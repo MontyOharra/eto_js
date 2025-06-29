@@ -1,0 +1,22 @@
+{
+  "appId": "com.harrah-transportation.eto",
+  "productName": "ETO",
+  "copyright": "Copyright © 2025",
+  "files" : [
+    "build/dist-electron",
+    "build/dist-react"
+  ],
+  "directories": {
+    "output": "dist"
+  },
+  "mac" : {
+    "target" : "dmg"
+  },
+  "linux" : {
+    "target" : "AppImage",
+    "category" : "Utility"
+  },
+  "win" : {
+    "target" : ["portable", "msi"]
+  }
+}
