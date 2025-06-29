@@ -1,16 +1,17 @@
-import path from 'path'
-import { app, WebFrameMain } from 'electron'
-import { pathToFileURL } from 'url'
+import path from "path";
+import { app, WebFrameMain } from "electron";
+import { pathToFileURL } from "url";
 
 export function isDev() {
-  return process.env.NODE_ENV === 'development';
+  return process.env.NODE_ENV === "development";
 }
 
 export function getPreloadPath() {
   return path.join(
-    app.getAppPath(), 
-    isDev() ? '.' : '..', 
-    '/build/dist-electron/preload/index.cjs')
+    app.getAppPath(),
+    isDev() ? "." : "..",
+    "/build/dist-electron/preload.cjs"
+  );
 }
 
 export function getUIPath() {

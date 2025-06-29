@@ -1,12 +1,12 @@
-const { contextBridge, ipcRenderer } = require("electron");
+const { ipcRenderer } = require("electron");
 
-export function ipcInvoke<Key extends keyof EventPayloadMapping>(
+function ipcInvoke<Key extends keyof EventPayloadMapping>(
   key: Key
 ): Promise<EventPayloadMapping[Key]> {
   return ipcRenderer.invoke(key);
 }
 
-export function ipcOn<Key extends keyof EventPayloadMapping>(
+function ipcOn<Key extends keyof EventPayloadMapping>(
   key: Key,
   callback: (payload: EventPayloadMapping[Key]) => void
 ) {
@@ -15,9 +15,11 @@ export function ipcOn<Key extends keyof EventPayloadMapping>(
   return () => ipcRenderer.off(key, cb);
 }
 
-export function ipcSend<Key extends keyof EventPayloadMapping>(
+function ipcSend<Key extends keyof EventPayloadMapping>(
   key: Key,
   payload: EventPayloadMapping[Key]
 ) {
   ipcRenderer.send(key, payload);
 }
+
+module.exports = { ipcInvoke, ipcOn, ipcSend };

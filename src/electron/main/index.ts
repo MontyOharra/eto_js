@@ -31,12 +31,12 @@ app.on("ready", () => {
     );
   }
 
-  ipcMainHandle("pythonTest", () => {
-    return new Promise<PythonTestReturn>((resolve, reject) => {
+  ipcMainHandle("pythonTest", async () => {
+    const pythonPromise = new Promise<PythonTestReturn>((resolve, reject) => {
       let outputData = "";
       let errorData = "";
 
-      const pythonProcess = spawn("python", ["python/test.py", "tes"]);
+      const pythonProcess = spawn("python", ["src/python/test.py", "test"]);
 
       pythonProcess.stdout.on("data", (data) => {
         outputData += data.toString();
@@ -58,5 +58,8 @@ app.on("ready", () => {
         reject(new Error(`Failed to start Python process: ${error.message}`));
       });
     });
+
+    const pythonReturnValue = await pythonPromise;
+    return pythonReturnValue;
   });
 });

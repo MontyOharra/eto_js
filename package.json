@@ -7,12 +7,13 @@
   "scripts": {
     "dev": "npm-run-all --parallel dev:react dev:electron",
     "dev:react": "vite",
-    "dev:electron": "npm run transpile:electron && cross-env NODE_ENV=development electron .",
+    "dev:electron": "npm run transpile:electron && npm run bundle:preload && cross-env NODE_ENV=development electron .",
     "build:react": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "transpile:electron": "tsc -p electron/tsconfig.json",
-    "dist:win": "npm run transpile:electron && npm run build:react && electron-builder --win"
+    "transpile:electron": "tsc -p src/electron/tsconfig.json",
+    "bundle:preload": "node scripts/build-preload.mjs",
+    "dist:win": "npm run transpile:electron && npm run bundle:preload && npm run build:react && electron-builder --win"
   },
   "dependencies": {
     "react": "^19.1.0",
@@ -25,6 +26,7 @@
     "@vitejs/plugin-react": "^4.4.1",
     "cross-env": "^7.0.3",
     "electron": "^37.1.0",
+    "esbuild": "^0.25.5",
     "eslint": "^9.25.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.19",

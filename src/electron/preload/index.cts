@@ -1,5 +1,5 @@
 const { contextBridge } = require("electron");
-const { ipcInvoke } = require("./ipcWrappers.cjs");
+const { ipcInvoke } = require("./ipcWrappers.cts");
 
 contextBridge.exposeInMainWorld("electron", {
   pythonTest: () => ipcInvoke("pythonTest"),
