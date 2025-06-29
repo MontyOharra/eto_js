@@ -9,7 +9,7 @@ async function buildPreload() {
   try {
     await build({
       // Entry point - your main preload file
-      entryPoints: [path.join(rootDir, "src/electron/preload/index.cts")],
+      entryPoints: [path.join(rootDir, "src/electron/preload/index.ts")],
 
       // Output configuration
       outfile: path.join(rootDir, "build/dist-electron/preload.cjs"),

@@ -1,6 +1,12 @@
 import { app, BrowserWindow } from "electron";
 import path from "path";
-import { devServerPort, getPreloadPath, isDev } from "../utils.js";
+import {
+  devServerPort,
+  getPreloadPath,
+  isDev,
+  getPythonExecutablePath,
+  getPythonScriptPath,
+} from "../utils.js";
 import { ipcMainHandle } from "./ipcWrappers.js";
 import { spawn } from "child_process";
 
@@ -31,12 +37,14 @@ app.on("ready", () => {
     );
   }
 
-  ipcMainHandle("pythonTest", async () => {
+  ipcMainHandle("pythonTest", async (payload) => {
     const pythonPromise = new Promise<PythonTestReturn>((resolve, reject) => {
       let outputData = "";
       let errorData = "";
 
-      const pythonProcess = spawn("python", ["src/python/test.py", "test"]);
+      const pythonExe = getPythonExecutablePath();
+      const scriptPath = getPythonScriptPath("test.py");
+      const pythonProcess = spawn(pythonExe, [scriptPath, payload]);
 
       pythonProcess.stdout.on("data", (data) => {
         outputData += data.toString();

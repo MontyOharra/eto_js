@@ -28,3 +28,23 @@ export function validateEventFrame(frame: WebFrameMain) {
 }
 
 export const devServerPort = "5000";
+
+export function getPythonExecutablePath() {
+  if (isDev()) {
+    // Development: Use system Python
+    return "python";
+  } else {
+    // Production: Use bundled Python
+    return path.join(process.resourcesPath, "python", "python.exe");
+  }
+}
+
+export function getPythonScriptPath(scriptName: string) {
+  if (isDev()) {
+    // Development: Scripts in src/python/
+    return path.join(process.cwd(), "src", "python", scriptName);
+  } else {
+    // Production: Scripts bundled in resources
+    return path.join(process.resourcesPath, "python", "scripts", scriptName);
+  }
+}

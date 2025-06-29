@@ -6,6 +6,5 @@
     "module": "NodeNext",
     "outDir": "../../build/dist-electron",
     "skipLibCheck": true
-  },
-  "exclude": ["preload/**/*"]
+  }
 }

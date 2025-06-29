@@ -2,12 +2,16 @@ type PythonTestReturn = {
   output: string;
 };
 
-type EventPayloadMapping = {
+type OutputPayloadMapping = {
   pythonTest: PythonTestReturn;
 };
 
+type InputPayloadMapping = {
+  pythonTest: string;
+}
+
 interface Window {
   electron: {
-    pythonTest: () => Promise<PythonTestReturn>;
+    pythonTest: (testType: string) => Promise<PythonTestReturn>;
   };
 }

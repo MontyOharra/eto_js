@@ -7,10 +7,10 @@ function App() {
   const [count, setCount] = useState(0)
 
   useEffect(() => {
-    window.electron.pythonTest().then((res) => {
+    window.electron.pythonTest("test" + (count % 3 === 0 ? "" : count % 3)).then((res) => {
       console.log(res);
     });
-  }, []);
+  }, [count]);
 
   return (
     <>
@@ -28,7 +28,7 @@ function App() {
           count is {count}
         </button>
         <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
+          Epoop <code>src/App.tsx</code> and save to test HMR
         </p>
       </div>
       <p className="read-the-docs">
