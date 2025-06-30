@@ -17,13 +17,16 @@
     "output": "dist"
   },
   "mac": {
-    "target": "dmg"
+    "target": "dmg",
+    "icon": "build/icons/icon.icns"
   },
   "linux": {
     "target": "AppImage",
-    "category": "Utility"
+    "category": "Utility",
+    "icon": "build/icons/icon.png"
   },
   "win": {
-    "target": ["portable", "msi"]
+    "target": ["portable", "msi"],
+    "icon": "build/icons/icon.ico"
   }
 }

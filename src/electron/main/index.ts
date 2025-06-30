@@ -29,7 +29,7 @@ app.on("ready", () => {
     // Suppress DevTools console errors
     mainWindow.webContents.on("console-message", (event, level, message) => {
       if (message.includes("Autofill")) return; // Filter out autofill errors
-      console.log("DevTools:", message);
+      // console.log("DevTools:", message);
     });
   } else {
     mainWindow.loadFile(
