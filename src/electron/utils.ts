@@ -2,6 +2,9 @@ import path from "path";
 import { app, WebFrameMain } from "electron";
 import { pathToFileURL } from "url";
 
+
+export const devServerPort = "5000";
+
 export function isDev() {
   return process.env.NODE_ENV === "development";
 }
@@ -15,7 +18,7 @@ export function getPreloadPath() {
 }
 
 export function getUIPath() {
-  return path.join(app.getAppPath(), "/dist-react/index.html");
+  return path.join(app.getAppPath(), "/build/dist-react/index.html");
 }
 
 export function validateEventFrame(frame: WebFrameMain) {
@@ -26,8 +29,6 @@ export function validateEventFrame(frame: WebFrameMain) {
     throw new Error("Malicious event");
   }
 }
-
-export const devServerPort = "5000";
 
 export function getPythonExecutablePath() {
   if (isDev()) {

@@ -11,7 +11,8 @@
     {
       "from": "src/python",
       "to": "python/scripts"
-    }
+    },
+    "build/dist-electron/preload.cjs"
   ],
   "directories": {
     "output": "dist"
@@ -27,6 +28,6 @@
   },
   "win": {
     "target": ["portable", "msi"],
-    "icon": "build/icons/icon.ico"
+    "icon": "icons/icon.ico"
   }
 }

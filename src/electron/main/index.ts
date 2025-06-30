@@ -1,11 +1,11 @@
 import { app, BrowserWindow } from "electron";
-import path from "path";
 import {
   devServerPort,
   getPreloadPath,
   isDev,
   getPythonExecutablePath,
   getPythonScriptPath,
+  getUIPath,
 } from "../utils.js";
 import { ipcMainHandle } from "./ipcWrappers.js";
 import { spawn } from "child_process";
@@ -25,16 +25,8 @@ app.on("ready", () => {
   if (isDev()) {
     mainWindow.loadURL(`http://localhost:${devServerPort}`);
     mainWindow.webContents.openDevTools();
-
-    // Suppress DevTools console errors
-    mainWindow.webContents.on("console-message", (event, level, message) => {
-      if (message.includes("Autofill")) return; // Filter out autofill errors
-      // console.log("DevTools:", message);
-    });
   } else {
-    mainWindow.loadFile(
-      path.join(app.getAppPath(), "/build/dist-react/index.html")
-    );
+    mainWindow.loadFile(getUIPath());
   }
 
   ipcMainHandle("pythonTest", async (payload) => {
