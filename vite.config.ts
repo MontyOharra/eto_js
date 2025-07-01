@@ -12,4 +12,8 @@ export default defineConfig({
     port: 5000,
     strictPort: true,
   },
+  optimizeDeps: {
+    include: ["pdfjs-dist"],
+  },
+  assetsInclude: ["**/*.pdf"],
 });

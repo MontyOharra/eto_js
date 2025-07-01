@@ -11,25 +11,24 @@
     "bundle:preload": "node scripts/build-preload.mjs",
     "bundle:preload:prod": "cross-env NODE_ENV=production node scripts/build-preload.mjs",
     "setup:python": "node scripts/setup-python.mjs",
-
     "dev:react": "vite",
     "dev:electron": "npm run transpile:electron && npm run bundle:preload && cross-env NODE_ENV=development electron .",
     "dev": "npm-run-all --parallel dev:react dev:electron",
-
     "build:react": "tsc -b && vite build",
     "build:electron": "npm run transpile:electron && npm run bundle:preload:prod",
     "build:all": "npm run build:electron && npm run build:react",
-
     "lint": "eslint .",
-
     "dist:win": "rm -rf build && rm -rf dist && npm run build:all && electron-builder --win",
     "dist:mac": "npm run build:all && electron-builder --mac",
     "dist:linux": "npm run build:all && electron-builder --linux",
     "dist:all": "npm run build:all && electron-builder"
   },
   "dependencies": {
+    "@tanstack/react-router": "^1.123.2",
+    "pdfjs-dist": "^5.3.31",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "react-pdf": "^10.0.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.25.0",

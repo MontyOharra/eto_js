@@ -3,12 +3,10 @@ import {
   devServerPort,
   getPreloadPath,
   isDev,
-  getPythonExecutablePath,
-  getPythonScriptPath,
   getUIPath,
 } from "./utils.js";
 import { ipcMainHandle } from "./ipcWrappers.js";
-import { spawn } from "child_process";
+import { executePythonScript } from "./python.js";
 
 app.on("ready", () => {
   const mainWindow = new BrowserWindow({
@@ -28,38 +26,8 @@ app.on("ready", () => {
   } else {
     mainWindow.loadFile(getUIPath());
   }
-
   ipcMainHandle("pythonTest", async (payload) => {
-    const pythonPromise = new Promise<PythonTestReturn>((resolve, reject) => {
-      let outputData = "";
-      let errorData = "";
-
-      const pythonExe = getPythonExecutablePath();
-      const scriptPath = getPythonScriptPath("applications/test.py");
-      const pythonProcess = spawn(pythonExe, [scriptPath, payload]);
-
-      pythonProcess.stdout.on("data", (data) => {
-        outputData += data.toString();
-      });
-      pythonProcess.stderr.on("data", (data) => {
-        errorData += data.toString();
-      });
-
-      pythonProcess.on("close", (code) => {
-        if (code === 0) {
-          resolve({ output: outputData.trim() });
-        } else {
-          reject(
-            new Error(`Python script failed with code ${code}: ${errorData}`)
-          );
-        }
-      });
-      pythonProcess.on("error", (error) => {
-        reject(new Error(`Failed to start Python process: ${error.message}`));
-      });
-    });
-
-    const pythonReturnValue = await pythonPromise;
-    return pythonReturnValue;
+    const res = await executePythonScript("applications/test.py", payload);
+    return { output: res };
   });
 });
