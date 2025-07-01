@@ -40,12 +40,13 @@ export function getPythonExecutablePath() {
   }
 }
 
-export function getPythonScriptPath(scriptName: string) {
+export function getPythonScriptPath(scriptDirStructure: string) {
+
   if (isDev()) {
     // Development: Scripts in src/python/
-    return path.join(process.cwd(), "src", "python", scriptName);
+    return path.join(process.cwd(), "src", "python", scriptDirStructure);
   } else {
     // Production: Scripts bundled in resources
-    return path.join(process.resourcesPath, "python", "scripts", scriptName);
+    return path.join(process.resourcesPath, "python", "scripts", scriptDirStructure);
   }
 }

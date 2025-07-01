@@ -6,7 +6,7 @@ import {
   getPythonExecutablePath,
   getPythonScriptPath,
   getUIPath,
-} from "../utils.js";
+} from "./utils.js";
 import { ipcMainHandle } from "./ipcWrappers.js";
 import { spawn } from "child_process";
 
@@ -35,7 +35,7 @@ app.on("ready", () => {
       let errorData = "";
 
       const pythonExe = getPythonExecutablePath();
-      const scriptPath = getPythonScriptPath("test.py");
+      const scriptPath = getPythonScriptPath("applications/test.py");
       const pythonProcess = spawn(pythonExe, [scriptPath, payload]);
 
       pythonProcess.stdout.on("data", (data) => {

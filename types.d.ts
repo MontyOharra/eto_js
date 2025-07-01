@@ -19,6 +19,5 @@ type Email = {
 interface Window {
   electron: {
     pythonTest: (testType: string) => Promise<PythonTestReturn>;
-    getEmailsFromFolder: (folderName: string) => Promise<Email>
   };
 }

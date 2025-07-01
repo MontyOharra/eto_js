@@ -1,15 +1,17 @@
 import { ipcMain, WebContents, WebFrameMain } from "electron";
-import { validateEventFrame } from "../utils.js";
+import { validateEventFrame } from "./utils.js";
 
 export function ipcMainHandle<Key extends keyof OutputPayloadMapping>(
   key: Key,
-  handler: (payload: InputPayloadMapping[Key]) => Promise<OutputPayloadMapping[Key]>
+  handler: (
+    payload: InputPayloadMapping[Key]
+  ) => Promise<OutputPayloadMapping[Key]>
 ) {
   ipcMain.handle(key, (event, payload) => {
     validateEventFrame(event.senderFrame as WebFrameMain);
     return handler(payload);
   });
-} 
+}
 
 export function ipcMainOn<Key extends keyof OutputPayloadMapping>(
   key: Key,
