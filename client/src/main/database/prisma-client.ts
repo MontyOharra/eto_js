@@ -1,4 +1,8 @@
 import { PrismaClient } from "../../../prisma/generated/prisma/index.js";
+import { config } from "dotenv";
+
+// Load environment variables from .env file
+config();
 
 // Function to build connection string based on auth type
 function buildDatabaseUrl(): string {
@@ -55,9 +59,7 @@ class PrismaService {
     if (!PrismaService.instance) {
       // Set DATABASE_URL if not already set
       if (!process.env.DATABASE_URL) {
-        console.log("DATABASE_URL not set, building connection string");
         process.env.DATABASE_URL = buildDatabaseUrl();
-        console.log("DATABASE_URL set to", process.env.DATABASE_URL);
       }
 
       PrismaService.instance = new PrismaClient({

@@ -33,6 +33,7 @@
   "dependencies": {
     "@prisma/client": "^6.11.0",
     "@tanstack/react-router-devtools": "^1.124.0",
+    "dotenv": "^17.0.1",
     "pdfjs-dist": "^5.3.31",
     "prisma": "^6.11.0",
     "react": "^19.1.0",
