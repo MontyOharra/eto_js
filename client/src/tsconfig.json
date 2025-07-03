@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "strict": true,
+    "target": "ESNext",
+    "types": ["./types", "../prisma/generated/prisma/index"],
+    "module": "NodeNext",
+    "skipLibCheck": true
+  },
+  "include": ["**/*"]
+}
