@@ -1,17 +1,24 @@
-type OutputPayloadMapping = {
-  testDatabaseConnection: boolean;
-  getPositions: position[];
-};
+import { position } from "../prisma/generated/prisma/index.js";
 
-type InputPayloadMapping = {
-  testDatabaseConnection: void;
-  getPositions: void;
-};
+declare global {
+  type OutputPayloadMapping = {
+    testDatabaseConnection: boolean;
+    getPositions: position[];
+    getFarts: fart[];
+  };
 
-interface Window {
-  electron: {
-    testDatabaseConnection: () => Promise<boolean>;
-    getPositions: () => Promise<position[]>;
+  type InputPayloadMapping = {
+    testDatabaseConnection: void;
+    getPositions: void;
+    getFarts: void;
+  };
+
+  interface Window {
+    electron: {
+      testDatabaseConnection: () => Promise<boolean>;
+      getPositions: () => Promise<position[]>;
+    };
   };
 }
 
+export {};

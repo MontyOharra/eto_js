@@ -2,7 +2,7 @@
   "appId": "com.harrah-transportation.eto",
   "productName": "ETO",
   "copyright": "Copyright © 2025",
-  "files": ["build/dist-electron", "build/dist-react"],
+  "files": ["build/dist-electron", "build/dist-react", "build/prisma"],
   "extraResources": [
     {
       "from": "resources/python",

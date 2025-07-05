@@ -38,6 +38,9 @@ app.on("ready", () => {
   });
 });
 
+
+
+
 // Clean up database connections on app quit
 app.on("before-quit", async () => {
   await DataServiceFactory.cleanup();

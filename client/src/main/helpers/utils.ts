@@ -2,7 +2,6 @@ import path from "path";
 import { app, WebFrameMain } from "electron";
 import { pathToFileURL } from "url";
 
-
 export const devServerPort = "5000";
 
 export function isDev() {
@@ -13,12 +12,12 @@ export function getPreloadPath() {
   return path.join(
     app.getAppPath(),
     isDev() ? "." : "..",
-    "/build/dist-electron/preload.cjs"
+    "build/dist-electron/preload.cjs"
   );
 }
 
 export function getUIPath() {
-  return path.join(app.getAppPath(), "/build/dist-react/index.html");
+  return path.join(app.getAppPath(), "build/dist-react/index.html");
 }
 
 export function validateEventFrame(frame: WebFrameMain) {
@@ -26,7 +25,11 @@ export function validateEventFrame(frame: WebFrameMain) {
     return;
   }
   if (frame.url !== pathToFileURL(getUIPath()).toString()) {
-    throw new Error("Malicious event");
+    console.log(`Frame URL: ${frame.url}`);
+    console.log(`Expected UI Path: ${pathToFileURL(getUIPath()).toString()}`);
+    throw new Error(
+      `Malicious Event -- Frame url: ${frame.url} is not the same as the UI path: ${pathToFileURL(getUIPath()).toString()}`
+    );
   }
 }
 
@@ -41,12 +44,16 @@ export function getPythonExecutablePath() {
 }
 
 export function getPythonScriptPath(scriptDirStructure: string) {
-
   if (isDev()) {
     // Development: Scripts in src/python/
     return path.join(process.cwd(), "src", "python", scriptDirStructure);
   } else {
     // Production: Scripts bundled in resources
-    return path.join(process.resourcesPath, "python", "scripts", scriptDirStructure);
+    return path.join(
+      process.resourcesPath,
+      "python",
+      "scripts",
+      scriptDirStructure
+    );
   }
 }

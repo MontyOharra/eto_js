@@ -5,19 +5,8 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const sourceDir = path.join(
-  __dirname,
-  "..",
-  "prisma",
-  "generated"
-);
-const targetDir = path.join(
-  __dirname,
-  "..",
-  "build",
-  "prisma",
-  "generated"
-);
+const sourceDir = path.join(__dirname, "..", "prisma", "generated");
+const targetDir = path.join(__dirname, "..", "build", "prisma", "generated");
 
 // Function to copy directory recursively
 function copyDir(src, dest) {
