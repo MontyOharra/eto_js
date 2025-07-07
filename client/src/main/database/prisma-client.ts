@@ -1,8 +1,64 @@
-import { PrismaClient } from "../../../prisma/generated/prisma/index.js";
+import { PrismaClient } from "../../../prisma/generated/client/index.js";
 import { config } from "dotenv";
+import { getPrismaQueryEnginePath } from "../helpers/utils.js";
+import fs from "fs";
+import { app } from "electron";
+import path from "path";
 
-// Load environment variables from .env file
-config();
+// Load environment variables from appropriate location
+function loadEnvironmentVariables() {
+  if (app.isPackaged) {
+    // In packaged app: Look for config in user data directory
+    const userDataPath = app.getPath("userData");
+    const configPath = path.join(userDataPath, ".env");
+
+    if (fs.existsSync(configPath)) {
+      console.log(`Loading config from: ${configPath}`);
+      config({ path: configPath });
+    } else {
+      console.log(`Config file not found at: ${configPath}`);
+      console.log(
+        "Create a .env file in the app data directory with your database settings"
+      );
+
+      // Create a sample config file
+      const sampleConfig = `# Database Configuration
+# Copy this file to: ${configPath}
+# And update with your database settings
+
+DB_AUTH_TYPE=windows
+DB_SERVER=localhost
+DB_PORT=1433
+DB_NAME=HTC
+DB_ENCRYPT=optional
+DB_TRUST_SERVER_CERTIFICATE=true
+
+# For SQL Server authentication, uncomment and set:
+# DB_USER=your_username
+# DB_PASSWORD=your_password
+
+# For Azure AD authentication, uncomment and set:
+# DB_AZURE_USER=your_azure_user
+# DB_AZURE_PASSWORD=your_azure_password
+# DB_AZURE_CLIENT_ID=your_client_id
+`;
+
+      try {
+        fs.writeFileSync(path.join(userDataPath, ".env.example"), sampleConfig);
+        console.log(
+          `Sample config created at: ${path.join(userDataPath, ".env.example")}`
+        );
+      } catch (error) {
+        console.error("Failed to create sample config:", error);
+      }
+    }
+  } else {
+    // In development: Use local .env file
+    config();
+  }
+}
+
+loadEnvironmentVariables();
 
 // Function to build connection string based on auth type
 function buildDatabaseUrl(): string {
@@ -61,6 +117,22 @@ class PrismaService {
       if (!process.env.DATABASE_URL) {
         process.env.DATABASE_URL = buildDatabaseUrl();
       }
+
+      // Set the query engine path dynamically
+      const queryEnginePath = getPrismaQueryEnginePath();
+      console.log(`Prisma query engine path: ${queryEnginePath}`);
+
+      // Verify the query engine exists
+      if (!fs.existsSync(queryEnginePath)) {
+        console.error(`Prisma query engine not found at: ${queryEnginePath}`);
+        console.error(`Current working directory: ${process.cwd()}`);
+        console.error(`Process executable path: ${process.execPath}`);
+        console.error(`Resources path: ${process.resourcesPath}`);
+        console.error(`App path: ${app.getAppPath()}`);
+        console.error(`Is packaged: ${app.isPackaged}`);
+      }
+
+      process.env.PRISMA_QUERY_ENGINE_LIBRARY = queryEnginePath;
 
       PrismaService.instance = new PrismaClient({
         log: ["query", "info", "warn", "error"],

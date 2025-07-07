@@ -1,5 +1,5 @@
 import { prisma, PrismaService } from "../database/prisma-client.js";
-import type { position } from "../../../prisma/generated/prisma/index.js";
+import { position } from "../../../prisma/generated/client/index.js";
 
 export interface DataService {
   testConnection(): Promise<boolean>;

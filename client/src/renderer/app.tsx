@@ -1,12 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import type { position } from "../../../prisma/generated/prisma/index.js";
+import type { position } from "../main/prisma/generated/prisma/client.js";
 
-export const Route = createFileRoute("/")({
-  component: Index,
-});
-
-function Index() {
+export default function App() {
   const [connectionStatus, setConnectionStatus] = useState<boolean>(false);
   const [positions, setPositions] = useState<position[]>([]);
 
@@ -20,12 +15,14 @@ function Index() {
     window.electron.getPositions().then((positions) => {
       setPositions(positions);
     });
-  };
+  }
 
   return (
     <div className="p-2">
       <h3>Welcome Home!</h3>
-      <p>Connection Status: {connectionStatus ? "Connected" : "Disconnected"}</p>
+      <p>
+        Connection Status: {connectionStatus ? "Connected" : "Disconnected"}
+      </p>
       <button onClick={handleGetPositions}>Get Positions</button>
       <pre>{JSON.stringify(positions, null, 2)}</pre>
     </div>

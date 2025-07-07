@@ -1,11 +1,10 @@
 {
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "strict": true,
-    "target": "ESNext",
-    "types": ["../types"],
-    "module": "NodeNext",
     "outDir": "../../build/dist-electron/main",
-    "skipLibCheck": true
+    "lib": ["ES2022"]
   },
-  "include": ["**/*"]
+  "files": ["../@types/global.d.ts"],
+  "include": ["**/*"],
+  "exclude": ["**/node_modules/**"]
 }

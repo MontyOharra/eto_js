@@ -24,6 +24,8 @@ export function validateEventFrame(frame: WebFrameMain) {
   if (isDev() && new URL(frame.url).host === `localhost:${devServerPort}`) {
     return;
   }
+  console.log(frame.url);
+  console.log(pathToFileURL(getUIPath()).toString());
   if (frame.url !== pathToFileURL(getUIPath()).toString()) {
     console.log(`Frame URL: ${frame.url}`);
     console.log(`Expected UI Path: ${pathToFileURL(getUIPath()).toString()}`);
@@ -54,6 +56,28 @@ export function getPythonScriptPath(scriptDirStructure: string) {
       "python",
       "scripts",
       scriptDirStructure
+    );
+  }
+}
+
+export function getPrismaQueryEnginePath() {
+  if (isDev()) {
+    // Development: Use the query engine from build directory
+    return path.join(
+      process.cwd(),
+      "build",
+      "dist-electron",
+      "main",
+      "query_engine-windows.dll.node"
+    );
+  } else if (app.isPackaged) {
+    // Packaged app: Query engine is in the resources directory
+    return path.join(process.resourcesPath, "query_engine-windows.dll.node");
+  } else {
+    // Production build (not packaged): Query engine is in the same directory as the main process
+    return path.join(
+      path.dirname(process.execPath),
+      "query_engine-windows.dll.node"
     );
   }
 }

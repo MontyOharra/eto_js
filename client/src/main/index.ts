@@ -23,8 +23,10 @@ app.on("ready", () => {
   if (isDev()) {
     mainWindow.loadURL(`http://localhost:${devServerPort}`);
     mainWindow.webContents.openDevTools();
+    console.log("dev");
   } else {
     mainWindow.loadFile(getUIPath());
+    console.log("prod");
   }
 
   // Database IPC handlers

@@ -48,7 +48,7 @@ async function buildPreload() {
       // Clean output
       logLevel: "info",
     });
-
+    console.log(process.env.NODE_ENV);
     console.log("✅ Preload bundle built successfully!");
   } catch (error) {
     console.error("❌ Preload bundle failed:", error);
