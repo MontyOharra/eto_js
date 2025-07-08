@@ -1,11 +1,6 @@
 import { prisma, PrismaService } from "../database/prisma-client.js";
 import { position } from "../../../prisma/generated/client/index.js";
-
-export interface DataService {
-  testConnection(): Promise<boolean>;
-  getPositions(): Promise<position[]>;
-  disconnect(): Promise<void>;
-}
+import { DataService } from "../../@types/database.js";
 
 export class LocalDatabaseService implements DataService {
   constructor() {

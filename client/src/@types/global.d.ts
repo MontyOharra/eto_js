@@ -1,27 +1,27 @@
 import { position } from "../../prisma/generated/client/index";
-import { DatabaseConfig } from "./types";
+import { DatabaseConfig } from "./database";
 
 declare global {
   type OutputPayloadMapping = {
     testDatabaseConnection: boolean;
     getPositions: position[];
-    updateDatabaseConfig: boolean;
-    loadDatabaseConfig: DatabaseConfig;
+    setDatabaseConfig: boolean;
+    getDatabaseConfig: DatabaseConfig;
   };
 
   type InputPayloadMapping = {
     testDatabaseConnection: void;
     getPositions: void;
-    updateDatabaseConfig: DatabaseConfig;
-    loadDatabaseConfig: void;
+    setDatabaseConfig: DatabaseConfig;
+    getDatabaseConfig: void;
   };
 
   interface Window {
     electron: {
       testDatabaseConnection: () => Promise<boolean>;
       getPositions: () => Promise<position[]>;
-      updateDatabaseConfig: (config: DatabaseConfig) => Promise<boolean>;
-      loadDatabaseConfig: () => Promise<DatabaseConfig>;
+      setDatabaseConfig: (config: DatabaseConfig) => Promise<boolean>;
+      getDatabaseConfig: () => Promise<DatabaseConfig>;
     };
   }
 }

@@ -45,12 +45,15 @@ app.on("ready", () => {
     return await dataService.getPositions();
   });
 
-  ipcMainHandle("loadDatabaseConfig", async () => {
-    return await SecureConfigManager.loadConfig();
+  ipcMainHandle("getDatabaseConfig", async () => {
+    return await SecureConfigManager.getConfig();
   });
 
-  ipcMainHandle("updateDatabaseConfig", async (config: DatabaseConfig) => {
+  ipcMainHandle("setDatabaseConfig", async (config: DatabaseConfig) => {
     try {
+      // Set the configuration (handles both dev and prod modes)
+      await SecureConfigManager.setConfig(config);
+
       // Reconnect with new configuration
       const success = await PrismaService.reconnectWithConfig(config);
 
@@ -68,7 +71,7 @@ app.on("ready", () => {
 
       return false;
     } catch (error) {
-      console.error("Failed to update database configuration:", error);
+      console.error("Failed to set database configuration:", error);
       return false;
     }
   });

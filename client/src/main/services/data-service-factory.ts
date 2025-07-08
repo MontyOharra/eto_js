@@ -1,4 +1,6 @@
-import { DataService, LocalDatabaseService } from "./database-service.js";
+import { LocalDatabaseService } from "./local-prisma-db-service.js";
+
+import { DataService } from "../../@types/database.js";
 
 export class DataServiceFactory {
   private static instance: DataService | null = null;

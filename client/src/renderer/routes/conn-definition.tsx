@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { DatabaseConfig } from "../../@types/types";
+import { DatabaseConfig } from "../../@types/database";
 
 export const Route = createFileRoute("/conn-definition")({
   component: ConnectionDefinition,
@@ -29,7 +29,7 @@ function ConnectionDefinition() {
   useEffect(() => {
     const loadCurrentConfig = async () => {
       try {
-        const currentConfig = await window.electron.loadDatabaseConfig();
+        const currentConfig = await window.electron.getDatabaseConfig();
         if (currentConfig) {
           setConfig(currentConfig);
         }
@@ -57,7 +57,7 @@ function ConnectionDefinition() {
     setMessage("");
 
     try {
-      const result = await window.electron.updateDatabaseConfig(config);
+      const result = await window.electron.setDatabaseConfig(config);
 
       if (result) {
         setMessage("Configuration saved successfully");

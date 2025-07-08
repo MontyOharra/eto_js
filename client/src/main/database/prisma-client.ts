@@ -3,68 +3,24 @@ import { config } from "dotenv";
 import { getPrismaQueryEnginePath } from "../helpers/utils.js";
 import fs from "fs";
 import { app } from "electron";
-import path from "path";
-import { DatabaseConfig } from "../../@types/types";
+import { DatabaseConfig } from "../../@types/database.js";
 
-// Load environment variables from appropriate location
+// Load environment variables - simplified to only use process.env
+// Configuration is managed by SecureConfigManager
 function loadEnvironmentVariables() {
-  if (app.isPackaged) {
-    // In packaged app: Look for config in user data directory
-    const userDataPath = app.getPath("userData");
-    const configPath = path.join(userDataPath, ".env");
-
-    if (fs.existsSync(configPath)) {
-      console.log(`Loading config from: ${configPath}`);
-      config({ path: configPath });
-    } else {
-      console.log(`Config file not found at: ${configPath}`);
-      console.log(
-        "Create a .env file in the app data directory with your database settings"
-      );
-
-      // Create a sample config file
-      const sampleConfig = `# Database Configuration
-# Copy this file to: ${configPath}
-# And update with your database settings
-
-DB_AUTH_TYPE=windows
-DB_SERVER=localhost
-DB_PORT=1433
-DB_NAME=HTC
-DB_ENCRYPT=optional
-DB_TRUST_SERVER_CERTIFICATE=true
-
-# For SQL Server authentication, uncomment and set:
-# DB_USER=your_username
-# DB_PASSWORD=your_password
-
-# For Azure AD authentication, uncomment and set:
-# DB_AZURE_USER=your_azure_user
-# DB_AZURE_PASSWORD=your_azure_password
-# DB_AZURE_CLIENT_ID=your_client_id
-`;
-
-      try {
-        fs.writeFileSync(path.join(userDataPath, ".env.example"), sampleConfig);
-        console.log(
-          `Sample config created at: ${path.join(userDataPath, ".env.example")}`
-        );
-      } catch (error) {
-        console.error("Failed to create sample config:", error);
-      }
-    }
-  } else {
-    // In development: Use local .env file
+  if (!app.isPackaged) {
+    // In development: Load from .env file if it exists
     config();
   }
+  // In production: Environment variables are set by SecureConfigManager
+  // No file-based configuration needed
 }
 
 loadEnvironmentVariables();
 
 // Function to build connection string based on auth type
 function buildDatabaseUrl(config?: DatabaseConfig): string {
-  const authType =
-    config?.authType || process.env.DB_AUTH_TYPE || "windows";
+  const authType = config?.authType || process.env.DB_AUTH_TYPE || "windows";
   const server = config?.server || process.env.DB_SERVER || "localhost";
   const port = config?.port || process.env.DB_PORT || "1433";
   const database = config?.database || process.env.DB_NAME || "HTC";
@@ -102,8 +58,7 @@ function buildDatabaseUrl(config?: DatabaseConfig): string {
         connectionString += `;username=${azureUser};password=${azurePassword}`;
       }
       // Azure might use different auth methods
-      const clientId =
-        config?.azureClientId || process.env.DB_AZURE_CLIENT_ID;
+      const clientId = config?.azureClientId || process.env.DB_AZURE_CLIENT_ID;
       if (clientId) {
         connectionString += `;clientId=${clientId}`;
       }
@@ -159,16 +114,6 @@ class PrismaService {
     try {
       // Disconnect existing client
       await this.disconnect();
-
-      // Update environment variables with new config
-      Object.keys(config).forEach((key) => {
-        if (
-          config[key as keyof DatabaseConfig] !== undefined &&
-          config[key as keyof DatabaseConfig] !== ""
-        ) {
-          process.env[key] = config[key as keyof DatabaseConfig];
-        }
-      });
 
       // Update DATABASE_URL with new config
       process.env.DATABASE_URL = buildDatabaseUrl(config);

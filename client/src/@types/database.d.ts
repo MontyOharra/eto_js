@@ -1,3 +1,9 @@
+export interface DataService {
+  testConnection(): Promise<boolean>;
+  getPositions(): Promise<position[]>;
+  disconnect(): Promise<void>;
+}
+
 export interface DatabaseConfig {
   authType: string;
   server: string;
