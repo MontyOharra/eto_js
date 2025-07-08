@@ -1,11 +1,5 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": {
-    "noEmit": true,
-    "module": "NodeNext",
-    "lib": ["ES2022"],
-    "types": ["node", "electron"]
-  },
   "files": ["../@types/global.d.ts"],
   "include": ["**/*"]
 }

@@ -37,7 +37,7 @@ async function buildMain() {
       platform: "node",
       target: "node16",
       format: "cjs",
-      external: ["electron"],
+      external: ["electron", "keytar"],
       sourcemap: process.env.NODE_ENV === "development",
       minify: process.env.NODE_ENV === "production",
       loader: {

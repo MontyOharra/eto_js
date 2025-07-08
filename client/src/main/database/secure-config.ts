@@ -1,20 +1,7 @@
-import * as keytar from 'keytar';
 import { app } from 'electron';
 import { config } from 'dotenv';
-
-interface DatabaseConfig {
-  authType: string;
-  server: string;
-  port: string;
-  database: string;
-  encrypt: string;
-  trustServerCertificate: string;
-  username?: string;
-  password?: string;
-  azureUser?: string;
-  azurePassword?: string;
-  azureClientId?: string;
-}
+import { DatabaseConfig } from '../../@types/types';
+import * as keytar from 'keytar';
 
 const SERVICE_NAME = 'eto-database-config';
 const ACCOUNT_NAME = 'database-credentials';
@@ -43,6 +30,9 @@ export class SecureConfigManager {
       if (storedConfig) {
         console.log('Loading database config from OS credential manager');
         this.config = JSON.parse(storedConfig);
+        if (!this.config) {
+          throw new Error('Invalid config format');
+        }
         return this.config;
       } else {
         // First run: create default config and prompt user

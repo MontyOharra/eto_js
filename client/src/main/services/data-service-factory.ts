@@ -12,6 +12,10 @@ export class DataServiceFactory {
     return this.instance;
   }
 
+  static resetInstance(): void {
+    this.instance = null;
+  }
+
   static async cleanup(): Promise<void> {
     if (this.instance) {
       await this.instance.disconnect();

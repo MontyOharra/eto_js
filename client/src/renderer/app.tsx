@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import type { position } from "../main/prisma/generated/prisma/client.js";
+import { position } from "../../prisma/generated/client/index.js";
 
 export default function App() {
   const [connectionStatus, setConnectionStatus] = useState<boolean>(false);

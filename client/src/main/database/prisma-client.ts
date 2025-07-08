@@ -4,6 +4,7 @@ import { getPrismaQueryEnginePath } from "../helpers/utils.js";
 import fs from "fs";
 import { app } from "electron";
 import path from "path";
+import { DatabaseConfig } from "../../@types/types";
 
 // Load environment variables from appropriate location
 function loadEnvironmentVariables() {
@@ -61,13 +62,17 @@ DB_TRUST_SERVER_CERTIFICATE=true
 loadEnvironmentVariables();
 
 // Function to build connection string based on auth type
-function buildDatabaseUrl(): string {
-  const authType = process.env.DB_AUTH_TYPE || "windows";
-  const server = process.env.DB_SERVER || "localhost";
-  const port = process.env.DB_PORT || "1433";
-  const database = process.env.DB_NAME || "HTC";
-  const encrypt = process.env.DB_ENCRYPT || "optional";
-  const trustCert = process.env.DB_TRUST_SERVER_CERTIFICATE || "true";
+function buildDatabaseUrl(config?: DatabaseConfig): string {
+  const authType =
+    config?.authType || process.env.DB_AUTH_TYPE || "windows";
+  const server = config?.server || process.env.DB_SERVER || "localhost";
+  const port = config?.port || process.env.DB_PORT || "1433";
+  const database = config?.database || process.env.DB_NAME || "HTC";
+  const encrypt = config?.encrypt || process.env.DB_ENCRYPT || "optional";
+  const trustCert =
+    config?.trustServerCertificate ||
+    process.env.DB_TRUST_SERVER_CERTIFICATE ||
+    "true";
 
   let connectionString = `sqlserver://${server}:${port};database=${database};encrypt=${encrypt};trustServerCertificate=${trustCert}`;
 
@@ -80,8 +85,8 @@ function buildDatabaseUrl(): string {
 
     case "sql":
     case "sqlserver": {
-      const username = process.env.DB_USER;
-      const password = process.env.DB_PASSWORD;
+      const username = config?.username || process.env.DB_USER;
+      const password = config?.password || process.env.DB_PASSWORD;
       if (username && password) {
         connectionString += `;username=${username};password=${password}`;
       }
@@ -90,13 +95,15 @@ function buildDatabaseUrl(): string {
 
     case "azure":
     case "azuread": {
-      const azureUser = process.env.DB_AZURE_USER;
-      const azurePassword = process.env.DB_AZURE_PASSWORD;
+      const azureUser = config?.azureUser || process.env.DB_AZURE_USER;
+      const azurePassword =
+        config?.azurePassword || process.env.DB_AZURE_PASSWORD;
       if (azureUser && azurePassword) {
         connectionString += `;username=${azureUser};password=${azurePassword}`;
       }
       // Azure might use different auth methods
-      const clientId = process.env.DB_AZURE_CLIENT_ID;
+      const clientId =
+        config?.azureClientId || process.env.DB_AZURE_CLIENT_ID;
       if (clientId) {
         connectionString += `;clientId=${clientId}`;
       }
@@ -147,7 +154,42 @@ class PrismaService {
       PrismaService.instance = null;
     }
   }
+
+  static async reconnectWithConfig(config: DatabaseConfig): Promise<boolean> {
+    try {
+      // Disconnect existing client
+      await this.disconnect();
+
+      // Update environment variables with new config
+      Object.keys(config).forEach((key) => {
+        if (
+          config[key as keyof DatabaseConfig] !== undefined &&
+          config[key as keyof DatabaseConfig] !== ""
+        ) {
+          process.env[key] = config[key as keyof DatabaseConfig];
+        }
+      });
+
+      // Update DATABASE_URL with new config
+      process.env.DATABASE_URL = buildDatabaseUrl(config);
+
+      console.log("New DATABASE_URL:", process.env.DATABASE_URL);
+
+      // Create new instance (will use updated DATABASE_URL)
+      const newClient = this.getInstance();
+
+      // Test the connection
+      await newClient.$queryRaw`SELECT 1 as test`;
+
+      return true;
+    } catch (error) {
+      console.error("Failed to reconnect with new config:", error);
+      // Reset instance on failure
+      this.instance = null;
+      return false;
+    }
+  }
 }
 
 export const prisma = PrismaService.getInstance();
-export { PrismaService };
+export { PrismaService, type DatabaseConfig };

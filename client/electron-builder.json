@@ -8,13 +8,17 @@
       "from": "build/dist-electron/main/query_engine-windows.dll.node",
       "to": "query_engine-windows.dll.node"
     },
-    "build/dist-electron/preload.cjs"
+    "build/dist-electron/preload.cjs",
+    {
+      "from": ".env",
+      "to": ".env"
+    }
   ],
   "directories": {
     "output": "dist"
   },
   "win": {
-    "target": ["portable", "msi"],
+    "target": ["portable"],
     "icon": "icons/icon.ico"
   }
 }

@@ -20,17 +20,24 @@ export function getUIPath() {
   return path.join(app.getAppPath(), "build/dist-react/index.html");
 }
 
+const UI_URL = pathToFileURL(getUIPath()).toString();   // …/index.html
+
+function stripFragmentAndQuery (raw: string) {
+  const u = new URL(raw);
+  u.hash = "";
+  u.search = "";
+  return u.toString();
+}
+
 export function validateEventFrame(frame: WebFrameMain) {
-  if (isDev() && new URL(frame.url).host === `localhost:${devServerPort}`) {
-    return;
-  }
-  console.log(frame.url);
-  console.log(pathToFileURL(getUIPath()).toString());
-  if (frame.url !== pathToFileURL(getUIPath()).toString()) {
+  // Allow dev hot-reloads
+  if (isDev() && new URL(frame.url).host === `localhost:${devServerPort}`) return;
+
+  if (stripFragmentAndQuery(frame.url) !== UI_URL) {
     console.log(`Frame URL: ${frame.url}`);
     console.log(`Expected UI Path: ${pathToFileURL(getUIPath()).toString()}`);
     throw new Error(
-      `Malicious Event -- Frame url: ${frame.url} is not the same as the UI path: ${pathToFileURL(getUIPath()).toString()}`
+      `Malicious event: ${frame.url} does not match ${UI_URL}`
     );
   }
 }
