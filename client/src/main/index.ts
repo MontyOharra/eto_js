@@ -7,11 +7,16 @@ import {
 } from "./helpers/utils.js";
 import { ipcMainHandle } from "./helpers/ipcWrappers.js";
 import { DataServiceFactory } from "./services/data-service-factory.js";
-import {
-  PrismaService,
-  type DatabaseConfig,
-} from "./database/prisma-client.js";
-import { SecureConfigManager } from "./database/secure-config.js";
+import { PrismaService } from "./database/prisma/prisma-client.js";
+import { SecureConfigManager } from "./database/prisma/secure-config.js";
+
+import { DatabaseConfig } from "../@types/database.js";
+import { buildDatabaseUrl } from "./database/prisma/helpers.js";
+
+(async () => {
+  const initConfig = await SecureConfigManager.getConfig();
+  process.env.DATABASE_URL = buildDatabaseUrl(initConfig);
+})();
 
 app.on("ready", () => {
   const mainWindow = new BrowserWindow({
@@ -51,22 +56,14 @@ app.on("ready", () => {
 
   ipcMainHandle("setDatabaseConfig", async (config: DatabaseConfig) => {
     try {
-      // Set the configuration (handles both dev and prod modes)
       await SecureConfigManager.setConfig(config);
-
-      // Reconnect with new configuration
       const success = await PrismaService.reconnectWithConfig(config);
 
       if (success) {
-        // Reset the data service factory to use new connection
         await DataServiceFactory.cleanup();
         DataServiceFactory.resetInstance();
 
-        // Test the new connection
-        const dataService = DataServiceFactory.createDataService();
-        const testResult = await dataService.testConnection();
-
-        return testResult;
+        return true;
       }
 
       return false;
@@ -80,4 +77,12 @@ app.on("ready", () => {
 // Clean up database connections on app quit
 app.on("before-quit", async () => {
   await DataServiceFactory.cleanup();
+  await PrismaService.disconnect();
 });
+
+for (const signal of ["SIGINT", "SIGTERM", "uncaughtException"]) {
+  process.on(signal as NodeJS.Signals, async () => {
+    await PrismaService.disconnect();
+    process.exit(0);
+  });
+}

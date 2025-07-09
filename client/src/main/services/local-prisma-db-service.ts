@@ -1,8 +1,9 @@
-import { prisma, PrismaService } from "../database/prisma-client.js";
+import { getPrisma, PrismaService } from "../database/prisma/prisma-client.js";
 import { position } from "../../../prisma/generated/client/index.js";
+
 import { DataService } from "../../@types/database.js";
 
-export class LocalDatabaseService implements DataService {
+export class LocalPrismaDataService implements DataService {
   constructor() {
     // Prisma uses DATABASE_URL environment variable - no config needed
   }
@@ -10,6 +11,8 @@ export class LocalDatabaseService implements DataService {
   async testConnection(): Promise<boolean> {
     try {
       // Simple test query
+      console.log(process.env.DATABASE_URL);
+      const prisma = getPrisma();
       await prisma.$queryRaw`SELECT 1 as test`;
       return true;
     } catch (error) {
@@ -20,6 +23,7 @@ export class LocalDatabaseService implements DataService {
 
   async getPositions(): Promise<position[]> {
     try {
+      const prisma = getPrisma();
       const positions = await prisma.position.findMany();
       return positions;
     } catch (error) {

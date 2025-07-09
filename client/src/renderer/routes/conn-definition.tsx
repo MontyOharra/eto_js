@@ -60,9 +60,9 @@ function ConnectionDefinition() {
       const result = await window.electron.setDatabaseConfig(config);
 
       if (result) {
-        setMessage("Configuration saved successfully");
+        setMessage("Configution Valid");
       } else {
-        setMessage("Failed to save configuration");
+        setMessage("Configuration Invalid");
       }
     } catch (error) {
       setMessage(

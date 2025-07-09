@@ -1,15 +1,36 @@
 import { createFileRoute } from "@tanstack/react-router";
-import App from "../app";
+import { useState, useEffect } from "react";
+import { position } from "../../../prisma/generated/client/index.js";  
 
 export const Route = createFileRoute("/about")({
   component: About,
 });
 
-function About() {
+
+export default function About() {
+  const [connectionStatus, setConnectionStatus] = useState<boolean>(false);
+  const [positions, setPositions] = useState<position[]>([]);
+
+  useEffect(() => {
+    window.electron.testDatabaseConnection().then((status) => {
+      setConnectionStatus(status);
+    });
+  }, []);
+
+  function handleGetPositions() {
+    window.electron.getPositions().then((positions) => {
+      setPositions(positions);
+    });
+  }
+
   return (
     <div className="p-2">
-      Hello from About!
-      <App />
+      <h3>Welcome Home!</h3>
+      <p>
+        Connection Status: {connectionStatus ? "Connected" : "Disconnected"}
+      </p>
+      <button onClick={handleGetPositions}>Get Positions</button>
+      <pre>{JSON.stringify(positions, null, 2)}</pre>
     </div>
   );
 }

@@ -9,7 +9,7 @@
   "scripts": {
     "typecheck": "tsc -p src",
     "build:main": "node scripts/build-main.mjs",
-    "dev": "rm -rf build && npm-run-all --parallel dev:react dev:electron",
+    "dev": "rm -rf build && npm run prisma:generate && npm-run-all --parallel dev:react dev:electron",
     "dev:react": "vite",
     "dev:electron": "cross-env NODE_ENV=development npm run build:main && node scripts/build-preload.mjs && electron .",
     "build": "rm -rf build && cross-env NODE_ENV=production npm run prisma:generate && npm run build:react && npm run build:electron",
