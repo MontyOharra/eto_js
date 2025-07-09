@@ -10,8 +10,6 @@ export class LocalPrismaDataService implements DataService {
 
   async testConnection(): Promise<boolean> {
     try {
-      // Simple test query
-      console.log(process.env.DATABASE_URL);
       const prisma = getPrisma();
       await prisma.$queryRaw`SELECT 1 as test`;
       return true;

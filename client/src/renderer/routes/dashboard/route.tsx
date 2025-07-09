@@ -1,7 +1,13 @@
-import { Link, Outlet } from "@tanstack/react-router";
+import { Link, Outlet, redirect } from "@tanstack/react-router";
 import { createFileRoute } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/dashboard")({
+  loader: async ({ location }) => {
+    // Redirect if exactly on /dashboard
+    if (location.pathname === "/dashboard") {
+      throw redirect({ to: "/dashboard/connection-status" });
+    }
+  },
   component: DashboardLayout,
 });
 
@@ -17,6 +23,7 @@ function NavLink({ to, children }: { to: string; children: string }) {
 }
 
 function DashboardLayout() {
+
   return (
     <div className="flex h-screen">
       {/* Side navigation */}

@@ -33,7 +33,6 @@ class PrismaService {
 
       // Update DATABASE_URL for Prisma using the shared helper
       process.env.DATABASE_URL = buildDatabaseUrl(config);
-      console.log("New DATABASE_URL:", process.env.DATABASE_URL);
 
       // Create a fresh instance – this will pick up the new env var
       const newClient = this.getInstance();

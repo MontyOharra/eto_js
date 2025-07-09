@@ -22,7 +22,6 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 
 function PdfViewer() {
   const { file } = Route.useSearch();
-  console.log("file", file);
   const [numPages, setNumPages] = useState<number | null>(null);
   const [page, setPage] = useState(1);
 
