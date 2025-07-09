@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, type ChangeEvent } from "react";
 
-// @ts-expect-error new route path pending in generated types
 export const Route = createFileRoute("/dashboard/pdf-picker")({
   component: PdfPicker,
 });

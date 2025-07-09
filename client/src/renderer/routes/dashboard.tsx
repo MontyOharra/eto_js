@@ -1,7 +1,6 @@
 import { Link, Outlet } from "@tanstack/react-router";
 import { createFileRoute } from "@tanstack/react-router";
 
-// @ts-expect-error new route path pending in generated types
 export const Route = createFileRoute("/dashboard")({
   component: DashboardLayout,
 });
