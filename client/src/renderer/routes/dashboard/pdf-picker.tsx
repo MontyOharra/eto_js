@@ -18,6 +18,13 @@ function PdfPicker() {
     }
   };
 
+  const shortPath = (() => {
+    if (!file) return "No file selected";
+    // Show just last 30 chars
+    const name = file.name;
+    return name.length > 30 ? "…" + name.slice(-30) : name;
+  })();
+
   const onViewClick = async () => {
     if (!file) return;
     try {
@@ -44,6 +51,9 @@ function PdfPicker() {
       >
         Select PDF to view
       </label>
+      <span className="mb-4 text-sm text-gray-700 max-w-xs break-all text-center">
+        {shortPath}
+      </span>
       <input
         id="pdfInput"
         type="file"

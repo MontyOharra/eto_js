@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useMemo } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
+import PdfFieldSelector from "../components/PdfFieldSelector";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 
@@ -52,11 +53,11 @@ function PdfViewer() {
   // Build a proper file:// URL from the `file` query param.
   const decodedPath = decodeURIComponent(file);
 
-  // React-PDF can accept a typed array. Avoids cross-origin issues with file://
-  const fileSource = useMemo(
-    () => (pdfData ? { data: pdfData } : undefined),
-    [pdfData]
-  );
+  // Provide pdf.js with a fresh Uint8Array copy; avoids 'detached buffer'
+  const fileSource = useMemo(() => {
+    if (!pdfData) return undefined;
+    return { data: new Uint8Array(pdfData) }; // copy
+  }, [pdfData]);
 
   return (
     <main className="min-h-screen bg-gray-100 flex flex-col items-center p-8">
@@ -77,16 +78,22 @@ function PdfViewer() {
         </button>
       </div>
 
-      <div className="w-full max-w-4xl overflow-y-auto border rounded-2xl shadow-inner bg-white p-4">
+      <div className="w-full max-w-4xl overflow-y-auto border rounded-2xl bg-black p-4 relative">
         {fileSource && (
-          <Document file={fileSource} onLoadSuccess={onLoadSuccess}>
-            <Page
-              pageNumber={page}
-              renderTextLayer
-              renderAnnotationLayer
-              width={800}
-            />
-          </Document>
+          <>
+            <div className="relative inline-block border-4 border-lime-500">
+              <Document file={fileSource} onLoadSuccess={onLoadSuccess}>
+                <Page
+                  pageNumber={page}
+                  renderTextLayer
+                  renderAnnotationLayer
+                  width={800}
+                />
+              </Document>
+              {/* overlay on top */}
+              <PdfFieldSelector />
+            </div>
+          </>
         )}
       </div>
 
