@@ -42,9 +42,8 @@ function PdfViewer() {
     }
     return withSlashes;
   };
-  const fileUrl = decodedPath.startsWith("file://")
-    ? decodedPath
-    : `file://${normalizeForUrl(decodedPath)}`;
+
+  const fileUrl = "C:/HTC_EmailToParse%20-%20Copy/Mwb%2093195628%20-%20Delivery%20Receipt%20(Plain).pdf";
 
   return (
     <main className="min-h-screen bg-gray-100 flex flex-col items-center p-8">
