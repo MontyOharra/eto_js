@@ -21,10 +21,21 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url
 ).toString();
 
+interface Box {
+  id: number;
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
 function PdfViewer() {
   const { file } = Route.useSearch();
   const [numPages, setNumPages] = useState<number | null>(null);
   const [page, setPage] = useState(1);
+
+  // Track boxes for each page number
+  const [boxesPerPage, setBoxesPerPage] = useState<Record<number, Box[]>>({});
 
   const [pdfData, setPdfData] = useState<Uint8Array | null>(null);
 
@@ -49,6 +60,10 @@ function PdfViewer() {
 
   const nextPage = () => setPage((p) => Math.min(numPages ?? p, p + 1));
   const prevPage = () => setPage((p) => Math.max(1, p - 1));
+
+  const handleBoxesChange = (updated: Box[]) => {
+    setBoxesPerPage((prev) => ({ ...prev, [page]: updated }));
+  };
 
   // Build a proper file:// URL from the `file` query param.
   const decodedPath = decodeURIComponent(file);
@@ -78,10 +93,10 @@ function PdfViewer() {
         </button>
       </div>
 
-      <div className="w-full max-w-4xl overflow-y-auto border rounded-2xl bg-black p-4 relative">
+      <div className="w-full max-w-4xl overflow-y-auto border rounded-2xl bg-white p-4 relative">
         {fileSource && (
           <>
-            <div className="relative inline-block border-4 border-lime-500">
+            <div className="relative inline-block border-4">
               <Document file={fileSource} onLoadSuccess={onLoadSuccess}>
                 <Page
                   pageNumber={page}
@@ -91,7 +106,11 @@ function PdfViewer() {
                 />
               </Document>
               {/* overlay on top */}
-              <PdfFieldSelector />
+              <PdfFieldSelector
+                key={page}
+                initialBoxes={boxesPerPage[page] ?? []}
+                onBoxesChange={handleBoxesChange}
+              />
             </div>
           </>
         )}

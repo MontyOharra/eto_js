@@ -1,58 +1,76 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 
 interface Box {
   id: number;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+interface PdfFieldSelectorProps {
+  initialBoxes: Box[];
+  onBoxesChange?: (boxes: Box[]) => void;
 }
 
 // Renders an overlay that lets the user drag-to-draw selection rectangles.
 // Only the visual selection is handled for now.
-export default function PdfFieldSelector() {
+export default function PdfFieldSelector({
+  initialBoxes,
+  onBoxesChange,
+}: PdfFieldSelectorProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
-  const [boxes, setBoxes] = useState<Box[]>([]);
-  const [draft, setDraft] = useState<Box | null>(null);
+  const [boxes, setBoxes] = useState<Box[]>(initialBoxes);
+  const [draftStart, setDraftStart] = useState<{ x: number; y: number } | null>(
+    null
+  );
+  const [draftEnd, setDraftEnd] = useState<{ x: number; y: number } | null>(
+    null
+  );
   const boxIdRef = useRef(0);
 
   const toRelative = (e: React.MouseEvent) => {
     const rect = overlayRef.current!.getBoundingClientRect();
+    const borderX = overlayRef.current!.clientLeft; // left border width
+    const borderY = overlayRef.current!.clientTop; // top border width
     return {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
+      x: e.clientX - rect.left - borderX / 2,
+      y: e.clientY - rect.top - borderY / 2,
     };
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0) return;
-    const { x, y } = toRelative(e);
-    setDraft({ id: -1, x, y, width: 0, height: 0 });
+    let { x, y } = toRelative(e);
+    x -= 4;
+    y -= 4;
+    setDraftStart({ x, y });
+    setDraftEnd({ x, y });
     console.log(boxes);
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!draft) return;
-    const { x, y } = toRelative(e);
-    setDraft(
-      (prev) => prev && { ...prev, width: x - prev.x, height: y - prev.y }
-    );
+    if (!draftStart) return;
+    const { x: currX, y: currY } = toRelative(e);
+    if (draftStart) setDraftEnd({ x: currX, y: currY });
   };
 
   const handleMouseUp = () => {
-    if (!draft) return;
-    const final = { ...draft, id: ++boxIdRef.current };
-    // Normalize width/height to positive values
-    if (final.width < 0) {
-      final.x += final.width;
-      final.width = Math.abs(final.width);
-    }
-    if (final.height < 0) {
-      final.y += final.height;
-      final.height = Math.abs(final.height);
-    }
-    setBoxes((b) => [...b, final]);
-    setDraft(null);
+    if (!draftStart || !draftEnd) return;
+    const final: Box = {
+      id: ++boxIdRef.current,
+      left: Math.min(draftStart.x, draftEnd.x),
+      top: Math.min(draftStart.y, draftEnd.y),
+      right: Math.max(draftStart.x, draftEnd.x),
+      bottom: Math.max(draftStart.y, draftEnd.y),
+    };
+    setBoxes((b) => {
+      const updated = [...b, final];
+      onBoxesChange?.(updated);
+      return updated;
+    });
+    setDraftStart(null);
+    setDraftEnd(null);
   };
 
   const renderRect = (box: Box, color = "border-blue-500") => (
@@ -60,24 +78,41 @@ export default function PdfFieldSelector() {
       key={box.id}
       className={`absolute border-2 ${color} pointer-events-none`}
       style={{
-        left: box.x,
-        top: box.y,
-        width: box.width,
-        height: box.height,
+        left: box.left,
+        top: box.top,
+        width: box.right - box.left,
+        height: box.bottom - box.top,
       }}
     />
   );
 
+  // Keep local state in sync if parent provides new initialBoxes (e.g., when user navigates back to this page).
+  // Only overwrite when the array reference actually changes to avoid clobbering ongoing edits.
+  useEffect(() => {
+    setBoxes(initialBoxes);
+  }, [initialBoxes]);
+
   return (
     <div
       ref={overlayRef}
-      className="absolute inset-0 cursor-crosshair z-50 border-4 border-red-500/80 bg-red-500/5"
+      className="absolute inset-0 cursor-crosshair z-50 border-4"
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
     >
       {boxes.map((b) => renderRect(b))}
-      {draft && renderRect(draft, "border-red-400")}
+      {draftStart &&
+        draftEnd &&
+        renderRect(
+          {
+            id: -1,
+            left: Math.min(draftStart.x, draftEnd.x),
+            top: Math.min(draftStart.y, draftEnd.y),
+            right: Math.max(draftStart.x, draftEnd.x),
+            bottom: Math.max(draftStart.y, draftEnd.y),
+          },
+          "border-red-400"
+        )}
     </div>
   );
 }
