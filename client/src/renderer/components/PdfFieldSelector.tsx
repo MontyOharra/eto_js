@@ -1,26 +1,18 @@
 import { useRef, useState, useEffect } from "react";
-
-interface Box {
-  id: number;
-  left: number;
-  top: number;
-  right: number;
-  bottom: number;
-}
+import SelectableBox, { Box } from "./SelectableBox";
 
 interface PdfFieldSelectorProps {
   initialBoxes: Box[];
   onBoxesChange?: (boxes: Box[]) => void;
 }
 
-// Renders an overlay that lets the user drag-to-draw selection rectangles.
-// Only the visual selection is handled for now.
 export default function PdfFieldSelector({
   initialBoxes,
   onBoxesChange,
 }: PdfFieldSelectorProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const [boxes, setBoxes] = useState<Box[]>(initialBoxes);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [draftStart, setDraftStart] = useState<{ x: number; y: number } | null>(
     null
   );
@@ -46,7 +38,6 @@ export default function PdfFieldSelector({
     y -= 4;
     setDraftStart({ x, y });
     setDraftEnd({ x, y });
-    console.log(boxes);
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
@@ -57,34 +48,82 @@ export default function PdfFieldSelector({
 
   const handleMouseUp = () => {
     if (!draftStart || !draftEnd) return;
-    const final: Box = {
-      id: ++boxIdRef.current,
-      left: Math.min(draftStart.x, draftEnd.x),
-      top: Math.min(draftStart.y, draftEnd.y),
-      right: Math.max(draftStart.x, draftEnd.x),
-      bottom: Math.max(draftStart.y, draftEnd.y),
-    };
-    setBoxes((b) => {
-      const updated = [...b, final];
-      onBoxesChange?.(updated);
+
+    setBoxes((prev) => {
+      let updated = [...prev];
+      // If another box was in unsaved editing state, drop it
+      if (editingId !== null) {
+        const prevBox = updated.find((b) => b.id === editingId);
+        if (prevBox && prevBox.label === undefined) {
+          updated = updated.filter((b) => b.id !== editingId);
+        }
+      }
+
+      const newBox: Box = {
+        id: ++boxIdRef.current,
+        left: Math.min(draftStart.x, draftEnd.x),
+        top: Math.min(draftStart.y, draftEnd.y),
+        right: Math.max(draftStart.x, draftEnd.x),
+        bottom: Math.max(draftStart.y, draftEnd.y),
+        label: undefined,
+      };
+
+      updated.push(newBox);
+      setEditingId(newBox.id);
       return updated;
     });
+
     setDraftStart(null);
     setDraftEnd(null);
   };
 
-  const renderRect = (box: Box, color = "border-blue-500") => (
-    <div
-      key={box.id}
-      className={`absolute border-2 ${color} pointer-events-none`}
-      style={{
-        left: box.left,
-        top: box.top,
-        width: box.right - box.left,
-        height: box.bottom - box.top,
-      }}
-    />
-  );
+  const handleActivate = (id: number) => {
+    if (editingId === id) return;
+
+    setBoxes((prev) => {
+      let updated = [...prev];
+      if (editingId !== null && editingId !== id) {
+        const prevBox = updated.find((b) => b.id === editingId);
+        if (prevBox && prevBox.label === undefined) {
+          updated = updated.filter((b) => b.id !== editingId);
+        }
+      }
+      return updated;
+    });
+
+    setEditingId(id);
+  };
+
+  const handleSave = (id: number, label: string) => {
+    setBoxes((prev) => {
+      const updated = prev.map((b) => (b.id === id ? { ...b, label } : b));
+      onBoxesChange?.(updated);
+      return updated;
+    });
+    setEditingId(null);
+  };
+
+  const handleCancel = (id: number) => {
+    setBoxes((prev) => {
+      const target = prev.find((b) => b.id === id);
+      if (!target) return prev;
+      if (target.label === undefined) {
+        // unsaved -> remove completely
+        return prev.filter((b) => b.id !== id);
+      }
+      return prev;
+    });
+    setEditingId(null);
+  };
+
+  const handleDelete = (id: number) => {
+    setBoxes((prev) => {
+      const filtered = prev.filter((b) => b.id !== id);
+      onBoxesChange?.(filtered);
+      return filtered;
+    });
+    if (editingId === id) setEditingId(null);
+  };
 
   // Keep local state in sync if parent provides new initialBoxes (e.g., when user navigates back to this page).
   // Only overwrite when the array reference actually changes to avoid clobbering ongoing edits.
@@ -100,19 +139,29 @@ export default function PdfFieldSelector({
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
     >
-      {boxes.map((b) => renderRect(b))}
-      {draftStart &&
-        draftEnd &&
-        renderRect(
-          {
-            id: -1,
+      {boxes.map((b) => (
+        <SelectableBox
+          key={b.id}
+          box={b}
+          onSave={handleSave}
+          onCancel={handleCancel}
+          onDelete={handleDelete}
+          isEditing={b.id === editingId}
+          onActivate={handleActivate}
+        />
+      ))}
+
+      {draftStart && draftEnd && (
+        <div
+          className="absolute border-2 border-red-400 pointer-events-none"
+          style={{
             left: Math.min(draftStart.x, draftEnd.x),
             top: Math.min(draftStart.y, draftEnd.y),
-            right: Math.max(draftStart.x, draftEnd.x),
-            bottom: Math.max(draftStart.y, draftEnd.y),
-          },
-          "border-red-400"
-        )}
+            width: Math.abs(draftEnd.x - draftStart.x),
+            height: Math.abs(draftEnd.y - draftStart.y),
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -39,6 +39,22 @@ app.on("ready", () => {
     mainWindow.loadFile(getUIPath());
   }
 
+  // When the main window is closed, close any remaining windows then quit.
+  mainWindow.on("closed", () => {
+    // Close any additional windows that might still be open
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) {
+        win.close();
+      }
+    }
+
+    // On non-macOS platforms quit the application entirely.
+    // (macOS usually keeps the app menu alive, adapt if desired.)
+    if (process.platform !== "darwin") {
+      app.quit();
+    }
+  });
+
   // Database IPC handlers
   ipcMainHandle("testDatabaseConnection", async () => {
     const dataService = DataServiceFactory.createDataService();
