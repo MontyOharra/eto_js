@@ -8,3 +8,5 @@ dist-electron
 dist-ssr
 build
 *.local
+
+.tanstack/
