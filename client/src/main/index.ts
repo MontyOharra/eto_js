@@ -1,4 +1,5 @@
 import { app, BrowserWindow } from "electron";
+import { pathToFileURL } from "url";
 import {
   devServerPort,
   getPreloadPath,
@@ -69,6 +70,33 @@ app.on("ready", () => {
       return false;
     } catch (error) {
       console.error("Failed to set database configuration:", error);
+      return false;
+    }
+  });
+
+  // Open a separate PDF viewer window
+  ipcMainHandle("openPdfWindow", async (filePath: string) => {
+    try {
+      const encodedPath = encodeURIComponent(filePath);
+      const viewerUrl = isDev()
+        ? `http://localhost:${devServerPort}/#/pdf-view?file=${encodedPath}`
+        : `${pathToFileURL(getUIPath()).toString()}#/pdf-view?file=${encodedPath}`;
+
+      const viewerWindow = new BrowserWindow({
+        webPreferences: {
+          nodeIntegration: false,
+          contextIsolation: true,
+          preload: getPreloadPath(),
+        },
+        title: "PDF Viewer",
+        width: 1000,
+        height: 800,
+      });
+
+      await viewerWindow.loadURL(viewerUrl);
+      return true;
+    } catch (error) {
+      console.error("Failed to open PDF window:", error);
       return false;
     }
   });

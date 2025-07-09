@@ -9,10 +9,22 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as PdfViewRouteImport } from './routes/pdf-view'
+import { Route as PdfPickerRouteImport } from './routes/pdf-picker'
 import { Route as ConnDefinitionRouteImport } from './routes/conn-definition'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 
+const PdfViewRoute = PdfViewRouteImport.update({
+  id: '/pdf-view',
+  path: '/pdf-view',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PdfPickerRoute = PdfPickerRouteImport.update({
+  id: '/pdf-picker',
+  path: '/pdf-picker',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ConnDefinitionRoute = ConnDefinitionRouteImport.update({
   id: '/conn-definition',
   path: '/conn-definition',
@@ -33,34 +45,62 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/conn-definition': typeof ConnDefinitionRoute
+  '/pdf-picker': typeof PdfPickerRoute
+  '/pdf-view': typeof PdfViewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/conn-definition': typeof ConnDefinitionRoute
+  '/pdf-picker': typeof PdfPickerRoute
+  '/pdf-view': typeof PdfViewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/conn-definition': typeof ConnDefinitionRoute
+  '/pdf-picker': typeof PdfPickerRoute
+  '/pdf-view': typeof PdfViewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/about' | '/conn-definition'
+  fullPaths: '/' | '/about' | '/conn-definition' | '/pdf-picker' | '/pdf-view'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/about' | '/conn-definition'
-  id: '__root__' | '/' | '/about' | '/conn-definition'
+  to: '/' | '/about' | '/conn-definition' | '/pdf-picker' | '/pdf-view'
+  id:
+    | '__root__'
+    | '/'
+    | '/about'
+    | '/conn-definition'
+    | '/pdf-picker'
+    | '/pdf-view'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
   ConnDefinitionRoute: typeof ConnDefinitionRoute
+  PdfPickerRoute: typeof PdfPickerRoute
+  PdfViewRoute: typeof PdfViewRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/pdf-view': {
+      id: '/pdf-view'
+      path: '/pdf-view'
+      fullPath: '/pdf-view'
+      preLoaderRoute: typeof PdfViewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pdf-picker': {
+      id: '/pdf-picker'
+      path: '/pdf-picker'
+      fullPath: '/pdf-picker'
+      preLoaderRoute: typeof PdfPickerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/conn-definition': {
       id: '/conn-definition'
       path: '/conn-definition'
@@ -89,6 +129,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
   ConnDefinitionRoute: ConnDefinitionRoute,
+  PdfPickerRoute: PdfPickerRoute,
+  PdfViewRoute: PdfViewRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
