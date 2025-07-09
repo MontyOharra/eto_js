@@ -23,6 +23,11 @@ export class SecureConfigManager {
     if (app.isPackaged) {
       return await this.loadFromKeychain();
     } else {
+      if (!this.config) {
+        this.config = this.getDefaultConfig();
+        this.saveToEnv(this.config);
+        return this.config;
+      }
       return this.loadFromEnv();
     }
   }
@@ -122,9 +127,9 @@ export class SecureConfigManager {
     return {
       authType: "windows",
       server: "localhost",
-      port: "1433",
+      port: "49172",
       database: "HTC",
-      encrypt: "optional",
+      encrypt: "false",
       trustServerCertificate: "true",
     };
   }

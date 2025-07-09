@@ -1,5 +1,6 @@
 import { app, BrowserWindow } from "electron";
 import { pathToFileURL } from "url";
+import fs from "fs/promises";
 import {
   devServerPort,
   getPreloadPath,
@@ -15,8 +16,8 @@ import { DatabaseConfig } from "../@types/database.js";
 import { buildDatabaseUrl } from "./database/prisma/helpers.js";
 
 (async () => {
-  const initConfig = await SecureConfigManager.getConfig();
-  process.env.DATABASE_URL = buildDatabaseUrl(initConfig);
+  const defaultConfig = await SecureConfigManager.getConfig();
+  process.env.DATABASE_URL = buildDatabaseUrl(defaultConfig);
 })();
 
 app.on("ready", () => {
@@ -34,10 +35,8 @@ app.on("ready", () => {
   if (isDev()) {
     mainWindow.loadURL(`http://localhost:${devServerPort}`);
     mainWindow.webContents.openDevTools();
-    console.log("dev");
   } else {
     mainWindow.loadFile(getUIPath());
-    console.log("prod");
   }
 
   // Database IPC handlers
@@ -74,6 +73,18 @@ app.on("ready", () => {
     }
   });
 
+  // Send PDF file data to renderer as Uint8Array (safe for structured clone)
+  ipcMainHandle("readPdfFile", async (filepath: string) => {
+    try {
+      const buf = await fs.readFile(filepath);
+      // Return a fresh copy as Uint8Array to avoid detached ArrayBuffer issues
+      return Uint8Array.from(buf);
+    } catch (error) {
+      console.error("Failed to read PDF file:", error);
+      throw error;
+    }
+  });
+
   // Open a separate PDF viewer window
   ipcMainHandle("openPdfWindow", async (filePath: string) => {
     try {
@@ -87,6 +98,10 @@ app.on("ready", () => {
           nodeIntegration: false,
           contextIsolation: true,
           preload: getPreloadPath(),
+          // Disable the same-origin policy for this window so that the
+          // React dev server (http://localhost) can fetch a file:// resource.
+          // The main application window keeps webSecurity enabled.
+          webSecurity: false,
         },
         title: "PDF Viewer",
         width: 1000,

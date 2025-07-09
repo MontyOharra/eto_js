@@ -9,6 +9,7 @@ declare global {
     getDatabaseConfig: DatabaseConfig;
     openPdfWindow: boolean;
     getFilePath: string;
+    readPdfFile: Uint8Array;
   };
 
   type InputPayloadMapping = {
@@ -18,6 +19,7 @@ declare global {
     getDatabaseConfig: void;
     openPdfWindow: string;
     getFilePath: File;
+    readPdfFile: string; // file path
   };
 
   interface Window {
@@ -28,6 +30,7 @@ declare global {
       getDatabaseConfig: () => Promise<DatabaseConfig>;
       openPdfWindow: (filePath: string) => Promise<boolean>;
       getFilePath: (file: File) => string;
+      readPdfFile: (filePath: string) => Promise<Uint8Array>;
     };
   }
 }

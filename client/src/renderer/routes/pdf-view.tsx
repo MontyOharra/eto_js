@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
@@ -22,8 +22,26 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 
 function PdfViewer() {
   const { file } = Route.useSearch();
+  console.log("file", file);
   const [numPages, setNumPages] = useState<number | null>(null);
   const [page, setPage] = useState(1);
+
+  const [pdfData, setPdfData] = useState<Uint8Array | null>(null);
+
+  // Load the PDF binary via IPC once on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const bytes = await window.electron.readPdfFile(decodedPath);
+        // Create a defensive copy so React-PDF always receives the same
+        // buffer instance and to avoid detached-buffer warnings.
+        setPdfData(new Uint8Array(bytes));
+      } catch (err) {
+        console.error("Failed to load PDF data", err);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const onLoadSuccess = ({ numPages }: { numPages: number }) => {
     setNumPages(numPages);
@@ -32,18 +50,14 @@ function PdfViewer() {
   const nextPage = () => setPage((p) => Math.min(numPages ?? p, p + 1));
   const prevPage = () => setPage((p) => Math.max(1, p - 1));
 
-  // The file path is URL-encoded; decode it then turn into a proper file URL.
+  // Build a proper file:// URL from the `file` query param.
   const decodedPath = decodeURIComponent(file);
-  const normalizeForUrl = (p: string) => {
-    // Replace backslashes with forward slashes for Windows and ensure leading slash after drive letter.
-    const withSlashes = p.replace(/\\/g, "/");
-    if (/^[a-zA-Z]:\//.test(withSlashes)) {
-      return `/` + withSlashes; // adds leading slash before drive letter
-    }
-    return withSlashes;
-  };
 
-  const fileUrl = "C:/HTC_EmailToParse%20-%20Copy/Mwb%2093195628%20-%20Delivery%20Receipt%20(Plain).pdf";
+  // React-PDF can accept a typed array. Avoids cross-origin issues with file://
+  const fileSource = useMemo(
+    () => (pdfData ? { data: pdfData } : undefined),
+    [pdfData]
+  );
 
   return (
     <main className="min-h-screen bg-gray-100 flex flex-col items-center p-8">
@@ -65,14 +79,16 @@ function PdfViewer() {
       </div>
 
       <div className="w-full max-w-4xl overflow-y-auto border rounded-2xl shadow-inner bg-white p-4">
-        <Document file={fileUrl} onLoadSuccess={onLoadSuccess}>
-          <Page
-            pageNumber={page}
-            renderTextLayer
-            renderAnnotationLayer
-            width={800}
-          />
-        </Document>
+        {fileSource && (
+          <Document file={fileSource} onLoadSuccess={onLoadSuccess}>
+            <Page
+              pageNumber={page}
+              renderTextLayer
+              renderAnnotationLayer
+              width={800}
+            />
+          </Document>
+        )}
       </div>
 
       <p className="mt-2 text-sm text-gray-600">

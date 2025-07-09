@@ -10,29 +10,20 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as PdfViewRouteImport } from './routes/pdf-view'
-import { Route as PdfPickerRouteImport } from './routes/pdf-picker'
-import { Route as ConnDefinitionRouteImport } from './routes/conn-definition'
-import { Route as AboutRouteImport } from './routes/about'
+import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as DashboardPdfPickerRouteImport } from './routes/dashboard/pdf-picker'
+import { Route as DashboardConnectionStatusRouteImport } from './routes/dashboard/connection-status'
+import { Route as DashboardConnectionSettingsRouteImport } from './routes/dashboard/connection-settings'
 
 const PdfViewRoute = PdfViewRouteImport.update({
   id: '/pdf-view',
   path: '/pdf-view',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PdfPickerRoute = PdfPickerRouteImport.update({
-  id: '/pdf-picker',
-  path: '/pdf-picker',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ConnDefinitionRoute = ConnDefinitionRouteImport.update({
-  id: '/conn-definition',
-  path: '/conn-definition',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AboutRoute = AboutRouteImport.update({
-  id: '/about',
-  path: '/about',
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -40,48 +31,79 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DashboardPdfPickerRoute = DashboardPdfPickerRouteImport.update({
+  id: '/pdf-picker',
+  path: '/pdf-picker',
+  getParentRoute: () => DashboardRoute,
+} as any)
+const DashboardConnectionStatusRoute =
+  DashboardConnectionStatusRouteImport.update({
+    id: '/connection-status',
+    path: '/connection-status',
+    getParentRoute: () => DashboardRoute,
+  } as any)
+const DashboardConnectionSettingsRoute =
+  DashboardConnectionSettingsRouteImport.update({
+    id: '/connection-settings',
+    path: '/connection-settings',
+    getParentRoute: () => DashboardRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/about': typeof AboutRoute
-  '/conn-definition': typeof ConnDefinitionRoute
-  '/pdf-picker': typeof PdfPickerRoute
+  '/dashboard': typeof DashboardRouteWithChildren
   '/pdf-view': typeof PdfViewRoute
+  '/dashboard/connection-settings': typeof DashboardConnectionSettingsRoute
+  '/dashboard/connection-status': typeof DashboardConnectionStatusRoute
+  '/dashboard/pdf-picker': typeof DashboardPdfPickerRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/about': typeof AboutRoute
-  '/conn-definition': typeof ConnDefinitionRoute
-  '/pdf-picker': typeof PdfPickerRoute
+  '/dashboard': typeof DashboardRouteWithChildren
   '/pdf-view': typeof PdfViewRoute
+  '/dashboard/connection-settings': typeof DashboardConnectionSettingsRoute
+  '/dashboard/connection-status': typeof DashboardConnectionStatusRoute
+  '/dashboard/pdf-picker': typeof DashboardPdfPickerRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/about': typeof AboutRoute
-  '/conn-definition': typeof ConnDefinitionRoute
-  '/pdf-picker': typeof PdfPickerRoute
+  '/dashboard': typeof DashboardRouteWithChildren
   '/pdf-view': typeof PdfViewRoute
+  '/dashboard/connection-settings': typeof DashboardConnectionSettingsRoute
+  '/dashboard/connection-status': typeof DashboardConnectionStatusRoute
+  '/dashboard/pdf-picker': typeof DashboardPdfPickerRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/about' | '/conn-definition' | '/pdf-picker' | '/pdf-view'
+  fullPaths:
+    | '/'
+    | '/dashboard'
+    | '/pdf-view'
+    | '/dashboard/connection-settings'
+    | '/dashboard/connection-status'
+    | '/dashboard/pdf-picker'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/about' | '/conn-definition' | '/pdf-picker' | '/pdf-view'
+  to:
+    | '/'
+    | '/dashboard'
+    | '/pdf-view'
+    | '/dashboard/connection-settings'
+    | '/dashboard/connection-status'
+    | '/dashboard/pdf-picker'
   id:
     | '__root__'
     | '/'
-    | '/about'
-    | '/conn-definition'
-    | '/pdf-picker'
+    | '/dashboard'
     | '/pdf-view'
+    | '/dashboard/connection-settings'
+    | '/dashboard/connection-status'
+    | '/dashboard/pdf-picker'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AboutRoute: typeof AboutRoute
-  ConnDefinitionRoute: typeof ConnDefinitionRoute
-  PdfPickerRoute: typeof PdfPickerRoute
+  DashboardRoute: typeof DashboardRouteWithChildren
   PdfViewRoute: typeof PdfViewRoute
 }
 
@@ -94,25 +116,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PdfViewRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/pdf-picker': {
-      id: '/pdf-picker'
-      path: '/pdf-picker'
-      fullPath: '/pdf-picker'
-      preLoaderRoute: typeof PdfPickerRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/conn-definition': {
-      id: '/conn-definition'
-      path: '/conn-definition'
-      fullPath: '/conn-definition'
-      preLoaderRoute: typeof ConnDefinitionRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/about': {
-      id: '/about'
-      path: '/about'
-      fullPath: '/about'
-      preLoaderRoute: typeof AboutRouteImport
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -122,14 +130,49 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dashboard/pdf-picker': {
+      id: '/dashboard/pdf-picker'
+      path: '/pdf-picker'
+      fullPath: '/dashboard/pdf-picker'
+      preLoaderRoute: typeof DashboardPdfPickerRouteImport
+      parentRoute: typeof DashboardRoute
+    }
+    '/dashboard/connection-status': {
+      id: '/dashboard/connection-status'
+      path: '/connection-status'
+      fullPath: '/dashboard/connection-status'
+      preLoaderRoute: typeof DashboardConnectionStatusRouteImport
+      parentRoute: typeof DashboardRoute
+    }
+    '/dashboard/connection-settings': {
+      id: '/dashboard/connection-settings'
+      path: '/connection-settings'
+      fullPath: '/dashboard/connection-settings'
+      preLoaderRoute: typeof DashboardConnectionSettingsRouteImport
+      parentRoute: typeof DashboardRoute
+    }
   }
 }
 
+interface DashboardRouteChildren {
+  DashboardConnectionSettingsRoute: typeof DashboardConnectionSettingsRoute
+  DashboardConnectionStatusRoute: typeof DashboardConnectionStatusRoute
+  DashboardPdfPickerRoute: typeof DashboardPdfPickerRoute
+}
+
+const DashboardRouteChildren: DashboardRouteChildren = {
+  DashboardConnectionSettingsRoute: DashboardConnectionSettingsRoute,
+  DashboardConnectionStatusRoute: DashboardConnectionStatusRoute,
+  DashboardPdfPickerRoute: DashboardPdfPickerRoute,
+}
+
+const DashboardRouteWithChildren = DashboardRoute._addFileChildren(
+  DashboardRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AboutRoute: AboutRoute,
-  ConnDefinitionRoute: ConnDefinitionRoute,
-  PdfPickerRoute: PdfPickerRoute,
+  DashboardRoute: DashboardRouteWithChildren,
   PdfViewRoute: PdfViewRoute,
 }
 export const routeTree = rootRouteImport

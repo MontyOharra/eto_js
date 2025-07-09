@@ -1,1 +1,10 @@
-/prisma/generated
+/prisma/generated/
+/resources/
+
+node_modules
+dist
+dist-react
+dist-electron
+dist-ssr
+build
+*.local
