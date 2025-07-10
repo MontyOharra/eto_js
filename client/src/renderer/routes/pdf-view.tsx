@@ -3,9 +3,15 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import PdfFieldSelector from "../components/PdfFieldSelector";
 import PdfTextBoxOverlay from "../components/PdfTextBoxOverlay";
-import { findTextItem } from "../helpers/pdfTextUtils";
+import MousePositionOverlay from "../components/MousePositionOverlay";
+import { filterMeaningfulTextItems } from "../helpers/pdfTextUtils";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
+import {
+  decodeOperatorList,
+  buildPageObjects,
+  extractShowTextRuns,
+} from "../helpers/pdfDebug";
 
 export const Route = createFileRoute("/pdf-view")({
   validateSearch: (search) => {
@@ -45,6 +51,11 @@ function PdfViewer() {
 
   const [pdfDoc, setPdfDoc] = useState<pdfjs.PDFDocumentProxy | null>(null);
   const [textBoxes, setTextBoxes] = useState<Rect[]>([]);
+  const [showMousePos, setShowMousePos] = useState<boolean>(false);
+  const [viewportInfo, setViewportInfo] = useState<{
+    scale: number;
+    height: number;
+  } | null>(null);
   const [imageBoxes, setImageBoxes] = useState<Rect[]>([]);
   const [showObjects, setShowObjects] = useState<boolean>(true);
 
@@ -84,6 +95,11 @@ function PdfViewer() {
     setBoxesPerPage((prev) => ({ ...prev, [page]: updated }));
   };
 
+  const handleSaveClick = () => {
+    // Consolidate all boxes across pages and log
+    console.log("Saved field boxes:", boxesPerPage);
+  };
+
   // Extract text bounding boxes whenever page or document changes
   useEffect(() => {
     if (!pdfDoc) return;
@@ -97,25 +113,28 @@ function PdfViewer() {
         const scale = desiredWidth / unscaledViewport.width;
         const viewport = pdfPage.getViewport({ scale });
 
+        setViewportInfo({ scale, height: viewport.height });
+
         const textContent = await pdfPage.getTextContent();
 
         // Convert each text item to screen-space rectangle
+        const BORDER = 4;
+        const meaningfulItems = filterMeaningfulTextItems(textContent, 1);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const boxes: Rect[] = (textContent.items as any[]).map((item) => {
-          // item.transform: [a, b, c, d, e, f]
+        const boxes: Rect[] = (meaningfulItems as any[]).map((item) => {
           const [, , , , x, y] = item.transform as number[];
-          const width = item.width * scale;
-          const height = item.height * scale;
-
-          // pdf.js origin is bottom-left; convert to top-left for CSS
-          const top = viewport.height - y * scale - height;
-
-          return {
-            left: x * scale,
-            top,
-            width,
-            height,
-          };
+          const rect = viewport.convertToViewportRectangle([
+            x,
+            y,
+            x + item.width,
+            y + item.height,
+          ]);
+          const [vx1, vy1, vx2, vy2] = rect;
+          const left = Math.min(vx1, vx2) + BORDER;
+          const top = Math.min(vy1, vy2) + BORDER;
+          const width = Math.abs(vx1 - vx2);
+          const height = Math.abs(vy1 - vy2);
+          return { left, top, width, height };
         });
 
         setTextBoxes(boxes);
@@ -210,10 +229,53 @@ function PdfViewer() {
           console.warn("Image extraction via operator list failed", e);
         }
 
-        // TEST: log the object for the "Carrier" label (e.g., "FORWARD AIR, INC")
-        const forwardAirItem = findTextItem(textContent, "FORWARD AIR, INC");
+        // Fetch annotations
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let annotations: any[] = [];
+        try {
+          annotations = await pdfPage.getAnnotations();
+          // eslint-disable-next-line no-console
+          console.log("PDF annotations:", annotations);
+
+          annotations.forEach((a) => {
+            const [x1, y1, x2, y2] = viewport.convertToViewportRectangle(
+              a.rect
+            );
+            boxes.push({
+              left: Math.min(x1, x2) + BORDER,
+              top: Math.min(y1, y2) + BORDER,
+              width: Math.abs(x1 - x2),
+              height: Math.abs(y1 - y2),
+            });
+          });
+        } catch (annotErr) {
+          console.error("Failed to load annotations", annotErr);
+        }
+
+        // build readable summaries
+        const pageObjects = buildPageObjects(
+          textContent,
+          annotations,
+          viewport,
+          BORDER
+        );
         // eslint-disable-next-line no-console
-        console.log("TextItem for 'FORWARD AIR' =>", forwardAirItem);
+        console.log("Page objects summary:", pageObjects);
+
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const opList: any = await (pdfPage as any).getOperatorList();
+          const decoded = decodeOperatorList(opList);
+          // eslint-disable-next-line no-console
+          console.log("Decoded operator list:", decoded);
+          // eslint-disable-next-line no-console
+          console.log(
+            "ShowText runs:",
+            extractShowTextRuns(decoded, viewport, BORDER)
+          );
+        } catch (opErr) {
+          console.error("Failed to fetch operator list", opErr);
+        }
       } catch (err) {
         console.error("Failed to extract text boxes", err);
       }
@@ -252,6 +314,21 @@ function PdfViewer() {
           Next
         </button>
 
+        <button
+          onClick={handleSaveClick}
+          className="px-4 py-2 bg-green-600 text-white rounded"
+        >
+          Save
+        </button>
+
+        <label className="flex items-center gap-2 ml-4 text-sm">
+          <input
+            type="checkbox"
+            checked={showMousePos}
+            onChange={(e) => setShowMousePos(e.target.checked)}
+          />
+          Show coords
+        </label>
         <label className="flex items-center gap-2 ml-4 text-sm">
           <input
             type="checkbox"
@@ -279,11 +356,19 @@ function PdfViewer() {
               </Document>
               {/* debug overlay – highlight text and image objects */}
               {showObjects && <PdfTextBoxOverlay boxes={combinedBoxes} />}
+              {viewportInfo && (
+                <MousePositionOverlay
+                  active={showMousePos}
+                  scale={viewportInfo.scale}
+                  border={4}
+                />
+              )}
               {/* overlay for user selections */}
               <PdfFieldSelector
                 key={page}
                 initialBoxes={boxesPerPage[page] ?? []}
                 onBoxesChange={handleBoxesChange}
+                snapRects={textBoxes}
               />
             </div>
           </>

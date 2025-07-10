@@ -1,14 +1,23 @@
 import { useRef, useState, useEffect } from "react";
 import SelectableBox, { Box } from "./SelectableBox";
 
+interface SnapRect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
 interface PdfFieldSelectorProps {
   initialBoxes: Box[];
   onBoxesChange?: (boxes: Box[]) => void;
+  snapRects?: SnapRect[]; // text bounding boxes in screen coords
 }
 
 export default function PdfFieldSelector({
   initialBoxes,
   onBoxesChange,
+  snapRects = [],
 }: PdfFieldSelectorProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const [boxes, setBoxes] = useState<Box[]>(initialBoxes);
@@ -49,6 +58,39 @@ export default function PdfFieldSelector({
   const handleMouseUp = () => {
     if (!draftStart || !draftEnd) return;
 
+    // Build raw rect from drag
+    const raw = {
+      left: Math.min(draftStart.x, draftEnd.x),
+      top: Math.min(draftStart.y, draftEnd.y),
+      right: Math.max(draftStart.x, draftEnd.x),
+      bottom: Math.max(draftStart.y, draftEnd.y),
+    };
+
+    // Pick the single snapRect whose top-left corner is closest to the drag's
+    // own top-left corner (raw.left/raw.top).
+    const DIST_TOL = 20; // pixels; ignore if farther than this
+    let bestRect: SnapRect | null = null;
+    let bestDistSq = Infinity;
+    for (const r of snapRects) {
+      const dx = r.left - raw.left;
+      const dy = r.top - raw.top;
+      const distSq = dx * dx + dy * dy;
+      if (distSq < bestDistSq) {
+        bestDistSq = distSq;
+        bestRect = r;
+      }
+    }
+
+    const finalCoords =
+      bestRect && bestDistSq <= DIST_TOL * DIST_TOL
+        ? {
+            left: bestRect.left,
+            top: bestRect.top,
+            right: bestRect.left + bestRect.width,
+            bottom: bestRect.top + bestRect.height,
+          }
+        : raw;
+
     setBoxes((prev) => {
       let updated = [...prev];
       // If another box was in unsaved editing state, drop it
@@ -61,10 +103,7 @@ export default function PdfFieldSelector({
 
       const newBox: Box = {
         id: ++boxIdRef.current,
-        left: Math.min(draftStart.x, draftEnd.x),
-        top: Math.min(draftStart.y, draftEnd.y),
-        right: Math.max(draftStart.x, draftEnd.x),
-        bottom: Math.max(draftStart.y, draftEnd.y),
+        ...finalCoords,
         label: undefined,
       };
 

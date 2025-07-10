@@ -182,3 +182,17 @@ export function findTextItem(
   }
   return null;
 }
+
+/**
+ * Returns only those TextItem objects whose
+ * `height` is >= `minHeight` (default 1). This is useful to skip
+ * zero-height spacer items that pdf.js inserts between words.
+ */
+export function filterMeaningfulTextItems(
+  textContent: TextContent,
+  minHeight = 1
+): TextItem[] {
+  return (textContent.items as TextItem[]).filter(
+    (it) => it.height >= minHeight
+  );
+}

@@ -5,7 +5,7 @@ export const Route = createFileRoute("/dashboard")({
   loader: async ({ location }) => {
     // Redirect if exactly on /dashboard
     if (location.pathname === "/dashboard") {
-      throw redirect({ to: "/dashboard/connection-status" });
+      throw redirect({ to: "/dashboard/pdf-picker" });
     }
   },
   component: DashboardLayout,
