@@ -1,23 +1,15 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { TextContent, TextItem } from "pdfjs-dist/types/src/display/api";
 // @ts-expect-error – OPS constant import (runtime only)
 import { OPS } from "pdfjs-dist/build/pdf";
 
-interface ViewportLike {
-  convertToViewportRectangle: (rect: number[]) => number[];
-}
-
-export interface PageObjectSummary {
-  type: "text" | "annotation";
-  value?: string;
-  subtype?: string;
-  rect: { left: number; top: number; right: number; bottom: number };
+interface OperatorList {
+  fnArray: number[];
+  argsArray: unknown[][];
 }
 
 /**
  * Maps pdf.js operator list to readable array of { op, args }
  */
-export function decodeOperatorList(opList: any) {
+export function decodeOperatorList(opList: OperatorList) {
   const codeToName: Record<number, string> = {};
   Object.entries(OPS).forEach(([k, v]) => {
     codeToName[v as number] = k;
@@ -29,122 +21,128 @@ export function decodeOperatorList(opList: any) {
   }));
 }
 
-/**
- * Builds a simplified list of page objects (text items + annotations) with viewport-based rectangles.
- */
-export function buildPageObjects(
-  textContent: TextContent,
-  annotations: any[],
-  viewport: ViewportLike,
-  borderOffset = 0
-): PageObjectSummary[] {
-  const objects: PageObjectSummary[] = [];
-
-  // Text items
-  for (const item of textContent.items as TextItem[]) {
-    const [, , , , x, y] = item.transform as number[];
-    const [vx1, vy1, vx2, vy2] = viewport.convertToViewportRectangle([
-      x,
-      y,
-      x + item.width,
-      y + item.height,
-    ]);
-    objects.push({
-      type: "text",
-      value: item.str,
-      rect: {
-        left: Math.min(vx1, vx2) + borderOffset,
-        top: Math.min(vy1, vy2) + borderOffset,
-        right: Math.max(vx1, vx2) + borderOffset,
-        bottom: Math.max(vy1, vy2) + borderOffset,
-      },
-    });
-  }
-
-  // Annotations
-  for (const ann of annotations) {
-    const [x1, y1, x2, y2] = viewport.convertToViewportRectangle(ann.rect);
-    objects.push({
-      type: "annotation",
-      subtype: ann.subtype,
-      rect: {
-        left: Math.min(x1, x2) + borderOffset,
-        top: Math.min(y1, y2) + borderOffset,
-        right: Math.max(x1, x2) + borderOffset,
-        bottom: Math.max(y1, y2) + borderOffset,
-      },
-    });
-  }
-
-  return objects;
+export interface TextRun {
+  value: string | null;
+  coords: { x: number; y: number };
+  width: number;
+  height: number;
 }
 
 /**
- * Extract low-level showText operations with their preceding moveText coordinates.
- * Very simplified – assumes each showText is preceded by a moveText that sets
- * the position (tx, ty). The resulting objects give you the raw glyph run and
- * its origin before any scaling.
+ * Extract show-text runs grouped by beginText/endText pairs.
+ * It walks through the decoded operator list and returns an array containing
+ * the extracted string value together with the (x, y) coordinates taken from
+ * the most recent `moveText` (or `setTextMatrix`) operation inside each
+ * begin/end block.
  */
-export function extractShowTextRuns(
-  decodedOps: { op: string; args: any[] }[],
-  viewport: ViewportLike,
-  borderOffset = 0
-) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const runs: PageObjectSummary[] = [];
-  let currX = 0;
-  let currY = 0;
+interface Glyph {
+  accent: unknown;
+  fontChar: string;
+  isInFont: boolean;
+  isSpace: boolean;
+  operatorListId: unknown;
+  originalCharCode: number;
+  unicode: string;
+  vmetric: unknown;
+  width: number;
+}
 
-  decodedOps.forEach(({ op, args }) => {
-    if (op === "moveText" || op === "setTextMatrix") {
-      currX = args[0];
-      currY = args[1];
-    } else if (op === "showText" || op === "showSpacedText") {
-      const arg0 = args[0];
-      let glyphs: any[] = [];
-      if (typeof arg0 === "string") {
-        glyphs = [{ str: arg0, width: arg0.length * 5 }];
-      } else if (Array.isArray(arg0)) {
-        glyphs = arg0;
-      } else if (arg0 && typeof arg0 === "object") {
-        glyphs = [arg0];
+const getGlyphString = (
+  showArgs: Glyph[][]
+): { text: string; width: number } => {
+  /*
+   * showArgs[0] can be:
+   *  • string
+   *  • { str, ... }
+   *  • array mixing strings, numbers, and glyph objects
+   */
+  const container = showArgs[0];
+  const glyphs: Glyph[] = Array.isArray(container) ? container : [container];
+
+  let text = "";
+  let width = 0;
+  for (const g of glyphs) {
+    text += g.unicode;
+    width += g.width;
+  }
+  width /= 72;
+  return { text, width };
+};
+
+export function extractShowTextRuns(
+  decodedOps: { op: string; args: unknown[] }[]
+): TextRun[] {
+  const runs: TextRun[] = [];
+
+  for (let i = 0; i < decodedOps.length; i++) {
+    const { op: opName } = decodedOps[i];
+
+    if (opName === "beginText") {
+      const currentRun: TextRun = {
+        value: "",
+        coords: { x: 0, y: 0 },
+        width: 0,
+        height: 0,
+      };
+
+      let foundEnd = false;
+
+      for (i = i + 1; i < decodedOps.length; i++) {
+        const { op: innerOp, args: innerArgs } = decodedOps[i];
+
+        if (innerOp === "beginText") {
+          throw new Error(
+            "Nested beginText encountered before endText – malformed operator list."
+          );
+        }
+
+        if (innerOp === "setFont") {
+          const fontSize = innerArgs[1] as number;
+          currentRun.height = fontSize;
+          continue;
+        }
+
+        if (innerOp === "endText") {
+          foundEnd = true;
+          runs.push(currentRun);
+          break; // exit inner loop, outer loop will continue with next op
+        }
+
+        if (
+          innerOp === "moveText" ||
+          innerOp === "setTextMatrix" /* handles Td/Tm equivalently */
+        ) {
+          if (innerArgs && innerArgs.length >= 2) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const [x, y] = innerArgs as any[];
+            currentRun.coords.x = Number(x);
+            currentRun.coords.y = Number(y);
+          }
+          continue;
+        }
+
+        if (innerOp === "showText" || innerOp === "showSpacedText") {
+          const { text, width } = getGlyphString(
+            innerArgs as unknown as Glyph[][]
+          );
+          currentRun.value += text;
+          currentRun.width += width * currentRun.height / 14.04;
+          // Estimate height roughly at 0.7 * font size (assume 12pt default)
+          if (currentRun.height === 0) {
+            currentRun.height = 10; // fallback
+          }
+          continue;
+        }
+        // other operators inside text object are ignored
       }
 
-      let str = "";
-      let advance = 0;
-      glyphs.forEach((g) => {
-        if (typeof g === "string") {
-          str += g;
-        } else if (typeof g === "object" && g.str) {
-          str += g.str;
-          advance += g.width || 0;
-        } else if (typeof g === "number") {
-          // spacing adjustment
-          advance += g;
-        }
-      });
-
-      const estWidth = advance || str.length * 5;
-
-      const [vx1, vy1, vx2, vy2] = viewport.convertToViewportRectangle([
-        currX,
-        currY,
-        currX + estWidth,
-        currY + 10,
-      ]);
-
-      runs.push({
-        type: "text",
-        value: str.trim(),
-        rect: {
-          left: Math.min(vx1, vx2) + borderOffset,
-          top: Math.min(vy1, vy2) + borderOffset,
-          right: Math.max(vx1, vx2) + borderOffset,
-          bottom: Math.max(vy1, vy2) + borderOffset,
-        },
-      });
+      if (!foundEnd) {
+        throw new Error(
+          "Operator list exhausted without encountering endText after beginText."
+        );
+      }
     }
-  });
+  }
 
   return runs;
 }

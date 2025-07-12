@@ -2,16 +2,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import PdfFieldSelector from "../components/PdfFieldSelector";
-import PdfTextBoxOverlay from "../components/PdfTextBoxOverlay";
-import MousePositionOverlay from "../components/MousePositionOverlay";
-import { filterMeaningfulTextItems } from "../helpers/pdfTextUtils";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
-import {
-  decodeOperatorList,
-  buildPageObjects,
-  extractShowTextRuns,
-} from "../helpers/pdfDebug";
+import { decodeOperatorList, extractShowTextRuns } from "../helpers/pdfDebug";
+import TextRunOverlay from "../components/TextRunOverlay";
+import PdfTextBoxOverlay from "../components/PdfTextBoxOverlay";
 
 export const Route = createFileRoute("/pdf-view")({
   validateSearch: (search) => {
@@ -44,24 +39,38 @@ interface Rect {
   height: number;
 }
 
+const DESIRED_WIDTH = 800; // Base width before zooming
+
 function PdfViewer() {
   const { file } = Route.useSearch();
   const [numPages, setNumPages] = useState<number | null>(null);
   const [page, setPage] = useState(1);
 
+  // Zoom state (1 = 100%)
+  const [zoom, setZoom] = useState(1);
+  const desiredWidth = DESIRED_WIDTH * zoom;
+
   const [pdfDoc, setPdfDoc] = useState<pdfjs.PDFDocumentProxy | null>(null);
-  const [textBoxes, setTextBoxes] = useState<Rect[]>([]);
-  const [showMousePos, setShowMousePos] = useState<boolean>(false);
-  const [viewportInfo, setViewportInfo] = useState<{
+
+  // For mouse coordinate mapping
+  const pageContainerRef = useRef<HTMLDivElement>(null);
+  const [viewInfo, setViewInfo] = useState<{
     scale: number;
     height: number;
   } | null>(null);
-  const [imageBoxes, setImageBoxes] = useState<Rect[]>([]);
-  const [showObjects, setShowObjects] = useState<boolean>(true);
+  const [mousePos, setMousePos] = useState<{
+    x: number;
+    y: number;
+    pdfX: number;
+    pdfY: number;
+  } | null>(null);
 
-  // Ref to the container that holds the rendered PDF page so we can
-  // measure DOM elements (e.g. <img> tags) for additional object bounds.
-  const pageContainerRef = useRef<HTMLDivElement>(null);
+  const [textRunRects, setTextRunRects] = useState<Rect[]>([]);
+  const [rawTextRects, setRawTextRects] = useState<Rect[]>([]);
+
+  // toggles
+  const [showRunBoxes, setShowRunBoxes] = useState(false);
+  const [showRawBoxes, setShowRawBoxes] = useState(false);
 
   // Track boxes for each page number
   const [boxesPerPage, setBoxesPerPage] = useState<Record<number, Box[]>>({});
@@ -109,178 +118,56 @@ function PdfViewer() {
         const pdfPage = await pdfDoc.getPage(page);
         // The <Page> component renders at width 800, so mirror that scale
         const unscaledViewport = pdfPage.getViewport({ scale: 1 });
-        const desiredWidth = 800;
+
         const scale = desiredWidth / unscaledViewport.width;
         const viewport = pdfPage.getViewport({ scale });
-
-        setViewportInfo({ scale, height: viewport.height });
-
-        const textContent = await pdfPage.getTextContent();
-
-        // Convert each text item to screen-space rectangle
-        const BORDER = 4;
-        const meaningfulItems = filterMeaningfulTextItems(textContent, 1);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const boxes: Rect[] = (meaningfulItems as any[]).map((item) => {
-          const [, , , , x, y] = item.transform as number[];
-          const rect = viewport.convertToViewportRectangle([
-            x,
-            y,
-            x + item.width,
-            y + item.height,
-          ]);
-          const [vx1, vy1, vx2, vy2] = rect;
-          const left = Math.min(vx1, vx2) + BORDER;
-          const top = Math.min(vy1, vy2) + BORDER;
-          const width = Math.abs(vx1 - vx2);
-          const height = Math.abs(vy1 - vy2);
-          return { left, top, width, height };
-        });
-
-        setTextBoxes(boxes);
-
-        // --- New: extract images via operator list ---
-        const imageRects: Rect[] = [];
+        // Store scale & viewport height for mouse mapping
+        setViewInfo({ scale, height: viewport.height });
+        // --- Raw textContent rectangles (toggleable) ---
         try {
-          // getOperatorList may not exist depending on build; guard it.
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const opList: any = await (pdfPage as any).getOperatorList?.();
-          if (opList) {
-            // Util helpers
-            const mult = (m1: number[], m2: number[]) => {
-              return [
-                m1[0] * m2[0] + m1[2] * m2[1],
-                m1[1] * m2[0] + m1[3] * m2[1],
-                m1[0] * m2[2] + m1[2] * m2[3],
-                m1[1] * m2[2] + m1[3] * m2[3],
-                m1[0] * m2[4] + m1[2] * m2[5] + m1[4],
-                m1[1] * m2[4] + m1[3] * m2[5] + m1[5],
-              ];
-            };
-            const apply = (pt: number[], m: number[]) => {
-              return [
-                pt[0] * m[0] + pt[1] * m[2] + m[4],
-                pt[0] * m[1] + pt[1] * m[3] + m[5],
-              ] as const;
-            };
-
-            // Constants for operator IDs we care about (taken from pdf.js OPS enum)
-            const OPS_SAVE = 10;
-            const OPS_RESTORE = 11;
-            const OPS_TRANSFORM = 12;
-            const OPS_PAINT_IMAGE = 85;
-            const OPS_PAINT_INLINE_IMAGE = 86;
-
-            const { fnArray, argsArray } = opList;
-            const stack: number[][] = [];
-            let ctm = [1, 0, 0, 1, 0, 0];
-            for (let i = 0; i < fnArray.length; i++) {
-              const fn = fnArray[i];
-              const args = argsArray[i] as number[];
-              switch (fn) {
-                case OPS_SAVE:
-                  stack.push([...ctm]);
-                  break;
-                case OPS_RESTORE:
-                  if (stack.length) ctm = stack.pop()!;
-                  break;
-                case OPS_TRANSFORM:
-                  ctm = mult(ctm, args as number[]);
-                  break;
-                case OPS_PAINT_IMAGE:
-                case OPS_PAINT_INLINE_IMAGE: {
-                  // The CTM currently has scaling equal to image width/height in user space.
-                  // Transform unit square to get box in user space, then convert to screen.
-                  const p0 = apply([0, 0], ctm);
-                  const p1 = apply([1, 1], ctm);
-                  const leftUS = Math.min(p0[0], p1[0]);
-                  const rightUS = Math.max(p0[0], p1[0]);
-                  const bottomUS = Math.min(p0[1], p1[1]);
-                  const topUS = Math.max(p0[1], p1[1]);
-                  // Convert to viewport (includes scaling) then to CSS top-left origin
-                  const [leftPx, bottomPx] = apply(
-                    [leftUS, bottomUS],
-                    viewport.transform
-                  );
-                  const [rightPx, topPx] = apply(
-                    [rightUS, topUS],
-                    viewport.transform
-                  );
-                  const width = Math.abs(rightPx - leftPx);
-                  const height = Math.abs(topPx - bottomPx);
-                  // Convert Y to top-left
-                  const topCss = viewport.height - Math.max(topPx, bottomPx);
-                  imageRects.push({
-                    left: Math.min(leftPx, rightPx),
-                    top: topCss,
-                    width,
-                    height,
-                  });
-                  break;
-                }
-              }
-            }
-            if (imageRects.length === 0 && pageContainerRef.current) {
-              // fallback to DOM <canvas> search (previous logic)
-            }
-            setImageBoxes(imageRects);
-          }
+          const textContent = await pdfPage.getTextContent();
+          const rects: Rect[] = (
+            textContent.items as Array<{
+              transform: number[];
+              width: number;
+              height: number;
+            }>
+          )
+            .map((item) => {
+              const [, , , , x, y] = item.transform as number[];
+              const widthPt = item.width;
+              const heightPt = item.height;
+              const left = x * scale;
+              const width = widthPt * scale;
+              const height = heightPt * scale;
+              const top = viewport.height - y * scale - height;
+              return { left, top, width, height };
+            })
+            .filter((rect) => rect.height > 0);
+          setRawTextRects(rects);
         } catch (e) {
-          console.warn("Image extraction via operator list failed", e);
-        }
-
-        // Fetch annotations
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let annotations: any[] = [];
-        try {
-          annotations = await pdfPage.getAnnotations();
-          // eslint-disable-next-line no-console
-          console.log("PDF annotations:", annotations);
-
-          annotations.forEach((a) => {
-            const [x1, y1, x2, y2] = viewport.convertToViewportRectangle(
-              a.rect
-            );
-            boxes.push({
-              left: Math.min(x1, x2) + BORDER,
-              top: Math.min(y1, y2) + BORDER,
-              width: Math.abs(x1 - x2),
-              height: Math.abs(y1 - y2),
-            });
-          });
-        } catch (annotErr) {
-          console.error("Failed to load annotations", annotErr);
-        }
-
-        // build readable summaries
-        const pageObjects = buildPageObjects(
-          textContent,
-          annotations,
-          viewport,
-          BORDER
-        );
-        // eslint-disable-next-line no-console
-        console.log("Page objects summary:", pageObjects);
-
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const opList: any = await (pdfPage as any).getOperatorList();
-          const decoded = decodeOperatorList(opList);
-          // eslint-disable-next-line no-console
-          console.log("Decoded operator list:", decoded);
-          // eslint-disable-next-line no-console
-          console.log(
-            "ShowText runs:",
-            extractShowTextRuns(decoded, viewport, BORDER)
-          );
-        } catch (opErr) {
-          console.error("Failed to fetch operator list", opErr);
+          console.warn("Failed to get textContent boxes", e);
         }
       } catch (err) {
         console.error("Failed to extract text boxes", err);
       }
     })();
-  }, [pdfDoc, page]);
+  }, [pdfDoc, page, desiredWidth]);
+
+  // Mouse move handler to compute PDF-space coords
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!pageContainerRef.current || !viewInfo) return;
+    const rect = pageContainerRef.current.getBoundingClientRect();
+    const relX = e.clientX - rect.left;
+    const relY = e.clientY - rect.top;
+
+    const pdfX = relX / viewInfo.scale;
+    const pdfY = relY / viewInfo.scale; // measure Y from top now
+
+    setMousePos({ x: relX, y: relY, pdfX, pdfY });
+  };
+
+  const handleMouseLeave = () => setMousePos(null);
 
   // Build a proper file:// URL from the `file` query param.
   const decodedPath = decodeURIComponent(file);
@@ -291,14 +178,15 @@ function PdfViewer() {
     return { data: new Uint8Array(pdfData) }; // copy
   }, [pdfData]);
 
-  const combinedBoxes = useMemo(
-    () => [...textBoxes, ...imageBoxes],
-    [textBoxes, imageBoxes]
-  );
+  // const combinedBoxes = useMemo(
+  //   () => [...textBoxes, ...imageBoxes],
+  //   [textBoxes, imageBoxes]
+  // );
 
   return (
-    <main className="min-h-screen bg-gray-100 flex flex-col items-center p-8">
-      <div className="flex gap-4 mb-4">
+    <main className="min-h-screen bg-gray-100 flex flex-col items-center p-8 overflow-hidden">
+      {/* Control bar */}
+      <div className="flex gap-4 mb-4 z-10">
         <button
           onClick={prevPage}
           disabled={page === 1}
@@ -321,61 +209,77 @@ function PdfViewer() {
           Save
         </button>
 
-        <label className="flex items-center gap-2 ml-4 text-sm">
+        <label className="flex items-center gap-1 text-sm ml-4">
           <input
             type="checkbox"
-            checked={showMousePos}
-            onChange={(e) => setShowMousePos(e.target.checked)}
+            checked={showRawBoxes}
+            onChange={(e) => setShowRawBoxes(e.target.checked)}
           />
-          Show coords
+          Raw boxes
         </label>
-        <label className="flex items-center gap-2 ml-4 text-sm">
+
+        <label className="flex items-center gap-1 text-sm ml-2">
           <input
             type="checkbox"
-            checked={showObjects}
-            onChange={(e) => setShowObjects(e.target.checked)}
+            checked={showRunBoxes}
+            onChange={(e) => setShowRunBoxes(e.target.checked)}
           />
-          Show objects
+          Run boxes
         </label>
       </div>
 
-      <div className="w-full max-w-4xl overflow-y-auto border rounded-2xl bg-white p-4 relative">
+      {/* Zoom slider on the left */}
+      <div className="fixed left-4 top-1/2 -translate-y-1/2 -rotate-90 z-20">
+        <input
+          type="range"
+          min="0.5"
+          max="2"
+          step="0.1"
+          value={zoom}
+          onChange={(e) => setZoom(parseFloat(e.target.value))}
+          className="w-40"
+        />
+      </div>
+
+      <div className="w-full max-w-4xl overflow-y-auto bg-white relative">
         {fileSource && (
           <>
             <div
               ref={pageContainerRef}
-              className="relative inline-block border-4"
+              onMouseMove={handleMouseMove}
+              onMouseLeave={handleMouseLeave}
+              className="relative inline-block"
             >
               <Document file={fileSource} onLoadSuccess={onLoadSuccess}>
                 <Page
                   pageNumber={page}
                   renderTextLayer
                   renderAnnotationLayer
-                  width={800}
+                  width={desiredWidth}
                 />
               </Document>
+              {/* Mouse overlay removed to clean up per requirement */}
               {/* debug overlay – highlight text and image objects */}
-              {showObjects && <PdfTextBoxOverlay boxes={combinedBoxes} />}
-              {viewportInfo && (
-                <MousePositionOverlay
-                  active={showMousePos}
-                  scale={viewportInfo.scale}
-                  border={4}
-                />
-              )}
+              {showRawBoxes && <PdfTextBoxOverlay boxes={rawTextRects} />}
+              {showRunBoxes && <TextRunOverlay boxes={textRunRects} />}
               {/* overlay for user selections */}
               <PdfFieldSelector
                 key={page}
                 initialBoxes={boxesPerPage[page] ?? []}
                 onBoxesChange={handleBoxesChange}
-                snapRects={textBoxes}
               />
             </div>
+            {/* Mouse position display */}
+            {mousePos && (
+              <div className="absolute top-2 right-2 bg-white/80 text-xs px-2 py-0.5 rounded shadow">
+                {mousePos.pdfX.toFixed(1)}, {mousePos.pdfY.toFixed(1)}
+              </div>
+            )}
           </>
         )}
       </div>
 
-      <p className="mt-2 text-sm text-gray-600">
+      <p className="fixed bottom-4 text-sm text-gray-600 bg-white/80 px-2 py-1 rounded shadow z-20">
         Page {page} {numPages ? `of ${numPages}` : ""}
       </p>
     </main>
