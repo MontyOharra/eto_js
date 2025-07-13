@@ -19,7 +19,7 @@ export default function PdfTextBoxOverlay({ boxes }: PdfTextBoxOverlayProps) {
       {boxes.map((b, idx) => (
         <div
           key={idx}
-          className="absolute border border-cyan-500 opacity-70"
+          className="absolute border-cyan-600 border-2 opacity-70"
           style={{
             left: b.left,
             top: b.top,

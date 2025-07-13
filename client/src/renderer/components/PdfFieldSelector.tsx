@@ -1,14 +1,23 @@
 import { useRef, useState, useEffect } from "react";
 import SelectableBox, { Box } from "./SelectableBox";
 
+interface Rect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
 interface PdfFieldSelectorProps {
   initialBoxes: Box[];
   onBoxesChange?: (boxes: Box[]) => void;
+  textRects?: Rect[];
 }
 
 export default function PdfFieldSelector({
   initialBoxes,
   onBoxesChange,
+  textRects = [],
 }: PdfFieldSelectorProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const [boxes, setBoxes] = useState<Box[]>(initialBoxes);
@@ -20,44 +29,172 @@ export default function PdfFieldSelector({
     null
   );
   const boxIdRef = useRef(0);
+  const initializedRef = useRef(false);
+  const [startedInTextRect, setStartedInTextRect] = useState(false);
 
   const toRelative = (e: React.MouseEvent) => {
     const rect = overlayRef.current!.getBoundingClientRect();
-    const borderX = overlayRef.current!.clientLeft; // left border width
-    const borderY = overlayRef.current!.clientTop; // top border width
     return {
-      x: e.clientX - rect.left - borderX / 2,
-      y: e.clientY - rect.top - borderY / 2,
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
     };
   };
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.button !== 0) return;
-    let { x, y } = toRelative(e);
-    x -= 4;
-    y -= 4;
-    setDraftStart({ x, y });
-    setDraftEnd({ x, y });
+  // Check if a point is inside a rectangle
+  const isPointInRect = (x: number, y: number, rect: Rect) => {
+    return (
+      x >= rect.left &&
+      x <= rect.left + rect.width &&
+      y >= rect.top &&
+      y <= rect.top + rect.height
+    );
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!draftStart) return;
-    const { x: currX, y: currY } = toRelative(e);
-    if (draftStart) setDraftEnd({ x: currX, y: currY });
+  // Check if two rectangles overlap
+  const rectsOverlap = (
+    rect1: { left: number; top: number; right: number; bottom: number },
+    rect2: Rect
+  ) => {
+    return !(
+      rect1.right < rect2.left ||
+      rect1.left > rect2.left + rect2.width ||
+      rect1.bottom < rect2.top ||
+      rect1.top > rect2.top + rect2.height
+    );
   };
 
-  const handleMouseUp = () => {
-    if (!draftStart || !draftEnd) return;
-
-    // Build raw rect from drag
-    const raw = {
+  // Find all text rects that overlap with the current draft selection
+  const getOverlappingTextRects = (
+    draftStart: { x: number; y: number },
+    draftEnd: { x: number; y: number }
+  ) => {
+    const selection = {
       left: Math.min(draftStart.x, draftEnd.x),
       top: Math.min(draftStart.y, draftEnd.y),
       right: Math.max(draftStart.x, draftEnd.x),
       bottom: Math.max(draftStart.y, draftEnd.y),
     };
 
-    const finalCoords = raw;
+    return textRects.filter((rect) => rectsOverlap(selection, rect));
+  };
+
+  // Calculate snapped bounds from overlapping text rects
+  const getSnappedBounds = (
+    draftStart: { x: number; y: number },
+    draftEnd: { x: number; y: number }
+  ) => {
+    const overlappingRects = getOverlappingTextRects(draftStart, draftEnd);
+
+    if (overlappingRects.length === 0) {
+      return {
+        left: Math.min(draftStart.x, draftEnd.x),
+        top: Math.min(draftStart.y, draftEnd.y),
+        right: Math.max(draftStart.x, draftEnd.x),
+        bottom: Math.max(draftStart.y, draftEnd.y),
+      };
+    }
+
+    // Calculate bounds of all overlapping text rects
+    const textBounds = overlappingRects.reduce(
+      (bounds, rect) => {
+        return {
+          left: Math.min(bounds.left, rect.left),
+          top: Math.min(bounds.top, rect.top),
+          right: Math.max(bounds.right, rect.left + rect.width),
+          bottom: Math.max(bounds.bottom, rect.top + rect.height),
+        };
+      },
+      {
+        left: Infinity,
+        top: Infinity,
+        right: -Infinity,
+        bottom: -Infinity,
+      }
+    );
+
+    const currentSelection = {
+      left: Math.min(draftStart.x, draftEnd.x),
+      top: Math.min(draftStart.y, draftEnd.y),
+      right: Math.max(draftStart.x, draftEnd.x),
+      bottom: Math.max(draftStart.y, draftEnd.y),
+    };
+
+    // Apply snapping logic
+    let snappedLeft = currentSelection.left;
+    let snappedTop = currentSelection.top;
+    let snappedRight = currentSelection.right;
+    let snappedBottom = currentSelection.bottom;
+
+    // Snap top-left if text bounds are more top-left than current selection
+    // But only if we started in a text rect or the text bounds are more restrictive
+    if (startedInTextRect || textBounds.left < currentSelection.left) {
+      snappedLeft = textBounds.left;
+    }
+    if (startedInTextRect || textBounds.top < currentSelection.top) {
+      snappedTop = textBounds.top;
+    }
+
+    // Snap bottom-right if text bounds are more bottom-right than current selection
+    if (textBounds.right > currentSelection.right) {
+      snappedRight = textBounds.right;
+    }
+    if (textBounds.bottom > currentSelection.bottom) {
+      snappedBottom = textBounds.bottom;
+    }
+
+    return {
+      left: snappedLeft,
+      top: snappedTop,
+      right: snappedRight,
+      bottom: snappedBottom,
+    };
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const { x, y } = toRelative(e);
+
+    // Check if the drag started within a text rect
+    const startedInText = textRects.some((rect) => isPointInRect(x, y, rect));
+    setStartedInTextRect(startedInText);
+
+    setDraftStart({ x, y });
+    setDraftEnd({ x, y });
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!draftStart) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const { x: currX, y: currY } = toRelative(e);
+    setDraftEnd({ x: currX, y: currY });
+  };
+
+  const handleMouseUp = (e: React.MouseEvent) => {
+    if (!draftStart || !draftEnd) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Get snapped bounds
+    const snappedBounds = getSnappedBounds(draftStart, draftEnd);
+
+    // Only create a box if the drag has some minimum size
+    const minSize = 5;
+    if (
+      snappedBounds.right - snappedBounds.left < minSize ||
+      snappedBounds.bottom - snappedBounds.top < minSize
+    ) {
+      setDraftStart(null);
+      setDraftEnd(null);
+      setStartedInTextRect(false);
+      return;
+    }
+
+    const finalCoords = snappedBounds;
 
     setBoxes((prev) => {
       let updated = [...prev];
@@ -82,6 +219,7 @@ export default function PdfFieldSelector({
 
     setDraftStart(null);
     setDraftEnd(null);
+    setStartedInTextRect(false);
   };
 
   const handleActivate = (id: number) => {
@@ -132,16 +270,28 @@ export default function PdfFieldSelector({
     if (editingId === id) setEditingId(null);
   };
 
-  // Keep local state in sync if parent provides new initialBoxes (e.g., when user navigates back to this page).
-  // Only overwrite when the array reference actually changes to avoid clobbering ongoing edits.
+  // Only update boxes when initialBoxes actually contains data, or on first mount
+  // This prevents empty arrays from resetting our state on every render
   useEffect(() => {
-    setBoxes(initialBoxes);
+    if (!initializedRef.current) {
+      // First mount - always set the initial boxes
+      setBoxes(initialBoxes);
+      initializedRef.current = true;
+    } else if (initialBoxes.length > 0) {
+      // Only update if we actually have boxes to show (e.g., navigating to a page with existing boxes)
+      setBoxes(initialBoxes);
+    }
+    // Don't reset to empty array on subsequent renders
   }, [initialBoxes]);
+
+  // Calculate the current draft bounds (with snapping) for display
+  const currentDraftBounds =
+    draftStart && draftEnd ? getSnappedBounds(draftStart, draftEnd) : null;
 
   return (
     <div
       ref={overlayRef}
-      className="absolute inset-0 cursor-crosshair z-50 border-4"
+      className="absolute inset-0 cursor-crosshair z-40"
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
@@ -158,14 +308,14 @@ export default function PdfFieldSelector({
         />
       ))}
 
-      {draftStart && draftEnd && (
+      {currentDraftBounds && (
         <div
-          className="absolute border-2 border-red-400 pointer-events-none"
+          className="absolute border-2 border-red-500 bg-red-500/10 pointer-events-none"
           style={{
-            left: Math.min(draftStart.x, draftEnd.x),
-            top: Math.min(draftStart.y, draftEnd.y),
-            width: Math.abs(draftEnd.x - draftStart.x),
-            height: Math.abs(draftEnd.y - draftStart.y),
+            left: currentDraftBounds.left,
+            top: currentDraftBounds.top,
+            width: currentDraftBounds.right - currentDraftBounds.left,
+            height: currentDraftBounds.bottom - currentDraftBounds.top,
           }}
         />
       )}

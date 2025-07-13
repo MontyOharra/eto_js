@@ -4,8 +4,6 @@ import { Document, Page, pdfjs } from "react-pdf";
 import PdfFieldSelector from "../components/PdfFieldSelector";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
-import { decodeOperatorList, extractShowTextRuns } from "../helpers/pdfDebug";
-import TextRunOverlay from "../components/TextRunOverlay";
 import PdfTextBoxOverlay from "../components/PdfTextBoxOverlay";
 
 export const Route = createFileRoute("/pdf-view")({
@@ -65,17 +63,20 @@ function PdfViewer() {
     pdfY: number;
   } | null>(null);
 
-  const [textRunRects, setTextRunRects] = useState<Rect[]>([]);
   const [rawTextRects, setRawTextRects] = useState<Rect[]>([]);
 
   // toggles
-  const [showRunBoxes, setShowRunBoxes] = useState(false);
   const [showRawBoxes, setShowRawBoxes] = useState(false);
 
   // Track boxes for each page number
   const [boxesPerPage, setBoxesPerPage] = useState<Record<number, Box[]>>({});
 
   const [pdfData, setPdfData] = useState<Uint8Array | null>(null);
+
+  // Memoize the current page boxes to avoid creating new empty arrays
+  const currentPageBoxes = useMemo(() => {
+    return boxesPerPage[page] || [];
+  }, [boxesPerPage, page]);
 
   // Load the PDF binary via IPC once on mount
   useEffect(() => {
@@ -126,25 +127,95 @@ function PdfViewer() {
         // --- Raw textContent rectangles (toggleable) ---
         try {
           const textContent = await pdfPage.getTextContent();
-          const rects: Rect[] = (
+          const rects: Rect[] = [];
+
+          (
             textContent.items as Array<{
               transform: number[];
               width: number;
               height: number;
+              str: string;
             }>
-          )
-            .map((item) => {
-              const [, , , , x, y] = item.transform as number[];
-              const widthPt = item.width;
-              const heightPt = item.height;
-              const left = x * scale;
-              const width = widthPt * scale;
-              const height = heightPt * scale;
-              const top = viewport.height - y * scale - height;
-              return { left, top, width, height };
-            })
-            .filter((rect) => rect.height > 0);
-          setRawTextRects(rects);
+          ).forEach((item, itemIndex) => {
+            const [, , , , x, y] = item.transform as number[];
+            const widthPt = item.width;
+            const heightPt = item.height;
+            const left = x * scale;
+            const totalWidth = widthPt * scale;
+            const height = heightPt * scale;
+            const top = viewport.height - y * scale - height;
+
+            // Split text on 2+ consecutive spaces
+            const textSegments = item.str.split(/\s{2,}/);
+
+            console.log(`\n=== Text Item ${itemIndex} ===`);
+            console.log(`Original text: "${item.str}"`);
+            console.log(`Position: (${left.toFixed(1)}, ${top.toFixed(1)})`);
+            console.log(`Total width: ${totalWidth.toFixed(1)}`);
+            console.log(`Segments found: ${textSegments.length}`);
+
+            if (textSegments.length === 1) {
+              // No splitting needed, create single rect
+              console.log(
+                `No splitting needed - single segment: "${textSegments[0]}"`
+              );
+              rects.push({ left, top, width: totalWidth, height });
+            } else {
+              // Multiple segments, calculate positions for each
+              console.log(`Splitting into ${textSegments.length} segments:`);
+              let currentPosition = 0;
+              const originalText = item.str;
+
+              textSegments.forEach((segment, index) => {
+                if (segment.trim().length > 0) {
+                  // Find the position of this segment in the original text
+                  const segmentStart = originalText.indexOf(
+                    segment,
+                    currentPosition
+                  );
+                  const segmentEnd = segmentStart + segment.length;
+
+                  // Calculate proportional width and position
+                  const segmentStartRatio = segmentStart / originalText.length;
+                  const segmentEndRatio = segmentEnd / originalText.length;
+
+                  const segmentLeft = left + totalWidth * segmentStartRatio;
+                  const segmentWidth =
+                    totalWidth * (segmentEndRatio - segmentStartRatio);
+
+                  console.log(`  Segment ${index}: "${segment}"`);
+                  console.log(
+                    `    Characters: ${segmentStart}-${segmentEnd} (${segment.length} chars)`
+                  );
+                  console.log(
+                    `    Position: (${segmentLeft.toFixed(1)}, ${top.toFixed(1)})`
+                  );
+                  console.log(`    Width: ${segmentWidth.toFixed(1)}`);
+
+                  rects.push({
+                    left: segmentLeft,
+                    top,
+                    width: segmentWidth,
+                    height,
+                  });
+
+                  currentPosition = segmentEnd;
+                } else {
+                  console.log(
+                    `  Segment ${index}: "${segment}" (empty - skipped)`
+                  );
+                }
+              });
+            }
+          });
+
+          const filteredRects = rects.filter(
+            (rect) => rect.height > 0 && rect.width > 0
+          );
+          console.log(
+            `\nFinal result: ${filteredRects.length} text rects created`
+          );
+          setRawTextRects(filteredRects);
         } catch (e) {
           console.warn("Failed to get textContent boxes", e);
         }
@@ -217,15 +288,6 @@ function PdfViewer() {
           />
           Raw boxes
         </label>
-
-        <label className="flex items-center gap-1 text-sm ml-2">
-          <input
-            type="checkbox"
-            checked={showRunBoxes}
-            onChange={(e) => setShowRunBoxes(e.target.checked)}
-          />
-          Run boxes
-        </label>
       </div>
 
       {/* Zoom slider on the left */}
@@ -260,14 +322,14 @@ function PdfViewer() {
               </Document>
               {/* Mouse overlay removed to clean up per requirement */}
               {/* debug overlay – highlight text and image objects */}
-              {showRawBoxes && <PdfTextBoxOverlay boxes={rawTextRects} />}
-              {showRunBoxes && <TextRunOverlay boxes={textRunRects} />}
               {/* overlay for user selections */}
               <PdfFieldSelector
                 key={page}
-                initialBoxes={boxesPerPage[page] ?? []}
+                initialBoxes={currentPageBoxes}
                 onBoxesChange={handleBoxesChange}
+                textRects={rawTextRects}
               />
+              {showRawBoxes && <PdfTextBoxOverlay boxes={rawTextRects} />}
             </div>
             {/* Mouse position display */}
             {mousePos && (

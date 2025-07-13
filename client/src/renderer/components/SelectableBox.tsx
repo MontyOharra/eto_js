@@ -48,12 +48,29 @@ export default function SelectableBox({
   const width = box.right - box.left;
   const height = box.bottom - box.top;
 
+  const handleBoxClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onActivate(box.id);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      // Enter without Shift - save the data
+      e.preventDefault();
+      if (input.trim()) {
+        onSave(box.id, input.trim());
+      }
+    }
+    // Shift+Enter will create a new line (default behavior)
+  };
+
   return (
     <div
-      className={`absolute border-2 border-orange-500/60 transition-colors ${
+      className={`absolute border-2 border-orange-500 transition-colors z-10 ${
         isEditing
-          ? "bg-orange-500/20"
-          : "bg-orange-500/20 hover:bg-orange-500/50 cursor-pointer"
+          ? "bg-orange-500/30"
+          : "bg-orange-500/20 hover:bg-orange-500/40 cursor-pointer"
       }`}
       style={{
         left: box.left,
@@ -61,12 +78,13 @@ export default function SelectableBox({
         width,
         height,
       }}
-      onClick={() => onActivate(box.id)}
+      onClick={handleBoxClick}
+      onMouseDown={(e) => e.stopPropagation()}
     >
       {isEditing && (
         <div
           ref={overlayRef}
-          className="absolute flex flex-col items-stretch gap-1 z-50"
+          className="absolute flex flex-col items-stretch gap-1 z-50 bg-white shadow-lg rounded p-2"
           style={
             placeLeft
               ? { top: 0, right: "100%", marginRight: "4px" }
@@ -77,17 +95,19 @@ export default function SelectableBox({
         >
           {/* Text input */}
           <textarea
-            className="border rounded px-1 py-0.5 text-sm resize-none min-w-[140px] min-h-[78px] bg-white"
+            className="border rounded px-2 py-1 text-sm resize-none min-w-[140px] min-h-[78px] bg-white focus:outline-none focus:ring-2 focus:ring-orange-500"
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
             rows={1}
             style={{ lineHeight: "1.25rem" }}
             autoFocus
+            placeholder="Enter field label..."
           />
           {/* Buttons */}
           <div className="flex gap-1 self-end">
             <button
-              className="px-2 py-0.5 bg-gray-300 rounded text-xs"
+              className="px-2 py-1 bg-gray-300 hover:bg-gray-400 rounded text-xs transition-colors"
               onClick={() => onCancel(box.id)}
               onMouseDown={(e) => e.stopPropagation()}
             >
@@ -95,7 +115,7 @@ export default function SelectableBox({
             </button>
             {box.label !== undefined && (
               <button
-                className="px-2 py-0.5 bg-red-600 text-white rounded text-xs hover:bg-red-700"
+                className="px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700 transition-colors"
                 onClick={() => onDelete(box.id)}
                 onMouseDown={(e) => e.stopPropagation()}
               >
@@ -103,7 +123,7 @@ export default function SelectableBox({
               </button>
             )}
             <button
-              className="px-2 py-0.5 bg-indigo-600 text-white rounded text-xs disabled:bg-indigo-300"
+              className="px-2 py-1 bg-orange-600 text-white rounded text-xs hover:bg-orange-700 disabled:bg-orange-300 transition-colors"
               disabled={!input.trim()}
               onClick={() => onSave(box.id, input.trim())}
               onMouseDown={(e) => e.stopPropagation()}
