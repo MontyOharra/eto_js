@@ -18,4 +18,13 @@ lerna-debug.log*
 *.sln
 *.sw?
 
-*./.venv/*
+# Python virtual environments (anywhere)
+.venv/
+venv/
+env/
+
+# Node/Electron artifacts (anywhere)
+node_modules/
+build/
+dist/
+dist-*/
