@@ -1,0 +1,1085 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../prisma/generated/client"
+}
+
+datasource db {
+  provider = "sqlserver"
+  url      = env("DATABASE_URL")
+}
+
+model aci_data {
+  id              Int       @id(map: "aci_data$Index_820E0E2E_7DF6_492C") @default(autoincrement())
+  aci_key         String?   @db.NVarChar(255)
+  city            String?   @db.NVarChar(50)
+  state           String?   @db.NVarChar(3)
+  country         String?   @db.NVarChar(50)
+  zip_code        String?   @db.NVarChar(10)
+  airport_code    String?   @db.NVarChar(5)
+  carrier         String?   @db.NVarChar(50)
+  area            String?   @db.NVarChar(1)
+  plus_one        String?   @db.NVarChar(100)
+  rate_minimum    Float?
+  rate_100        Float?
+  rate_1000       Float?
+  rate_2000       Float?
+  rate_5000       Float?
+  date_created    DateTime?
+  user_created_id Int?
+  date_changed    DateTime?
+  user_changed_id Int?
+  is_active       Boolean?  @default(false, map: "DF__aci_data__is_act__249EF5AE")
+}
+
+model aci_data_change_history {
+  id           Int       @id(map: "aci_data_change_history$Index_07ABCFCF_85BA_488A") @default(autoincrement())
+  aci_data_id  Float?
+  user_id      Int?
+  date_changed DateTime?
+  changes      String?   @db.NVarChar(Max)
+}
+
+model address {
+  id                Float     @id(map: "address$Index_F41DE539_1F05_4072")
+  is_branch_address Boolean?  @default(false, map: "DF__address__is_bran__259319E7")
+  company_name      String?   @db.NVarChar(50)
+  location_name     String?   @db.NVarChar(50)
+  address_line_1    String?   @db.NVarChar(100)
+  address_line_2    String?   @db.NVarChar(50)
+  city              String?   @db.NVarChar(50)
+  state             String?   @db.NVarChar(3)
+  zip_code          String?   @db.NVarChar(10)
+  country           String?   @db.NVarChar(50)
+  latitude          Float?
+  longitude         Float?
+  is_listed_on_aci  Boolean?  @default(false, map: "DF__address__is_list__26873E20")
+  aci_id            Float?
+  first_name        String?   @db.NVarChar(25)
+  last_name         String?   @db.NVarChar(25)
+  email_address     String?   @db.NVarChar(100)
+  phone_number      String?   @db.NVarChar(15)
+  phone_extension   String?   @db.NVarChar(8)
+  assessorials      String?   @db.NVarChar(50)
+  is_carrier        Boolean?  @default(false, map: "DF__address__is_carr__277B6259")
+  is_local          Boolean?  @default(false, map: "DF__address__is_loca__286F8692")
+  is_international  Boolean?  @default(false, map: "DF__address__is_inte__2963AACB")
+  default_wait_time Float?
+  date_added        DateTime?
+  user_id_added     Int?
+  date_changed      DateTime?
+  user_id_changed   Int?
+  is_active         Boolean?  @default(false, map: "DF__address__is_acti__2A57CF04")
+}
+
+model address_change_history {
+  id           Int       @id(map: "address_change_history$Index_62AA0889_E9FF_46EB") @default(autoincrement())
+  address_id   Float?
+  user_id      Int?
+  date_changed DateTime?
+  changes      String?   @db.NVarChar(255)
+}
+
+model agent {
+  id              Int      @id(map: "agent$Index_9E9CC5BA_60C1_4333") @default(autoincrement())
+  customer_id     Int?
+  email_address   String?  @db.NVarChar(255)
+  first_name      String?  @db.NVarChar(255)
+  last_name       String?  @db.NVarChar(255)
+  phone           String?  @db.NVarChar(255)
+  phone_extension String?  @db.NVarChar(255)
+  phone_mobile    String?  @db.NVarChar(255)
+  fax             String?  @db.NVarChar(255)
+  send_auto_email Boolean? @default(false, map: "DF__agent__send_auto__2B4BF33D")
+  is_active       Boolean? @default(false, map: "DF__agent__is_active__2C401776")
+}
+
+model agent_change_history {
+  id           Int       @id(map: "agent_change_history$Index_83DD1AE9_C952_4C86") @default(autoincrement())
+  agent_id     Int?
+  user_id      Int?
+  date_changed DateTime?
+  changes      String?   @db.NVarChar(Max)
+}
+
+model archive_history {
+  id                           Int       @id(map: "archive_history$Index_F71E6476_6846_4BED") @default(autoincrement())
+  date_archived                DateTime?
+  when_archived                String?   @db.NVarChar(14)
+  open_orders                  Float?
+  open_order_assessorials      Float?
+  open_order_dimensions        Float?
+  open_order_drivers           Float?
+  open_order_attachments       Float?
+  invoiced_orders              Float?
+  invoiced_order_assessorials  Float?
+  invoiced_order_dimensions    Float?
+  invoiced_order_drivers       Float?
+  invoiced_order_attachments   Float?
+  remaining_orders             Float?
+  remaining_order_assessorials Float?
+  remaining_order_dimensions   Float?
+  remaining_order_drivers      Float?
+  remaining_order_attachments  Float?
+  dock_orders                  Float?
+  dock_order_assessorials      Float?
+  dock_order_dimensions        Float?
+  dock_order_drivers           Float?
+  dock_order_attachments       Float?
+  service_orders               Float?
+  service_order_assessorials   Float?
+  service_order_dimensions     Float?
+  service_order_drivers        Float?
+  service_order_attachments    Float?
+  active_order_history         Float?
+  active_order_hawbs           Float?
+  archived_orders              Float?
+  archived_order_assessorials  Float?
+  archived_order_dimensions    Float?
+  archived_order_drivers       Float?
+  archived_order_attachments   Float?
+  archived_order_history       Float?
+  archived_order_hawbs         Float?
+  removed_orders               Float?
+  removed_order_assessorials   Float?
+  removed_order_dimensions     Float?
+  removed_order_drivers        Float?
+  removed_order_attachments    Float?
+  removed_order_history        Float?
+  removed_order_hawbs          Float?
+}
+
+model assessorial_type {
+  id                  Int       @id(map: "assessorial_type$Index_3B2EB4FA_4551_492D") @default(autoincrement())
+  assessorial_type    String?   @db.NVarChar(10)
+  description         String?   @db.NVarChar(255)
+  application         String?   @db.NVarChar(1)
+  minimum_charge      Float?
+  basis               String?   @db.NVarChar(3)
+  question            String?   @db.NVarChar(255)
+  value_id            String?   @db.NVarChar(3)
+  portion             Float?
+  term                String?   @db.NVarChar(20)
+  rate                Float?    @db.Money
+  date_added          DateTime?
+  date_last_changed   DateTime?
+  comments            String?   @db.NVarChar(Max)
+  does_pay_commission Boolean?  @default(false, map: "DF__assessori__does___2D343BAF")
+  is_active           Boolean?  @default(false, map: "DF__assessori__is_ac__2E285FE8")
+}
+
+model assessorial_type_change_history {
+  id                  Int       @id(map: "assessorial_type_change_history$Index_F61AF3B1_4B45_4C68") @default(autoincrement())
+  assessorial_type_id Float?
+  user_id             Int?
+  date_changed        DateTime?
+  changes             String?   @db.NVarChar(Max)
+}
+
+model branch {
+  id                            Int      @id(map: "branch$Index_EAF3D1FF_032C_44D9") @default(autoincrement())
+  company_id                    Int?
+  branch_name                   String?  @db.NVarChar(125)
+  country                       String?  @db.NVarChar(50)
+  address_line_1                String?  @db.NVarChar(100)
+  address_line_2                String?  @db.NVarChar(50)
+  city                          String?  @db.NVarChar(50)
+  state                         String?  @db.NVarChar(3)
+  postal_code                   String?  @db.NVarChar(10)
+  phone                         String?  @db.NVarChar(15)
+  phone_extension               String?  @db.NVarChar(8)
+  fax                           String?  @db.NVarChar(15)
+  email                         String?  @db.NVarChar(100)
+  international_air_dim_divisor Int?
+  domestic_air_dim_divisor      Int?
+  truck_dim_divisor             Int?
+  fuel_service_charge           Float?
+  transfer_rate                 Float?   @db.Money
+  cartage_agent_type            String?  @db.NVarChar(25)
+  aci_low                       String?  @db.NVarChar(1)
+  aci_high                      String?  @db.NVarChar(1)
+  airport_code                  String?  @db.NVarChar(5)
+  notes                         String?  @db.NVarChar(Max)
+  is_active                     Boolean? @default(false, map: "DF__branch__is_activ__09B5F548")
+}
+
+model branch_change_history {
+  id           Int       @id(map: "branch_change_history$Index_28A0E702_F546_4247") @default(autoincrement())
+  branch_id    Float?
+  user_id      Int?
+  date_changed DateTime?
+  changes      String?   @db.NVarChar(Max)
+}
+
+model company {
+  id                 Int      @id(map: "company$Index_FBA0F210_A4BD_4AB4") @default(autoincrement())
+  company_name       String?  @db.NVarChar(255)
+  country            String?  @db.NVarChar(50)
+  address_line_1     String?  @db.NVarChar(100)
+  address_line_2     String?  @db.NVarChar(50)
+  city               String?  @db.NVarChar(50)
+  state              String?  @db.NVarChar(3)
+  postal_code        String?  @db.NVarChar(10)
+  email              String?  @db.NVarChar(100)
+  phone              String?  @db.NVarChar(15)
+  phone_extension    String?  @db.NVarChar(8)
+  fax                String?  @db.NVarChar(15)
+  website            String?  @db.NVarChar(100)
+  cartage_agent_type String?  @db.NVarChar(25)
+  scac               String?  @db.NVarChar(4)
+  tax_id             String?  @db.NVarChar(10)
+  airport_code       String?  @db.NVarChar(5)
+  is_tsa_compliant   Boolean? @default(false, map: "DF__company__is_tsa___05E56464")
+  notes              String?  @db.NVarChar(Max)
+  is_active          Boolean? @default(false, map: "DF__company__is_acti__06D9889D")
+}
+
+model company_change_history {
+  id           Int       @id(map: "company_change_history$Index_5BCA2C2B_29E7_4776") @default(autoincrement())
+  company_id   Float?
+  user_id      Int?
+  date_changed DateTime?
+  changes      String?   @db.NVarChar(Max)
+}
+
+model customer {
+  id                           Int       @id(map: "customer$Index_C9DFE567_9847_49DB") @default(autoincrement())
+  customer_name                String?   @db.NVarChar(100)
+  address_line_1               String?   @db.NVarChar(100)
+  address_line_2               String?   @db.NVarChar(50)
+  city                         String?   @db.NVarChar(50)
+  state                        String?   @db.NVarChar(3)
+  country                      String?   @db.NVarChar(50)
+  zip_code                     String?   @db.NVarChar(10)
+  phone_number                 String?   @db.NVarChar(15)
+  phone_extension              String?   @db.NVarChar(8)
+  notes                        String?   @db.NVarChar(Max)
+  tariff                       Float?
+  fuel_surcharge               Float?
+  assessorials                 String?   @db.NVarChar(50)
+  remarks                      String?   @db.NVarChar(Max)
+  omit_quickbooks_invoice      Boolean?  @default(false, map: "DF__customer__omit_q__31F8F0CC")
+  quickbooks_reference_list_id String?   @db.NVarChar(50)
+  quickbooks_reference_name    String?   @db.NVarChar(50)
+  date_added                   DateTime?
+  date_last_changed            DateTime?
+  is_active                    Boolean?  @default(false, map: "DF__customer__is_act__32ED1505")
+}
+
+model customer_change_history {
+  id           Int       @id(map: "customer_change_history$Index_79664284_23B2_4AE1") @default(autoincrement())
+  customer_id  Float?
+  user_id      Int?
+  date_changed DateTime?
+  time_changed DateTime?
+  changes      String?   @db.NVarChar(Max)
+}
+
+model dock_order {
+  order_number                        Float     @id(map: "dock_order$Index_5E750EC0_A773_4B88")
+  order_type                          String?   @db.NVarChar(20)
+  customer_id                         Int?
+  customer_name                       String?   @db.NVarChar(100)
+  customer_assessorials               String?   @db.NVarChar(50)
+  customer_agent                      String?   @db.NVarChar(100)
+  tarrif                              String?   @db.NVarChar(50)
+  hawb                                String?   @db.NVarChar(30)
+  mawb                                String?   @db.NVarChar(30)
+  pro_number                          String?   @db.NVarChar(30)
+  notes                               String?   @db.NVarChar(Max)
+  pu_date                             DateTime?
+  pu_time_start                       DateTime?
+  pu_time_end                         DateTime?
+  del_date                            DateTime?
+  del_time_start                      DateTime?
+  del_time_end                        DateTime?
+  pu_is_exact_date                    Boolean?  @default(false, map: "DF__dock_orde__pu_is__33E1393E")
+  del_is_exactdate                    Boolean?  @default(false, map: "DF__dock_orde__del_i__34D55D77")
+  declared_value                      Float?    @db.Money
+  pu_location_id                      Int?
+  pu_company_name                     String?   @db.NVarChar(100)
+  pu_address                          String?   @db.NVarChar(255)
+  pu_zip_code                         String?   @db.NVarChar(1)
+  pu_latitude                         Float?
+  pu_longitude                        Float?
+  pu_aci_code                         String?   @db.NVarChar(1)
+  pu_assessorials                     String?   @db.NVarChar(5)
+  pu_contact_name                     String?   @db.NVarChar(50)
+  pu_contact_means                    String?   @db.NVarChar(50)
+  pu_notes                            String?   @db.NVarChar(Max)
+  pu_is_carrier                       Boolean?  @default(false, map: "DF__dock_orde__pu_is__35C981B0")
+  pu_is_international                 Boolean?  @default(false, map: "DF__dock_orde__pu_is__36BDA5E9")
+  pu_is_local                         Boolean?  @default(false, map: "DF__dock_orde__pu_is__37B1CA22")
+  pu_is_branch                        Boolean?  @default(false, map: "DF__dock_orde__pu_is__38A5EE5B")
+  del_location_id                     Int?
+  del_company_name                    String?   @db.NVarChar(50)
+  del_address                         String?   @db.NVarChar(255)
+  del_zip_code                        String?   @db.NVarChar(10)
+  del_latitude                        Float?
+  del_longitude                       Float?
+  del_aci_code                        String?   @db.NVarChar(5)
+  del_assessorials                    String?   @db.NVarChar(50)
+  del_contact_name                    String?   @db.NVarChar(50)
+  del_contact_means                   String?   @db.NVarChar(50)
+  del_notes                           String?   @db.NVarChar(Max)
+  del_is_carrier                      Boolean?  @default(false, map: "DF__dock_orde__del_i__399A1294")
+  del_is_international                Boolean?  @default(false, map: "DF__dock_orde__del_i__3A8E36CD")
+  del_is_local                        Boolean?  @default(false, map: "DF__dock_orde__del_i__3B825B06")
+  del_is_branch                       Boolean?  @default(false, map: "DF__dock_orde__del_i__3C767F3F")
+  driver                              String?   @db.NVarChar(50)
+  pod_signee                          String?   @db.NVarChar(50)
+  pod_date_signed                     DateTime?
+  pod_time_signed                     DateTime?
+  pod_notes                           String?   @db.NVarChar(Max)
+  status_name                         String?   @db.NVarChar(50)
+  status_id                           Int?
+  rating_weight_charges               Float?    @db.Money
+  rating_fuel_charges                 Float?    @db.Money
+  rating_service_charges              Float?    @db.Money
+  rating_storage_charges              Float?    @db.Money
+  rating_extra_charges                Float?    @db.Money
+  rating_total_charges                Float?    @db.Money
+  rating_notes                        String?   @db.NVarChar(Max)
+  rating_total_expenses               Float?    @db.Money
+  quickbooks_customer_list_id         String?   @db.NVarChar(50)
+  quickbooks_customer_name            String?   @db.NVarChar(50)
+  quickbooks_invoice_reference_number String?   @db.NVarChar(50)
+  quickbooks_line_sequence_number     String?   @db.NVarChar(50)
+  is_auto_assessorials                Boolean?  @default(false, map: "DF__dock_orde__is_au__3D6AA378")
+  is_weight_charge_calculated         Boolean?  @default(false, map: "DF__dock_orde__is_we__3E5EC7B1")
+}
+
+model dock_order_assessorial {
+  id                  Int      @id(map: "dock_order_assessorial$Index_879ED544_EBBE_44B6") @default(autoincrement())
+  order_number        Int?
+  assessorial_number  Int?
+  assessorial_parent  String?  @db.NVarChar(2)
+  assessorial_type_id Int?
+  wait_time_minutes   Float?
+  how_many_miles      Float?
+  how_many_hrs        Float?
+  total_charges       Float?   @db.Money
+  how_much_per_pound  Float?   @db.Money
+  presentation        String?  @db.NVarChar(100)
+  is_pay_commision    Boolean? @default(false, map: "DF__dock_orde__is_pa__3F52EBEA")
+}
+
+model dock_order_dimension {
+  id               Int     @id(map: "dock_order_dimension$Index_98D8CE4D_C8C6_4FA6") @default(autoincrement())
+  order_number     Int?
+  dimension_number Int?
+  unit_type        String? @db.NVarChar(5)
+  quantity         Float?
+  height           Float?
+  length           Float?
+  width            Float?
+  weight           Float?
+  dimension_weight Float?
+}
+
+model dock_order_driver {
+  id                  Int     @id(map: "dock_order_driver$Index_BAE682FE_3E62_4894") @default(autoincrement())
+  order_number        Int?
+  driver_number       Float?
+  user_id             Float?
+  name                String? @db.NVarChar(5)
+  order_location_type String? @db.NVarChar(1)
+  position            String? @db.NVarChar(1)
+  commission_due      Float?
+}
+
+model hawb {
+  hawb        Float  @id(map: "hawb$Index_217A7D08_DCBC_4605")
+  order_id    Float?
+  customer_id Float?
+}
+
+model invoiced_order {
+  order_number                        Float     @id(map: "invoiced_order$Index_7D3BA9DE_2CBA_4004")
+  order_type                          String?   @db.NVarChar(20)
+  customer_id                         Int?
+  customer_name                       String?   @db.NVarChar(100)
+  customer_assessorials               String?   @db.NVarChar(50)
+  customer_agent                      String?   @db.NVarChar(100)
+  tarrif                              String?   @db.NVarChar(50)
+  hawb                                String?   @db.NVarChar(30)
+  mawb                                String?   @db.NVarChar(30)
+  pro_number                          String?   @db.NVarChar(30)
+  notes                               String?   @db.NVarChar(Max)
+  pu_date                             DateTime?
+  pu_time_start                       DateTime?
+  pu_time_end                         DateTime?
+  del_date                            DateTime?
+  del_time_start                      DateTime?
+  del_time_end                        DateTime?
+  pu_is_exact_date                    Boolean?  @default(false, map: "DF__invoiced___pu_is__40471023")
+  del_is_exactdate                    Boolean?  @default(false, map: "DF__invoiced___del_i__413B345C")
+  declared_value                      Float?    @db.Money
+  pu_location_id                      Int?
+  pu_company_name                     String?   @db.NVarChar(100)
+  pu_address                          String?   @db.NVarChar(255)
+  pu_zip_code                         String?   @db.NVarChar(1)
+  pu_latitude                         Float?
+  pu_longitude                        Float?
+  pu_aci_code                         String?   @db.NVarChar(1)
+  pu_assessorials                     String?   @db.NVarChar(5)
+  pu_contact_name                     String?   @db.NVarChar(50)
+  pu_contact_means                    String?   @db.NVarChar(50)
+  pu_notes                            String?   @db.NVarChar(Max)
+  pu_is_carrier                       Boolean?  @default(false, map: "DF__invoiced___pu_is__422F5895")
+  pu_is_international                 Boolean?  @default(false, map: "DF__invoiced___pu_is__43237CCE")
+  pu_is_local                         Boolean?  @default(false, map: "DF__invoiced___pu_is__4417A107")
+  pu_is_branch                        Boolean?  @default(false, map: "DF__invoiced___pu_is__450BC540")
+  del_location_id                     Int?
+  del_company_name                    String?   @db.NVarChar(50)
+  del_address                         String?   @db.NVarChar(255)
+  del_zip_code                        String?   @db.NVarChar(10)
+  del_latitude                        Float?
+  del_longitude                       Float?
+  del_aci_code                        String?   @db.NVarChar(5)
+  del_assessorials                    String?   @db.NVarChar(50)
+  del_contact_name                    String?   @db.NVarChar(50)
+  del_contact_means                   String?   @db.NVarChar(50)
+  del_notes                           String?   @db.NVarChar(Max)
+  del_is_carrier                      Boolean?  @default(false, map: "DF__invoiced___del_i__45FFE979")
+  del_is_international                Boolean?  @default(false, map: "DF__invoiced___del_i__46F40DB2")
+  del_is_local                        Boolean?  @default(false, map: "DF__invoiced___del_i__47E831EB")
+  del_is_branch                       Boolean?  @default(false, map: "DF__invoiced___del_i__48DC5624")
+  driver                              String?   @db.NVarChar(50)
+  pod_signee                          String?   @db.NVarChar(50)
+  pod_date_signed                     DateTime?
+  pod_time_signed                     DateTime?
+  pod_notes                           String?   @db.NVarChar(Max)
+  status_name                         String?   @db.NVarChar(50)
+  status_id                           Int?
+  rating_weight_charges               Float?    @db.Money
+  rating_fuel_charges                 Float?    @db.Money
+  rating_service_charges              Float?    @db.Money
+  rating_storage_charges              Float?    @db.Money
+  rating_extra_charges                Float?    @db.Money
+  rating_total_charges                Float?    @db.Money
+  rating_notes                        String?   @db.NVarChar(Max)
+  rating_total_expenses               Float?    @db.Money
+  quickbooks_customer_list_id         String?   @db.NVarChar(50)
+  quickbooks_customer_name            String?   @db.NVarChar(50)
+  quickbooks_invoice_reference_number String?   @db.NVarChar(50)
+  quickbooks_line_sequence_number     String?   @db.NVarChar(50)
+  is_auto_assessorials                Boolean?  @default(false, map: "DF__invoiced___is_au__49D07A5D")
+  is_weight_charge_calculated         Boolean?  @default(false, map: "DF__invoiced___is_we__4AC49E96")
+}
+
+model invoiced_order_assessorial {
+  id                  Int      @id(map: "invoiced_order_assessorial$Index_1F70B0F7_3A0F_409A") @default(autoincrement())
+  order_number        Int?
+  assessorial_number  Int?
+  assessorial_parent  String?  @db.NVarChar(2)
+  assessorial_type_id Int?
+  wait_time_minutes   Float?
+  how_many_miles      Float?
+  how_many_hrs        Float?
+  total_charges       Float?   @db.Money
+  how_much_per_pound  Float?   @db.Money
+  presentation        String?  @db.NVarChar(100)
+  is_pay_commision    Boolean? @default(false, map: "DF__invoiced___is_pa__4BB8C2CF")
+}
+
+model invoiced_order_dimension {
+  id               Int     @id(map: "invoiced_order_dimension$Index_D060A26A_DFED_4EBF") @default(autoincrement())
+  order_number     Int?
+  dimension_number Int?
+  unit_type        String? @db.NVarChar(5)
+  quantity         Float?
+  height           Float?
+  length           Float?
+  width            Float?
+  weight           Float?
+  dimension_weight Float?
+}
+
+model invoiced_order_driver {
+  id                  Int     @id(map: "invoiced_order_driver$Index_5AD9220A_7C92_4647") @default(autoincrement())
+  order_number        Int?
+  driver_number       Float?
+  user_id             Float?
+  name                String? @db.NVarChar(5)
+  order_location_type String? @db.NVarChar(1)
+  position            String? @db.NVarChar(1)
+  commission_due      Float?
+}
+
+model open_order {
+  order_number                        Float     @id(map: "open_order$Index_23DEC588_3769_4FC4")
+  order_type                          String?   @db.NVarChar(20)
+  customer_id                         Int?
+  customer_name                       String?   @db.NVarChar(100)
+  customer_assessorials               String?   @db.NVarChar(50)
+  customer_agent                      String?   @db.NVarChar(100)
+  tarrif                              String?   @db.NVarChar(50)
+  hawb                                String?   @db.NVarChar(30)
+  mawb                                String?   @db.NVarChar(30)
+  pro_number                          String?   @db.NVarChar(30)
+  notes                               String?   @db.NVarChar(Max)
+  pu_date                             DateTime?
+  pu_time_start                       DateTime?
+  pu_time_end                         DateTime?
+  del_date                            DateTime?
+  del_time_start                      DateTime?
+  del_time_end                        DateTime?
+  pu_is_exact_date                    Boolean?  @default(false, map: "DF__open_orde__pu_is__4CACE708")
+  del_is_exactdate                    Boolean?  @default(false, map: "DF__open_orde__del_i__4DA10B41")
+  declared_value                      Float?    @db.Money
+  pu_location_id                      Int?
+  pu_company_name                     String?   @db.NVarChar(100)
+  pu_address                          String?   @db.NVarChar(255)
+  pu_zip_code                         String?   @db.NVarChar(1)
+  pu_latitude                         Float?
+  pu_longitude                        Float?
+  pu_aci_code                         String?   @db.NVarChar(1)
+  pu_assessorials                     String?   @db.NVarChar(5)
+  pu_contact_name                     String?   @db.NVarChar(50)
+  pu_contact_means                    String?   @db.NVarChar(50)
+  pu_notes                            String?   @db.NVarChar(Max)
+  pu_is_carrier                       Boolean?  @default(false, map: "DF__open_orde__pu_is__4E952F7A")
+  pu_is_international                 Boolean?  @default(false, map: "DF__open_orde__pu_is__4F8953B3")
+  pu_is_local                         Boolean?  @default(false, map: "DF__open_orde__pu_is__507D77EC")
+  pu_is_branch                        Boolean?  @default(false, map: "DF__open_orde__pu_is__51719C25")
+  del_location_id                     Int?
+  del_company_name                    String?   @db.NVarChar(50)
+  del_address                         String?   @db.NVarChar(255)
+  del_zip_code                        String?   @db.NVarChar(10)
+  del_latitude                        Float?
+  del_longitude                       Float?
+  del_aci_code                        String?   @db.NVarChar(5)
+  del_assessorials                    String?   @db.NVarChar(50)
+  del_contact_name                    String?   @db.NVarChar(50)
+  del_contact_means                   String?   @db.NVarChar(50)
+  del_notes                           String?   @db.NVarChar(Max)
+  del_is_carrier                      Boolean?  @default(false, map: "DF__open_orde__del_i__5265C05E")
+  del_is_international                Boolean?  @default(false, map: "DF__open_orde__del_i__5359E497")
+  del_is_local                        Boolean?  @default(false, map: "DF__open_orde__del_i__544E08D0")
+  del_is_branch                       Boolean?  @default(false, map: "DF__open_orde__del_i__55422D09")
+  driver                              String?   @db.NVarChar(50)
+  pod_signee                          String?   @db.NVarChar(50)
+  pod_date_signed                     DateTime?
+  pod_time_signed                     DateTime?
+  pod_notes                           String?   @db.NVarChar(Max)
+  status_name                         String?   @db.NVarChar(50)
+  status_id                           Int?
+  rating_weight_charges               Float?    @db.Money
+  rating_fuel_charges                 Float?    @db.Money
+  rating_service_charges              Float?    @db.Money
+  rating_storage_charges              Float?    @db.Money
+  rating_extra_charges                Float?    @db.Money
+  rating_total_charges                Float?    @db.Money
+  rating_notes                        String?   @db.NVarChar(Max)
+  rating_total_expenses               Float?    @db.Money
+  quickbooks_customer_list_id         String?   @db.NVarChar(50)
+  quickbooks_customer_name            String?   @db.NVarChar(50)
+  quickbooks_invoice_reference_number String?   @db.NVarChar(50)
+  quickbooks_line_sequence_number     String?   @db.NVarChar(50)
+  is_auto_assessorials                Boolean?  @default(false, map: "DF__open_orde__is_au__56365142")
+  is_weight_charge_calculated         Boolean?  @default(false, map: "DF__open_orde__is_we__572A757B")
+}
+
+model open_order_assessorial {
+  id                  Int      @id(map: "open_order_assessorial$Index_868B0B1D_181F_405F") @default(autoincrement())
+  order_number        Int?
+  assessorial_number  Int?
+  assessorial_parent  String?  @db.NVarChar(2)
+  assessorial_type_id Int?
+  wait_time_minutes   Float?
+  how_many_miles      Float?
+  how_many_hrs        Float?
+  total_charges       Float?   @db.Money
+  how_much_per_pound  Float?   @db.Money
+  presentation        String?  @db.NVarChar(100)
+  is_pay_commision    Boolean? @default(false, map: "DF__open_orde__is_pa__581E99B4")
+}
+
+model open_order_dimension {
+  id               Int     @id(map: "open_order_dimension$Index_D3001FCE_F05F_4FA1") @default(autoincrement())
+  order_number     Int?
+  dimension_number Int?
+  unit_type        String? @db.NVarChar(5)
+  quantity         Float?
+  height           Float?
+  length           Float?
+  width            Float?
+  weight           Float?
+  dimension_weight Float?
+}
+
+model open_order_driver {
+  id                  Int     @id(map: "open_order_driver$Index_CBF1B0AB_68C8_4FF4") @default(autoincrement())
+  order_number        Float?
+  driver_number       Float?
+  user_id             Float?
+  name                String? @db.NVarChar(5)
+  order_location_type String? @db.NVarChar(1)
+  position            String? @db.NVarChar(1)
+  commission_due      Float?
+}
+
+model order_change_history {
+  id           Int       @id(map: "order_change_history$Index_D97B17F9_C9F0_41FB") @default(autoincrement())
+  order_id     Float?
+  user_id      Int?
+  date_changed DateTime?
+  changes      String?   @db.NVarChar(Max)
+}
+
+model order_in_work {
+  order_id     Float     @id(map: "order_in_work$Index_B12E3370_2F06_4735")
+  date_created DateTime?
+  user_id      String?   @db.NVarChar(255)
+}
+
+model overnight_maintenance_history {
+  id                               Int       @id(map: "overnight_maintenance_history$Index_7432EF52_6D52_4F83") @default(autoincrement())
+  date_overnight_maintenance       DateTime?
+  user_id                          Int?
+  open_orders_in                   Float?
+  open_order_assessorials_in       Float?
+  open_order_dimensions_in         Float?
+  open_order_drivers_in            Float?
+  open_order_attachments_in        Float?
+  invoiced_orders_in               Float?
+  invoiced_order_assessorials_in   Float?
+  invoiced_order_dimensions_in     Float?
+  invoiced_order_drivers_in        Float?
+  invoiced_order_attachments_in    Float?
+  remaining_orders_in              Float?
+  remaining_order_assessorials_in  Float?
+  remaining_order_dimensions_in    Float?
+  remaining_order_drivers_in       Float?
+  remaining_order_attachments_in   Float?
+  open_orders_out                  Float?
+  open_order_assessorials_out      Float?
+  open_order_dimensions_out        Float?
+  open_order_drivers_out           Float?
+  open_order_attachments_out       Float?
+  invoiced_orders_out              Float?
+  invoiced_order_assessorials_out  Float?
+  invoiced_order_dimensions_out    Float?
+  invoiced_order_drivers_out       Float?
+  invoiced_order_attachments_out   Float?
+  remaining_orders_out             Float?
+  remaining_order_assessorials_out Float?
+  remaining_order_dimensions_out   Float?
+  remaining_order_drivers_out      Float?
+  remaining_order_attachments_out  Float?
+}
+
+model position {
+  id             Int      @id(map: "position$Index_AC65272E_9F46_4235") @default(autoincrement())
+  branch_id      Int?
+  title          String?  @db.NVarChar(60)
+  security_level Int?
+  is_active      Boolean? @default(false, map: "DF__position__is_act__5912BDED")
+}
+
+model position_change_history {
+  id           Int       @id(map: "position_change_history$Index_CDFF74EC_EBC4_47EF") @default(autoincrement())
+  position_id  Float?
+  user_id      Int?
+  date_changed DateTime?
+  changes      String?   @db.NVarChar(Max)
+}
+
+model rate {
+  id         Int      @id(map: "rate$Index_BA371E46_0AA9_4C42") @default(autoincrement())
+  name       String?  @db.NVarChar(20)
+  branch_id  Int?
+  is_default Boolean? @default(false, map: "DF__rate__is_default__5A06E226")
+  is_active  Boolean? @default(false, map: "DF__rate__is_active__5AFB065F")
+}
+
+model rate_area {
+  id        Int     @id(map: "rate_area$Index_EDC36238_510B_4EF3") @default(autoincrement())
+  rate_id   Int?
+  aci_area  String? @db.NVarChar(1)
+  rate_min  Float?  @db.Money
+  rate_100  Float?  @db.Money
+  rate_1000 Float?  @db.Money
+  rate_2000 Float?  @db.Money
+  rate_5000 Float?  @db.Money
+  rate_max  Float?  @db.Money
+}
+
+model rate_change_history {
+  id           Int       @id(map: "rate_change_history$Index_7AAF63CA_F65B_47A0") @default(autoincrement())
+  rate_id      Int?
+  user_id      Int?
+  date_changed DateTime?
+  changes      String?   @db.NVarChar(255)
+}
+
+model remaining_order {
+  order_number                        Float     @id(map: "remaining_order$Index_A1033332_E42A_443F")
+  order_type                          String?   @db.NVarChar(20)
+  customer_id                         Int?
+  customer_name                       String?   @db.NVarChar(100)
+  customer_assessorials               String?   @db.NVarChar(50)
+  customer_agent                      String?   @db.NVarChar(100)
+  tarrif                              String?   @db.NVarChar(50)
+  hawb                                String?   @db.NVarChar(30)
+  mawb                                String?   @db.NVarChar(30)
+  pro_number                          String?   @db.NVarChar(30)
+  notes                               String?   @db.NVarChar(Max)
+  pu_date                             DateTime?
+  pu_time_start                       DateTime?
+  pu_time_end                         DateTime?
+  del_date                            DateTime?
+  del_time_start                      DateTime?
+  del_time_end                        DateTime?
+  pu_is_exact_date                    Boolean?  @default(false, map: "DF__remaining__pu_is__5BEF2A98")
+  del_is_exactdate                    Boolean?  @default(false, map: "DF__remaining__del_i__5CE34ED1")
+  declared_value                      Float?    @db.Money
+  pu_location_id                      Int?
+  pu_company_name                     String?   @db.NVarChar(100)
+  pu_address                          String?   @db.NVarChar(255)
+  pu_zip_code                         String?   @db.NVarChar(1)
+  pu_latitude                         Float?
+  pu_longitude                        Float?
+  pu_aci_code                         String?   @db.NVarChar(1)
+  pu_assessorials                     String?   @db.NVarChar(5)
+  pu_contact_name                     String?   @db.NVarChar(50)
+  pu_contact_means                    String?   @db.NVarChar(50)
+  pu_notes                            String?   @db.NVarChar(Max)
+  pu_is_carrier                       Boolean?  @default(false, map: "DF__remaining__pu_is__5DD7730A")
+  pu_is_international                 Boolean?  @default(false, map: "DF__remaining__pu_is__5ECB9743")
+  pu_is_local                         Boolean?  @default(false, map: "DF__remaining__pu_is__5FBFBB7C")
+  pu_is_branch                        Boolean?  @default(false, map: "DF__remaining__pu_is__60B3DFB5")
+  del_location_id                     Int?
+  del_company_name                    String?   @db.NVarChar(50)
+  del_address                         String?   @db.NVarChar(255)
+  del_zip_code                        String?   @db.NVarChar(10)
+  del_latitude                        Float?
+  del_longitude                       Float?
+  del_aci_code                        String?   @db.NVarChar(5)
+  del_assessorials                    String?   @db.NVarChar(50)
+  del_contact_name                    String?   @db.NVarChar(50)
+  del_contact_means                   String?   @db.NVarChar(50)
+  del_notes                           String?   @db.NVarChar(Max)
+  del_is_carrier                      Boolean?  @default(false, map: "DF__remaining__del_i__61A803EE")
+  del_is_international                Boolean?  @default(false, map: "DF__remaining__del_i__629C2827")
+  del_is_local                        Boolean?  @default(false, map: "DF__remaining__del_i__63904C60")
+  del_is_branch                       Boolean?  @default(false, map: "DF__remaining__del_i__64847099")
+  driver                              String?   @db.NVarChar(50)
+  pod_signee                          String?   @db.NVarChar(50)
+  pod_date_signed                     DateTime?
+  pod_time_signed                     DateTime?
+  pod_notes                           String?   @db.NVarChar(Max)
+  status_name                         String?   @db.NVarChar(50)
+  status_id                           Int?
+  rating_weight_charges               Float?    @db.Money
+  rating_fuel_charges                 Float?    @db.Money
+  rating_service_charges              Float?    @db.Money
+  rating_storage_charges              Float?    @db.Money
+  rating_extra_charges                Float?    @db.Money
+  rating_total_charges                Float?    @db.Money
+  rating_notes                        String?   @db.NVarChar(Max)
+  rating_total_expenses               Float?    @db.Money
+  quickbooks_customer_list_id         String?   @db.NVarChar(50)
+  quickbooks_customer_name            String?   @db.NVarChar(50)
+  quickbooks_invoice_reference_number String?   @db.NVarChar(50)
+  quickbooks_line_sequence_number     String?   @db.NVarChar(50)
+  is_auto_assessorials                Boolean?  @default(false, map: "DF__remaining__is_au__657894D2")
+  is_weight_charge_calculated         Boolean?  @default(false, map: "DF__remaining__is_we__666CB90B")
+}
+
+model remaining_order_assessorial {
+  id                  Int      @id(map: "remaining_order_assessorial$Index_B856AA72_7285_4940") @default(autoincrement())
+  order_number        Int?
+  assessorial_number  Int?
+  assessorial_parent  String?  @db.NVarChar(2)
+  assessorial_type_id Int?
+  wait_time_minutes   Float?
+  how_many_miles      Float?
+  how_many_hrs        Float?
+  total_charges       Float?   @db.Money
+  how_much_per_pound  Float?   @db.Money
+  presentation        String?  @db.NVarChar(100)
+  is_pay_commision    Boolean? @default(false, map: "DF__remaining__is_pa__6760DD44")
+}
+
+model remaining_order_dimension {
+  id               Int     @id(map: "remaining_order_dimension$Index_28B26C9D_0D06_46DD") @default(autoincrement())
+  order_number     Int?
+  dimension_number Int?
+  unit_type        String? @db.NVarChar(5)
+  quantity         Float?
+  height           Float?
+  length           Float?
+  width            Float?
+  weight           Float?
+  dimension_weight Float?
+}
+
+model remaining_order_driver {
+  id                  Int     @id(map: "remaining_order_driver$Index_AA80BA31_CB7F_4E7A") @default(autoincrement())
+  order_number        Int?
+  driver_number       Float?
+  user_id             Float?
+  name                String? @db.NVarChar(5)
+  order_location_type String? @db.NVarChar(1)
+  position            String? @db.NVarChar(1)
+  commission_due      Float?
+}
+
+model service_order {
+  order_number                        Float     @id(map: "service_order$Index_C4A82E31_249D_4960")
+  order_type                          String?   @db.NVarChar(20)
+  customer_id                         Int?
+  customer_name                       String?   @db.NVarChar(100)
+  customer_assessorials               String?   @db.NVarChar(50)
+  customer_agent                      String?   @db.NVarChar(100)
+  tarrif                              String?   @db.NVarChar(50)
+  hawb                                String?   @db.NVarChar(30)
+  mawb                                String?   @db.NVarChar(30)
+  pro_number                          String?   @db.NVarChar(30)
+  notes                               String?   @db.NVarChar(Max)
+  pu_date                             DateTime?
+  pu_time_start                       DateTime?
+  pu_time_end                         DateTime?
+  del_date                            DateTime?
+  del_time_start                      DateTime?
+  del_time_end                        DateTime?
+  pu_is_exact_date                    Boolean?  @default(false, map: "DF__service_o__pu_is__6855017D")
+  del_is_exactdate                    Boolean?  @default(false, map: "DF__service_o__del_i__694925B6")
+  declared_value                      Float?    @db.Money
+  pu_location_id                      Int?
+  pu_company_name                     String?   @db.NVarChar(100)
+  pu_address                          String?   @db.NVarChar(255)
+  pu_zip_code                         String?   @db.NVarChar(1)
+  pu_latitude                         Float?
+  pu_longitude                        Float?
+  pu_aci_code                         String?   @db.NVarChar(1)
+  pu_assessorials                     String?   @db.NVarChar(5)
+  pu_contact_name                     String?   @db.NVarChar(50)
+  pu_contact_means                    String?   @db.NVarChar(50)
+  pu_notes                            String?   @db.NVarChar(Max)
+  pu_is_carrier                       Boolean?  @default(false, map: "DF__service_o__pu_is__6A3D49EF")
+  pu_is_international                 Boolean?  @default(false, map: "DF__service_o__pu_is__6B316E28")
+  pu_is_local                         Boolean?  @default(false, map: "DF__service_o__pu_is__6C259261")
+  pu_is_branch                        Boolean?  @default(false, map: "DF__service_o__pu_is__6D19B69A")
+  del_location_id                     Int?
+  del_company_name                    String?   @db.NVarChar(50)
+  del_address                         String?   @db.NVarChar(255)
+  del_zip_code                        String?   @db.NVarChar(10)
+  del_latitude                        Float?
+  del_longitude                       Float?
+  del_aci_code                        String?   @db.NVarChar(5)
+  del_assessorials                    String?   @db.NVarChar(50)
+  del_contact_name                    String?   @db.NVarChar(50)
+  del_contact_means                   String?   @db.NVarChar(50)
+  del_notes                           String?   @db.NVarChar(Max)
+  del_is_carrier                      Boolean?  @default(false, map: "DF__service_o__del_i__6E0DDAD3")
+  del_is_international                Boolean?  @default(false, map: "DF__service_o__del_i__6F01FF0C")
+  del_is_local                        Boolean?  @default(false, map: "DF__service_o__del_i__6FF62345")
+  del_is_branch                       Boolean?  @default(false, map: "DF__service_o__del_i__70EA477E")
+  driver                              String?   @db.NVarChar(50)
+  pod_signee                          String?   @db.NVarChar(50)
+  pod_date_signed                     DateTime?
+  pod_time_signed                     DateTime?
+  pod_notes                           String?   @db.NVarChar(Max)
+  status_name                         String?   @db.NVarChar(50)
+  status_id                           Int?
+  rating_weight_charges               Float?    @db.Money
+  rating_fuel_charges                 Float?    @db.Money
+  rating_service_charges              Float?    @db.Money
+  rating_storage_charges              Float?    @db.Money
+  rating_extra_charges                Float?    @db.Money
+  rating_total_charges                Float?    @db.Money
+  rating_notes                        String?   @db.NVarChar(Max)
+  rating_total_expenses               Float?    @db.Money
+  quickbooks_customer_list_id         String?   @db.NVarChar(50)
+  quickbooks_customer_name            String?   @db.NVarChar(50)
+  quickbooks_invoice_reference_number String?   @db.NVarChar(50)
+  quickbooks_line_sequence_number     String?   @db.NVarChar(50)
+  is_auto_assessorials                Boolean?  @default(false, map: "DF__service_o__is_au__71DE6BB7")
+  is_weight_charge_calculated         Boolean?  @default(false, map: "DF__service_o__is_we__72D28FF0")
+}
+
+model service_order_assessorial {
+  id                  Int      @id(map: "service_order_assessorial$Index_186756C5_4527_4374") @default(autoincrement())
+  order_number        Int?
+  assessorial_number  Int?
+  assessorial_parent  String?  @db.NVarChar(2)
+  assessorial_type_id Int?
+  wait_time_minutes   Float?
+  how_many_miles      Float?
+  how_many_hrs        Float?
+  total_charges       Float?   @db.Money
+  how_much_per_pound  Float?   @db.Money
+  presentation        String?  @db.NVarChar(100)
+  is_pay_commision    Boolean? @default(false, map: "DF__service_o__is_pa__73C6B429")
+}
+
+model service_order_dimension {
+  id               Int     @id(map: "service_order_dimension$Index_B5C35ADC_1473_4905") @default(autoincrement())
+  order_number     Int?
+  dimension_number Int?
+  unit_type        String? @db.NVarChar(5)
+  quantity         Float?
+  height           Float?
+  length           Float?
+  width            Float?
+  weight           Float?
+  dimension_weight Float?
+}
+
+model service_order_driver {
+  id                  Int     @id(map: "service_order_driver$Index_E8A1DAF9_714E_42B2") @default(autoincrement())
+  order_number        Int?
+  driver_number       Float?
+  user_id             Float?
+  name                String? @db.NVarChar(5)
+  order_location_type String? @db.NVarChar(1)
+  position            String? @db.NVarChar(1)
+  commission_due      Float?
+}
+
+model static_country {
+  ID           Int     @id(map: "static_country$ID") @default(autoincrement())
+  name         String? @db.NVarChar(255)
+  alpha_2_code String? @db.NVarChar(255)
+  alpha_3_code String? @db.NVarChar(255)
+  numeric_code Float?
+  iso_code     String? @db.NVarChar(255)
+
+  @@index([alpha_2_code], map: "static_country$Alpha-2 code")
+  @@index([alpha_3_code], map: "static_country$Alpha-3 code")
+  @@index([numeric_code], map: "static_country$Numeric code")
+}
+
+model static_us_airport {
+  ID           Int     @id(map: "static_us_airport$ID") @default(autoincrement())
+  airport_code String? @db.NVarChar(255)
+  airport_name String? @db.NVarChar(255)
+  CITY         String? @db.NVarChar(255)
+  STATE        String? @db.NVarChar(255)
+  COUNTRY      String? @db.NVarChar(255)
+  LATITUDE     Float?
+  LONGITUDE    Float?
+}
+
+model static_us_city {
+  id           Int      @id(map: "static_us_city$ID1") @default(autoincrement())
+  city         String?  @db.NVarChar(255)
+  city_ascii   String?  @db.NVarChar(255)
+  state_id     String?  @db.NVarChar(255)
+  state_name   String?  @db.NVarChar(255)
+  county_fips  Float?
+  county_name  String?  @db.NVarChar(255)
+  lat          Float?
+  lng          Float?
+  population   Float?
+  density      Float?
+  source       String?  @db.NVarChar(255)
+  military     Boolean? @default(false, map: "DF__static_us__milit__74BAD862")
+  incorporated Boolean? @default(false, map: "DF__static_us__incor__75AEFC9B")
+  timezone     String?  @db.NVarChar(255)
+  ranking      Float?
+  zips         String?  @db.NVarChar(Max)
+
+  @@index([state_id], map: "static_us_city$state_id")
+}
+
+model static_us_state {
+  ID           Int     @id(map: "static_us_state$PrimaryKey") @default(autoincrement())
+  name         String? @db.NVarChar(255)
+  abbreviation String? @db.NVarChar(255)
+}
+
+model static_us_zip_code {
+  ID           Int     @id(map: "static_us_zip_code$ID") @default(autoincrement())
+  country_code String? @db.NVarChar(255)
+  postal_code  Float?
+  place_name   String? @db.NVarChar(255)
+  admin_1_name String? @db.NVarChar(255)
+  admin_1_code String? @db.NVarChar(255)
+  admin_2_name String? @db.NVarChar(255)
+  admin_2_code Float?
+  latitude     Float?
+  longitude    Float?
+
+  @@index([admin_1_code], map: "static_us_zip_code$admin_1_code")
+  @@index([admin_2_code], map: "static_us_zip_code$admin_2_code")
+  @@index([country_code], map: "static_us_zip_code$country_code")
+  @@index([postal_code], map: "static_us_zip_code$postal_code")
+}
+
+model status {
+  id                    Int      @id(map: "status$Index_8E82C12F_5715_4D32") @default(autoincrement())
+  status_name           String?  @db.NVarChar(50)
+  is_on_manifest        Boolean? @default(false, map: "DF__status__is_on_ma__76A320D4")
+  is_set_to_auto_notify Boolean? @default(false, map: "DF__status__is_set_t__7797450D")
+  is_active             Boolean? @default(false, map: "DF__status__is_activ__788B6946")
+}
+
+model status_change_history {
+  id           Int       @id(map: "status_change_history$Index_604994A3_AD35_4485") @default(autoincrement())
+  status_id    Float?
+  user_id      Int?
+  date_changed DateTime?
+  changes      String?   @db.NVarChar(Max)
+}
+
+model sysdiagrams {
+  name         String @db.NVarChar(128)
+  principal_id Int
+  diagram_id   Int    @id(map: "PK__sysdiagr__C2B05B61D85BBC5B") @default(autoincrement())
+  version      Int?
+  definition   Bytes?
+
+  @@unique([principal_id, name], map: "UK_principal_name")
+}
+
+model user {
+  id                      Int       @id(map: "user$Index_60232A2F_7A4B_4CB2") @default(autoincrement())
+  username                String?   @db.NVarChar(100)
+  password_hash           String?   @db.NVarChar(255)
+  password_salt           String?   @db.NVarChar(32)
+  company_id              Float?
+  branch_id               Float?
+  position_id             Float?
+  name_prefix             String?   @db.NVarChar(4)
+  first_name              String?   @db.NVarChar(50)
+  last_name               String?   @db.NVarChar(50)
+  name_suffix             String?   @db.NVarChar(4)
+  email                   String?   @db.NVarChar(100)
+  phone                   String?   @db.NVarChar(15)
+  phone_mobile            String?   @db.NVarChar(15)
+  phone_home              String?   @db.NVarChar(15)
+  address_line_1          String?   @db.NVarChar(100)
+  address_line_2          String?   @db.NVarChar(50)
+  city                    String?   @db.NVarChar(50)
+  state                   String?   @db.NVarChar(3)
+  zip_code                String?   @db.NVarChar(10)
+  country                 String?   @db.NVarChar(50)
+  date_hired              DateTime?
+  date_terminated         DateTime?
+  commission_rate         Float?
+  tsa_type                String?   @db.NVarChar(255)
+  tsa_number              String?   @db.NVarChar(255)
+  is_default_doc_owner    Boolean?  @default(false, map: "DF__user__is_default__7F3866D5")
+  is_tsa_trainer          Boolean?  @default(false, map: "DF__user__is_tsa_tra__002C8B0E")
+  is_security_coordinator Boolean?  @default(false, map: "DF__user__is_securit__0120AF47")
+  is_active               Boolean?  @default(false, map: "DF__user__is_active__0214D380")
+}
+
+model user_change_history {
+  id           Int       @id(map: "user_change_history$Index_41F0BD04_9323_47BB") @default(autoincrement())
+  staff_id     Float?
+  user_id      Int?
+  date_changed DateTime?
+  time_changed DateTime?
+  changes      String?   @db.NVarChar(Max)
+}
+
+model user_logged_in {
+  id          Float     @id(map: "user_logged_in$Index_E754A5E9_F9AB_409A")
+  pc_name     String?   @db.NVarChar(255)
+  pc_login_id String?   @db.NVarChar(255)
+  login_time  DateTime?
+}

@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "../../build/dist-electron/main",
+    "lib": ["ES2022"]
+  },
+  "files": ["../@types/global.d.ts"],
+  "include": ["**/*"],
+  "exclude": ["**/node_modules/**"]
+}
