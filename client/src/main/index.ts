@@ -14,6 +14,7 @@ import { SecureConfigManager } from "./database/prisma/secure-config.js";
 
 import { DatabaseConfig } from "../@types/database.js";
 import { buildDatabaseUrl } from "./database/prisma/helpers.js";
+import { executePythonScript } from "./helpers/python.js";
 
 (async () => {
   const defaultConfig = await SecureConfigManager.getConfig();
@@ -98,6 +99,43 @@ app.on("ready", () => {
     } catch (error) {
       console.error("Failed to read PDF file:", error);
       throw error;
+    }
+  });
+
+  // Extract PDF objects using Python script
+  ipcMainHandle("extractPdfObjects", async (pdfFilePath: string) => {
+    try {
+      // Pass file path directly to Python script
+      const result = await executePythonScript("pdf_objects.py", pdfFilePath);
+      return JSON.parse(result);
+    } catch (error) {
+      const err = error as Error & { details?: unknown };
+      const details = {
+        handler: "extractPdfObjects",
+        message: err.message,
+        name: err.name,
+        // Include structured details from Python helper if present
+        python: (err as any)?.details ?? null,
+        // Quick context on input sizes
+        input: {
+          pdfFilePath,
+        },
+        timestamp: new Date().toISOString(),
+      };
+
+      // Log structured details in main process
+      console.error(
+        "Error occurred in handler for 'extractPdfObjects':",
+        details
+      );
+
+      // Re-throw with JSON payload to preserve details over IPC
+      throw new Error(
+        JSON.stringify({
+          error: "EXTRACT_PDF_OBJECTS_FAILED",
+          ...details,
+        })
+      );
     }
   });
 

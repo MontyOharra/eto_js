@@ -13,4 +13,6 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRendererInvoke("openPdfWindow", filePath),
   getFilePath: (file: File) => webUtils.getPathForFile(file),
   readPdfFile: (filePath: string) => ipcRendererInvoke("readPdfFile", filePath),
+  extractPdfObjects: (pdfFilePath: string) =>
+    ipcRendererInvoke("extractPdfObjects", pdfFilePath),
 } satisfies Window["electron"]);

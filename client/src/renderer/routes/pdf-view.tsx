@@ -4,7 +4,8 @@ import { Document, Page, pdfjs } from "react-pdf";
 import PdfFieldSelector from "../components/PdfFieldSelector";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
-import PdfTextBoxOverlay from "../components/PdfTextBoxOverlay";
+import PdfObjectOverlay from "../components/PdfTextBoxOverlay";
+import type { PdfObject } from "../../@types/global";
 
 export const Route = createFileRoute("/pdf-view")({
   validateSearch: (search) => {
@@ -63,7 +64,9 @@ function PdfViewer() {
     pdfY: number;
   } | null>(null);
 
-  const [rawTextRects, setRawTextRects] = useState<Rect[]>([]);
+  // Store PDF objects from Python extraction
+  const [allPdfObjects, setAllPdfObjects] = useState<PdfObject[]>([]);
+  const [currentPageObjects, setCurrentPageObjects] = useState<PdfObject[]>([]);
 
   // toggles
   const [showRawBoxes, setShowRawBoxes] = useState(false);
@@ -86,8 +89,12 @@ function PdfViewer() {
         // Create a defensive copy so React-PDF always receives the same
         // buffer instance and to avoid detached-buffer warnings.
         setPdfData(new Uint8Array(bytes));
+
+        // Extract PDF objects using Python script
+        const objects = await window.electron.extractPdfObjects(decodedPath);
+        setAllPdfObjects(objects);
       } catch (err) {
-        console.error("Failed to load PDF data", err);
+        console.error("Failed to load PDF data or extract objects", err);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -110,120 +117,67 @@ function PdfViewer() {
     console.log("Saved field boxes:", boxesPerPage);
   };
 
-  // Extract text bounding boxes whenever page or document changes
+  // Update current page objects and transform coordinates when page or document changes
   useEffect(() => {
-    if (!pdfDoc) return;
+    if (!pdfDoc || allPdfObjects.length === 0) return;
 
     (async () => {
       try {
         const pdfPage = await pdfDoc.getPage(page);
-        // The <Page> component renders at width 800, so mirror that scale
+        // The <Page> component renders at desired width, so calculate scale
         const unscaledViewport = pdfPage.getViewport({ scale: 1 });
-
         const scale = desiredWidth / unscaledViewport.width;
         const viewport = pdfPage.getViewport({ scale });
+
         // Store scale & viewport height for mouse mapping
         setViewInfo({ scale, height: viewport.height });
-        // --- Raw textContent rectangles (toggleable) ---
-        try {
-          const textContent = await pdfPage.getTextContent();
-          const rects: Rect[] = [];
 
-          (
-            textContent.items as Array<{
-              transform: number[];
-              width: number;
-              height: number;
-              str: string;
-            }>
-          ).forEach((item, itemIndex) => {
-            const [, , , , x, y] = item.transform as number[];
-            const widthPt = item.width;
-            const heightPt = item.height;
-            const left = x * scale;
-            const totalWidth = widthPt * scale;
-            const height = heightPt * scale;
-            const top = viewport.height - y * scale - height;
+        // Filter objects for current page (pages are 0-indexed in Python, 1-indexed in React)
+        const pageObjects = allPdfObjects.filter(
+          (obj) => obj.page === page - 1
+        );
 
-            // Split text on 2+ consecutive spaces
-            const textSegments = item.str.split(/\s{2,}/);
+        // Transform coordinates from PDF space to screen space
+        const transformedObjects = pageObjects.map((obj) => {
+          const [x0, y0, x1, y1] = obj.bbox;
+          // Transform coordinates: scale and flip Y axis
+          const screenX0 = x0 * scale;
+          const screenX1 = x1 * scale;
+          const screenY0 = viewport.height - y1 * scale;
+          const screenY1 = viewport.height - y0 * scale;
 
-            console.log(`\n=== Text Item ${itemIndex} ===`);
-            console.log(`Original text: "${item.str}"`);
-            console.log(`Position: (${left.toFixed(1)}, ${top.toFixed(1)})`);
-            console.log(`Total width: ${totalWidth.toFixed(1)}`);
-            console.log(`Segments found: ${textSegments.length}`);
+          return {
+            ...obj,
+            bbox: [screenX0, screenY0, screenX1, screenY1] as [
+              number,
+              number,
+              number,
+              number,
+            ],
+          };
+        });
 
-            if (textSegments.length === 1) {
-              // No splitting needed, create single rect
-              console.log(
-                `No splitting needed - single segment: "${textSegments[0]}"`
-              );
-              rects.push({ left, top, width: totalWidth, height });
-            } else {
-              // Multiple segments, calculate positions for each
-              console.log(`Splitting into ${textSegments.length} segments:`);
-              let currentPosition = 0;
-              const originalText = item.str;
-
-              textSegments.forEach((segment, index) => {
-                if (segment.trim().length > 0) {
-                  // Find the position of this segment in the original text
-                  const segmentStart = originalText.indexOf(
-                    segment,
-                    currentPosition
-                  );
-                  const segmentEnd = segmentStart + segment.length;
-
-                  // Calculate proportional width and position
-                  const segmentStartRatio = segmentStart / originalText.length;
-                  const segmentEndRatio = segmentEnd / originalText.length;
-
-                  const segmentLeft = left + totalWidth * segmentStartRatio;
-                  const segmentWidth =
-                    totalWidth * (segmentEndRatio - segmentStartRatio);
-
-                  console.log(`  Segment ${index}: "${segment}"`);
-                  console.log(
-                    `    Characters: ${segmentStart}-${segmentEnd} (${segment.length} chars)`
-                  );
-                  console.log(
-                    `    Position: (${segmentLeft.toFixed(1)}, ${top.toFixed(1)})`
-                  );
-                  console.log(`    Width: ${segmentWidth.toFixed(1)}`);
-
-                  rects.push({
-                    left: segmentLeft,
-                    top,
-                    width: segmentWidth,
-                    height,
-                  });
-
-                  currentPosition = segmentEnd;
-                } else {
-                  console.log(
-                    `  Segment ${index}: "${segment}" (empty - skipped)`
-                  );
-                }
-              });
-            }
-          });
-
-          const filteredRects = rects.filter(
-            (rect) => rect.height > 0 && rect.width > 0
-          );
-          console.log(
-            `\nFinal result: ${filteredRects.length} text rects created`
-          );
-          setRawTextRects(filteredRects);
-        } catch (e) {
-          console.warn("Failed to get textContent boxes", e);
-        }
+        setCurrentPageObjects(transformedObjects);
       } catch (err) {
-        console.error("Failed to extract text boxes", err);
+        console.error("Failed to transform PDF objects", err);
       }
     })();
-  }, [pdfDoc, page, desiredWidth]);
+  }, [pdfDoc, page, desiredWidth, allPdfObjects]);
+
+  // Convert PDF objects to text rects for field selector compatibility
+  const textRects = useMemo(() => {
+    return currentPageObjects
+      .filter((obj) => obj.type === "word" || obj.type === "text_line")
+      .map((obj) => {
+        const [x0, y0, x1, y1] = obj.bbox;
+        return {
+          left: x0,
+          top: y0,
+          width: x1 - x0,
+          height: y1 - y0,
+        };
+      });
+  }, [currentPageObjects]);
 
   // Mouse move handler to compute PDF-space coords
   const handleMouseMove = (e: React.MouseEvent) => {
@@ -248,11 +202,6 @@ function PdfViewer() {
     if (!pdfData) return undefined;
     return { data: new Uint8Array(pdfData) }; // copy
   }, [pdfData]);
-
-  // const combinedBoxes = useMemo(
-  //   () => [...textBoxes, ...imageBoxes],
-  //   [textBoxes, imageBoxes]
-  // );
 
   return (
     <main className="min-h-screen bg-gray-100 flex flex-col items-center p-8 overflow-hidden">
@@ -286,7 +235,7 @@ function PdfViewer() {
             checked={showRawBoxes}
             onChange={(e) => setShowRawBoxes(e.target.checked)}
           />
-          Raw boxes
+          Show Objects
         </label>
       </div>
 
@@ -320,16 +269,17 @@ function PdfViewer() {
                   width={desiredWidth}
                 />
               </Document>
-              {/* Mouse overlay removed to clean up per requirement */}
-              {/* debug overlay – highlight text and image objects */}
-              {/* overlay for user selections */}
+              {/* PDF Field Selector overlay */}
               <PdfFieldSelector
                 key={page}
                 initialBoxes={currentPageBoxes}
                 onBoxesChange={handleBoxesChange}
-                textRects={rawTextRects}
+                textRects={textRects}
               />
-              {showRawBoxes && <PdfTextBoxOverlay boxes={rawTextRects} />}
+              {/* PDF Objects overlay */}
+              {showRawBoxes && (
+                <PdfObjectOverlay objects={currentPageObjects} />
+              )}
             </div>
             {/* Mouse position display */}
             {mousePos && (
