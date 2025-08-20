@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { setAuthenticated } from "../helpers/auth";
 
 export const Route = createFileRoute("/login")({
   component: Login,
@@ -24,6 +25,7 @@ function Login() {
     try {
       const ok = await fakeAuthenticate(username, password);
       if (ok) {
+        setAuthenticated(true);
         navigate({ to: "/dashboard", replace: true });
       }
     } finally {
