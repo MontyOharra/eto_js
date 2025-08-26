@@ -8,6 +8,12 @@
 
 ## **CRITICAL BEHAVIORS FOR EVERY CONVERSATION**
 
+### **🚀 Conversation Startup (MANDATORY)**
+- **ALWAYS** read `server/CHANGELOG_SESSION.md` after reading this startup context
+- **IMMEDIATELY** provide a detailed summary of where we left off in the most recent conversation
+- Include current status, completed tasks, pending issues, and next steps from the changelog
+- This summary helps maintain continuity across conversations
+
 ### **📝 Changelog Management (MANDATORY)**
 - **ALWAYS** update `server/CHANGELOG_SESSION.md` during EVERY conversation
 - Add new context, progress, issues encountered, and resolutions to the current session section
