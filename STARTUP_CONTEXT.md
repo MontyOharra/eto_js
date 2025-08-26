@@ -158,6 +158,25 @@ Database Cursor → Email Table → PDF Files → PDF Objects → ETO Runs → E
 
 ## **Testing Approach**
 
+### **Quick Start Command**
+When user asks for "email service start testing request":
+```bash
+curl -X POST http://localhost:8080/api/email/start \
+  -H "Content-Type: application/json" \
+  -d '{"email_address": "em.harrah.business@gmail.com", "folder_name": "test"}'
+```
+
+### **Comprehensive Testing Protocol**
+**Process**: After each step, check database to verify proper ingestion.
+
+1. **Basic Service Test**: Start email service, send one email with unique PDF
+2. **Real-time Processing**: With service running, send two emails with unique PDFs  
+3. **Duplicate Handling (Live)**: With service running, send two emails (one duplicate PDF, one unique)
+4. **Simple Downtime Recovery**: Stop email service, send one email with unique PDF, start email service
+5. **Multiple Missed Emails**: Stop email service, send two emails with unique PDFs, start email service
+6. **Duplicate During Downtime**: Stop email service, send two emails (one duplicate PDF, one unique), start email service
+7. **Full Server Restart**: Stop server, send two emails (one duplicate PDF, one unique), start server, start email service
+
 ### **Manual Testing Workflow**
 1. User starts server manually
 2. Call `/api/email/start` with configuration
