@@ -7,6 +7,7 @@ interface TemplatesListProps {
   onEdit: (template: TemplateSummary) => void;
   onView: (template: TemplateSummary) => void;
   onDelete: (template: TemplateSummary) => void;
+  onCreateTemplate?: () => void;
 }
 
 type SortField =
@@ -23,6 +24,7 @@ export function TemplatesList({
   onEdit,
   onView,
   onDelete,
+  onCreateTemplate,
 }: TemplatesListProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<TemplateSummary["status"] | "all">(
@@ -205,7 +207,10 @@ export function TemplatesList({
           Showing {filteredAndSortedTemplates.length} of {templates.length}{" "}
           templates
         </p>
-        <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors">
+        <button 
+          onClick={onCreateTemplate}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+        >
           Create New Template
         </button>
       </div>

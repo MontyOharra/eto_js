@@ -22,7 +22,7 @@ class TemplateMatchingService:
         self.db_service = db_service
         logger.info("Database service configured for template matching")
     
-    def find_best_template_match(self, pdf_objects: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def find_best_template_match(self, pdf_objects: List[Dict[str, Any]], exclude_types: List[str] = None) -> Dict[str, Any]:
         """
         Find the best template match using exact subset matching algorithm.
         
@@ -53,24 +53,36 @@ class TemplateMatchingService:
             if not self.db_service:
                 raise RuntimeError("Database service not configured")
             
+            # Filter out excluded object types (if any)
+            if exclude_types is None:
+                exclude_types = []  # Default: no exclusions, images now use geometric signatures
+            
+            filtered_pdf_objects = [obj for obj in pdf_objects if obj.get('type') not in exclude_types] if exclude_types else pdf_objects
+            if exclude_types:
+                logger.info(f"Filtered PDF objects: {len(pdf_objects)} -> {len(filtered_pdf_objects)} (excluded: {exclude_types})")
+            else:
+                logger.info(f"Using all {len(pdf_objects)} PDF objects (no exclusions)")
+            
             # Get all active templates
             templates = self._get_all_active_templates()
             if not templates:
                 logger.info("No active templates found for matching")
                 return self._no_match_result()
             
-            logger.info(f"Checking {len(pdf_objects)} PDF objects against {len(templates)} templates")
+            logger.info(f"Checking {len(filtered_pdf_objects)} PDF objects against {len(templates)} templates")
             
             # Convert PDF objects to comparable format
-            pdf_signatures = self._objects_to_signatures(pdf_objects)
+            pdf_signatures = self._objects_to_signatures(filtered_pdf_objects)
             
             # Check each template for exact subset match
             match_candidates = []
             
             for template in templates:
                 try:
-                    template_objects = json.loads(template.signature_data) if template.signature_data else []
-                    template_signatures = self._objects_to_signatures(template_objects)
+                    template_objects = json.loads(template.signature_objects) if template.signature_objects else []
+                    # Filter template objects with same exclusions (if any)
+                    filtered_template_objects = [obj for obj in template_objects if obj.get('type') not in exclude_types] if exclude_types else template_objects
+                    template_signatures = self._objects_to_signatures(filtered_template_objects)
                     
                     match_result = self._check_exact_subset_match(pdf_signatures, template_signatures, template)
                     
@@ -106,7 +118,7 @@ class TemplateMatchingService:
                     "matching_objects": best_match['match_count'],
                     "template_objects": best_match['template_object_count'],
                     "pdf_objects": len(pdf_objects),
-                    "signature_hash": best_match['template']['signature_hash']
+                    "template_id": best_match['template']['id']
                 },
                 "candidates": match_candidates
             }
@@ -149,7 +161,6 @@ class TemplateMatchingService:
             'template': {
                 'id': template.id,
                 'name': template.name,
-                'signature_hash': template.signature_hash,
                 'created_at': template.created_at.isoformat() if template.created_at else None
             }
         }
@@ -166,51 +177,57 @@ class TemplateMatchingService:
         for obj in objects:
             try:
                 # Create signature based on object type and key properties
+                # Use rounded coordinates and dimensions for more flexible matching
+                bbox = obj.get('bbox', [0, 0, 0, 0])
+                # Ensure bbox values are consistently formatted as floats with 1 decimal place
+                formatted_bbox = [f"{round(coord, 1):.1f}" for coord in bbox] if bbox else ["0.0", "0.0", "0.0", "0.0"]
+                
                 signature_parts = [
                     obj.get('type', ''),
-                    str(obj.get('page', 0)),
-                    json.dumps(obj.get('bbox', []), sort_keys=True),
-                    str(obj.get('width', 0)),
-                    str(obj.get('height', 0))
+                    f"{round(obj.get('page', 0), 0):.0f}",  # Page as float with 0 decimals
+                    json.dumps(formatted_bbox, sort_keys=True),  # Use string-formatted bbox values
+                    f"{round(obj.get('width', 0), 1):.1f}",  # Force 1 decimal place
+                    f"{round(obj.get('height', 0), 1):.1f}"   # Force 1 decimal place
                 ]
                 
                 # Add type-specific signature components
                 if obj.get('type') in ['word', 'text_line']:
                     signature_parts.extend([
                         obj.get('fontname', ''),
-                        str(obj.get('fontsize', 0)),
-                        str(obj.get('char_count', 0))
+                        f"{round(obj.get('fontsize', 0), 1):.1f}",
+                        f"{round(obj.get('char_count', 0), 0):.0f}"  # Char count as float with 0 decimals
                     ])
                 elif obj.get('type') == 'rect':
                     signature_parts.extend([
-                        str(obj.get('linewidth', 0)),
+                        f"{round(obj.get('linewidth', 0), 1):.1f}",
                         str(obj.get('has_stroke', False)),
                         str(obj.get('has_fill', False))
                     ])
                 elif obj.get('type') == 'graphic_line':
                     signature_parts.extend([
-                        str(obj.get('linewidth', 0)),
+                        f"{round(obj.get('linewidth', 0), 1):.1f}",
                         str(obj.get('is_horizontal', False)),
                         str(obj.get('is_vertical', False)),
-                        str(obj.get('length', 0))
+                        f"{round(obj.get('length', 0), 1):.1f}"
                     ])
                 elif obj.get('type') == 'table':
                     signature_parts.extend([
-                        str(obj.get('rows', 0)),
-                        str(obj.get('cols', 0)),
+                        f"{round(obj.get('rows', 0), 0):.0f}",      # Rows as float with 0 decimals
+                        f"{round(obj.get('cols', 0), 0):.0f}",      # Cols as float with 0 decimals
                         json.dumps(obj.get('column_types', []), sort_keys=True)
                     ])
                 elif obj.get('type') == 'image':
+                    # For images, focus on geometric properties rather than content properties
+                    # This makes image matching more reliable across extractions
                     signature_parts.extend([
-                        obj.get('format', ''),
-                        str(obj.get('aspect_ratio', 0)),
-                        str(obj.get('width_pixels', 0)),
-                        str(obj.get('height_pixels', 0))
+                        f"{round(obj.get('aspect_ratio', 0), 2):.2f}",  # Force 2 decimal places
+                        # Skip format as it can be inconsistent
+                        # Skip pixel dimensions as they can vary, width/height already included above
                     ])
                 elif obj.get('type') == 'curve':
                     signature_parts.extend([
-                        str(obj.get('point_count', 0)),
-                        str(obj.get('path_length', 0)),
+                        f"{round(obj.get('point_count', 0), 0):.0f}",  # Point count as float with 0 decimals
+                        f"{round(obj.get('path_length', 0), 1):.1f}",
                         str(obj.get('is_closed', False))
                     ])
                 
@@ -224,6 +241,70 @@ class TemplateMatchingService:
                 continue
         
         return signatures
+    
+    def _get_signature_components(self, obj: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Get the signature components for an object without hashing (for debugging).
+        Returns the actual values that would be used to create the signature.
+        """
+        try:
+            # Create signature based on object type and key properties
+            # Use rounded coordinates and dimensions for more flexible matching
+            bbox = obj.get('bbox', [0, 0, 0, 0])
+            # Use same formatting as actual signature generation
+            formatted_bbox = [f"{round(coord, 1):.1f}" for coord in bbox] if bbox else ["0.0", "0.0", "0.0", "0.0"]
+            
+            components = {
+                'type': obj.get('type', ''),
+                'page': round(obj.get('page', 0), 0),  # Float with 0 decimals for consistency
+                'bbox': formatted_bbox,  # Use string-formatted bbox like signature generation
+                'width': round(obj.get('width', 0), 1),
+                'height': round(obj.get('height', 0), 1)
+            }
+            
+            # Add type-specific signature components
+            if obj.get('type') in ['word', 'text_line']:
+                components.update({
+                    'fontname': obj.get('fontname', ''),
+                    'fontsize': round(obj.get('fontsize', 0), 1),
+                    'char_count': round(obj.get('char_count', 0), 0)  # Float with 0 decimals
+                })
+            elif obj.get('type') == 'rect':
+                components.update({
+                    'linewidth': round(obj.get('linewidth', 0), 1),
+                    'has_stroke': obj.get('has_stroke', False),
+                    'has_fill': obj.get('has_fill', False)
+                })
+            elif obj.get('type') == 'graphic_line':
+                components.update({
+                    'linewidth': round(obj.get('linewidth', 0), 1),
+                    'is_horizontal': obj.get('is_horizontal', False),
+                    'is_vertical': obj.get('is_vertical', False),
+                    'length': round(obj.get('length', 0), 1)
+                })
+            elif obj.get('type') == 'table':
+                components.update({
+                    'rows': round(obj.get('rows', 0), 0),      # Float with 0 decimals
+                    'cols': round(obj.get('cols', 0), 0),      # Float with 0 decimals
+                    'column_types': obj.get('column_types', [])
+                })
+            elif obj.get('type') == 'image':
+                components.update({
+                    'aspect_ratio': round(obj.get('aspect_ratio', 0), 2)
+                    # Note: format, width_pixels, height_pixels excluded for reliable matching
+                })
+            elif obj.get('type') == 'curve':
+                components.update({
+                    'point_count': round(obj.get('point_count', 0), 0),  # Float with 0 decimals
+                    'path_length': round(obj.get('path_length', 0), 1),
+                    'is_closed': obj.get('is_closed', False)
+                })
+            
+            return components
+            
+        except Exception as e:
+            logger.warning(f"Error creating signature components for object {obj.get('type', 'unknown')}: {e}")
+            return {'error': str(e)}
     
     def _get_all_active_templates(self) -> List[PdfTemplate]:
         """Get all active PDF templates from database"""
@@ -255,7 +336,7 @@ class TemplateMatchingService:
         }
     
     def create_template_from_objects(self, name: str, description: str, customer_name: str, 
-                                   pdf_objects: List[Dict[str, Any]], signature_hash: str) -> Dict[str, Any]:
+                                   pdf_objects: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
         Create a new PDF template from extracted objects.
         This will be called by the client application.
@@ -265,7 +346,6 @@ class TemplateMatchingService:
             description: Template description
             customer_name: Customer name (optional)
             pdf_objects: List of PDF objects that define the template
-            signature_hash: SHA-256 hash of the PDF signature
             
         Returns:
             Dictionary with template creation result
@@ -274,15 +354,6 @@ class TemplateMatchingService:
             if not self.db_service:
                 raise RuntimeError("Database service not configured")
             
-            # Check if template with same signature already exists
-            existing_template = self._find_template_by_signature(signature_hash)
-            if existing_template:
-                return {
-                    "success": False,
-                    "error": f"Template with identical signature already exists: '{existing_template.name}'",
-                    "existing_template_id": existing_template.id
-                }
-            
             # Create template record
             session = self.db_service.get_session()
             try:
@@ -290,8 +361,8 @@ class TemplateMatchingService:
                     name=name,
                     description=description,
                     customer_name=customer_name,
-                    signature_hash=signature_hash,
-                    signature_data=json.dumps(pdf_objects, sort_keys=True),
+                    signature_objects=json.dumps(pdf_objects, sort_keys=True),
+                    signature_object_count=len(pdf_objects),
                     status='active'
                 )
                 
@@ -305,8 +376,7 @@ class TemplateMatchingService:
                     "success": True,
                     "template_id": template.id,
                     "template_name": template.name,
-                    "object_count": len(pdf_objects),
-                    "signature_hash": signature_hash
+                    "object_count": len(pdf_objects)
                 }
                 
             finally:
@@ -318,17 +388,6 @@ class TemplateMatchingService:
                 "success": False,
                 "error": str(e)
             }
-    
-    def _find_template_by_signature(self, signature_hash: str) -> Optional[PdfTemplate]:
-        """Find template by signature hash"""
-        session = self.db_service.get_session()
-        try:
-            return session.query(PdfTemplate).filter(
-                PdfTemplate.signature_hash == signature_hash,
-                PdfTemplate.status == 'active'
-            ).first()
-        finally:
-            session.close()
     
     def get_template_statistics(self) -> Dict[str, Any]:
         """Get statistics about templates and matching"""

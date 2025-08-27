@@ -263,6 +263,48 @@ class ApiClient {
   }
 
   /**
+   * Create Template
+   */
+  async createTemplate(templateData: {
+    name: string;
+    description?: string;
+    source_pdf_id: number;
+    source_eto_run_id: number;
+    filename: string;
+    selected_objects: any[];
+  }): Promise<{
+    template_id: number;
+    message: string;
+  }> {
+    return this.fetchApi('/api/templates', {
+      method: 'POST',
+      body: JSON.stringify(templateData),
+    });
+  }
+
+  /**
+   * Test Template Matching (for debugging)
+   */
+  async testTemplateMatch(pdfId: number, templateId: number): Promise<{
+    test_results: {
+      pdf_info: any;
+      template_info: any;
+      signature_analysis: any;
+      direct_match_test: any;
+      full_matching_result: any;
+      would_match: boolean;
+    };
+  }> {
+    return this.fetchApi('/api/test/template-match', {
+      method: 'POST',
+      body: JSON.stringify({
+        pdf_id: pdfId,
+        template_id: templateId
+      }),
+    });
+  }
+
+  /**
    * Generic GET request (for flexibility)
    */
   async get<T = any>(endpoint: string): Promise<{ data: T }> {

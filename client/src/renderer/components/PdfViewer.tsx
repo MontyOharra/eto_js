@@ -24,6 +24,7 @@ interface PdfViewerProps {
   showObjectOverlays?: boolean;
   onObjectClick?: (object: PdfObject) => void;
   selectedObjectTypes?: Set<string>;
+  selectedObjects?: Set<string>;
 }
 
 const OBJECT_COLORS = {
@@ -52,7 +53,8 @@ export function PdfViewer({
   className = '',
   showObjectOverlays = true,
   onObjectClick,
-  selectedObjectTypes
+  selectedObjectTypes,
+  selectedObjects
 }: PdfViewerProps) {
   const [numPages, setNumPages] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -150,12 +152,18 @@ export function PdfViewer({
     const screenY0 = actualPdfHeight - y1; // Flip Y coordinate
     const screenY1 = actualPdfHeight - y0;
     
+    // Generate object ID for selection tracking
+    const objectId = `${obj.type}-${obj.page}-${obj.bbox.join('-')}`;
+    const isSelected = selectedObjects?.has(objectId) || false;
+    
     // Debug first few objects
     if (index < 2) {
       console.log(`Object ${index} (${obj.type}):`, {
         bbox: obj.bbox,
         page: obj.page,
         text: obj.text,
+        objectId,
+        isSelected,
         pdfDimensions: { width: pageWidth, height: pageHeight },
         screenCoords: { screenY0, screenY1 },
         scale: scale
@@ -168,11 +176,12 @@ export function PdfViewer({
       top: `${screenY0 * scale}px`,
       width: `${(x1 - x0) * scale}px`,
       height: `${(screenY1 - screenY0) * scale}px`,
-      backgroundColor: OBJECT_COLORS[obj.type],
-      border: `1px solid ${OBJECT_BORDER_COLORS[obj.type]}`,
+      backgroundColor: isSelected ? 'rgba(59, 130, 246, 0.4)' : OBJECT_COLORS[obj.type],
+      border: isSelected ? '2px solid #3b82f6' : `1px solid ${OBJECT_BORDER_COLORS[obj.type]}`,
       cursor: onObjectClick ? 'pointer' : 'default',
-      zIndex: 10,
-      pointerEvents: onObjectClick ? 'auto' : 'none'
+      zIndex: isSelected ? 20 : 10,
+      pointerEvents: onObjectClick ? 'auto' : 'none',
+      boxShadow: isSelected ? '0 0 0 1px rgba(59, 130, 246, 0.8)' : 'none'
     };
 
     return (
@@ -181,7 +190,7 @@ export function PdfViewer({
         style={style}
         onClick={() => onObjectClick?.(obj)}
         title={obj.text || `${obj.type} object`}
-        className="hover:opacity-80 transition-opacity"
+        className={`hover:opacity-80 transition-all ${isSelected ? 'ring-2 ring-blue-500' : ''}`}
       />
     );
   };

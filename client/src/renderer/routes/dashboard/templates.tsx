@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { TemplatesList } from "../../components/TemplatesList";
+import { TemplateBuilderModal } from "../../components/TemplateBuilderModal";
 import { useTemplates, useServerHealth } from "../../hooks/useApi";
 import { TemplateSummary } from "../../types/eto";
 
@@ -10,6 +11,7 @@ export const Route = createFileRoute("/dashboard/templates")({
 
 function TemplatesPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [buildingTemplateForRun, setBuildingTemplateForRun] = useState<string | null>(null);
   
   // Fetch templates data from API
   const { data: templates, loading, error, refetch } = useTemplates({ 
@@ -33,6 +35,22 @@ function TemplatesPage() {
   const handleDelete = (template: TemplateSummary) => {
     console.log("Delete template:", template);
     // TODO: Show confirmation dialog
+  };
+
+  const handleCreateTemplate = () => {
+    console.log("Create new template - need to select ETO run first");
+    // TODO: Show ETO run selection dialog or navigate to ETO runs page
+  };
+
+  const handleTemplateBuilderSave = (templateData: any) => {
+    console.log("Template saved successfully:", templateData);
+    setBuildingTemplateForRun(null);
+    // Refresh the templates list to show the new template
+    refetch();
+  };
+
+  const handleTemplateBuilderClose = () => {
+    setBuildingTemplateForRun(null);
   };
 
   // Show loading state
@@ -126,6 +144,14 @@ function TemplatesPage() {
         onEdit={handleEdit}
         onView={handleView}
         onDelete={handleDelete}
+        onCreateTemplate={handleCreateTemplate}
+      />
+      
+      {/* Template Builder Modal */}
+      <TemplateBuilderModal
+        runId={buildingTemplateForRun}
+        onClose={handleTemplateBuilderClose}
+        onSave={handleTemplateBuilderSave}
       />
     </div>
   );
