@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PdfViewer } from './PdfViewer';
-import { useApi } from '../hooks/useApi';
+import { apiClient } from '../services/api';
 
 interface EtoRunPdfData {
   eto_run_id: number;
@@ -50,7 +50,7 @@ export function EtoRunViewerModal({ runId, onClose }: EtoRunViewerModalProps) {
   const [error, setError] = useState<string | null>(null);
   const [selectedObjectTypes, setSelectedObjectTypes] = useState<Set<string>>(new Set());
   const [showAllObjectTypes, setShowAllObjectTypes] = useState(true);
-  const api = useApi();
+  // Remove useApi hook declaration
 
   useEffect(() => {
     if (runId) {
@@ -65,11 +65,11 @@ export function EtoRunViewerModal({ runId, onClose }: EtoRunViewerModalProps) {
     setError(null);
 
     try {
-      const response = await api.get(`/eto-run/${runId}/pdf-data`);
-      setPdfData(response.data);
+      const response = await apiClient.getEtoRunPdfData(runId);
+      setPdfData(response);
       
       // Initialize with all object types selected
-      const objectTypes = new Set(response.data.objects.map((obj: any) => obj.type));
+      const objectTypes = new Set(response.objects.map((obj: any) => obj.type));
       setSelectedObjectTypes(objectTypes);
     } catch (err: any) {
       console.error('Error fetching PDF data:', err);
@@ -131,7 +131,7 @@ export function EtoRunViewerModal({ runId, onClose }: EtoRunViewerModalProps) {
   };
 
   const objectCounts = getObjectTypeCounts();
-  const pdfUrl = pdfData ? `/api/pdf/${pdfData.pdf_id}` : '';
+  const pdfUrl = pdfData ? apiClient.getPdfFileUrl(pdfData.pdf_id) : '';
 
   if (!runId) return null;
 
