@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { PdfViewer } from './PdfViewer';
 import { apiClient } from '../services/api';
 
@@ -135,32 +136,52 @@ export function EtoRunViewerModal({ runId, onClose }: EtoRunViewerModalProps) {
 
   if (!runId) return null;
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-gray-800 rounded-lg w-full h-full max-w-7xl max-h-[95vh] flex flex-col">
+  const modalContent = (
+    <div 
+      className="fixed inset-0 flex items-center justify-center z-[9999] p-4"
+      style={{ 
+        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+        backdropFilter: 'blur(1px)'
+      }}
+      onClick={(e) => {
+        // Close modal if clicking the backdrop
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div className="bg-gray-800 rounded-lg w-full h-full max-w-7xl max-h-[90vh] flex flex-col shadow-2xl border border-gray-600">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-700">
-          <div className="flex-1">
-            <h2 className="text-xl font-semibold text-white">
-              PDF Viewer - {pdfData?.filename || 'Loading...'}
-            </h2>
-            {pdfData && (
-              <div className="text-sm text-gray-400 mt-1">
-                <div>From: {pdfData.email.sender_email}</div>
-                <div>Subject: {pdfData.email.subject}</div>
-                <div>Received: {formatDate(pdfData.email.received_date)}</div>
-                <div>Size: {formatFileSize(pdfData.file_size)} • {pdfData.page_count} pages • {pdfData.object_count} objects</div>
-                <div>Status: <span className={`${pdfData.status === 'success' ? 'text-green-400' : pdfData.status === 'error' ? 'text-red-400' : 'text-yellow-400'}`}>
+        <div className="flex items-start justify-between p-3 border-b border-gray-700">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-3 mb-2">
+              <h2 className="text-lg font-semibold text-white truncate">
+                {pdfData?.filename || 'Loading...'}
+              </h2>
+              {pdfData && (
+                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                  pdfData.status === 'success' ? 'bg-green-900 text-green-300' : 
+                  pdfData.status === 'error' ? 'bg-red-900 text-red-300' : 'bg-yellow-900 text-yellow-300'
+                }`}>
                   {pdfData.status}
-                </span></div>
+                </span>
+              )}
+            </div>
+            {pdfData && (
+              <div className="text-xs text-gray-400 grid grid-cols-1 lg:grid-cols-2 gap-x-6">
+                <div>From: <span className="text-gray-300">{pdfData.email.sender_email}</span></div>
+                <div>Size: <span className="text-gray-300">{formatFileSize(pdfData.file_size)}</span></div>
+                <div className="truncate" title={pdfData.email.subject}>Subject: <span className="text-gray-300">{pdfData.email.subject}</span></div>
+                <div>{pdfData.page_count} pages • {pdfData.object_count} objects</div>
               </div>
             )}
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-white p-2"
+            className="text-gray-400 hover:text-white p-1 ml-3 flex-shrink-0"
+            title="Close"
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
@@ -264,4 +285,10 @@ export function EtoRunViewerModal({ runId, onClose }: EtoRunViewerModalProps) {
       </div>
     </div>
   );
+
+  // Use portal to render at the root level to maintain styling context
+  const rootElement = document.getElementById('root');
+  if (!rootElement) return null;
+  
+  return createPortal(modalContent, rootElement);
 }

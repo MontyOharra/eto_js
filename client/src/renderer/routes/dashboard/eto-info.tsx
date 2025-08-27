@@ -112,7 +112,8 @@ function EtoInfoPage() {
   }
 
   return (
-    <div className="flex-1 p-6">
+    <>
+      <div className="flex-1 p-6">
       <div className="mb-6">
         <div className="flex items-center justify-between">
           <div>
@@ -185,12 +186,13 @@ function EtoInfoPage() {
           onReview={handleReview}
         />
       </div>
-
-      {/* PDF Viewer Modal */}
+      </div>
+      
+      {/* PDF Viewer Modal - Positioned outside content area */}
       <EtoRunViewerModal 
         runId={viewingRunId}
         onClose={handleCloseViewer}
       />
-    </div>
+    </>
   );
 }

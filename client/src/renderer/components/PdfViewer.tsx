@@ -223,10 +223,10 @@ export function PdfViewer({
       <div
         ref={containerRef}
         className="flex-1 overflow-auto bg-gray-700 p-4"
-        style={{ minHeight: '400px' }}
+        style={{ minHeight: '400px', maxHeight: 'calc(100vh - 120px)' }}
       >
-        <div className="flex justify-center">
-          <div className="relative bg-white shadow-lg">
+        <div className="flex justify-center min-h-full">
+          <div className="relative bg-white shadow-lg max-w-full">
             {loading && (
               <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
                 <div className="text-gray-600">Loading PDF...</div>
