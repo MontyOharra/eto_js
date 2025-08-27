@@ -101,6 +101,12 @@ export function PdfViewer({
     setLoading(false);
   };
 
+  const onPageLoadError = (error: Error) => {
+    console.error('PDF page load error:', error);
+    // Don't set the main error state for page load errors, just log them
+    // The page component will handle its own error display
+  };
+
   const goToPreviousPage = () => {
     setCurrentPage((prev) => Math.max(prev - 1, 1));
   };
@@ -282,16 +288,24 @@ export function PdfViewer({
                   loading=""
                   error=""
                   onLoadSuccess={(page) => {
-                    // Get the actual PDF page dimensions
-                    const viewport = page.getViewport({ scale: 1.0 });
-                    setPageWidth(viewport.width);
-                    setPageHeight(viewport.height);
-                    console.log('PDF Page dimensions:', {
-                      width: viewport.width,
-                      height: viewport.height,
-                      scale: scale
-                    });
+                    try {
+                      // Get the actual PDF page dimensions
+                      const viewport = page.getViewport({ scale: 1.0 });
+                      setPageWidth(viewport.width);
+                      setPageHeight(viewport.height);
+                      console.log('PDF Page dimensions:', {
+                        width: viewport.width,
+                        height: viewport.height,
+                        scale: scale
+                      });
+                    } catch (error) {
+                      console.error('Error getting page dimensions:', error);
+                      // Use fallback dimensions if viewport fails
+                      setPageWidth(612);
+                      setPageHeight(792);
+                    }
                   }}
+                  onLoadError={onPageLoadError}
                 />
                 
                 {/* Object Overlays */}

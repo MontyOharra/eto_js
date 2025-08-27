@@ -55,8 +55,23 @@ export function EtoRunViewerModal({ runId, onClose }: EtoRunViewerModalProps) {
 
   useEffect(() => {
     if (runId) {
-      fetchPdfData();
+      // Small delay to ensure modal is fully mounted before loading PDF
+      const timeoutId = setTimeout(() => {
+        fetchPdfData();
+      }, 100);
+      
+      return () => {
+        clearTimeout(timeoutId);
+      };
     }
+    
+    // Cleanup function to handle modal unmounting
+    return () => {
+      // Clear states when modal is closing to prevent stale renders
+      setPdfData(null);
+      setError(null);
+      setLoading(false);
+    };
   }, [runId]);
 
   const fetchPdfData = async () => {
@@ -298,6 +313,7 @@ export function EtoRunViewerModal({ runId, onClose }: EtoRunViewerModalProps) {
 
             {pdfData && pdfUrl && (
               <PdfViewer
+                key={`pdf-${pdfData.pdf_id}-${pdfData.eto_run_id}`} // Force re-render on PDF change
                 pdfUrl={pdfUrl}
                 objects={pdfData.objects}
                 showObjectOverlays={selectedObjectTypes.size > 0}
