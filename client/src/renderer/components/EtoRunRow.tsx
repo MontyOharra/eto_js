@@ -151,7 +151,7 @@ export function EtoRunRow({ run, onView, onReview }: EtoRunRowProps) {
                 onClick={() => onReview(run.id.toString())}
                 className="px-3 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors"
               >
-                Review
+                Build Template
               </button>
             )}
           </div>
