@@ -230,7 +230,7 @@ class TemplateMatchingService:
         session = self.db_service.get_session()
         try:
             templates = session.query(PdfTemplate).filter(
-                PdfTemplate.is_active == True
+                PdfTemplate.status == 'active'
             ).order_by(PdfTemplate.created_at.desc()).all()
             
             return templates
@@ -292,7 +292,7 @@ class TemplateMatchingService:
                     customer_name=customer_name,
                     signature_hash=signature_hash,
                     signature_data=json.dumps(pdf_objects, sort_keys=True),
-                    is_active=True
+                    status='active'
                 )
                 
                 session.add(template)
@@ -325,7 +325,7 @@ class TemplateMatchingService:
         try:
             return session.query(PdfTemplate).filter(
                 PdfTemplate.signature_hash == signature_hash,
-                PdfTemplate.is_active == True
+                PdfTemplate.status == 'active'
             ).first()
         finally:
             session.close()
@@ -337,7 +337,7 @@ class TemplateMatchingService:
             try:
                 from .database import EtoRun
                 
-                total_templates = session.query(PdfTemplate).filter(PdfTemplate.is_active == True).count()
+                total_templates = session.query(PdfTemplate).filter(PdfTemplate.status == 'active').count()
                 
                 # Get matching statistics from ETO runs
                 template_matches = session.query(EtoRun).filter(
@@ -349,8 +349,7 @@ class TemplateMatchingService:
                 ).count()
                 
                 pending_matches = session.query(EtoRun).filter(
-                    EtoRun.status == 'pending',
-                    EtoRun.run_type == 'template_match'
+                    EtoRun.status == 'unprocessed'
                 ).count()
                 
                 return {

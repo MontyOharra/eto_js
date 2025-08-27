@@ -123,6 +123,7 @@ Database Cursor → Email Table → PDF Files → PDF Objects → ETO Runs → E
 - **Code Conventions**: Always check existing code style and follow patterns
 - **Database**: Never assume schema - always check current state
 - **File Edits**: Always use Read tool before editing files
+- **Design Evaluation**: Provide accurate, balanced assessments of code and design quality. Be neither overly critical nor overly praising. Focus on objective analysis of strengths, weaknesses, and improvement opportunities based on actual technical merit.
 
 ### **🔍 Before Starting Work**
 1. Check current git status with `git status`

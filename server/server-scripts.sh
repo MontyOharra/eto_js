@@ -27,11 +27,14 @@ show_help() {
     echo -e "  start      - Start the deployed Flask server${NC}"
     echo -e "  kill       - Kill any running Flask server instances${NC}"
     echo -e "  killpython - Kill all Python processes (cleanup before restart)${NC}"
+    echo -e "  resetdb    - Reset database (drops and recreates all tables)${NC}"
+    echo -e "  cleardata  - Clear data folders (logs, storage) without affecting database${NC}"
     echo -e "  help       - Show this help message${NC}"
     echo ""
     echo -e "${YELLOW}Examples:${NC}"
     echo -e "  ./server-scripts.sh build${NC}"
     echo -e "  ./server-scripts.sh start${NC}"
+    echo -e "  ./server-scripts.sh resetdb${NC}"
     echo -e "  ./server-scripts.sh killpython${NC}"
 }
 
@@ -64,6 +67,14 @@ case "$ACTION" in
     "killpython")
         echo -e "${GREEN}Killing all Python processes...${NC}"
         "$SCRIPTS_DIR/kill-python.sh"
+        ;;
+    "resetdb")
+        echo -e "${GREEN}Resetting database (dropping and recreating all tables)...${NC}"
+        "$SCRIPTS_DIR/reset-database.sh"
+        ;;
+    "cleardata")
+        echo -e "${GREEN}Clearing data folders (logs, storage)...${NC}"
+        "$SCRIPTS_DIR/clear-data.sh"
         ;;
     "help")
         show_help

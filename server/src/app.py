@@ -1,6 +1,7 @@
 import os
 import logging
 from flask import Flask, jsonify, request
+from flask_cors import CORS
 from dotenv import load_dotenv
 from .outlook_service import outlook_service
 from .database import init_database, get_db_service
@@ -17,6 +18,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+
+# Enable CORS for frontend integration
+CORS(app, origins=["http://localhost:5002", "http://localhost:3000"], 
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+     allow_headers=["Content-Type", "Authorization"])
 
 # Initialize database and storage systems
 try:
@@ -227,6 +233,72 @@ def get_template_stats():
         return jsonify({"error": str(e)}), 500
 
 
+@app.get("/api/templates")
+def get_templates():
+    """Get PDF templates with optional filtering"""
+    try:
+        status_filter = request.args.get('status', None)  # 'active', 'archived', 'draft'
+        limit = request.args.get('limit', 50, type=int)
+        
+        db_service = get_db_service()
+        session = db_service.get_session()
+        
+        try:
+            from .database import PdfTemplate
+            
+            query = session.query(PdfTemplate)
+            
+            if status_filter:
+                query = query.filter(PdfTemplate.status == status_filter)
+            
+            # Get only current versions and order by usage
+            templates = query.filter(PdfTemplate.is_current_version == True).order_by(
+                PdfTemplate.usage_count.desc(), 
+                PdfTemplate.updated_at.desc()
+            ).limit(limit).all()
+            
+            templates_data = []
+            for template in templates:
+                # Calculate success rate from related ETO runs if available
+                success_rate = None
+                if template.eto_runs:
+                    total_runs = len(template.eto_runs)
+                    successful_runs = len([run for run in template.eto_runs if run.status == 'success'])
+                    success_rate = (successful_runs / total_runs * 100) if total_runs > 0 else 0
+                
+                templates_data.append({
+                    "id": template.id,
+                    "name": template.name,
+                    "customer_name": template.customer_name,
+                    "description": template.description,
+                    "status": template.status,
+                    "is_complete": template.is_complete,
+                    "coverage_threshold": template.coverage_threshold,
+                    "usage_count": template.usage_count or 0,
+                    "last_used_at": template.last_used_at.isoformat() if template.last_used_at else None,
+                    "success_rate": success_rate,
+                    "version": template.version,
+                    "created_by": template.created_by,
+                    "created_at": template.created_at.isoformat() if template.created_at else None,
+                    "updated_at": template.updated_at.isoformat() if template.updated_at else None,
+                    "extraction_rules_count": len(template.extraction_rules) if template.extraction_rules else 0,
+                    "signature_object_count": template.signature_object_count or 0
+                })
+                
+            return jsonify({
+                "templates": templates_data,
+                "total": len(templates_data),
+                "status_filter": status_filter
+            })
+            
+        finally:
+            session.close()
+        
+    except Exception as e:
+        logger.error(f"Error getting templates: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @app.get("/api/processing/stats")
 def get_processing_stats():
     """Get processing worker statistics"""
@@ -239,28 +311,20 @@ def get_processing_stats():
             
             # Get processing statistics
             total_runs = session.query(EtoRun).count()
-            pending_runs = session.query(EtoRun).filter(EtoRun.status == 'pending').count()
-            processing_runs = session.query(EtoRun).filter(EtoRun.status == 'processing').count()
-            completed_runs = session.query(EtoRun).filter(EtoRun.status == 'completed').count()
-            failed_runs = session.query(EtoRun).filter(EtoRun.status == 'failed').count()
-            needs_template_runs = session.query(EtoRun).filter(EtoRun.status == 'needs_template').count()
-            
-            # Template matching stats
-            template_match_runs = session.query(EtoRun).filter(EtoRun.run_type == 'template_match').count()
-            data_extract_runs = session.query(EtoRun).filter(EtoRun.run_type == 'data_extract').count()
+            success_runs = session.query(EtoRun).filter(EtoRun.status == 'success').count()
+            failure_runs = session.query(EtoRun).filter(EtoRun.status == 'failure').count()
+            unrecognized_runs = session.query(EtoRun).filter(EtoRun.status == 'unrecognized').count()
+            unprocessed_runs = session.query(EtoRun).filter(EtoRun.status == 'unprocessed').count()
+            error_runs = session.query(EtoRun).filter(EtoRun.status == 'error').count()
             
             return jsonify({
                 "total_runs": total_runs,
                 "by_status": {
-                    "pending": pending_runs,
-                    "processing": processing_runs,
-                    "completed": completed_runs,
-                    "failed": failed_runs,
-                    "needs_template": needs_template_runs
-                },
-                "by_type": {
-                    "template_match": template_match_runs,
-                    "data_extract": data_extract_runs
+                    "success": success_runs,
+                    "failure": failure_runs,
+                    "unrecognized": unrecognized_runs,
+                    "unprocessed": unprocessed_runs,
+                    "error": error_runs
                 },
                 "worker_status": get_processing_worker().get_worker_status()
             })
@@ -300,11 +364,10 @@ def get_eto_runs():
                     "id": run.id,
                     "email_id": run.email_id,
                     "pdf_file_id": run.pdf_file_id,
-                    "run_type": run.run_type,
                     "status": run.status,
-                    "template_id": run.template_id,
-                    "is_duplicate_pdf": run.is_duplicate_pdf,
-                    "duplicate_handling_result": run.duplicate_handling_result,
+                    "matched_template_id": run.matched_template_id,
+                    "error_type": run.error_type,
+                    "error_message": run.error_message,
                     "created_at": run.created_at.isoformat() if run.created_at else None,
                     "started_at": run.started_at.isoformat() if run.started_at else None,
                     "completed_at": run.completed_at.isoformat() if run.completed_at else None,

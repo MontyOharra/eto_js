@@ -41,33 +41,101 @@ class PdfFile(Base):
     original_filename = Column(String(255))
     file_path = Column(String(512), nullable=False)
     file_size = Column(BigInteger)
-    sha256_hash = Column(String(64), nullable=False, index=True)
+    sha256_hash = Column(String(64), nullable=False, index=True)  # REMOVED unique constraint
     mime_type = Column(String(100), default='application/pdf')
     page_count = Column(Integer)
+    object_count = Column(Integer)  # Number of PDF objects extracted
+    objects_json = Column(Text)  # PDF objects for template matching
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
     email = relationship("Email", back_populates="pdf_files")
     eto_runs = relationship("EtoRun", back_populates="pdf_file")
-    extracted_orders = relationship("ExtractedOrder", back_populates="pdf_file")
 
 class PdfTemplate(Base):
     __tablename__ = 'pdf_templates'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(255), nullable=False)
-    description = Column(String(1000))
     customer_name = Column(String(255))
-    signature_hash = Column(String(64), nullable=False, unique=True, index=True)
-    signature_data = Column(Text)  # JSON: layout elements, fonts, positions
-    extraction_rules = Column(Text)  # JSON: field extraction specifications
-    is_active = Column(Boolean, default=True, index=True)
+    description = Column(Text)
+    
+    # Template matching signature
+    signature_objects = Column(Text)  # JSON: objects that define this template
+    signature_object_count = Column(Integer)  # For quick subset matching
+    
+    # Template metadata  
+    is_complete = Column(Boolean, default=False)  # User-marked completeness
+    coverage_threshold = Column(Float, default=0.6)  # Expected coverage ratio
+    
+    # Usage statistics
+    usage_count = Column(Integer, default=0)
+    last_used_at = Column(DateTime)
+    
+    # Versioning
+    version = Column(Integer, default=1)
+    is_current_version = Column(Boolean, default=True)
+    
+    # Audit fields
+    created_by = Column(String(255))
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    status = Column(String(50), default='active')  # 'active', 'archived', 'draft'
     
     # Relationships
     eto_runs = relationship("EtoRun", back_populates="template")
-    extracted_orders = relationship("ExtractedOrder", back_populates="template")
+    extraction_rules = relationship("TemplateExtractionRule", back_populates="template")
+
+class TemplateExtractionRule(Base):
+    __tablename__ = 'template_extraction_rules'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    template_id = Column(Integer, ForeignKey('pdf_templates.id'), nullable=False, index=True)
+    rule_name = Column(String(255), nullable=False)  # "carrier_processing", "pickup_date_processing"
+    final_target_field = Column(String(255), nullable=False)  # "address_id", "pickup_date"
+    is_required = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    template = relationship("PdfTemplate", back_populates="extraction_rules")
+    extraction_steps = relationship("TemplateExtractionStep", back_populates="extraction_rule", cascade="all, delete-orphan")
+
+class TemplateExtractionStep(Base):
+    __tablename__ = 'template_extraction_steps'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    extraction_rule_id = Column(Integer, ForeignKey('template_extraction_rules.id'), nullable=False, index=True)
+    step_number = Column(Integer, nullable=False)  # 1, 2, 3... (execution order)
+    step_name = Column(String(255), nullable=False)  # "extract_raw_carrier", "lookup_address_id"
+    
+    # Step configuration
+    step_type = Column(String(50), nullable=False)  # 'raw_extract', 'sql_lookup', 'llm_parse'
+    step_config = Column(Text)  # JSON: method-specific configuration
+    
+    # Input/Output
+    input_fields = Column(Text)  # JSON: ["carrier_raw"]
+    output_field = Column(String(255))  # "carrier_raw", "address_id"
+    
+    # Error handling
+    error_handling = Column(String(50), default='fail_rule')  # 'fail_rule', 'skip_step', 'use_default'
+    default_value = Column(Text)
+    
+    # Performance tracking
+    avg_execution_time_ms = Column(Integer, default=0)
+    execution_count = Column(Integer, default=0)
+    last_executed_at = Column(DateTime)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    extraction_rule = relationship("TemplateExtractionRule", back_populates="extraction_steps")
+    failed_eto_runs = relationship("EtoRun", foreign_keys="[EtoRun.failed_step_id]")
+    
+    # Constraints
+    __table_args__ = (
+        UniqueConstraint('extraction_rule_id', 'step_number', name='_rule_step_number_uc'),
+    )
 
 class EtoRun(Base):
     __tablename__ = 'eto_runs'
@@ -75,62 +143,44 @@ class EtoRun(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     email_id = Column(Integer, ForeignKey('emails.id'), nullable=False, index=True)
     pdf_file_id = Column(Integer, ForeignKey('pdf_files.id'), nullable=False, index=True)
-    run_type = Column(String(50), nullable=False)  # 'template_match', 'data_extract'
-    status = Column(String(50), nullable=False, index=True)  # 'pending', 'processing', 'completed', 'failed', 'needs_template'
-    template_id = Column(Integer, ForeignKey('pdf_templates.id'), nullable=True)
     
-    # Duplicate handling
-    is_duplicate_pdf = Column(Boolean, default=False)  # True if PDF hash already exists
-    duplicate_handling_result = Column(String(100))  # 'processed_as_new', 'flagged_duplicate', etc.
+    # Processing status
+    status = Column(String(50), nullable=False, index=True)  # 'success', 'failure', 'unrecognized', 'error'
+    error_type = Column(String(50))  # 'processing_error', 'extraction_error', 'order_creation_error'
+    error_message = Column(Text)
+    error_details = Column(Text)  # JSON: detailed error info
     
-    # Processing results
-    template_match_confidence = Column(Float)
-    template_match_result = Column(String(50))  # 'matched', 'no_match', 'multiple_matches'
+    # Template matching results
+    matched_template_id = Column(Integer, ForeignKey('pdf_templates.id'), nullable=True)
+    template_version = Column(Integer)  # Which version was used
+    template_match_coverage = Column(Float)  # % of PDF objects matched
+    unmatched_object_count = Column(Integer)
+    suggested_new_template = Column(Boolean, default=False)
     
-    # Extraction results
-    extracted_data = Column(Text)  # JSON: extracted field values
-    extraction_errors = Column(Text)  # JSON: extraction errors/warnings
+    # Extraction results (for success status)
+    extracted_data = Column(Text)  # JSON: field_name -> value mapping
     
-    # Timing and metadata
+    # Pipeline execution tracking
+    failed_step_id = Column(Integer, ForeignKey('template_extraction_steps.id'))
+    step_execution_log = Column(Text)  # JSON: step-by-step execution details
+    
+    # Processing timeline
     started_at = Column(DateTime)
     completed_at = Column(DateTime)
+    processing_duration_ms = Column(Integer)
+    
+    # Order integration
+    order_id = Column(Integer)  # References orders table (assumed to exist)
+    
+    # Audit
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
     email = relationship("Email", back_populates="eto_runs")
     pdf_file = relationship("PdfFile", back_populates="eto_runs")
     template = relationship("PdfTemplate", back_populates="eto_runs")
-    extracted_orders = relationship("ExtractedOrder", back_populates="eto_run")
-
-class ExtractedOrder(Base):
-    __tablename__ = 'extracted_orders'
-    
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    eto_run_id = Column(Integer, ForeignKey('eto_runs.id'), nullable=False, index=True)
-    pdf_file_id = Column(Integer, ForeignKey('pdf_files.id'), nullable=False)
-    template_id = Column(Integer, ForeignKey('pdf_templates.id'), nullable=False)
-    
-    # Common logistics fields (customize based on your forms)
-    order_number = Column(String(100), index=True)
-    bol_number = Column(String(100))
-    customer_name = Column(String(255))
-    pickup_date = Column(DateTime)
-    delivery_date = Column(DateTime)
-    origin_address = Column(String(500))
-    destination_address = Column(String(500))
-    weight = Column(Float)
-    pieces = Column(Integer)
-    
-    # Raw extracted data as backup
-    raw_extracted_data = Column(Text)  # JSON: all extracted fields
-    
-    created_at = Column(DateTime, default=datetime.utcnow)
-    
-    # Relationships
-    eto_run = relationship("EtoRun", back_populates="extracted_orders")
-    pdf_file = relationship("PdfFile", back_populates="extracted_orders")
-    template = relationship("PdfTemplate", back_populates="extracted_orders")
-
+    failed_step = relationship("TemplateExtractionStep", foreign_keys=[failed_step_id], overlaps="failed_eto_runs")
 
 class EmailCursor(Base):
     """Track email processing cursors for downtime recovery"""

@@ -1,10 +1,10 @@
-import { Template } from "../data/mockTemplates";
+import { TemplateSummary, EtoDataTransforms } from "../types/eto";
 
 interface TemplateCardProps {
-  template: Template;
-  onEdit: (template: Template) => void;
-  onView: (template: Template) => void;
-  onDelete: (template: Template) => void;
+  template: TemplateSummary;
+  onEdit: (template: TemplateSummary) => void;
+  onView: (template: TemplateSummary) => void;
+  onDelete: (template: TemplateSummary) => void;
 }
 
 export function TemplateCard({
@@ -13,14 +13,12 @@ export function TemplateCard({
   onView,
   onDelete,
 }: TemplateCardProps) {
-  const getStatusColor = (status: Template["status"]) => {
+  const getStatusColor = (status: TemplateSummary["status"]) => {
     switch (status) {
       case "active":
         return "bg-green-600";
       case "draft":
         return "bg-yellow-600";
-      case "testing":
-        return "bg-blue-600";
       case "archived":
         return "bg-gray-600";
       default:
@@ -44,8 +42,8 @@ export function TemplateCard({
           <h3 className="text-lg font-semibold text-blue-300 mb-1">
             {template.name}
           </h3>
-          {template.customerName && (
-            <p className="text-sm text-gray-400">{template.customerName}</p>
+          {template.customer_name && (
+            <p className="text-sm text-gray-400">{template.customer_name}</p>
           )}
         </div>
         <div className="flex items-center space-x-2">
@@ -69,46 +67,42 @@ export function TemplateCard({
         <div>
           <p className="text-gray-400">Usage</p>
           <p className="text-white font-medium">
-            {template.usageCount.toLocaleString()}
+            {template.usage_count.toLocaleString()}
           </p>
         </div>
         <div>
           <p className="text-gray-400">Success Rate</p>
           <p className="text-white font-medium">
-            {template.successRate ? `${template.successRate}%` : "N/A"}
+            {template.success_rate ? `${template.success_rate.toFixed(1)}%` : "N/A"}
           </p>
         </div>
         <div>
-          <p className="text-gray-400">Last Used</p>
+          <p className="text-gray-400">Rules</p>
           <p className="text-white font-medium">
-            {template.lastUsedAt ? formatDate(template.lastUsedAt) : "Never"}
+            {template.extraction_rules_count || 0}
           </p>
         </div>
       </div>
 
-      {/* Tags */}
-      {template.tags.length > 0 && (
-        <div className="flex flex-wrap gap-1 mb-4">
-          {template.tags.slice(0, 3).map((tag) => (
-            <span
-              key={tag}
-              className="px-2 py-1 text-xs bg-gray-700 text-gray-300 rounded"
-            >
-              {tag}
-            </span>
-          ))}
-          {template.tags.length > 3 && (
-            <span className="px-2 py-1 text-xs bg-gray-700 text-gray-300 rounded">
-              +{template.tags.length - 3}
-            </span>
-          )}
+      {/* Completeness Indicator */}
+      <div className="flex items-center space-x-2 mb-4">
+        <div className="flex items-center space-x-1">
+          <div className={`w-2 h-2 rounded-full ${EtoDataTransforms.getTemplateCompletenessColor(template.is_complete)}`}></div>
+          <span className="text-xs text-gray-400">
+            {template.is_complete ? 'Complete' : 'Incomplete'}
+          </span>
         </div>
-      )}
+        {template.last_used_at && (
+          <span className="text-xs text-gray-500">
+            Used {formatDate(template.last_used_at)}
+          </span>
+        )}
+      </div>
 
       {/* Footer */}
       <div className="flex justify-between items-center">
         <div className="text-xs text-gray-500">
-          Updated {formatDate(template.updatedAt)}
+          {template.updated_at ? `Updated ${formatDate(template.updated_at)}` : 'No update date'}
         </div>
         <div className="flex space-x-2">
           <button

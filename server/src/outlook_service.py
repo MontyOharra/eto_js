@@ -670,10 +670,7 @@ class OutlookService:
             eto_run_data = {
                 "email_id": email_id,
                 "pdf_file_id": pdf_record.id,
-                "run_type": "template_match",
-                "status": "pending",
-                "is_duplicate_pdf": is_duplicate,
-                "duplicate_handling_result": "flagged_duplicate" if is_duplicate else "processed_as_new"
+                "status": "unprocessed"  # Initial state, needs template matching
             }
             
             eto_run = self.db_service.create_eto_run(eto_run_data)
@@ -834,4 +831,4 @@ class OutlookService:
             return []
 
 # Global instance
-outlook_service = OutlookService() 
+outlook_service = OutlookService()

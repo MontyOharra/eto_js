@@ -105,7 +105,7 @@ class EtoProcessingWorker:
             session = self.db_service.get_session()
             try:
                 runs = session.query(EtoRun).filter(
-                    EtoRun.status == 'pending'
+                    EtoRun.status == 'unprocessed'
                 ).order_by(EtoRun.created_at).limit(5).all()  # Process 5 at a time
                 
                 return runs
@@ -119,18 +119,14 @@ class EtoProcessingWorker:
     
     def _process_eto_run(self, eto_run: EtoRun):
         """Process a single ETO run"""
-        logger.info(f"Processing ETO run {eto_run.id} (type: {eto_run.run_type})")
+        logger.info(f"Processing ETO run {eto_run.id} (status: {eto_run.status})")
         
-        # Mark as processing
-        self._update_run_status(eto_run.id, 'processing', started_at=datetime.now())
+        # Mark as processing  
+        self._update_run_status(eto_run.id, 'unprocessed', started_at=datetime.now())
         
         try:
-            if eto_run.run_type == 'template_match':
-                self._process_template_matching(eto_run)
-            elif eto_run.run_type == 'data_extract':
-                self._process_data_extraction(eto_run)
-            else:
-                raise ValueError(f"Unknown run type: {eto_run.run_type}")
+            # For now, all runs go through template matching first
+            self._process_template_matching(eto_run)
                 
         except Exception as e:
             logger.error(f"Failed to process ETO run {eto_run.id}: {e}")
@@ -182,11 +178,9 @@ class EtoProcessingWorker:
         # Update run with match results
         self._update_run_status(
             eto_run.id,
-            'completed',
+            'success',
             completed_at=datetime.now(),
-            template_id=template_id,
-            template_match_result='matched',
-            template_match_confidence=match_result['confidence'],
+            matched_template_id=template_id,
             extracted_data=json.dumps({
                 'pdf_objects': pdf_objects,
                 'match_details': match_result['match_details']
@@ -213,14 +207,12 @@ class EtoProcessingWorker:
         
         self._update_run_status(
             eto_run.id,
-            'needs_template',
+            'unrecognized',
             completed_at=datetime.now(),
-            template_match_result='no_match',
-            template_match_confidence=0.0,
             extracted_data=json.dumps(extracted_data, default=str)
         )
         
-        logger.info(f"Run {eto_run.id} marked as needs_template with {len(pdf_objects)} objects stored")
+        logger.info(f"Run {eto_run.id} marked as unrecognized with {len(pdf_objects)} objects stored")
     
     def _process_data_extraction(self, eto_run: EtoRun):
         """Process data extraction from matched template (placeholder for future implementation)"""
@@ -229,7 +221,7 @@ class EtoProcessingWorker:
         # For now, just mark as completed
         self._update_run_status(
             eto_run.id,
-            'completed',
+            'success',
             completed_at=datetime.now(),
             extracted_data=json.dumps({
                 'status': 'data_extraction_not_implemented',
@@ -243,9 +235,8 @@ class EtoProcessingWorker:
             eto_run_data = {
                 "email_id": email_id,
                 "pdf_file_id": pdf_file_id,
-                "template_id": template_id,
-                "run_type": "data_extract",
-                "status": "pending"
+                "matched_template_id": template_id,
+                "status": "unprocessed"  # Will be processed by template matching
             }
             
             self.db_service.create_eto_run(eto_run_data)
@@ -274,9 +265,10 @@ class EtoProcessingWorker:
         try:
             self._update_run_status(
                 run_id,
-                'failed',
+                'error',
                 completed_at=datetime.now(),
-                extraction_errors=json.dumps({'error': error_message})
+                error_type='processing_error',
+                error_message=error_message
             )
         except Exception as e:
             logger.error(f"Error marking run as failed: {e}")

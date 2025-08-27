@@ -76,7 +76,19 @@ if [ -f "$ENV_EXAMPLE" ]; then
     cp "$ENV_EXAMPLE" "$DEPLOY_ROOT/"
 fi
 
+# Clear data and reset database after successful build
+echo -e "${GREEN}Clearing data folders and resetting database...${NC}"
+
+# Clear data folders using our script
+echo -e "${GREEN}Clearing data folders...${NC}"
+"$SCRIPT_DIR/clear-data.sh" --confirm || echo -e "${YELLOW}Data clearing completed with warnings${NC}"
+
+# Reset database using our script  
+echo -e "${GREEN}Resetting database...${NC}"
+"$SCRIPT_DIR/reset-database.sh" --confirm || echo -e "${YELLOW}Database reset completed with warnings${NC}"
+
 echo -e "${GREEN}Build complete. Deployed to $DEPLOY_ROOT${NC}"
 echo -e "${GREEN}Python executable: $PYTHON_EXE${NC}"
+echo -e "${GREEN}Data folders and database have been reset${NC}"
 
 exit 0 
