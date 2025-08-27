@@ -205,6 +205,17 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
       
       console.log('Template created successfully:', result);
       
+      // Show reprocessing information if available
+      if (result.reprocessing) {
+        console.log('Reprocessing triggered:', result.reprocessing);
+        if (result.reprocessing.reprocessed > 0) {
+          alert(`Template created successfully!\n\nReprocessing ${result.reprocessing.reprocessed} previously unrecognized PDFs...`);
+        }
+      } else if (result.reprocessing_error) {
+        console.warn('Reprocessing failed:', result.reprocessing_error);
+        alert(`Template created successfully!\n\nWarning: Automatic reprocessing failed: ${result.reprocessing_error}`);
+      }
+      
       // Notify parent component
       onSave(templateData);
       

@@ -305,6 +305,22 @@ class ApiClient {
   }
 
   /**
+   * Trigger Reprocessing of Unrecognized ETO Runs
+   */
+  async triggerReprocessing(): Promise<{
+    success: boolean;
+    result: {
+      reprocessed: number;
+      message: string;
+      error?: string;
+    };
+  }> {
+    return this.fetchApi('/api/templates/reprocess', {
+      method: 'POST',
+    });
+  }
+
+  /**
    * Generic GET request (for flexibility)
    */
   async get<T = any>(endpoint: string): Promise<{ data: T }> {

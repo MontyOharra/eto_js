@@ -335,10 +335,25 @@ def create_template():
             
             logger.info(f"Created template '{data['name']}' with ID {template.id}")
             
-            return jsonify({
-                "template_id": template.id,
-                "message": f"Template '{data['name']}' created successfully"
-            }), 201
+            # Trigger reprocessing of unrecognized runs
+            try:
+                from .processing_worker import trigger_reprocessing
+                reprocess_result = trigger_reprocessing()
+                logger.info(f"Template creation triggered reprocessing: {reprocess_result}")
+                
+                return jsonify({
+                    "template_id": template.id,
+                    "message": f"Template '{data['name']}' created successfully",
+                    "reprocessing": reprocess_result
+                }), 201
+                
+            except Exception as reprocess_error:
+                logger.error(f"Template created but reprocessing failed: {reprocess_error}")
+                return jsonify({
+                    "template_id": template.id,
+                    "message": f"Template '{data['name']}' created successfully",
+                    "reprocessing_error": str(reprocess_error)
+                }), 201
             
         except Exception as e:
             session.rollback()
@@ -348,6 +363,24 @@ def create_template():
             
     except Exception as e:
         logger.error(f"Error creating template: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.post("/api/templates/reprocess")
+def reprocess_unrecognized():
+    """Manually trigger reprocessing of unrecognized ETO runs"""
+    try:
+        from .processing_worker import trigger_reprocessing
+        
+        result = trigger_reprocessing()
+        
+        return jsonify({
+            "success": True,
+            "result": result
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error triggering reprocessing: {e}")
         return jsonify({"error": str(e)}), 500
 
 
