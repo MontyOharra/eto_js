@@ -219,6 +219,56 @@ class ApiClient {
     const endpoint = `/api/templates${searchParams.toString() ? `?${searchParams}` : ''}`;
     return this.fetchApi<ApiTemplatesResponse>(endpoint);
   }
+
+  /**
+   * Get PDF File (binary data)
+   */
+  getPdfFileUrl(pdfId: number): string {
+    return `${this.baseUrl}/api/pdf/${pdfId}`;
+  }
+
+  /**
+   * Get PDF Objects
+   */
+  async getPdfObjects(pdfId: number): Promise<{
+    pdf_id: number;
+    filename: string;
+    page_count: number;
+    object_count: number;
+    objects: any[];
+  }> {
+    return this.fetchApi(`/api/pdf/${pdfId}/objects`);
+  }
+
+  /**
+   * Get ETO Run PDF Data (complete PDF data including objects)
+   */
+  async getEtoRunPdfData(runId: string | number): Promise<{
+    eto_run_id: number;
+    pdf_id: number;
+    filename: string;
+    page_count: number;
+    object_count: number;
+    file_size: number;
+    objects: any[];
+    email: {
+      subject: string;
+      sender_email: string;
+      received_date: string;
+    };
+    status: string;
+    error_message?: string;
+  }> {
+    return this.fetchApi(`/api/eto-run/${runId}/pdf-data`);
+  }
+
+  /**
+   * Generic GET request (for flexibility)
+   */
+  async get<T = any>(endpoint: string): Promise<{ data: T }> {
+    const data = await this.fetchApi<T>(endpoint);
+    return { data };
+  }
 }
 
 // Custom error class for API errors

@@ -1,6 +1,7 @@
 import os
 import logging
-from flask import Flask, jsonify, request
+import json
+from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 from dotenv import load_dotenv
 from .outlook_service import outlook_service
@@ -479,6 +480,130 @@ def get_emails():
         
     except Exception as e:
         logger.error(f"Error getting emails: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.get("/api/pdf/<int:pdf_id>")
+def get_pdf_file(pdf_id):
+    """Serve PDF file by ID"""
+    try:
+        db_service = get_db_service()
+        session = db_service.get_session()
+        
+        try:
+            from .database import PdfFile
+            
+            pdf_file = session.query(PdfFile).filter(PdfFile.id == pdf_id).first()
+            if not pdf_file:
+                return jsonify({"error": "PDF file not found"}), 404
+            
+            # Check if file exists on disk
+            if not os.path.exists(pdf_file.file_path):
+                return jsonify({"error": "PDF file not found on disk"}), 404
+            
+            return send_file(
+                pdf_file.file_path,
+                as_attachment=False,
+                download_name=pdf_file.original_filename,
+                mimetype='application/pdf'
+            )
+            
+        finally:
+            session.close()
+            
+    except Exception as e:
+        logger.error(f"Error serving PDF file {pdf_id}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.get("/api/pdf/<int:pdf_id>/objects")
+def get_pdf_objects(pdf_id):
+    """Get extracted PDF objects by PDF ID"""
+    try:
+        db_service = get_db_service()
+        session = db_service.get_session()
+        
+        try:
+            from .database import PdfFile
+            
+            pdf_file = session.query(PdfFile).filter(PdfFile.id == pdf_id).first()
+            if not pdf_file:
+                return jsonify({"error": "PDF file not found"}), 404
+            
+            # Parse the objects JSON
+            objects = []
+            if pdf_file.objects_json:
+                try:
+                    objects = json.loads(pdf_file.objects_json)
+                except json.JSONDecodeError as e:
+                    logger.error(f"Error parsing objects JSON for PDF {pdf_id}: {e}")
+                    return jsonify({"error": "Invalid objects data"}), 500
+            
+            return jsonify({
+                "pdf_id": pdf_id,
+                "filename": pdf_file.original_filename,
+                "page_count": pdf_file.page_count or 1,
+                "object_count": pdf_file.object_count or 0,
+                "objects": objects
+            })
+            
+        finally:
+            session.close()
+            
+    except Exception as e:
+        logger.error(f"Error getting PDF objects for {pdf_id}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.get("/api/eto-run/<int:run_id>/pdf-data")
+def get_eto_run_pdf_data(run_id):
+    """Get complete PDF data (file + objects) for an ETO run"""
+    try:
+        db_service = get_db_service()
+        session = db_service.get_session()
+        
+        try:
+            from .database import EtoRun, PdfFile, Email
+            
+            eto_run = session.query(EtoRun).filter(EtoRun.id == run_id).first()
+            if not eto_run:
+                return jsonify({"error": "ETO run not found"}), 404
+            
+            pdf_file = eto_run.pdf_file
+            if not pdf_file:
+                return jsonify({"error": "PDF file not found for ETO run"}), 404
+            
+            # Parse the objects JSON
+            objects = []
+            if pdf_file.objects_json:
+                try:
+                    objects = json.loads(pdf_file.objects_json)
+                except json.JSONDecodeError as e:
+                    logger.error(f"Error parsing objects JSON for PDF {pdf_file.id}: {e}")
+                    return jsonify({"error": "Invalid objects data"}), 500
+            
+            return jsonify({
+                "eto_run_id": run_id,
+                "pdf_id": pdf_file.id,
+                "filename": pdf_file.original_filename,
+                "page_count": pdf_file.page_count or 1,
+                "object_count": pdf_file.object_count or 0,
+                "file_size": pdf_file.file_size,
+                "objects": objects,
+                "email": {
+                    "subject": eto_run.email.subject,
+                    "sender_email": eto_run.email.sender_email,
+                    "received_date": eto_run.email.received_date.isoformat() if eto_run.email.received_date else None
+                },
+                "status": eto_run.status,
+                "error_message": eto_run.error_message
+            })
+            
+        finally:
+            session.close()
+            
+    except Exception as e:
+        logger.error(f"Error getting PDF data for ETO run {run_id}: {e}")
         return jsonify({"error": str(e)}), 500
 
 

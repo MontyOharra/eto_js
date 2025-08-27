@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { EtoRunsTable } from "../../components/EtoRunsTable";
+import { EtoRunViewerModal } from "../../components/EtoRunViewerModal";
 import { useEtoRuns, useServerHealth } from "../../hooks/useApi";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 export const Route = createFileRoute("/dashboard/eto-info")({
   component: EtoInfoPage,
@@ -15,6 +16,9 @@ function EtoInfoPage() {
     refreshInterval: 15000 
   });
   const { isServerOnline } = useServerHealth();
+
+  // Modal state for PDF viewer
+  const [viewingRunId, setViewingRunId] = useState<string | null>(null);
 
   // Group runs by status
   const { successRuns, failureRuns, unrecognizedRuns, errorRuns } = useMemo(() => {
@@ -37,12 +41,17 @@ function EtoInfoPage() {
 
   const handleView = (runId: string) => {
     console.log("View run:", runId);
-    // TODO: Show run details modal
+    setViewingRunId(runId);
   };
 
   const handleReview = (runId: string) => {
-    console.log("Review run:", runId);
-    // TODO: Open review interface
+    console.log("Build Template for run:", runId);
+    // TODO: Open template building interface
+    setViewingRunId(runId);
+  };
+
+  const handleCloseViewer = () => {
+    setViewingRunId(null);
   };
 
   // Show loading state
@@ -176,6 +185,12 @@ function EtoInfoPage() {
           onReview={handleReview}
         />
       </div>
+
+      {/* PDF Viewer Modal */}
+      <EtoRunViewerModal 
+        runId={viewingRunId}
+        onClose={handleCloseViewer}
+      />
     </div>
   );
 }
