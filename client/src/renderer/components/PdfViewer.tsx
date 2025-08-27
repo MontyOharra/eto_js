@@ -222,11 +222,16 @@ export function PdfViewer({
       {/* PDF Document Container */}
       <div
         ref={containerRef}
-        className="flex-1 overflow-auto bg-gray-700 p-4"
-        style={{ minHeight: '400px', maxHeight: 'calc(100vh - 120px)' }}
+        className="flex-1 bg-gray-700 p-4 pdf-scroll-container"
+        style={{ 
+          minHeight: '400px', 
+          maxHeight: 'calc(100vh - 120px)',
+          width: '100%',
+          overflow: 'auto'
+        }}
       >
-        <div className="flex justify-center min-h-full">
-          <div className="relative bg-white shadow-lg max-w-full">
+        <div className="flex justify-center" style={{ minWidth: 'fit-content', minHeight: '100%' }}>
+          <div className="relative bg-white shadow-lg" style={{ display: 'inline-block' }}>
             {loading && (
               <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
                 <div className="text-gray-600">Loading PDF...</div>

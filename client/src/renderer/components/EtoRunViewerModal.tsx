@@ -187,9 +187,9 @@ export function EtoRunViewerModal({ runId, onClose }: EtoRunViewerModalProps) {
           </button>
         </div>
 
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-1 overflow-hidden" style={{ minHeight: 0, minWidth: 0 }}>
           {/* Sidebar - Object Type Controls */}
-          <div className="w-64 bg-gray-900 border-r border-gray-700 p-4 overflow-y-auto">
+          <div className="w-64 flex-shrink-0 bg-gray-900 border-r border-gray-700 p-4 overflow-y-auto">
             <h3 className="text-sm font-semibold text-white mb-3">Object Overlays</h3>
             
             <div className="space-y-2 mb-4">
@@ -245,7 +245,7 @@ export function EtoRunViewerModal({ runId, onClose }: EtoRunViewerModalProps) {
           </div>
 
           {/* Main Content - PDF Viewer */}
-          <div className="flex-1 flex flex-col">
+          <div className="flex-1 flex flex-col overflow-hidden" style={{ minWidth: 0 }}>
             {loading && (
               <div className="flex-1 flex items-center justify-center">
                 <div className="text-white">Loading PDF data...</div>
