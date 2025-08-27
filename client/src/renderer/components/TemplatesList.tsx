@@ -1,20 +1,20 @@
 import { useState, useMemo } from "react";
-import { Template } from "../data/mockTemplates";
+import { TemplateSummary } from "../types/eto";
 import { TemplateCard } from "./TemplateCard";
 
 interface TemplatesListProps {
-  templates: Template[];
-  onEdit: (template: Template) => void;
-  onView: (template: Template) => void;
-  onDelete: (template: Template) => void;
+  templates: TemplateSummary[];
+  onEdit: (template: TemplateSummary) => void;
+  onView: (template: TemplateSummary) => void;
+  onDelete: (template: TemplateSummary) => void;
 }
 
 type SortField =
   | "name"
-  | "customerName"
-  | "updatedAt"
-  | "usageCount"
-  | "successRate"
+  | "customer_name"
+  | "updated_at"
+  | "usage_count"
+  | "success_rate"
   | "status";
 type SortDirection = "asc" | "desc";
 
@@ -25,17 +25,17 @@ export function TemplatesList({
   onDelete,
 }: TemplatesListProps) {
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<Template["status"] | "all">(
+  const [statusFilter, setStatusFilter] = useState<TemplateSummary["status"] | "all">(
     "all"
   );
   const [customerFilter, setCustomerFilter] = useState<string>("all");
-  const [sortField, setSortField] = useState<SortField>("updatedAt");
+  const [sortField, setSortField] = useState<SortField>("updated_at");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
 
   // Get unique customers for filter
   const customers = useMemo(() => {
     const customerSet = new Set(
-      templates.map((t) => t.customerName).filter(Boolean)
+      templates.map((t) => t.customer_name).filter(Boolean)
     );
     return Array.from(customerSet).sort();
   }, [templates]);
@@ -48,17 +48,14 @@ export function TemplatesList({
         template.description
           ?.toLowerCase()
           .includes(searchTerm.toLowerCase()) ||
-        template.customerName
+        template.customer_name
           ?.toLowerCase()
-          .includes(searchTerm.toLowerCase()) ||
-        template.tags.some((tag) =>
-          tag.toLowerCase().includes(searchTerm.toLowerCase())
-        );
+          .includes(searchTerm.toLowerCase());
 
       const matchesStatus =
         statusFilter === "all" || template.status === statusFilter;
       const matchesCustomer =
-        customerFilter === "all" || template.customerName === customerFilter;
+        customerFilter === "all" || template.customer_name === customerFilter;
 
       return matchesSearch && matchesStatus && matchesCustomer;
     });
@@ -73,21 +70,21 @@ export function TemplatesList({
           aValue = a.name.toLowerCase();
           bValue = b.name.toLowerCase();
           break;
-        case "customerName":
-          aValue = a.customerName?.toLowerCase() || "";
-          bValue = b.customerName?.toLowerCase() || "";
+        case "customer_name":
+          aValue = a.customer_name?.toLowerCase() || "";
+          bValue = b.customer_name?.toLowerCase() || "";
           break;
-        case "updatedAt":
-          aValue = a.updatedAt.getTime();
-          bValue = b.updatedAt.getTime();
+        case "updated_at":
+          aValue = a.updated_at?.getTime() || 0;
+          bValue = b.updated_at?.getTime() || 0;
           break;
-        case "usageCount":
-          aValue = a.usageCount;
-          bValue = b.usageCount;
+        case "usage_count":
+          aValue = a.usage_count;
+          bValue = b.usage_count;
           break;
-        case "successRate":
-          aValue = a.successRate || 0;
-          bValue = b.successRate || 0;
+        case "success_rate":
+          aValue = a.success_rate || 0;
+          bValue = b.success_rate || 0;
           break;
         case "status":
           aValue = a.status;
@@ -165,14 +162,13 @@ export function TemplatesList({
           <select
             value={statusFilter}
             onChange={(e) =>
-              setStatusFilter(e.target.value as Template["status"] | "all")
+              setStatusFilter(e.target.value as TemplateSummary["status"] | "all")
             }
             className="px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:border-blue-500"
           >
             <option value="all">All Status</option>
             <option value="active">Active</option>
             <option value="draft">Draft</option>
-            <option value="testing">Testing</option>
             <option value="archived">Archived</option>
           </select>
 
@@ -195,10 +191,10 @@ export function TemplatesList({
         <div className="flex flex-wrap gap-2">
           <span className="text-gray-400 text-sm self-center">Sort by:</span>
           <SortButton field="name">Name</SortButton>
-          <SortButton field="customerName">Customer</SortButton>
-          <SortButton field="updatedAt">Last Modified</SortButton>
-          <SortButton field="usageCount">Usage</SortButton>
-          <SortButton field="successRate">Success Rate</SortButton>
+          <SortButton field="customer_name">Customer</SortButton>
+          <SortButton field="updated_at">Last Modified</SortButton>
+          <SortButton field="usage_count">Usage</SortButton>
+          <SortButton field="success_rate">Success Rate</SortButton>
           <SortButton field="status">Status</SortButton>
         </div>
       </div>
