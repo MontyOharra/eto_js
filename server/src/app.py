@@ -483,6 +483,60 @@ def get_emails():
         return jsonify({"error": str(e)}), 500
 
 
+@app.get("/api/pdf/<int:pdf_id>/debug")
+def debug_pdf_paths(pdf_id):
+    """Debug PDF file paths"""
+    try:
+        db_service = get_db_service()
+        session = db_service.get_session()
+        
+        try:
+            from .database import PdfFile
+            
+            pdf_file = session.query(PdfFile).filter(PdfFile.id == pdf_id).first()
+            if not pdf_file:
+                return jsonify({"error": "PDF file not found"}), 404
+            
+            # Get current working directory and stored path
+            cwd = os.getcwd()
+            stored_path = pdf_file.file_path
+            normalized_path = os.path.normpath(stored_path)
+            
+            # If we're running from src directory, go up one level to server root
+            server_root = cwd
+            if cwd.endswith('src'):
+                server_root = os.path.dirname(cwd)
+            
+            # Build possible paths
+            possible_paths = [
+                os.path.join(cwd, stored_path),  # From current directory
+                os.path.join(server_root, stored_path),  # From server root
+            ]
+            
+            path_info = []
+            for path in possible_paths:
+                path_info.append({
+                    'path': path,
+                    'exists': os.path.exists(path),
+                    'normalized': os.path.normpath(path)
+                })
+            
+            return jsonify({
+                'pdf_id': pdf_id,
+                'current_working_directory': cwd,
+                'stored_path': stored_path,
+                'filename': pdf_file.original_filename,
+                'possible_paths': path_info
+            })
+            
+        finally:
+            session.close()
+            
+    except Exception as e:
+        logger.error(f"Error debugging PDF file {pdf_id}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @app.get("/api/pdf/<int:pdf_id>")
 def get_pdf_file(pdf_id):
     """Serve PDF file by ID"""
@@ -497,12 +551,32 @@ def get_pdf_file(pdf_id):
             if not pdf_file:
                 return jsonify({"error": "PDF file not found"}), 404
             
-            # Check if file exists on disk
-            if not os.path.exists(pdf_file.file_path):
-                return jsonify({"error": "PDF file not found on disk"}), 404
+            # Try multiple path approaches based on current working directory
+            cwd = os.getcwd()
+            
+            # If we're running from src directory, go up one level to server root
+            server_root = cwd
+            if cwd.endswith('src'):
+                server_root = os.path.dirname(cwd)
+            
+            possible_paths = [
+                os.path.join(cwd, pdf_file.file_path),  # From current directory
+                os.path.join(server_root, pdf_file.file_path),  # From server root
+            ]
+            
+            file_path = None
+            for path in possible_paths:
+                if os.path.exists(path):
+                    file_path = path
+                    logger.info(f"Found PDF at: {file_path}")
+                    break
+            
+            if not file_path:
+                logger.error(f"PDF file not found. Tried paths: {possible_paths}")
+                return jsonify({"error": "PDF file not found on disk", "tried_paths": possible_paths}), 404
             
             return send_file(
-                pdf_file.file_path,
+                file_path,
                 as_attachment=False,
                 download_name=pdf_file.original_filename,
                 mimetype='application/pdf'
