@@ -647,23 +647,22 @@ def get_eto_run_pdf_data(run_id):
             if not pdf_file:
                 return jsonify({"error": "PDF file not found for ETO run"}), 404
             
-            # Parse the objects JSON
-            objects = []
-            if pdf_file.objects_json:
-                try:
-                    objects = json.loads(pdf_file.objects_json)
-                except json.JSONDecodeError as e:
-                    logger.error(f"Error parsing objects JSON for PDF {pdf_file.id}: {e}")
-                    return jsonify({"error": "Invalid objects data"}), 500
+            # Pass raw extracted_data to frontend for parsing
+            raw_extracted_data = eto_run.extracted_data
+            logger.info(f"ETO run {run_id} extracted_data: {raw_extracted_data is not None}")
+            if raw_extracted_data:
+                logger.info(f"ETO run {run_id} extracted_data length: {len(raw_extracted_data)}")
+            else:
+                logger.info(f"ETO run {run_id} has no extracted_data")
             
             return jsonify({
                 "eto_run_id": run_id,
                 "pdf_id": pdf_file.id,
                 "filename": pdf_file.original_filename,
                 "page_count": pdf_file.page_count or 1,
-                "object_count": pdf_file.object_count or 0,
+                "object_count": 0,  # Will be calculated on frontend
                 "file_size": pdf_file.file_size,
-                "objects": objects,
+                "raw_extracted_data": raw_extracted_data,
                 "email": {
                     "subject": eto_run.email.subject,
                     "sender_email": eto_run.email.sender_email,

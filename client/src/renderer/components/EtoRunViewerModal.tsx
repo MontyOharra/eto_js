@@ -67,10 +67,39 @@ export function EtoRunViewerModal({ runId, onClose }: EtoRunViewerModalProps) {
 
     try {
       const response = await apiClient.getEtoRunPdfData(runId);
-      setPdfData(response);
+      
+      // Parse objects from raw_extracted_data
+      let objects: any[] = [];
+      if (response.raw_extracted_data) {
+        try {
+          const extractedData = JSON.parse(response.raw_extracted_data);
+          console.log('Extracted data keys:', Object.keys(extractedData));
+          
+          if (extractedData.pdf_objects && Array.isArray(extractedData.pdf_objects)) {
+            objects = extractedData.pdf_objects;
+          }
+        } catch (e) {
+          console.error('Error parsing raw_extracted_data:', e);
+        }
+      }
+      
+      console.log('PDF Data Response:', {
+        eto_run_id: response.eto_run_id,
+        objects_found: objects.length,
+        sample_objects: objects.slice(0, 2)
+      });
+      
+      // Add objects to the response
+      const pdfDataWithObjects = {
+        ...response,
+        objects: objects,
+        object_count: objects.length
+      };
+      
+      setPdfData(pdfDataWithObjects);
       
       // Initialize with all object types selected
-      const objectTypes = new Set(response.objects.map((obj: any) => obj.type));
+      const objectTypes = new Set(objects.map((obj: any) => obj.type));
       setSelectedObjectTypes(objectTypes);
     } catch (err: any) {
       console.error('Error fetching PDF data:', err);

@@ -250,7 +250,7 @@ class ApiClient {
     page_count: number;
     object_count: number;
     file_size: number;
-    objects: any[];
+    raw_extracted_data?: string;
     email: {
       subject: string;
       sender_email: string;

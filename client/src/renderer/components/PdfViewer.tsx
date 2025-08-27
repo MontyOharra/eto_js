@@ -59,6 +59,8 @@ export function PdfViewer({
   const [scale, setScale] = useState(1.0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [pageHeight, setPageHeight] = useState<number>(792); // Default Letter height
+  const [pageWidth, setPageWidth] = useState<number>(612); // Default Letter width (many PDFs use this)
   const containerRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef<{ [key: number]: HTMLDivElement }>({});
 
@@ -87,6 +89,9 @@ export function PdfViewer({
     setError(null);
     setTimeout(() => {
       setScale(calculateScale());
+      // Try to get actual page dimensions (this is a rough approach)
+      // Most PDFs will be either A4 (842) or Letter (792)
+      // We might need to get this from the actual page rendering
     }, 100);
   };
 
@@ -123,15 +128,33 @@ export function PdfViewer({
     return isCurrentPage && isSelectedType;
   });
 
+  // Debug: Log when objects change
+  if (objects.length > 0) {
+    console.log(`PdfViewer: ${objects.length} total objects, ${currentPageObjects.length} on page ${currentPage}`);
+  }
+
   const renderObjectOverlay = (obj: PdfObject, index: number) => {
     const [x0, y0, x1, y1] = obj.bbox;
     
-    // Convert PDF coordinates to screen coordinates
+    // Convert PDF coordinates to screen coordinates using actual page dimensions
     // PDF coordinates: origin at bottom-left, Y increases upward
     // Screen coordinates: origin at top-left, Y increases downward
-    const pdfHeight = 842; // Standard A4 height in points
-    const screenY0 = pdfHeight - y1; // Flip Y coordinate
-    const screenY1 = pdfHeight - y0;
+    // Scale coordinates from PDF space (pageHeight x pageWidth) to rendered space (pageHeight * scale)
+    const actualPdfHeight = pageHeight;
+    const screenY0 = actualPdfHeight - y1; // Flip Y coordinate
+    const screenY1 = actualPdfHeight - y0;
+    
+    // Debug first few objects
+    if (index < 2) {
+      console.log(`Object ${index} (${obj.type}):`, {
+        bbox: obj.bbox,
+        page: obj.page,
+        text: obj.text,
+        pdfDimensions: { width: pageWidth, height: pageHeight },
+        screenCoords: { screenY0, screenY1 },
+        scale: scale
+      });
+    }
     
     const style: React.CSSProperties = {
       position: 'absolute',
@@ -258,6 +281,17 @@ export function PdfViewer({
                   renderAnnotationLayer={false}
                   loading=""
                   error=""
+                  onLoadSuccess={(page) => {
+                    // Get the actual PDF page dimensions
+                    const viewport = page.getViewport({ scale: 1.0 });
+                    setPageWidth(viewport.width);
+                    setPageHeight(viewport.height);
+                    console.log('PDF Page dimensions:', {
+                      width: viewport.width,
+                      height: viewport.height,
+                      scale: scale
+                    });
+                  }}
                 />
                 
                 {/* Object Overlays */}
