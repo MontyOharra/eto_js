@@ -60,16 +60,20 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
   const [fieldLabels, setFieldLabels] = useState<Record<string, string>>({}); 
   const [extractionFields, setExtractionFields] = useState<Array<{
     id: string;
-    objectId: string;
+    boundingBox: [number, number, number, number]; // [x0, y0, x1, y1] in PDF coordinates
+    page: number;
     label: string;
     description: string;
     required: boolean;
     validationRegex?: string;
-    obj: any; // Store the actual PDF object
   }>>([]);
   const [selectedExtractionField, setSelectedExtractionField] = useState<string | null>(null);
   const [editingField, setEditingField] = useState<string | null>(null); // For editing/creating extraction fields
-  const [tempFieldData, setTempFieldData] = useState<{id: string, objectId: string, obj: any} | null>(null); // Temporary storage for field creation
+  // Box drawing state
+  const [isDrawingMode, setIsDrawingMode] = useState(false);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [drawingBox, setDrawingBox] = useState<{x: number, y: number, width: number, height: number} | null>(null);
+  const [tempFieldData, setTempFieldData] = useState<{id: string, boundingBox: [number, number, number, number], page: number} | null>(null);
   const [saving, setSaving] = useState(false);
   // Field editor form state - must be at component level to follow Rules of Hooks
   const [fieldLabel, setFieldLabel] = useState('');
@@ -181,46 +185,107 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
         totalSelected: newSelected.size
       });
     } else if (currentStep === 'field-labels') {
-      // Handle single click on extraction field - show existing field info
-      const objectId = `${obj.type}-${obj.page}-${obj.bbox.join('-')}`;
-      const existingField = extractionFields.find(field => field.objectId === objectId);
+      // In field-labels step, check if clicking on an existing extraction field
+      const clickX = obj.bbox[0];
+      const clickY = obj.bbox[1];
+      const clickPage = obj.page;
+      
+      const existingField = extractionFields.find(field => {
+        if (field.page !== clickPage) return false;
+        const [x0, y0, x1, y1] = field.boundingBox;
+        return clickX >= x0 && clickX <= x1 && clickY >= y0 && clickY <= y1;
+      });
       
       if (existingField) {
         setSelectedExtractionField(existingField.id);
         setEditingField(null);
+        setIsDrawingMode(false);
         console.log('Showing extraction field:', existingField);
       }
     }
   };
 
-  const handleObjectDoubleClick = (obj: any) => {
-    if (currentStep === 'field-labels') {
-      // Handle double click - create new extraction field
-      const objectId = `${obj.type}-${obj.page}-${obj.bbox.join('-')}`;
-      const existingField = extractionFields.find(field => field.objectId === objectId);
-      
-      if (!existingField && obj.type === 'word') {
-        // Create new extraction field
-        const newFieldId = `field_${Date.now()}`;
-        setEditingField(newFieldId);
-        setSelectedExtractionField(null);
-        
-        // Store temporary field data for the editor
-        setTempFieldData({
-          id: newFieldId,
-          objectId: objectId,
-          obj: obj
-        });
-        
-        // Reset form fields
-        setFieldLabel('');
-        setFieldDescription('');
-        setFieldRequired(false);
-        setFieldValidationRegex('');
-        
-        console.log('Creating new extraction field for object:', { objectId, text: obj.text, type: obj.type });
-      }
+  const handleStartDrawing = () => {
+    if (currentStep === 'field-labels' && !editingField && !selectedExtractionField) {
+      setIsDrawingMode(true);
+      setSelectedExtractionField(null);
+      setEditingField(null);
     }
+  };
+
+  const handleObjectDoubleClick = () => {
+    // Double-click now just starts drawing mode instead of creating fields directly
+    if (currentStep === 'field-labels') {
+      handleStartDrawing();
+    }
+  };
+
+  // Box drawing handlers
+  const handleMouseDown = (e: React.MouseEvent, pageElement: HTMLElement, currentPage: number, scale: number, pageHeight: number) => {
+    if (!isDrawingMode) return;
+    
+    e.preventDefault();
+    const rect = pageElement.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / scale;
+    const y = (e.clientY - rect.top) / scale;
+    
+    setIsDrawing(true);
+    setDrawingBox({ x, y, width: 0, height: 0 });
+  };
+
+  const handleMouseMove = (e: React.MouseEvent, pageElement: HTMLElement, _currentPage: number, scale: number, _pageHeight: number) => {
+    if (!isDrawing || !drawingBox) return;
+    
+    e.preventDefault();
+    const rect = pageElement.getBoundingClientRect();
+    const currentX = (e.clientX - rect.left) / scale;
+    const currentY = (e.clientY - rect.top) / scale;
+    
+    setDrawingBox({
+      x: Math.min(drawingBox.x, currentX),
+      y: Math.min(drawingBox.y, currentY),
+      width: Math.abs(currentX - drawingBox.x),
+      height: Math.abs(currentY - drawingBox.y)
+    });
+  };
+
+  const handleMouseUp = (e: React.MouseEvent, _pageElement: HTMLElement, currentPage: number, _scale: number, pageHeight: number) => {
+    if (!isDrawing || !drawingBox) return;
+    
+    e.preventDefault();
+    
+    // Only create field if the drawn box has meaningful size
+    if (drawingBox.width > 10 && drawingBox.height > 10) {
+      // Convert screen coordinates to PDF coordinates
+      const pdfX0 = drawingBox.x;
+      const pdfY0 = pageHeight - (drawingBox.y + drawingBox.height); // Flip Y coordinate
+      const pdfX1 = drawingBox.x + drawingBox.width;
+      const pdfY1 = pageHeight - drawingBox.y;
+      
+      const newFieldId = `field_${Date.now()}`;
+      setTempFieldData({
+        id: newFieldId,
+        boundingBox: [pdfX0, pdfY0, pdfX1, pdfY1],
+        page: currentPage - 1 // Convert to 0-based
+      });
+      
+      setEditingField(newFieldId);
+      setIsDrawingMode(false);
+      
+      // Reset form fields
+      setFieldLabel('');
+      setFieldDescription('');
+      setFieldRequired(false);
+      setFieldValidationRegex('');
+      
+      console.log('Created extraction field with bounding box:', {
+        boundingBox: [pdfX0, pdfY0, pdfX1, pdfY1],
+        page: currentPage - 1
+      });
+    }
+    
+    setIsDrawing(false);
+    setDrawingBox(null);
   };
 
   const handleNextStep = () => {
@@ -291,15 +356,12 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
         selected_objects: objectsWithLabels,
         extraction_fields: extractionFields.map(field => ({
           id: field.id,
-          objectId: field.objectId,
           label: field.label,
           description: field.description,
           required: field.required,
           validationRegex: field.validationRegex,
-          source_text: field.obj?.text || '',
-          source_type: field.obj?.type || '',
-          source_page: field.obj?.page || 0,
-          source_bbox: field.obj?.bbox || [0, 0, 0, 0]
+          boundingBox: field.boundingBox,
+          page: field.page
         }))
       };
       
@@ -363,12 +425,12 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
 
     const newField = {
       id: editingField,
-      objectId: tempFieldData.objectId,
+      boundingBox: tempFieldData.boundingBox,
+      page: tempFieldData.page,
       label: fieldLabel,
       description: fieldDescription,
       required: fieldRequired,
-      validationRegex: fieldValidationRegex || undefined,
-      obj: tempFieldData.obj
+      validationRegex: fieldValidationRegex || undefined
     };
 
     console.log('Saving new extraction field:', newField);
@@ -451,13 +513,15 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
           <h3 className="text-sm font-semibold text-white">Create Extraction Field</h3>
         </div>
         
-        {/* Show the source text being labeled */}
+        {/* Show the drawn area information */}
         {tempFieldData && (
           <div className="mb-4 p-3 bg-gray-800 border border-gray-600 rounded">
-            <div className="text-xs text-gray-400 mb-1">Source Text:</div>
-            <div className="text-sm text-white font-mono">"{ tempFieldData.obj?.text || 'N/A'}"</div>
+            <div className="text-xs text-gray-400 mb-1">Extraction Area:</div>
+            <div className="text-sm text-white">
+              Page {tempFieldData.page + 1}
+            </div>
             <div className="text-xs text-gray-500 mt-1">
-              {tempFieldData.obj?.type} • Page {(tempFieldData.obj?.page || 0) + 1}
+              Box: {tempFieldData.boundingBox.map(n => Math.round(n)).join(', ')}
             </div>
           </div>
         )}
@@ -568,8 +632,11 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
             </div>
           )}
           <div>
-            <label className="block text-xs font-medium text-gray-400 mb-1">Source Text</label>
-            <div className="text-sm text-gray-300">"{field.obj?.text || 'N/A'}"</div>
+            <label className="block text-xs font-medium text-gray-400 mb-1">Extraction Area</label>
+            <div className="text-sm text-gray-300">
+              Page {field.page + 1}<br/>
+              Box: {field.boundingBox.map(n => Math.round(n)).join(', ')}
+            </div>
           </div>
         </div>
       </div>
@@ -674,13 +741,36 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
                   </div>
                 </div>
 
+                {/* Drawing Mode Controls */}
+                <div className="mb-4">
+                  <button
+                    onClick={handleStartDrawing}
+                    disabled={editingField !== null || selectedExtractionField !== null}
+                    className={`w-full px-4 py-2 rounded font-medium text-sm transition-colors ${
+                      isDrawingMode 
+                        ? 'bg-blue-600 text-white' 
+                        : 'bg-gray-700 hover:bg-gray-600 text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed'
+                    }`}
+                  >
+                    {isDrawingMode ? '✏️ Drawing Mode Active' : '+ Draw New Field Area'}
+                  </button>
+                  {isDrawingMode && (
+                    <div className="mt-2 p-2 bg-blue-900/30 border border-blue-700 rounded">
+                      <div className="text-xs text-blue-200">
+                        Click and drag on the PDF to draw an extraction area
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {/* Instructions */}
                 <div className="bg-blue-900/30 border border-blue-700 rounded p-3">
-                  <div className="text-xs text-blue-300 font-medium mb-1">Instructions:</div>
+                  <div className="text-xs text-blue-300 font-medium mb-1">How it works:</div>
                   <div className="text-xs text-blue-200">
-                    • Double-click words to create extraction field<br/>
-                    • Single-click existing fields to view/edit<br/>
-                    • Purple highlighted = has extraction field
+                    • Draw rectangular areas over content regions<br/>
+                    • Any text found within each area gets extracted<br/>
+                    • Areas handle variable content (addresses, names, etc.)<br/>
+                    • Click purple boxes to view/edit field settings
                   </div>
                 </div>
               </>
@@ -791,14 +881,19 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
                   <PdfViewer
                     key={`pdf-labels-${pdfData.pdf_id}-${pdfData.eto_run_id}`}
                     pdfUrl={pdfUrl}
-                    objects={pdfData.objects.filter(obj => obj.type === 'word')} // Only show word objects
-                    showObjectOverlays={true}
-                    selectedObjectTypes={new Set(['word'])}
+                    objects={pdfData.objects} // Show all objects for reference
+                    showObjectOverlays={false} // Don't show object overlays - box overlays are the primary visual
+                    selectedObjectTypes={new Set(['word', 'text_line'])} // Show text for context
                     selectedObjects={new Set()}
-                    extractionFields={new Set(extractionFields.map(field => field.objectId))}
+                    extractionFields={extractionFields}
+                    isDrawingMode={isDrawingMode}
+                    drawingBox={drawingBox}
                     className="flex-1"
                     onObjectClick={handleObjectClick}
                     onObjectDoubleClick={handleObjectDoubleClick}
+                    onMouseDown={handleMouseDown}
+                    onMouseMove={handleMouseMove}
+                    onMouseUp={handleMouseUp}
                   />
                 )}
               </>
@@ -811,7 +906,7 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
           <div className="text-sm text-gray-400">
             {currentStep === 'object-selection' 
               ? `Click on objects in the PDF to select them for your template. Selected: ${selectedObjects.size} objects`
-              : `Double-click words to create extraction fields. Single-click existing fields to view/edit. Fields defined: ${extractionFields.length}`
+              : `Draw areas on the PDF to create extraction fields. Click existing purple fields to view/edit. Fields defined: ${extractionFields.length}`
             }
           </div>
           <div className="flex space-x-3">
