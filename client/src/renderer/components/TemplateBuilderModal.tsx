@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { PdfViewer } from './PdfViewer';
 import { apiClient } from '../services/api';
+import { EtoDataTransforms } from '../types/eto';
 
 interface TemplateBuilderModalProps {
   runId: string | null;
@@ -16,14 +17,27 @@ interface EtoRunPdfData {
   page_count: number;
   object_count: number;
   file_size: number;
-  objects: any[];
+  pdf_objects: any[];  // PDF objects from pdf_files table (new workflow)
+  status: "not_started" | "processing" | "success" | "failure" | "needs_template";
+  processing_step?: "template_matching" | "extracting_data" | "transforming_data";
+  matched_template_id?: number;
+  extracted_data?: any;  // Structured extracted field data
+  transformation_audit?: any;  // Transformation audit trail
+  target_data?: any;  // Final transformed data
   email: {
     subject: string;
     sender_email: string;
     received_date: string;
   };
-  status: string;
-  error_message?: string;
+  timestamps: {
+    created_at?: string;
+    started_at?: string;
+    completed_at?: string;
+  };
+  error_info: {
+    error_type?: string;
+    error_message?: string;
+  };
 }
 
 const OBJECT_TYPE_NAMES = {
@@ -112,27 +126,17 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
       const rawData = await apiClient.getEtoRunPdfData(runId);
       console.log('Raw PDF data loaded:', rawData);
       
-      // Parse the extracted data JSON to get objects
-      let objects: any[] = [];
-      let objectCount = 0;
+      // PDF objects are now directly available in rawData.pdf_objects (new workflow)
+      const objects = rawData.pdf_objects || [];
+      const objectCount = objects.length;
       
-      if (rawData.raw_extracted_data) {
-        try {
-          const extractedData = JSON.parse(rawData.raw_extracted_data);
-          objects = extractedData.pdf_objects || [];
-          objectCount = objects.length;
-          console.log('Parsed objects:', objectCount, 'objects found');
-        } catch (parseError) {
-          console.error('Error parsing extracted data:', parseError);
-          console.log('Raw extracted data:', rawData.raw_extracted_data);
-        }
-      }
+      console.log('PDF objects loaded:', objectCount, 'objects found');
+      console.log('Processing status:', rawData.status, rawData.processing_step);
       
-      // Create the expected data structure
+      // Create the expected data structure (rawData already matches our interface)
       const pdfData: EtoRunPdfData = {
         ...rawData,
-        objects: objects,
-        object_count: objectCount
+        object_count: objectCount  // Ensure object_count matches actual array length
       };
       
       console.log('Processed PDF data:', pdfData);
@@ -301,7 +305,7 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
       }
 
       // Initialize field labels for word objects
-      const wordObjects = pdfData?.objects?.filter(obj => {
+      const wordObjects = pdfData?.pdf_objects?.filter(obj => {
         const objectId = `${obj.type}-${obj.page}-${obj.bbox.join('-')}`;
         return selectedObjects.has(objectId) && obj.type === 'word';
       }) || [];
@@ -334,7 +338,7 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
     setError(null);
     
     try {
-      const selectedObjectData = pdfData.objects.filter(obj => {
+      const selectedObjectData = pdfData.pdf_objects.filter(obj => {
         const objectId = `${obj.type}-${obj.page}-${obj.bbox.join('-')}`;
         return selectedObjects.has(objectId);
       });
@@ -644,10 +648,10 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
   };
 
   const getObjectTypeCounts = () => {
-    if (!pdfData || !pdfData.objects) return {};
+    if (!pdfData || !pdfData.pdf_objects) return {};
     const counts: { [key: string]: number } = {};
     
-    pdfData.objects.forEach(obj => {
+    pdfData.pdf_objects.forEach(obj => {
       counts[obj.type] = (counts[obj.type] || 0) + 1;
     });
     
@@ -690,6 +694,10 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
                 <div>Size: <span className="text-gray-300">{formatFileSize(pdfData.file_size)}</span></div>
                 <div className="truncate" title={pdfData.email.subject}>Subject: <span className="text-gray-300">{pdfData.email.subject}</span></div>
                 <div>{pdfData.page_count} pages • {pdfData.object_count} objects</div>
+                <div>Status: <span className={`text-sm font-medium ${EtoDataTransforms.getStatusColorClass(pdfData.status)}`}>
+                  {EtoDataTransforms.getStatusDisplayName(pdfData.status)}
+                  {pdfData.processing_step && ` (${EtoDataTransforms.getProcessingStepDisplayName(pdfData.processing_step)})`}
+                </span></div>
               </div>
             )}
           </div>
@@ -825,10 +833,12 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
                   })}
                 </div>
 
-                {pdfData?.error_message && (
+                {pdfData?.error_info?.error_message && (
                   <div className="mt-4 p-3 bg-red-900 border border-red-700 rounded">
-                    <h4 className="text-sm font-semibold text-red-300 mb-1">Error Details</h4>
-                    <p className="text-xs text-red-200">{pdfData.error_message}</p>
+                    <h4 className="text-sm font-semibold text-red-300 mb-1">
+                      {pdfData.error_info.error_type || 'Error Details'}
+                    </h4>
+                    <p className="text-xs text-red-200">{pdfData.error_info.error_message}</p>
                   </div>
                 )}
               </div>
@@ -864,7 +874,7 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
                   <PdfViewer
                     key={`pdf-${pdfData.pdf_id}-${pdfData.eto_run_id}`}
                     pdfUrl={pdfUrl}
-                    objects={pdfData.objects}
+                    objects={pdfData.pdf_objects}
                     showObjectOverlays={selectedObjectTypes.size > 0}
                     selectedObjectTypes={selectedObjectTypes}
                     selectedObjects={selectedObjects}
@@ -881,7 +891,7 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
                   <PdfViewer
                     key={`pdf-labels-${pdfData.pdf_id}-${pdfData.eto_run_id}`}
                     pdfUrl={pdfUrl}
-                    objects={pdfData.objects} // Show all objects for reference
+                    objects={pdfData.pdf_objects} // Show all objects for reference
                     showObjectOverlays={false} // Don't show object overlays - box overlays are the primary visual
                     selectedObjectTypes={new Set(['word', 'text_line'])} // Show text for context
                     selectedObjects={new Set()}

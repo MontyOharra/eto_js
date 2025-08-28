@@ -50,9 +50,9 @@ class TemplateMatchingService:
             
             logger.info(f"Extracting {len(extraction_fields)} fields from PDF with {len(pdf_objects)} objects")
             
-            # Filter to only text objects for extraction
-            text_objects = [obj for obj in pdf_objects if obj.get('type') in ['word', 'text_line']]
-            logger.info(f"Found {len(text_objects)} text objects for extraction")
+            # Filter to only individual word objects for precise extraction
+            text_objects = [obj for obj in pdf_objects if obj.get('type') == 'word']
+            logger.info(f"Found {len(text_objects)} word objects for extraction")
             
             extracted_data = {}
             
@@ -97,7 +97,7 @@ class TemplateMatchingService:
         Extract all text within a spatial bounding box on a specific page.
         
         Args:
-            text_objects: List of text objects (words/text_lines) from PDF
+            text_objects: List of individual word objects from PDF
             target_page: Page number (0-based)
             bbox: Bounding box [x0, y0, x1, y1] in PDF coordinates
             
