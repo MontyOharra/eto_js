@@ -11,7 +11,6 @@ import time
 from datetime import datetime
 from typing import Optional, Dict, List, Any
 import json
-import win32com.client.gencache
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +27,11 @@ class OutlookService:
         self.last_poll_time = None
         self._lock = threading.Lock()
         
-        # Event-based monitoring
+        # Enhanced polling configuration  
         self.event_handler = None
-        self.use_event_monitoring = True  # Prefer events over polling
-        self.fallback_to_polling = False  # Track if we fell back to polling
+        self.use_event_monitoring = False  # Disable events, use optimized polling
+        self.fallback_to_polling = True  # Always use polling for reliability
+        self.fast_poll_interval = 5  # Fast polling: 5 seconds for better responsiveness
         
         # Database and storage services
         self.db_service = None
@@ -454,18 +454,13 @@ class OutlookService:
                 
                 self.monitoring = True
                 
-                # Try event-based monitoring first
-                if self.use_event_monitoring and self._setup_event_monitoring():
-                    logger.info("Started event-based email monitoring")
-                    return {"status": "monitoring_started", "method": "events"}
-                else:
-                    # Fall back to polling if events fail
-                    logger.warning("Event monitoring failed, falling back to polling")
-                    self.fallback_to_polling = True
-                    self.monitor_thread = threading.Thread(target=self._monitor_loop, daemon=True)
-                    self.monitor_thread.start()
-                    logger.info("Started polling-based email monitoring")
-                    return {"status": "monitoring_started", "method": "polling"}
+                # Use optimized polling approach for maximum reliability
+                logger.info("Starting optimized polling-based email monitoring")
+                self.fallback_to_polling = True
+                self.monitor_thread = threading.Thread(target=self._monitor_loop, daemon=True)
+                self.monitor_thread.start()
+                logger.info(f"Started optimized polling-based email monitoring (interval: {self.fast_poll_interval}s)")
+                return {"status": "monitoring_started", "method": "optimized_polling"}
                 
         except Exception as e:
             logger.error(f"Failed to start monitoring: {e}")
@@ -511,72 +506,9 @@ class OutlookService:
         Setup Outlook COM event monitoring for immediate email processing
         Returns True if events were successfully configured, False otherwise
         """
-        try:
-            logger.info("Setting up Outlook event monitoring")
-            
-            # Create event handler class for this service instance
-            class OutlookEventHandler:
-                def __init__(self, outlook_service):
-                    self.outlook_service = outlook_service
-                    logger.info("Outlook event handler initialized")
-                
-                def OnNewMailEx(self, entry_ids):
-                    """Handle new mail events - called when new emails arrive"""
-                    try:
-                        logger.info(f"New mail event received with {len(entry_ids.split(',')) if entry_ids else 0} emails")
-                        
-                        if not self.outlook_service.monitoring:
-                            return
-                        
-                        # Process each new email entry ID
-                        for entry_id in entry_ids.split(',') if entry_ids else []:
-                            entry_id = entry_id.strip()
-                            if entry_id:
-                                self.outlook_service._process_new_email_by_id(entry_id)
-                                
-                    except Exception as e:
-                        logger.error(f"Error in OnNewMailEx event handler: {e}")
-                
-                def OnItemAdd(self, item):
-                    """Handle item add events in the monitored folder"""
-                    try:
-                        # Check if this is an email (MailItem) with PDF attachments
-                        if hasattr(item, 'Class') and item.Class == 43:  # olMail
-                            if self.outlook_service._has_pdf_attachments(item):
-                                logger.info(f"New email with PDF detected via OnItemAdd: {item.Subject}")
-                                self.outlook_service._process_email(item)
-                                self.outlook_service.processed_emails.add(item.EntryID)
-                    except Exception as e:
-                        logger.error(f"Error in OnItemAdd event handler: {e}")
-            
-            # Create event handler instance
-            self.event_handler = OutlookEventHandler(self)
-            
-            # Set up Application-level events (for NewMailEx)
-            try:
-                # Use early binding for more reliable event handling
-                win32com.client.gencache.EnsureDispatch("Outlook.Application")
-                
-                # Connect to application events
-                self.outlook.NewMailEx = self.event_handler.OnNewMailEx
-                logger.info("Connected to Outlook NewMailEx events")
-                
-                # Also set up folder-level events for the monitored folder
-                if self.inbox:
-                    # Connect to folder item add events
-                    self.inbox.Items.ItemAdd = self.event_handler.OnItemAdd
-                    logger.info(f"Connected to folder ItemAdd events for {self.inbox.Name}")
-                
-                logger.info("Event monitoring setup completed successfully")
-                return True
-                
-            except Exception as event_error:
-                logger.error(f"Failed to connect to Outlook events: {event_error}")
-                return False
-                
-        except Exception as e:
-            logger.error(f"Failed to setup event monitoring: {e}")
-            return False
+        # Event monitoring is disabled in favor of optimized polling for maximum reliability
+        logger.info("Event monitoring disabled - using optimized polling approach for maximum reliability")
+        return False
     
     def _cleanup_event_monitoring(self):
         """Clean up event monitoring connections"""
@@ -584,61 +516,23 @@ class OutlookService:
             if self.event_handler:
                 logger.info("Cleaning up Outlook event monitoring")
                 
-                # Disconnect from events
+                # WithEvents cleanup - simply set to None to disconnect
                 try:
-                    if self.outlook:
-                        self.outlook.NewMailEx = None
-                        logger.debug("Disconnected from NewMailEx events")
-                except:
-                    pass
+                    self.event_handler.close()
+                    logger.debug("Called close() on event handler")
+                except AttributeError:
+                    # Not all event handlers have close method
+                    logger.debug("Event handler has no close() method")
+                except Exception as close_error:
+                    logger.warning(f"Error calling close() on event handler: {close_error}")
                 
-                try:
-                    if self.inbox and self.inbox.Items:
-                        self.inbox.Items.ItemAdd = None
-                        logger.debug("Disconnected from ItemAdd events")
-                except:
-                    pass
-                
+                # Set to None to release the reference
                 self.event_handler = None
                 logger.info("Event monitoring cleanup completed")
                 
         except Exception as e:
             logger.error(f"Error cleaning up event monitoring: {e}")
     
-    def _process_new_email_by_id(self, entry_id: str):
-        """Process a new email by its EntryID (for event-based monitoring)"""
-        try:
-            # Skip if already processed
-            if entry_id in self.processed_emails:
-                return
-            
-            logger.info(f"Processing new email by EntryID: {entry_id[:20]}...")
-            
-            # Get the email item by EntryID
-            try:
-                email_item = self.namespace.GetItemFromID(entry_id)
-            except Exception as get_error:
-                logger.warning(f"Could not retrieve email with EntryID {entry_id[:20]}...: {get_error}")
-                return
-            
-            # Check if it's in our monitored folder and has PDF attachments
-            try:
-                # Check if email has PDF attachments
-                if self._has_pdf_attachments(email_item):
-                    logger.info(f"Processing new email with PDF: {email_item.Subject}")
-                    self._process_email(email_item)
-                    self.processed_emails.add(entry_id)
-                    
-                    # Update last poll time to track processing
-                    self.last_poll_time = datetime.now()
-                else:
-                    logger.debug(f"Email has no PDF attachments, skipping: {email_item.Subject}")
-                    
-            except Exception as process_error:
-                logger.error(f"Error processing email {entry_id[:20]}...: {process_error}")
-                
-        except Exception as e:
-            logger.error(f"Error in _process_new_email_by_id for {entry_id[:20]}...: {e}")
     
     def _monitor_loop(self):
         """Main monitoring loop"""
@@ -683,8 +577,8 @@ class OutlookService:
                     if self.monitoring and thread_inbox:
                         self._check_for_new_emails_thread(thread_inbox)
                     
-                    # Sleep in smaller chunks and check monitoring flag
-                    for _ in range(30):  # 30 seconds total, but check every second
+                    # Sleep in smaller chunks using fast poll interval
+                    for _ in range(self.fast_poll_interval):  # Use configurable fast polling
                         if not self.monitoring:
                             break
                         time.sleep(1)
@@ -696,8 +590,9 @@ class OutlookService:
                     thread_namespace = None
                     thread_inbox = None
                     
-                    # Sleep in smaller chunks on error too
-                    for _ in range(60):  # 60 seconds total, but check every second
+                    # Sleep in smaller chunks on error too (longer interval)
+                    error_backoff_time = self.fast_poll_interval * 2  # Double the interval on error
+                    for _ in range(error_backoff_time):
                         if not self.monitoring:
                             break
                         time.sleep(1)
