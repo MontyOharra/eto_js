@@ -8,8 +8,12 @@ export interface EtoRun {
   id: number;
   email_id: number;
   pdf_file_id: number;
-  status: "success" | "failure" | "unrecognized" | "processing" | "error";
+  status: "not_started" | "processing" | "success" | "failure" | "needs_template";
+  processing_step?: "template_matching" | "extracting_data" | "transforming_data";
   matched_template_id?: number;
+  has_extracted_data?: boolean;
+  has_transformation_audit?: boolean;
+  has_target_data?: boolean;
   error_type?: string;
   error_message?: string;
   created_at?: string;
@@ -34,10 +38,14 @@ export interface EtoRun {
 export interface EtoRunSummary {
   id: number;
   fileName: string;
-  status: "success" | "failure" | "unrecognized" | "processing" | "error";
+  status: "not_started" | "processing" | "success" | "failure" | "needs_template";
+  processing_step?: "template_matching" | "extracting_data" | "transforming_data";
   receivedAt: Date;
   processingCompletedAt?: Date;
   matchedTemplateId?: number;
+  hasExtractedData?: boolean;
+  hasTransformationAudit?: boolean;
+  hasTargetData?: boolean;
   errorMessage?: string;
   emailSubject: string;
   senderEmail: string;
@@ -122,9 +130,13 @@ export class EtoDataTransforms {
       id: apiRun.id,
       fileName: apiRun.pdf_file.original_filename,
       status: apiRun.status,
+      processing_step: apiRun.processing_step,
       receivedAt: new Date(apiRun.email.received_date),
       processingCompletedAt: apiRun.completed_at ? new Date(apiRun.completed_at) : undefined,
       matchedTemplateId: apiRun.matched_template_id,
+      hasExtractedData: apiRun.has_extracted_data,
+      hasTransformationAudit: apiRun.has_transformation_audit,
+      hasTargetData: apiRun.has_target_data,
       errorMessage: apiRun.error_message,
       emailSubject: apiRun.email.subject,
       senderEmail: apiRun.email.sender_email,
@@ -173,12 +185,13 @@ export class EtoDataTransforms {
       case 'success':
         return 'text-green-400';
       case 'failure':
-      case 'error':
         return 'text-red-400';
-      case 'unrecognized':
+      case 'needs_template':
         return 'text-yellow-400';
       case 'processing':
         return 'text-blue-400';
+      case 'not_started':
+        return 'text-gray-400';
       default:
         return 'text-gray-400';
     }
@@ -193,14 +206,50 @@ export class EtoDataTransforms {
         return 'Success';
       case 'failure':
         return 'Failed';
-      case 'unrecognized':
-        return 'Unrecognized';
+      case 'needs_template':
+        return 'Needs Template';
       case 'processing':
         return 'Processing';
-      case 'error':
-        return 'Error';
+      case 'not_started':
+        return 'Not Started';
       default:
         return 'Unknown';
+    }
+  }
+
+  /**
+   * Get processing step display name
+   */
+  static getProcessingStepDisplayName(step?: EtoRun['processing_step']): string {
+    if (!step) return '';
+    
+    switch (step) {
+      case 'template_matching':
+        return 'Template Matching';
+      case 'extracting_data':
+        return 'Extracting Data';
+      case 'transforming_data':
+        return 'Transforming Data';
+      default:
+        return step;
+    }
+  }
+
+  /**
+   * Get processing step color class
+   */
+  static getProcessingStepColorClass(step?: EtoRun['processing_step']): string {
+    if (!step) return 'text-gray-400';
+    
+    switch (step) {
+      case 'template_matching':
+        return 'text-blue-400';
+      case 'extracting_data':
+        return 'text-purple-400';
+      case 'transforming_data':
+        return 'text-indigo-400';
+      default:
+        return 'text-gray-400';
     }
   }
 

@@ -105,7 +105,7 @@ class EtoProcessingWorker:
             session = self.db_service.get_session()
             try:
                 runs = session.query(EtoRun).filter(
-                    EtoRun.status == 'unprocessed'
+                    EtoRun.status == 'not_started'
                 ).order_by(EtoRun.created_at).limit(5).all()  # Process 5 at a time
                 
                 return runs
@@ -118,20 +118,316 @@ class EtoProcessingWorker:
             return []
     
     def _process_eto_run(self, eto_run: EtoRun):
-        """Process a single ETO run"""
-        logger.info(f"Processing ETO run {eto_run.id} (status: {eto_run.status})")
+        """
+        Process a single ETO run through the complete workflow:
+        not_started -> processing (template_matching -> extracting_data -> transforming_data) -> success
+        """
+        logger.info(f"Starting ETO run {eto_run.id} processing workflow")
         
-        # Mark as processing  
-        self._update_run_status(eto_run.id, 'processing', started_at=datetime.now())
+        # Step 1: Update status to 'processing' and start with template matching
+        self._update_run_status(
+            eto_run.id, 
+            'processing', 
+            processing_step='template_matching',
+            started_at=datetime.now()
+        )
         
         try:
-            # For now, all runs go through template matching first
-            self._process_template_matching(eto_run)
+            # Step 1: Template Matching
+            template_id = self._process_template_matching_step(eto_run)
+            if not template_id:
+                # No template found - set to needs_template and stop
+                return
+            
+            # Step 2: Data Extraction 
+            self._process_data_extraction_step(eto_run.id, template_id)
+            
+            # Step 3: Data Transformation
+            self._process_data_transformation_step(eto_run.id, template_id)
+            
+            # All steps completed successfully
+            self._update_run_status(
+                eto_run.id,
+                'success',
+                processing_step=None,  # Clear processing step on success
+                completed_at=datetime.now()
+            )
+            
+            logger.info(f"ETO run {eto_run.id} completed successfully")
                 
         except Exception as e:
-            logger.error(f"Failed to process ETO run {eto_run.id}: {e}")
+            logger.error(f"ETO run {eto_run.id} failed: {e}")
             self._mark_run_failed(eto_run.id, str(e))
     
+    def _process_template_matching_step(self, eto_run: EtoRun) -> Optional[int]:
+        """
+        Process template matching step of the workflow.
+        
+        Reads PDF objects from pdf_files.objects_json and attempts to match against templates.
+        Returns template_id if match found, None if no match (and sets status to 'needs_template').
+        
+        This follows the new workflow where PDF objects are stored in pdf_files table,
+        not in eto_runs table.
+        """
+        logger.info(f"Starting template matching step for ETO run {eto_run.id}")
+        
+        try:
+            # Get PDF file record to access objects_json
+            pdf_file = self._get_pdf_file(eto_run.pdf_file_id)
+            if not pdf_file:
+                raise ValueError(f"PDF file not found: {eto_run.pdf_file_id}")
+            
+            # Check if PDF objects have been extracted and stored
+            if not pdf_file.objects_json:
+                raise ValueError(f"PDF objects not found for file {pdf_file.id} - objects_json is empty")
+            
+            # Parse the stored PDF objects JSON
+            try:
+                pdf_objects = json.loads(pdf_file.objects_json)
+            except (json.JSONDecodeError, TypeError) as e:
+                raise ValueError(f"Invalid PDF objects JSON for file {pdf_file.id}: {e}")
+            
+            logger.info(f"Using {len(pdf_objects)} PDF objects from pdf_files.objects_json for template matching")
+            
+            # Perform template matching using the template matcher service
+            match_result = self.template_matcher.find_best_template_match(pdf_objects)
+            
+            if match_result['matched']:
+                # Template found - return the template ID so processing can continue
+                template_id = match_result['template_id']
+                template_name = match_result['template_name']
+                
+                logger.info(f"Template matched for run {eto_run.id}: '{template_name}' (ID: {template_id})")
+                
+                # Store the matched template ID in the ETO run
+                self._update_run_status(
+                    eto_run.id,
+                    'processing',  # Keep in processing status
+                    processing_step='template_matching',  # Still in template matching step
+                    matched_template_id=template_id
+                )
+                
+                return template_id
+            else:
+                # No template match - set status to needs_template and stop processing
+                logger.info(f"No template match found for run {eto_run.id}, setting status to 'needs_template'")
+                
+                # Store match details for debugging/analysis
+                match_details = {
+                    'match_details': match_result.get('match_details', {}),
+                    'candidates_checked': len(match_result.get('candidates', [])),
+                    'pdf_object_count': len(pdf_objects)
+                }
+                
+                self._update_run_status(
+                    eto_run.id,
+                    'needs_template',
+                    processing_step=None,  # Clear processing step
+                    completed_at=datetime.now(),
+                    extracted_data=json.dumps(match_details, default=str)  # Store analysis data
+                )
+                
+                return None
+                
+        except Exception as e:
+            logger.error(f"Template matching step failed for run {eto_run.id}: {e}")
+            raise
+
+    def _process_data_extraction_step(self, run_id: int, template_id: int):
+        """
+        Process data extraction step of the workflow.
+        
+        Updates processing step to 'extracting_data', reads PDF objects from pdf_files table,
+        uses template's extraction_fields to extract data from spatial bounding boxes,
+        and stores results in extracted_data column.
+        
+        This is the second step in the processing workflow: template_matching -> extracting_data -> transforming_data
+        """
+        logger.info(f"Starting data extraction step for ETO run {run_id}")
+        
+        # Update processing step to extracting_data
+        self._update_run_status(
+            run_id,
+            'processing',
+            processing_step='extracting_data'
+        )
+        
+        try:
+            # Get the ETO run to access pdf_file_id
+            session = self.db_service.get_session()
+            try:
+                eto_run = session.query(EtoRun).filter(EtoRun.id == run_id).first()
+                if not eto_run:
+                    raise ValueError(f"ETO run not found: {run_id}")
+                
+                # Get PDF file record to access objects_json
+                pdf_file = self._get_pdf_file(eto_run.pdf_file_id)
+                if not pdf_file:
+                    raise ValueError(f"PDF file not found: {eto_run.pdf_file_id}")
+                
+                # Parse PDF objects from the stored JSON
+                if not pdf_file.objects_json:
+                    raise ValueError(f"PDF objects not found for file {pdf_file.id} - objects_json is empty")
+                
+                try:
+                    pdf_objects = json.loads(pdf_file.objects_json)
+                except (json.JSONDecodeError, TypeError) as e:
+                    raise ValueError(f"Invalid PDF objects JSON for file {pdf_file.id}: {e}")
+                
+                logger.info(f"Using {len(pdf_objects)} PDF objects from pdf_files.objects_json for data extraction")
+                
+            finally:
+                session.close()
+            
+            # Use template matcher to extract field data using spatial bounding boxes
+            # This uses the extraction_fields stored in the template to define what to extract
+            extracted_fields = self.template_matcher.extract_fields_from_pdf(
+                pdf_objects, 
+                template_id
+            )
+            
+            if not extracted_fields:
+                logger.warning(f"No fields extracted for run {run_id} - template may have no extraction fields defined")
+                extraction_status = 'no_fields_defined'
+            else:
+                extraction_status = 'success'
+                logger.info(f"Successfully extracted {len(extracted_fields)} fields: {list(extracted_fields.keys())}")
+            
+            # Store the base extracted data in the extracted_data column
+            # This is the raw field data extracted from bounding boxes before any transformation
+            base_extracted_data = {
+                'extraction_status': extraction_status,
+                'extracted_fields': extracted_fields,
+                'template_id': template_id,
+                'extraction_timestamp': datetime.now().isoformat(),
+                'pdf_object_count': len(pdf_objects)
+            }
+            
+            # Update the run with the extracted data
+            self._update_run_status(
+                run_id,
+                'processing',  # Keep in processing status
+                processing_step='extracting_data',  # Still in extracting_data step
+                extracted_data=json.dumps(base_extracted_data, default=str)
+            )
+            
+            logger.info(f"Data extraction step completed successfully for run {run_id}")
+            
+        except Exception as e:
+            logger.error(f"Data extraction step failed for run {run_id}: {e}")
+            raise
+
+    def _process_data_transformation_step(self, run_id: int, template_id: int):
+        """
+        Process data transformation step of the workflow.
+        
+        Updates processing step to 'transforming_data', reads extracted_data from previous step,
+        applies any transformation rules associated with the template, creates audit trail,
+        and stores final data in target_data column.
+        
+        This is the final step in the processing workflow: template_matching -> extracting_data -> transforming_data
+        """
+        logger.info(f"Starting data transformation step for ETO run {run_id}")
+        
+        # Update processing step to transforming_data
+        self._update_run_status(
+            run_id,
+            'processing',
+            processing_step='transforming_data'
+        )
+        
+        try:
+            # Get the current ETO run with extracted data
+            session = self.db_service.get_session()
+            try:
+                eto_run = session.query(EtoRun).filter(EtoRun.id == run_id).first()
+                if not eto_run:
+                    raise ValueError(f"ETO run not found: {run_id}")
+                
+                # Parse the extracted data from the previous step
+                if not eto_run.extracted_data:
+                    raise ValueError(f"No extracted data found for run {run_id} - extraction step may have failed")
+                
+                try:
+                    extracted_data_json = json.loads(eto_run.extracted_data)
+                    extracted_fields = extracted_data_json.get('extracted_fields', {})
+                except (json.JSONDecodeError, TypeError) as e:
+                    raise ValueError(f"Invalid extracted data JSON for run {run_id}: {e}")
+                
+                logger.info(f"Processing transformation for {len(extracted_fields)} extracted fields")
+                
+            finally:
+                session.close()
+            
+            # TODO: Check for extraction_rules and extraction_steps tables for transformation instructions
+            # For now, this is a placeholder implementation that copies extracted_data to target_data
+            # The full transformation system with rules and steps will be implemented later
+            
+            # Check if there are transformation rules associated with this template
+            # This is where we would query extraction_rules and extraction_steps tables
+            transformation_rules_exist = False  # Placeholder - will implement rule checking later
+            
+            if not transformation_rules_exist:
+                # No transformation rules - copy extracted_data directly to target_data
+                logger.info(f"No transformation rules found for template {template_id} - using extracted data as final target data")
+                
+                target_data = extracted_fields
+                transformation_audit = {
+                    'transformation_type': 'direct_copy',
+                    'message': 'No transformation rules defined for template - extracted data copied directly to target data',
+                    'steps_applied': 0,
+                    'input_fields': list(extracted_fields.keys()),
+                    'output_fields': list(extracted_fields.keys())
+                }
+                
+            else:
+                # TODO: Apply transformation rules and create detailed audit trail
+                # This would involve:
+                # 1. Query extraction_rules table for rules associated with template_id
+                # 2. Query extraction_steps table for step definitions
+                # 3. Apply each transformation step in sequence
+                # 4. Create audit trail showing input/output for each step with rule IDs
+                # 
+                # Example transformation_audit structure:
+                # {
+                #     "transformation_type": "rules_applied",
+                #     "steps": [
+                #         {
+                #             "step_id": 1,
+                #             "extraction_rule_id": 2,
+                #             "input": {"pu_address_and_date": "123 example st. 08/27/2025"},
+                #             "output": {"pu_address": "123 example st", "pu_date": "08/27/2025"}
+                #         }
+                #     ]
+                # }
+                
+                # Placeholder implementation
+                target_data = extracted_fields
+                transformation_audit = {
+                    'transformation_type': 'rules_applied_placeholder',
+                    'message': 'Transformation rules system not yet implemented - using extracted data as target data',
+                    'steps_applied': 0
+                }
+                
+                logger.warning("Transformation rules system not yet implemented - copying extracted data to target data")
+            
+            # Store transformation results and mark as successful
+            self._update_run_status(
+                run_id,
+                'success',  # Final status - processing complete
+                processing_step=None,  # Clear processing step on completion
+                completed_at=datetime.now(),
+                transformation_audit=json.dumps(transformation_audit, default=str),
+                target_data=json.dumps(target_data, default=str)
+            )
+            
+            logger.info(f"Data transformation step completed successfully for run {run_id}")
+            logger.info(f"Final target data contains {len(target_data)} fields: {list(target_data.keys())}")
+            
+        except Exception as e:
+            logger.error(f"Data transformation step failed for run {run_id}: {e}")
+            raise
+
     def _process_template_matching(self, eto_run: EtoRun):
         """Process template matching for a PDF"""
         try:
@@ -360,7 +656,8 @@ class EtoProcessingWorker:
         try:
             self._update_run_status(
                 run_id,
-                'error',
+                'failure',  # Updated to use new status value
+                processing_step=None,  # Clear processing step on failure
                 completed_at=datetime.now(),
                 error_type='processing_error',
                 error_message=error_message
@@ -368,44 +665,74 @@ class EtoProcessingWorker:
         except Exception as e:
             logger.error(f"Error marking run as failed: {e}")
     
-    def reprocess_unrecognized_runs(self):
-        """Reprocess all unrecognized ETO runs - typically called when new templates are added"""
+    def reprocess_failed_runs(self):
+        """
+        Reprocess all failed and needs_template ETO runs.
+        
+        This method handles runs with status 'needs_template' (no template found) 
+        and 'failure' (processing error), resetting them to 'not_started' so they
+        go through the complete processing workflow again.
+        
+        Typically called when new templates are added or processing issues are resolved.
+        """
         try:
             session = self.db_service.get_session()
             try:
-                # Find all unrecognized runs
-                unrecognized_runs = session.query(EtoRun).filter(
-                    EtoRun.status == 'unrecognized'
+                # Find all runs that need reprocessing: needs_template and failure
+                failed_runs = session.query(EtoRun).filter(
+                    EtoRun.status.in_(['needs_template', 'failure'])
                 ).all()
                 
-                if not unrecognized_runs:
-                    logger.info("No unrecognized runs found to reprocess")
-                    return {"reprocessed": 0, "message": "No unrecognized runs found"}
+                if not failed_runs:
+                    logger.info("No failed runs found to reprocess")
+                    return {"reprocessed": 0, "message": "No failed runs found to reprocess"}
                 
-                # Mark them as unprocessed so they get picked up by the worker
+                # Count by status for logging
+                needs_template_count = len([r for r in failed_runs if r.status == 'needs_template'])
+                failure_count = len([r for r in failed_runs if r.status == 'failure'])
+                
+                # Reset them to not_started so they get picked up by the worker
                 reprocessed_count = 0
-                for run in unrecognized_runs:
+                for run in failed_runs:
                     self._update_run_status(
                         run.id, 
-                        'unprocessed',
-                        # Clear previous results to start fresh
+                        'not_started',  # Reset to initial status for new processing workflow
+                        # Clear all previous processing results to start fresh
+                        processing_step=None,
                         matched_template_id=None,
                         extracted_data=None,
+                        transformation_audit=None,
+                        target_data=None,
                         error_type=None,
                         error_message=None,
-                        completed_at=None
+                        completed_at=None,
+                        started_at=None
                     )
                     reprocessed_count += 1
                 
-                logger.info(f"Marked {reprocessed_count} unrecognized runs for reprocessing")
-                return {"reprocessed": reprocessed_count, "message": f"Marked {reprocessed_count} runs for reprocessing"}
+                logger.info(f"Marked {reprocessed_count} failed runs for reprocessing:")
+                logger.info(f"  - {needs_template_count} needs_template runs")
+                logger.info(f"  - {failure_count} failure runs")
+                
+                return {
+                    "reprocessed": reprocessed_count, 
+                    "message": f"Marked {reprocessed_count} runs for reprocessing ({needs_template_count} needs_template, {failure_count} failure)",
+                    "needs_template_count": needs_template_count,
+                    "failure_count": failure_count
+                }
                 
             finally:
                 session.close()
                 
         except Exception as e:
-            logger.error(f"Error reprocessing unrecognized runs: {e}")
+            logger.error(f"Error reprocessing failed runs: {e}")
             return {"reprocessed": 0, "error": str(e)}
+
+    # Keep the old method name for backwards compatibility
+    def reprocess_unrecognized_runs(self):
+        """Legacy method name - calls reprocess_failed_runs()"""
+        logger.warning("reprocess_unrecognized_runs() is deprecated - use reprocess_failed_runs() instead")
+        return self.reprocess_failed_runs()
 
     def get_worker_status(self) -> Dict[str, Any]:
         """Get current worker status"""
@@ -444,7 +771,7 @@ def stop_processing_worker():
         processing_worker.stop()
 
 def trigger_reprocessing():
-    """Trigger reprocessing of unrecognized ETO runs"""
+    """Trigger reprocessing of failed ETO runs (needs_template and failure status)"""
     if processing_worker is None:
         raise RuntimeError("Processing worker not initialized. Call init_processing_worker() first.")
-    return processing_worker.reprocess_unrecognized_runs()
+    return processing_worker.reprocess_failed_runs()

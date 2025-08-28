@@ -562,7 +562,7 @@ class TemplateMatchingService:
                 ).count()
                 
                 pending_matches = session.query(EtoRun).filter(
-                    EtoRun.status == 'unprocessed'
+                    EtoRun.status == 'not_started'
                 ).count()
                 
                 return {

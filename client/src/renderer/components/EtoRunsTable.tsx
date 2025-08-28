@@ -5,7 +5,7 @@ import { EtoRunRow } from "./EtoRunRow";
 interface EtoRunsTableProps {
   title: string;
   runs: EtoRunSummary[];
-  status: "success" | "failure" | "unrecognized" | "error" | "processing";
+  status: "not_started" | "processing" | "success" | "failure" | "needs_template";
   onView: (runId: string) => void;
   onReview: (runId: string) => void;
 }
@@ -17,7 +17,7 @@ export function EtoRunsTable({
   onView,
   onReview,
 }: EtoRunsTableProps) {
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(runs.length > 0);
 
   const getStatusColor = (status: EtoRunsTableProps["status"]) => {
     switch (status) {
@@ -25,12 +25,12 @@ export function EtoRunsTable({
         return "text-green-400";
       case "failure":
         return "text-red-400";
-      case "unrecognized":
+      case "needs_template":
         return "text-yellow-400";
       case "processing":
         return "text-blue-400";
-      case "error":
-        return "text-red-400";
+      case "not_started":
+        return "text-gray-400";
       default:
         return "text-gray-400";
     }
@@ -66,7 +66,7 @@ export function EtoRunsTable({
             />
           </svg>
         );
-      case "unrecognized":
+      case "needs_template":
         return (
           <svg
             className="w-5 h-5 text-yellow-400"
@@ -91,16 +91,16 @@ export function EtoRunsTable({
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
           </svg>
         );
-      case "error":
+      case "not_started":
         return (
           <svg
-            className="w-5 h-5 text-red-400"
+            className="w-5 h-5 text-gray-400"
             fill="currentColor"
             viewBox="0 0 20 20"
           >
             <path
               fillRule="evenodd"
-              d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+              d="M10 18a8 8 0 100-16 8 8 0 000 16zm-1-11a1 1 0 112 0v2h2a1 1 0 110 2h-2v2a1 1 0 11-2 0v-2H7a1 1 0 110-2h2V7z"
               clipRule="evenodd"
             />
           </svg>

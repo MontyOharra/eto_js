@@ -147,11 +147,16 @@ class EtoRun(Base):
     email_id = Column(Integer, ForeignKey('emails.id'), nullable=False, index=True)
     pdf_file_id = Column(Integer, ForeignKey('pdf_files.id'), nullable=False, index=True)
     
-    # Processing status
-    status = Column(String(50), nullable=False, index=True)  # 'success', 'failure', 'unrecognized', 'error'
-    error_type = Column(String(50))  # 'processing_error', 'extraction_error', 'order_creation_error'
+    # Overall processing status
+    status = Column(String(50), nullable=False, index=True)  # 'not_started', 'processing', 'success', 'failure', 'needs_template'
+    
+    # Current processing step (only populated when status='processing')
+    processing_step = Column(String(50))  # 'template_matching', 'extracting_data', 'transforming_data'
+    
+    # Error tracking (for status='failure')
+    error_type = Column(String(50))  # 'template_matching_error', 'data_extraction_error', 'transformation_error'
     error_message = Column(Text)
-    error_details = Column(Text)  # JSON: detailed error info
+    error_details = Column(Text)  # JSON: detailed error info including which step failed
     
     # Template matching results
     matched_template_id = Column(Integer, ForeignKey('pdf_templates.id'), nullable=True)
@@ -160,8 +165,14 @@ class EtoRun(Base):
     unmatched_object_count = Column(Integer)
     suggested_new_template = Column(Boolean, default=False)
     
-    # Extraction results (for success status)
-    extracted_data = Column(Text)  # JSON: field_name -> value mapping
+    # Data extraction results (populated during 'extracting_data' step)  
+    extracted_data = Column(Text)  # JSON: base extracted field values from bounding boxes
+    
+    # Data transformation audit trail (populated during 'transforming_data' step)
+    transformation_audit = Column(Text)  # JSON: step-by-step transformation inputs/outputs with rule IDs
+    
+    # Final transformed data (populated after successful transformation)
+    target_data = Column(Text)  # JSON: final transformed data ready for order creation
     
     # Pipeline execution tracking
     failed_step_id = Column(Integer, ForeignKey('template_extraction_steps.id'))
@@ -258,6 +269,26 @@ class DatabaseService:
         except Exception as e:
             session.rollback()
             logger.error(f"Error creating PDF file record: {e}")
+            raise
+        finally:
+            session.close()
+    
+    def update_pdf_file_objects(self, pdf_file_id, objects_json, object_count):
+        """Update PDF file with extracted objects JSON data"""
+        session = self.get_session()
+        try:
+            pdf_file = session.query(PdfFile).filter(PdfFile.id == pdf_file_id).first()
+            if pdf_file:
+                pdf_file.objects_json = objects_json
+                pdf_file.object_count = object_count
+                session.commit()
+                logger.info(f"Updated PDF file {pdf_file_id} with {object_count} objects")
+                return pdf_file
+            else:
+                raise ValueError(f"PDF file {pdf_file_id} not found")
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Error updating PDF file objects: {e}")
             raise
         finally:
             session.close()

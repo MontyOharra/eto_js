@@ -50,7 +50,7 @@ export function EtoRunRow({ run, onView, onReview }: EtoRunRowProps) {
             />
           </svg>
         );
-      case "unrecognized":
+      case "needs_template":
         return (
           <svg
             className="w-4 h-4 text-yellow-400"
@@ -75,16 +75,16 @@ export function EtoRunRow({ run, onView, onReview }: EtoRunRowProps) {
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
           </svg>
         );
-      case "error":
+      case "not_started":
         return (
           <svg
-            className="w-4 h-4 text-red-400"
+            className="w-4 h-4 text-gray-400"
             fill="currentColor"
             viewBox="0 0 20 20"
           >
             <path
               fillRule="evenodd"
-              d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+              d="M10 18a8 8 0 100-16 8 8 0 000 16zm-1-11a1 1 0 112 0v2h2a1 1 0 110 2h-2v2a1 1 0 11-2 0v-2H7a1 1 0 110-2h2V7z"
               clipRule="evenodd"
             />
           </svg>
@@ -113,6 +113,13 @@ export function EtoRunRow({ run, onView, onReview }: EtoRunRowProps) {
               >
                 {EtoDataTransforms.getStatusDisplayName(run.status)}
               </span>
+              {run.processing_step && (
+                <span
+                  className={`text-xs font-medium ${EtoDataTransforms.getProcessingStepColorClass(run.processing_step)}`}
+                >
+                  ({EtoDataTransforms.getProcessingStepDisplayName(run.processing_step)})
+                </span>
+              )}
             </div>
 
             <div className="mt-1 flex items-center space-x-4 text-xs text-gray-400">
@@ -124,6 +131,13 @@ export function EtoRunRow({ run, onView, onReview }: EtoRunRowProps) {
               )}
               {run.matchedTemplateId && (
                 <span>Template ID: {run.matchedTemplateId}</span>
+              )}
+              {/* Data availability indicators */}
+              {run.hasExtractedData && (
+                <span className="text-green-400">📊 Extracted</span>
+              )}
+              {run.hasTargetData && (
+                <span className="text-blue-400">🎯 Transformed</span>
               )}
             </div>
 

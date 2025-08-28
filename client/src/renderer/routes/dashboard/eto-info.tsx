@@ -23,21 +23,23 @@ function EtoInfoPage() {
   const [buildingTemplateForRun, setBuildingTemplateForRun] = useState<string | null>(null);
 
   // Group runs by status
-  const { successRuns, failureRuns, unrecognizedRuns, errorRuns } = useMemo(() => {
+  const { successRuns, failureRuns, needsTemplateRuns, notStartedRuns, processingRuns } = useMemo(() => {
     if (!allRuns) {
       return {
         successRuns: [],
         failureRuns: [],
-        unrecognizedRuns: [],
-        errorRuns: [],
+        needsTemplateRuns: [],
+        notStartedRuns: [],
+        processingRuns: [],
       };
     }
 
     return {
       successRuns: allRuns.filter(run => run.status === "success"),
-      failureRuns: allRuns.filter(run => run.status === "failure"),
-      unrecognizedRuns: allRuns.filter(run => run.status === "unrecognized"),
-      errorRuns: allRuns.filter(run => run.status === "error"),
+      failureRuns: allRuns.filter(run => run.status === "failure"), 
+      needsTemplateRuns: allRuns.filter(run => run.status === "needs_template"),
+      notStartedRuns: allRuns.filter(run => run.status === "not_started"),
+      processingRuns: allRuns.filter(run => run.status === "processing"),
     };
   }, [allRuns]);
 
@@ -165,6 +167,14 @@ function EtoInfoPage() {
 
       <div className="space-y-6">
         <EtoRunsTable
+          title="Currently Processing"
+          runs={processingRuns}
+          status="processing"
+          onView={handleView}
+          onReview={handleReview}
+        />
+
+        <EtoRunsTable
           title="Successful Extractions"
           runs={successRuns}
           status="success"
@@ -181,17 +191,17 @@ function EtoInfoPage() {
         />
 
         <EtoRunsTable
-          title="Processing Errors"
-          runs={errorRuns}
-          status="error"
+          title="Needs Template Creation"
+          runs={needsTemplateRuns}
+          status="needs_template"
           onView={handleView}
           onReview={handleReview}
         />
 
         <EtoRunsTable
-          title="Unrecognized Attachments"
-          runs={unrecognizedRuns}
-          status="unrecognized"
+          title="Pending Processing"
+          runs={notStartedRuns}
+          status="not_started"
           onView={handleView}
           onReview={handleReview}
         />

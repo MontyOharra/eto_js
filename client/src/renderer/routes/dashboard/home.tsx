@@ -14,7 +14,9 @@ function Home() {
   // Calculate recent activity (last 24 hours)
   const recentSuccessCount = recentRuns?.filter(run => run.status === 'success').length || 0;
   const recentFailureCount = recentRuns?.filter(run => run.status === 'failure').length || 0;
-  const recentUnrecognizedCount = recentRuns?.filter(run => run.status === 'unrecognized').length || 0;
+  const recentNeedsTemplateCount = recentRuns?.filter(run => run.status === 'needs_template').length || 0;
+  const recentProcessingCount = recentRuns?.filter(run => run.status === 'processing').length || 0;
+  const recentNotStartedCount = recentRuns?.filter(run => run.status === 'not_started').length || 0;
 
   return (
     <div className="flex-1 p-6">
@@ -134,8 +136,16 @@ function Home() {
                 <span className="text-white font-medium">{recentFailureCount}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-yellow-400">Unrecognized</span>
-                <span className="text-white font-medium">{recentUnrecognizedCount}</span>
+                <span className="text-yellow-400">Needs Template</span>
+                <span className="text-white font-medium">{recentNeedsTemplateCount}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-blue-400">Processing</span>
+                <span className="text-white font-medium">{recentProcessingCount}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400">Not Started</span>
+                <span className="text-white font-medium">{recentNotStartedCount}</span>
               </div>
               <div className="flex justify-between items-center pt-2 border-t border-gray-600">
                 <span className="text-gray-400">Total Recent</span>

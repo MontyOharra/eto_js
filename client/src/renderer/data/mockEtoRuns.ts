@@ -15,7 +15,7 @@ export interface EtoRun {
   receivedAt: Date;
 
   // Processing status
-  status: "success" | "failure" | "unrecognized";
+  status: "not_started" | "processing" | "success" | "failure" | "needs_template";
 
   // Template matching
   matchedTemplateId?: string;
@@ -68,7 +68,7 @@ export interface EtoRun {
 export interface EtoRunSummary {
   id: string;
   fileName: string;
-  status: "success" | "failure" | "unrecognized";
+  status: "not_started" | "processing" | "success" | "failure" | "needs_template";
   receivedAt: Date;
   processingCompletedAt?: Date;
   matchedTemplateName?: string;
@@ -254,7 +254,7 @@ export const mockEtoRuns: EtoRun[] = [
     sourceEmailSubject: "Invoice for Services Rendered",
     sourceEmailFrom: "billing@newcorp.com",
     receivedAt: new Date("2024-03-21T17:00:00Z"),
-    status: "unrecognized",
+    status: "needs_template",
     processingStartedAt: new Date("2024-03-21T17:01:00Z"),
     processingCompletedAt: new Date("2024-03-21T17:01:15Z"),
     processingDuration: 15000,
@@ -275,7 +275,7 @@ export const mockEtoRuns: EtoRun[] = [
     sourceEmailSubject: "Contract Agreement",
     sourceEmailFrom: "legal@legacycorp.com",
     receivedAt: new Date("2024-03-21T18:15:00Z"),
-    status: "unrecognized",
+    status: "needs_template",
     processingStartedAt: new Date("2024-03-21T18:16:00Z"),
     processingCompletedAt: new Date("2024-03-21T18:16:10Z"),
     processingDuration: 10000,
@@ -297,7 +297,7 @@ export const mockEtoRuns: EtoRun[] = [
     sourceEmailSubject: "Quote for Equipment",
     sourceEmailFrom: "sales@newvendor.com",
     receivedAt: new Date("2024-03-21T19:30:00Z"),
-    status: "unrecognized",
+    status: "needs_template",
     processingStartedAt: new Date("2024-03-21T19:31:00Z"),
     processingCompletedAt: new Date("2024-03-21T19:31:08Z"),
     processingDuration: 8000,

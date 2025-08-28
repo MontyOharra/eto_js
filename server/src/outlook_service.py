@@ -59,6 +59,11 @@ class OutlookService:
         self.pdf_storage = pdf_storage
         logger.info("PDF storage service configured for Outlook service")
     
+    def set_pdf_extractor(self, pdf_extractor):
+        """Set the PDF extractor service for extracting objects during ingestion"""
+        self.pdf_extractor = pdf_extractor
+        logger.info("PDF extractor service configured for Outlook service")
+    
     def _get_folder(self, account, folder_name: str):
         """Get folder by name, supporting both standard and custom folders"""
         try:
@@ -663,6 +668,27 @@ class OutlookService:
             
             pdf_record = self.db_service.create_pdf_file(pdf_data)
             
+            # Extract PDF objects immediately and store in pdf_files.objects_json (new workflow requirement)
+            try:
+                if hasattr(self, 'pdf_extractor') and self.pdf_extractor:
+                    logger.info(f"Extracting PDF objects for {attachment.FileName}")
+                    extraction_result = self.pdf_extractor.extract_objects_from_file_path(storage_result['file_path'])
+                    
+                    if extraction_result['success']:
+                        import json
+                        objects_json = json.dumps(extraction_result['objects'], default=str)
+                        
+                        # Update PDF record with extracted objects
+                        self.db_service.update_pdf_file_objects(pdf_record.id, objects_json, len(extraction_result['objects']))
+                        
+                        logger.info(f"Extracted and stored {len(extraction_result['objects'])} PDF objects for {attachment.FileName}")
+                    else:
+                        logger.error(f"PDF object extraction failed for {attachment.FileName}: {extraction_result.get('error', 'Unknown error')}")
+                else:
+                    logger.warning("PDF extractor not available - PDF objects not extracted during ingestion")
+            except Exception as extract_error:
+                logger.error(f"Error during PDF object extraction for {attachment.FileName}: {extract_error}")
+            
             # Check if this PDF hash already exists in other emails (for reporting purposes)
             is_duplicate = self._check_if_duplicate_pdf_exists(storage_result['sha256_hash'], pdf_record.id)
             
@@ -670,7 +696,7 @@ class OutlookService:
             eto_run_data = {
                 "email_id": email_id,
                 "pdf_file_id": pdf_record.id,
-                "status": "unprocessed"  # Initial state, needs template matching
+                "status": "not_started"  # Initial state for new workflow
             }
             
             eto_run = self.db_service.create_eto_run(eto_run_data)

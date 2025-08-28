@@ -8,8 +8,12 @@ export interface ApiEtoRun {
   id: number;
   email_id: number;
   pdf_file_id: number;
-  status: "success" | "failure" | "unrecognized" | "processing" | "error";
+  status: "not_started" | "processing" | "success" | "failure" | "needs_template";
+  processing_step?: "template_matching" | "extracting_data" | "transforming_data";
   matched_template_id?: number;
+  has_extracted_data?: boolean;
+  has_transformation_audit?: boolean;
+  has_target_data?: boolean;
   error_type?: string;
   error_message?: string;
   created_at?: string;
@@ -250,14 +254,27 @@ class ApiClient {
     page_count: number;
     object_count: number;
     file_size: number;
-    raw_extracted_data?: string;
+    pdf_objects: any[];  // PDF objects from pdf_files table
+    status: "not_started" | "processing" | "success" | "failure" | "needs_template";
+    processing_step?: "template_matching" | "extracting_data" | "transforming_data";
+    matched_template_id?: number;
+    extracted_data?: any;  // Structured extracted field data
+    transformation_audit?: any;  // Transformation audit trail
+    target_data?: any;  // Final transformed data
     email: {
       subject: string;
       sender_email: string;
       received_date: string;
     };
-    status: string;
-    error_message?: string;
+    timestamps: {
+      created_at?: string;
+      started_at?: string;
+      completed_at?: string;
+    };
+    error_info: {
+      error_type?: string;
+      error_message?: string;
+    };
   }> {
     return this.fetchApi(`/api/eto-run/${runId}/pdf-data`);
   }
@@ -305,17 +322,64 @@ class ApiClient {
   }
 
   /**
-   * Trigger Reprocessing of Unrecognized ETO Runs
+   * Trigger Reprocessing of Failed ETO Runs
    */
   async triggerReprocessing(): Promise<{
     success: boolean;
     result: {
       reprocessed: number;
       message: string;
+      needs_template_count: number;
+      failure_count: number;
       error?: string;
     };
   }> {
     return this.fetchApi('/api/templates/reprocess', {
+      method: 'POST',
+    });
+  }
+
+  /**
+   * Get detailed processing information for an ETO run
+   */
+  async getEtoRunProcessingDetails(runId: string | number): Promise<{
+    run_id: number;
+    status: "not_started" | "processing" | "success" | "failure" | "needs_template";
+    processing_step?: "template_matching" | "extracting_data" | "transforming_data";
+    template_info?: {
+      id: number;
+      name: string;
+      customer_name?: string;
+      description?: string;
+    };
+    extraction_info: {
+      status?: string;
+      fields_extracted: number;
+      field_names: string[];
+      extracted_fields: Record<string, any>;
+    };
+    transformation_info: Record<string, any>;
+    target_data: Record<string, any>;
+    processing_times: {
+      started_at?: string;
+      completed_at?: string;
+      duration_seconds?: number;
+    };
+  }> {
+    return this.fetchApi(`/api/eto-runs/${runId}/processing-details`);
+  }
+
+  /**
+   * Reprocess a single ETO run
+   */
+  async reprocessSingleEtoRun(runId: string | number): Promise<{
+    success: boolean;
+    message: string;
+    run_id: number;
+    old_status: string;
+    new_status: string;
+  }> {
+    return this.fetchApi(`/api/eto-runs/${runId}/reprocess`, {
       method: 'POST',
     });
   }
