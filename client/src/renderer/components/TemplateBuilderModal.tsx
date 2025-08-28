@@ -97,6 +97,9 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
 
   useEffect(() => {
     if (runId) {
+      // Clear all drawing/field state when switching to a new PDF document
+      clearDrawingState();
+      
       const timeoutId = setTimeout(() => {
         fetchPdfData();
       }, 100);
@@ -111,15 +114,53 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
     return () => {
       if (pdfData) {
         console.log('TemplateBuilderModal unmounting, cleaning up PDF data');
+        // Clear all drawing/field state when modal unmounts
+        clearDrawingState();
       }
     };
   }, [pdfData]);
+
+  // Clear drawing state when switching steps
+  useEffect(() => {
+    clearDrawingState();
+  }, [currentStep]);
+
+  const clearDrawingState = () => {
+    console.log('Clearing drawing and field state');
+    
+    // Clear drawing mode and drawing state
+    setIsDrawingMode(false);
+    setIsDrawing(false);
+    setDrawingBox(null);
+    
+    // Clear temporary field data
+    setTempFieldData(null);
+    setEditingField(null);
+    
+    // Clear field form state
+    setFieldLabel('');
+    setFieldDescription('');
+    setFieldRequired(false);
+    setFieldValidationRegex('');
+    
+    // Clear selection state
+    setSelectedExtractionField(null);
+  };
+
+  const handleModalClose = () => {
+    console.log('Modal closing - clearing all state');
+    clearDrawingState();
+    onClose();
+  };
 
   const fetchPdfData = async () => {
     if (!runId) return;
 
     setLoading(true);
     setError(null);
+    
+    // Clear drawing state when loading new PDF data
+    clearDrawingState();
 
     try {
       console.log('Fetching PDF data for run:', runId);
@@ -931,7 +972,7 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
               </button>
             )}
             <button
-              onClick={onClose}
+              onClick={handleModalClose}
               disabled={saving}
               className="px-4 py-2 text-sm bg-gray-600 hover:bg-gray-700 disabled:bg-gray-500 disabled:cursor-not-allowed text-white rounded"
             >
