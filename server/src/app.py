@@ -326,6 +326,7 @@ def create_template():
                 description=data.get('description'),
                 signature_objects=json.dumps(data['selected_objects']),
                 signature_object_count=len(data['selected_objects']),
+                extraction_fields=json.dumps(data.get('extraction_fields', [])),  # Store spatial extraction field definitions
                 created_by='system',  # TODO: Add user authentication
                 status='active'  # Start as active for immediate template matching
             )
@@ -381,6 +382,63 @@ def reprocess_unrecognized():
         
     except Exception as e:
         logger.error(f"Error triggering reprocessing: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.post("/api/test/extract-fields")
+def test_field_extraction():
+    """Test field extraction from a specific PDF using a specific template"""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        if not data or not data.get('pdf_id') or not data.get('template_id'):
+            return jsonify({"error": "Both pdf_id and template_id are required"}), 400
+        
+        pdf_id = data.get('pdf_id')
+        template_id = data.get('template_id')
+        
+        db_service = get_db_service()
+        session = db_service.get_session()
+        
+        try:
+            from .database import PdfFile, PdfTemplate
+            
+            # Get PDF file
+            pdf_file = session.query(PdfFile).filter(PdfFile.id == pdf_id).first()
+            if not pdf_file:
+                return jsonify({"error": f"PDF file {pdf_id} not found"}), 404
+            
+            # Get template
+            template = session.query(PdfTemplate).filter(PdfTemplate.id == template_id).first()
+            if not template:
+                return jsonify({"error": f"Template {template_id} not found"}), 404
+            
+            # Get PDF objects
+            if not pdf_file.objects_json:
+                return jsonify({"error": "PDF file has no extracted objects"}), 400
+            
+            pdf_objects = json.loads(pdf_file.objects_json)
+            
+            # Perform field extraction
+            template_matcher = get_template_matcher()
+            extracted_fields = template_matcher.extract_fields_from_pdf(pdf_objects, template_id)
+            
+            return jsonify({
+                "pdf_id": pdf_id,
+                "template_id": template_id,
+                "template_name": template.name,
+                "pdf_filename": pdf_file.original_filename,
+                "total_pdf_objects": len(pdf_objects),
+                "extracted_fields": extracted_fields,
+                "extraction_field_count": len(extracted_fields)
+            })
+            
+        finally:
+            session.close()
+        
+    except Exception as e:
+        logger.error(f"Error in field extraction test: {e}")
         return jsonify({"error": str(e)}), 500
 
 

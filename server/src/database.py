@@ -65,6 +65,9 @@ class PdfTemplate(Base):
     signature_objects = Column(Text)  # JSON: objects that define this template
     signature_object_count = Column(Integer)  # For quick subset matching
     
+    # Spatial extraction field definitions
+    extraction_fields = Column(Text)  # JSON: spatial bounding box extraction fields
+    
     # Template metadata  
     is_complete = Column(Boolean, default=False)  # User-marked completeness
     coverage_threshold = Column(Float, default=0.6)  # Expected coverage ratio

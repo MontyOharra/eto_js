@@ -175,22 +175,18 @@ class EtoProcessingWorker:
         
         logger.info(f"Template matched for run {eto_run.id}: '{template_name}' (ID: {template_id})")
         
-        # Update run with match results and proceed directly to data extraction
+        # Update run status to extracting_data and start extraction
         self._update_run_status(
             eto_run.id,
-            'processing',
-            matched_template_id=template_id,
-            extracted_data=json.dumps({
-                'pdf_objects': pdf_objects,
-                'match_details': match_result['match_details']
-            }, default=str)
+            'extracting_data',
+            matched_template_id=template_id
         )
         
-        # Process data extraction immediately instead of creating new run
-        logger.info(f"Processing data extraction for run {eto_run.id}")
-        self._process_data_extraction(eto_run)
+        # Process base data extraction
+        logger.info(f"Starting base data extraction for run {eto_run.id}")
+        self._extract_base_data(eto_run.id, template_id)
         
-        logger.info(f"Template matching and data extraction completed for run {eto_run.id}")
+        logger.info(f"Template matching and base extraction initiated for run {eto_run.id}")
     
     def _handle_no_template_match(self, eto_run: EtoRun, match_result: Dict[str, Any], 
                                  pdf_objects: list, signature_hash: str):
@@ -215,19 +211,127 @@ class EtoProcessingWorker:
         logger.info(f"Run {eto_run.id} marked as unrecognized with {len(pdf_objects)} objects stored")
     
     def _process_data_extraction(self, eto_run: EtoRun):
-        """Process data extraction from matched template (placeholder for future implementation)"""
-        logger.info(f"Data extraction not yet implemented for run {eto_run.id}")
+        """Process data extraction from matched template using spatial bounding boxes"""
+        logger.info(f"Starting data extraction for run {eto_run.id}")
         
-        # For now, just mark as completed
-        self._update_run_status(
-            eto_run.id,
-            'success',
-            completed_at=datetime.now(),
-            extracted_data=json.dumps({
-                'status': 'data_extraction_not_implemented',
-                'message': 'Data extraction will be implemented in next phase'
-            })
-        )
+        try:
+            # Get PDF objects from the previously extracted data
+            if not eto_run.extracted_data:
+                raise ValueError("No extracted data found for template-matched run")
+            
+            stored_data = json.loads(eto_run.extracted_data)
+            pdf_objects = stored_data.get('pdf_objects', [])
+            
+            if not pdf_objects:
+                raise ValueError("No PDF objects found in extracted data")
+            
+            if not eto_run.matched_template_id:
+                raise ValueError("No matched template ID for data extraction")
+            
+            logger.info(f"Extracting fields using template {eto_run.matched_template_id} from {len(pdf_objects)} PDF objects")
+            
+            # Use template matcher to extract field data using spatial bounding boxes
+            extracted_fields = self.template_matcher.extract_fields_from_pdf(
+                pdf_objects, 
+                eto_run.matched_template_id
+            )
+            
+            if not extracted_fields:
+                logger.warning(f"No fields extracted for run {eto_run.id} - template may have no extraction fields defined")
+                extraction_status = 'no_fields_defined'
+            else:
+                extraction_status = 'success'
+                logger.info(f"Successfully extracted {len(extracted_fields)} fields: {list(extracted_fields.keys())}")
+            
+            # Store extracted field data
+            final_extracted_data = {
+                'extraction_status': extraction_status,
+                'extracted_fields': extracted_fields,
+                'template_id': eto_run.matched_template_id,
+                'extraction_timestamp': datetime.now().isoformat(),
+                'pdf_object_count': len(pdf_objects)
+            }
+            
+            # Mark run as completed with extracted field data
+            self._update_run_status(
+                eto_run.id,
+                'success',
+                completed_at=datetime.now(),
+                extracted_data=json.dumps(final_extracted_data, default=str)
+            )
+            
+            logger.info(f"Data extraction completed successfully for run {eto_run.id}")
+            
+        except Exception as e:
+            logger.error(f"Data extraction failed for run {eto_run.id}: {e}")
+            
+            # Mark run as failed with error details
+            self._update_run_status(
+                eto_run.id,
+                'error',
+                completed_at=datetime.now(),
+                error_type='data_extraction_error',
+                error_message=str(e)
+            )
+            raise
+    
+    def _process_data_extraction_with_objects(self, run_id: int, template_id: int, pdf_objects: list):
+        """Process data extraction using provided PDF objects (bypasses database read)"""
+        logger.info(f"Starting data extraction for run {run_id} with {len(pdf_objects)} objects")
+        
+        try:
+            if not pdf_objects:
+                raise ValueError("No PDF objects provided for data extraction")
+            
+            if not template_id:
+                raise ValueError("No template ID provided for data extraction")
+            
+            logger.info(f"Extracting fields using template {template_id} from {len(pdf_objects)} PDF objects")
+            
+            # Use template matcher to extract field data using spatial bounding boxes
+            extracted_fields = self.template_matcher.extract_fields_from_pdf(
+                pdf_objects, 
+                template_id
+            )
+            
+            if not extracted_fields:
+                logger.warning(f"No fields extracted for run {run_id} - template may have no extraction fields defined")
+                extraction_status = 'no_fields_defined'
+            else:
+                extraction_status = 'success'
+                logger.info(f"Successfully extracted {len(extracted_fields)} fields: {list(extracted_fields.keys())}")
+            
+            # Store extracted field data
+            final_extracted_data = {
+                'extraction_status': extraction_status,
+                'extracted_fields': extracted_fields,
+                'template_id': template_id,
+                'extraction_timestamp': datetime.now().isoformat(),
+                'pdf_object_count': len(pdf_objects)
+            }
+            
+            # Mark run as completed with extracted field data
+            self._update_run_status(
+                run_id,
+                'success',
+                completed_at=datetime.now(),
+                extracted_data=json.dumps(final_extracted_data, default=str)
+            )
+            
+            logger.info(f"Data extraction completed successfully for run {run_id}")
+            
+        except Exception as e:
+            logger.error(f"Data extraction failed for run {run_id}: {e}")
+            
+            # Mark run as failed with error details
+            self._update_run_status(
+                run_id,
+                'error',
+                completed_at=datetime.now(),
+                error_type='data_extraction_error',
+                error_message=str(e)
+            )
+            raise
     
     def _create_data_extraction_run(self, email_id: int, pdf_file_id: int, template_id: int):
         """Create a new ETO run for data extraction - DEPRECATED: Now processing inline"""

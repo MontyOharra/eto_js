@@ -22,6 +22,160 @@ class TemplateMatchingService:
         self.db_service = db_service
         logger.info("Database service configured for template matching")
     
+    def extract_fields_from_pdf(self, pdf_objects: List[Dict[str, Any]], template_id: int) -> Dict[str, Any]:
+        """
+        Extract field data from PDF using spatial bounding boxes from matched template.
+        
+        Args:
+            pdf_objects: List of extracted PDF objects 
+            template_id: ID of matched template with extraction field definitions
+            
+        Returns:
+            Dictionary with extracted field data by label name
+        """
+        try:
+            if not self.db_service:
+                raise RuntimeError("Database service not configured")
+            
+            # Get template with extraction fields
+            template = self._get_template_by_id(template_id)
+            if not template or not template.extraction_fields:
+                logger.warning(f"Template {template_id} has no extraction fields defined")
+                return {}
+            
+            extraction_fields = json.loads(template.extraction_fields)
+            if not extraction_fields:
+                logger.info(f"Template {template_id} has empty extraction fields")
+                return {}
+            
+            logger.info(f"Extracting {len(extraction_fields)} fields from PDF with {len(pdf_objects)} objects")
+            
+            # Filter to only text objects for extraction
+            text_objects = [obj for obj in pdf_objects if obj.get('type') in ['word', 'text_line']]
+            logger.info(f"Found {len(text_objects)} text objects for extraction")
+            
+            extracted_data = {}
+            
+            # Process each extraction field
+            for field in extraction_fields:
+                try:
+                    field_label = field.get('label', '')
+                    field_page = field.get('page', 0) 
+                    field_bbox = field.get('boundingBox', [0, 0, 0, 0])
+                    
+                    if not field_label or not field_bbox:
+                        logger.warning(f"Invalid extraction field: missing label or bbox")
+                        continue
+                    
+                    # Extract text within this field's bounding box
+                    extracted_text = self._extract_text_in_bbox(text_objects, field_page, field_bbox)
+                    
+                    extracted_data[field_label] = {
+                        'text': extracted_text,
+                        'page': field_page,
+                        'bbox': field_bbox,
+                        'required': field.get('required', False),
+                        'description': field.get('description', ''),
+                        'validation_regex': field.get('validationRegex', None)
+                    }
+                    
+                    logger.info(f"Extracted field '{field_label}': '{extracted_text[:50]}{'...' if len(extracted_text) > 50 else ''}'")
+                    
+                except Exception as field_error:
+                    logger.error(f"Error extracting field {field.get('label', 'unknown')}: {field_error}")
+                    continue
+            
+            logger.info(f"Successfully extracted {len(extracted_data)} fields")
+            return extracted_data
+            
+        except Exception as e:
+            logger.error(f"Error in field extraction: {e}")
+            return {}
+    
+    def _extract_text_in_bbox(self, text_objects: List[Dict[str, Any]], target_page: int, bbox: List[float]) -> str:
+        """
+        Extract all text within a spatial bounding box on a specific page.
+        
+        Args:
+            text_objects: List of text objects (words/text_lines) from PDF
+            target_page: Page number (0-based)
+            bbox: Bounding box [x0, y0, x1, y1] in PDF coordinates
+            
+        Returns:
+            Concatenated text found within the bounding box
+        """
+        x0, y0, x1, y1 = bbox
+        matching_texts = []
+        
+        for obj in text_objects:
+            try:
+                # Check if object is on the target page
+                if obj.get('page', 0) != target_page:
+                    continue
+                
+                obj_bbox = obj.get('bbox', [0, 0, 0, 0])
+                ox0, oy0, ox1, oy1 = obj_bbox
+                
+                # Check if object is completely or mostly contained within the extraction bbox
+                # Use center point method: include text if its center point is within the bounding box
+                center_x = (ox0 + ox1) / 2
+                center_y = (oy0 + oy1) / 2
+                
+                # Alternative approach: check if text is mostly within bounds (at least 30% overlap)
+                overlap_x0 = max(ox0, x0)
+                overlap_y0 = max(oy0, y0) 
+                overlap_x1 = min(ox1, x1)
+                overlap_y1 = min(oy1, y1)
+                
+                should_include = False
+                
+                # Calculate overlap area vs original object area
+                if overlap_x1 > overlap_x0 and overlap_y1 > overlap_y0:
+                    overlap_area = (overlap_x1 - overlap_x0) * (overlap_y1 - overlap_y0)
+                    object_area = (ox1 - ox0) * (oy1 - oy0)
+                    overlap_ratio = overlap_area / object_area if object_area > 0 else 0
+                    
+                    # Include text if center is within bounds OR significant overlap (>30%)
+                    if ((center_x >= x0 and center_x <= x1 and center_y >= y0 and center_y <= y1) or 
+                        overlap_ratio > 0.3):
+                        should_include = True
+                
+                if should_include:
+                    obj_text = obj.get('text', '').strip()
+                    if obj_text:
+                        matching_texts.append({
+                            'text': obj_text,
+                            'bbox': obj_bbox,
+                            'y': (oy0 + oy1) / 2,  # Center Y for sorting
+                            'x': (ox0 + ox1) / 2   # Center X for sorting
+                        })
+                
+            except Exception as obj_error:
+                logger.warning(f"Error checking text object: {obj_error}")
+                continue
+        
+        if not matching_texts:
+            return ""
+        
+        # Sort by Y coordinate (top to bottom), then by X coordinate (left to right)
+        # Note: In PDF coordinates, Y increases upward, so higher Y = higher on page
+        matching_texts.sort(key=lambda t: (-t['y'], t['x']))  # Negative Y for top-to-bottom sorting
+        
+        # Combine text with appropriate spacing
+        extracted_text = ' '.join([t['text'] for t in matching_texts])
+        return extracted_text.strip()
+    
+    def _get_template_by_id(self, template_id: int) -> Optional[PdfTemplate]:
+        """Get template by ID"""
+        session = self.db_service.get_session()
+        try:
+            return session.query(PdfTemplate).filter(
+                PdfTemplate.id == template_id,
+                PdfTemplate.status == 'active'
+            ).first()
+        finally:
+            session.close()
+
     def find_best_template_match(self, pdf_objects: List[Dict[str, Any]], exclude_types: List[str] = None) -> Dict[str, Any]:
         """
         Find the best template match using exact subset matching algorithm.
