@@ -122,7 +122,7 @@ class EtoProcessingWorker:
         logger.info(f"Processing ETO run {eto_run.id} (status: {eto_run.status})")
         
         # Mark as processing  
-        self._update_run_status(eto_run.id, 'unprocessed', started_at=datetime.now())
+        self._update_run_status(eto_run.id, 'processing', started_at=datetime.now())
         
         try:
             # For now, all runs go through template matching first
@@ -175,11 +175,10 @@ class EtoProcessingWorker:
         
         logger.info(f"Template matched for run {eto_run.id}: '{template_name}' (ID: {template_id})")
         
-        # Update run with match results
+        # Update run with match results and proceed directly to data extraction
         self._update_run_status(
             eto_run.id,
-            'success',
-            completed_at=datetime.now(),
+            'processing',
             matched_template_id=template_id,
             extracted_data=json.dumps({
                 'pdf_objects': pdf_objects,
@@ -187,10 +186,11 @@ class EtoProcessingWorker:
             }, default=str)
         )
         
-        # Create data extraction run
-        self._create_data_extraction_run(eto_run.email_id, eto_run.pdf_file_id, template_id)
+        # Process data extraction immediately instead of creating new run
+        logger.info(f"Processing data extraction for run {eto_run.id}")
+        self._process_data_extraction(eto_run)
         
-        logger.info(f"Template matching completed for run {eto_run.id}, queued for data extraction")
+        logger.info(f"Template matching and data extraction completed for run {eto_run.id}")
     
     def _handle_no_template_match(self, eto_run: EtoRun, match_result: Dict[str, Any], 
                                  pdf_objects: list, signature_hash: str):
@@ -230,20 +230,11 @@ class EtoProcessingWorker:
         )
     
     def _create_data_extraction_run(self, email_id: int, pdf_file_id: int, template_id: int):
-        """Create a new ETO run for data extraction"""
-        try:
-            eto_run_data = {
-                "email_id": email_id,
-                "pdf_file_id": pdf_file_id,
-                "matched_template_id": template_id,
-                "status": "unprocessed"  # Will be processed by template matching
-            }
-            
-            self.db_service.create_eto_run(eto_run_data)
-            logger.info(f"Created data extraction run for PDF {pdf_file_id} with template {template_id}")
-            
-        except Exception as e:
-            logger.error(f"Error creating data extraction run: {e}")
+        """Create a new ETO run for data extraction - DEPRECATED: Now processing inline"""
+        # This method is no longer used - data extraction is processed immediately
+        # after template matching to avoid infinite loops
+        logger.warning("_create_data_extraction_run called but is deprecated - processing should be inline")
+        pass
     
     def _get_pdf_file(self, pdf_file_id: int) -> Optional[PdfFile]:
         """Get PDF file by ID"""
@@ -273,6 +264,45 @@ class EtoProcessingWorker:
         except Exception as e:
             logger.error(f"Error marking run as failed: {e}")
     
+    def reprocess_unrecognized_runs(self):
+        """Reprocess all unrecognized ETO runs - typically called when new templates are added"""
+        try:
+            session = self.db_service.get_session()
+            try:
+                # Find all unrecognized runs
+                unrecognized_runs = session.query(EtoRun).filter(
+                    EtoRun.status == 'unrecognized'
+                ).all()
+                
+                if not unrecognized_runs:
+                    logger.info("No unrecognized runs found to reprocess")
+                    return {"reprocessed": 0, "message": "No unrecognized runs found"}
+                
+                # Mark them as unprocessed so they get picked up by the worker
+                reprocessed_count = 0
+                for run in unrecognized_runs:
+                    self._update_run_status(
+                        run.id, 
+                        'unprocessed',
+                        # Clear previous results to start fresh
+                        matched_template_id=None,
+                        extracted_data=None,
+                        error_type=None,
+                        error_message=None,
+                        completed_at=None
+                    )
+                    reprocessed_count += 1
+                
+                logger.info(f"Marked {reprocessed_count} unrecognized runs for reprocessing")
+                return {"reprocessed": reprocessed_count, "message": f"Marked {reprocessed_count} runs for reprocessing"}
+                
+            finally:
+                session.close()
+                
+        except Exception as e:
+            logger.error(f"Error reprocessing unrecognized runs: {e}")
+            return {"reprocessed": 0, "error": str(e)}
+
     def get_worker_status(self) -> Dict[str, Any]:
         """Get current worker status"""
         return {
@@ -308,3 +338,9 @@ def stop_processing_worker():
     """Stop the processing worker"""
     if processing_worker:
         processing_worker.stop()
+
+def trigger_reprocessing():
+    """Trigger reprocessing of unrecognized ETO runs"""
+    if processing_worker is None:
+        raise RuntimeError("Processing worker not initialized. Call init_processing_worker() first.")
+    return processing_worker.reprocess_unrecognized_runs()

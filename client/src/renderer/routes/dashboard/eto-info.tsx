@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { EtoRunsTable } from "../../components/EtoRunsTable";
 import { EtoRunViewerModal } from "../../components/EtoRunViewerModal";
+import { TemplateBuilderModal } from "../../components/TemplateBuilderModal";
 import { useEtoRuns, useServerHealth } from "../../hooks/useApi";
 import { useMemo, useState } from "react";
 
@@ -17,8 +18,9 @@ function EtoInfoPage() {
   });
   const { isServerOnline } = useServerHealth();
 
-  // Modal state for PDF viewer
+  // Modal state for PDF viewer and template builder
   const [viewingRunId, setViewingRunId] = useState<string | null>(null);
+  const [buildingTemplateForRun, setBuildingTemplateForRun] = useState<string | null>(null);
 
   // Group runs by status
   const { successRuns, failureRuns, unrecognizedRuns, errorRuns } = useMemo(() => {
@@ -46,12 +48,20 @@ function EtoInfoPage() {
 
   const handleReview = (runId: string) => {
     console.log("Build Template for run:", runId);
-    // TODO: Open template building interface
-    setViewingRunId(runId);
+    setBuildingTemplateForRun(runId);
   };
 
   const handleCloseViewer = () => {
     setViewingRunId(null);
+  };
+
+  const handleTemplateBuilderSave = (templateData: any) => {
+    console.log("Template saved successfully:", templateData);
+    setBuildingTemplateForRun(null);
+  };
+
+  const handleTemplateBuilderClose = () => {
+    setBuildingTemplateForRun(null);
   };
 
   // Show loading state
@@ -192,6 +202,13 @@ function EtoInfoPage() {
       <EtoRunViewerModal 
         runId={viewingRunId}
         onClose={handleCloseViewer}
+      />
+      
+      {/* Template Builder Modal */}
+      <TemplateBuilderModal
+        runId={buildingTemplateForRun}
+        onClose={handleTemplateBuilderClose}
+        onSave={handleTemplateBuilderSave}
       />
     </>
   );

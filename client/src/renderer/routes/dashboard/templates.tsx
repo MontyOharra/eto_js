@@ -1,8 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { TemplatesList } from "../../components/TemplatesList";
+import { TemplateBuilderModal } from "../../components/TemplateBuilderModal";
 import { useTemplates, useServerHealth } from "../../hooks/useApi";
 import { TemplateSummary } from "../../types/eto";
+import { apiClient } from "../../services/api";
 
 export const Route = createFileRoute("/dashboard/templates")({
   component: TemplatesPage,
@@ -10,6 +12,8 @@ export const Route = createFileRoute("/dashboard/templates")({
 
 function TemplatesPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [buildingTemplateForRun, setBuildingTemplateForRun] = useState<string | null>(null);
+  const [reprocessing, setReprocessing] = useState(false);
   
   // Fetch templates data from API
   const { data: templates, loading, error, refetch } = useTemplates({ 
@@ -33,6 +37,43 @@ function TemplatesPage() {
   const handleDelete = (template: TemplateSummary) => {
     console.log("Delete template:", template);
     // TODO: Show confirmation dialog
+  };
+
+  const handleCreateTemplate = () => {
+    console.log("Create new template - need to select ETO run first");
+    // TODO: Show ETO run selection dialog or navigate to ETO runs page
+  };
+
+  const handleTemplateBuilderSave = (templateData: any) => {
+    console.log("Template saved successfully:", templateData);
+    setBuildingTemplateForRun(null);
+    // Refresh the templates list to show the new template
+    refetch();
+  };
+
+  const handleTemplateBuilderClose = () => {
+    setBuildingTemplateForRun(null);
+  };
+
+  const handleReprocessUnrecognized = async () => {
+    setReprocessing(true);
+    try {
+      const result = await apiClient.triggerReprocessing();
+      console.log('Reprocessing result:', result);
+      
+      if (result.success && result.result.reprocessed > 0) {
+        alert(`Successfully triggered reprocessing of ${result.result.reprocessed} unrecognized PDFs.`);
+      } else if (result.success) {
+        alert('No unrecognized PDFs found to reprocess.');
+      } else {
+        alert(`Reprocessing failed: ${result.result.error || 'Unknown error'}`);
+      }
+    } catch (err: any) {
+      console.error('Error triggering reprocessing:', err);
+      alert(`Failed to trigger reprocessing: ${err.message || 'Unknown error'}`);
+    } finally {
+      setReprocessing(false);
+    }
   };
 
   // Show loading state
@@ -102,6 +143,16 @@ function TemplatesPage() {
               </span>
             </div>
             
+            {/* Reprocess button */}
+            <button 
+              onClick={handleReprocessUnrecognized}
+              disabled={reprocessing || !isServerOnline}
+              className="px-3 py-1 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 text-white text-sm rounded transition-colors"
+              title="Reprocess all unrecognized PDFs with current templates"
+            >
+              {reprocessing ? 'Reprocessing...' : 'Reprocess Unrecognized'}
+            </button>
+            
             {/* Refresh button */}
             <button 
               onClick={refetch}
@@ -126,6 +177,14 @@ function TemplatesPage() {
         onEdit={handleEdit}
         onView={handleView}
         onDelete={handleDelete}
+        onCreateTemplate={handleCreateTemplate}
+      />
+      
+      {/* Template Builder Modal */}
+      <TemplateBuilderModal
+        runId={buildingTemplateForRun}
+        onClose={handleTemplateBuilderClose}
+        onSave={handleTemplateBuilderSave}
       />
     </div>
   );

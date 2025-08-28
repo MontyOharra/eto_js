@@ -300,6 +300,272 @@ def get_templates():
         return jsonify({"error": str(e)}), 500
 
 
+@app.post("/api/templates")
+def create_template():
+    """Create a new PDF template"""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        if not data or not data.get('name'):
+            return jsonify({"error": "Template name is required"}), 400
+        
+        if not data.get('selected_objects') or len(data.get('selected_objects', [])) == 0:
+            return jsonify({"error": "At least one object must be selected"}), 400
+        
+        db_service = get_db_service()
+        session = db_service.get_session()
+        
+        try:
+            from .database import PdfTemplate
+            import json
+            
+            # Create new template
+            template = PdfTemplate(
+                name=data['name'],
+                description=data.get('description'),
+                signature_objects=json.dumps(data['selected_objects']),
+                signature_object_count=len(data['selected_objects']),
+                created_by='system',  # TODO: Add user authentication
+                status='active'  # Start as active for immediate template matching
+            )
+            
+            session.add(template)
+            session.commit()
+            
+            logger.info(f"Created template '{data['name']}' with ID {template.id}")
+            
+            # Trigger reprocessing of unrecognized runs
+            try:
+                from .processing_worker import trigger_reprocessing
+                reprocess_result = trigger_reprocessing()
+                logger.info(f"Template creation triggered reprocessing: {reprocess_result}")
+                
+                return jsonify({
+                    "template_id": template.id,
+                    "message": f"Template '{data['name']}' created successfully",
+                    "reprocessing": reprocess_result
+                }), 201
+                
+            except Exception as reprocess_error:
+                logger.error(f"Template created but reprocessing failed: {reprocess_error}")
+                return jsonify({
+                    "template_id": template.id,
+                    "message": f"Template '{data['name']}' created successfully",
+                    "reprocessing_error": str(reprocess_error)
+                }), 201
+            
+        except Exception as e:
+            session.rollback()
+            raise e
+        finally:
+            session.close()
+            
+    except Exception as e:
+        logger.error(f"Error creating template: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.post("/api/templates/reprocess")
+def reprocess_unrecognized():
+    """Manually trigger reprocessing of unrecognized ETO runs"""
+    try:
+        from .processing_worker import trigger_reprocessing
+        
+        result = trigger_reprocessing()
+        
+        return jsonify({
+            "success": True,
+            "result": result
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error triggering reprocessing: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.post("/api/test/template-match")
+def test_template_match():
+    """Test if a specific PDF matches a specific template - for debugging"""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        if not data or not data.get('pdf_id') or not data.get('template_id'):
+            return jsonify({"error": "Both pdf_id and template_id are required"}), 400
+        
+        pdf_id = data.get('pdf_id')
+        template_id = data.get('template_id')
+        
+        db_service = get_db_service()
+        session = db_service.get_session()
+        
+        try:
+            from .database import PdfFile, PdfTemplate, EtoRun
+            import json
+            
+            # Get the PDF file and its objects
+            pdf_file = session.query(PdfFile).filter(PdfFile.id == pdf_id).first()
+            if not pdf_file:
+                return jsonify({"error": f"PDF with ID {pdf_id} not found"}), 404
+            
+            # Get the template
+            template = session.query(PdfTemplate).filter(PdfTemplate.id == template_id).first()
+            if not template:
+                return jsonify({"error": f"Template with ID {template_id} not found"}), 404
+            
+            # Get PDF objects - check if they're in the ETO run or PDF file
+            eto_run = session.query(EtoRun).filter(EtoRun.pdf_file_id == pdf_id).first()
+            pdf_objects = []
+            
+            if eto_run and eto_run.extracted_data:
+                try:
+                    extracted_data = json.loads(eto_run.extracted_data)
+                    if 'pdf_objects' in extracted_data:
+                        pdf_objects = extracted_data['pdf_objects']
+                except Exception as e:
+                    logger.error(f"Error parsing extracted_data: {e}")
+            
+            if not pdf_objects:
+                return jsonify({
+                    "error": "No PDF objects found for this PDF",
+                    "pdf_file": pdf_file.original_filename,
+                    "eto_run_id": eto_run.id if eto_run else None,
+                    "has_extracted_data": bool(eto_run and eto_run.extracted_data)
+                }), 400
+            
+            # Get template objects
+            template_objects = []
+            if template.signature_objects:
+                try:
+                    template_objects = json.loads(template.signature_objects)
+                except Exception as e:
+                    return jsonify({"error": f"Error parsing template signature_objects: {e}"}), 500
+            
+            if not template_objects:
+                return jsonify({
+                    "error": "Template has no signature objects",
+                    "template_name": template.name,
+                    "template_status": template.status
+                }), 400
+            
+            # Run the template matching algorithm (with image exclusion by default)
+            template_matcher = get_template_matcher()
+            match_result = template_matcher.find_best_template_match(pdf_objects)
+            
+            # Also do a direct comparison with detailed signature breakdown
+            # No filtering by default - images now use geometric signatures
+            exclude_types = []  # Can be modified for testing specific exclusions
+            filtered_pdf_objects = [obj for obj in pdf_objects if obj.get('type') not in exclude_types] if exclude_types else pdf_objects
+            filtered_template_objects = [obj for obj in template_objects if obj.get('type') not in exclude_types] if exclude_types else template_objects
+            
+            pdf_signatures = template_matcher._objects_to_signatures(filtered_pdf_objects)
+            template_signatures = template_matcher._objects_to_signatures(filtered_template_objects)
+            direct_match = template_matcher._check_exact_subset_match(pdf_signatures, template_signatures, template)
+            
+            # Create signature-to-object mapping for detailed analysis
+            def create_signature_object_map(objects, signatures):
+                signature_map = {}
+                for i, (obj, sig) in enumerate(zip(objects, signatures)):
+                    signature_map[sig] = {
+                        'object_index': i,
+                        'object_data': obj,
+                        'signature_components': template_matcher._get_signature_components(obj)
+                    }
+                return signature_map
+            
+            pdf_sig_map = create_signature_object_map(filtered_pdf_objects, pdf_signatures)
+            template_sig_map = create_signature_object_map(filtered_template_objects, template_signatures)
+            
+            # Enhanced debugging - compare object structures
+            sample_pdf_obj = pdf_objects[0] if pdf_objects else {}
+            sample_template_obj = template_objects[0] if template_objects else {}
+            
+            # Check if objects have same structure
+            pdf_keys = set(sample_pdf_obj.keys()) if sample_pdf_obj else set()
+            template_keys = set(sample_template_obj.keys()) if sample_template_obj else set()
+            
+            return jsonify({
+                "test_results": {
+                    "pdf_info": {
+                        "id": pdf_id,
+                        "filename": pdf_file.original_filename,
+                        "object_count": len(pdf_objects),
+                        "filtered_object_count": len(filtered_pdf_objects),
+                        "excluded_types": exclude_types,
+                        "eto_run_id": eto_run.id if eto_run else None
+                    },
+                    "template_info": {
+                        "id": template_id,
+                        "name": template.name,
+                        "status": template.status,
+                        "object_count": len(template_objects),
+                        "filtered_object_count": len(filtered_template_objects),
+                        "excluded_types": exclude_types
+                    },
+                    "signature_analysis": {
+                        "pdf_signatures_count": len(pdf_signatures),
+                        "template_signatures_count": len(template_signatures),
+                        "pdf_signatures": pdf_signatures[:10],  # More samples for inspection
+                        "template_signatures": template_signatures[:10]
+                    },
+                    "object_structure_comparison": {
+                        "sample_pdf_object": sample_pdf_obj,
+                        "sample_template_object": sample_template_obj,
+                        "pdf_object_keys": sorted(list(pdf_keys)),
+                        "template_object_keys": sorted(list(template_keys)),
+                        "keys_only_in_pdf": sorted(list(pdf_keys - template_keys)),
+                        "keys_only_in_template": sorted(list(template_keys - pdf_keys)),
+                        "common_keys": sorted(list(pdf_keys & template_keys))
+                    },
+                    "direct_match_test": direct_match,
+                    "full_matching_result": match_result,
+                    "would_match": (
+                        match_result.get("matched", False) and 
+                        match_result.get("template_id") == template_id
+                    ),
+                    "debug_info": {
+                        "matching_signatures": list(set(pdf_signatures) & set(template_signatures)),
+                        "signature_overlap_count": len(set(pdf_signatures) & set(template_signatures)),
+                        "template_missing_signatures": list(set(template_signatures) - set(pdf_signatures)),
+                        "pdf_extra_signatures": list(set(pdf_signatures) - set(template_signatures))
+                    },
+                    "missing_signature_details": [
+                        {
+                            "signature_hash": missing_sig,
+                            "template_object_data": template_sig_map[missing_sig]['object_data'],
+                            "signature_components": template_sig_map[missing_sig]['signature_components'],
+                            "object_index": template_sig_map[missing_sig]['object_index']
+                        }
+                        for missing_sig in list(set(template_signatures) - set(pdf_signatures))[:5]  # First 5 missing
+                    ],
+                    "matching_signature_details": [
+                        {
+                            "signature_hash": matching_sig,
+                            "pdf_object_data": pdf_sig_map[matching_sig]['object_data'],
+                            "template_object_data": template_sig_map[matching_sig]['object_data'],
+                            "signature_components": template_sig_map[matching_sig]['signature_components']
+                        }
+                        for matching_sig in list(set(pdf_signatures) & set(template_signatures))[:3]  # First 3 matching
+                    ],
+                    "pdf_image_objects": [
+                        {
+                            "object_data": obj,
+                            "signature_components": template_matcher._get_signature_components(obj)
+                        }
+                        for obj in filtered_pdf_objects if obj.get('type') == 'image'
+                    ]
+                }
+            }), 200
+            
+        finally:
+            session.close()
+            
+    except Exception as e:
+        logger.error(f"Error in template match test: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @app.get("/api/processing/stats")
 def get_processing_stats():
     """Get processing worker statistics"""

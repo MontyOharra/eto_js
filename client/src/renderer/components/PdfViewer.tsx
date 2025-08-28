@@ -17,13 +17,29 @@ interface PdfObject {
   [key: string]: any;
 }
 
+interface ExtractionField {
+  id: string;
+  boundingBox: [number, number, number, number];
+  page: number;
+  label: string;
+}
+
 interface PdfViewerProps {
   pdfUrl: string;
   objects?: PdfObject[];
   className?: string;
   showObjectOverlays?: boolean;
   onObjectClick?: (object: PdfObject) => void;
+  onObjectDoubleClick?: (object: PdfObject) => void;
   selectedObjectTypes?: Set<string>;
+  selectedObjects?: Set<string>;
+  extractionFields?: ExtractionField[];
+  // Box drawing props
+  isDrawingMode?: boolean;
+  drawingBox?: {x: number, y: number, width: number, height: number} | null;
+  onMouseDown?: (e: React.MouseEvent, pageElement: HTMLElement, currentPage: number, scale: number, pageHeight: number) => void;
+  onMouseMove?: (e: React.MouseEvent, pageElement: HTMLElement, currentPage: number, scale: number, pageHeight: number) => void;
+  onMouseUp?: (e: React.MouseEvent, pageElement: HTMLElement, currentPage: number, scale: number, pageHeight: number) => void;
 }
 
 const OBJECT_COLORS = {
@@ -52,7 +68,15 @@ export function PdfViewer({
   className = '',
   showObjectOverlays = true,
   onObjectClick,
-  selectedObjectTypes
+  onObjectDoubleClick,
+  selectedObjectTypes,
+  selectedObjects,
+  extractionFields = [],
+  isDrawingMode = false,
+  drawingBox = null,
+  onMouseDown,
+  onMouseMove,
+  onMouseUp
 }: PdfViewerProps) {
   const [numPages, setNumPages] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -134,6 +158,11 @@ export function PdfViewer({
     return isCurrentPage && isSelectedType;
   });
 
+  // Filter extraction fields for current page
+  const currentPageExtractionFields = extractionFields.filter((field) => {
+    return field.page === currentPage - 1; // 0-based page indexing
+  });
+
   // Debug: Log when objects change
   if (objects.length > 0) {
     console.log(`PdfViewer: ${objects.length} total objects, ${currentPageObjects.length} on page ${currentPage}`);
@@ -150,29 +179,68 @@ export function PdfViewer({
     const screenY0 = actualPdfHeight - y1; // Flip Y coordinate
     const screenY1 = actualPdfHeight - y0;
     
+    // Generate object ID for selection tracking
+    const objectId = `${obj.type}-${obj.page}-${obj.bbox.join('-')}`;
+    const isSelected = selectedObjects?.has(objectId) || false;
+    
+    // Objects should not be highlighted based on extraction fields
+    // The extraction field boxes themselves are the visual indicators
+    const hasExtractionField = false;
+    
     // Debug first few objects
     if (index < 2) {
       console.log(`Object ${index} (${obj.type}):`, {
         bbox: obj.bbox,
         page: obj.page,
         text: obj.text,
+        objectId,
+        isSelected,
         pdfDimensions: { width: pageWidth, height: pageHeight },
         screenCoords: { screenY0, screenY1 },
         scale: scale
       });
     }
     
+    // Determine styling based on state
+    let backgroundColor, border, boxShadow, transform, zIndex;
+    
+    if (isSelected) {
+      // Selected objects (green)
+      backgroundColor = 'rgba(34, 197, 94, 0.5)';
+      border = '3px solid #22c55e';
+      boxShadow = '0 0 8px rgba(34, 197, 94, 0.6), inset 0 0 0 1px rgba(34, 197, 94, 0.8)';
+      transform = 'scale(1.02)';
+      zIndex = 25;
+    } else if (hasExtractionField) {
+      // Objects with extraction fields defined (purple)
+      backgroundColor = 'rgba(168, 85, 247, 0.5)';
+      border = '2px solid #a855f7';
+      boxShadow = '0 0 6px rgba(168, 85, 247, 0.6)';
+      transform = 'scale(1.01)';
+      zIndex = 20;
+    } else {
+      // Default objects
+      backgroundColor = OBJECT_COLORS[obj.type];
+      border = `1px solid ${OBJECT_BORDER_COLORS[obj.type]}`;
+      boxShadow = 'none';
+      transform = 'scale(1)';
+      zIndex = 10;
+    }
+
     const style: React.CSSProperties = {
       position: 'absolute',
       left: `${x0 * scale}px`,
       top: `${screenY0 * scale}px`,
       width: `${(x1 - x0) * scale}px`,
       height: `${(screenY1 - screenY0) * scale}px`,
-      backgroundColor: OBJECT_COLORS[obj.type],
-      border: `1px solid ${OBJECT_BORDER_COLORS[obj.type]}`,
-      cursor: onObjectClick ? 'pointer' : 'default',
-      zIndex: 10,
-      pointerEvents: onObjectClick ? 'auto' : 'none'
+      backgroundColor,
+      border,
+      cursor: (onObjectClick || onObjectDoubleClick) ? 'pointer' : 'default',
+      zIndex,
+      pointerEvents: (onObjectClick || onObjectDoubleClick) ? 'auto' : 'none',
+      boxShadow,
+      transform,
+      transition: 'all 0.15s ease-in-out'
     };
 
     return (
@@ -180,8 +248,100 @@ export function PdfViewer({
         key={`${obj.type}-${index}`}
         style={style}
         onClick={() => onObjectClick?.(obj)}
-        title={obj.text || `${obj.type} object`}
-        className="hover:opacity-80 transition-opacity"
+        onDoubleClick={() => onObjectDoubleClick?.(obj)}
+        title={hasExtractionField ? `${obj.text || obj.type} - Has extraction field` : obj.text || `${obj.type} object`}
+        className={`transition-all ${isSelected ? 'animate-pulse' : hasExtractionField ? 'animate-pulse' : 'hover:opacity-80 hover:scale-105'}`}
+      />
+    );
+  };
+
+  const renderExtractionFieldOverlay = (field: ExtractionField) => {
+    const [x0, y0, x1, y1] = field.boundingBox;
+    
+    // Convert PDF coordinates to screen coordinates
+    const actualPdfHeight = pageHeight;
+    const screenY0 = actualPdfHeight - y1; // Flip Y coordinate
+    const screenY1 = actualPdfHeight - y0;
+    
+    const style: React.CSSProperties = {
+      position: 'absolute',
+      left: `${x0 * scale}px`,
+      top: `${screenY0 * scale}px`,
+      width: `${(x1 - x0) * scale}px`,
+      height: `${(screenY1 - screenY0) * scale}px`,
+      backgroundColor: 'rgba(168, 85, 247, 0.25)',
+      border: '3px solid #a855f7',
+      borderRadius: '6px',
+      cursor: 'pointer',
+      zIndex: 30,
+      pointerEvents: 'auto',
+      boxShadow: '0 0 12px rgba(168, 85, 247, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.1)',
+      transition: 'all 0.15s ease-in-out'
+    };
+
+    return (
+      <div
+        key={`extraction-field-${field.id}`}
+        style={style}
+        onClick={() => {
+          // Create a fake object for the click handler
+          const fakeObj: PdfObject = {
+            type: 'extraction-field',
+            page: field.page,
+            bbox: field.boundingBox,
+            text: field.label,
+            width: field.boundingBox[2] - field.boundingBox[0],
+            height: field.boundingBox[3] - field.boundingBox[1]
+          };
+          onObjectClick?.(fakeObj);
+        }}
+        title={`Extraction Field: ${field.label}`}
+        className="hover:scale-105"
+      >
+        {/* Field Label */}
+        <div
+          style={{
+            position: 'absolute',
+            top: '-25px',
+            left: '0px',
+            backgroundColor: '#a855f7',
+            color: 'white',
+            padding: '2px 8px',
+            borderRadius: '4px',
+            fontSize: '11px',
+            fontWeight: 'bold',
+            whiteSpace: 'nowrap',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+            zIndex: 1
+          }}
+        >
+          {field.label}
+        </div>
+      </div>
+    );
+  };
+
+  const renderDrawingBox = () => {
+    if (!drawingBox) return null;
+    
+    const style: React.CSSProperties = {
+      position: 'absolute',
+      left: `${drawingBox.x * scale}px`,
+      top: `${drawingBox.y * scale}px`,
+      width: `${drawingBox.width * scale}px`,
+      height: `${drawingBox.height * scale}px`,
+      backgroundColor: 'rgba(59, 130, 246, 0.2)',
+      border: '2px dashed #3b82f6',
+      borderRadius: '4px',
+      zIndex: 40,
+      pointerEvents: 'none'
+    };
+
+    return (
+      <div
+        key="drawing-box"
+        style={style}
+        className="animate-pulse"
       />
     );
   };
@@ -278,7 +438,22 @@ export function PdfViewer({
                 ref={(el) => {
                   if (el) pageRefs.current[currentPage] = el;
                 }}
-                className="relative"
+                className={`relative ${isDrawingMode ? 'cursor-crosshair' : 'cursor-default'}`}
+                onMouseDown={(e) => {
+                  if (pageRefs.current[currentPage] && onMouseDown) {
+                    onMouseDown(e, pageRefs.current[currentPage], currentPage, scale, pageHeight);
+                  }
+                }}
+                onMouseMove={(e) => {
+                  if (pageRefs.current[currentPage] && onMouseMove) {
+                    onMouseMove(e, pageRefs.current[currentPage], currentPage, scale, pageHeight);
+                  }
+                }}
+                onMouseUp={(e) => {
+                  if (pageRefs.current[currentPage] && onMouseUp) {
+                    onMouseUp(e, pageRefs.current[currentPage], currentPage, scale, pageHeight);
+                  }
+                }}
               >
                 <Page
                   pageNumber={currentPage}
@@ -312,6 +487,18 @@ export function PdfViewer({
                 {showObjectOverlays && (
                   <div className="absolute inset-0 pointer-events-none">
                     {currentPageObjects.map((obj, index) => renderObjectOverlay(obj, index))}
+                  </div>
+                )}
+                
+                {/* Extraction Field Overlays */}
+                <div className="absolute inset-0 pointer-events-none">
+                  {currentPageExtractionFields.map((field) => renderExtractionFieldOverlay(field))}
+                </div>
+                
+                {/* Drawing Box Overlay */}
+                {isDrawingMode && (
+                  <div className="absolute inset-0 pointer-events-none">
+                    {renderDrawingBox()}
                   </div>
                 )}
               </div>
