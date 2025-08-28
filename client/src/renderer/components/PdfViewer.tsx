@@ -23,8 +23,10 @@ interface PdfViewerProps {
   className?: string;
   showObjectOverlays?: boolean;
   onObjectClick?: (object: PdfObject) => void;
+  onObjectDoubleClick?: (object: PdfObject) => void;
   selectedObjectTypes?: Set<string>;
   selectedObjects?: Set<string>;
+  extractionFields?: Set<string>; // Object IDs that have extraction fields defined
 }
 
 const OBJECT_COLORS = {
@@ -53,8 +55,10 @@ export function PdfViewer({
   className = '',
   showObjectOverlays = true,
   onObjectClick,
+  onObjectDoubleClick,
   selectedObjectTypes,
-  selectedObjects
+  selectedObjects,
+  extractionFields
 }: PdfViewerProps) {
   const [numPages, setNumPages] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -155,6 +159,7 @@ export function PdfViewer({
     // Generate object ID for selection tracking
     const objectId = `${obj.type}-${obj.page}-${obj.bbox.join('-')}`;
     const isSelected = selectedObjects?.has(objectId) || false;
+    const hasExtractionField = extractionFields?.has(objectId) || false;
     
     // Debug first few objects
     if (index < 2) {
@@ -170,18 +175,46 @@ export function PdfViewer({
       });
     }
     
+    // Determine styling based on state
+    let backgroundColor, border, boxShadow, transform, zIndex;
+    
+    if (isSelected) {
+      // Selected objects (green)
+      backgroundColor = 'rgba(34, 197, 94, 0.5)';
+      border = '3px solid #22c55e';
+      boxShadow = '0 0 8px rgba(34, 197, 94, 0.6), inset 0 0 0 1px rgba(34, 197, 94, 0.8)';
+      transform = 'scale(1.02)';
+      zIndex = 25;
+    } else if (hasExtractionField) {
+      // Objects with extraction fields defined (purple)
+      backgroundColor = 'rgba(168, 85, 247, 0.5)';
+      border = '2px solid #a855f7';
+      boxShadow = '0 0 6px rgba(168, 85, 247, 0.6)';
+      transform = 'scale(1.01)';
+      zIndex = 20;
+    } else {
+      // Default objects
+      backgroundColor = OBJECT_COLORS[obj.type];
+      border = `1px solid ${OBJECT_BORDER_COLORS[obj.type]}`;
+      boxShadow = 'none';
+      transform = 'scale(1)';
+      zIndex = 10;
+    }
+
     const style: React.CSSProperties = {
       position: 'absolute',
       left: `${x0 * scale}px`,
       top: `${screenY0 * scale}px`,
       width: `${(x1 - x0) * scale}px`,
       height: `${(screenY1 - screenY0) * scale}px`,
-      backgroundColor: isSelected ? 'rgba(59, 130, 246, 0.4)' : OBJECT_COLORS[obj.type],
-      border: isSelected ? '2px solid #3b82f6' : `1px solid ${OBJECT_BORDER_COLORS[obj.type]}`,
-      cursor: onObjectClick ? 'pointer' : 'default',
-      zIndex: isSelected ? 20 : 10,
-      pointerEvents: onObjectClick ? 'auto' : 'none',
-      boxShadow: isSelected ? '0 0 0 1px rgba(59, 130, 246, 0.8)' : 'none'
+      backgroundColor,
+      border,
+      cursor: (onObjectClick || onObjectDoubleClick) ? 'pointer' : 'default',
+      zIndex,
+      pointerEvents: (onObjectClick || onObjectDoubleClick) ? 'auto' : 'none',
+      boxShadow,
+      transform,
+      transition: 'all 0.15s ease-in-out'
     };
 
     return (
@@ -189,8 +222,9 @@ export function PdfViewer({
         key={`${obj.type}-${index}`}
         style={style}
         onClick={() => onObjectClick?.(obj)}
-        title={obj.text || `${obj.type} object`}
-        className={`hover:opacity-80 transition-all ${isSelected ? 'ring-2 ring-blue-500' : ''}`}
+        onDoubleClick={() => onObjectDoubleClick?.(obj)}
+        title={hasExtractionField ? `${obj.text || obj.type} - Has extraction field` : obj.text || `${obj.type} object`}
+        className={`transition-all ${isSelected ? 'animate-pulse' : hasExtractionField ? 'animate-pulse' : 'hover:opacity-80 hover:scale-105'}`}
       />
     );
   };
