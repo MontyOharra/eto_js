@@ -23,13 +23,12 @@ function EtoInfoPage() {
   const [buildingTemplateForRun, setBuildingTemplateForRun] = useState<string | null>(null);
 
   // Group runs by status
-  const { successRuns, failureRuns, needsTemplateRuns, notStartedRuns, processingRuns } = useMemo(() => {
+  const { successRuns, failureRuns, needsTemplateRuns, processingRuns } = useMemo(() => {
     if (!allRuns) {
       return {
         successRuns: [],
         failureRuns: [],
         needsTemplateRuns: [],
-        notStartedRuns: [],
         processingRuns: [],
       };
     }
@@ -38,8 +37,8 @@ function EtoInfoPage() {
       successRuns: allRuns.filter(run => run.status === "success"),
       failureRuns: allRuns.filter(run => run.status === "failure"), 
       needsTemplateRuns: allRuns.filter(run => run.status === "needs_template"),
-      notStartedRuns: allRuns.filter(run => run.status === "not_started"),
-      processingRuns: allRuns.filter(run => run.status === "processing"),
+      // Combine both processing and not_started into a single processing group
+      processingRuns: allRuns.filter(run => run.status === "processing" || run.status === "not_started"),
     };
   }, [allRuns]);
 
@@ -194,14 +193,6 @@ function EtoInfoPage() {
           title="Needs Template Creation"
           runs={needsTemplateRuns}
           status="needs_template"
-          onView={handleView}
-          onReview={handleReview}
-        />
-
-        <EtoRunsTable
-          title="Pending Processing"
-          runs={notStartedRuns}
-          status="not_started"
           onView={handleView}
           onReview={handleReview}
         />
