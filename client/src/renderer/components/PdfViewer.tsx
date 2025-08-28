@@ -37,6 +37,7 @@ interface PdfViewerProps {
   // Box drawing props
   isDrawingMode?: boolean;
   drawingBox?: {x: number, y: number, width: number, height: number} | null;
+  tempFieldData?: {id: string, boundingBox: [number, number, number, number], page: number} | null;
   onMouseDown?: (e: React.MouseEvent, pageElement: HTMLElement, currentPage: number, scale: number, pageHeight: number) => void;
   onMouseMove?: (e: React.MouseEvent, pageElement: HTMLElement, currentPage: number, scale: number, pageHeight: number) => void;
   onMouseUp?: (e: React.MouseEvent, pageElement: HTMLElement, currentPage: number, scale: number, pageHeight: number) => void;
@@ -74,6 +75,7 @@ export function PdfViewer({
   extractionFields = [],
   isDrawingMode = false,
   drawingBox = null,
+  tempFieldData = null,
   onMouseDown,
   onMouseMove,
   onMouseUp
@@ -321,6 +323,60 @@ export function PdfViewer({
     );
   };
 
+  const renderTempFieldOverlay = (field: {id: string, boundingBox: [number, number, number, number], page: number}) => {
+    const [x0, y0, x1, y1] = field.boundingBox;
+    
+    // Convert PDF coordinates to screen coordinates
+    const actualPdfHeight = pageHeight;
+    const screenY0 = actualPdfHeight - y1; // Flip Y coordinate
+    const screenY1 = actualPdfHeight - y0;
+    
+    const style: React.CSSProperties = {
+      position: 'absolute',
+      left: `${x0 * scale}px`,
+      top: `${screenY0 * scale}px`,
+      width: `${(x1 - x0) * scale}px`,
+      height: `${(screenY1 - screenY0) * scale}px`,
+      backgroundColor: 'rgba(34, 197, 94, 0.25)',  // Green background for temporary field
+      border: '3px dashed #22c55e',  // Dashed border to indicate it's temporary
+      borderRadius: '6px',
+      cursor: 'pointer',
+      zIndex: 35,  // Higher than saved fields
+      pointerEvents: 'auto',
+      boxShadow: '0 0 12px rgba(34, 197, 94, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.1)',
+      animation: 'pulse 2s infinite',  // Subtle animation to draw attention
+      transition: 'all 0.15s ease-in-out'
+    };
+
+    return (
+      <div
+        key={`temp-field-${field.id}`}
+        style={style}
+        title="Temporary Field (not saved yet)"
+      >
+        {/* Label overlay for temporary field */}
+        <div
+          style={{
+            position: 'absolute',
+            top: '-32px',
+            left: '0px',
+            backgroundColor: '#22c55e',
+            color: 'white',
+            padding: '4px 8px',
+            borderRadius: '4px',
+            fontSize: '12px',
+            fontWeight: 500,
+            whiteSpace: 'nowrap',
+            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+            zIndex: 40
+          }}
+        >
+          New Field (unsaved)
+        </div>
+      </div>
+    );
+  };
+
   const renderDrawingBox = () => {
     if (!drawingBox) return null;
     
@@ -494,6 +550,13 @@ export function PdfViewer({
                 <div className="absolute inset-0 pointer-events-none">
                   {currentPageExtractionFields.map((field) => renderExtractionFieldOverlay(field))}
                 </div>
+                
+                {/* Temporary Field Overlay (unsaved field being edited) */}
+                {tempFieldData && tempFieldData.page === currentPage - 1 && (
+                  <div className="absolute inset-0 pointer-events-none">
+                    {renderTempFieldOverlay(tempFieldData)}
+                  </div>
+                )}
                 
                 {/* Drawing Box Overlay */}
                 {isDrawingMode && (

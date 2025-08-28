@@ -898,6 +898,7 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
                     extractionFields={extractionFields}
                     isDrawingMode={isDrawingMode}
                     drawingBox={drawingBox}
+                    tempFieldData={tempFieldData}
                     className="flex-1"
                     onObjectClick={handleObjectClick}
                     onObjectDoubleClick={handleObjectDoubleClick}
