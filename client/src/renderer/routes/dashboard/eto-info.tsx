@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { EtoRunsTable } from "../../components/EtoRunsTable";
-import { EtoRunViewerModal } from "../../components/EtoRunViewerModal";
 import { TemplateBuilderModal } from "../../components/TemplateBuilderModal";
 import { useEtoRuns, useServerHealth } from "../../hooks/useApi";
 import { useMemo, useState } from "react";
@@ -18,8 +17,7 @@ function EtoInfoPage() {
   });
   const { isServerOnline } = useServerHealth();
 
-  // Modal state for PDF viewer and template builder
-  const [viewingRunId, setViewingRunId] = useState<string | null>(null);
+  // Modal state for template builder
   const [buildingTemplateForRun, setBuildingTemplateForRun] = useState<string | null>(null);
 
   // Group runs by status
@@ -42,18 +40,9 @@ function EtoInfoPage() {
     };
   }, [allRuns]);
 
-  const handleView = (runId: string) => {
-    console.log("View run:", runId);
-    setViewingRunId(runId);
-  };
-
   const handleReview = (runId: string) => {
     console.log("Build Template for run:", runId);
     setBuildingTemplateForRun(runId);
-  };
-
-  const handleCloseViewer = () => {
-    setViewingRunId(null);
   };
 
   const handleTemplateBuilderSave = (templateData: any) => {
@@ -169,7 +158,6 @@ function EtoInfoPage() {
           title="Currently Processing"
           runs={processingRuns}
           status="processing"
-          onView={handleView}
           onReview={handleReview}
         />
 
@@ -177,7 +165,6 @@ function EtoInfoPage() {
           title="Successful Extractions"
           runs={successRuns}
           status="success"
-          onView={handleView}
           onReview={handleReview}
         />
 
@@ -185,7 +172,6 @@ function EtoInfoPage() {
           title="Failed Extractions"
           runs={failureRuns}
           status="failure"
-          onView={handleView}
           onReview={handleReview}
         />
 
@@ -193,17 +179,10 @@ function EtoInfoPage() {
           title="Needs Template Creation"
           runs={needsTemplateRuns}
           status="needs_template"
-          onView={handleView}
           onReview={handleReview}
         />
       </div>
       </div>
-      
-      {/* PDF Viewer Modal - Positioned outside content area */}
-      <EtoRunViewerModal 
-        runId={viewingRunId}
-        onClose={handleCloseViewer}
-      />
       
       {/* Template Builder Modal */}
       <TemplateBuilderModal

@@ -2,11 +2,10 @@ import { EtoRunSummary, EtoDataTransforms } from "../types/eto";
 
 interface EtoRunRowProps {
   run: EtoRunSummary;
-  onView: (runId: string) => void;
   onReview: (runId: string) => void;
 }
 
-export function EtoRunRow({ run, onView, onReview }: EtoRunRowProps) {
+export function EtoRunRow({ run, onReview }: EtoRunRowProps) {
   const formatDate = (date: Date) => {
     return date.toLocaleDateString("en-US", {
       month: "short",
@@ -154,12 +153,6 @@ export function EtoRunRow({ run, onView, onReview }: EtoRunRowProps) {
         <div className="flex items-center space-x-3">
           {/* Action buttons */}
           <div className="flex space-x-2">
-            <button
-              onClick={() => onView(run.id.toString())}
-              className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
-            >
-              View
-            </button>
             {run.status !== "success" && (
               <button
                 onClick={() => onReview(run.id.toString())}

@@ -154,10 +154,17 @@ export function PdfViewer({
   };
 
   // Filter objects for current page and selected types
+  // Also include objects that are selected even if their type is not shown
   const currentPageObjects = objects.filter((obj) => {
     const isCurrentPage = obj.page === currentPage - 1; // Objects use 0-based page indexing
     const isSelectedType = !selectedObjectTypes || selectedObjectTypes.has(obj.type);
-    return isCurrentPage && isSelectedType;
+    
+    // Generate object ID to check if this object is selected
+    const objectId = `${obj.type}-${obj.page}-${obj.bbox.join('-')}`;
+    const isObjectSelected = selectedObjects?.has(objectId) || false;
+    
+    // Show object if it's on current page AND (its type is selected OR the object itself is selected)
+    return isCurrentPage && (isSelectedType || isObjectSelected);
   });
 
   // Filter extraction fields for current page
@@ -206,7 +213,17 @@ export function PdfViewer({
     // Determine styling based on state
     let backgroundColor, border, boxShadow, transform, zIndex;
     
-    if (isSelected) {
+    // Check if this object type is currently visible
+    const isTypeVisible = !selectedObjectTypes || selectedObjectTypes.has(obj.type);
+    
+    if (isSelected && !isTypeVisible) {
+      // Selected objects whose type is not shown (gray with distinct styling)
+      backgroundColor = 'rgba(156, 163, 175, 0.6)';
+      border = '3px solid #9ca3af';
+      boxShadow = '0 0 8px rgba(156, 163, 175, 0.8), inset 0 0 0 1px rgba(255, 255, 255, 0.3)';
+      transform = 'scale(1.02)';
+      zIndex = 26; // Higher than normal selected objects
+    } else if (isSelected) {
       // Selected objects (green)
       backgroundColor = 'rgba(34, 197, 94, 0.5)';
       border = '3px solid #22c55e';
@@ -237,9 +254,9 @@ export function PdfViewer({
       height: `${(screenY1 - screenY0) * scale}px`,
       backgroundColor,
       border,
-      cursor: (onObjectClick || onObjectDoubleClick) ? 'pointer' : 'default',
+      cursor: (onObjectClick || onObjectDoubleClick) ? (isSelected && !isTypeVisible ? 'not-allowed' : 'pointer') : 'default',
       zIndex,
-      pointerEvents: (onObjectClick || onObjectDoubleClick) ? 'auto' : 'none',
+      pointerEvents: (onObjectClick || onObjectDoubleClick) ? (isSelected && !isTypeVisible ? 'none' : 'auto') : 'none',
       boxShadow,
       transform,
       transition: 'all 0.15s ease-in-out'
@@ -251,7 +268,12 @@ export function PdfViewer({
         style={style}
         onClick={() => onObjectClick?.(obj)}
         onDoubleClick={() => onObjectDoubleClick?.(obj)}
-        title={hasExtractionField ? `${obj.text || obj.type} - Has extraction field` : obj.text || `${obj.type} object`}
+        title={isSelected && !isTypeVisible 
+          ? `${obj.text || obj.type} - Selected (type hidden, cannot deselect)`
+          : hasExtractionField 
+            ? `${obj.text || obj.type} - Has extraction field` 
+            : obj.text || `${obj.type} object`
+        }
         className={`transition-all ${isSelected ? 'animate-pulse' : hasExtractionField ? 'animate-pulse' : 'hover:opacity-80 hover:scale-105'}`}
       />
     );
@@ -380,12 +402,18 @@ export function PdfViewer({
   const renderDrawingBox = () => {
     if (!drawingBox) return null;
     
+    // Handle negative width/height by normalizing the box position and size
+    const x = drawingBox.width >= 0 ? drawingBox.x : drawingBox.x + drawingBox.width;
+    const y = drawingBox.height >= 0 ? drawingBox.y : drawingBox.y + drawingBox.height;
+    const width = Math.abs(drawingBox.width);
+    const height = Math.abs(drawingBox.height);
+    
     const style: React.CSSProperties = {
       position: 'absolute',
-      left: `${drawingBox.x * scale}px`,
-      top: `${drawingBox.y * scale}px`,
-      width: `${drawingBox.width * scale}px`,
-      height: `${drawingBox.height * scale}px`,
+      left: `${x * scale}px`,
+      top: `${y * scale}px`,
+      width: `${width * scale}px`,
+      height: `${height * scale}px`,
       backgroundColor: 'rgba(59, 130, 246, 0.2)',
       border: '2px dashed #3b82f6',
       borderRadius: '4px',

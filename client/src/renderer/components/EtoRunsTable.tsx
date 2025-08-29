@@ -6,7 +6,6 @@ interface EtoRunsTableProps {
   title: string;
   runs: EtoRunSummary[];
   status: "not_started" | "processing" | "success" | "failure" | "needs_template";
-  onView: (runId: string) => void;
   onReview: (runId: string) => void;
 }
 
@@ -14,7 +13,6 @@ export function EtoRunsTable({
   title,
   runs,
   status,
-  onView,
   onReview,
 }: EtoRunsTableProps) {
   const [isExpanded, setIsExpanded] = useState(runs.length > 0);
@@ -156,7 +154,6 @@ export function EtoRunsTable({
                 <EtoRunRow
                   key={run.id}
                   run={run}
-                  onView={onView}
                   onReview={onReview}
                 />
               ))}
