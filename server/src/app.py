@@ -193,6 +193,7 @@ def get_system_stats():
             success_runs = session.query(EtoRun).filter(EtoRun.status == 'success').count()
             failure_runs = session.query(EtoRun).filter(EtoRun.status == 'failure').count()
             needs_template_runs = session.query(EtoRun).filter(EtoRun.status == 'needs_template').count()
+            skipped_runs = session.query(EtoRun).filter(EtoRun.status == 'skipped').count()
             
         finally:
             session.close()
@@ -210,7 +211,8 @@ def get_system_stats():
                     "success": success_runs,
                     "failure": failure_runs,
                     "needs_template": needs_template_runs,
-                    "total": not_started_runs + processing_runs + success_runs + failure_runs + needs_template_runs
+                    "skipped": skipped_runs,
+                    "total": not_started_runs + processing_runs + success_runs + failure_runs + needs_template_runs + skipped_runs
                 }
             },
             "storage": storage_stats,
@@ -388,6 +390,131 @@ def reprocess_unrecognized():
         
     except Exception as e:
         logger.error(f"Error triggering reprocessing: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.get("/api/templates/<int:template_id>/view")
+def get_template_view_data(template_id):
+    """Get detailed template data for viewing, including PDF and object information"""
+    logger.info(f"Loading template view data for template {template_id}")
+    try:
+        db_service = get_db_service()
+        session = db_service.get_session()
+        
+        try:
+            from .database import PdfTemplate, PdfFile, EtoRun
+            import json
+            
+            # Get the template
+            logger.info(f"Querying for template {template_id}")
+            template = session.query(PdfTemplate).filter(PdfTemplate.id == template_id).first()
+            if not template:
+                logger.error(f"Template {template_id} not found")
+                return jsonify({"error": f"Template {template_id} not found"}), 404
+            
+            logger.info(f"Found template: {template.name}")
+            
+            # Get a sample PDF that this template was created from
+            # Look for the first ETO run that used this template successfully
+            logger.info(f"Looking for ETO runs that used template {template_id}")
+            sample_run = session.query(EtoRun).filter(
+                EtoRun.matched_template_id == template_id,
+                EtoRun.status == 'success'
+            ).first()
+            
+            # If no successful run found, look for any run that matched this template
+            if not sample_run:
+                logger.info(f"No successful runs found, looking for any run with template {template_id}")
+                sample_run = session.query(EtoRun).filter(
+                    EtoRun.matched_template_id == template_id
+                ).first()
+            
+            if not sample_run:
+                logger.error(f"No sample PDF found for template {template_id}")
+                return jsonify({"error": "No sample PDF found for this template"}), 404
+            
+            logger.info(f"Found sample run {sample_run.id} with PDF file {sample_run.pdf_file_id}")
+            
+            # Get the PDF file
+            pdf_file = session.query(PdfFile).filter(PdfFile.id == sample_run.pdf_file_id).first()
+            if not pdf_file:
+                logger.error(f"PDF file {sample_run.pdf_file_id} not found for sample run")
+                return jsonify({"error": "Sample PDF file not found"}), 404
+            
+            logger.info(f"Found PDF file: {pdf_file.original_filename}")
+            
+            # Parse template data
+            logger.info(f"Parsing template data")
+            try:
+                signature_objects = json.loads(template.signature_objects) if template.signature_objects else []
+                logger.info(f"Parsed {len(signature_objects)} signature objects")
+            except Exception as e:
+                logger.error(f"Error parsing signature_objects: {e}")
+                signature_objects = []
+                
+            try:
+                extraction_fields = json.loads(template.extraction_fields) if template.extraction_fields else []
+                logger.info(f"Parsed {len(extraction_fields)} extraction fields")
+            except Exception as e:
+                logger.error(f"Error parsing extraction_fields: {e}")
+                extraction_fields = []
+                
+            try:
+                pdf_objects = json.loads(pdf_file.objects_json) if pdf_file.objects_json else []
+                logger.info(f"Parsed {len(pdf_objects)} PDF objects")
+            except Exception as e:
+                logger.error(f"Error parsing PDF objects: {e}")
+                pdf_objects = []
+            
+            # Build response
+            logger.info(f"Building response data")
+            try:
+                template_data = {
+                    "id": template.id,
+                    "name": template.name,
+                    "description": template.description,
+                    "status": template.status,
+                    "is_complete": template.is_complete,
+                    "coverage_threshold": template.coverage_threshold,
+                    "usage_count": getattr(template, 'usage_count', 0),
+                    "last_used_at": template.last_used_at.isoformat() if getattr(template, 'last_used_at', None) else None,
+                    "success_rate": getattr(template, 'success_rate', None),
+                    "version": getattr(template, 'version', 1),
+                    "created_by": getattr(template, 'created_by', None),
+                    "created_at": template.created_at.isoformat() if getattr(template, 'created_at', None) else None,
+                    "updated_at": template.updated_at.isoformat() if getattr(template, 'updated_at', None) else None,
+                    "extraction_rules_count": len(extraction_fields),
+                    "signature_object_count": len(signature_objects),
+                    
+                    # PDF data
+                    "sample_pdf_id": pdf_file.id,
+                    "sample_pdf_filename": pdf_file.original_filename,
+                    "sample_pdf_page_count": getattr(pdf_file, 'page_count', 1),
+                    "pdf_objects": pdf_objects,
+                    "signature_objects": signature_objects,
+                    "extraction_fields": extraction_fields
+                }
+                logger.info(f"Template data built successfully")
+                
+            except Exception as e:
+                logger.error(f"Error building template data: {e}")
+                logger.error(f"Template fields available: {dir(template)}")
+                return jsonify({"error": f"Error building template data: {str(e)}"}), 500
+            
+            logger.info(f"Retrieved template view data for template {template_id}")
+            return jsonify({
+                "success": True,
+                "result": template_data
+            })
+            
+        finally:
+            session.close()
+            
+    except Exception as e:
+        logger.error(f"Error getting template view data for {template_id}: {e}")
+        logger.error(f"Exception type: {type(e)}")
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -644,6 +771,7 @@ def get_processing_stats():
             success_runs = session.query(EtoRun).filter(EtoRun.status == 'success').count()
             failure_runs = session.query(EtoRun).filter(EtoRun.status == 'failure').count()
             needs_template_runs = session.query(EtoRun).filter(EtoRun.status == 'needs_template').count()
+            skipped_runs = session.query(EtoRun).filter(EtoRun.status == 'skipped').count()
             
             # Get processing step breakdown for runs currently in processing
             processing_steps = {}
@@ -674,7 +802,8 @@ def get_processing_stats():
                     "processing": processing_runs,
                     "success": success_runs,
                     "failure": failure_runs,
-                    "needs_template": needs_template_runs
+                    "needs_template": needs_template_runs,
+                    "skipped": skipped_runs
                 },
                 "processing_steps": processing_steps,
                 "success_rate": (success_runs / total_runs * 100) if total_runs > 0 else 0,
@@ -1156,57 +1285,213 @@ def get_eto_run_processing_details(run_id):
         return jsonify({"error": str(e)}), 500
 
 
-@app.post("/api/eto-runs/<int:run_id>/reprocess")
-def reprocess_single_eto_run(run_id):
-    """Reprocess a single ETO run (reset to not_started status)"""
+
+@app.post("/api/eto-runs/<int:run_id>/skip")
+def skip_eto_run(run_id):
+    """Skip an ETO run (mark as skipped status)"""
     try:
+        from .database import EtoRun
+        from datetime import datetime
+        
         db_service = get_db_service()
         session = db_service.get_session()
         
         try:
-            from .database import EtoRun
-            
+            # Get the ETO run
             eto_run = session.query(EtoRun).filter(EtoRun.id == run_id).first()
+            
             if not eto_run:
                 return jsonify({"error": "ETO run not found"}), 404
             
-            # Only allow reprocessing of failed or needs_template runs
-            if eto_run.status not in ['failure', 'needs_template']:
+            # Only allow skipping of runs that aren't already processed successfully
+            if eto_run.status == 'success':
                 return jsonify({
-                    "error": f"Cannot reprocess run with status '{eto_run.status}'. Only 'failure' and 'needs_template' runs can be reprocessed."
+                    "error": f"Cannot skip run with status '{eto_run.status}'. Successfully processed runs cannot be skipped."
                 }), 400
             
             old_status = eto_run.status
             
-            # Reset run to not_started status
-            worker = get_processing_worker()
-            worker._update_run_status(
-                run_id,
-                'not_started',
-                processing_step=None,
-                matched_template_id=None,
-                extracted_data=None,
-                transformation_audit=None,
-                target_data=None,
-                error_type=None,
-                error_message=None,
-                completed_at=None,
-                started_at=None
-            )
+            # Set run to skipped status
+            eto_run.status = 'skipped'
+            eto_run.processing_step = None  # Clear processing step
+            eto_run.error_type = None  # Clear any error info
+            eto_run.error_message = None
+            eto_run.error_details = None
+            eto_run.updated_at = datetime.utcnow()
+            
+            session.commit()
+            
+            logger.info(f"ETO run {run_id} marked as skipped (was '{old_status}')")
             
             return jsonify({
                 "success": True,
-                "message": f"ETO run {run_id} reset from '{old_status}' to 'not_started' for reprocessing",
+                "message": f"ETO run {run_id} marked as skipped",
                 "run_id": run_id,
                 "old_status": old_status,
-                "new_status": "not_started"
+                "new_status": "skipped"
             })
             
         finally:
             session.close()
     
     except Exception as e:
+        logger.error(f"Error skipping ETO run {run_id}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.delete("/api/eto-runs/<int:run_id>")
+def delete_eto_run(run_id):
+    """Permanently delete an ETO run and associated data"""
+    try:
+        from .database import EtoRun
+        
+        db_service = get_db_service()
+        session = db_service.get_session()
+        
+        try:
+            # Get the ETO run
+            eto_run = session.query(EtoRun).filter(EtoRun.id == run_id).first()
+            if not eto_run:
+                return jsonify({"error": f"ETO run {run_id} not found"}), 404
+            
+            # Only allow deletion of skipped runs for safety
+            if eto_run.status != 'skipped':
+                return jsonify({
+                    "error": f"Cannot delete run with status '{eto_run.status}'. Only skipped runs can be permanently deleted."
+                }), 400
+            
+            # Delete the ETO run (cascading should handle related data)
+            session.delete(eto_run)
+            session.commit()
+            
+            logger.info(f"ETO run {run_id} permanently deleted")
+            
+            return jsonify({
+                "message": f"ETO run {run_id} permanently deleted"
+            })
+            
+        finally:
+            session.close()
+            
+    except Exception as e:
+        logger.error(f"Error deleting ETO run {run_id}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.post("/api/eto-runs/<int:run_id>/reprocess")
+def reprocess_eto_run(run_id):
+    """Reprocess a skipped ETO run (reset to not_started status)"""
+    logger.info(f"Reprocess request received for ETO run {run_id}")
+    
+    try:
+        from .database import EtoRun
+        logger.info(f"Successfully imported EtoRun for run {run_id}")
+        
+        db_service = get_db_service()
+        session = db_service.get_session()
+        logger.info(f"Got database session for run {run_id}")
+        
+        try:
+            # Get the ETO run
+            logger.info(f"Querying for ETO run {run_id}")
+            eto_run = session.query(EtoRun).filter(EtoRun.id == run_id).first()
+            if not eto_run:
+                logger.error(f"ETO run {run_id} not found in database")
+                return jsonify({"error": f"ETO run {run_id} not found"}), 404
+            
+            old_status = eto_run.status
+            logger.info(f"Found ETO run {run_id} with status: {old_status}")
+            
+            # Only allow reprocessing of skipped runs
+            if eto_run.status != 'skipped':
+                logger.error(f"Cannot reprocess run {run_id} with status '{eto_run.status}'")
+                return jsonify({
+                    "error": f"Cannot reprocess run with status '{eto_run.status}'. Only skipped runs can be reprocessed."
+                }), 400
+            
+            # Reset run to not_started status and clear any previous processing data
+            logger.info(f"Resetting ETO run {run_id} data fields")
+            eto_run.status = 'not_started'
+            eto_run.processing_step = None
+            eto_run.matched_template_id = None
+            eto_run.extracted_data = None
+            eto_run.transformation_audit = None
+            eto_run.target_data = None
+            eto_run.error_type = None
+            eto_run.error_message = None
+            eto_run.started_at = None
+            eto_run.completed_at = None
+            
+            logger.info(f"Committing changes for ETO run {run_id}")
+            session.commit()
+            
+            logger.info(f"ETO run {run_id} reset for reprocessing (was '{old_status}')")
+            
+            # Process this specific run
+            try:
+                logger.info(f"Attempting to process specific ETO run {run_id}")
+                from .processing_worker import process_single_run
+                success = process_single_run(run_id)
+                if success:
+                    logger.info(f"Successfully started processing of ETO run {run_id}")
+                else:
+                    logger.warning(f"Failed to start processing of ETO run {run_id}")
+            except Exception as e:
+                logger.warning(f"Failed to start processing: {e}")
+            
+            logger.info(f"Returning success response for ETO run {run_id} reprocessing")
+            return jsonify({
+                "message": f"ETO run {run_id} reset for reprocessing",
+                "new_status": "not_started"
+            })
+            
+        finally:
+            logger.info(f"Closing database session for ETO run {run_id}")
+            session.close()
+            
+    except Exception as e:
         logger.error(f"Error reprocessing ETO run {run_id}: {e}")
+        logger.error(f"Exception type: {type(e)}")
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.get("/api/pdf-files/<int:pdf_id>/download")
+def download_pdf_file(pdf_id):
+    """Download a PDF file by its ID"""
+    try:
+        db_service = get_db_service()
+        session = db_service.get_session()
+        
+        try:
+            from .database import PdfFile
+            from flask import send_file
+            import os
+            
+            # Get the PDF file record
+            pdf_file = session.query(PdfFile).filter(PdfFile.id == pdf_id).first()
+            if not pdf_file:
+                return jsonify({"error": f"PDF file {pdf_id} not found"}), 404
+            
+            # Construct the file path
+            file_path = pdf_file.file_path
+            if not os.path.exists(file_path):
+                return jsonify({"error": f"PDF file not found on disk: {file_path}"}), 404
+            
+            # Serve the file
+            return send_file(
+                file_path,
+                as_attachment=False,  # Display in browser rather than force download
+                download_name=pdf_file.original_filename,
+                mimetype='application/pdf'
+            )
+            
+        finally:
+            session.close()
+            
+    except Exception as e:
+        logger.error(f"Error downloading PDF file {pdf_id}: {e}")
         return jsonify({"error": str(e)}), 500
 
 

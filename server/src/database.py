@@ -148,7 +148,7 @@ class EtoRun(Base):
     pdf_file_id = Column(Integer, ForeignKey('pdf_files.id'), nullable=False, index=True)
     
     # Overall processing status
-    status = Column(String(50), nullable=False, index=True)  # 'not_started', 'processing', 'success', 'failure', 'needs_template'
+    status = Column(String(50), nullable=False, index=True)  # 'not_started', 'processing', 'success', 'failure', 'needs_template', 'skipped'
     
     # Current processing step (only populated when status='processing')
     processing_step = Column(String(50))  # 'template_matching', 'extracting_data', 'transforming_data'

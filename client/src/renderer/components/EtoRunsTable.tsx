@@ -5,8 +5,13 @@ import { EtoRunRow } from "./EtoRunRow";
 interface EtoRunsTableProps {
   title: string;
   runs: EtoRunSummary[];
-  status: "not_started" | "processing" | "success" | "failure" | "needs_template";
-  onReview: (runId: string) => void;
+  status: "not_started" | "processing" | "success" | "failure" | "needs_template" | "skipped";
+  onReview?: (runId: string) => void;
+  onSkip?: (runId: string) => void;
+  onView?: (runId: string) => void;
+  onDelete?: (runId: string) => void;
+  onReprocess?: (runId: string) => void;
+  showButtons?: boolean;
 }
 
 export function EtoRunsTable({
@@ -14,6 +19,11 @@ export function EtoRunsTable({
   runs,
   status,
   onReview,
+  onSkip,
+  onView,
+  onDelete,
+  onReprocess,
+  showButtons = true,
 }: EtoRunsTableProps) {
   const [isExpanded, setIsExpanded] = useState(runs.length > 0);
 
@@ -29,6 +39,8 @@ export function EtoRunsTable({
         return "text-blue-400";
       case "not_started":
         return "text-gray-400";
+      case "skipped":
+        return "text-gray-500";
       default:
         return "text-gray-400";
     }
@@ -103,6 +115,21 @@ export function EtoRunsTable({
             />
           </svg>
         );
+      case "skipped":
+        return (
+          <svg
+            className="w-5 h-5 text-gray-500"
+            fill="currentColor"
+            viewBox="0 0 20 20"
+          >
+            <path
+              fillRule="evenodd"
+              d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z"
+              clipRule="evenodd"
+            />
+            <path d="M4 4l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+          </svg>
+        );
       default:
         return null;
     }
@@ -155,6 +182,11 @@ export function EtoRunsTable({
                   key={run.id}
                   run={run}
                   onReview={onReview}
+                  onSkip={onSkip}
+                  onView={onView}
+                  onDelete={onDelete}
+                  onReprocess={onReprocess}
+                  showButtons={showButtons}
                 />
               ))}
             </div>

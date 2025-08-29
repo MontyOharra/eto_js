@@ -665,6 +665,47 @@ class EtoProcessingWorker:
         except Exception as e:
             logger.error(f"Error marking run as failed: {e}")
     
+    def process_single_run(self, run_id: int):
+        """
+        Process a single specific ETO run by ID.
+        
+        This method processes only the specified run through the complete workflow:
+        not_started -> processing (template_matching -> extracting_data -> transforming_data) -> success
+        
+        Args:
+            run_id (int): The ID of the ETO run to process
+            
+        Returns:
+            bool: True if processing started successfully, False otherwise
+        """
+        try:
+            session = self.db_service.get_session()
+            try:
+                # Get the specific ETO run
+                eto_run = session.query(EtoRun).filter(EtoRun.id == run_id).first()
+                if not eto_run:
+                    logger.error(f"ETO run {run_id} not found for processing")
+                    return False
+                
+                if eto_run.status != 'not_started':
+                    logger.warning(f"ETO run {run_id} has status '{eto_run.status}', expected 'not_started'")
+                    return False
+                
+                logger.info(f"Starting processing of single ETO run {run_id}")
+                
+                # Process this specific run
+                self._process_eto_run(eto_run)
+                
+                logger.info(f"Successfully started processing of ETO run {run_id}")
+                return True
+                
+            finally:
+                session.close()
+                
+        except Exception as e:
+            logger.error(f"Error processing single ETO run {run_id}: {e}")
+            return False
+    
     def reprocess_failed_runs(self):
         """
         Reprocess all failed and needs_template ETO runs.
@@ -775,3 +816,9 @@ def trigger_reprocessing():
     if processing_worker is None:
         raise RuntimeError("Processing worker not initialized. Call init_processing_worker() first.")
     return processing_worker.reprocess_failed_runs()
+
+def process_single_run(run_id: int):
+    """Process a single specific ETO run by ID"""
+    if processing_worker is None:
+        raise RuntimeError("Processing worker not initialized. Call init_processing_worker() first.")
+    return processing_worker.process_single_run(run_id)

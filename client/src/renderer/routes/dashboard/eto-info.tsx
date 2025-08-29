@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { EtoRunsTable } from "../../components/EtoRunsTable";
 import { TemplateBuilderModal } from "../../components/TemplateBuilderModal";
+import { ConfirmationModal } from "../../components/ConfirmationModal";
 import { useEtoRuns, useServerHealth } from "../../hooks/useApi";
 import { useMemo, useState } from "react";
 
@@ -19,15 +20,24 @@ function EtoInfoPage() {
 
   // Modal state for template builder
   const [buildingTemplateForRun, setBuildingTemplateForRun] = useState<string | null>(null);
+  
+  // Confirmation modal state
+  const [confirmationModal, setConfirmationModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
 
   // Group runs by status
-  const { successRuns, failureRuns, needsTemplateRuns, processingRuns } = useMemo(() => {
+  const { successRuns, failureRuns, needsTemplateRuns, processingRuns, skippedRuns } = useMemo(() => {
     if (!allRuns) {
       return {
         successRuns: [],
         failureRuns: [],
         needsTemplateRuns: [],
         processingRuns: [],
+        skippedRuns: [],
       };
     }
 
@@ -37,6 +47,7 @@ function EtoInfoPage() {
       needsTemplateRuns: allRuns.filter(run => run.status === "needs_template"),
       // Combine both processing and not_started into a single processing group
       processingRuns: allRuns.filter(run => run.status === "processing" || run.status === "not_started"),
+      skippedRuns: allRuns.filter(run => run.status === "skipped"),
     };
   }, [allRuns]);
 
@@ -52,6 +63,78 @@ function EtoInfoPage() {
 
   const handleTemplateBuilderClose = () => {
     setBuildingTemplateForRun(null);
+  };
+
+  const handleSkip = async (runId: string) => {
+    try {
+      const response = await fetch(`http://localhost:8080/api/eto-runs/${runId}/skip`, {
+        method: 'POST',
+      });
+      
+      if (response.ok) {
+        // Refresh the data to show updated status
+        refetch();
+      } else {
+        console.error('Failed to skip run:', await response.text());
+      }
+    } catch (error) {
+      console.error('Error skipping run:', error);
+    }
+  };
+
+  const handleView = (runId: string) => {
+    console.log("View run:", runId);
+    // TODO: Implement view functionality for successful/failed extractions
+  };
+
+  const handleDelete = (runId: string) => {
+    setConfirmationModal({
+      isOpen: true,
+      title: "Delete ETO Run",
+      message: "Are you sure you want to permanently delete this ETO run? This action cannot be undone.",
+      onConfirm: () => confirmDelete(runId)
+    });
+  };
+
+  const confirmDelete = async (runId: string) => {
+    try {
+      const response = await fetch(`http://localhost:8080/api/eto-runs/${runId}`, {
+        method: 'DELETE',
+      });
+      
+      if (response.ok) {
+        refetch(); // Refresh the data
+        setConfirmationModal(null);
+      } else {
+        const errorData = await response.json();
+        console.error('Failed to delete run:', errorData.error || 'Unknown error');
+        setConfirmationModal(null);
+      }
+    } catch (error) {
+      console.error('Error deleting run:', error);
+      setConfirmationModal(null);
+    }
+  };
+
+  const handleReprocess = async (runId: string) => {
+    try {
+      const response = await fetch(`http://localhost:8080/api/eto-runs/${runId}/reprocess`, {
+        method: 'POST',
+      });
+      
+      if (response.ok) {
+        refetch(); // Refresh the data to show updated status
+      } else {
+        const errorData = await response.json();
+        console.error('Failed to reprocess run:', errorData.error || 'Unknown error');
+      }
+    } catch (error) {
+      console.error('Error reprocessing run:', error);
+    }
+  };
+
+  const closeConfirmationModal = () => {
+    setConfirmationModal(null);
   };
 
   // Show loading state
@@ -158,21 +241,23 @@ function EtoInfoPage() {
           title="Currently Processing"
           runs={processingRuns}
           status="processing"
-          onReview={handleReview}
+          showButtons={false}
         />
 
         <EtoRunsTable
           title="Successful Extractions"
           runs={successRuns}
           status="success"
-          onReview={handleReview}
+          onView={handleView}
         />
 
         <EtoRunsTable
           title="Failed Extractions"
           runs={failureRuns}
           status="failure"
+          onView={handleView}
           onReview={handleReview}
+          onSkip={handleSkip}
         />
 
         <EtoRunsTable
@@ -180,6 +265,15 @@ function EtoInfoPage() {
           runs={needsTemplateRuns}
           status="needs_template"
           onReview={handleReview}
+          onSkip={handleSkip}
+        />
+
+        <EtoRunsTable
+          title="Skipped Runs"
+          runs={skippedRuns}
+          status="skipped"
+          onDelete={handleDelete}
+          onReprocess={handleReprocess}
         />
       </div>
       </div>
@@ -190,6 +284,19 @@ function EtoInfoPage() {
         onClose={handleTemplateBuilderClose}
         onSave={handleTemplateBuilderSave}
       />
+      
+      {/* Confirmation Modal */}
+      {confirmationModal && (
+        <ConfirmationModal
+          isOpen={confirmationModal.isOpen}
+          title={confirmationModal.title}
+          message={confirmationModal.message}
+          variant="danger"
+          confirmText="Delete"
+          onConfirm={confirmationModal.onConfirm}
+          onCancel={closeConfirmationModal}
+        />
+      )}
     </>
   );
 }

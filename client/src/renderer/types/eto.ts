@@ -8,7 +8,7 @@ export interface EtoRun {
   id: number;
   email_id: number;
   pdf_file_id: number;
-  status: "not_started" | "processing" | "success" | "failure" | "needs_template";
+  status: "not_started" | "processing" | "success" | "failure" | "needs_template" | "skipped";
   processing_step?: "template_matching" | "extracting_data" | "transforming_data";
   matched_template_id?: number;
   has_extracted_data?: boolean;
@@ -38,7 +38,7 @@ export interface EtoRun {
 export interface EtoRunSummary {
   id: number;
   fileName: string;
-  status: "not_started" | "processing" | "success" | "failure" | "needs_template";
+  status: "not_started" | "processing" | "success" | "failure" | "needs_template" | "skipped";
   processing_step?: "template_matching" | "extracting_data" | "transforming_data";
   receivedAt: Date;
   processingCompletedAt?: Date;
@@ -192,6 +192,8 @@ export class EtoDataTransforms {
         return 'text-blue-400';
       case 'not_started':
         return 'text-gray-400';
+      case 'skipped':
+        return 'text-gray-500';
       default:
         return 'text-gray-400';
     }
@@ -212,6 +214,8 @@ export class EtoDataTransforms {
         return 'Processing';
       case 'not_started':
         return 'Not Started';
+      case 'skipped':
+        return 'Skipped';
       default:
         return 'Unknown';
     }

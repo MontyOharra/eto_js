@@ -385,6 +385,47 @@ class ApiClient {
   }
 
   /**
+   * Get detailed template data for viewing
+   */
+  async getTemplateViewData(templateId: number): Promise<{
+    success: boolean;
+    result: {
+      id: number;
+      name: string;
+      description?: string;
+      status: "active" | "archived" | "draft";
+      is_complete: boolean;
+      coverage_threshold: number;
+      usage_count: number;
+      last_used_at?: string;
+      success_rate?: number;
+      version: number;
+      created_by?: string;
+      created_at?: string;
+      updated_at?: string;
+      extraction_rules_count: number;
+      signature_object_count: number;
+      sample_pdf_id: number;
+      sample_pdf_filename: string;
+      sample_pdf_page_count: number;
+      pdf_objects: any[];
+      signature_objects: any[];
+      extraction_fields: Array<{
+        id: string;
+        boundingBox: [number, number, number, number];
+        page: number;
+        label: string;
+        description: string;
+        required: boolean;
+        validationRegex?: string;
+      }>;
+    };
+    error?: string;
+  }> {
+    return this.fetchApi(`/api/templates/${templateId}/view`);
+  }
+
+  /**
    * Generic GET request (for flexibility)
    */
   async get<T = any>(endpoint: string): Promise<{ data: T }> {

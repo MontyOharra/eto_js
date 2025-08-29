@@ -25,7 +25,8 @@ interface ExtractionField {
 }
 
 interface PdfViewerProps {
-  pdfUrl: string;
+  pdfUrl?: string;
+  pdfId?: number; // Alternative to pdfUrl - will construct URL from ID
   objects?: PdfObject[];
   className?: string;
   showObjectOverlays?: boolean;
@@ -34,6 +35,8 @@ interface PdfViewerProps {
   selectedObjectTypes?: Set<string>;
   selectedObjects?: Set<string>;
   extractionFields?: ExtractionField[];
+  selectedExtractionField?: string | null; // Highlight a specific extraction field
+  isReadOnly?: boolean; // Disable interactions when true
   // Box drawing props
   isDrawingMode?: boolean;
   drawingBox?: {x: number, y: number, width: number, height: number} | null;
@@ -65,6 +68,7 @@ const OBJECT_BORDER_COLORS = {
 
 export function PdfViewer({
   pdfUrl,
+  pdfId,
   objects = [],
   className = '',
   showObjectOverlays = true,
@@ -73,6 +77,8 @@ export function PdfViewer({
   selectedObjectTypes,
   selectedObjects,
   extractionFields = [],
+  selectedExtractionField,
+  isReadOnly = false,
   isDrawingMode = false,
   drawingBox = null,
   tempFieldData = null,
@@ -89,6 +95,9 @@ export function PdfViewer({
   const [pageWidth, setPageWidth] = useState<number>(612); // Default Letter width (many PDFs use this)
   const containerRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef<{ [key: number]: HTMLDivElement }>({});
+
+  // Determine the PDF URL to use
+  const effectivePdfUrl = pdfUrl || (pdfId ? `http://localhost:8080/api/pdf-files/${pdfId}/download` : null);
 
   // Calculate scale to fit container
   const calculateScale = () => {
@@ -287,17 +296,20 @@ export function PdfViewer({
     const screenY0 = actualPdfHeight - y1; // Flip Y coordinate
     const screenY1 = actualPdfHeight - y0;
     
+    // Check if this field is selected
+    const isSelected = selectedExtractionField === field.id;
+    
     const style: React.CSSProperties = {
       position: 'absolute',
       left: `${x0 * scale}px`,
       top: `${screenY0 * scale}px`,
       width: `${(x1 - x0) * scale}px`,
       height: `${(screenY1 - screenY0) * scale}px`,
-      backgroundColor: 'rgba(168, 85, 247, 0.25)',
-      border: '3px solid #a855f7',
+      backgroundColor: isSelected ? 'rgba(168, 85, 247, 0.4)' : 'rgba(168, 85, 247, 0.25)',
+      border: isSelected ? '4px solid #a855f7' : '3px solid #a855f7',
       borderRadius: '6px',
-      cursor: 'pointer',
-      zIndex: 30,
+      cursor: isReadOnly ? 'default' : 'pointer',
+      zIndex: isSelected ? 35 : 30,
       pointerEvents: 'auto',
       boxShadow: '0 0 12px rgba(168, 85, 247, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.1)',
       transition: 'all 0.15s ease-in-out'
@@ -308,16 +320,18 @@ export function PdfViewer({
         key={`extraction-field-${field.id}`}
         style={style}
         onClick={() => {
-          // Create a fake object for the click handler
-          const fakeObj: PdfObject = {
-            type: 'extraction-field',
-            page: field.page,
-            bbox: field.boundingBox,
-            text: field.label,
-            width: field.boundingBox[2] - field.boundingBox[0],
-            height: field.boundingBox[3] - field.boundingBox[1]
-          };
-          onObjectClick?.(fakeObj);
+          if (!isReadOnly) {
+            // Create a fake object for the click handler
+            const fakeObj: PdfObject = {
+              type: 'extraction-field',
+              page: field.page,
+              bbox: field.boundingBox,
+              text: field.label,
+              width: field.boundingBox[2] - field.boundingBox[0],
+              height: field.boundingBox[3] - field.boundingBox[1]
+            };
+            onObjectClick?.(fakeObj);
+          }
         }}
         title={`Extraction Field: ${field.label}`}
         className="hover:scale-105"
@@ -512,7 +526,7 @@ export function PdfViewer({
             )}
             
             <Document
-              file={pdfUrl}
+              file={effectivePdfUrl}
               onLoadSuccess={onDocumentLoadSuccess}
               onLoadError={onDocumentLoadError}
               loading=""
@@ -522,19 +536,19 @@ export function PdfViewer({
                 ref={(el) => {
                   if (el) pageRefs.current[currentPage] = el;
                 }}
-                className={`relative ${isDrawingMode ? 'cursor-crosshair' : 'cursor-default'}`}
+                className={`relative ${isReadOnly ? 'cursor-default' : isDrawingMode ? 'cursor-crosshair' : 'cursor-default'}`}
                 onMouseDown={(e) => {
-                  if (pageRefs.current[currentPage] && onMouseDown) {
+                  if (!isReadOnly && pageRefs.current[currentPage] && onMouseDown) {
                     onMouseDown(e, pageRefs.current[currentPage], currentPage, scale, pageHeight);
                   }
                 }}
                 onMouseMove={(e) => {
-                  if (pageRefs.current[currentPage] && onMouseMove) {
+                  if (!isReadOnly && pageRefs.current[currentPage] && onMouseMove) {
                     onMouseMove(e, pageRefs.current[currentPage], currentPage, scale, pageHeight);
                   }
                 }}
                 onMouseUp={(e) => {
-                  if (pageRefs.current[currentPage] && onMouseUp) {
+                  if (!isReadOnly && pageRefs.current[currentPage] && onMouseUp) {
                     onMouseUp(e, pageRefs.current[currentPage], currentPage, scale, pageHeight);
                   }
                 }}

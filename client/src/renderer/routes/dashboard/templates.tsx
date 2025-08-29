@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { TemplatesList } from "../../components/TemplatesList";
 import { TemplateBuilderModal } from "../../components/TemplateBuilderModal";
+import { TemplateViewerModal } from "../../components/TemplateViewerModal";
 import { useTemplates, useServerHealth } from "../../hooks/useApi";
 import { TemplateSummary } from "../../types/eto";
 import { apiClient } from "../../services/api";
@@ -13,6 +14,7 @@ export const Route = createFileRoute("/dashboard/templates")({
 function TemplatesPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [buildingTemplateForRun, setBuildingTemplateForRun] = useState<string | null>(null);
+  const [viewingTemplateId, setViewingTemplateId] = useState<number | null>(null);
   const [reprocessing, setReprocessing] = useState(false);
   
   // Fetch templates data from API
@@ -31,7 +33,7 @@ function TemplatesPage() {
 
   const handleView = (template: TemplateSummary) => {
     console.log("View template:", template);
-    // TODO: Show template details modal
+    setViewingTemplateId(template.id);
   };
 
   const handleDelete = (template: TemplateSummary) => {
@@ -53,6 +55,10 @@ function TemplatesPage() {
 
   const handleTemplateBuilderClose = () => {
     setBuildingTemplateForRun(null);
+  };
+
+  const handleTemplateViewerClose = () => {
+    setViewingTemplateId(null);
   };
 
   const handleReprocessUnrecognized = async () => {
@@ -185,6 +191,12 @@ function TemplatesPage() {
         runId={buildingTemplateForRun}
         onClose={handleTemplateBuilderClose}
         onSave={handleTemplateBuilderSave}
+      />
+      
+      {/* Template Viewer Modal */}
+      <TemplateViewerModal
+        templateId={viewingTemplateId}
+        onClose={handleTemplateViewerClose}
       />
     </div>
   );

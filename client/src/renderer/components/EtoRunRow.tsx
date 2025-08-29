@@ -2,10 +2,15 @@ import { EtoRunSummary, EtoDataTransforms } from "../types/eto";
 
 interface EtoRunRowProps {
   run: EtoRunSummary;
-  onReview: (runId: string) => void;
+  onReview?: (runId: string) => void;
+  onSkip?: (runId: string) => void;
+  onView?: (runId: string) => void;
+  onDelete?: (runId: string) => void;
+  onReprocess?: (runId: string) => void;
+  showButtons?: boolean;
 }
 
-export function EtoRunRow({ run, onReview }: EtoRunRowProps) {
+export function EtoRunRow({ run, onReview, onSkip, onView, onDelete, onReprocess, showButtons = true }: EtoRunRowProps) {
   const formatDate = (date: Date) => {
     return date.toLocaleDateString("en-US", {
       month: "short",
@@ -88,6 +93,21 @@ export function EtoRunRow({ run, onReview }: EtoRunRowProps) {
             />
           </svg>
         );
+      case "skipped":
+        return (
+          <svg
+            className="w-4 h-4 text-gray-500"
+            fill="currentColor"
+            viewBox="0 0 20 20"
+          >
+            <path
+              fillRule="evenodd"
+              d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z"
+              clipRule="evenodd"
+            />
+            <path d="M4 4l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+          </svg>
+        );
       default:
         return null;
     }
@@ -131,13 +151,6 @@ export function EtoRunRow({ run, onReview }: EtoRunRowProps) {
               {run.matchedTemplateId && (
                 <span>Template ID: {run.matchedTemplateId}</span>
               )}
-              {/* Data availability indicators */}
-              {run.hasExtractedData && (
-                <span className="text-green-400">📊 Extracted</span>
-              )}
-              {run.hasTargetData && (
-                <span className="text-blue-400">🎯 Transformed</span>
-              )}
             </div>
 
             {/* Error message for failures */}
@@ -152,16 +165,93 @@ export function EtoRunRow({ run, onReview }: EtoRunRowProps) {
         {/* Right side - Actions and review info */}
         <div className="flex items-center space-x-3">
           {/* Action buttons */}
-          <div className="flex space-x-2">
-            {run.status !== "success" && (
-              <button
-                onClick={() => onReview(run.id.toString())}
-                className="px-3 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors"
-              >
-                Build Template
-              </button>
-            )}
-          </div>
+          {showButtons && (
+            <div className="flex space-x-2">
+              {/* View button for successful extractions */}
+              {run.status === "success" && onView && (
+                <button
+                  onClick={() => onView(run.id.toString())}
+                  className="px-3 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors"
+                >
+                  View
+                </button>
+              )}
+              
+              {/* View and Review buttons for failed extractions */}
+              {run.status === "failure" && (
+                <>
+                  {onView && (
+                    <button
+                      onClick={() => onView(run.id.toString())}
+                      className="px-3 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors"
+                    >
+                      View
+                    </button>
+                  )}
+                  {onReview && (
+                    <button
+                      onClick={() => onReview(run.id.toString())}
+                      className="px-3 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors"
+                    >
+                      Review
+                    </button>
+                  )}
+                  {onSkip && (
+                    <button
+                      onClick={() => onSkip(run.id.toString())}
+                      className="px-3 py-1 text-xs bg-yellow-600 hover:bg-yellow-700 text-white rounded transition-colors"
+                    >
+                      Skip
+                    </button>
+                  )}
+                </>
+              )}
+              
+              {/* Build Template and Skip buttons for needs_template */}
+              {run.status === "needs_template" && (
+                <>
+                  {onReview && (
+                    <button
+                      onClick={() => onReview(run.id.toString())}
+                      className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+                    >
+                      Build Template
+                    </button>
+                  )}
+                  {onSkip && (
+                    <button
+                      onClick={() => onSkip(run.id.toString())}
+                      className="px-3 py-1 text-xs bg-yellow-600 hover:bg-yellow-700 text-white rounded transition-colors"
+                    >
+                      Skip
+                    </button>
+                  )}
+                </>
+              )}
+              
+              {/* Delete and Reprocess buttons for skipped runs */}
+              {run.status === "skipped" && (
+                <>
+                  {onReprocess && (
+                    <button
+                      onClick={() => onReprocess(run.id.toString())}
+                      className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+                    >
+                      Reprocess
+                    </button>
+                  )}
+                  {onDelete && (
+                    <button
+                      onClick={() => onDelete(run.id.toString())}
+                      className="px-3 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
+                    >
+                      Delete
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
