@@ -62,13 +62,10 @@ const OBJECT_TYPE_COLORS = {
   table: '#ffa500'
 };
 
-type ViewMode = 'signature' | 'extraction';
-
 export function TemplateViewerModal({ templateId, onClose }: TemplateViewerModalProps) {
   const [templateData, setTemplateData] = useState<TemplateViewData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>('signature');
   const [selectedObjectTypes, setSelectedObjectTypes] = useState<Set<string>>(new Set(['word', 'text_line', 'rect']));
   const [selectedExtractionField, setSelectedExtractionField] = useState<string | null>(null);
 
@@ -118,25 +115,31 @@ export function TemplateViewerModal({ templateId, onClose }: TemplateViewerModal
   const getVisibleObjects = () => {
     if (!templateData) return [];
     
-    if (viewMode === 'signature') {
-      // Show signature objects (static template objects)
-      return templateData.pdf_objects.filter(obj => 
-        templateData.signature_objects.some(sigObj => sigObj.id === obj.id) &&
-        selectedObjectTypes.has(obj.object_type)
-      );
-    } else {
-      // Show all PDF objects for context when viewing extraction fields
-      return templateData.pdf_objects.filter(obj => selectedObjectTypes.has(obj.object_type));
-    }
+    // Return only the signature objects (template definition objects) filtered by selected types
+    const visibleSignatureObjects = templateData.signature_objects.filter(obj => {
+      const objType = obj.type || obj.object_type;
+      return selectedObjectTypes.has(objType);
+    });
+    
+    console.log('Signature Objects Debug:', {
+      total_signature_objects: templateData.signature_objects.length,
+      visible_signature_objects: visibleSignatureObjects.length,
+      selected_types: Array.from(selectedObjectTypes),
+      sample_signature_object: templateData.signature_objects[0]
+    });
+    
+    return visibleSignatureObjects;
   };
 
   const getVisibleExtractionFields = () => {
-    if (!templateData || viewMode !== 'extraction') return [];
+    if (!templateData) return [];
+    // Always show extraction fields since we removed tabs
     return templateData.extraction_fields;
   };
 
-  const objectTypeCounts = templateData ? templateData.pdf_objects.reduce((counts: Record<string, number>, obj: any) => {
-    counts[obj.object_type] = (counts[obj.object_type] || 0) + 1;
+  const objectTypeCounts = templateData ? templateData.signature_objects.reduce((counts: Record<string, number>, obj: any) => {
+    const objType = obj.type || obj.object_type;
+    counts[objType] = (counts[objType] || 0) + 1;
     return counts;
   }, {}) : {};
 
@@ -197,68 +200,44 @@ export function TemplateViewerModal({ templateId, onClose }: TemplateViewerModal
 
         {templateData && (
           <>
-            {/* Controls Panel */}
-            <div className="flex border-b border-gray-700">
-              {/* View Mode Tabs */}
-              <div className="flex">
-                <button
-                  onClick={() => setViewMode('signature')}
-                  className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-                    viewMode === 'signature' 
-                      ? 'border-blue-400 text-blue-300' 
-                      : 'border-transparent text-gray-400 hover:text-gray-300'
-                  }`}
-                >
-                  Signature Objects ({templateData.signature_object_count})
-                </button>
-                <button
-                  onClick={() => setViewMode('extraction')}
-                  className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
-                    viewMode === 'extraction' 
-                      ? 'border-blue-400 text-blue-300' 
-                      : 'border-transparent text-gray-400 hover:text-gray-300'
-                  }`}
-                >
-                  Extraction Fields ({templateData.extraction_rules_count})
-                </button>
-              </div>
-            </div>
-
             {/* Main Content */}
             <div className="flex-1 flex overflow-hidden">
               {/* Left Sidebar */}
               <div className="w-80 border-r border-gray-700 flex flex-col overflow-hidden">
                 <div className="p-4 border-b border-gray-700">
-                  <h3 className="font-medium text-gray-300 mb-3">Object Types</h3>
+                  <h3 className="font-medium text-gray-300 mb-3">Signature Objects</h3>
                   <div className="space-y-2">
                     {Object.entries(OBJECT_TYPE_NAMES).map(([type, name]) => {
                       const count = objectTypeCounts[type] || 0;
-                      const isVisible = selectedObjectTypes.has(type);
+                      const isSelected = selectedObjectTypes.has(type);
+                      
+                      if (count === 0) return null;
                       
                       return (
-                        <div key={type} className="flex items-center justify-between">
-                          <label className="flex items-center space-x-2 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={isVisible}
-                              onChange={(e) => {
-                                const newTypes = new Set(selectedObjectTypes);
-                                if (e.target.checked) {
-                                  newTypes.add(type);
-                                } else {
-                                  newTypes.delete(type);
-                                }
-                                setSelectedObjectTypes(newTypes);
-                              }}
-                              className="rounded"
-                            />
-                            <div 
-                              className="w-3 h-3 rounded border"
-                              style={{ backgroundColor: OBJECT_TYPE_COLORS[type as keyof typeof OBJECT_TYPE_COLORS] }}
-                            ></div>
-                            <span className="text-sm text-gray-300">{name}</span>
-                          </label>
-                          <span className="text-xs text-gray-500">{count}</span>
+                        <div key={type} className="flex items-center">
+                          <button
+                            onClick={() => {
+                              const newTypes = new Set(selectedObjectTypes);
+                              if (isSelected) {
+                                newTypes.delete(type);
+                              } else {
+                                newTypes.add(type);
+                              }
+                              setSelectedObjectTypes(newTypes);
+                            }}
+                            className={`flex-1 flex items-center justify-between p-2 text-xs rounded transition-colors ${
+                              isSelected ? 'bg-gray-700 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                            }`}
+                          >
+                            <div className="flex items-center space-x-2">
+                              <div
+                                className="w-3 h-3 rounded"
+                                style={{ backgroundColor: OBJECT_TYPE_COLORS[type as keyof typeof OBJECT_TYPE_COLORS] }}
+                              ></div>
+                              <span>{name}</span>
+                            </div>
+                            <span className="font-medium">{count}</span>
+                          </button>
                         </div>
                       );
                     })}
@@ -266,50 +245,48 @@ export function TemplateViewerModal({ templateId, onClose }: TemplateViewerModal
                 </div>
 
                 {/* Extraction Fields List */}
-                {viewMode === 'extraction' && (
-                  <div className="flex-1 overflow-y-auto p-4">
-                    <h3 className="font-medium text-gray-300 mb-3">Extraction Fields</h3>
-                    {templateData.extraction_fields.length === 0 ? (
-                      <p className="text-sm text-gray-500">No extraction fields defined</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {templateData.extraction_fields.map((field) => (
-                          <div
-                            key={field.id}
-                            onClick={() => setSelectedExtractionField(
-                              selectedExtractionField === field.id ? null : field.id
-                            )}
-                            className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                              selectedExtractionField === field.id
-                                ? 'border-blue-400 bg-blue-900/20'
-                                : 'border-gray-600 hover:border-gray-500'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between mb-1">
-                              <h4 className="font-medium text-sm text-blue-300">{field.label}</h4>
-                              {field.required && (
-                                <span className="text-xs text-red-400">Required</span>
-                              )}
-                            </div>
-                            {field.description && (
-                              <p className="text-xs text-gray-400 mb-2">{field.description}</p>
-                            )}
-                            <div className="text-xs text-gray-500">
-                              Page {field.page} • 
-                              ({field.boundingBox[0].toFixed(1)}, {field.boundingBox[1].toFixed(1)}) → 
-                              ({field.boundingBox[2].toFixed(1)}, {field.boundingBox[3].toFixed(1)})
-                            </div>
-                            {field.validationRegex && (
-                              <div className="text-xs text-gray-500 mt-1">
-                                Regex: <code className="bg-gray-700 px-1 rounded">{field.validationRegex}</code>
-                              </div>
+                <div className="flex-1 overflow-y-auto p-4">
+                  <h3 className="font-medium text-gray-300 mb-3">Extraction Fields</h3>
+                  {templateData.extraction_fields.length === 0 ? (
+                    <p className="text-sm text-gray-500">No extraction fields defined</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {templateData.extraction_fields.map((field) => (
+                        <div
+                          key={field.id}
+                          onClick={() => setSelectedExtractionField(
+                            selectedExtractionField === field.id ? null : field.id
+                          )}
+                          className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                            selectedExtractionField === field.id
+                              ? 'border-purple-400 bg-purple-900/20'
+                              : 'border-gray-600 hover:border-gray-500 hover:bg-gray-800/50'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <h4 className="font-medium text-sm text-purple-300">{field.label}</h4>
+                            {field.required && (
+                              <span className="text-xs text-red-400">Required</span>
                             )}
                           </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
+                          {field.description && (
+                            <p className="text-xs text-gray-400 mb-2">{field.description}</p>
+                          )}
+                          <div className="text-xs text-gray-500">
+                            Page {field.page + 1} • 
+                            ({field.boundingBox[0].toFixed(1)}, {field.boundingBox[1].toFixed(1)}) → 
+                            ({field.boundingBox[2].toFixed(1)}, {field.boundingBox[3].toFixed(1)})
+                          </div>
+                          {field.validationRegex && (
+                            <div className="text-xs text-gray-500 mt-1">
+                              Regex: <code className="bg-gray-700 px-1 rounded">{field.validationRegex}</code>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* PDF Viewer */}

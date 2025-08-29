@@ -1468,16 +1468,43 @@ def download_pdf_file(pdf_id):
             from .database import PdfFile
             from flask import send_file
             import os
+            from pathlib import Path
             
             # Get the PDF file record
             pdf_file = session.query(PdfFile).filter(PdfFile.id == pdf_id).first()
             if not pdf_file:
                 return jsonify({"error": f"PDF file {pdf_id} not found"}), 404
             
-            # Construct the file path
+            # First try the stored file path as-is
             file_path = pdf_file.file_path
-            if not os.path.exists(file_path):
-                return jsonify({"error": f"PDF file not found on disk: {file_path}"}), 404
+            logger.info(f"PDF download requested for ID {pdf_id}: stored path = {file_path}")
+            
+            # Always resolve paths to the correct storage location
+            # Extract the hash-based path structure from the stored path
+            stored_path = Path(file_path)
+            
+            # Get just the hash-based directory structure (last 3 parts: hash[:2]/hash[2:4]/hash.pdf)
+            if len(stored_path.parts) >= 3:
+                hash_structure = Path(*stored_path.parts[-3:])  # e.g., "87/d9/87d9dc...pdf"
+                
+                # Always use the correct storage location: C:\apps\eto\server\storage\pdfs\
+                correct_path = Path("C:/apps/eto/server/storage/pdfs") / hash_structure
+                file_path = str(correct_path)
+                
+                if not os.path.exists(file_path):
+                    # If hash structure fails, try using the SHA256 hash directly
+                    if pdf_file.sha256_hash:
+                        hash_val = pdf_file.sha256_hash
+                        rebuilt_path = Path("C:/apps/eto/server/storage/pdfs") / hash_val[:2] / hash_val[2:4] / f"{hash_val}.pdf"
+                        if rebuilt_path.exists():
+                            file_path = str(rebuilt_path)
+                            logger.info(f"Rebuilt PDF path using hash: {file_path}")
+                        else:
+                            return jsonify({"error": f"PDF file not found in storage: {rebuilt_path}"}), 404
+                    else:
+                        return jsonify({"error": f"PDF file not found in storage: {file_path}"}), 404
+            else:
+                return jsonify({"error": f"Invalid stored path structure: {file_path}"}), 404
             
             # Serve the file
             return send_file(

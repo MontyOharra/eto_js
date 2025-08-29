@@ -334,10 +334,11 @@ export function PdfViewer({
           }
         }}
         title={`Extraction Field: ${field.label}`}
-        className="hover:scale-105"
+        className="hover:scale-105 group"
       >
-        {/* Field Label */}
+        {/* Field Label - only show on hover */}
         <div
+          className="opacity-0 group-hover:opacity-100 transition-opacity duration-200"
           style={{
             position: 'absolute',
             top: '-25px',
@@ -389,9 +390,11 @@ export function PdfViewer({
         key={`temp-field-${field.id}`}
         style={style}
         title="Temporary Field (not saved yet)"
+        className="group"
       >
-        {/* Label overlay for temporary field */}
+        {/* Label overlay for temporary field - only show on hover */}
         <div
+          className="opacity-0 group-hover:opacity-100 transition-opacity duration-200"
           style={{
             position: 'absolute',
             top: '-32px',

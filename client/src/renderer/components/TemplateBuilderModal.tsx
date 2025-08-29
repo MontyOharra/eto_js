@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { PdfViewer } from './PdfViewer';
 import { apiClient } from '../services/api';
@@ -94,6 +94,17 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
   const [fieldDescription, setFieldDescription] = useState('');
   const [fieldRequired, setFieldRequired] = useState(false);
   const [fieldValidationRegex, setFieldValidationRegex] = useState('');
+  
+  // Ref for auto-focusing field label input
+  const fieldLabelInputRef = useRef<HTMLInputElement>(null);
+  
+  // Auto-focus field label input when editing starts
+  useEffect(() => {
+    if (editingField && fieldLabelInputRef.current) {
+      fieldLabelInputRef.current.focus();
+      fieldLabelInputRef.current.select();
+    }
+  }, [editingField]);
   
   // Confirmation dialog state
   const [showCloseConfirmation, setShowCloseConfirmation] = useState(false);
@@ -534,7 +545,7 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
   };
 
   const handleSaveExtractionField = () => {
-    if (!editingField || !tempFieldData) return;
+    if (!editingField || !tempFieldData || !fieldLabel.trim()) return;
 
     const newField = {
       id: editingField,
@@ -552,6 +563,20 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
     setEditingField(null);
     setTempFieldData(null);
     setSelectedExtractionField(null); // Return to main field creation mode, don't view the new field
+    
+    // Reset form fields
+    setFieldLabel('');
+    setFieldDescription('');
+    setFieldRequired(false);
+    setFieldValidationRegex('');
+  };
+  
+  // Handle Enter key press in field form
+  const handleFieldFormKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSaveExtractionField();
+    }
   };
 
   const handleDeleteExtractionField = (fieldId: string) => {
@@ -643,9 +668,11 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
           <div>
             <label className="block text-xs font-medium text-gray-300 mb-1">Field Label</label>
             <input
+              ref={fieldLabelInputRef}
               type="text"
               value={fieldLabel}
               onChange={(e) => setFieldLabel(e.target.value)}
+              onKeyDown={handleFieldFormKeyDown}
               placeholder="e.g., hawb, carrier-name"
               className="w-full px-3 py-2 text-sm bg-gray-800 border border-gray-600 rounded text-white focus:border-blue-500 focus:outline-none"
             />
@@ -676,6 +703,7 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
               type="text"
               value={fieldValidationRegex}
               onChange={(e) => setFieldValidationRegex(e.target.value)}
+              onKeyDown={handleFieldFormKeyDown}
               placeholder="^[A-Z0-9]+$"
               className="w-full px-3 py-2 text-sm bg-gray-800 border border-gray-600 rounded text-white focus:border-blue-500 focus:outline-none"
             />
