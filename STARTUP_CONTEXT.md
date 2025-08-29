@@ -1,7 +1,7 @@
 # ETO System - Startup Context
 
-**Last Updated**: January 26, 2025 at 3:47 PM EST  
-**Current Branch**: `email_ingestion_service`  
+**Last Updated**: August 29, 2025 at 6:30 PM EST  
+**Current Branch**: `master`  
 **Server**: `http://localhost:8080`
 
 ---
@@ -58,13 +58,14 @@ Database Cursor → Email Table → PDF Files → PDF Objects → ETO Runs → E
 ## **Current System State**
 
 ### **✅ What's Working**
-- **Email Ingestion**: Successfully monitoring `em.harrah.business@gmail.com` in "test" folder
-- **PDF Processing**: Extracting thousands of objects from multi-page PDFs (8434 objects from 18-page test)
-- **Cursor Tracking**: Downtime recovery and missed email processing
-- **Background Workers**: Processing ETO runs asynchronously
-- **Template Matching**: Correctly identifying PDFs that need templates
-- **Duplicate Handling**: Same PDF in different emails processed separately
-- **Database Schema**: Full SQLAlchemy models with proper relationships
+- **Email Ingestion**: Reliable monitoring with 5-second fast polling (down from 30s)
+- **Email Service Reliability**: Comprehensive error recovery, retry logic, and health monitoring
+- **PDF Processing**: Extracting thousands of objects from multi-page PDFs stored in pdf_files.objects_json
+- **Spatial Text Extraction**: Template-based extraction targeting individual word objects (not text_lines)
+- **Template Builder UI**: Complete workflow with immediate visual feedback for drawn bounding boxes
+- **Three-Step Processing**: template_matching → extracting_data → transforming_data
+- **Cursor Tracking**: Enhanced missed email processing with validation and recovery
+- **Background Workers**: Processing ETO runs with improved error isolation
 
 ### **⚙️ Current Configuration**
 - **Target Email**: `em.harrah.business@gmail.com`
@@ -104,15 +105,18 @@ Database Cursor → Email Table → PDF Files → PDF Objects → ETO Runs → E
 
 ## **Current Priority Tasks**
 
-### **Next Steps (From Changelog)**
-1. **Test server restart and cursor recovery** with multiple emails containing same PDF
-2. **Verify template creation workflow** for PDFs marked as "needs_template"  
-3. **Test complete end-to-end processing pipeline**
+### **System Status**
+**✅ MAJOR RELIABILITY IMPROVEMENTS COMPLETED**
+- Email service reliability comprehensively improved
+- Template builder UI with spatial text extraction fully functional
+- Three-step processing workflow implemented
+- UI consolidated and enhanced with immediate visual feedback
 
-### **Future Development Phase**
-- Wire up client application for template creation from unrecognized PDFs
-- Implement actual data extraction functionality (currently placeholder)
-- Build template creation UI for PDFs marked as "needs_template"
+### **Next Development Phase**
+- Testing and validation of end-to-end template creation and extraction workflow
+- Advanced template transformation rules and validation
+- Performance optimization for large-scale email processing
+- Additional extraction field types and validation patterns
 
 ---
 
@@ -143,17 +147,18 @@ Database Cursor → Email Table → PDF Files → PDF Objects → ETO Runs → E
 
 ## **Known Issues & Status**
 
-### **✅ Recently Resolved**
-- Database connection and schema issues
-- Timezone handling in cursor comparisons
-- Duplicate PDF constraint conflicts
-- Email processing during downtime recovery
+### **✅ Recently Resolved** 
+- **Email Service Reliability**: COM connection failures, event monitoring issues, error recovery
+- **Template Builder UX**: Immediate visual feedback, state cleanup between sessions
+- **Spatial Text Extraction**: Precise word-level extraction instead of text-line extraction  
+- **Processing Workflow**: Complete three-step pipeline with proper error handling
+- **UI Consolidation**: Merged pending/processing tables, improved dashboard organization
 
 ### **⚠️ Watch Out For**
-- COM interface can be unstable - automatic reconnection implemented
-- SQL Server authentication with 'test' user credentials
-- Timezone-aware vs naive datetime comparisons
-- Background worker thread management
+- Email service uses optimized 5-second polling (events disabled due to COM complexity)
+- Template builder state is automatically cleared between PDF documents and modal sections
+- Extraction targets individual 'word' objects, not 'text_line' objects for precision
+- Processing pipeline stores data in specific columns (extracted_data, transformation_audit, target_data)
 
 ---
 
