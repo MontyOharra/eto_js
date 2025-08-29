@@ -340,6 +340,39 @@ class ApiClient {
   }
 
   /**
+   * Get extraction results for a successful ETO run
+   */
+  async getExtractionResults(runId: number): Promise<{
+    id: number;
+    status: string;
+    matched_template_id: number;
+    template_name: string;
+    pdf_id: number;
+    filename: string;
+    page_count: number;
+    extracted_data: Record<string, any>;
+    extraction_fields: Array<{
+      id: string;
+      label: string;
+      description: string;
+      boundingBox: [number, number, number, number];
+      page: number;
+      extracted_value: any;
+    }>;
+    email: {
+      subject: string;
+      sender_email: string;
+      received_date: string;
+    };
+  }> {
+    const response = await fetch(`${this.baseUrl}/api/eto-runs/${runId}/extraction-results`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch extraction results: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
+  /**
    * Get detailed processing information for an ETO run
    */
   async getEtoRunProcessingDetails(runId: string | number): Promise<{

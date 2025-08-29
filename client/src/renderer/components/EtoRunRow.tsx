@@ -171,7 +171,7 @@ export function EtoRunRow({ run, onReview, onSkip, onView, onDelete, onReprocess
               {run.status === "success" && onView && (
                 <button
                   onClick={() => onView(run.id.toString())}
-                  className="px-3 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors"
+                  className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
                 >
                   View
                 </button>

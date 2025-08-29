@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { EtoRunsTable } from "../../components/EtoRunsTable";
 import { TemplateBuilderModal } from "../../components/TemplateBuilderModal";
 import { ConfirmationModal } from "../../components/ConfirmationModal";
+import { ExtractionResultViewerModal } from "../../components/ExtractionResultViewerModal";
 import { useEtoRuns, useServerHealth } from "../../hooks/useApi";
 import { useMemo, useState } from "react";
 
@@ -20,6 +21,7 @@ function EtoInfoPage() {
 
   // Modal state for template builder
   const [buildingTemplateForRun, setBuildingTemplateForRun] = useState<string | null>(null);
+  const [viewingExtractionForRun, setViewingExtractionForRun] = useState<string | null>(null);
   
   // Confirmation modal state
   const [confirmationModal, setConfirmationModal] = useState<{
@@ -83,8 +85,8 @@ function EtoInfoPage() {
   };
 
   const handleView = (runId: string) => {
-    console.log("View run:", runId);
-    // TODO: Implement view functionality for successful/failed extractions
+    console.log("View extraction results for run:", runId);
+    setViewingExtractionForRun(runId);
   };
 
   const handleDelete = (runId: string) => {
@@ -283,6 +285,12 @@ function EtoInfoPage() {
         runId={buildingTemplateForRun}
         onClose={handleTemplateBuilderClose}
         onSave={handleTemplateBuilderSave}
+      />
+
+      {/* Extraction Results Viewer Modal */}
+      <ExtractionResultViewerModal
+        runId={viewingExtractionForRun}
+        onClose={() => setViewingExtractionForRun(null)}
       />
       
       {/* Confirmation Modal */}

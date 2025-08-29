@@ -1521,6 +1521,100 @@ def download_pdf_file(pdf_id):
         logger.error(f"Error downloading PDF file {pdf_id}: {e}")
         return jsonify({"error": str(e)}), 500
 
+@app.get("/api/eto-runs/<int:run_id>/extraction-results")
+def get_extraction_results(run_id):
+    """Get extraction results for a successful ETO run"""
+    try:
+        db_service = get_db_service()
+        session = db_service.get_session()
+        
+        try:
+            from .database import EtoRun, PdfFile, PdfTemplate, Email
+            import json
+            
+            # Get the ETO run with all related data
+            run = session.query(EtoRun).filter(EtoRun.id == run_id).first()
+            if not run:
+                return jsonify({"error": f"ETO run {run_id} not found"}), 404
+            
+            if run.status != "success":
+                return jsonify({"error": f"ETO run {run_id} is not successful (status: {run.status})"}), 400
+            
+            # Get related data
+            pdf_file = session.query(PdfFile).filter(PdfFile.id == run.pdf_file_id).first()
+            email = session.query(Email).filter(Email.id == run.email_id).first()
+            template = None
+            if run.matched_template_id:
+                template = session.query(PdfTemplate).filter(PdfTemplate.id == run.matched_template_id).first()
+            
+            if not pdf_file or not email:
+                return jsonify({"error": "Missing related PDF file or email data"}), 404
+            
+            # Parse extracted data
+            extracted_data = {}
+            
+            if run.extracted_data:
+                try:
+                    extracted_data = json.loads(run.extracted_data)
+                except:
+                    pass
+            
+            # Get template extraction fields if template exists
+            extraction_fields = []
+            if template and template.extraction_fields:
+                try:
+                    template_fields = json.loads(template.extraction_fields)
+                    
+                    for field in template_fields:
+                        field_id = field.get('id', '')
+                        
+                        # Get extracted value for this field from extracted_fields nested data
+                        extracted_value = None
+                        if 'extracted_fields' in extracted_data and field_id in extracted_data['extracted_fields']:
+                            field_data = extracted_data['extracted_fields'][field_id]
+                            if isinstance(field_data, dict):
+                                extracted_value = field_data.get('text', None)
+                            else:
+                                extracted_value = field_data
+                        
+                        extraction_fields.append({
+                            'id': field_id,
+                            'label': field.get('label', field_id),
+                            'description': field.get('description', ''),
+                            'boundingBox': field.get('boundingBox', [0, 0, 0, 0]),
+                            'page': field.get('page', 0),
+                            'extracted_value': extracted_value
+                        })
+                        
+                except Exception as e:
+                    logger.error(f"Error parsing template extraction fields: {e}")
+            
+            response_data = {
+                'id': run.id,
+                'status': run.status,
+                'matched_template_id': run.matched_template_id,
+                'template_name': template.name if template else 'Unknown Template',
+                'pdf_id': pdf_file.id,
+                'filename': pdf_file.original_filename,
+                'page_count': pdf_file.page_count or 1,
+                'extracted_data': extracted_data,
+                'extraction_fields': extraction_fields,
+                'email': {
+                    'subject': email.subject,
+                    'sender_email': email.sender_email,
+                    'received_date': email.received_date.isoformat() if email.received_date else None
+                }
+            }
+            
+            return jsonify(response_data)
+            
+        finally:
+            session.close()
+            
+    except Exception as e:
+        logger.error(f"Error getting extraction results for run {run_id}: {e}")
+        return jsonify({"error": str(e)}), 500
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "8080"))

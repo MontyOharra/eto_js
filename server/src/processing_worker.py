@@ -212,19 +212,12 @@ class EtoProcessingWorker:
                 # No template match - set status to needs_template and stop processing
                 logger.info(f"No template match found for run {eto_run.id}, setting status to 'needs_template'")
                 
-                # Store match details for debugging/analysis
-                match_details = {
-                    'match_details': match_result.get('match_details', {}),
-                    'candidates_checked': len(match_result.get('candidates', [])),
-                    'pdf_object_count': len(pdf_objects)
-                }
-                
                 self._update_run_status(
                     eto_run.id,
                     'needs_template',
                     processing_step=None,  # Clear processing step
                     completed_at=datetime.now(),
-                    extracted_data=json.dumps(match_details, default=str)  # Store analysis data
+                    extracted_data=None  # No data extracted since no template found
                 )
                 
                 return None
@@ -489,22 +482,14 @@ class EtoProcessingWorker:
         """Handle no template match - needs manual template creation"""
         logger.info(f"No template match for run {eto_run.id}, marking as needs_template")
         
-        # Store PDF objects for template creation by client
-        extracted_data = {
-            'pdf_objects': pdf_objects,
-            'signature_hash': signature_hash,
-            'match_details': match_result.get('match_details', {}),
-            'candidates_checked': len(match_result.get('candidates', []))
-        }
-        
         self._update_run_status(
             eto_run.id,
-            'unrecognized',
+            'needs_template',
             completed_at=datetime.now(),
-            extracted_data=json.dumps(extracted_data, default=str)
+            extracted_data=None  # No data extracted since no template found
         )
         
-        logger.info(f"Run {eto_run.id} marked as unrecognized with {len(pdf_objects)} objects stored")
+        logger.info(f"Run {eto_run.id} marked as needs_template")
     
     def _process_data_extraction(self, eto_run: EtoRun):
         """Process data extraction from matched template using spatial bounding boxes"""
