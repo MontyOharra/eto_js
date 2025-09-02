@@ -5,6 +5,124 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [v0.4.0] - September 2, 2025 - TRANSFORMATION PIPELINE FRONTEND COMPLETE ✅
+
+### **MAJOR MILESTONE**: Visual Graph Builder for Data Transformation Pipeline
+
+#### **Complete Visual Pipeline Builder Interface**
+Implemented a comprehensive visual graph builder system for creating data transformation pipelines, providing an intuitive drag-and-drop interface for connecting processing modules.
+
+##### **Key Features Implemented**:
+
+**1. Interactive Graph Canvas**
+- **Zoom & Pan Controls**: Mouse wheel zooming + dedicated zoom in/out buttons
+- **Grid Background**: Visual reference grid with smooth scaling
+- **Canvas Dragging**: Click-and-drag to pan the view across the entire screen
+- **Coordinate System**: Proper world-to-screen coordinate transformations
+- **Bounds Checking**: Prevents modules from being dragged onto sidebar or off-canvas
+
+**2. Module Selection Sidebar**
+- **Collapsible Design**: Expandable/collapsible library pane with space optimization
+- **Category Organization**: Modules grouped by categories (Text Processing, AI/ML, Testing)
+- **Search Functionality**: Real-time filtering by module name and description
+- **Drag-and-Drop**: Drag modules from library directly onto canvas
+- **Visual Feedback**: Selection states, hover effects, and drag previews
+
+**3. Interactive Module Components**
+- **Card-Based Design**: Professional module cards with headers, descriptions, and configuration sections
+- **Configuration Options**: Support for boolean toggles, select dropdowns, text inputs, textarea, and number inputs
+- **Modern UI Elements**: Styled with Tailwind CSS for professional appearance
+- **Delete Functionality**: Confirmation modal with delete button in module header
+- **Selection System**: Click modules to select, click again to deselect
+
+**4. Robust Event Handling System**
+- **Global Mouse Events**: Canvas dragging works over entire screen including sidebar
+- **Event Propagation Control**: Proper handling of click vs drag interactions
+- **Header-Only Dragging**: Module configuration inputs don't interfere with dragging
+- **Z-Index Management**: Proper layering so sidebar stays above canvas content
+
+**5. Module Template System**
+```typescript
+interface BaseModuleTemplate {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  inputs: ModuleInput[];
+  outputs: ModuleOutput[];
+  config: ModuleConfig[];
+  color: string;
+}
+```
+
+**6. Test Data & Edge Cases**
+- **4 Sample Modules**: Basic Text Cleaner, Advanced Text Cleaner, LLM Parser, Edge Case Testing Module
+- **Configuration Types**: Boolean, select, string, textarea, number inputs
+- **Edge Case Testing**: Very long names and descriptions for UI stress testing
+
+#### **Technical Architecture**:
+
+##### **React Components**:
+- **graph.tsx**: Main graph component with canvas, zoom/pan, and module management
+- **ModuleSelectionPane.tsx**: Collapsible sidebar with module library and search
+- **GraphModuleComponent.tsx**: Interactive module cards with configuration and delete
+- **testModules.ts**: Module template definitions and test data
+
+##### **Advanced Features**:
+- **Coordinate Transformations**: Screen coordinates ↔ World coordinates for zoom/pan
+- **State Management**: React hooks for canvas state, selected modules, and UI interactions
+- **Event System**: Global mouse handlers with capture phase and preventDefault
+- **Visual Effects**: Smooth transitions, hover states, and drag previews
+
+#### **Problem-Solving Achievements**:
+
+**Configuration Input Conflicts**: 
+- ✅ **Issue**: Clicking on inputs triggered module dragging
+- ✅ **Solution**: Header-only dragging approach with event propagation control
+
+**Canvas Dragging Interruption**:
+- ✅ **Issue**: Mouse movement over sidebar stopped canvas dragging
+- ✅ **Solution**: Global mouse handlers with pointer-events-none during drag
+
+**Event Handler Conflicts**:
+- ✅ **Issue**: Canvas mouse leave was stopping drags prematurely  
+- ✅ **Solution**: Removed canvas-level handlers, used only global handlers
+
+#### **Business Impact**:
+
+**Before**: No visual interface for building transformation pipelines
+- ❌ Users had to manually configure transformations in code/config files
+- ❌ No visual representation of data flow between processing steps
+- ❌ Difficult to understand complex multi-step transformations
+
+**After**: Complete visual pipeline builder
+- ✅ **Drag-and-Drop Interface**: Intuitive module placement and configuration
+- ✅ **Visual Data Flow**: Clear representation of transformation pipeline structure  
+- ✅ **Professional UI**: Modern interface suitable for enterprise use
+- ✅ **Module Library**: Organized, searchable repository of processing modules
+- ✅ **Configuration Management**: Visual interface for all module parameters
+
+#### **Git History**:
+```
+d349786 Implement comprehensive transformation pipeline frontend with visual graph builder
+```
+
+#### **Files Created**:
+- `client/src/renderer/routes/transformation_pipeline/graph.tsx` - Main graph interface
+- `client/src/renderer/routes/transformation_pipeline/route.tsx` - Route layout
+- `client/src/renderer/components/GraphModuleComponent.tsx` - Interactive module cards
+- `client/src/renderer/components/ModuleSelectionPane.tsx` - Collapsible module library
+- `client/src/renderer/components/SimpleModuleComponent.tsx` - Basic module display
+- `client/src/renderer/data/testModules.ts` - Module templates and test data
+
+### **Next Development Priorities**:
+1. **Module Connections**: Wire system to connect module outputs to inputs
+2. **Pipeline Execution**: Backend integration for running transformation pipelines  
+3. **Data Preview**: Real-time preview of data flowing through pipeline
+4. **Module Marketplace**: Expandable module library with custom module creation
+
+---
+
 ## [v0.3.0] - August 28, 2025 - SPATIAL TEMPLATE BUILDER COMPLETE ✅
 
 ### **MAJOR MILESTONE**: Spatial Box Drawing Template Creation System

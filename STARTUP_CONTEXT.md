@@ -1,7 +1,7 @@
 # ETO System - Startup Context
 
-**Last Updated**: August 29, 2025 at 6:30 PM EST  
-**Current Branch**: `master`  
+**Last Updated**: September 2, 2025 at 2:00 PM EST  
+**Current Branch**: `transformation_pipeline`  
 **Server**: `http://localhost:8080`
 
 ---
@@ -66,6 +66,7 @@ Database Cursor → Email Table → PDF Files → PDF Objects → ETO Runs → E
 - **Three-Step Processing**: template_matching → extracting_data → transforming_data
 - **Cursor Tracking**: Enhanced missed email processing with validation and recovery
 - **Background Workers**: Processing ETO runs with improved error isolation
+- **Transformation Pipeline Frontend**: Complete visual graph builder with drag-and-drop module system
 
 ### **⚙️ Current Configuration**
 - **Target Email**: `em.harrah.business@gmail.com`
@@ -113,6 +114,10 @@ Database Cursor → Email Table → PDF Files → PDF Objects → ETO Runs → E
 - UI consolidated and enhanced with immediate visual feedback
 
 ### **Next Development Phase**
+- **Transformation Pipeline Backend**: Connect visual frontend to actual processing backend
+- **Module Connections**: Wire system to connect module outputs to inputs
+- **Pipeline Execution**: Backend integration for running transformation pipelines
+- **Data Preview**: Real-time preview of data flowing through pipeline
 - Testing and validation of end-to-end template creation and extraction workflow
 - Advanced template transformation rules and validation
 - Performance optimization for large-scale email processing

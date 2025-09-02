@@ -78,6 +78,9 @@ function TransformationPipelineGraph() {
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     
+    // Disable zooming when dragging a module
+    if (isDraggingModule) return;
+    
     if (!canvasRef.current) return;
     
     const canvasRect = canvasRef.current.getBoundingClientRect();
@@ -330,6 +333,7 @@ function TransformationPipelineGraph() {
   const handleModuleMouseDown = (moduleId: string) => (e: React.MouseEvent) => {
     if (e.button !== 0) return; // Only left mouse button
     
+    e.preventDefault(); // Prevent text selection
     e.stopPropagation();
     
     const module = placedModules.find(m => m.id === moduleId);
@@ -405,9 +409,14 @@ function TransformationPipelineGraph() {
         {/* Zoom Controls - Top Right */}
         <div className="absolute top-4 right-4 z-20 flex flex-col bg-gray-800 rounded-lg shadow-lg border border-gray-700">
           <button
-            onClick={zoomIn}
-            className="w-10 h-10 flex items-center justify-center text-white hover:bg-gray-700 transition-colors rounded-t-lg border-b border-gray-700"
-            title="Zoom In"
+            onClick={isDraggingModule ? undefined : zoomIn}
+            disabled={isDraggingModule}
+            className={`w-10 h-10 flex items-center justify-center transition-colors rounded-t-lg border-b border-gray-700 ${
+              isDraggingModule 
+                ? 'text-gray-500 cursor-not-allowed' 
+                : 'text-white hover:bg-gray-700'
+            }`}
+            title={isDraggingModule ? "Cannot zoom while dragging" : "Zoom In"}
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -419,9 +428,14 @@ function TransformationPipelineGraph() {
           </div>
           
           <button
-            onClick={zoomOut}
-            className="w-10 h-10 flex items-center justify-center text-white hover:bg-gray-700 transition-colors border-b border-gray-700"
-            title="Zoom Out"
+            onClick={isDraggingModule ? undefined : zoomOut}
+            disabled={isDraggingModule}
+            className={`w-10 h-10 flex items-center justify-center transition-colors border-b border-gray-700 ${
+              isDraggingModule 
+                ? 'text-gray-500 cursor-not-allowed' 
+                : 'text-white hover:bg-gray-700'
+            }`}
+            title={isDraggingModule ? "Cannot zoom while dragging" : "Zoom Out"}
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 12H6" />
@@ -429,9 +443,14 @@ function TransformationPipelineGraph() {
           </button>
           
           <button
-            onClick={resetZoom}
-            className="w-10 h-10 flex items-center justify-center text-white hover:bg-gray-700 transition-colors rounded-b-lg"
-            title="Reset Zoom"
+            onClick={isDraggingModule ? undefined : resetZoom}
+            disabled={isDraggingModule}
+            className={`w-10 h-10 flex items-center justify-center transition-colors rounded-b-lg ${
+              isDraggingModule 
+                ? 'text-gray-500 cursor-not-allowed' 
+                : 'text-white hover:bg-gray-700'
+            }`}
+            title={isDraggingModule ? "Cannot reset while dragging" : "Reset Zoom"}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -443,6 +462,12 @@ function TransformationPipelineGraph() {
         <div
           ref={canvasRef}
           className={`w-full h-full select-none ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+          style={{
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
+            MozUserSelect: 'none',
+            msUserSelect: 'none'
+          }}
           onWheel={handleWheel}
           onMouseDown={handleCanvasMouseDown}
           onMouseMove={handleCanvasMouseMove}

@@ -31,9 +31,16 @@ export const GraphModuleComponent: React.FC<GraphModuleComponentProps> = ({
   const handleCancelDelete = () => {
     setShowDeleteModal(false);
   };
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault(); // Prevent text selection
+    if (onMouseDown) {
+      onMouseDown(e);
+    }
+  };
+
   return (
     <div
-      className="absolute bg-gray-800 rounded-lg shadow-lg border-2 border-gray-600 cursor-pointer"
+      className="absolute bg-gray-800 rounded-lg shadow-lg border-2 border-gray-600 cursor-pointer select-none"
       style={{
         left: `${position.x}px`,
         top: `${position.y}px`,
@@ -41,8 +48,12 @@ export const GraphModuleComponent: React.FC<GraphModuleComponentProps> = ({
         width: 'max-content',
         maxWidth: '320px',
         transform: 'translate(-50%, -50%)',
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+        MozUserSelect: 'none',
+        msUserSelect: 'none'
       }}
-      onMouseDown={onMouseDown}
+      onMouseDown={handleMouseDown}
     >
       {/* Header */}
       <div 
