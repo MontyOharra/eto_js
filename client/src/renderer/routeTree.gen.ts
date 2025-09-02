@@ -10,8 +10,10 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as Transformation_pipelineRouteRouteImport } from './routes/transformation_pipeline/route'
 import { Route as DashboardRouteRouteImport } from './routes/dashboard/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as Transformation_pipelineGraphRouteImport } from './routes/transformation_pipeline/graph'
 import { Route as DashboardTemplatesRouteImport } from './routes/dashboard/templates'
 import { Route as DashboardSettingsRouteImport } from './routes/dashboard/settings'
 import { Route as DashboardHomeRouteImport } from './routes/dashboard/home'
@@ -22,6 +24,12 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const Transformation_pipelineRouteRoute =
+  Transformation_pipelineRouteRouteImport.update({
+    id: '/transformation_pipeline',
+    path: '/transformation_pipeline',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const DashboardRouteRoute = DashboardRouteRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -32,6 +40,12 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const Transformation_pipelineGraphRoute =
+  Transformation_pipelineGraphRouteImport.update({
+    id: '/graph',
+    path: '/graph',
+    getParentRoute: () => Transformation_pipelineRouteRoute,
+  } as any)
 const DashboardTemplatesRoute = DashboardTemplatesRouteImport.update({
   id: '/templates',
   path: '/templates',
@@ -56,64 +70,77 @@ const DashboardEtoInfoRoute = DashboardEtoInfoRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRouteRouteWithChildren
+  '/transformation_pipeline': typeof Transformation_pipelineRouteRouteWithChildren
   '/login': typeof LoginRoute
   '/dashboard/eto-info': typeof DashboardEtoInfoRoute
   '/dashboard/home': typeof DashboardHomeRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/templates': typeof DashboardTemplatesRoute
+  '/transformation_pipeline/graph': typeof Transformation_pipelineGraphRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRouteRouteWithChildren
+  '/transformation_pipeline': typeof Transformation_pipelineRouteRouteWithChildren
   '/login': typeof LoginRoute
   '/dashboard/eto-info': typeof DashboardEtoInfoRoute
   '/dashboard/home': typeof DashboardHomeRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/templates': typeof DashboardTemplatesRoute
+  '/transformation_pipeline/graph': typeof Transformation_pipelineGraphRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRouteRouteWithChildren
+  '/transformation_pipeline': typeof Transformation_pipelineRouteRouteWithChildren
   '/login': typeof LoginRoute
   '/dashboard/eto-info': typeof DashboardEtoInfoRoute
   '/dashboard/home': typeof DashboardHomeRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/templates': typeof DashboardTemplatesRoute
+  '/transformation_pipeline/graph': typeof Transformation_pipelineGraphRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/dashboard'
+    | '/transformation_pipeline'
     | '/login'
     | '/dashboard/eto-info'
     | '/dashboard/home'
     | '/dashboard/settings'
     | '/dashboard/templates'
+    | '/transformation_pipeline/graph'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/dashboard'
+    | '/transformation_pipeline'
     | '/login'
     | '/dashboard/eto-info'
     | '/dashboard/home'
     | '/dashboard/settings'
     | '/dashboard/templates'
+    | '/transformation_pipeline/graph'
   id:
     | '__root__'
     | '/'
     | '/dashboard'
+    | '/transformation_pipeline'
     | '/login'
     | '/dashboard/eto-info'
     | '/dashboard/home'
     | '/dashboard/settings'
     | '/dashboard/templates'
+    | '/transformation_pipeline/graph'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DashboardRouteRoute: typeof DashboardRouteRouteWithChildren
+  Transformation_pipelineRouteRoute: typeof Transformation_pipelineRouteRouteWithChildren
   LoginRoute: typeof LoginRoute
 }
 
@@ -124,6 +151,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/transformation_pipeline': {
+      id: '/transformation_pipeline'
+      path: '/transformation_pipeline'
+      fullPath: '/transformation_pipeline'
+      preLoaderRoute: typeof Transformation_pipelineRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard': {
@@ -139,6 +173,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/transformation_pipeline/graph': {
+      id: '/transformation_pipeline/graph'
+      path: '/graph'
+      fullPath: '/transformation_pipeline/graph'
+      preLoaderRoute: typeof Transformation_pipelineGraphRouteImport
+      parentRoute: typeof Transformation_pipelineRouteRoute
     }
     '/dashboard/templates': {
       id: '/dashboard/templates'
@@ -189,9 +230,25 @@ const DashboardRouteRouteWithChildren = DashboardRouteRoute._addFileChildren(
   DashboardRouteRouteChildren,
 )
 
+interface Transformation_pipelineRouteRouteChildren {
+  Transformation_pipelineGraphRoute: typeof Transformation_pipelineGraphRoute
+}
+
+const Transformation_pipelineRouteRouteChildren: Transformation_pipelineRouteRouteChildren =
+  {
+    Transformation_pipelineGraphRoute: Transformation_pipelineGraphRoute,
+  }
+
+const Transformation_pipelineRouteRouteWithChildren =
+  Transformation_pipelineRouteRoute._addFileChildren(
+    Transformation_pipelineRouteRouteChildren,
+  )
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DashboardRouteRoute: DashboardRouteRouteWithChildren,
+  Transformation_pipelineRouteRoute:
+    Transformation_pipelineRouteRouteWithChildren,
   LoginRoute: LoginRoute,
 }
 export const routeTree = rootRouteImport
