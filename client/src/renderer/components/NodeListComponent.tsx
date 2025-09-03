@@ -26,6 +26,9 @@ interface NodeListComponentProps {
   onAddOutput?: (moduleId: string) => void;
   onNodeTypeChange?: (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number, newType: 'string' | 'number' | 'boolean' | 'datetime') => void;
   onNodePositionUpdate?: (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number, position: { x: number; y: number }) => void;
+  onNameChange?: (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number, newName: string) => void;
+  getInputDisplayName?: (moduleId: string, nodeIndex: number) => string;
+  canChangeType?: (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number) => boolean;
 }
 
 export const NodeListComponent: React.FC<NodeListComponentProps> = ({
@@ -44,7 +47,10 @@ export const NodeListComponent: React.FC<NodeListComponentProps> = ({
   onAddInput,
   onAddOutput,
   onNodeTypeChange,
-  onNodePositionUpdate
+  onNodePositionUpdate,
+  onNameChange,
+  getInputDisplayName,
+  canChangeType
 }) => {
   // Calculate how many rows we need
   const inputsWithAdd = canAddInputs ? inputNodes.length + 1 : inputNodes.length;
@@ -75,6 +81,9 @@ export const NodeListComponent: React.FC<NodeListComponentProps> = ({
                   onRemove={onRemoveInput}
                   onTypeChange={onNodeTypeChange}
                   onPositionUpdate={onNodePositionUpdate}
+                  onNameChange={onNameChange}
+                  getInputDisplayName={getInputDisplayName}
+                  canChangeType={canChangeType}
                 />
               ) : showAddInput ? (
                 <>
@@ -115,6 +124,9 @@ export const NodeListComponent: React.FC<NodeListComponentProps> = ({
                   onRemove={onRemoveOutput}
                   onTypeChange={onNodeTypeChange}
                   onPositionUpdate={onNodePositionUpdate}
+                  onNameChange={onNameChange}
+                  getInputDisplayName={getInputDisplayName}
+                  canChangeType={canChangeType}
                 />
               ) : showAddOutput ? (
                 <>

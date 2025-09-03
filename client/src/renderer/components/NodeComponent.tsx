@@ -19,13 +19,16 @@ interface NodeComponentProps {
   onRemove?: (moduleId: string, nodeIndex: number) => void;
   onTypeChange?: (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number, newType: 'string' | 'number' | 'boolean' | 'datetime') => void;
   onPositionUpdate?: (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number, position: { x: number; y: number }) => void;
+  onNameChange?: (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number, newName: string) => void;
+  getInputDisplayName?: (moduleId: string, nodeIndex: number) => string;
+  canChangeType?: (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number) => boolean;
 }
 
 const getTypeColor = (type: string): string => {
   switch (type) {
-    case 'string': return '#10B981'; // Green
-    case 'number': return '#3B82F6'; // Blue  
-    case 'boolean': return '#F59E0B'; // Yellow
+    case 'string': return '#3B82F6'; // Blue
+    case 'number': return '#EF4444'; // Red  
+    case 'boolean': return '#10B981'; // Green
     case 'datetime': return '#8B5CF6'; // Purple
     default: return '#6B7280'; // Gray
   }
@@ -41,7 +44,10 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
   onNodeClick,
   onRemove,
   onTypeChange,
-  onPositionUpdate
+  onPositionUpdate,
+  onNameChange,
+  getInputDisplayName,
+  canChangeType
 }) => {
   const circleRef = useRef<HTMLDivElement>(null);
 
@@ -64,6 +70,10 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
 
   const handleTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     onTypeChange?.(moduleId, nodeType, nodeIndex, e.target.value as any);
+  };
+
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    onNameChange?.(moduleId, nodeType, nodeIndex, e.target.value);
   };
 
   if (nodeType === 'input') {
@@ -93,7 +103,9 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
         {/* Input Content */}
         <div className="ml-6 flex-1">
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-300 font-medium">{node.name}</span>
+            <span className="text-xs text-gray-300 font-medium">
+              {getInputDisplayName ? getInputDisplayName(moduleId, nodeIndex) : (node.name || "Not connected")}
+            </span>
             {canRemove && (
               <button
                 onClick={handleRemoveClick}
@@ -111,7 +123,13 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
               value={node.type}
               onChange={handleTypeChange}
               onMouseDown={(e) => e.stopPropagation()}
-              className="text-xs bg-gray-700 border border-gray-600 text-gray-300 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 mt-1"
+              disabled={canChangeType ? !canChangeType(moduleId, nodeType, nodeIndex) : false}
+              className={`text-xs border text-gray-300 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 mt-1 ${
+                (canChangeType && !canChangeType(moduleId, nodeType, nodeIndex)) 
+                  ? 'bg-gray-600 border-gray-500 cursor-not-allowed opacity-60' 
+                  : 'bg-gray-700 border-gray-600 cursor-pointer'
+              }`}
+              title={(canChangeType && !canChangeType(moduleId, nodeType, nodeIndex)) ? 'Type locked due to connection with fixed-type node' : ''}
             >
               <option value="string">string</option>
               <option value="number">number</option>
@@ -128,7 +146,16 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
         {/* Output Content */}
         <div className="mr-6 flex-1 text-right">
           <div className="flex items-center justify-end gap-2">
-            <span className="text-xs text-gray-300 font-medium">{node.name}</span>
+            <input
+              type="text"
+              value={node.name || ''}
+              onChange={handleNameChange}
+              onMouseDown={(e) => e.stopPropagation()}
+              onFocus={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+              className="text-xs bg-gray-700 border border-gray-600 text-gray-300 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 min-w-0 text-right max-w-24"
+              placeholder="Output name"
+            />
             {canRemove && (
               <button
                 onClick={handleRemoveClick}
@@ -146,7 +173,13 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
               value={node.type}
               onChange={handleTypeChange}
               onMouseDown={(e) => e.stopPropagation()}
-              className="text-xs bg-gray-700 border border-gray-600 text-gray-300 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 mt-1"
+              disabled={canChangeType ? !canChangeType(moduleId, nodeType, nodeIndex) : false}
+              className={`text-xs border text-gray-300 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 mt-1 ${
+                (canChangeType && !canChangeType(moduleId, nodeType, nodeIndex)) 
+                  ? 'bg-gray-600 border-gray-500 cursor-not-allowed opacity-60' 
+                  : 'bg-gray-700 border-gray-600 cursor-pointer'
+              }`}
+              title={(canChangeType && !canChangeType(moduleId, nodeType, nodeIndex)) ? 'Type locked due to connection with fixed-type node' : ''}
             >
               <option value="string">string</option>
               <option value="number">number</option>

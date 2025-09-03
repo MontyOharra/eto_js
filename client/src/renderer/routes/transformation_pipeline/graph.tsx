@@ -12,7 +12,7 @@ export const Route = createFileRoute("/transformation_pipeline/graph")({
 
 interface NodeState {
   id: string;
-  name: string;
+  name?: string; // Optional for inputs (computed from connections), required for outputs
   type: 'string' | 'number' | 'boolean' | 'datetime';
   description: string;
   required: boolean;
@@ -173,9 +173,9 @@ function TransformationPipelineGraph() {
   // Get node type color
   const getTypeColor = (type: string): string => {
     switch (type) {
-      case 'string': return '#10B981'; // Green
-      case 'number': return '#3B82F6'; // Blue  
-      case 'boolean': return '#F59E0B'; // Yellow
+      case 'string': return '#3B82F6'; // Blue
+      case 'number': return '#EF4444'; // Red  
+      case 'boolean': return '#10B981'; // Green
       case 'datetime': return '#8B5CF6'; // Purple
       default: return '#6B7280'; // Gray
     }
@@ -202,14 +202,13 @@ function TransformationPipelineGraph() {
       const generated = template.generateNodes(config);
       inputs = generated.inputs.map((input, index) => ({
         id: `${template.id}_input_${index}`,
-        name: input.name,
         type: input.type,
         description: input.description,
         required: input.required
       }));
       outputs = generated.outputs.map((output, index) => ({
         id: `${template.id}_output_${index}`,
-        name: output.name,
+        name: '',
         type: output.type,
         description: output.description,
         required: output.required || false
@@ -218,14 +217,13 @@ function TransformationPipelineGraph() {
       // Use template nodes for static modules
       inputs = template.inputs.map((input, index) => ({
         id: `${template.id}_input_${index}`,
-        name: input.name,
         type: input.type,
         description: input.description,
         required: input.required
       }));
       outputs = template.outputs.map((output, index) => ({
         id: `${template.id}_output_${index}`,
-        name: output.name,
+        name: '',
         type: output.type,
         description: output.description,
         required: false
@@ -240,6 +238,75 @@ function TransformationPipelineGraph() {
     return module.nodes.inputs;
   };
 
+  // Helper function to get display name for an input based on connections
+  const getInputDisplayName = (moduleId: string, inputIndex: number): string => {
+    // Find connection to this input
+    const connection = connections.find(conn => 
+      conn.toModuleId === moduleId && conn.toInputIndex === inputIndex
+    );
+    
+    if (!connection) {
+      return "Not connected";
+    }
+    
+    // Find the source module and output
+    const sourceModule = placedModules.find(m => m.id === connection.fromModuleId);
+    if (!sourceModule) {
+      return "Not connected";
+    }
+    
+    const sourceOutput = sourceModule.nodes.outputs[connection.fromOutputIndex];
+    return sourceOutput?.name || "Unknown output";
+  };
+
+  // Helper function to check if a node allows type configuration
+  const getNodeTypeConfigAllowed = (moduleId: string, nodeType: 'input' | 'output'): boolean => {
+    const module = placedModules.find(m => m.id === moduleId);
+    if (!module) return false;
+
+    if (nodeType === 'input') {
+      return module.template.dynamicInputs?.allowTypeConfiguration || false;
+    } else {
+      return module.template.dynamicOutputs?.allowTypeConfiguration || false;
+    }
+  };
+
+  // Helper function to check if a node can change type based on connections
+  const canNodeChangeType = (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number): boolean => {
+    // First check if this node itself allows type configuration
+    if (!getNodeTypeConfigAllowed(moduleId, nodeType)) {
+      return false;
+    }
+
+    if (nodeType === 'input') {
+      // Check if input is connected
+      const connection = connections.find(conn => 
+        conn.toModuleId === moduleId && conn.toInputIndex === nodeIndex
+      );
+      
+      if (!connection) {
+        return true; // No connection, can change type
+      }
+      
+      // Check if the connected output allows type configuration
+      return getNodeTypeConfigAllowed(connection.fromModuleId, 'output');
+    } else {
+      // For outputs, check all connected inputs
+      const outputConnections = connections.filter(conn => 
+        conn.fromModuleId === moduleId && conn.fromOutputIndex === nodeIndex
+      );
+      
+      if (outputConnections.length === 0) {
+        return true; // No connections, can change type
+      }
+      
+      // All connected inputs must allow type configuration
+      return outputConnections.every(connection => 
+        getNodeTypeConfigAllowed(connection.toModuleId, 'input')
+      );
+    }
+  };
+
   // Helper function to get current outputs for a module
   const getModuleOutputs = (module: PlacedModule): NodeState[] => {
     return module.nodes.outputs;
@@ -250,7 +317,7 @@ function TransformationPipelineGraph() {
     const nodeType = isInput ? 'input' : 'output';
     const node = {
       ...template,
-      name: template.name.replace('{{index}}', (index + 1).toString()),
+      name: isInput ? undefined : '', // Only outputs get blank names, inputs get no name property
       description: template.description.replace('{{index}}', (index + 1).toString())
     };
     
@@ -393,7 +460,7 @@ function TransformationPipelineGraph() {
       
       const newOutput: NodeState = {
         id: `${module.id}_output_${newIndex}`,
-        name: template.name.replace('{{index}}', newIndex.toString()),
+        name: '',
         type: template.type,
         description: template.description.replace('{{index}}', newIndex.toString()),
         required: template.required || false
@@ -493,19 +560,107 @@ function TransformationPipelineGraph() {
 
   // Handle node type change
   const handleNodeTypeChange = (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number, newType: 'string' | 'number' | 'boolean' | 'datetime') => {
+    // Check if the node can change type
+    if (!canNodeChangeType(moduleId, nodeType, nodeIndex)) {
+      console.log('❌ Type change not allowed for connected fixed-type node');
+      return;
+    }
+
+    setPlacedModules(prev => {
+      let updatedModules = [...prev];
+      
+      // Update the original node
+      updatedModules = updatedModules.map(module => {
+        if (module.id !== moduleId) return module;
+        
+        const nodeList = nodeType === 'input' ? module.nodes.inputs : module.nodes.outputs;
+        const updatedNodes = nodeList.map((node, index) => 
+          index === nodeIndex ? { ...node, type: newType } : node
+        );
+        
+        return {
+          ...module,
+          nodes: {
+            ...module.nodes,
+            [nodeType === 'input' ? 'inputs' : 'outputs']: updatedNodes
+          }
+        };
+      });
+
+      // Synchronize connected nodes if they allow type configuration
+      if (nodeType === 'input') {
+        // Find connected output and update its type if it allows configuration
+        const connection = connections.find(conn => 
+          conn.toModuleId === moduleId && conn.toInputIndex === nodeIndex
+        );
+        
+        if (connection && getNodeTypeConfigAllowed(connection.fromModuleId, 'output')) {
+          updatedModules = updatedModules.map(module => {
+            if (module.id !== connection.fromModuleId) return module;
+            
+            const updatedOutputs = module.nodes.outputs.map((node, index) => 
+              index === connection.fromOutputIndex ? { ...node, type: newType } : node
+            );
+            
+            return {
+              ...module,
+              nodes: {
+                ...module.nodes,
+                outputs: updatedOutputs
+              }
+            };
+          });
+        }
+      } else {
+        // Find all connected inputs and update their types if they allow configuration
+        const outputConnections = connections.filter(conn => 
+          conn.fromModuleId === moduleId && conn.fromOutputIndex === nodeIndex
+        );
+        
+        outputConnections.forEach(connection => {
+          if (getNodeTypeConfigAllowed(connection.toModuleId, 'input')) {
+            updatedModules = updatedModules.map(module => {
+              if (module.id !== connection.toModuleId) return module;
+              
+              const updatedInputs = module.nodes.inputs.map((node, index) => 
+                index === connection.toInputIndex ? { ...node, type: newType } : node
+              );
+              
+              return {
+                ...module,
+                nodes: {
+                  ...module.nodes,
+                  inputs: updatedInputs
+                }
+              };
+            });
+          }
+        });
+      }
+
+      return updatedModules;
+    });
+
+    console.log(`🔄 Synchronized type change to ${newType} for ${nodeType} node and connected nodes`);
+  };
+
+  // Handle node name changes for outputs
+  const handleNodeNameChange = (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number, newName: string) => {
+    // Only allow name changes for outputs
+    if (nodeType !== 'output') return;
+    
     setPlacedModules(prev => prev.map(module => {
       if (module.id !== moduleId) return module;
       
-      const nodeList = nodeType === 'input' ? module.nodes.inputs : module.nodes.outputs;
-      const updatedNodes = nodeList.map((node, index) => 
-        index === nodeIndex ? { ...node, type: newType } : node
+      const updatedOutputs = module.nodes.outputs.map((node, index) => 
+        index === nodeIndex ? { ...node, name: newName } : node
       );
       
       return {
         ...module,
         nodes: {
           ...module.nodes,
-          [nodeType === 'input' ? 'inputs' : 'outputs']: updatedNodes
+          outputs: updatedOutputs
         }
       };
     }));
@@ -1044,7 +1199,30 @@ function TransformationPipelineGraph() {
           );
           
           if (!connectionExists) {
-            setConnections(prev => [...prev, newConnection]);
+            // Check if the input already has a connection (inputs can only have one connection)
+            const existingInputConnection = connections.find(conn => 
+              conn.toModuleId === newConnection.toModuleId &&
+              conn.toInputIndex === newConnection.toInputIndex
+            );
+            
+            setConnections(prev => {
+              let updatedConnections = [...prev];
+              
+              // Remove existing connection to this input if it exists
+              if (existingInputConnection) {
+                updatedConnections = updatedConnections.filter(conn => conn.id !== existingInputConnection.id);
+                console.log('🔄 Replaced existing input connection:', existingInputConnection.id);
+                
+                // Clear selection if we're replacing the selected connection
+                if (selectedConnectionId === existingInputConnection.id) {
+                  setSelectedConnectionId(null);
+                }
+              }
+              
+              // Add the new connection
+              return [...updatedConnections, newConnection];
+            });
+            
             console.log('✅ Connection created:', newConnection);
           } else {
             console.log('⚠️ Connection already exists');
@@ -1443,6 +1621,9 @@ function TransformationPipelineGraph() {
                     onRemoveOutput={handleRemoveOutput}
                     onNodeTypeChange={handleNodeTypeChange}
                     onNodePositionUpdate={handleNodePositionUpdate}
+                    onNameChange={handleNodeNameChange}
+                    getInputDisplayName={getInputDisplayName}
+                    canChangeType={canNodeChangeType}
                   />
                 );
               })}

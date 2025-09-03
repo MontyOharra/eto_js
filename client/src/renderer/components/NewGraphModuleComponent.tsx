@@ -31,6 +31,9 @@ interface NewGraphModuleComponentProps {
   onRemoveOutput?: (moduleId: string, outputIndex: number) => void;
   onNodeTypeChange?: (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number, newType: 'string' | 'number' | 'boolean' | 'datetime') => void;
   onNodePositionUpdate?: (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number, position: { x: number; y: number }) => void;
+  onNameChange?: (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number, newName: string) => void;
+  getInputDisplayName?: (moduleId: string, nodeIndex: number) => string;
+  canChangeType?: (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number) => boolean;
 }
 
 
@@ -49,7 +52,10 @@ export const NewGraphModuleComponent: React.FC<NewGraphModuleComponentProps> = (
   onAddOutput,
   onRemoveOutput,
   onNodeTypeChange,
-  onNodePositionUpdate
+  onNodePositionUpdate,
+  onNameChange,
+  getInputDisplayName,
+  canChangeType
 }) => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isConfigExpanded, setIsConfigExpanded] = useState(true);
@@ -156,6 +162,9 @@ export const NewGraphModuleComponent: React.FC<NewGraphModuleComponentProps> = (
           onAddOutput={onAddOutput}
           onNodeTypeChange={onNodeTypeChange}
           onNodePositionUpdate={onNodePositionUpdate}
+          onNameChange={onNameChange}
+          getInputDisplayName={getInputDisplayName}
+          canChangeType={canChangeType}
         />
       )}
 
