@@ -2,17 +2,49 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState, useRef, useEffect } from "react";
 import { ModuleSelectionPane } from "../../components/ModuleSelectionPane";
 import { GraphModuleComponent } from "../../components/GraphModuleComponent";
-import { testBaseModules, BaseModuleTemplate } from "../../data/testModules";
+import { ExtractedDataModuleComponent } from "../../components/ExtractedDataModuleComponent";
+import { NewGraphModuleComponent } from "../../components/NewGraphModuleComponent";
+import { testBaseModules, BaseModuleTemplate, ModuleInput, ModuleOutput } from "../../data/testModules";
 
 export const Route = createFileRoute("/transformation_pipeline/graph")({
   component: TransformationPipelineGraph,
 });
+
+interface NodeState {
+  id: string;
+  name: string;
+  type: 'string' | 'number' | 'boolean' | 'datetime';
+  description: string;
+  required: boolean;
+}
+
+interface ModuleNodeState {
+  inputs: NodeState[];
+  outputs: NodeState[];
+}
 
 interface PlacedModule {
   id: string;
   template: BaseModuleTemplate;
   position: { x: number; y: number };
   config: any;
+  
+  // Node state (replaces runtime inputs/outputs)
+  nodes: ModuleNodeState;
+}
+
+interface NodeConnection {
+  id: string;
+  fromModuleId: string;
+  fromOutputIndex: number;
+  toModuleId: string;
+  toInputIndex: number;
+}
+
+interface StartingConnection {
+  moduleId: string;
+  type: 'input' | 'output';
+  index: number;
 }
 
 function TransformationPipelineGraph() {
@@ -27,6 +59,97 @@ function TransformationPipelineGraph() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [selectedModuleTemplate, setSelectedModuleTemplate] = useState<BaseModuleTemplate | null>(null);
   const [placedModules, setPlacedModules] = useState<PlacedModule[]>([]);
+
+  // Auto-place extracted data modules and Type Coercion module on initial load
+  useEffect(() => {
+    if (placedModules.length === 0) {
+      const extractedDataModules = testBaseModules.filter(module => module.category === 'Extracted Data');
+      const typeCoercionModule = testBaseModules.find(module => module.id === 'type_coercion');
+      const dataCombinerModule = testBaseModules.find(module => module.id === 'data_combiner');
+      
+      const moduleHeight = 140; // Approximate height of extracted data modules
+      const moduleSpacing = 20; // Space between modules
+      const startY = 100; // Starting Y position
+      const leftX = 200; // X position for extracted data modules
+      const middleX = 600; // X position for type coercion module
+      const rightX = 1000; // X position for data combiner module
+      
+      const initialModules: PlacedModule[] = [];
+      
+      // Add extracted data modules
+      extractedDataModules.forEach((template, index) => {
+        const config = {};
+        const nodes = initializeModuleNodes(template, config);
+        
+        const module: PlacedModule = {
+          id: `auto_${template.id}_${Date.now()}_${index}`,
+          template,
+          position: {
+            x: leftX,
+            y: startY + (index * (moduleHeight + moduleSpacing))
+          },
+          config,
+          nodes
+        };
+        
+        initialModules.push(module);
+      });
+      
+      // Add Type Coercion module for testing
+      if (typeCoercionModule) {
+        // Initialize config with default values from template
+        const config = {};
+        typeCoercionModule.config.forEach(configField => {
+          if (configField.defaultValue !== undefined) {
+            config[configField.name] = configField.defaultValue;
+          }
+        });
+        
+        const nodes = initializeModuleNodes(typeCoercionModule, config);
+        
+        const module: PlacedModule = {
+          id: `auto_type_coercion_${Date.now()}`,
+          template: typeCoercionModule,
+          position: {
+            x: middleX,
+            y: startY
+          },
+          config,
+          nodes
+        };
+        
+        initialModules.push(module);
+      }
+      
+      // Add Data Combiner module for testing variable nodes
+      if (dataCombinerModule) {
+        // Initialize config with default values from template
+        const config = {};
+        dataCombinerModule.config.forEach(configField => {
+          if (configField.defaultValue !== undefined) {
+            config[configField.name] = configField.defaultValue;
+          }
+        });
+        
+        const nodes = initializeModuleNodes(dataCombinerModule, config);
+        
+        const module: PlacedModule = {
+          id: `auto_data_combiner_${Date.now()}`,
+          template: dataCombinerModule,
+          position: {
+            x: rightX,
+            y: startY + 200
+          },
+          config,
+          nodes
+        };
+        
+        initialModules.push(module);
+      }
+      
+      setPlacedModules(initialModules);
+    }
+  }, []);  // Empty dependency array to run only on initial render
   const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null);
   
   // Placement state
@@ -37,6 +160,389 @@ function TransformationPipelineGraph() {
   const [isDraggingModule, setIsDraggingModule] = useState(false);
   const [draggedModuleId, setDraggedModuleId] = useState<string | null>(null);
   const [moduleDragOffset, setModuleDragOffset] = useState({ x: 0, y: 0 });
+
+  // Connection state
+  const [connections, setConnections] = useState<NodeConnection[]>([]);
+  const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
+  const [startingConnection, setStartingConnection] = useState<StartingConnection | null>(null);
+  const [currentMousePosition, setCurrentMousePosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // Node position tracking - stores actual DOM positions of node circles
+  const [nodePositions, setNodePositions] = useState<Record<string, { x: number; y: number }>>({});
+
+  // Get node type color
+  const getTypeColor = (type: string): string => {
+    switch (type) {
+      case 'string': return '#10B981'; // Green
+      case 'number': return '#3B82F6'; // Blue  
+      case 'boolean': return '#F59E0B'; // Yellow
+      case 'datetime': return '#8B5CF6'; // Purple
+      default: return '#6B7280'; // Gray
+    }
+  };
+
+  // Get node type from module state
+  const getNodeType = (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number): string => {
+    const module = placedModules.find(m => m.id === moduleId);
+    if (!module) return 'string';
+    
+    const nodeList = nodeType === 'input' ? module.nodes.inputs : module.nodes.outputs;
+    const node = nodeList[nodeIndex];
+    return node?.type || 'string';
+  };
+
+
+  // Helper function to initialize module nodes from template
+  const initializeModuleNodes = (template: BaseModuleTemplate, config: any): ModuleNodeState => {
+    let inputs: NodeState[] = [];
+    let outputs: NodeState[] = [];
+    
+    // Use generateNodes if available for dynamic modules
+    if (template.generateNodes) {
+      const generated = template.generateNodes(config);
+      inputs = generated.inputs.map((input, index) => ({
+        id: `${template.id}_input_${index}`,
+        name: input.name,
+        type: input.type,
+        description: input.description,
+        required: input.required
+      }));
+      outputs = generated.outputs.map((output, index) => ({
+        id: `${template.id}_output_${index}`,
+        name: output.name,
+        type: output.type,
+        description: output.description,
+        required: output.required || false
+      }));
+    } else {
+      // Use template nodes for static modules
+      inputs = template.inputs.map((input, index) => ({
+        id: `${template.id}_input_${index}`,
+        name: input.name,
+        type: input.type,
+        description: input.description,
+        required: input.required
+      }));
+      outputs = template.outputs.map((output, index) => ({
+        id: `${template.id}_output_${index}`,
+        name: output.name,
+        type: output.type,
+        description: output.description,
+        required: false
+      }));
+    }
+    
+    return { inputs, outputs };
+  };
+  
+  // Helper function to get current inputs for a module
+  const getModuleInputs = (module: PlacedModule): NodeState[] => {
+    return module.nodes.inputs;
+  };
+
+  // Helper function to get current outputs for a module
+  const getModuleOutputs = (module: PlacedModule): NodeState[] => {
+    return module.nodes.outputs;
+  };
+
+  // Helper function to create a new node from template with index replacement
+  const createNodeFromTemplate = (template: ModuleInput | ModuleOutput, index: number, isInput: boolean) => {
+    const nodeType = isInput ? 'input' : 'output';
+    const node = {
+      ...template,
+      name: template.name.replace('{{index}}', (index + 1).toString()),
+      description: template.description.replace('{{index}}', (index + 1).toString())
+    };
+    
+    // Update dynamicType configKey if it exists
+    if (node.dynamicType) {
+      node.dynamicType = {
+        ...node.dynamicType,
+        configKey: node.dynamicType.configKey.replace('{{index}}', (index + 1).toString())
+      };
+    }
+    
+    return node;
+  };
+
+  // Add input node
+  const handleAddInput = (moduleId: string) => {
+    setPlacedModules(prev => prev.map(module => {
+      if (module.id !== moduleId || !module.template.dynamicInputs?.enabled) return module;
+      
+      const currentInputs = module.nodes.inputs;
+      const maxInputs = module.template.dynamicInputs.maxNodes;
+      
+      if (maxInputs && currentInputs.length >= maxInputs) return module;
+      
+      const newIndex = currentInputs.length + 1;
+      const template = module.template.dynamicInputs.defaultTemplate;
+      
+      const newInput: NodeState = {
+        id: `${module.id}_input_${newIndex}`,
+        name: template.name.replace('{{index}}', newIndex.toString()),
+        type: template.type,
+        description: template.description.replace('{{index}}', newIndex.toString()),
+        required: template.required
+      };
+      
+      // Add default config for new input's type if it has dynamicType
+      const newConfig = { ...module.config };
+      if (template.dynamicType) {
+        const configKey = template.dynamicType.configKey.replace('{{index}}', newIndex.toString());
+        newConfig[configKey] = newInput.type;
+      }
+      
+      return {
+        ...module,
+        config: newConfig,
+        nodes: {
+          ...module.nodes,
+          inputs: [...currentInputs, newInput]
+        }
+      };
+    }));
+  };
+
+  // Remove input node
+  const handleRemoveInput = (moduleId: string, inputIndex: number) => {
+    setPlacedModules(prev => prev.map(module => {
+      if (module.id !== moduleId || !module.template.dynamicInputs?.enabled) return module;
+      
+      const currentInputs = module.nodes.inputs;
+      const minInputs = module.template.dynamicInputs.minNodes || 0;
+      
+      if (currentInputs.length <= minInputs) return module;
+      
+      const newInputs = currentInputs.filter((_, index) => index !== inputIndex);
+      
+      return {
+        ...module,
+        nodes: {
+          ...module.nodes,
+          inputs: newInputs
+        }
+      };
+    }));
+    
+    // Remove connections associated with the deleted input node
+    setConnections(prev => {
+      const connectionsToRemove = prev.filter(connection => 
+        connection.toModuleId === moduleId && connection.toInputIndex === inputIndex
+      );
+      
+      // Clear selection if selected connection is being deleted
+      connectionsToRemove.forEach(connection => {
+        if (selectedConnectionId === connection.id) {
+          setSelectedConnectionId(null);
+        }
+      });
+      
+      return prev.filter(connection => 
+        !(connection.toModuleId === moduleId && connection.toInputIndex === inputIndex)
+      );
+    });
+    
+    // Update connection indices for inputs that moved up after deletion
+    setConnections(prev => prev.map(connection => {
+      if (connection.toModuleId === moduleId && connection.toInputIndex > inputIndex) {
+        return {
+          ...connection,
+          toInputIndex: connection.toInputIndex - 1
+        };
+      }
+      return connection;
+    }));
+    
+    // Clean up node position registry for deleted input and shift remaining indices
+    setNodePositions(prev => {
+      const newPositions = { ...prev };
+      
+      // Remove the deleted input's position
+      delete newPositions[`${moduleId}-input-${inputIndex}`];
+      
+      // Shift higher-indexed inputs down by 1
+      Object.keys(newPositions).forEach(key => {
+        const match = key.match(new RegExp(`^${moduleId}-input-(\\d+)$`));
+        if (match) {
+          const index = parseInt(match[1]);
+          if (index > inputIndex) {
+            const newKey = `${moduleId}-input-${index - 1}`;
+            newPositions[newKey] = newPositions[key];
+            delete newPositions[key];
+          }
+        }
+      });
+      
+      return newPositions;
+    });
+  };
+
+  // Add output node
+  const handleAddOutput = (moduleId: string) => {
+    setPlacedModules(prev => prev.map(module => {
+      if (module.id !== moduleId || !module.template.dynamicOutputs?.enabled) return module;
+      
+      const currentOutputs = module.nodes.outputs;
+      const maxOutputs = module.template.dynamicOutputs.maxNodes;
+      
+      if (maxOutputs && currentOutputs.length >= maxOutputs) return module;
+      
+      const newIndex = currentOutputs.length + 1;
+      const template = module.template.dynamicOutputs.defaultTemplate;
+      
+      const newOutput: NodeState = {
+        id: `${module.id}_output_${newIndex}`,
+        name: template.name.replace('{{index}}', newIndex.toString()),
+        type: template.type,
+        description: template.description.replace('{{index}}', newIndex.toString()),
+        required: template.required || false
+      };
+      
+      // Add default config for new output's type if it has dynamicType
+      const newConfig = { ...module.config };
+      if (template.dynamicType) {
+        const configKey = template.dynamicType.configKey.replace('{{index}}', newIndex.toString());
+        newConfig[configKey] = newOutput.type;
+      }
+      
+      return {
+        ...module,
+        config: newConfig,
+        nodes: {
+          ...module.nodes,
+          outputs: [...currentOutputs, newOutput]
+        }
+      };
+    }));
+  };
+
+  // Remove output node
+  const handleRemoveOutput = (moduleId: string, outputIndex: number) => {
+    setPlacedModules(prev => prev.map(module => {
+      if (module.id !== moduleId || !module.template.dynamicOutputs?.enabled) return module;
+      
+      const currentOutputs = module.nodes.outputs;
+      const minOutputs = module.template.dynamicOutputs.minNodes || 0;
+      
+      if (currentOutputs.length <= minOutputs) return module;
+      
+      const newOutputs = currentOutputs.filter((_, index) => index !== outputIndex);
+      
+      return {
+        ...module,
+        nodes: {
+          ...module.nodes,
+          outputs: newOutputs
+        }
+      };
+    }));
+    
+    // Remove connections associated with the deleted output node
+    setConnections(prev => {
+      const connectionsToRemove = prev.filter(connection => 
+        connection.fromModuleId === moduleId && connection.fromOutputIndex === outputIndex
+      );
+      
+      // Clear selection if selected connection is being deleted
+      connectionsToRemove.forEach(connection => {
+        if (selectedConnectionId === connection.id) {
+          setSelectedConnectionId(null);
+        }
+      });
+      
+      return prev.filter(connection => 
+        !(connection.fromModuleId === moduleId && connection.fromOutputIndex === outputIndex)
+      );
+    });
+    
+    // Update connection indices for outputs that moved up after deletion
+    setConnections(prev => prev.map(connection => {
+      if (connection.fromModuleId === moduleId && connection.fromOutputIndex > outputIndex) {
+        return {
+          ...connection,
+          fromOutputIndex: connection.fromOutputIndex - 1
+        };
+      }
+      return connection;
+    }));
+    
+    // Clean up node position registry for deleted output and shift remaining indices
+    setNodePositions(prev => {
+      const newPositions = { ...prev };
+      
+      // Remove the deleted output's position
+      delete newPositions[`${moduleId}-output-${outputIndex}`];
+      
+      // Shift higher-indexed outputs down by 1
+      Object.keys(newPositions).forEach(key => {
+        const match = key.match(new RegExp(`^${moduleId}-output-(\\d+)$`));
+        if (match) {
+          const index = parseInt(match[1]);
+          if (index > outputIndex) {
+            const newKey = `${moduleId}-output-${index - 1}`;
+            newPositions[newKey] = newPositions[key];
+            delete newPositions[key];
+          }
+        }
+      });
+      
+      return newPositions;
+    });
+  };
+
+  // Handle node type change
+  const handleNodeTypeChange = (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number, newType: 'string' | 'number' | 'boolean' | 'datetime') => {
+    setPlacedModules(prev => prev.map(module => {
+      if (module.id !== moduleId) return module;
+      
+      const nodeList = nodeType === 'input' ? module.nodes.inputs : module.nodes.outputs;
+      const updatedNodes = nodeList.map((node, index) => 
+        index === nodeIndex ? { ...node, type: newType } : node
+      );
+      
+      return {
+        ...module,
+        nodes: {
+          ...module.nodes,
+          [nodeType === 'input' ? 'inputs' : 'outputs']: updatedNodes
+        }
+      };
+    }));
+  };
+
+  // Handle node position updates from DOM measurements
+  const handleNodePositionUpdate = (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number, position: { x: number; y: number }) => {
+    const nodeKey = `${moduleId}-${nodeType}-${nodeIndex}`;
+    setNodePositions(prev => ({
+      ...prev,
+      [nodeKey]: position
+    }));
+  };
+
+  // Handle connection selection
+  const handleConnectionClick = (connectionId: string) => (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    console.log('🔗 Connection clicked:', connectionId);
+    
+    // Toggle selection
+    if (selectedConnectionId === connectionId) {
+      setSelectedConnectionId(null);
+      console.log('🔗 Connection deselected');
+    } else {
+      setSelectedConnectionId(connectionId);
+      console.log('🔗 Connection selected:', connectionId);
+    }
+  };
+
+  // Handle connection deletion
+  const handleConnectionDelete = (connectionId: string) => {
+    setConnections(prev => prev.filter(connection => connection.id !== connectionId));
+    setSelectedConnectionId(null);
+    console.log('🗑️ Deleted connection:', connectionId);
+  };
 
   // Calculate adaptive grid size based on zoom level
   const getGridSize = (zoomLevel: number) => {
@@ -74,33 +580,25 @@ function TransformationPipelineGraph() {
     setPanOffset({ x: 0, y: 0 });
   };
 
-  // Handle scroll wheel zoom
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    
-    // Disable zooming when dragging a module
-    if (isDraggingModule) return;
-    
-    if (!canvasRef.current) return;
-    
-    const canvasRect = canvasRef.current.getBoundingClientRect();
-    const mouseX = e.clientX - canvasRect.left;
-    const mouseY = e.clientY - canvasRect.top;
-    
-    // Zoom factor
-    const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-    const newZoom = Math.max(0.1, Math.min(3, zoom * zoomFactor));
-    
-    if (newZoom !== zoom) {
-      // Calculate pan offset to zoom towards mouse position
-      const zoomRatio = newZoom / zoom;
-      const newPanX = mouseX - (mouseX - panOffset.x) * zoomRatio;
-      const newPanY = mouseY - (mouseY - panOffset.y) * zoomRatio;
-      
-      setZoom(newZoom);
-      setPanOffset({ x: newPanX, y: newPanY });
+
+  // Add mouse tracking for connection preview
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (startingConnection && canvasRef.current) {
+        const canvasRect = canvasRef.current.getBoundingClientRect();
+        const mouseX = (e.clientX - canvasRect.left - panOffset.x) / zoom;
+        const mouseY = (e.clientY - canvasRect.top - panOffset.y) / zoom;
+        setCurrentMousePosition({ x: mouseX, y: mouseY });
+      }
+    };
+
+    if (startingConnection) {
+      document.addEventListener('mousemove', handleMouseMove);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+      };
     }
-  };
+  }, [startingConnection, panOffset, zoom]);
 
   // Handle mouse down for canvas - either place module or start canvas drag
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
@@ -114,8 +612,15 @@ function TransformationPipelineGraph() {
       return;
     }
     
-    // Deselect any selected module when clicking empty canvas
+    // Cancel any active connection when clicking empty canvas
+    if (startingConnection) {
+      setStartingConnection(null);
+      return;
+    }
+    
+    // Deselect any selected module or connection when clicking empty canvas
     setSelectedModuleId(null);
+    setSelectedConnectionId(null);
     
     // Only start canvas dragging if no module is currently selected
     // This prevents canvas movement when interacting with module configurations
@@ -141,12 +646,21 @@ function TransformationPipelineGraph() {
     setIsPlacingModule(true);
     setPlacementStartPos({ x: clickX, y: clickY });
     
+    // Initialize config with default values from template
+    const config = {};
+    selectedModuleTemplate.config.forEach(configField => {
+      if (configField.defaultValue !== undefined) {
+        config[configField.name] = configField.defaultValue;
+      }
+    });
+    
     // Create and place module immediately on click
     const newModule: PlacedModule = {
       id: `${selectedModuleTemplate.id}_${Date.now()}`,
       template: selectedModuleTemplate,
       position: { x: clickX, y: clickY },
-      config: {}
+      config,
+      nodes: initializeModuleNodes(selectedModuleTemplate, config)
     };
     
     setPlacedModules(prev => [...prev, newModule]);
@@ -210,20 +724,49 @@ function TransformationPipelineGraph() {
     setIsSidebarCollapsed(prev => !prev);
   };
 
+  // Wheel event handler for zoom
+  useEffect(() => {
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      
+      // Disable zooming when dragging a module
+      if (isDraggingModule) return;
+      
+      if (!canvasRef.current) return;
+      
+      const canvasRect = canvasRef.current.getBoundingClientRect();
+      const mouseX = e.clientX - canvasRect.left;
+      const mouseY = e.clientY - canvasRect.top;
+      
+      // Zoom factor
+      const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+      const newZoom = Math.max(0.1, Math.min(3, zoom * zoomFactor));
+      
+      if (newZoom !== zoom) {
+        // Calculate pan offset to zoom towards mouse position
+        const zoomRatio = newZoom / zoom;
+        const newPanX = mouseX - (mouseX - panOffset.x) * zoomRatio;
+        const newPanY = mouseY - (mouseY - panOffset.y) * zoomRatio;
+        
+        setZoom(newZoom);
+        setPanOffset({ x: newPanX, y: newPanY });
+      }
+    };
+
+    if (canvasRef.current) {
+      canvasRef.current.addEventListener('wheel', handleWheel, { passive: false });
+    }
+
+    return () => {
+      if (canvasRef.current) {
+        canvasRef.current.removeEventListener('wheel', handleWheel);
+      }
+    };
+  }, [zoom, panOffset, isDraggingModule]);
+
   // Global mouse handlers for module dragging and canvas dragging
   useEffect(() => {
     const handleGlobalMouseMove = (e: MouseEvent) => {
-      // Log when we're in a dragging state
-      if (isDragging) {
-        console.log('📍 Global mouse move - canvas dragging', { 
-          x: e.clientX, 
-          y: e.clientY,
-          target: e.target?.constructor?.name || 'unknown'
-        });
-      }
-      if (isDraggingModule) {
-        console.log('📍 Global mouse move - module dragging');
-      }
 
       // Prevent any other event handlers from interfering
       if (isDragging || isDraggingModule) {
@@ -269,6 +812,7 @@ function TransformationPipelineGraph() {
         return;
       }
 
+
       // Handle canvas dragging
       if (isDragging) {
         const deltaX = e.clientX - dragStart.x;
@@ -292,7 +836,6 @@ function TransformationPipelineGraph() {
         e.preventDefault();
         e.stopPropagation();
       }
-      
       if (isDraggingModule) {
         console.log('🛑 Stopping module drag');
         setIsDraggingModule(false);
@@ -317,16 +860,95 @@ function TransformationPipelineGraph() {
   // Handle module deletion
   const handleModuleDelete = (moduleId: string) => () => {
     setPlacedModules(prev => prev.filter(module => module.id !== moduleId));
+    
     // Clear selection if deleted module was selected
     if (selectedModuleId === moduleId) {
       setSelectedModuleId(null);
     }
+    
+    // Remove all node positions for this module
+    setNodePositions(prev => {
+      const newPositions = { ...prev };
+      Object.keys(newPositions).forEach(key => {
+        if (key.startsWith(`${moduleId}-`)) {
+          delete newPositions[key];
+        }
+      });
+      return newPositions;
+    });
+    
+    // Remove all connections associated with this module
+    setConnections(prev => {
+      const connectionsToRemove = prev.filter(connection => 
+        connection.fromModuleId === moduleId || connection.toModuleId === moduleId
+      );
+      
+      // Clear selection if selected connection is being deleted
+      connectionsToRemove.forEach(connection => {
+        if (selectedConnectionId === connection.id) {
+          setSelectedConnectionId(null);
+        }
+      });
+      
+      return prev.filter(connection => 
+        connection.fromModuleId !== moduleId && connection.toModuleId !== moduleId
+      );
+    });
+    
+    // Cancel any starting connection from this module
+    if (startingConnection && startingConnection.moduleId === moduleId) {
+      setStartingConnection(null);
+    }
+    
+    console.log(`🗑️ Deleted module ${moduleId} and its associated connections`);
+  };
+
+
+  // Handle module config change
+  const handleModuleConfigChange = (moduleId: string) => (config: Record<string, any>) => {
+    setPlacedModules(prev => 
+      prev.map(module => {
+        if (module.id === moduleId) {
+          const updatedModule = { ...module, config };
+          
+          // If module has generateNodes, update node state
+          if (module.template.generateNodes) {
+            const generated = module.template.generateNodes(config);
+            updatedModule.nodes = {
+              inputs: generated.inputs.map((input, index) => ({
+                id: `${module.id}_input_${index}`,
+                name: input.name,
+                type: input.type,
+                description: input.description,
+                required: input.required
+              })),
+              outputs: generated.outputs.map((output, index) => ({
+                id: `${module.id}_output_${index}`,
+                name: output.name,
+                type: output.type,
+                description: output.description,
+                required: output.required || false
+              }))
+            };
+          }
+          
+          return updatedModule;
+        }
+        return module;
+      })
+    );
   };
 
   // Handle module click (selection)
   const handleModuleClick = (moduleId: string) => (e: React.MouseEvent) => {
     e.stopPropagation();
     setSelectedModuleId(moduleId);
+    
+    // Clear selected connection when clicking on a module
+    if (selectedConnectionId) {
+      setSelectedConnectionId(null);
+      console.log('🔗 Connection deselected due to module click');
+    }
   };
 
   // Handle module mouse down (start dragging)
@@ -353,6 +975,114 @@ function TransformationPipelineGraph() {
     setModuleDragOffset({ x: offsetX, y: offsetY });
   };
 
+  // Get node position from DOM-measured positions
+  const getNodePosition = (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number): { x: number; y: number } => {
+    const nodeKey = `${moduleId}-${nodeType}-${nodeIndex}`;
+    const position = nodePositions[nodeKey];
+    
+    if (position) {
+      // Convert from screen coordinates to canvas coordinates
+      const canvasRect = canvasRef.current?.getBoundingClientRect();
+      if (canvasRect) {
+        const canvasX = (position.x - canvasRect.left - panOffset.x) / zoom;
+        const canvasY = (position.y - canvasRect.top - panOffset.y) / zoom;
+        return { x: canvasX, y: canvasY };
+      }
+    }
+    
+    // Fallback to module center if position not yet measured
+    const module = placedModules.find(m => m.id === moduleId);
+    return module ? module.position : { x: 0, y: 0 };
+  };
+
+  // Handle node click (start or complete connection)
+  const handleNodeClick = (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number) => (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    console.log('🔗 Node clicked:', { moduleId, nodeType, nodeIndex, startingConnection });
+    
+    // Clear any selected connection when interacting with nodes
+    if (selectedConnectionId) {
+      setSelectedConnectionId(null);
+      console.log('🔗 Connection deselected due to node interaction');
+    }
+    
+    if (!startingConnection) {
+      // Start new connection
+      setStartingConnection({ moduleId, type: nodeType, index: nodeIndex });
+      // Initialize mouse position to the starting node position
+      const startPos = getNodePosition(moduleId, nodeType, nodeIndex);
+      setCurrentMousePosition(startPos);
+      console.log('🚀 Started connection from:', { moduleId, nodeType, nodeIndex });
+    } else {
+      // Try to complete connection
+      const start = startingConnection;
+      
+      // Can only connect output to input or input to output, and not to same module
+      if (start.type !== nodeType && start.moduleId !== moduleId) {
+        // Get types of both nodes for validation
+        const startNodeType = getNodeType(start.moduleId, start.type, start.index);
+        const endNodeType = getNodeType(moduleId, nodeType, nodeIndex);
+        
+        // Only allow connections between nodes of the same type
+        if (startNodeType === endNodeType) {
+          const newConnection: NodeConnection = {
+            id: `${Date.now()}`,
+            fromModuleId: start.type === 'output' ? start.moduleId : moduleId,
+            fromOutputIndex: start.type === 'output' ? start.index : nodeIndex,
+            toModuleId: start.type === 'input' ? start.moduleId : moduleId,
+            toInputIndex: start.type === 'input' ? start.index : nodeIndex,
+          };
+          
+          // Check if connection already exists
+          const connectionExists = connections.some(conn => 
+            conn.fromModuleId === newConnection.fromModuleId &&
+            conn.fromOutputIndex === newConnection.fromOutputIndex &&
+            conn.toModuleId === newConnection.toModuleId &&
+            conn.toInputIndex === newConnection.toInputIndex
+          );
+          
+          if (!connectionExists) {
+            setConnections(prev => [...prev, newConnection]);
+            console.log('✅ Connection created:', newConnection);
+          } else {
+            console.log('⚠️ Connection already exists');
+          }
+        } else {
+          console.log(`❌ Type mismatch: cannot connect ${startNodeType} to ${endNodeType}`);
+        }
+      } else {
+        console.log('❌ Invalid connection - same type or same module');
+      }
+      
+      // Clear starting connection
+      setStartingConnection(null);
+    }
+  };
+
+  // Generate bezier path for connection - direction aware
+  const generateBezierPath = (start: { x: number; y: number }, end: { x: number; y: number }, startType?: 'input' | 'output'): string => {
+    const controlPointOffset = Math.abs(end.x - start.x) * 0.5;
+    
+    let cp1x, cp2x;
+    
+    if (startType === 'input') {
+      // Starting from input node (left side) - curve should go left then right
+      cp1x = start.x - controlPointOffset;
+      cp2x = end.x + controlPointOffset;
+    } else {
+      // Starting from output node (right side) or standard connection - curve should go right then left
+      cp1x = start.x + controlPointOffset;
+      cp2x = end.x - controlPointOffset;
+    }
+    
+    const cp1y = start.y;
+    const cp2y = end.y;
+    
+    return `M ${start.x} ${start.y} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${end.x} ${end.y}`;
+  };
+
   // Handle drag over canvas
   const handleCanvasDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -373,12 +1103,21 @@ function TransformationPipelineGraph() {
       const dropX = (e.clientX - canvasRect.left - panOffset.x) / zoom;
       const dropY = (e.clientY - canvasRect.top - panOffset.y) / zoom;
       
+      // Initialize config with default values from template
+      const config = {};
+      moduleData.config.forEach(configField => {
+        if (configField.defaultValue !== undefined) {
+          config[configField.name] = configField.defaultValue;
+        }
+      });
+      
       // Create new placed module
       const newModule: PlacedModule = {
         id: `${moduleData.id}_${Date.now()}`,
         template: moduleData,
         position: { x: dropX, y: dropY },
-        config: {}
+        config,
+        nodes: initializeModuleNodes(moduleData, config)
       };
       
       setPlacedModules(prev => [...prev, newModule]);
@@ -406,6 +1145,18 @@ function TransformationPipelineGraph() {
 
       {/* Main Graph Area */}
       <div className="flex-1 relative">
+        {/* Connection Counter - Top Left */}
+        <div className="absolute top-4 left-4 z-20 bg-gray-800 rounded-lg shadow-lg border border-gray-700 px-4 py-2">
+          <div className="text-white text-sm font-medium">
+            Connections: <span className="text-blue-400">{connections.length}</span>
+          </div>
+          {startingConnection && (
+            <div className="text-green-400 text-xs mt-1">
+              Creating connection...
+            </div>
+          )}
+        </div>
+
         {/* Zoom Controls - Top Right */}
         <div className="absolute top-4 right-4 z-20 flex flex-col bg-gray-800 rounded-lg shadow-lg border border-gray-700">
           <button
@@ -468,7 +1219,6 @@ function TransformationPipelineGraph() {
             MozUserSelect: 'none',
             msUserSelect: 'none'
           }}
-          onWheel={handleWheel}
           onMouseDown={handleCanvasMouseDown}
           onMouseMove={handleCanvasMouseMove}
           onMouseUp={handleCanvasMouseUp}
@@ -491,18 +1241,280 @@ function TransformationPipelineGraph() {
               transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`,
             }}
           >
-            {/* Placed Modules */}
-            {placedModules.map((placedModule) => (
-              <GraphModuleComponent
-                key={placedModule.id}
-                template={placedModule.template}
-                position={placedModule.position}
-                onMouseDown={handleModuleMouseDown(placedModule.id)}
-                onDelete={handleModuleDelete(placedModule.id)}
-              />
-            ))}
+            {/* CSS Animation for dashed lines */}
+            <style>
+              {`
+                @keyframes dashAnimation {
+                  0% {
+                    stroke-dashoffset: 0;
+                  }
+                  100% {
+                    stroke-dashoffset: -24;
+                  }
+                }
+              `}
+            </style>
+
+            {/* Connection SVG Layer - Behind modules */}
+            <svg
+              className="absolute inset-0"
+              style={{
+                width: '100%',
+                height: '100%',
+                overflow: 'visible',
+                pointerEvents: 'auto', // Allow pointer events for connection selection
+                zIndex: 1 // Behind modules
+              }}
+            >
+              {/* SVG Filters and Definitions */}
+              <defs>
+                <filter id="connectionGlow" x="-100%" y="-100%" width="300%" height="300%">
+                  <feGaussianBlur stdDeviation="5" result="coloredBlur"/>
+                  <feMerge> 
+                    <feMergeNode in="coloredBlur"/>
+                    <feMergeNode in="SourceGraphic"/>
+                  </feMerge>
+                </filter>
+              </defs>
+              {/* Existing Connections */}
+              {connections.map((connection) => {
+                const startPos = getNodePosition(connection.fromModuleId, 'output', connection.fromOutputIndex);
+                const endPos = getNodePosition(connection.toModuleId, 'input', connection.toInputIndex);
+                const path = generateBezierPath(startPos, endPos);
+                
+                // Get color from the output node type (source of the connection)
+                const outputNodeType = getNodeType(connection.fromModuleId, 'output', connection.fromOutputIndex);
+                const connectionColor = getTypeColor(outputNodeType);
+                const isSelected = selectedConnectionId === connection.id;
+                
+                return (
+                  <g key={connection.id}>
+                    {isSelected ? (
+                      <>
+                        {/* Glow effect for selected connection */}
+                        <path
+                          d={path}
+                          stroke={connectionColor}
+                          strokeWidth="8"
+                          fill="none"
+                          strokeLinecap="round"
+                          pointerEvents="none"
+                          opacity="0.4"
+                          filter="url(#connectionGlow)"
+                        />
+                        {/* Main connection path with animated dashes */}
+                        <path
+                          d={path}
+                          stroke={connectionColor}
+                          strokeWidth="3"
+                          fill="none"
+                          strokeLinecap="round"
+                          strokeDasharray="8,4"
+                          style={{ 
+                            cursor: 'pointer',
+                            animation: 'dashAnimation 2s linear infinite'
+                          }}
+                          onClick={handleConnectionClick(connection.id)}
+                          onMouseDown={(e) => e.stopPropagation()}
+                        />
+                      </>
+                    ) : (
+                      /* Normal connection path */
+                      <path
+                        d={path}
+                        stroke={connectionColor}
+                        strokeWidth="2"
+                        fill="none"
+                        strokeLinecap="round"
+                        style={{ cursor: 'pointer' }}
+                        onClick={handleConnectionClick(connection.id)}
+                        onMouseDown={(e) => e.stopPropagation()}
+                      />
+                    )}
+                    {/* Invisible thicker path for easier clicking */}
+                    <path
+                      d={path}
+                      stroke="transparent"
+                      strokeWidth="10"
+                      fill="none"
+                      strokeLinecap="round"
+                      style={{ cursor: 'pointer' }}
+                      onClick={handleConnectionClick(connection.id)}
+                      onMouseDown={(e) => e.stopPropagation()}
+                    />
+                  </g>
+                );
+              })}
+
+              {/* Preview Connection */}
+              {startingConnection && (() => {
+                const startingNodeType = getNodeType(startingConnection.moduleId, startingConnection.type, startingConnection.index);
+                const previewColor = getTypeColor(startingNodeType);
+                
+                return (
+                  <path
+                    d={generateBezierPath(
+                      getNodePosition(startingConnection.moduleId, startingConnection.type, startingConnection.index),
+                      currentMousePosition,
+                      startingConnection.type
+                    )}
+                    stroke={previewColor}
+                    strokeWidth="2"
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeDasharray="5,5"
+                  />
+                );
+              })()}
+
+              {/* Debug: Show calculated node positions */}
+              {placedModules.map((module) => (
+                <g key={`debug-${module.id}`}>
+                  {/* Input node position indicators */}
+                  {module.nodes.inputs.map((input, index) => {
+                    const pos = getNodePosition(module.id, 'input', index);
+                    return (
+                      <circle
+                        key={`debug-input-${index}`}
+                        cx={pos.x}
+                        cy={pos.y}
+                        r="3"
+                        fill="red"
+                        opacity="0.7"
+                        pointerEvents="none"
+                      />
+                    );
+                  })}
+                  {/* Output node position indicators */}
+                  {module.nodes.outputs.map((output, index) => {
+                    const pos = getNodePosition(module.id, 'output', index);
+                    return (
+                      <circle
+                        key={`debug-output-${index}`}
+                        cx={pos.x}
+                        cy={pos.y}
+                        r="3"
+                        fill="yellow"
+                        opacity="0.7"
+                        pointerEvents="none"
+                      />
+                    );
+                  })}
+                </g>
+              ))}
+            </svg>
+
+            {/* Placed Modules - In front of connections */}
+            <div style={{ position: 'relative', zIndex: 2 }}>
+              {placedModules.map((placedModule) => {
+                // Use new state-based component for all modules
+                if (placedModule.template.category === 'Extracted Data') {
+                  return (
+                    <ExtractedDataModuleComponent
+                      key={placedModule.id}
+                      moduleId={placedModule.id}
+                      template={placedModule.template}
+                      position={placedModule.position}
+                      config={placedModule.config}
+                      onMouseDown={handleModuleMouseDown(placedModule.id)}
+                      onDelete={handleModuleDelete(placedModule.id)}
+                      onConfigChange={handleModuleConfigChange(placedModule.id)}
+                      onNodeClick={handleNodeClick}
+                    />
+                  );
+                }
+                
+                // Use new state-based component for all other modules
+                return (
+                  <NewGraphModuleComponent
+                    key={placedModule.id}
+                    moduleId={placedModule.id}
+                    template={placedModule.template}
+                    position={placedModule.position}
+                    config={placedModule.config}
+                    nodes={placedModule.nodes}
+                    onMouseDown={handleModuleMouseDown(placedModule.id)}
+                    onDelete={handleModuleDelete(placedModule.id)}
+                    onConfigChange={handleModuleConfigChange(placedModule.id)}
+                    onNodeClick={handleNodeClick}
+                    onAddInput={handleAddInput}
+                    onRemoveInput={handleRemoveInput}
+                    onAddOutput={handleAddOutput}
+                    onRemoveOutput={handleRemoveOutput}
+                    onNodeTypeChange={handleNodeTypeChange}
+                    onNodePositionUpdate={handleNodePositionUpdate}
+                  />
+                );
+              })}
+            </div>
           </div>
         </div>
+
+        {/* Connection Info Panel - Bottom */}
+        {selectedConnectionId && (() => {
+          const selectedConnection = connections.find(conn => conn.id === selectedConnectionId);
+          if (!selectedConnection) return null;
+          
+          const outputModule = placedModules.find(m => m.id === selectedConnection.fromModuleId);
+          const inputModule = placedModules.find(m => m.id === selectedConnection.toModuleId);
+          
+          if (!outputModule || !inputModule) return null;
+          
+          const outputNode = outputModule.nodes.outputs[selectedConnection.fromOutputIndex];
+          const inputNode = inputModule.nodes.inputs[selectedConnection.toInputIndex];
+          
+          if (!outputNode || !inputNode) return null;
+          
+          const connectionType = outputNode.type;
+          const connectionColor = getTypeColor(connectionType);
+          
+          return (
+            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-30">
+              <div className="bg-gray-800 rounded-lg shadow-xl border border-gray-600 px-4 py-3 min-w-96">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    {/* Connection Type Indicator */}
+                    <div 
+                      className="w-4 h-4 rounded-full border-2 border-gray-600"
+                      style={{ backgroundColor: connectionColor }}
+                      title={`${connectionType} connection`}
+                    />
+                    
+                    {/* Connection Info */}
+                    <div className="text-white text-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-300 font-medium">{outputModule.template.name}</span>
+                        <span className="text-blue-400 text-xs">({outputNode.name})</span>
+                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                        </svg>
+                        <span className="text-gray-300 font-medium">{inputModule.template.name}</span>
+                        <span className="text-blue-400 text-xs">({inputNode.name})</span>
+                      </div>
+                      <div className="text-xs text-gray-400 mt-1">
+                        Type: <span className="text-blue-300 capitalize">{connectionType}</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Delete Button */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleConnectionDelete(selectedConnectionId);
+                    }}
+                    className="w-8 h-8 flex items-center justify-center text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded transition-colors"
+                    title="Delete connection"
+                  >
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
