@@ -3,7 +3,7 @@ export interface ModuleInput {
   type: 'string' | 'number' | 'boolean' | 'datetime';
   description: string;
   required: boolean;
-  defaultValue?: any;
+  defaultValue?: unknown;
   // For dynamic type nodes
   dynamicType?: {
     configKey: string; // Which config field controls this type
@@ -15,6 +15,7 @@ export interface ModuleOutput {
   name: string;
   type: 'string' | 'number' | 'boolean' | 'datetime';
   description: string;
+  required?: boolean; // Optional for outputs, defaults to false
   // For dynamic type nodes
   dynamicType?: {
     configKey: string; // Which config field controls this type
@@ -27,7 +28,7 @@ export interface ModuleConfig {
   type: 'string' | 'number' | 'boolean' | 'select' | 'textarea';
   description: string;
   required: boolean;
-  defaultValue?: any;
+  defaultValue?: unknown;
   options?: string[]; // For select type
   placeholder?: string;
   hidden?: boolean; // Hide from config UI

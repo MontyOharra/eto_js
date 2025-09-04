@@ -1,10 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { ModuleSelectionPane } from "../../components/ModuleSelectionPane";
-import { GraphModuleComponent } from "../../components/GraphModuleComponent";
 import { ExtractedDataModuleComponent } from "../../components/ExtractedDataModuleComponent";
 import { NewGraphModuleComponent } from "../../components/NewGraphModuleComponent";
-import { BaseModuleTemplate, ModuleInput, ModuleOutput, testBaseModules } from "../../data/testModules";
+import { BaseModuleTemplate } from "../../data/testModules";
 import { useTransformationModules } from "../../hooks/useTransformationModules";
 
 export const Route = createFileRoute("/transformation_pipeline/graph")({
@@ -13,7 +12,7 @@ export const Route = createFileRoute("/transformation_pipeline/graph")({
 
 interface NodeState {
   id: string;
-  name?: string; // Optional for inputs (computed from connections), required for outputs
+  name: string; // Required name to match component interface
   type: 'string' | 'number' | 'boolean' | 'datetime';
   description: string;
   required: boolean;
@@ -28,7 +27,7 @@ interface PlacedModule {
   id: string;
   template: BaseModuleTemplate;
   position: { x: number; y: number };
-  config: any;
+  config: Record<string, unknown>;
   
   // Node state (replaces runtime inputs/outputs)
   nodes: ModuleNodeState;
@@ -95,7 +94,7 @@ function TransformationPipelineGraph() {
       
       // Add extracted data modules
       extractedDataModules.forEach((template, index) => {
-        const config = {};
+        const config: Record<string, unknown> = {};
         const nodes = initializeModuleNodes(template, config);
         
         const module: PlacedModule = {
@@ -115,7 +114,7 @@ function TransformationPipelineGraph() {
       // Add Type Coercion module for testing
       if (typeCoercionModule) {
         // Initialize config with default values from template
-        const config = {};
+        const config: Record<string, unknown> = {};
         typeCoercionModule.config.forEach(configField => {
           if (configField.defaultValue !== undefined) {
             config[configField.name] = configField.defaultValue;
@@ -141,7 +140,7 @@ function TransformationPipelineGraph() {
       // Add Data Combiner module for testing variable nodes
       if (dataCombinerModule) {
         // Initialize config with default values from template
-        const config = {};
+        const config: Record<string, unknown> = {};
         dataCombinerModule.config.forEach(configField => {
           if (configField.defaultValue !== undefined) {
             config[configField.name] = configField.defaultValue;
@@ -166,12 +165,11 @@ function TransformationPipelineGraph() {
       
       setPlacedModules(initialModules);
     }
-  }, [allModules]);  // Re-run when modules are loaded
+  }, [allModules, placedModules.length]);  // Re-run when modules are loaded
   const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null);
   
   // Placement state
   const [isPlacingModule, setIsPlacingModule] = useState(false);
-  const [placementStartPos, setPlacementStartPos] = useState({ x: 0, y: 0 });
 
   // Module dragging state
   const [isDraggingModule, setIsDraggingModule] = useState(false);
@@ -210,7 +208,7 @@ function TransformationPipelineGraph() {
 
 
   // Helper function to initialize module nodes from template
-  const initializeModuleNodes = (template: BaseModuleTemplate, config: any): ModuleNodeState => {
+  const initializeModuleNodes = (template: BaseModuleTemplate, config: Record<string, unknown>): ModuleNodeState => {
     let inputs: NodeState[] = [];
     let outputs: NodeState[] = [];
     
@@ -219,13 +217,14 @@ function TransformationPipelineGraph() {
       const generated = template.generateNodes(config);
       inputs = generated.inputs.map((input, index) => ({
         id: `${template.id}_input_${index}`,
+        name: input.name || `Input ${index + 1}`,
         type: input.type,
         description: input.description,
         required: input.required
       }));
       outputs = generated.outputs.map((output, index) => ({
         id: `${template.id}_output_${index}`,
-        name: '',
+        name: output.name || `Output ${index + 1}`,
         type: output.type,
         description: output.description,
         required: output.required || false
@@ -234,26 +233,23 @@ function TransformationPipelineGraph() {
       // Use template nodes for static modules
       inputs = template.inputs.map((input, index) => ({
         id: `${template.id}_input_${index}`,
+        name: input.name || `Input ${index + 1}`,
         type: input.type,
         description: input.description,
         required: input.required
       }));
       outputs = template.outputs.map((output, index) => ({
         id: `${template.id}_output_${index}`,
-        name: '',
+        name: output.name || `Output ${index + 1}`,
         type: output.type,
         description: output.description,
-        required: false
+        required: output.required || false
       }));
     }
     
     return { inputs, outputs };
   };
   
-  // Helper function to get current inputs for a module
-  const getModuleInputs = (module: PlacedModule): NodeState[] => {
-    return module.nodes.inputs;
-  };
 
   // Helper function to get display name for an input based on connections
   const getInputDisplayName = (moduleId: string, inputIndex: number): string => {
@@ -324,30 +320,7 @@ function TransformationPipelineGraph() {
     }
   };
 
-  // Helper function to get current outputs for a module
-  const getModuleOutputs = (module: PlacedModule): NodeState[] => {
-    return module.nodes.outputs;
-  };
 
-  // Helper function to create a new node from template with index replacement
-  const createNodeFromTemplate = (template: ModuleInput | ModuleOutput, index: number, isInput: boolean) => {
-    const nodeType = isInput ? 'input' : 'output';
-    const node = {
-      ...template,
-      name: isInput ? undefined : '', // Only outputs get blank names, inputs get no name property
-      description: template.description.replace('{{index}}', (index + 1).toString())
-    };
-    
-    // Update dynamicType configKey if it exists
-    if (node.dynamicType) {
-      node.dynamicType = {
-        ...node.dynamicType,
-        configKey: node.dynamicType.configKey.replace('{{index}}', (index + 1).toString())
-      };
-    }
-    
-    return node;
-  };
 
   // Add input node
   const handleAddInput = (moduleId: string) => {
@@ -367,7 +340,7 @@ function TransformationPipelineGraph() {
         name: template.name.replace('{{index}}', newIndex.toString()),
         type: template.type,
         description: template.description.replace('{{index}}', newIndex.toString()),
-        required: template.required
+        required: template.required || false
       };
       
       // Add default config for new input's type if it has dynamicType
@@ -477,7 +450,7 @@ function TransformationPipelineGraph() {
       
       const newOutput: NodeState = {
         id: `${module.id}_output_${newIndex}`,
-        name: '',
+        name: `Output ${newIndex}`,
         type: template.type,
         description: template.description.replace('{{index}}', newIndex.toString()),
         required: template.required || false
@@ -849,10 +822,9 @@ function TransformationPipelineGraph() {
     const clickY = (e.clientY - canvasRect.top - panOffset.y) / zoom;
     
     setIsPlacingModule(true);
-    setPlacementStartPos({ x: clickX, y: clickY });
     
     // Initialize config with default values from template
-    const config = {};
+    const config: Record<string, unknown> = {};
     selectedModuleTemplate.config.forEach(configField => {
       if (configField.defaultValue !== undefined) {
         config[configField.name] = configField.defaultValue;
@@ -961,13 +933,14 @@ function TransformationPipelineGraph() {
       }
     };
 
-    if (canvasRef.current) {
-      canvasRef.current.addEventListener('wheel', handleWheel, { passive: false });
+    const currentCanvas = canvasRef.current;
+    if (currentCanvas) {
+      currentCanvas.addEventListener('wheel', handleWheel, { passive: false });
     }
 
     return () => {
-      if (canvasRef.current) {
-        canvasRef.current.removeEventListener('wheel', handleWheel);
+      if (currentCanvas) {
+        currentCanvas.removeEventListener('wheel', handleWheel);
       }
     };
   }, [isDraggingModule]);
@@ -1104,7 +1077,7 @@ function TransformationPipelineGraph() {
 
 
   // Handle module config change
-  const handleModuleConfigChange = (moduleId: string) => (config: Record<string, any>) => {
+  const handleModuleConfigChange = (moduleId: string) => (config: Record<string, unknown>) => {
     setPlacedModules(prev => 
       prev.map(module => {
         if (module.id === moduleId) {
@@ -1116,14 +1089,14 @@ function TransformationPipelineGraph() {
             updatedModule.nodes = {
               inputs: generated.inputs.map((input, index) => ({
                 id: `${module.id}_input_${index}`,
-                name: input.name,
+                name: input.name || `Input ${index + 1}`,
                 type: input.type,
                 description: input.description,
                 required: input.required
               })),
               outputs: generated.outputs.map((output, index) => ({
                 id: `${module.id}_output_${index}`,
-                name: output.name,
+                name: output.name || `Output ${index + 1}`,
                 type: output.type,
                 description: output.description,
                 required: output.required || false
@@ -1138,16 +1111,6 @@ function TransformationPipelineGraph() {
     );
   };
 
-  // Handle module click (selection)
-  const handleModuleClick = (moduleId: string) => (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setSelectedModuleId(moduleId);
-    
-    // Clear selected connection when clicking on a module
-    if (selectedConnectionId) {
-      setSelectedConnectionId(null);
-    }
-  };
 
   // Handle module mouse down (start dragging)
   const handleModuleMouseDown = (moduleId: string) => (e: React.MouseEvent) => {
@@ -1330,7 +1293,7 @@ function TransformationPipelineGraph() {
       const dropY = (e.clientY - canvasRect.top - panOffset.y) / zoom;
       
       // Initialize config with default values from template
-      const config = {};
+      const config: Record<string, unknown> = {};
       moduleData.config.forEach(configField => {
         if (configField.defaultValue !== undefined) {
           config[configField.name] = configField.defaultValue;
@@ -1456,15 +1419,7 @@ function TransformationPipelineGraph() {
             userSelect: 'none',
             WebkitUserSelect: 'none',
             MozUserSelect: 'none',
-            msUserSelect: 'none'
-          }}
-          onMouseDown={handleCanvasMouseDown}
-          onMouseMove={handleCanvasMouseMove}
-          onMouseUp={handleCanvasMouseUp}
-          onMouseLeave={handleCanvasMouseLeave}
-          onDragOver={handleCanvasDragOver}
-          onDrop={handleCanvasDrop}
-          style={{
+            msUserSelect: 'none',
             backgroundImage: `
               linear-gradient(rgba(75, 85, 99, ${getGridOpacity(zoom)}) 1px, transparent 1px),
               linear-gradient(90deg, rgba(75, 85, 99, ${getGridOpacity(zoom)}) 1px, transparent 1px)
@@ -1472,6 +1427,12 @@ function TransformationPipelineGraph() {
             backgroundSize: `${getGridSize(zoom) * zoom}px ${getGridSize(zoom) * zoom}px`,
             backgroundPosition: `${panOffset.x}px ${panOffset.y}px`,
           }}
+          onMouseDown={handleCanvasMouseDown}
+          onMouseMove={handleCanvasMouseMove}
+          onMouseUp={handleCanvasMouseUp}
+          onMouseLeave={handleCanvasMouseLeave}
+          onDragOver={handleCanvasDragOver}
+          onDrop={handleCanvasDrop}
         >
           {/* Zoom and Pan Container */}
           <div
