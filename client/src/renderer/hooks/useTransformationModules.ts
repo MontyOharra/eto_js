@@ -5,6 +5,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { BaseModuleTemplate } from '../types/modules';
 import { fetchBaseModules } from '../services/transformationPipelineApi';
+import { testModules } from '../data/testModules';
 
 export interface UseTransformationModulesResult {
   modules: BaseModuleTemplate[];
@@ -23,7 +24,7 @@ export interface UseTransformationModulesResult {
  */
 export function useTransformationModules(): UseTransformationModulesResult {
   const [backendModules, setBackendModules] = useState<BaseModuleTemplate[]>([]);
-  const [mockModules] = useState<BaseModuleTemplate[]>(testBaseModules);
+  const [mockModules] = useState<BaseModuleTemplate[]>(testModules);
   const [modules, setModules] = useState<BaseModuleTemplate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

@@ -27,7 +27,7 @@ export const mockOrderFields = [
 ];
 
 // Generate extracted data modules
-const extractedDataModules: BaseModuleTemplate[] = mockExtractedFields.map(field => ({
+export const extractedDataModules: BaseModuleTemplate[] = mockExtractedFields.map(field => ({
   id: `extracted_${field.name}`,
   name: `Extracted: ${field.displayName}`,
   description: `Outputs the extracted ${field.displayName} from the PDF processing`,
@@ -56,7 +56,7 @@ const extractedDataModules: BaseModuleTemplate[] = mockExtractedFields.map(field
 }));
 
 // Create order generation module
-const orderGenerationModule: BaseModuleTemplate = {
+export const orderGenerationModule: BaseModuleTemplate = {
   id: 'order_generation',
   name: 'Generate Order',
   description: 'Final step: Creates an order from the processed data. Every pipeline must end here.',
@@ -97,4 +97,10 @@ const orderGenerationModule: BaseModuleTemplate = {
     }
   ]
 };
+
+// Export the test modules array for the hook
+export const testModules: BaseModuleTemplate[] = [
+  ...extractedDataModules,
+  orderGenerationModule
+];
 
