@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BaseModuleTemplate } from '../data/testModules';
+import { BaseModuleTemplate } from '../types/modules';
 
 interface ModuleSelectionPaneProps {
   modules: BaseModuleTemplate[];

@@ -3,7 +3,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { BaseModuleTemplate, testBaseModules } from '../data/testModules';
+import { BaseModuleTemplate } from '../types/modules';
 import { fetchBaseModules } from '../services/transformationPipelineApi';
 
 export interface UseTransformationModulesResult {

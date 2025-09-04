@@ -1,5 +1,5 @@
 import React from 'react';
-import { BaseModuleTemplate, ModuleInput, ModuleOutput } from '../data/testModules';
+import { BaseModuleTemplate, ModuleInput, ModuleOutput } from '../types/modules';
 
 interface ModuleComponentProps {
   module: BaseModuleTemplate;

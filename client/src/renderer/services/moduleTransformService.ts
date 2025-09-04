@@ -2,7 +2,7 @@
  * Service for transforming backend module definitions to frontend format
  */
 
-import { BaseModuleTemplate, ModuleInput, ModuleOutput, ModuleConfig, DynamicNodeConfig } from '../data/testModules';
+import { BaseModuleTemplate, ModuleInput, ModuleOutput, ModuleConfig, DynamicNodeConfig } from '../types/modules';
 
 export interface BackendModuleData {
   id: string;

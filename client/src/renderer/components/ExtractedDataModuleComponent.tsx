@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { BaseModuleTemplate } from '../data/testModules';
+import { BaseModuleTemplate } from '../types/modules';
 
 interface ExtractedDataModuleComponentProps {
   moduleId: string;

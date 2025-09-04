@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { BaseModuleTemplate, ModuleConfig, ModuleInput, ModuleOutput } from '../data/testModules';
+import { BaseModuleTemplate, ModuleConfig, ModuleInput, ModuleOutput } from '../types/modules';
 
 interface GraphModuleComponentProps {
   moduleId: string;

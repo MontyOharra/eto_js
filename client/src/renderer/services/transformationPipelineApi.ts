@@ -2,7 +2,7 @@
  * API service for Transformation Pipeline Server
  */
 
-import { BaseModuleTemplate } from '../data/testModules';
+import { BaseModuleTemplate } from '../types/modules';
 
 const TRANSFORMATION_PIPELINE_API_BASE = 'http://localhost:8090';
 
