@@ -5,23 +5,47 @@ import { ExtractedDataModuleComponent } from "./_components/ExtractedDataModuleC
 import { NewGraphModuleComponent } from "./_components/NewGraphModuleComponent";
 import { BaseModuleTemplate } from "../../types/modules";
 import { useTransformationModules } from "../../hooks/useTransformationModules";
-import { NodeState, PlacedModule, NodeConnection, StartingConnection } from "./_utils/types";
-import { 
-  getTypeColor, 
-  getNodeType, 
-  initializeModuleNodes, 
-  getInputDisplayName,
-  getNodeTypeConfigAllowed,
-  canNodeChangeType,
-  getGridSize,
-  getGridOpacity 
-} from "./_utils/graphUtils";
-import { generateBezierPath, getNodePosition } from "./_utils/connectionUtils";
 
 export const Route = createFileRoute("/transformation_pipeline/graph")({
   component: TransformationPipelineGraph,
 });
 
+interface NodeState {
+  id: string;
+  name: string; // Required name to match component interface
+  type: 'string' | 'number' | 'boolean' | 'datetime';
+  description: string;
+  required: boolean;
+}
+
+interface ModuleNodeState {
+  inputs: NodeState[];
+  outputs: NodeState[];
+}
+
+interface PlacedModule {
+  id: string;
+  template: BaseModuleTemplate;
+  position: { x: number; y: number };
+  config: Record<string, unknown>;
+  
+  // Node state (replaces runtime inputs/outputs)
+  nodes: ModuleNodeState;
+}
+
+interface NodeConnection {
+  id: string;
+  fromModuleId: string;
+  fromOutputIndex: number;
+  toModuleId: string;
+  toInputIndex: number;
+}
+
+interface StartingConnection {
+  moduleId: string;
+  type: 'input' | 'output';
+  index: number;
+}
 
 function TransformationPipelineGraph() {
   // Load modules from both mock and backend
@@ -161,13 +185,140 @@ function TransformationPipelineGraph() {
   // Node position tracking - stores actual DOM positions of node circles
   const [nodePositions, setNodePositions] = useState<Record<string, { x: number; y: number }>>({});
 
+  // Get node type color
+  const getTypeColor = (type: string): string => {
+    switch (type) {
+      case 'string': return '#3B82F6'; // Blue
+      case 'number': return '#EF4444'; // Red  
+      case 'boolean': return '#10B981'; // Green
+      case 'datetime': return '#8B5CF6'; // Purple
+      default: return '#6B7280'; // Gray
+    }
+  };
+
+  // Get node type from module state
+  const getNodeType = (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number): string => {
+    const module = placedModules.find(m => m.id === moduleId);
+    if (!module) return 'string';
+    
+    const nodeList = nodeType === 'input' ? module.nodes.inputs : module.nodes.outputs;
+    const node = nodeList[nodeIndex];
+    return node?.type || 'string';
+  };
 
 
-
+  // Helper function to initialize module nodes from template
+  const initializeModuleNodes = (template: BaseModuleTemplate, config: Record<string, unknown>): ModuleNodeState => {
+    let inputs: NodeState[] = [];
+    let outputs: NodeState[] = [];
+    
+    // Use generateNodes if available for dynamic modules
+    if (template.generateNodes) {
+      const generated = template.generateNodes(config);
+      inputs = generated.inputs.map((input, index) => ({
+        id: `${template.id}_input_${index}`,
+        name: input.name || `Input ${index + 1}`,
+        type: input.type,
+        description: input.description,
+        required: input.required
+      }));
+      outputs = generated.outputs.map((output, index) => ({
+        id: `${template.id}_output_${index}`,
+        name: output.name || `Output ${index + 1}`,
+        type: output.type,
+        description: output.description,
+        required: output.required || false
+      }));
+    } else {
+      // Use template nodes for static modules
+      inputs = template.inputs.map((input, index) => ({
+        id: `${template.id}_input_${index}`,
+        name: input.name || `Input ${index + 1}`,
+        type: input.type,
+        description: input.description,
+        required: input.required
+      }));
+      outputs = template.outputs.map((output, index) => ({
+        id: `${template.id}_output_${index}`,
+        name: output.name || `Output ${index + 1}`,
+        type: output.type,
+        description: output.description,
+        required: output.required || false
+      }));
+    }
+    
+    return { inputs, outputs };
+  };
   
 
+  // Helper function to get display name for an input based on connections
+  const getInputDisplayName = (moduleId: string, inputIndex: number): string => {
+    // Find connection to this input
+    const connection = connections.find(conn => 
+      conn.toModuleId === moduleId && conn.toInputIndex === inputIndex
+    );
+    
+    if (!connection) {
+      return "Not connected";
+    }
+    
+    // Find the source module and output
+    const sourceModule = placedModules.find(m => m.id === connection.fromModuleId);
+    if (!sourceModule) {
+      return "Not connected";
+    }
+    
+    const sourceOutput = sourceModule.nodes.outputs[connection.fromOutputIndex];
+    return sourceOutput?.name || "Unknown output";
+  };
 
+  // Helper function to check if a node allows type configuration
+  const getNodeTypeConfigAllowed = (moduleId: string, nodeType: 'input' | 'output'): boolean => {
+    const module = placedModules.find(m => m.id === moduleId);
+    if (!module) return false;
 
+    if (nodeType === 'input') {
+      return module.template.dynamicInputs?.allowTypeConfiguration || false;
+    } else {
+      return module.template.dynamicOutputs?.allowTypeConfiguration || false;
+    }
+  };
+
+  // Helper function to check if a node can change type based on connections
+  const canNodeChangeType = (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number): boolean => {
+    // First check if this node itself allows type configuration
+    if (!getNodeTypeConfigAllowed(moduleId, nodeType)) {
+      return false;
+    }
+
+    if (nodeType === 'input') {
+      // Check if input is connected
+      const connection = connections.find(conn => 
+        conn.toModuleId === moduleId && conn.toInputIndex === nodeIndex
+      );
+      
+      if (!connection) {
+        return true; // No connection, can change type
+      }
+      
+      // Check if the connected output allows type configuration
+      return getNodeTypeConfigAllowed(connection.fromModuleId, 'output');
+    } else {
+      // For outputs, check all connected inputs
+      const outputConnections = connections.filter(conn => 
+        conn.fromModuleId === moduleId && conn.fromOutputIndex === nodeIndex
+      );
+      
+      if (outputConnections.length === 0) {
+        return true; // No connections, can change type
+      }
+      
+      // All connected inputs must allow type configuration
+      return outputConnections.every(connection => 
+        getNodeTypeConfigAllowed(connection.toModuleId, 'input')
+      );
+    }
+  };
 
 
 
@@ -400,7 +551,7 @@ function TransformationPipelineGraph() {
   // Handle node type change
   const handleNodeTypeChange = (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number, newType: 'string' | 'number' | 'boolean' | 'datetime') => {
     // Check if the node can change type
-    if (!canNodeChangeType(placedModules, connections, moduleId, nodeType, nodeIndex)) {
+    if (!canNodeChangeType(moduleId, nodeType, nodeIndex)) {
       return;
     }
 
@@ -432,7 +583,7 @@ function TransformationPipelineGraph() {
           conn.toModuleId === moduleId && conn.toInputIndex === nodeIndex
         );
         
-        if (connection && getNodeTypeConfigAllowed(placedModules, connection.fromModuleId, 'output')) {
+        if (connection && getNodeTypeConfigAllowed(connection.fromModuleId, 'output')) {
           updatedModules = updatedModules.map(module => {
             if (module.id !== connection.fromModuleId) return module;
             
@@ -456,7 +607,7 @@ function TransformationPipelineGraph() {
         );
         
         outputConnections.forEach(connection => {
-          if (getNodeTypeConfigAllowed(placedModules, connection.toModuleId, 'input')) {
+          if (getNodeTypeConfigAllowed(connection.toModuleId, 'input')) {
             updatedModules = updatedModules.map(module => {
               if (module.id !== connection.toModuleId) return module;
               
@@ -532,6 +683,26 @@ function TransformationPipelineGraph() {
   };
 
   // Calculate adaptive grid size based on zoom level
+  const getGridSize = (zoomLevel: number) => {
+    if (zoomLevel <= 0.25) {
+      return 100; // Large grid for very zoomed out
+    } else if (zoomLevel <= 0.5) {
+      return 50; // Medium grid for moderately zoomed out
+    } else {
+      return 20; // Fine grid for normal/zoomed in
+    }
+  };
+
+  // Calculate grid opacity based on zoom level
+  const getGridOpacity = (zoomLevel: number) => {
+    if (zoomLevel <= 0.25) {
+      return 0.2; // Less visible when very zoomed out
+    } else if (zoomLevel <= 0.5) {
+      return 0.25; // Slightly more visible
+    } else {
+      return 0.3; // Normal visibility
+    }
+  };
 
   // Zoom utility functions
   const zoomIn = () => {
@@ -965,6 +1136,42 @@ function TransformationPipelineGraph() {
     setModuleDragOffset({ x: offsetX, y: offsetY });
   };
 
+  // Get node position directly from DOM elements (real-time)
+  const getNodePosition = (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number): { x: number; y: number } => {
+    // Try to find the actual DOM element for this node
+    const nodeSelector = `[data-node-id="${moduleId}-${nodeType}-${nodeIndex}"]`;
+    const nodeElement = document.querySelector(nodeSelector);
+    
+    if (nodeElement && canvasRef.current) {
+      const nodeRect = nodeElement.getBoundingClientRect();
+      const canvasRect = canvasRef.current.getBoundingClientRect();
+      
+      // Calculate center of the node element
+      const centerX = nodeRect.left + nodeRect.width / 2;
+      const centerY = nodeRect.top + nodeRect.height / 2;
+      
+      // Convert from screen coordinates to canvas coordinates
+      const canvasX = (centerX - canvasRect.left - panOffset.x) / zoom;
+      const canvasY = (centerY - canvasRect.top - panOffset.y) / zoom;
+      
+      return { x: canvasX, y: canvasY };
+    }
+    
+    // Fallback to cached position if DOM element not found
+    const nodeKey = `${moduleId}-${nodeType}-${nodeIndex}`;
+    const cachedPosition = nodePositions[nodeKey];
+    
+    if (cachedPosition && canvasRef.current) {
+      const canvasRect = canvasRef.current.getBoundingClientRect();
+      const canvasX = (cachedPosition.x - canvasRect.left - panOffset.x) / zoom;
+      const canvasY = (cachedPosition.y - canvasRect.top - panOffset.y) / zoom;
+      return { x: canvasX, y: canvasY };
+    }
+    
+    // Final fallback to module center
+    const module = placedModules.find(m => m.id === moduleId);
+    return module ? module.position : { x: 0, y: 0 };
+  };
 
   // Handle node click (start or complete connection)
   const handleNodeClick = (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number) => (e: React.MouseEvent) => {
@@ -981,7 +1188,7 @@ function TransformationPipelineGraph() {
       // Start new connection
       setStartingConnection({ moduleId, type: nodeType, index: nodeIndex });
       // Initialize mouse position to the starting node position
-      const startPos = getNodePosition(moduleId, nodeType, nodeIndex, canvasRef, panOffset, zoom, nodePositions);
+      const startPos = getNodePosition(moduleId, nodeType, nodeIndex);
       setCurrentMousePosition(startPos);
     } else {
       // Try to complete connection
@@ -990,8 +1197,8 @@ function TransformationPipelineGraph() {
       // Can only connect output to input or input to output, and not to same module
       if (start.type !== nodeType && start.moduleId !== moduleId) {
         // Get types of both nodes for validation
-        const startNodeType = getNodeType(placedModules, start.moduleId, start.type, start.index);
-        const endNodeType = getNodeType(placedModules, moduleId, nodeType, nodeIndex);
+        const startNodeType = getNodeType(start.moduleId, start.type, start.index);
+        const endNodeType = getNodeType(moduleId, nodeType, nodeIndex);
         
         // Only allow connections between nodes of the same type
         if (startNodeType === endNodeType) {
@@ -1043,6 +1250,27 @@ function TransformationPipelineGraph() {
     }
   };
 
+  // Generate bezier path for connection - direction aware
+  const generateBezierPath = (start: { x: number; y: number }, end: { x: number; y: number }, startType?: 'input' | 'output'): string => {
+    const controlPointOffset = Math.abs(end.x - start.x) * 0.5;
+    
+    let cp1x, cp2x;
+    
+    if (startType === 'input') {
+      // Starting from input node (left side) - curve should go left then right
+      cp1x = start.x - controlPointOffset;
+      cp2x = end.x + controlPointOffset;
+    } else {
+      // Starting from output node (right side) or standard connection - curve should go right then left
+      cp1x = start.x + controlPointOffset;
+      cp2x = end.x - controlPointOffset;
+    }
+    
+    const cp1y = start.y;
+    const cp2y = end.y;
+    
+    return `M ${start.x} ${start.y} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${end.x} ${end.y}`;
+  };
 
   // Handle drag over canvas
   const handleCanvasDragOver = (e: React.DragEvent) => {
@@ -1116,7 +1344,6 @@ function TransformationPipelineGraph() {
           selectedModule={selectedModuleTemplate}
         />
       </div>
-
       {/* Main Graph Area */}
       <div className="flex-1 relative">
         {/* Connection Counter - Top Left */}
@@ -1250,12 +1477,12 @@ function TransformationPipelineGraph() {
               </defs>
               {/* Existing Connections */}
               {connections.map((connection) => {
-                const startPos = getNodePosition(connection.fromModuleId, 'output', connection.fromOutputIndex, canvasRef, panOffset, zoom, nodePositions);
-                const endPos = getNodePosition(connection.toModuleId, 'input', connection.toInputIndex, canvasRef, panOffset, zoom, nodePositions);
+                const startPos = getNodePosition(connection.fromModuleId, 'output', connection.fromOutputIndex);
+                const endPos = getNodePosition(connection.toModuleId, 'input', connection.toInputIndex);
                 const path = generateBezierPath(startPos, endPos);
                 
                 // Get color from the output node type (source of the connection)
-                const outputNodeType = getNodeType(placedModules, connection.fromModuleId, 'output', connection.fromOutputIndex);
+                const outputNodeType = getNodeType(connection.fromModuleId, 'output', connection.fromOutputIndex);
                 const connectionColor = getTypeColor(outputNodeType);
                 const isSelected = selectedConnectionId === connection.id;
                 
@@ -1292,7 +1519,7 @@ function TransformationPipelineGraph() {
                       </>
                     ) : (
                       /* Normal connection path */
-                      <path
+                      (<path
                         d={path}
                         stroke={connectionColor}
                         strokeWidth="2"
@@ -1301,7 +1528,7 @@ function TransformationPipelineGraph() {
                         style={{ cursor: 'pointer' }}
                         onClick={handleConnectionClick(connection.id)}
                         onMouseDown={(e) => e.stopPropagation()}
-                      />
+                      />)
                     )}
                     {/* Invisible thicker path for easier clicking */}
                     <path
@@ -1315,7 +1542,7 @@ function TransformationPipelineGraph() {
                       onMouseDown={(e) => e.stopPropagation()}
                     />
                   </g>
-                );
+                )
               })}
 
               {/* Preview Connection */}
@@ -1326,7 +1553,7 @@ function TransformationPipelineGraph() {
                 return (
                   <path
                     d={generateBezierPath(
-                      getNodePosition(startingConnection.moduleId, startingConnection.type, startingConnection.index, canvasRef, panOffset, zoom, nodePositions),
+                      getNodePosition(startingConnection.moduleId, startingConnection.type, startingConnection.index),
                       currentMousePosition,
                       startingConnection.type
                     )}
@@ -1466,5 +1693,5 @@ function TransformationPipelineGraph() {
         })()}
       </div>
     </div>
-  );
+  )
 }
