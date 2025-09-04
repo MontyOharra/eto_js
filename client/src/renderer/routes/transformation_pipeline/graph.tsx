@@ -50,6 +50,19 @@ interface StartingConnection {
 function TransformationPipelineGraph() {
   const [zoom, setZoom] = useState(1);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  
+  // Refs to access current zoom and pan values without causing useEffect re-creation
+  const zoomRef = useRef(zoom);
+  const panOffsetRef = useRef(panOffset);
+  
+  // Keep refs in sync with state
+  useEffect(() => {
+    zoomRef.current = zoom;
+  }, [zoom]);
+  
+  useEffect(() => {
+    panOffsetRef.current = panOffset;
+  }, [panOffset]);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [dragStartOffset, setDragStartOffset] = useState({ x: 0, y: 0 });
@@ -716,11 +729,53 @@ function TransformationPipelineGraph() {
 
   // Zoom utility functions
   const zoomIn = () => {
-    setZoom(prev => Math.min(prev * 1.2, 3)); // Max zoom 3x
+    if (!canvasRef.current) return;
+    
+    const canvasRect = canvasRef.current.getBoundingClientRect();
+    // Calculate center of viewport in screen coordinates (same as wheel zoom)
+    const centerX = canvasRect.width / 2;
+    const centerY = canvasRect.height / 2;
+    
+    // Use same approach as wheel zoom with current state values
+    const currentZoom = zoomRef.current;
+    const currentPanOffset = panOffsetRef.current;
+    
+    const newZoom = Math.min(currentZoom * 1.2, 3); // Max zoom 3x
+    
+    if (newZoom !== currentZoom) {
+      // Calculate pan offset to zoom towards center (same math as wheel zoom)
+      const zoomRatio = newZoom / currentZoom;
+      const newPanX = centerX - (centerX - currentPanOffset.x) * zoomRatio;
+      const newPanY = centerY - (centerY - currentPanOffset.y) * zoomRatio;
+      
+      setZoom(newZoom);
+      setPanOffset({ x: newPanX, y: newPanY });
+    }
   };
 
   const zoomOut = () => {
-    setZoom(prev => Math.max(prev / 1.2, 0.1)); // Min zoom 0.1x
+    if (!canvasRef.current) return;
+    
+    const canvasRect = canvasRef.current.getBoundingClientRect();
+    // Calculate center of viewport in screen coordinates (same as wheel zoom)
+    const centerX = canvasRect.width / 2;
+    const centerY = canvasRect.height / 2;
+    
+    // Use same approach as wheel zoom with current state values
+    const currentZoom = zoomRef.current;
+    const currentPanOffset = panOffsetRef.current;
+    
+    const newZoom = Math.max(currentZoom / 1.2, 0.1); // Min zoom 0.1x
+    
+    if (newZoom !== currentZoom) {
+      // Calculate pan offset to zoom towards center (same math as wheel zoom)
+      const zoomRatio = newZoom / currentZoom;
+      const newPanX = centerX - (centerX - currentPanOffset.x) * zoomRatio;
+      const newPanY = centerY - (centerY - currentPanOffset.y) * zoomRatio;
+      
+      setZoom(newZoom);
+      setPanOffset({ x: newPanX, y: newPanY });
+    }
   };
 
   const resetZoom = () => {
@@ -880,16 +935,23 @@ function TransformationPipelineGraph() {
       const mouseX = e.clientX - canvasRect.left;
       const mouseY = e.clientY - canvasRect.top;
       
-      // Zoom factor
+      // Calculate new zoom with proper bounds using ref values
       const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-      const newZoom = Math.max(0.1, Math.min(3, zoom * zoomFactor));
+      const currentZoom = zoomRef.current;
+      const currentPanOffset = panOffsetRef.current;
       
-      if (newZoom !== zoom) {
+      const newZoom = e.deltaY > 0 
+        ? Math.max(currentZoom * zoomFactor, 0.1)  // Zoom out with min limit
+        : Math.min(currentZoom * zoomFactor, 3);   // Zoom in with max limit
+      
+      // Only update if zoom actually changes
+      if (newZoom !== currentZoom) {
         // Calculate pan offset to zoom towards mouse position
-        const zoomRatio = newZoom / zoom;
-        const newPanX = mouseX - (mouseX - panOffset.x) * zoomRatio;
-        const newPanY = mouseY - (mouseY - panOffset.y) * zoomRatio;
+        const zoomRatio = newZoom / currentZoom;
+        const newPanX = mouseX - (mouseX - currentPanOffset.x) * zoomRatio;
+        const newPanY = mouseY - (mouseY - currentPanOffset.y) * zoomRatio;
         
+        // Apply both updates
         setZoom(newZoom);
         setPanOffset({ x: newPanX, y: newPanY });
       }
@@ -904,7 +966,7 @@ function TransformationPipelineGraph() {
         canvasRef.current.removeEventListener('wheel', handleWheel);
       }
     };
-  }, [zoom, panOffset, isDraggingModule]);
+  }, [isDraggingModule]);
 
   // Global mouse handlers for module dragging and canvas dragging
   useEffect(() => {
