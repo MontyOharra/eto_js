@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import { BaseModuleTemplate } from '../types/modules';
 import { NodeListComponent } from './NodeListComponent';
 
@@ -119,17 +119,17 @@ export const NewGraphModuleComponent: React.FC<NewGraphModuleComponentProps> = (
     }
   };
 
-  const canAddInputs = template.dynamicInputs?.enabled && 
-    (!template.dynamicInputs.maxNodes || nodes.inputs.length < template.dynamicInputs.maxNodes);
+  const canAddInputs = (template.dynamicInputs?.enabled && 
+    (!template.dynamicInputs.maxNodes || nodes.inputs.length < template.dynamicInputs.maxNodes)) || false;
   
-  const canAddOutputs = template.dynamicOutputs?.enabled && 
-    (!template.dynamicOutputs.maxNodes || nodes.outputs.length < template.dynamicOutputs.maxNodes);
+  const canAddOutputs = (template.dynamicOutputs?.enabled && 
+    (!template.dynamicOutputs.maxNodes || nodes.outputs.length < template.dynamicOutputs.maxNodes)) || false;
 
-  const canRemoveInputs = template.dynamicInputs?.enabled && 
-    nodes.inputs.length > (template.dynamicInputs.minNodes || 0);
+  const canRemoveInputs = (template.dynamicInputs?.enabled && 
+    nodes.inputs.length > (template.dynamicInputs.minNodes || 0)) || false;
   
-  const canRemoveOutputs = template.dynamicOutputs?.enabled && 
-    nodes.outputs.length > (template.dynamicOutputs.minNodes || 0);
+  const canRemoveOutputs = (template.dynamicOutputs?.enabled && 
+    nodes.outputs.length > (template.dynamicOutputs.minNodes || 0)) || false;
 
   return (
     <div
