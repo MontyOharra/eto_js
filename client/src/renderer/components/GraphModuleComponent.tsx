@@ -5,12 +5,12 @@ interface GraphModuleComponentProps {
   moduleId: string;
   template: BaseModuleTemplate;
   position: { x: number; y: number };
-  config?: Record<string, any>;
+  config?: Record<string, unknown>;
   runtimeInputs?: ModuleInput[];
   runtimeOutputs?: ModuleOutput[];
   onMouseDown?: (e: React.MouseEvent) => void;
   onDelete?: () => void;
-  onConfigChange?: (config: Record<string, any>) => void;
+  onConfigChange?: (config: Record<string, unknown>) => void;
   onNodeClick?: (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number) => (e: React.MouseEvent) => void;
   onLayoutUpdate?: (moduleId: string, layout: { 
     headerHeight: number; 
@@ -59,7 +59,6 @@ export const GraphModuleComponent: React.FC<GraphModuleComponentProps> = ({
   const nodesSectionRef = useRef<HTMLDivElement>(null);
   
   // Refs for tracking individual node rows
-  const nodeRowRefs = useRef<(HTMLDivElement | null)[]>([]);
   const inputNodeRefs = useRef<(HTMLDivElement | null)[]>([]);
   const outputNodeRefs = useRef<(HTMLDivElement | null)[]>([]);
 
@@ -114,7 +113,7 @@ export const GraphModuleComponent: React.FC<GraphModuleComponentProps> = ({
         nodePositions
       });
     }
-  }, [moduleId, template.description, currentInputs.length, currentOutputs.length]); // Include node counts in dependencies
+  }, [moduleId, template.description, currentInputs.length, currentOutputs.length, onLayoutUpdate]); // Include node counts in dependencies
 
   const handleDeleteClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -156,7 +155,7 @@ export const GraphModuleComponent: React.FC<GraphModuleComponentProps> = ({
     }
   };
 
-  const handleConfigChange = (configName: string, value: any) => {
+  const handleConfigChange = (configName: string, value: unknown) => {
     const newConfig = { ...config, [configName]: value };
     if (onConfigChange) {
       onConfigChange(newConfig);
@@ -334,7 +333,6 @@ export const GraphModuleComponent: React.FC<GraphModuleComponentProps> = ({
             for (let i = 0; i < totalRows; i++) {
               const input = currentInputs[i];
               const output = currentOutputs[i];
-              const isLastRow = i === totalRows - 1;
               
               // Check if we should show add buttons based on dynamic config or legacy maxInputs/maxOutputs
               const canAddInput = template.dynamicInputs?.enabled 
