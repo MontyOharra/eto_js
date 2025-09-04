@@ -155,7 +155,7 @@ export const GraphModuleComponent: React.FC<GraphModuleComponentProps> = ({
     }
   };
 
-  const handleConfigChange = (configName: string, value: unknown) => {
+  const handleConfigChange = (configName: string, value: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
     const newConfig = { ...config, [configName]: value };
     if (onConfigChange) {
       onConfigChange(newConfig);
@@ -396,7 +396,7 @@ export const GraphModuleComponent: React.FC<GraphModuleComponentProps> = ({
                           <div className="text-xs text-gray-500">
                             {input.dynamicType ? (
                               <select
-                                value={config[input.dynamicType.configKey] || input.type}
+                                value={config[input.dynamicType?.configKey || ''] || input.type}
                                 onChange={(e) => handleConfigChange(input.dynamicType.configKey, e.target.value)}
                                 onMouseDown={(e) => e.stopPropagation()}
                                 onFocus={(e) => e.stopPropagation()}
@@ -466,7 +466,7 @@ export const GraphModuleComponent: React.FC<GraphModuleComponentProps> = ({
                           <div className="text-xs text-gray-500">
                             {output.dynamicType ? (
                               <select
-                                value={config[output.dynamicType.configKey] || output.type}
+                                value={config[output.dynamicType?.configKey || ''] || output.type}
                                 onChange={(e) => handleConfigChange(output.dynamicType.configKey, e.target.value)}
                                 onMouseDown={(e) => e.stopPropagation()}
                                 onFocus={(e) => e.stopPropagation()}
