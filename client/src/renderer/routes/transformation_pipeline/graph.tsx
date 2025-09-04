@@ -4,7 +4,8 @@ import { ModuleSelectionPane } from "../../components/ModuleSelectionPane";
 import { GraphModuleComponent } from "../../components/GraphModuleComponent";
 import { ExtractedDataModuleComponent } from "../../components/ExtractedDataModuleComponent";
 import { NewGraphModuleComponent } from "../../components/NewGraphModuleComponent";
-import { testBaseModules, BaseModuleTemplate, ModuleInput, ModuleOutput } from "../../data/testModules";
+import { BaseModuleTemplate, ModuleInput, ModuleOutput, testBaseModules } from "../../data/testModules";
+import { useTransformationModules } from "../../hooks/useTransformationModules";
 
 export const Route = createFileRoute("/transformation_pipeline/graph")({
   component: TransformationPipelineGraph,
@@ -48,6 +49,9 @@ interface StartingConnection {
 }
 
 function TransformationPipelineGraph() {
+  // Load modules from both mock and backend
+  const { modules: allModules, isLoading: modulesLoading, error: modulesError } = useTransformationModules();
+  
   const [zoom, setZoom] = useState(1);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   
@@ -75,10 +79,10 @@ function TransformationPipelineGraph() {
 
   // Auto-place extracted data modules and Type Coercion module on initial load
   useEffect(() => {
-    if (placedModules.length === 0) {
-      const extractedDataModules = testBaseModules.filter(module => module.category === 'Extracted Data');
-      const typeCoercionModule = testBaseModules.find(module => module.id === 'type_coercion');
-      const dataCombinerModule = testBaseModules.find(module => module.id === 'data_combiner');
+    if (placedModules.length === 0 && allModules.length > 0) {
+      const extractedDataModules = allModules.filter(module => module.category === 'Extracted Data');
+      const typeCoercionModule = allModules.find(module => module.id === 'mock_type_coercion'); // Only mock version exists
+      const dataCombinerModule = allModules.find(module => module.id === 'backend_data_combiner'); // Use backend version
       
       const moduleHeight = 140; // Approximate height of extracted data modules
       const moduleSpacing = 20; // Space between modules
@@ -162,7 +166,7 @@ function TransformationPipelineGraph() {
       
       setPlacedModules(initialModules);
     }
-  }, []);  // Empty dependency array to run only on initial render
+  }, [allModules]);  // Re-run when modules are loaded
   const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null);
   
   // Placement state
@@ -1169,22 +1173,39 @@ function TransformationPipelineGraph() {
     setModuleDragOffset({ x: offsetX, y: offsetY });
   };
 
-  // Get node position from DOM-measured positions
+  // Get node position directly from DOM elements (real-time)
   const getNodePosition = (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number): { x: number; y: number } => {
-    const nodeKey = `${moduleId}-${nodeType}-${nodeIndex}`;
-    const position = nodePositions[nodeKey];
+    // Try to find the actual DOM element for this node
+    const nodeSelector = `[data-node-id="${moduleId}-${nodeType}-${nodeIndex}"]`;
+    const nodeElement = document.querySelector(nodeSelector);
     
-    if (position) {
+    if (nodeElement && canvasRef.current) {
+      const nodeRect = nodeElement.getBoundingClientRect();
+      const canvasRect = canvasRef.current.getBoundingClientRect();
+      
+      // Calculate center of the node element
+      const centerX = nodeRect.left + nodeRect.width / 2;
+      const centerY = nodeRect.top + nodeRect.height / 2;
+      
       // Convert from screen coordinates to canvas coordinates
-      const canvasRect = canvasRef.current?.getBoundingClientRect();
-      if (canvasRect) {
-        const canvasX = (position.x - canvasRect.left - panOffset.x) / zoom;
-        const canvasY = (position.y - canvasRect.top - panOffset.y) / zoom;
-        return { x: canvasX, y: canvasY };
-      }
+      const canvasX = (centerX - canvasRect.left - panOffset.x) / zoom;
+      const canvasY = (centerY - canvasRect.top - panOffset.y) / zoom;
+      
+      return { x: canvasX, y: canvasY };
     }
     
-    // Fallback to module center if position not yet measured
+    // Fallback to cached position if DOM element not found
+    const nodeKey = `${moduleId}-${nodeType}-${nodeIndex}`;
+    const cachedPosition = nodePositions[nodeKey];
+    
+    if (cachedPosition && canvasRef.current) {
+      const canvasRect = canvasRef.current.getBoundingClientRect();
+      const canvasX = (cachedPosition.x - canvasRect.left - panOffset.x) / zoom;
+      const canvasY = (cachedPosition.y - canvasRect.top - panOffset.y) / zoom;
+      return { x: canvasX, y: canvasY };
+    }
+    
+    // Final fallback to module center
     const module = placedModules.find(m => m.id === moduleId);
     return module ? module.position : { x: 0, y: 0 };
   };
@@ -1335,12 +1356,25 @@ function TransformationPipelineGraph() {
     }
   };
 
+  // Show loading state while modules are loading
+  if (modulesLoading) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-gray-900 text-white">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-4"></div>
+          <p>Loading modules from backend...</p>
+          {modulesError && <p className="text-red-400 mt-2">Error: {modulesError}</p>}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="relative w-full h-full overflow-hidden bg-gray-900 flex">
       {/* Module Selection Sidebar */}
       <div className={`relative z-50 ${isDragging ? 'pointer-events-none' : ''}`}>
         <ModuleSelectionPane
-          modules={testBaseModules}
+          modules={allModules}
           isCollapsed={isSidebarCollapsed}
           onToggleCollapse={toggleSidebar}
           onModuleSelect={handleModuleTemplateSelect}
@@ -1572,41 +1606,6 @@ function TransformationPipelineGraph() {
                 );
               })()}
 
-              {/* Debug: Show calculated node positions */}
-              {placedModules.map((module) => (
-                <g key={`debug-${module.id}`}>
-                  {/* Input node position indicators */}
-                  {module.nodes.inputs.map((input, index) => {
-                    const pos = getNodePosition(module.id, 'input', index);
-                    return (
-                      <circle
-                        key={`debug-input-${index}`}
-                        cx={pos.x}
-                        cy={pos.y}
-                        r="3"
-                        fill="red"
-                        opacity="0.7"
-                        pointerEvents="none"
-                      />
-                    );
-                  })}
-                  {/* Output node position indicators */}
-                  {module.nodes.outputs.map((output, index) => {
-                    const pos = getNodePosition(module.id, 'output', index);
-                    return (
-                      <circle
-                        key={`debug-output-${index}`}
-                        cx={pos.x}
-                        cy={pos.y}
-                        r="3"
-                        fill="yellow"
-                        opacity="0.7"
-                        pointerEvents="none"
-                      />
-                    );
-                  })}
-                </g>
-              ))}
             </svg>
 
             {/* Placed Modules - In front of connections */}
@@ -1623,6 +1622,7 @@ function TransformationPipelineGraph() {
                       config={placedModule.config}
                       zoom={zoom}
                       panOffset={panOffset}
+                      isSidebarCollapsed={isSidebarCollapsed}
                       onMouseDown={handleModuleMouseDown(placedModule.id)}
                       onDelete={handleModuleDelete(placedModule.id)}
                       onConfigChange={handleModuleConfigChange(placedModule.id)}
@@ -1645,6 +1645,7 @@ function TransformationPipelineGraph() {
                     panOffset={panOffset}
                     connections={connections}
                     placedModules={placedModules}
+                    isSidebarCollapsed={isSidebarCollapsed}
                     onMouseDown={handleModuleMouseDown(placedModule.id)}
                     onDelete={handleModuleDelete(placedModule.id)}
                     onConfigChange={handleModuleConfigChange(placedModule.id)}

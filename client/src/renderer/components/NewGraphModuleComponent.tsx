@@ -44,6 +44,7 @@ interface NewGraphModuleComponentProps {
   panOffset?: { x: number; y: number }; // Add pan offset
   connections?: NodeConnection[]; // Add connections
   placedModules?: PlacedModule[]; // Add placed modules
+  isSidebarCollapsed?: boolean; // Add sidebar state for layout changes
   onMouseDown?: (e: React.MouseEvent) => void;
   onDelete?: () => void;
   onConfigChange?: (config: Record<string, any>) => void;
@@ -70,6 +71,7 @@ export const NewGraphModuleComponent: React.FC<NewGraphModuleComponentProps> = (
   panOffset,
   connections,
   placedModules,
+  isSidebarCollapsed,
   onMouseDown,
   onDelete,
   onConfigChange,
@@ -179,6 +181,7 @@ export const NewGraphModuleComponent: React.FC<NewGraphModuleComponentProps> = (
           panOffset={panOffset}
           connections={connections}
           placedModules={placedModules}
+          isSidebarCollapsed={isSidebarCollapsed}
           inputNodes={nodes.inputs}
           outputNodes={nodes.outputs}
           canAddInputs={canAddInputs}

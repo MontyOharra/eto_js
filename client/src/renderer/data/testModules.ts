@@ -521,3 +521,6 @@ export const testBaseModules: BaseModuleTemplate[] = [
     ]
   }
 ];
+
+// Export the test modules for the hook
+export const testModules = testBaseModules;

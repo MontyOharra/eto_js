@@ -52,7 +52,10 @@ export async function fetchBaseModules(): Promise<BaseModuleTemplate[]> {
       );
     }
 
-    return data.modules || [];
+    // Backend API already returns modules in frontend format (camelCase)
+    const modules = data.modules || [];
+    
+    return modules;
   } catch (error) {
     if (error instanceof TransformationPipelineApiError) {
       throw error;

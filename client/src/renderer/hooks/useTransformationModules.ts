@@ -3,10 +3,13 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { BaseModuleTemplate, testModules } from '../data/testModules';
+import { BaseModuleTemplate, testBaseModules } from '../data/testModules';
+import { fetchBaseModules } from '../services/transformationPipelineApi';
 
 export interface UseTransformationModulesResult {
   modules: BaseModuleTemplate[];
+  mockModules: BaseModuleTemplate[];
+  backendModules: BaseModuleTemplate[];
   isLoading: boolean;
   error: string | null;
   refreshModules: () => Promise<void>;
@@ -19,6 +22,8 @@ export interface UseTransformationModulesResult {
  * Hook to fetch and manage transformation pipeline modules
  */
 export function useTransformationModules(): UseTransformationModulesResult {
+  const [backendModules, setBackendModules] = useState<BaseModuleTemplate[]>([]);
+  const [mockModules] = useState<BaseModuleTemplate[]>(testBaseModules);
   const [modules, setModules] = useState<BaseModuleTemplate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -28,21 +33,54 @@ export function useTransformationModules(): UseTransformationModulesResult {
     setError(null);
 
     try {
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Fetch modules from transformation pipeline backend
+      const fetchedBackendModules = await fetchBaseModules();
+      setBackendModules(fetchedBackendModules);
       
-      // Use test modules for now
-      setModules(testModules);
-      console.log(`Loaded ${testModules.length} test modules`);
+      // Keep only specific mock modules for testing (extracted data and order creation)
+      const testingOnlyModules = mockModules.filter(module => 
+        module.category === 'Extracted Data' || 
+        module.id === 'order_generation'
+      ).map(module => ({
+        ...module,
+        id: `mock_${module.id}`,
+        name: module.name, // Keep original name for these testing modules
+        description: module.description
+      }));
+      
+      // Use backend modules as-is (no prefix needed since they're the real modules)
+      const backendModulesWithSource = fetchedBackendModules.map(module => ({
+        ...module,
+        id: `backend_${module.id}`,
+        name: module.name, // Keep original name
+        description: module.description
+      }));
+      
+      const allModules = [...testingOnlyModules, ...backendModulesWithSource];
+      setModules(allModules);
+      
+      console.log(`Loaded ${fetchedBackendModules.length} backend modules + ${testingOnlyModules.length} testing modules`);
 
     } catch (err) {
-      console.error('Error loading modules:', err);
-      setError('Failed to load modules');
-      setModules([]);
+      console.error('Error loading backend modules:', err);
+      setError(`Failed to load backend modules: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      
+      // Fall back to just testing modules if backend fails
+      const testingOnlyModules = mockModules.filter(module => 
+        module.category === 'Extracted Data' || 
+        module.id === 'order_generation'
+      ).map(module => ({
+        ...module,
+        id: `mock_${module.id}`,
+        name: module.name,
+        description: `${module.description} (Backend Unavailable)`
+      }));
+      setModules(testingOnlyModules);
+      setBackendModules([]);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [mockModules]);
 
   const refreshModules = useCallback(async () => {
     await loadModules();
@@ -50,7 +88,7 @@ export function useTransformationModules(): UseTransformationModulesResult {
 
   useEffect(() => {
     loadModules();
-  }, []);
+  }, [loadModules]);
 
   // Categorize modules for easier use
   const extractedDataModules = modules.filter(module => module.category === 'Extracted Data');
@@ -63,6 +101,8 @@ export function useTransformationModules(): UseTransformationModulesResult {
 
   return {
     modules,
+    mockModules,
+    backendModules,
     isLoading,
     error,
     refreshModules,
