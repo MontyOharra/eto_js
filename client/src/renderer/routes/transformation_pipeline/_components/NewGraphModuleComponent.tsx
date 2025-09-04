@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BaseModuleTemplate } from '../types/modules';
+import { BaseModuleTemplate } from '../../../types/modules';
 import { NodeListComponent } from './NodeListComponent';
 
 interface NodeState {

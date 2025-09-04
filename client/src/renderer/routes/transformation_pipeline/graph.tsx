@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useRef, useEffect, useCallback } from "react";
-import { ModuleSelectionPane } from "../../components/ModuleSelectionPane";
-import { ExtractedDataModuleComponent } from "../../components/ExtractedDataModuleComponent";
-import { NewGraphModuleComponent } from "../../components/NewGraphModuleComponent";
+import { ModuleSelectionPane } from "./_components/ModuleSelectionPane";
+import { ExtractedDataModuleComponent } from "./_components/ExtractedDataModuleComponent";
+import { NewGraphModuleComponent } from "./_components/NewGraphModuleComponent";
 import { BaseModuleTemplate } from "../../types/modules";
 import { useTransformationModules } from "../../hooks/useTransformationModules";
 
