@@ -5,23 +5,47 @@ import { ExtractedDataModuleComponent } from "./_components/ExtractedDataModuleC
 import { NewGraphModuleComponent } from "./_components/NewGraphModuleComponent";
 import { BaseModuleTemplate } from "../../types/modules";
 import { useTransformationModules } from "../../hooks/useTransformationModules";
-import { NodeState, ModuleNodeState, PlacedModule, NodeConnection, StartingConnection } from "./_utils/types";
-import { 
-  getTypeColor, 
-  getNodeType, 
-  initializeModuleNodes, 
-  getInputDisplayName,
-  getNodeTypeConfigAllowed,
-  canNodeChangeType,
-  getGridSize,
-  getGridOpacity 
-} from "./_utils/graphUtils";
-import { generateBezierPath, getNodePosition } from "./_utils/connectionUtils";
 
-export const Route = createFileRoute("/transformation_pipeline/graph")({
+export const Route = createFileRoute("/transformation_pipeline/graph-original")({
   component: TransformationPipelineGraph,
 });
 
+interface NodeState {
+  id: string;
+  name: string; // Required name to match component interface
+  type: 'string' | 'number' | 'boolean' | 'datetime';
+  description: string;
+  required: boolean;
+}
+
+interface ModuleNodeState {
+  inputs: NodeState[];
+  outputs: NodeState[];
+}
+
+interface PlacedModule {
+  id: string;
+  template: BaseModuleTemplate;
+  position: { x: number; y: number };
+  config: Record<string, unknown>;
+  
+  // Node state (replaces runtime inputs/outputs)
+  nodes: ModuleNodeState;
+}
+
+interface NodeConnection {
+  id: string;
+  fromModuleId: string;
+  fromOutputIndex: number;
+  toModuleId: string;
+  toInputIndex: number;
+}
+
+interface StartingConnection {
+  moduleId: string;
+  type: 'input' | 'output';
+  index: number;
+}
 
 function TransformationPipelineGraph() {
   // Load modules from both mock and backend
@@ -161,7 +185,26 @@ function TransformationPipelineGraph() {
   // Node position tracking - stores actual DOM positions of node circles
   const [nodePositions, setNodePositions] = useState<Record<string, { x: number; y: number }>>({});
 
+  // Get node type color
+  const getTypeColor = (type: string): string => {
+    switch (type) {
+      case 'string': return '#3B82F6'; // Blue
+      case 'number': return '#EF4444'; // Red  
+      case 'boolean': return '#10B981'; // Green
+      case 'datetime': return '#8B5CF6'; // Purple
+      default: return '#6B7280'; // Gray
+    }
+  };
 
+  // Get node type from module state
+  const getNodeType = (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number): string => {
+    const module = placedModules.find(m => m.id === moduleId);
+    if (!module) return 'string';
+    
+    const nodeList = nodeType === 'input' ? module.nodes.inputs : module.nodes.outputs;
+    const node = nodeList[nodeIndex];
+    return node?.type || 'string';
+  };
 
 
   // Helper function to initialize module nodes from template
@@ -1301,7 +1344,6 @@ function TransformationPipelineGraph() {
           selectedModule={selectedModuleTemplate}
         />
       </div>
-
       {/* Main Graph Area */}
       <div className="flex-1 relative">
         {/* Connection Counter - Top Left */}
@@ -1477,7 +1519,7 @@ function TransformationPipelineGraph() {
                       </>
                     ) : (
                       /* Normal connection path */
-                      <path
+                      (<path
                         d={path}
                         stroke={connectionColor}
                         strokeWidth="2"
@@ -1486,7 +1528,7 @@ function TransformationPipelineGraph() {
                         style={{ cursor: 'pointer' }}
                         onClick={handleConnectionClick(connection.id)}
                         onMouseDown={(e) => e.stopPropagation()}
-                      />
+                      />)
                     )}
                     {/* Invisible thicker path for easier clicking */}
                     <path
@@ -1500,7 +1542,7 @@ function TransformationPipelineGraph() {
                       onMouseDown={(e) => e.stopPropagation()}
                     />
                   </g>
-                );
+                )
               })}
 
               {/* Preview Connection */}
@@ -1651,5 +1693,5 @@ function TransformationPipelineGraph() {
         })()}
       </div>
     </div>
-  );
+  )
 }
