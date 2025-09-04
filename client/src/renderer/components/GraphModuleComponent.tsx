@@ -172,7 +172,7 @@ export const GraphModuleComponent: React.FC<GraphModuleComponentProps> = ({
             <label className="flex items-center space-x-2 cursor-pointer">
               <input
                 type="checkbox"
-                checked={value || false}
+                checked={Boolean(value)}
                 onChange={(e) => handleConfigChange(configItem.name, e.target.checked)}
                 onMouseDown={(e) => e.stopPropagation()}
                 onFocus={(e) => e.stopPropagation()}
@@ -193,7 +193,7 @@ export const GraphModuleComponent: React.FC<GraphModuleComponentProps> = ({
               {configItem.required && <span className="text-red-400 text-xs ml-1">*</span>}
             </label>
             <select
-              value={value || ''}
+              value={String(value || '')}
               onChange={(e) => handleConfigChange(configItem.name, e.target.value)}
               onMouseDown={(e) => e.stopPropagation()}
               onFocus={(e) => e.stopPropagation()}
@@ -218,7 +218,7 @@ export const GraphModuleComponent: React.FC<GraphModuleComponentProps> = ({
               {configItem.required && <span className="text-red-400 text-xs ml-1">*</span>}
             </label>
             <textarea
-              value={value || ''}
+              value={String(value || '')}
               onChange={(e) => handleConfigChange(configItem.name, e.target.value)}
               onMouseDown={(e) => e.stopPropagation()}
               onFocus={(e) => e.stopPropagation()}
@@ -239,7 +239,7 @@ export const GraphModuleComponent: React.FC<GraphModuleComponentProps> = ({
             </label>
             <input
               type="number"
-              value={value || ''}
+              value={String(value || '')}
               onChange={(e) => handleConfigChange(configItem.name, e.target.value ? Number(e.target.value) : '')}
               onMouseDown={(e) => e.stopPropagation()}
               onFocus={(e) => e.stopPropagation()}
@@ -260,7 +260,7 @@ export const GraphModuleComponent: React.FC<GraphModuleComponentProps> = ({
             </label>
             <input
               type="text"
-              value={value || ''}
+              value={String(value || '')}
               onChange={(e) => handleConfigChange(configItem.name, e.target.value)}
               onMouseDown={(e) => e.stopPropagation()}
               onFocus={(e) => e.stopPropagation()}
