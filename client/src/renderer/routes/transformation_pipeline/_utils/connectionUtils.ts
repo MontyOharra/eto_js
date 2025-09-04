@@ -34,7 +34,7 @@ export const getNodePosition = (
   moduleId: string, 
   nodeType: 'input' | 'output', 
   nodeIndex: number,
-  canvasRef: React.RefObject<HTMLDivElement>,
+  canvasRef: React.RefObject<HTMLDivElement | null>,
   panOffset: { x: number; y: number },
   zoom: number,
   nodePositions: Record<string, { x: number; y: number }>
