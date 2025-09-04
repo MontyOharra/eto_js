@@ -15,12 +15,35 @@ interface ModuleNodeState {
   outputs: NodeState[];
 }
 
+interface NodeConnection {
+  id: string;
+  fromModuleId: string;
+  fromOutputIndex: number;
+  toModuleId: string;
+  toInputIndex: number;
+}
+
+interface PlacedModule {
+  id: string;
+  template: any;
+  position: { x: number; y: number };
+  config: any;
+  nodes: {
+    inputs: any[];
+    outputs: any[];
+  };
+}
+
 interface NewGraphModuleComponentProps {
   moduleId: string;
   template: BaseModuleTemplate;
   position: { x: number; y: number };
   config?: Record<string, any>;
   nodes: ModuleNodeState;
+  zoom?: number; // Add zoom level
+  panOffset?: { x: number; y: number }; // Add pan offset
+  connections?: NodeConnection[]; // Add connections
+  placedModules?: PlacedModule[]; // Add placed modules
   onMouseDown?: (e: React.MouseEvent) => void;
   onDelete?: () => void;
   onConfigChange?: (config: Record<string, any>) => void;
@@ -43,6 +66,10 @@ export const NewGraphModuleComponent: React.FC<NewGraphModuleComponentProps> = (
   position,
   config = {},
   nodes,
+  zoom,
+  panOffset,
+  connections,
+  placedModules,
   onMouseDown,
   onDelete,
   onConfigChange,
@@ -147,6 +174,11 @@ export const NewGraphModuleComponent: React.FC<NewGraphModuleComponentProps> = (
       {(nodes.inputs.length > 0 || nodes.outputs.length > 0 || canAddInputs || canAddOutputs) && (
         <NodeListComponent
           moduleId={moduleId}
+          modulePosition={position}
+          zoom={zoom}
+          panOffset={panOffset}
+          connections={connections}
+          placedModules={placedModules}
           inputNodes={nodes.inputs}
           outputNodes={nodes.outputs}
           canAddInputs={canAddInputs}

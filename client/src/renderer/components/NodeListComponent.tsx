@@ -9,8 +9,32 @@ interface NodeState {
   required: boolean;
 }
 
+interface NodeConnection {
+  id: string;
+  fromModuleId: string;
+  fromOutputIndex: number;
+  toModuleId: string;
+  toInputIndex: number;
+}
+
+interface PlacedModule {
+  id: string;
+  template: any;
+  position: { x: number; y: number };
+  config: any;
+  nodes: {
+    inputs: any[];
+    outputs: any[];
+  };
+}
+
 interface NodeListComponentProps {
   moduleId: string;
+  modulePosition?: { x: number; y: number }; // Add module position
+  zoom?: number; // Add zoom level
+  panOffset?: { x: number; y: number }; // Add pan offset
+  connections?: NodeConnection[]; // Add connections
+  placedModules?: PlacedModule[]; // Add placed modules
   inputNodes: NodeState[];
   outputNodes: NodeState[];
   canAddInputs: boolean;
@@ -33,6 +57,11 @@ interface NodeListComponentProps {
 
 export const NodeListComponent: React.FC<NodeListComponentProps> = ({
   moduleId,
+  modulePosition,
+  zoom,
+  panOffset,
+  connections,
+  placedModules,
   inputNodes,
   outputNodes,
   canAddInputs,
@@ -75,6 +104,11 @@ export const NodeListComponent: React.FC<NodeListComponentProps> = ({
                   nodeType="input"
                   nodeIndex={rowIndex}
                   moduleId={moduleId}
+                  modulePosition={modulePosition}
+                  zoom={zoom}
+                  panOffset={panOffset}
+                  connections={connections}
+                  placedModules={placedModules}
                   canRemove={canRemoveInputs}
                   allowTypeConfiguration={allowInputTypeConfiguration}
                   onNodeClick={onNodeClick}
@@ -118,6 +152,11 @@ export const NodeListComponent: React.FC<NodeListComponentProps> = ({
                   nodeType="output"
                   nodeIndex={rowIndex}
                   moduleId={moduleId}
+                  modulePosition={modulePosition}
+                  zoom={zoom}
+                  panOffset={panOffset}
+                  connections={connections}
+                  placedModules={placedModules}
                   canRemove={canRemoveOutputs}
                   allowTypeConfiguration={allowOutputTypeConfiguration}
                   onNodeClick={onNodeClick}

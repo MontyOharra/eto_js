@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { ModuleSelectionPane } from "../../components/ModuleSelectionPane";
 import { GraphModuleComponent } from "../../components/GraphModuleComponent";
 import { ExtractedDataModuleComponent } from "../../components/ExtractedDataModuleComponent";
@@ -562,7 +562,6 @@ function TransformationPipelineGraph() {
   const handleNodeTypeChange = (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number, newType: 'string' | 'number' | 'boolean' | 'datetime') => {
     // Check if the node can change type
     if (!canNodeChangeType(moduleId, nodeType, nodeIndex)) {
-      console.log('❌ Type change not allowed for connected fixed-type node');
       return;
     }
 
@@ -640,8 +639,6 @@ function TransformationPipelineGraph() {
 
       return updatedModules;
     });
-
-    console.log(`🔄 Synchronized type change to ${newType} for ${nodeType} node and connected nodes`);
   };
 
   // Handle node name changes for outputs
@@ -667,28 +664,25 @@ function TransformationPipelineGraph() {
   };
 
   // Handle node position updates from DOM measurements
-  const handleNodePositionUpdate = (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number, position: { x: number; y: number }) => {
+  const handleNodePositionUpdate = useCallback((moduleId: string, nodeType: 'input' | 'output', nodeIndex: number, position: { x: number; y: number }) => {
     const nodeKey = `${moduleId}-${nodeType}-${nodeIndex}`;
     setNodePositions(prev => ({
       ...prev,
       [nodeKey]: position
     }));
-  };
+  }, []);
 
   // Handle connection selection
   const handleConnectionClick = (connectionId: string) => (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
     
-    console.log('🔗 Connection clicked:', connectionId);
     
     // Toggle selection
     if (selectedConnectionId === connectionId) {
       setSelectedConnectionId(null);
-      console.log('🔗 Connection deselected');
     } else {
       setSelectedConnectionId(connectionId);
-      console.log('🔗 Connection selected:', connectionId);
     }
   };
 
@@ -696,7 +690,6 @@ function TransformationPipelineGraph() {
   const handleConnectionDelete = (connectionId: string) => {
     setConnections(prev => prev.filter(connection => connection.id !== connectionId));
     setSelectedConnectionId(null);
-    console.log('🗑️ Deleted connection:', connectionId);
   };
 
   // Calculate adaptive grid size based on zoom level
@@ -757,7 +750,6 @@ function TransformationPipelineGraph() {
 
   // Handle mouse down for canvas - either place module or start canvas drag
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
-    console.log('🖱️ Canvas mouse down', { button: e.button, selectedModuleTemplate: !!selectedModuleTemplate, selectedModuleId });
     
     if (e.button !== 0) return; // Only left mouse button
     
@@ -780,7 +772,6 @@ function TransformationPipelineGraph() {
     // Only start canvas dragging if no module is currently selected
     // This prevents canvas movement when interacting with module configurations
     if (selectedModuleId === null) {
-      console.log('🎯 Starting canvas drag');
       setIsDragging(true);
       setDragStart({ x: e.clientX, y: e.clientY });
       setDragStartOffset({ ...panOffset });
@@ -846,10 +837,8 @@ function TransformationPipelineGraph() {
 
   // Handle mouse up - only for module placement, not for dragging (global handlers manage dragging)
   const handleCanvasMouseUp = () => {
-    console.log('🖱️ Canvas mouse up');
     // Only handle module placement cleanup, NOT dragging
     if (isPlacingModule) {
-      console.log('🛑 Stopping module placement (mouse up)');
       setSelectedModuleTemplate(null);
       setIsPlacingModule(false);
     }
@@ -859,10 +848,8 @@ function TransformationPipelineGraph() {
 
   // Handle mouse leave - only for module placement, not for dragging (global handlers manage dragging)
   const handleCanvasMouseLeave = () => {
-    console.log('🚪 Canvas mouse leave');
     // Only handle module placement cleanup, NOT dragging
     if (isPlacingModule) {
-      console.log('🛑 Stopping module placement (mouse leave)');
       setSelectedModuleTemplate(null);
       setIsPlacingModule(false);
     }
@@ -981,23 +968,15 @@ function TransformationPipelineGraph() {
     };
 
     const handleGlobalMouseUp = (e: MouseEvent) => {
-      console.log('🛑 Global mouse up', { 
-        isDragging, 
-        isDraggingModule, 
-        target: e.target?.constructor?.name || 'unknown'
-      });
-      
       if (isDragging || isDraggingModule) {
         e.preventDefault();
         e.stopPropagation();
       }
       if (isDraggingModule) {
-        console.log('🛑 Stopping module drag');
         setIsDraggingModule(false);
         setDraggedModuleId(null);
       }
       if (isDragging) {
-        console.log('🛑 Stopping canvas drag');
         setIsDragging(false);
       }
     };
@@ -1055,7 +1034,6 @@ function TransformationPipelineGraph() {
       setStartingConnection(null);
     }
     
-    console.log(`🗑️ Deleted module ${moduleId} and its associated connections`);
   };
 
 
@@ -1102,7 +1080,6 @@ function TransformationPipelineGraph() {
     // Clear selected connection when clicking on a module
     if (selectedConnectionId) {
       setSelectedConnectionId(null);
-      console.log('🔗 Connection deselected due to module click');
     }
   };
 
@@ -1155,12 +1132,10 @@ function TransformationPipelineGraph() {
     e.stopPropagation();
     e.preventDefault();
     
-    console.log('🔗 Node clicked:', { moduleId, nodeType, nodeIndex, startingConnection });
     
     // Clear any selected connection when interacting with nodes
     if (selectedConnectionId) {
       setSelectedConnectionId(null);
-      console.log('🔗 Connection deselected due to node interaction');
     }
     
     if (!startingConnection) {
@@ -1169,7 +1144,6 @@ function TransformationPipelineGraph() {
       // Initialize mouse position to the starting node position
       const startPos = getNodePosition(moduleId, nodeType, nodeIndex);
       setCurrentMousePosition(startPos);
-      console.log('🚀 Started connection from:', { moduleId, nodeType, nodeIndex });
     } else {
       // Try to complete connection
       const start = startingConnection;
@@ -1211,7 +1185,6 @@ function TransformationPipelineGraph() {
               // Remove existing connection to this input if it exists
               if (existingInputConnection) {
                 updatedConnections = updatedConnections.filter(conn => conn.id !== existingInputConnection.id);
-                console.log('🔄 Replaced existing input connection:', existingInputConnection.id);
                 
                 // Clear selection if we're replacing the selected connection
                 if (selectedConnectionId === existingInputConnection.id) {
@@ -1222,16 +1195,8 @@ function TransformationPipelineGraph() {
               // Add the new connection
               return [...updatedConnections, newConnection];
             });
-            
-            console.log('✅ Connection created:', newConnection);
-          } else {
-            console.log('⚠️ Connection already exists');
           }
-        } else {
-          console.log(`❌ Type mismatch: cannot connect ${startNodeType} to ${endNodeType}`);
         }
-      } else {
-        console.log('❌ Invalid connection - same type or same module');
       }
       
       // Clear starting connection
@@ -1594,10 +1559,13 @@ function TransformationPipelineGraph() {
                       template={placedModule.template}
                       position={placedModule.position}
                       config={placedModule.config}
+                      zoom={zoom}
+                      panOffset={panOffset}
                       onMouseDown={handleModuleMouseDown(placedModule.id)}
                       onDelete={handleModuleDelete(placedModule.id)}
                       onConfigChange={handleModuleConfigChange(placedModule.id)}
                       onNodeClick={handleNodeClick}
+                      onNodePositionUpdate={handleNodePositionUpdate}
                     />
                   );
                 }
@@ -1611,6 +1579,10 @@ function TransformationPipelineGraph() {
                     position={placedModule.position}
                     config={placedModule.config}
                     nodes={placedModule.nodes}
+                    zoom={zoom}
+                    panOffset={panOffset}
+                    connections={connections}
+                    placedModules={placedModules}
                     onMouseDown={handleModuleMouseDown(placedModule.id)}
                     onDelete={handleModuleDelete(placedModule.id)}
                     onConfigChange={handleModuleConfigChange(placedModule.id)}

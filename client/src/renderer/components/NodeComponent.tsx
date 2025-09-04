@@ -8,11 +8,35 @@ interface NodeState {
   required: boolean;
 }
 
+interface NodeConnection {
+  id: string;
+  fromModuleId: string;
+  fromOutputIndex: number;
+  toModuleId: string;
+  toInputIndex: number;
+}
+
+interface PlacedModule {
+  id: string;
+  template: any;
+  position: { x: number; y: number };
+  config: any;
+  nodes: {
+    inputs: any[];
+    outputs: any[];
+  };
+}
+
 interface NodeComponentProps {
   node: NodeState;
   nodeType: 'input' | 'output';
   nodeIndex: number;
   moduleId: string;
+  modulePosition?: { x: number; y: number }; // Add module position to trigger updates when module moves
+  zoom?: number; // Add zoom level to trigger updates when zoom changes
+  panOffset?: { x: number; y: number }; // Add pan offset to trigger updates when pan changes
+  connections?: NodeConnection[]; // Add connections to trigger updates when connections change
+  placedModules?: PlacedModule[]; // Add placed modules to track output name changes
   canRemove: boolean;
   allowTypeConfiguration: boolean;
   onNodeClick?: (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number) => (e: React.MouseEvent) => void;
@@ -39,6 +63,11 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
   nodeType,
   nodeIndex,
   moduleId,
+  modulePosition,
+  zoom,
+  panOffset,
+  connections,
+  placedModules,
   canRemove,
   allowTypeConfiguration,
   onNodeClick,
@@ -51,6 +80,11 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
 }) => {
   const circleRef = useRef<HTMLDivElement>(null);
 
+  // Calculate display name for dependency tracking
+  const displayName = nodeType === 'input' 
+    ? (getInputDisplayName ? getInputDisplayName(moduleId, nodeIndex) : (node.name || "Not connected"))
+    : node.name;
+
   // Update position whenever the component renders or moves
   useEffect(() => {
     if (circleRef.current && onPositionUpdate) {
@@ -61,7 +95,7 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
       // Convert to canvas coordinates (accounting for zoom/pan would be handled by parent)
       onPositionUpdate(moduleId, nodeType, nodeIndex, { x: centerX, y: centerY });
     }
-  });
+  }, [moduleId, nodeType, nodeIndex, onPositionUpdate, modulePosition, zoom, panOffset, connections, placedModules]);
 
   const handleRemoveClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -103,8 +137,15 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
         {/* Input Content */}
         <div className="ml-6 flex-1">
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-300 font-medium">
-              {getInputDisplayName ? getInputDisplayName(moduleId, nodeIndex) : (node.name || "Not connected")}
+            <span 
+              className="text-xs text-gray-300 font-medium"
+              style={{ 
+                wordBreak: 'break-word',
+                overflowWrap: 'break-word',
+                hyphens: 'auto'
+              }}
+            >
+              {displayName}
             </span>
             {canRemove && (
               <button

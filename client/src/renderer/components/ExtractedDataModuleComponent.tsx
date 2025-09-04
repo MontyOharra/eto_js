@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { BaseModuleTemplate } from '../data/testModules';
 
 interface ExtractedDataModuleComponentProps {
@@ -6,10 +6,13 @@ interface ExtractedDataModuleComponentProps {
   template: BaseModuleTemplate;
   position: { x: number; y: number };
   config?: Record<string, any>;
+  zoom?: number; // Add zoom level
+  panOffset?: { x: number; y: number }; // Add pan offset
   onMouseDown?: (e: React.MouseEvent) => void;
   onDelete?: () => void;
   onConfigChange?: (config: Record<string, any>) => void;
   onNodeClick?: (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number) => (e: React.MouseEvent) => void;
+  onNodePositionUpdate?: (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number, position: { x: number; y: number }) => void;
 }
 
 export const ExtractedDataModuleComponent: React.FC<ExtractedDataModuleComponentProps> = ({
@@ -17,12 +20,27 @@ export const ExtractedDataModuleComponent: React.FC<ExtractedDataModuleComponent
   template,
   position,
   config = {},
+  zoom,
+  panOffset,
   onMouseDown,
   onDelete,
   onConfigChange,
-  onNodeClick
+  onNodeClick,
+  onNodePositionUpdate
 }) => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const outputNodeRef = useRef<HTMLDivElement>(null);
+
+  // Update position whenever the module moves
+  useEffect(() => {
+    if (outputNodeRef.current && onNodePositionUpdate) {
+      const rect = outputNodeRef.current.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      
+      onNodePositionUpdate(moduleId, 'output', 0, { x: centerX, y: centerY });
+    }
+  }, [moduleId, onNodePositionUpdate, position, zoom, panOffset]);
 
   const handleDeleteClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -129,6 +147,7 @@ export const ExtractedDataModuleComponent: React.FC<ExtractedDataModuleComponent
               style={{ right: '-10px' }}
             >
               <div
+                ref={outputNodeRef}
                 className="w-5 h-5 rounded-full border-2 border-emerald-800 cursor-pointer hover:scale-110 transition-transform"
                 style={{ 
                   backgroundColor: '#10B981', // Green for string type
