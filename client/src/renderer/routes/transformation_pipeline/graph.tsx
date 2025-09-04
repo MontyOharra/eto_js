@@ -897,7 +897,7 @@ function TransformationPipelineGraph() {
     setIsSidebarCollapsed(prev => !prev);
   };
 
-  // Wheel event handler for zoom
+  // Wheel event handler for zoom - runs on every render to ensure canvas is always listening
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
@@ -933,8 +933,12 @@ function TransformationPipelineGraph() {
       }
     };
 
+    // Always try to attach listener if canvas exists
     const currentCanvas = canvasRef.current;
     if (currentCanvas) {
+      // Remove existing listener first to prevent duplicates
+      currentCanvas.removeEventListener('wheel', handleWheel);
+      // Add the listener
       currentCanvas.addEventListener('wheel', handleWheel, { passive: false });
     }
 
@@ -943,7 +947,7 @@ function TransformationPipelineGraph() {
         currentCanvas.removeEventListener('wheel', handleWheel);
       }
     };
-  }, [isDraggingModule]);
+  }); // No dependencies - runs on every render to ensure listener is always active
 
   // Global mouse handlers for module dragging and canvas dragging
   useEffect(() => {
