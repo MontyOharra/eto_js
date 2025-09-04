@@ -396,14 +396,14 @@ export const GraphModuleComponent: React.FC<GraphModuleComponentProps> = ({
                           <div className="text-xs text-gray-500">
                             {input.dynamicType ? (
                               <select
-                                value={config[input.dynamicType?.configKey || ''] || input.type}
-                                onChange={(e) => handleConfigChange(input.dynamicType.configKey, e.target.value)}
+                                value={String(config[input.dynamicType?.configKey || ''] || input.type)}
+                                onChange={(e) => handleConfigChange(input.dynamicType?.configKey || '', e.target.value)}
                                 onMouseDown={(e) => e.stopPropagation()}
                                 onFocus={(e) => e.stopPropagation()}
                                 onClick={(e) => e.stopPropagation()}
                                 className="bg-gray-700 border border-gray-600 text-gray-300 text-xs rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
                               >
-                                {input.dynamicType.options.map(option => (
+                                {input.dynamicType?.options?.map(option => (
                                   <option key={option} value={option}>
                                     {option}
                                   </option>
@@ -466,14 +466,14 @@ export const GraphModuleComponent: React.FC<GraphModuleComponentProps> = ({
                           <div className="text-xs text-gray-500">
                             {output.dynamicType ? (
                               <select
-                                value={config[output.dynamicType?.configKey || ''] || output.type}
-                                onChange={(e) => handleConfigChange(output.dynamicType.configKey, e.target.value)}
+                                value={String(config[output.dynamicType?.configKey || ''] || output.type)}
+                                onChange={(e) => handleConfigChange(output.dynamicType?.configKey || '', e.target.value)}
                                 onMouseDown={(e) => e.stopPropagation()}
                                 onFocus={(e) => e.stopPropagation()}
                                 onClick={(e) => e.stopPropagation()}
                                 className="bg-gray-700 border border-gray-600 text-gray-300 text-xs rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
                               >
-                                {output.dynamicType.options.map(option => (
+                                {output.dynamicType?.options?.map(option => (
                                   <option key={option} value={option}>
                                     {option}
                                   </option>
