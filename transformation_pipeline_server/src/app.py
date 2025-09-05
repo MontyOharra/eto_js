@@ -5,6 +5,8 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 from .database import init_database, get_db_service, create_database_if_not_exists, BaseModule
 from .modules import get_module_registry, populate_database_with_modules
+from .services import get_pipeline_analyzer, get_pipeline_executor, PipelineAnalysisError, PipelineExecutionError
+from .services.simple_pipeline_execution import get_simple_pipeline_executor
 
 # Load environment variables
 load_dotenv()
@@ -228,6 +230,162 @@ def get_dynamic_outputs(module_id):
         return jsonify({
             "success": False,
             "message": f"Error: {str(e)}"
+        }), 500
+
+# Pipeline Execution Endpoints
+
+@app.post("/api/pipeline/analyze")
+def analyze_pipeline():
+    """Analyze a pipeline for execution planning"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                "success": False,
+                "message": "Request body required"
+            }), 400
+        
+        modules = data.get('modules', [])
+        connections = data.get('connections', [])
+        target_module_id = data.get('target_module_id')
+        
+        if not modules:
+            return jsonify({
+                "success": False,
+                "message": "Modules list is required"
+            }), 400
+        
+        analyzer = get_pipeline_analyzer()
+        result = analyzer.analyze_pipeline(modules, connections, target_module_id)
+        
+        return jsonify(result)
+        
+    except PipelineAnalysisError as e:
+        return jsonify({
+            "success": False,
+            "message": f"Analysis error: {str(e)}"
+        }), 400
+    except Exception as e:
+        logger.error(f"Error analyzing pipeline: {e}")
+        return jsonify({
+            "success": False,
+            "message": f"Analysis failed: {str(e)}"
+        }), 500
+
+@app.post("/api/pipeline/execute")
+def execute_pipeline():
+    """Execute a complete transformation pipeline with clean separation"""
+    try:
+        logger.info("Pipeline execution request received")
+        
+        data = request.get_json()
+        if not data:
+            logger.error("No request body provided")
+            return jsonify({
+                "success": False,
+                "message": "Request body required"
+            }), 400
+        
+        logger.info(f"Request data keys: {list(data.keys())}")
+        
+        modules = data.get('modules', [])
+        connections = data.get('connections', [])
+        input_data = data.get('inputData', {})  # Changed from baseInputs to inputData
+        
+        logger.info(f"Received {len(modules)} modules, {len(connections)} connections")
+        logger.info(f"Input data: {input_data}")
+        
+        if not modules:
+            logger.error("No modules provided in request")
+            return jsonify({
+                "success": False,
+                "message": "Modules list is required"
+            }), 400
+        
+        # Step 1: Analyze pipeline to get transformation steps
+        logger.info("🔍 Step 1: Analyzing pipeline...")
+        analyzer = get_pipeline_analyzer()
+        analysis_result = analyzer.analyze_pipeline(modules, connections)
+        
+        if not analysis_result['success']:
+            logger.error("Pipeline analysis failed")
+            return jsonify({
+                "success": False,
+                "message": "Pipeline analysis failed"
+            }), 400
+        
+        transformation_steps = analysis_result['transformation_steps']
+        field_mappings = analysis_result['field_mappings']
+        
+        logger.info(f"📋 Analysis complete: {len(transformation_steps)} transformation steps")
+        logger.info(f"🗺️ Field mappings: {field_mappings}")
+        
+        # Step 2: Execute pipeline with clean separation
+        logger.info("⚙️ Step 2: Executing transformations...")
+        executor = get_simple_pipeline_executor()
+        
+        final_outputs = executor.execute_pipeline(
+            transformation_steps=transformation_steps,
+            input_data=input_data,
+            field_mappings=field_mappings
+        )
+        
+        logger.info("✅ Pipeline execution completed successfully")
+        return jsonify({
+            "success": True,
+            "analysis": {
+                "transformation_steps": transformation_steps,
+                "field_mappings": field_mappings
+            },
+            "outputs": final_outputs
+        })
+        
+    except PipelineAnalysisError as e:
+        logger.error(f"Pipeline analysis error: {str(e)}")
+        return jsonify({
+            "success": False,
+            "message": f"Analysis error: {str(e)}"
+        }), 400
+    except Exception as e:
+        logger.error(f"Unexpected error executing pipeline: {str(e)}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "message": f"Execution failed: {str(e)}"
+        }), 500
+
+@app.post("/api/pipeline/validate")
+def validate_pipeline():
+    """Validate a pipeline structure and requirements"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                "success": False,
+                "message": "Request body required"
+            }), 400
+        
+        modules = data.get('modules', [])
+        connections = data.get('connections', [])
+        
+        if not modules:
+            return jsonify({
+                "success": False,
+                "message": "Modules list is required"
+            }), 400
+        
+        executor = get_pipeline_executor()
+        result = executor.validate_execution_requirements(modules, connections)
+        
+        return jsonify({
+            "success": True,
+            "validation": result
+        })
+        
+    except Exception as e:
+        logger.error(f"Error validating pipeline: {e}")
+        return jsonify({
+            "success": False,
+            "message": f"Validation failed: {str(e)}"
         }), 500
 
 if __name__ == "__main__":

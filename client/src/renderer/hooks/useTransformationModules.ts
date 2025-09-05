@@ -44,7 +44,7 @@ export function useTransformationModules(): UseTransformationModulesResult {
         module.id === 'order_generation'
       ).map(module => ({
         ...module,
-        id: `mock_${module.id}`,
+        id: `${module.id}`,
         name: module.name, // Keep original name for these testing modules
         description: module.description
       }));

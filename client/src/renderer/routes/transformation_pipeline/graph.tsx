@@ -5,6 +5,8 @@ import { ExtractedDataModuleComponent } from "./_components/ExtractedDataModuleC
 import { NewGraphModuleComponent } from "./_components/NewGraphModuleComponent";
 import { BaseModuleTemplate } from "../../types/modules";
 import { useTransformationModules } from "../../hooks/useTransformationModules";
+import { analyzePipeline, executeModule } from "../../services/transformationPipelineApi";
+import { mockExtractedFields } from "../../data/testModules";
 
 export const Route = createFileRoute("/transformation_pipeline/graph")({
   component: TransformationPipelineGraph,
@@ -76,96 +78,6 @@ function TransformationPipelineGraph() {
   const [selectedModuleTemplate, setSelectedModuleTemplate] = useState<BaseModuleTemplate | null>(null);
   const [placedModules, setPlacedModules] = useState<PlacedModule[]>([]);
 
-  // Auto-place extracted data modules and Type Coercion module on initial load
-  useEffect(() => {
-    if (placedModules.length === 0 && allModules.length > 0) {
-      const extractedDataModules = allModules.filter(module => module.category === 'Extracted Data');
-      const typeCoercionModule = allModules.find(module => module.id === 'mock_type_coercion'); // Only mock version exists
-      const dataCombinerModule = allModules.find(module => module.id === 'backend_data_combiner'); // Use backend version
-      
-      const moduleHeight = 140; // Approximate height of extracted data modules
-      const moduleSpacing = 20; // Space between modules
-      const startY = 100; // Starting Y position
-      const leftX = 200; // X position for extracted data modules
-      const middleX = 600; // X position for type coercion module
-      const rightX = 1000; // X position for data combiner module
-      
-      const initialModules: PlacedModule[] = [];
-      
-      // Add extracted data modules
-      extractedDataModules.forEach((template, index) => {
-        const config: Record<string, unknown> = {};
-        const nodes = initializeModuleNodes(template, config);
-        
-        const module: PlacedModule = {
-          id: `auto_${template.id}_${Date.now()}_${index}`,
-          template,
-          position: {
-            x: leftX,
-            y: startY + (index * (moduleHeight + moduleSpacing))
-          },
-          config,
-          nodes
-        };
-        
-        initialModules.push(module);
-      });
-      
-      // Add Type Coercion module for testing
-      if (typeCoercionModule) {
-        // Initialize config with default values from template
-        const config: Record<string, unknown> = {};
-        typeCoercionModule.config.forEach(configField => {
-          if (configField.defaultValue !== undefined) {
-            config[configField.name] = configField.defaultValue;
-          }
-        });
-        
-        const nodes = initializeModuleNodes(typeCoercionModule, config);
-        
-        const module: PlacedModule = {
-          id: `auto_type_coercion_${Date.now()}`,
-          template: typeCoercionModule,
-          position: {
-            x: middleX,
-            y: startY
-          },
-          config,
-          nodes
-        };
-        
-        initialModules.push(module);
-      }
-      
-      // Add Data Combiner module for testing variable nodes
-      if (dataCombinerModule) {
-        // Initialize config with default values from template
-        const config: Record<string, unknown> = {};
-        dataCombinerModule.config.forEach(configField => {
-          if (configField.defaultValue !== undefined) {
-            config[configField.name] = configField.defaultValue;
-          }
-        });
-        
-        const nodes = initializeModuleNodes(dataCombinerModule, config);
-        
-        const module: PlacedModule = {
-          id: `auto_data_combiner_${Date.now()}`,
-          template: dataCombinerModule,
-          position: {
-            x: rightX,
-            y: startY + 200
-          },
-          config,
-          nodes
-        };
-        
-        initialModules.push(module);
-      }
-      
-      setPlacedModules(initialModules);
-    }
-  }, [allModules, placedModules.length]);  // Re-run when modules are loaded
   const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null);
   
   // Placement state
@@ -897,6 +809,195 @@ function TransformationPipelineGraph() {
     setIsSidebarCollapsed(prev => !prev);
   };
 
+  // Helper function to format execution steps with input/output field names
+  const formatExecutionSteps = (analysisResult: any) => {
+    const steps: Array<{
+      stepNumber: number;
+      inputField: string;
+      process: string;
+      outputField: string;
+    }> = [];
+
+    if (!analysisResult.execution_plan?.steps) return steps;
+
+    analysisResult.execution_plan.steps.forEach((step: any) => {
+      step.modules.forEach((module: any) => {
+        // Find the module in placed modules to get node information
+        const placedModule = placedModules.find(pm => pm.id === module.id);
+        if (!placedModule) return;
+
+        // Get the module template to get the display name
+        const template = placedModule.template;
+        
+        // For each connection involving this module, create execution steps
+        connections.forEach((connection) => {
+          if (connection.toModuleId === module.id) {
+            // This module receives input from another module
+            const fromModule = placedModules.find(pm => pm.id === connection.fromModuleId);
+            if (!fromModule) return;
+
+            // Get the input field name from the connected output (the actual data being passed)
+            const inputField = fromModule.nodes.outputs[connection.fromOutputIndex]?.name || `Output ${connection.fromOutputIndex + 1}`;
+            // Get the output field name from this module
+            const outputField = placedModule.nodes.outputs[0]?.name || `Output 1`;
+            
+            steps.push({
+              stepNumber: step.step_number,
+              inputField: inputField,
+              process: template.name,
+              outputField: outputField
+            });
+          }
+        });
+
+        // For modules with no input connections (like extracted data modules), still show them
+        const hasInputConnections = connections.some(conn => conn.toModuleId === module.id);
+        if (!hasInputConnections && placedModule.nodes.outputs.length > 0) {
+          const outputField = placedModule.nodes.outputs[0]?.name || `Output 1`;
+          steps.push({
+            stepNumber: step.step_number,
+            inputField: "Source Data",
+            process: template.name,
+            outputField: outputField
+          });
+        }
+      });
+    });
+
+    return steps;
+  };
+
+  // Handle pipeline run
+  const handleRunPipeline = async () => {
+    // Check if order generation module is present
+    console.log(placedModules);
+    const orderModule = placedModules.find(module => 
+      module.template.id === 'order_generation'
+    );
+    
+    if (!orderModule) {
+      alert('Order Generation module is required to run the pipeline');
+      return;
+    }
+
+    console.log('🚀 Executing transformation pipeline...');
+    
+    // Debug: Log current placed modules
+    console.log('🔍 Debug - Current placed modules:', placedModules.map(m => ({
+      id: m.id,
+      templateId: m.template.id,
+      category: m.template.category,
+      nodes: m.nodes
+    })));
+    
+    // Collect base inputs from extracted data modules
+    const baseInputs: Record<string, any> = {};
+    
+    placedModules.forEach(module => {
+      // Check if this is an extracted data module
+      if (module.template.category === 'Extracted Data') {
+        if (module.nodes.outputs.length > 0) {
+          const outputFieldName = module.nodes.outputs[0].name;
+          
+          // First try to get value from module config (user-entered value)
+          let value = module.config['test_value'];
+          
+          // If no user value, fall back to default sample value
+          if (!value || value === '') {
+            const fieldName = module.template.id.replace('extracted_', '');
+            const extractedField = mockExtractedFields.find(field => field.name === fieldName);
+            value = extractedField?.sampleValue || 'No value';
+          }
+          
+          baseInputs[outputFieldName] = value;
+          console.log(`📥 Base input: ${outputFieldName} = "${value}" (from ${module.config['test_value'] ? 'user config' : 'default sample'})`);
+        }
+      }
+    });
+    
+    console.log('🔍 Debug - Final baseInputs:', baseInputs);
+    
+    // Prepare pipeline data for execution
+    const pipelineData = {
+      modules: placedModules.map(module => ({
+        id: module.id,
+        templateId: module.template.id.startsWith('backend_') 
+          ? module.template.id.replace('backend_', '') 
+          : module.template.id,
+        config: module.config,
+        position: module.position,
+        nodes: module.nodes
+      })),
+      connections: connections.map(connection => ({
+        from: { moduleId: connection.fromModuleId, outputIndex: connection.fromOutputIndex },
+        to: { moduleId: connection.toModuleId, inputIndex: connection.toInputIndex }
+      })),
+      inputData: baseInputs
+    };
+
+    try {
+      // Call transformation_pipeline_server API to execute pipeline
+      console.log('📊 Pipeline data for execution:', pipelineData);
+      
+      const response = await fetch('http://localhost:8090/api/pipeline/execute', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(pipelineData)
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      if (result.success) {
+        console.log('✅ Pipeline execution completed successfully!');
+        console.log('📋 Pipeline Analysis:', result.analysis);
+        console.log('🎯 Final Output Data:', result.outputs);
+        
+        // Log the transformation steps that were executed
+        if (result.analysis?.transformation_steps) {
+          console.log('\n🔧 TRANSFORMATION STEPS EXECUTED:');
+          console.log('=====================================');
+          result.analysis.transformation_steps.forEach((step: any) => {
+            console.log(`Step ${step.step_number}: ${step.input_field_name} → [${step.template_id}] → ${step.output_field_name}`);
+            console.log(`    Internal IDs: ${step.input_field_id} → ${step.output_field_id}`);
+          });
+          console.log('=====================================\n');
+        }
+        
+        // Log the field mappings for debugging
+        if (result.analysis?.field_mappings) {
+          console.log('\n🗺️ FIELD MAPPINGS:');
+          console.log('=====================================');
+          console.log('ID to Name:', result.analysis.field_mappings.id_to_name);
+          console.log('Name to IDs:', result.analysis.field_mappings.name_to_ids);
+          console.log('=====================================\n');
+        }
+        
+        // Log the final output field names and values
+        if (result.outputs && Object.keys(result.outputs).length > 0) {
+          console.log('\n🎯 FINAL OUTPUT DATA:');
+          console.log('=====================================');
+          Object.entries(result.outputs).forEach(([fieldName, value]) => {
+            console.log(`${fieldName}: "${value}"`);
+          });
+          console.log('=====================================\n');
+        }
+        
+      } else {
+        throw new Error(result.message || 'Pipeline execution failed');
+      }
+      
+    } catch (error) {
+      console.error('❌ Pipeline execution failed:', error);
+      alert(`Pipeline execution failed: ${error instanceof Error ? error.message : 'Unknown error'}\n\nCheck console for details.`);
+    }
+  };
+
   // Wheel event handler for zoom - runs on every render to ensure canvas is always listening
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
@@ -1360,6 +1461,25 @@ function TransformationPipelineGraph() {
               Creating connection...
             </div>
           )}
+        </div>
+
+        {/* Run Button - Top Center */}
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-20">
+          <button
+            onClick={handleRunPipeline}
+            disabled={placedModules.length === 0}
+            className={`px-6 py-3 rounded-lg shadow-lg border font-medium text-sm flex items-center gap-2 transition-colors ${
+              placedModules.length === 0
+                ? 'bg-gray-600 border-gray-600 text-gray-400 cursor-not-allowed'
+                : 'bg-green-600 hover:bg-green-700 border-green-500 text-white cursor-pointer'
+            }`}
+            title={placedModules.length === 0 ? 'Add modules to run pipeline' : 'Run transformation pipeline'}
+          >
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+            </svg>
+            Run Pipeline
+          </button>
         </div>
 
         {/* Zoom Controls - Top Right */}
