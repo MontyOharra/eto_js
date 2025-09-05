@@ -116,10 +116,17 @@ export const GraphOverlays: React.FC<GraphOverlaysProps> = ({
               ? 'text-gray-500 cursor-not-allowed' 
               : 'text-white hover:bg-gray-700'
           }`}
-          title={isDraggingModule ? "Cannot reset while dragging" : "Reset Zoom"}
+          title={isDraggingModule ? "Cannot fit while dragging" : "Fit All to View"}
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            {/* Top-left corner */}
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 3H3v4" />
+            {/* Top-right corner */}
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 3h4v4" />
+            {/* Bottom-left corner */}
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21H3v-4" />
+            {/* Bottom-right corner */}
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 21h4v-4" />
           </svg>
         </button>
       </div>

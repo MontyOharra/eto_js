@@ -652,8 +652,93 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
   };
 
   const resetZoom = () => {
-    setZoom(1);
-    setPanOffset({ x: 0, y: 0 });
+    if (!canvasRef.current) return;
+    
+    // If no modules or definers, just reset to origin
+    if (placedModules.length === 0 && inputDefiners.length === 0 && outputDefiners.length === 0) {
+      setZoom(1);
+      setPanOffset({ x: 0, y: 0 });
+      return;
+    }
+    
+    // Calculate bounding box of all modules
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    
+    // Estimate module dimensions (modules are typically ~240-320px wide, ~200-300px tall)
+    const moduleWidth = 280;
+    const moduleHeight = 250;
+    
+    // Include placed modules in bounding box
+    placedModules.forEach(module => {
+      const left = module.position.x - moduleWidth / 2;
+      const right = module.position.x + moduleWidth / 2;
+      const top = module.position.y;
+      const bottom = module.position.y + moduleHeight;
+      
+      minX = Math.min(minX, left);
+      minY = Math.min(minY, top);
+      maxX = Math.max(maxX, right);
+      maxY = Math.max(maxY, bottom);
+    });
+    
+    // Include input/output definers in bounding box
+    const definerWidth = 200;
+    const definerHeight = 100;
+    
+    [...inputDefiners, ...outputDefiners].forEach(definer => {
+      const left = definer.position.x - definerWidth / 2;
+      const right = definer.position.x + definerWidth / 2;
+      const top = definer.position.y;
+      const bottom = definer.position.y + definerHeight;
+      
+      minX = Math.min(minX, left);
+      minY = Math.min(minY, top);
+      maxX = Math.max(maxX, right);
+      maxY = Math.max(maxY, bottom);
+    });
+    
+    // If we couldn't calculate a valid bounding box, fallback to origin
+    if (minX === Infinity || minY === Infinity || maxX === -Infinity || maxY === -Infinity) {
+      setZoom(1);
+      setPanOffset({ x: 0, y: 0 });
+      return;
+    }
+    
+    // Add padding around the modules
+    const padding = 100;
+    minX -= padding;
+    minY -= padding;
+    maxX += padding;
+    maxY += padding;
+    
+    // Calculate bounding box dimensions
+    const boundingWidth = maxX - minX;
+    const boundingHeight = maxY - minY;
+    
+    // Get canvas dimensions
+    const canvasRect = canvasRef.current.getBoundingClientRect();
+    const canvasWidth = canvasRect.width;
+    const canvasHeight = canvasRect.height;
+    
+    // Calculate zoom level to fit all modules with some padding
+    const zoomX = canvasWidth / boundingWidth;
+    const zoomY = canvasHeight / boundingHeight;
+    const newZoom = Math.min(zoomX, zoomY, 1.5); // Cap at 1.5x to avoid over-zooming
+    
+    // Calculate center of bounding box
+    const boundingCenterX = (minX + maxX) / 2;
+    const boundingCenterY = (minY + maxY) / 2;
+    
+    // Calculate pan offset to center the bounding box
+    const newPanX = canvasWidth / 2 - boundingCenterX * newZoom;
+    const newPanY = canvasHeight / 2 - boundingCenterY * newZoom;
+    
+    // Apply the new zoom and pan
+    setZoom(newZoom);
+    setPanOffset({ x: newPanX, y: newPanY });
   };
 
   // Add mouse tracking for connection preview
