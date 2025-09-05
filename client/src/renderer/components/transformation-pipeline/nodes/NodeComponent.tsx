@@ -37,7 +37,6 @@ interface NodeComponentProps {
   panOffset?: { x: number; y: number }; // Add pan offset to trigger updates when pan changes
   connections?: NodeConnection[]; // Add connections to trigger updates when connections change
   placedModules?: PlacedModule[]; // Add placed modules to track output name changes
-  isSidebarCollapsed?: boolean; // Add sidebar state to trigger updates when sidebar toggles
   canRemove: boolean;
   allowTypeConfiguration: boolean;
   onNodeClick?: (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number) => (e: React.MouseEvent) => void;
@@ -69,7 +68,6 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
   panOffset,
   connections,
   placedModules,
-  isSidebarCollapsed,
   canRemove,
   allowTypeConfiguration,
   onNodeClick,
@@ -97,7 +95,7 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
       // Convert to canvas coordinates (accounting for zoom/pan would be handled by parent)
       onPositionUpdate(moduleId, nodeType, nodeIndex, { x: centerX, y: centerY });
     }
-  }, [moduleId, nodeType, nodeIndex, onPositionUpdate, modulePosition, zoom, panOffset, connections, placedModules, isSidebarCollapsed]);
+  }, [moduleId, nodeType, nodeIndex, onPositionUpdate, modulePosition, zoom, panOffset, connections, placedModules]);
 
   const handleRemoveClick = (e: React.MouseEvent) => {
     e.stopPropagation();

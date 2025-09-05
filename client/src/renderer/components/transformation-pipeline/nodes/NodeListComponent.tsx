@@ -35,7 +35,6 @@ interface NodeListComponentProps {
   panOffset?: { x: number; y: number }; // Add pan offset
   connections?: NodeConnection[]; // Add connections
   placedModules?: PlacedModule[]; // Add placed modules
-  isSidebarCollapsed?: boolean; // Add sidebar state for layout changes
   inputNodes: NodeState[];
   outputNodes: NodeState[];
   canAddInputs: boolean;
@@ -63,7 +62,6 @@ export const NodeListComponent: React.FC<NodeListComponentProps> = ({
   panOffset,
   connections,
   placedModules,
-  isSidebarCollapsed,
   inputNodes,
   outputNodes,
   canAddInputs,
@@ -111,7 +109,6 @@ export const NodeListComponent: React.FC<NodeListComponentProps> = ({
                   panOffset={panOffset}
                   connections={connections}
                   placedModules={placedModules}
-                  isSidebarCollapsed={isSidebarCollapsed}
                   canRemove={canRemoveInputs}
                   allowTypeConfiguration={allowInputTypeConfiguration}
                   onNodeClick={onNodeClick}
@@ -160,7 +157,6 @@ export const NodeListComponent: React.FC<NodeListComponentProps> = ({
                   panOffset={panOffset}
                   connections={connections}
                   placedModules={placedModules}
-                  isSidebarCollapsed={isSidebarCollapsed}
                   canRemove={canRemoveOutputs}
                   allowTypeConfiguration={allowOutputTypeConfiguration}
                   onNodeClick={onNodeClick}

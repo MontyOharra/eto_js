@@ -8,7 +8,6 @@ interface ExtractedDataModuleComponentProps {
   config?: Record<string, any>;
   zoom?: number; // Add zoom level
   panOffset?: { x: number; y: number }; // Add pan offset
-  isSidebarCollapsed?: boolean; // Add sidebar state for layout changes
   onMouseDown?: (e: React.MouseEvent) => void;
   onDelete?: () => void;
   onConfigChange?: (config: Record<string, any>) => void;
@@ -23,7 +22,6 @@ export const ExtractedDataModuleComponent: React.FC<ExtractedDataModuleComponent
   config = {},
   zoom,
   panOffset,
-  isSidebarCollapsed,
   onMouseDown,
   onDelete,
   onConfigChange,
@@ -42,7 +40,7 @@ export const ExtractedDataModuleComponent: React.FC<ExtractedDataModuleComponent
       
       onNodePositionUpdate(moduleId, 'output', 0, { x: centerX, y: centerY });
     }
-  }, [moduleId, onNodePositionUpdate, position, zoom, panOffset, isSidebarCollapsed]);
+  }, [moduleId, onNodePositionUpdate, position, zoom, panOffset]);
 
   const handleDeleteClick = (e: React.MouseEvent) => {
     e.stopPropagation();

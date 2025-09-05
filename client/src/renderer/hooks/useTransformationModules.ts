@@ -14,9 +14,7 @@ export interface UseTransformationModulesResult {
   isLoading: boolean;
   error: string | null;
   refreshModules: () => Promise<void>;
-  extractedDataModules: BaseModuleTemplate[];
   processingModules: BaseModuleTemplate[];
-  orderGenerationModule: BaseModuleTemplate | null;
 }
 
 /**
@@ -38,45 +36,24 @@ export function useTransformationModules(): UseTransformationModulesResult {
       const fetchedBackendModules = await fetchBaseModules();
       setBackendModules(fetchedBackendModules);
       
-      // Keep only specific mock modules for testing (extracted data and order creation)
-      const testingOnlyModules = mockModules.filter(module => 
-        module.category === 'Extracted Data' || 
-        module.id === 'order_generation'
-      ).map(module => ({
-        ...module,
-        id: `${module.id}`,
-        name: module.name, // Keep original name for these testing modules
-        description: module.description
-      }));
-      
-      // Use backend modules as-is (no prefix needed since they're the real modules)
+      // Use backend modules as the primary source (no mock modules for extraction/order generation)
       const backendModulesWithSource = fetchedBackendModules.map(module => ({
         ...module,
         id: `backend_${module.id}`,
-        name: module.name, // Keep original name
+        name: module.name,
         description: module.description
       }));
       
-      const allModules = [...testingOnlyModules, ...backendModulesWithSource];
-      setModules(allModules);
+      setModules(backendModulesWithSource);
       
-      console.log(`Loaded ${fetchedBackendModules.length} backend modules + ${testingOnlyModules.length} testing modules`);
+      console.log(`Loaded ${fetchedBackendModules.length} backend modules`);
 
     } catch (err) {
       console.error('Error loading backend modules:', err);
       setError(`Failed to load backend modules: ${err instanceof Error ? err.message : 'Unknown error'}`);
       
-      // Fall back to just testing modules if backend fails
-      const testingOnlyModules = mockModules.filter(module => 
-        module.category === 'Extracted Data' || 
-        module.id === 'order_generation'
-      ).map(module => ({
-        ...module,
-        id: `mock_${module.id}`,
-        name: module.name,
-        description: `${module.description} (Backend Unavailable)`
-      }));
-      setModules(testingOnlyModules);
+      // Set empty modules array if backend fails
+      setModules([]);
       setBackendModules([]);
     } finally {
       setIsLoading(false);
@@ -92,13 +69,11 @@ export function useTransformationModules(): UseTransformationModulesResult {
   }, [loadModules]);
 
   // Categorize modules for easier use
-  const extractedDataModules = modules.filter(module => module.category === 'Extracted Data');
   const processingModules = modules.filter(module => 
     module.category === 'Text Processing' || 
     module.category === 'Data Processing' || 
     module.category === 'Math'
   );
-  const orderGenerationModule = modules.find(module => module.id === 'order_generation') || null;
 
   return {
     modules,
@@ -107,8 +82,6 @@ export function useTransformationModules(): UseTransformationModulesResult {
     isLoading,
     error,
     refreshModules,
-    extractedDataModules,
-    processingModules,
-    orderGenerationModule
+    processingModules
   };
 }
