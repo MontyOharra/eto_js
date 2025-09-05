@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { EtoRunsTable } from "../../components/EtoRunsTable";
-import { TemplateBuilderModal } from "../../components/TemplateBuilderModal";
-import { ConfirmationModal } from "../../components/ConfirmationModal";
-import { ExtractionResultViewerModal } from "../../components/ExtractionResultViewerModal";
+import { EtoRunsTable } from "../../components/eto/EtoRunsTable";
+import { TemplateBuilderModal } from "../../components/template/TemplateBuilderModal";
+import { ConfirmationModal } from "../../components/shared/ConfirmationModal";
+import { ExtractionResultViewerModal } from "../../components/eto/ExtractionResultViewerModal";
 import { useEtoRuns, useServerHealth } from "../../hooks/useApi";
 import { useMemo, useState } from "react";
 

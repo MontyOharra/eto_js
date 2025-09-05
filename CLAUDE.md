@@ -17,7 +17,12 @@ CHANGELOG.md exists in the context/ dir. This dir should be used for any referen
    - **Changes made** (files touched, functions added/modified, noteworthy diffs).
    - **Open questions / blockers** and **Next actions**.
 2. **Rotate to the last 10 entries** (keep the 10 most recent; delete older entries from the file so context stays small).
-3. If **substantial changes** were made (see “Commit Discipline”), run a commit.
+3. If **substantial changes** were made (see "Commit Discipline"), run a commit.
+
+### Testing & Development
+- **NEVER run `npm run dev` or development servers.** The user will handle all testing and server execution.
+- **DO NOT** automatically start development processes or check server status.
+- Focus on code changes only; user manages their own development environment.
 
 ---
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { PdfViewer } from './PdfViewer';
+import { PdfViewer } from '../pdf/PdfViewer';
 import { apiClient } from '../services/api';
 
 interface EtoRunPdfData {

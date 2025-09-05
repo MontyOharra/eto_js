@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useRef, useEffect, useCallback } from "react";
-import { ModuleSelectionPane } from "./_components/ModuleSelectionPane";
-import { ExtractedDataModuleComponent } from "./_components/ExtractedDataModuleComponent";
-import { NewGraphModuleComponent } from "./_components/NewGraphModuleComponent";
+import { ModuleSelectionPane } from "../../components/transformation-pipeline/ui/ModuleSelectionPane";
+import { ExtractedDataModuleComponent } from "../../components/transformation-pipeline/modules/ExtractedDataModuleComponent";
+import { GraphModule } from "../../components/transformation-pipeline/modules/GraphModule";
 import { BaseModuleTemplate } from "../../types/modules";
 import { useTransformationModules } from "../../hooks/useTransformationModules";
 import { analyzePipeline, executeModule } from "../../services/transformationPipelineApi";
@@ -1718,7 +1718,7 @@ function TransformationPipelineGraph() {
                 
                 // Use new state-based component for all other modules
                 return (
-                  <NewGraphModuleComponent
+                  <GraphModule
                     key={placedModule.id}
                     moduleId={placedModule.id}
                     template={placedModule.template}

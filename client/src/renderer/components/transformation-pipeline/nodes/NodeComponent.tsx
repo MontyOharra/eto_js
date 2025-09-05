@@ -152,7 +152,7 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
             {canRemove && (
               <button
                 onClick={handleRemoveClick}
-                className="w-3 h-3 text-red-400 hover:text-red-300 transition-colors"
+                className="w-3 h-3 flex-shrink-0 text-red-400 hover:text-red-300 transition-colors"
                 title="Remove input"
               >
                 <svg className="w-full h-full" fill="currentColor" viewBox="0 0 20 20">
@@ -202,7 +202,7 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
             {canRemove && (
               <button
                 onClick={handleRemoveClick}
-                className="w-3 h-3 text-red-400 hover:text-red-300 transition-colors"
+                className="w-3 h-3 flex-shrink-0 text-red-400 hover:text-red-300 transition-colors"
                 title="Remove output"
               >
                 <svg className="w-full h-full" fill="currentColor" viewBox="0 0 20 20">
