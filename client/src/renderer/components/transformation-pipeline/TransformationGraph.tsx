@@ -12,7 +12,7 @@ import { InputOutputDefinerComponent } from './module-builder/InputOutputDefiner
 interface NodeState {
   id: string;
   name: string;
-  type: 'string' | 'number' | 'boolean' | 'datetime';
+  type: 'string' | 'number' | 'boolean' | 'datetime' | 'variant';
   description: string;
   required: boolean;
 }
@@ -114,6 +114,7 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
       case 'number': return '#EF4444'; // Red  
       case 'boolean': return '#10B981'; // Green
       case 'datetime': return '#8B5CF6'; // Purple
+      case 'variant': return '#6B7280'; // Gray (accepts any type)
       default: return '#6B7280'; // Gray
     }
   };
@@ -467,7 +468,7 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
   };
 
   // Handle node type change
-  const handleNodeTypeChange = (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number, newType: 'string' | 'number' | 'boolean' | 'datetime') => {
+  const handleNodeTypeChange = (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number, newType: 'string' | 'number' | 'boolean' | 'datetime' | 'variant') => {
     // Check if the node can change type
     if (!canNodeChangeType(moduleId, nodeType, nodeIndex)) {
       return;
@@ -485,8 +486,15 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
           index === nodeIndex ? { ...node, type: newType } : node
         );
         
+        // For input/output definers, also update the data_type config
+        let updatedConfig = module.config;
+        if (module.template.category === 'Module Definers') {
+          updatedConfig = { ...module.config, data_type: newType };
+        }
+
         return {
           ...module,
+          config: updatedConfig,
           nodes: {
             ...module.nodes,
             [nodeType === 'input' ? 'inputs' : 'outputs']: updatedNodes
@@ -1054,6 +1062,26 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
         if (module.id === moduleId) {
           const updatedModule = { ...module, config };
           
+          // For input/output definers, sync node type with data_type config
+          if (module.template.category === 'Module Definers' && config.data_type) {
+            const newType = config.data_type as 'string' | 'number' | 'boolean' | 'datetime' | 'variant';
+            
+            // Update the single node's type
+            if (module.nodes.inputs.length > 0) {
+              // Output definer (has input)
+              updatedModule.nodes = {
+                ...module.nodes,
+                inputs: module.nodes.inputs.map(node => ({ ...node, type: newType }))
+              };
+            } else if (module.nodes.outputs.length > 0) {
+              // Input definer (has output) 
+              updatedModule.nodes = {
+                ...module.nodes,
+                outputs: module.nodes.outputs.map(node => ({ ...node, type: newType }))
+              };
+            }
+          }
+          
           // If module has generateNodes, update node state
           if (module.template.generateNodes) {
             const generated = module.template.generateNodes(config);
@@ -1268,28 +1296,39 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
       const dropX = (e.clientX - canvasRect.left - panOffset.x) / zoom;
       const dropY = (e.clientY - canvasRect.top - panOffset.y) / zoom;
       
-      // Handle Input/Output Definers (only for custom module builder)
+      // Handle Input/Output Definers as regular modules (only for custom module builder)
       if (enableInputOutputDefiners && (data.type === 'input_definer' || data.type === 'output_definer')) {
-        const newDefiner = {
-          id: `${data.type}_${Date.now()}`,
-          name: '',
-          description: '',
-          type: 'string' as const,
-          position: { x: dropX, y: dropY },
-          ...(data.type === 'input_definer' && {
-            required: false,
-            defaultValue: undefined
-          })
+        // Transform definer data into module template format
+        const moduleTemplate: BaseModuleTemplate = {
+          id: data.id,
+          name: data.name,
+          description: data.type === 'input_definer' ? 'Define an input for your custom module' : 'Define an output for your custom module',
+          category: 'Module Definers',
+          color: data.type === 'input_definer' ? '#FFFFFF' : '#000000',
+          inputs: data.type === 'input_definer' ? [] : [{ name: 'Value', type: 'variant', description: 'Input value', required: true }],
+          outputs: data.type === 'input_definer' ? [{ name: 'Value', type: 'variant', description: 'Output value', required: true }] : [],
+          config: [
+            {
+              name: 'field_name',
+              type: 'text',
+              description: 'Field Name',
+              required: true,
+              defaultValue: data.type === 'input_definer' ? 'input_name' : 'output_name',
+              placeholder: 'Enter field name'
+            },
+            {
+              name: 'data_type',
+              type: 'select',
+              description: 'Data Type',
+              required: true,
+              defaultValue: 'string',
+              options: ['string', 'number', 'boolean', 'datetime', 'variant']
+            }
+          ]
         };
         
-        if (data.type === 'input_definer') {
-          const updatedInputs = [...inputDefiners, newDefiner as InputDefiner];
-          onInputDefinersChange?.(updatedInputs);
-        } else {
-          const updatedOutputs = [...outputDefiners, newDefiner as OutputDefiner];
-          onOutputDefinersChange?.(updatedOutputs);
-        }
-        return;
+        // Process as regular module
+        data = moduleTemplate;
       }
       
       // Handle regular module placement
@@ -1371,70 +1410,6 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
           canChangeType={canNodeChangeType}
         />
 
-        {/* Input/Output Definers - For custom module builder only */}
-        {enableInputOutputDefiners && (
-          <>
-            {/* Input Definers */}
-            {inputDefiners.map(definer => (
-              <div
-                key={definer.id}
-                style={{
-                  position: 'absolute',
-                  left: definer.position.x,
-                  top: definer.position.y,
-                  zIndex: 100
-                }}
-              >
-                <InputOutputDefinerComponent
-                  definer={definer}
-                  isSelected={selectedDefinerId === definer.id}
-                  onSelect={() => setSelectedDefinerId(definer.id)}
-                  onUpdate={(updatedDefiner) => {
-                    const updatedInputs = inputDefiners.map(d => d.id === updatedDefiner.id ? updatedDefiner as InputDefiner : d);
-                    onInputDefinersChange?.(updatedInputs);
-                  }}
-                  onDelete={() => {
-                    const updatedInputs = inputDefiners.filter(d => d.id !== definer.id);
-                    onInputDefinersChange?.(updatedInputs);
-                    if (selectedDefinerId === definer.id) {
-                      setSelectedDefinerId(null);
-                    }
-                  }}
-                />
-              </div>
-            ))}
-
-            {/* Output Definers */}
-            {outputDefiners.map(definer => (
-              <div
-                key={definer.id}
-                style={{
-                  position: 'absolute',
-                  left: definer.position.x,
-                  top: definer.position.y,
-                  zIndex: 100
-                }}
-              >
-                <InputOutputDefinerComponent
-                  definer={definer}
-                  isSelected={selectedDefinerId === definer.id}
-                  onSelect={() => setSelectedDefinerId(definer.id)}
-                  onUpdate={(updatedDefiner) => {
-                    const updatedOutputs = outputDefiners.map(d => d.id === updatedDefiner.id ? updatedDefiner as OutputDefiner : d);
-                    onOutputDefinersChange?.(updatedOutputs);
-                  }}
-                  onDelete={() => {
-                    const updatedOutputs = outputDefiners.filter(d => d.id !== definer.id);
-                    onOutputDefinersChange?.(updatedOutputs);
-                    if (selectedDefinerId === definer.id) {
-                      setSelectedDefinerId(null);
-                    }
-                  }}
-                />
-              </div>
-            ))}
-          </>
-        )}
       </GraphCanvas>
 
       {/* Overlay Components - Above everything */}

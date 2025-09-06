@@ -90,9 +90,26 @@ export const CustomModuleBuilder: React.FC<CustomModuleBuilderProps> = ({
   ];
 
   const ioDefinerTemplates: IODefinerTemplate[] = [
-    { id: 'input_definer', name: 'Input Definer', type: 'input', color: '#3B82F6', icon: 'input' },
-    { id: 'output_definer', name: 'Output Definer', type: 'output', color: '#10B981', icon: 'output' }
+    { id: 'input_definer', name: 'Input Definer', type: 'input', color: '#FFFFFF', icon: 'input' },
+    { id: 'output_definer', name: 'Output Definer', type: 'output', color: '#000000', icon: 'output' }
   ];
+
+  // Helper function to determine if a color is light or dark
+  const isLightColor = (hexColor: string): boolean => {
+    // Remove # if present
+    const color = hexColor.replace('#', '');
+    
+    // Parse RGB values
+    const r = parseInt(color.substring(0, 2), 16);
+    const g = parseInt(color.substring(2, 4), 16);
+    const b = parseInt(color.substring(4, 6), 16);
+    
+    // Calculate luminance using relative luminance formula
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    
+    // Return true if light (luminance > 0.5)
+    return luminance > 0.5;
+  };
 
 
   const renderDesignTab = () => (
@@ -118,7 +135,43 @@ export const CustomModuleBuilder: React.FC<CustomModuleBuilderProps> = ({
                   key={template.id}
                   draggable
                   onDragStart={(e) => {
-                    e.dataTransfer.setData('text/plain', JSON.stringify({ type: template.type + '_definer', ...template }));
+                    e.dataTransfer.setData('text/plain', JSON.stringify({ ...template, type: template.type + '_definer' }));
+                    
+                    // Create drag preview
+                    const dragPreview = document.createElement('div');
+                    const textColor = isLightColor(template.color) ? '#000000' : '#FFFFFF';
+                    
+                    dragPreview.style.width = '200px';
+                    dragPreview.style.height = '40px';
+                    dragPreview.style.backgroundColor = template.color;
+                    dragPreview.style.borderRadius = '8px';
+                    dragPreview.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.3)';
+                    dragPreview.style.position = 'absolute';
+                    dragPreview.style.top = '-1000px';
+                    dragPreview.style.left = '-1000px';
+                    dragPreview.style.display = 'flex';
+                    dragPreview.style.alignItems = 'center';
+                    dragPreview.style.justifyContent = 'center';
+                    dragPreview.style.padding = '0 16px';
+                    dragPreview.style.color = textColor;
+                    dragPreview.style.fontWeight = '600';
+                    dragPreview.style.fontSize = '14px';
+                    dragPreview.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+                    dragPreview.style.textAlign = 'center';
+                    dragPreview.style.userSelect = 'none';
+                    dragPreview.style.pointerEvents = 'none';
+                    dragPreview.style.opacity = '1';
+                    dragPreview.style.filter = 'none';
+                    dragPreview.textContent = template.name;
+                    
+                    document.body.appendChild(dragPreview);
+                    e.dataTransfer.setDragImage(dragPreview, 100, 20);
+                    
+                    setTimeout(() => {
+                      if (document.body.contains(dragPreview)) {
+                        document.body.removeChild(dragPreview);
+                      }
+                    }, 0);
                   }}
                   className="bg-gray-900 rounded-lg p-3 cursor-move hover:bg-gray-700 transition-colors border border-gray-600"
                 >
@@ -153,6 +206,42 @@ export const CustomModuleBuilder: React.FC<CustomModuleBuilderProps> = ({
                     draggable
                     onDragStart={(e) => {
                       e.dataTransfer.setData('application/json', JSON.stringify(module));
+                      
+                      // Create drag preview
+                      const dragPreview = document.createElement('div');
+                      const textColor = isLightColor(module.color) ? '#000000' : '#FFFFFF';
+                      
+                      dragPreview.style.width = '200px';
+                      dragPreview.style.height = '40px';
+                      dragPreview.style.backgroundColor = module.color;
+                      dragPreview.style.borderRadius = '8px';
+                      dragPreview.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.3)';
+                      dragPreview.style.position = 'absolute';
+                      dragPreview.style.top = '-1000px';
+                      dragPreview.style.left = '-1000px';
+                      dragPreview.style.display = 'flex';
+                      dragPreview.style.alignItems = 'center';
+                      dragPreview.style.justifyContent = 'center';
+                      dragPreview.style.padding = '0 16px';
+                      dragPreview.style.color = textColor;
+                      dragPreview.style.fontWeight = '600';
+                      dragPreview.style.fontSize = '14px';
+                      dragPreview.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+                      dragPreview.style.textAlign = 'center';
+                      dragPreview.style.userSelect = 'none';
+                      dragPreview.style.pointerEvents = 'none';
+                      dragPreview.style.opacity = '1';
+                      dragPreview.style.filter = 'none';
+                      dragPreview.textContent = module.name;
+                      
+                      document.body.appendChild(dragPreview);
+                      e.dataTransfer.setDragImage(dragPreview, 100, 20);
+                      
+                      setTimeout(() => {
+                        if (document.body.contains(dragPreview)) {
+                          document.body.removeChild(dragPreview);
+                        }
+                      }, 0);
                     }}
                     className="bg-gray-900 rounded-lg p-3 cursor-move hover:bg-gray-700 transition-colors border border-gray-600"
                   >
