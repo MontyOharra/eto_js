@@ -97,7 +97,7 @@ export interface ApiError {
 }
 
 // API Configuration
-const API_BASE_URL = 'http://localhost:8080';
+const API_BASE_URL = 'http://localhost:8090';
 
 class ApiClient {
   private baseUrl: string;
@@ -456,6 +456,64 @@ class ApiClient {
     error?: string;
   }> {
     return this.fetchApi(`/api/templates/${templateId}/view`);
+  }
+
+  /**
+   * Analyze transformation pipeline to generate execution steps
+   */
+  async analyzePipeline(pipelineData: {
+    modules: Array<{
+      id: string;
+      template: any;
+      position: { x: number; y: number };
+      config: Record<string, any>;
+      nodes: {
+        inputs: Array<{
+          id: string;
+          name: string;
+          type: string;
+          description: string;
+          required: boolean;
+        }>;
+        outputs: Array<{
+          id: string;
+          name: string;
+          type: string;
+          description: string;
+          required: boolean;
+        }>;
+      };
+    }>;
+    connections: Array<{
+      id: string;
+      fromModuleId: string;
+      fromOutputIndex: number;
+      toModuleId: string;
+      toInputIndex: number;
+    }>;
+  }): Promise<{
+    success: boolean;
+    execution_steps: Array<{
+      step: number;
+      module_id: string;
+      module_name: string;
+      operation: string;
+      inputs: string[];
+      outputs: string[];
+      dependencies: string[];
+    }>;
+    pipeline_info: {
+      total_modules: number;
+      input_definers: number;
+      output_definers: number;
+      processing_modules: number;
+    };
+    error?: string;
+  }> {
+    return this.fetchApi('/api/pipeline/analyze', {
+      method: 'POST',
+      body: JSON.stringify(pipelineData),
+    });
   }
 
   /**

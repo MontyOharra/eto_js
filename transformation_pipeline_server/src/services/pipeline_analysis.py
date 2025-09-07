@@ -78,30 +78,53 @@ class PipelineAnalyzer:
             template_ids = [m.get('templateId', 'NO_TEMPLATE_ID') for m in modules]
             self.logger.info(f"All template IDs: {template_ids}")
             
-            # Separate modules by type
-            input_modules = [m for m in modules if m.get('templateId', '').startswith('extracted_')]  # Changed from 'mock_extracted_'
-            output_modules = [m for m in modules if m.get('templateId') in ['order_generation', 'mock_order_generation']]
-            processing_modules = [m for m in modules if m not in input_modules and m not in output_modules]
+            # Separate modules by type - more flexible identification
+            input_modules = []
+            output_modules = []
+            processing_modules = []
+            
+            for module in modules:
+                template_id = module.get('templateId', '')
+                template_name = module.get('template', {}).get('name', '').lower()
+                
+                # Identify input modules (various patterns)
+                if (template_id.startswith('input_') or 
+                    template_id.startswith('extracted_') or 
+                    'input' in template_name):
+                    input_modules.append(module)
+                # Identify output modules (various patterns)  
+                elif (template_id in ['order_generation', 'mock_order_generation'] or
+                      template_id.startswith('output_') or
+                      'output' in template_name or
+                      'order' in template_name):
+                    output_modules.append(module)
+                # Everything else is a processing module
+                else:
+                    processing_modules.append(module)
             
             self.logger.info(f"Input modules: {[m.get('templateId') for m in input_modules]}")
             self.logger.info(f"Processing modules: {[m.get('templateId') for m in processing_modules]}")
             self.logger.info(f"Output modules: {[m.get('templateId') for m in output_modules]}")
             self.logger.info(f"Found {len(input_modules)} input modules, {len(processing_modules)} processing modules, {len(output_modules)} output modules")
             
-            if not output_modules:
-                raise PipelineAnalysisError("No output module (order generation) found in pipeline")
+            # NOTE: Input/Output modules are optional for analysis - they're used during execution
+            # Analysis focuses on transformation steps between processing modules
             
             # Simple field mapping system (no unique IDs)
             field_mapper = SimpleFieldMapper()
             
-            # Build transformation steps using user field names directly
-            transformation_steps = self._build_transformation_steps_simple(
-                processing_modules, connections, input_modules, output_modules, field_mapper
-            )
+            # Build transformation steps for processing modules
+            if processing_modules:
+                transformation_steps = self._build_transformation_steps_simple(
+                    processing_modules, connections, input_modules, output_modules, field_mapper
+                )
+            else:
+                transformation_steps = []
+                self.logger.info("No processing modules found - pipeline contains only input/output configuration")
             
-            # Extract input and output field mappings (simple names)
-            input_field_mapping = self._extract_input_fields_simple(input_modules, connections, field_mapper)
-            output_field_mapping = self._extract_output_fields_simple(output_modules, connections, processing_modules, input_modules, field_mapper)
+            # Extract input and output field mappings (simple names) - optional for analysis
+            input_field_mapping = self._extract_input_fields_simple(input_modules, connections, field_mapper) if input_modules else {}
+            output_field_mapping = self._extract_output_fields_simple(output_modules, connections, processing_modules, input_modules, field_mapper) if output_modules else {}
             
             return {
                 'success': True,

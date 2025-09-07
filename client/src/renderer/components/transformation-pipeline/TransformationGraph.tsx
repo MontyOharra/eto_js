@@ -7,12 +7,13 @@ import { ModuleLayer } from './layers/ModuleLayer';
 import { ConnectionLayer } from './layers/ConnectionLayer';
 import { GraphOverlays } from './overlays/GraphOverlays';
 import { InputOutputDefinerComponent } from './module-builder/InputOutputDefinerComponent';
+import { apiClient } from '../../services/api';
 
 // Types (extracted from original file)
 interface NodeState {
   id: string;
   name: string;
-  type: 'string' | 'number' | 'boolean' | 'datetime' | 'variant';
+  type: 'string' | 'number' | 'boolean' | 'datetime';
   description: string;
   required: boolean;
 }
@@ -114,7 +115,6 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
       case 'number': return '#EF4444'; // Red  
       case 'boolean': return '#10B981'; // Green
       case 'datetime': return '#8B5CF6'; // Purple
-      case 'variant': return '#6B7280'; // Gray (accepts any type)
       default: return '#6B7280'; // Gray
     }
   };
@@ -211,6 +211,14 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
     if (!getNodeTypeConfigAllowed(moduleId, nodeType)) {
       return false;
     }
+    
+    // Check if this is an I/O definer - they always allow type changes
+    const module = placedModules.find(m => m.id === moduleId);
+    const isIODefiner = module?.template.category === 'Module Definers';
+    
+    if (isIODefiner) {
+      return true; // I/O definers can always change type
+    }
 
     if (nodeType === 'input') {
       // Check if input is connected
@@ -220,6 +228,14 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
       
       if (!connection) {
         return true; // No connection, can change type
+      }
+      
+      // Check if the connected output is from an I/O definer or allows type configuration
+      const connectedModule = placedModules.find(m => m.id === connection.fromModuleId);
+      const isConnectedToIODefiner = connectedModule?.template.category === 'Module Definers';
+      
+      if (isConnectedToIODefiner) {
+        return true; // Connected to I/O definer, can change type
       }
       
       // Check if the connected output allows type configuration
@@ -234,10 +250,17 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
         return true; // No connections, can change type
       }
       
-      // All connected inputs must allow type configuration
-      return outputConnections.every(connection => 
-        getNodeTypeConfigAllowed(connection.toModuleId, 'input')
-      );
+      // All connected inputs must allow type configuration OR be I/O definers
+      return outputConnections.every(connection => {
+        const connectedModule = placedModules.find(m => m.id === connection.toModuleId);
+        const isConnectedToIODefiner = connectedModule?.template.category === 'Module Definers';
+        
+        if (isConnectedToIODefiner) {
+          return true; // Connected to I/O definer, can change type
+        }
+        
+        return getNodeTypeConfigAllowed(connection.toModuleId, 'input');
+      });
     }
   };
 
@@ -468,7 +491,7 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
   };
 
   // Handle node type change
-  const handleNodeTypeChange = (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number, newType: 'string' | 'number' | 'boolean' | 'datetime' | 'variant') => {
+  const handleNodeTypeChange = (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number, newType: 'string' | 'number' | 'boolean' | 'datetime') => {
     // Check if the node can change type
     if (!canNodeChangeType(moduleId, nodeType, nodeIndex)) {
       return;
@@ -502,38 +525,48 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
         };
       });
 
-      // Synchronize connected nodes if they allow type configuration
+      // Synchronize connected nodes if they allow type configuration or are I/O definers
       if (nodeType === 'input') {
-        // Find connected output and update its type if it allows configuration
+        // Find connected output and update its type if it allows configuration or is an I/O definer
         const connection = connections.find(conn => 
           conn.toModuleId === moduleId && conn.toInputIndex === nodeIndex
         );
         
-        if (connection && getNodeTypeConfigAllowed(connection.fromModuleId, 'output')) {
-          updatedModules = updatedModules.map(module => {
-            if (module.id !== connection.fromModuleId) return module;
-            
-            const updatedOutputs = module.nodes.outputs.map((node, index) => 
-              index === connection.fromOutputIndex ? { ...node, type: newType } : node
-            );
-            
-            return {
-              ...module,
-              nodes: {
-                ...module.nodes,
-                outputs: updatedOutputs
-              }
-            };
-          });
+        if (connection) {
+          const connectedModule = updatedModules.find(m => m.id === connection.fromModuleId);
+          const isConnectedIODefiner = connectedModule?.template.category === 'Module Definers';
+          const allowsTypeConfig = getNodeTypeConfigAllowed(connection.fromModuleId, 'output');
+          
+          if (isConnectedIODefiner || allowsTypeConfig) {
+            updatedModules = updatedModules.map(module => {
+              if (module.id !== connection.fromModuleId) return module;
+              
+              const updatedOutputs = module.nodes.outputs.map((node, index) => 
+                index === connection.fromOutputIndex ? { ...node, type: newType } : node
+              );
+              
+              return {
+                ...module,
+                nodes: {
+                  ...module.nodes,
+                  outputs: updatedOutputs
+                }
+              };
+            });
+          }
         }
       } else {
-        // Find all connected inputs and update their types if they allow configuration
+        // Find all connected inputs and update their types if they allow configuration or are I/O definers
         const outputConnections = connections.filter(conn => 
           conn.fromModuleId === moduleId && conn.fromOutputIndex === nodeIndex
         );
         
         outputConnections.forEach(connection => {
-          if (getNodeTypeConfigAllowed(connection.toModuleId, 'input')) {
+          const connectedModule = updatedModules.find(m => m.id === connection.toModuleId);
+          const isConnectedIODefiner = connectedModule?.template.category === 'Module Definers';
+          const allowsTypeConfig = getNodeTypeConfigAllowed(connection.toModuleId, 'input');
+          
+          if (isConnectedIODefiner || allowsTypeConfig) {
             updatedModules = updatedModules.map(module => {
               if (module.id !== connection.toModuleId) return module;
               
@@ -603,6 +636,41 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
 
   // Handle connection deletion
   const handleConnectionDelete = (connectionId: string) => {
+    // Find the connection being deleted to check if it involves I/O definers
+    const connectionToDelete = connections.find(conn => conn.id === connectionId);
+    
+    if (connectionToDelete) {
+      const fromModule = placedModules.find(m => m.id === connectionToDelete.fromModuleId);
+      const toModule = placedModules.find(m => m.id === connectionToDelete.toModuleId);
+      const isFromIODefiner = fromModule?.template.category === 'Module Definers';
+      const isToIODefiner = toModule?.template.category === 'Module Definers';
+      
+      // Update I/O definer types back to default when connection is removed
+      if (isFromIODefiner || isToIODefiner) {
+        setPlacedModules(prevModules => {
+          return prevModules.map(module => {
+            if (isFromIODefiner && module.id === connectionToDelete.fromModuleId) {
+              // Reset output node type to string
+              const updatedOutputs = module.nodes.outputs.map((node, idx) => 
+                idx === connectionToDelete.fromOutputIndex ? { ...node, type: 'string' } : node
+              );
+              return { ...module, nodes: { ...module.nodes, outputs: updatedOutputs } };
+            }
+            
+            if (isToIODefiner && module.id === connectionToDelete.toModuleId) {
+              // Reset input node type to string
+              const updatedInputs = module.nodes.inputs.map((node, idx) => 
+                idx === connectionToDelete.toInputIndex ? { ...node, type: 'string' } : node
+              );
+              return { ...module, nodes: { ...module.nodes, inputs: updatedInputs } };
+            }
+            
+            return module;
+          });
+        });
+      }
+    }
+    
     setConnections(prev => prev.filter(connection => connection.id !== connectionId));
     setSelectedConnectionId(null);
   };
@@ -1011,6 +1079,87 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
     };
   }, [isDraggingModule, draggedModuleId, moduleDragOffset, isDragging, dragStart, dragStartOffset, panOffset, zoom]);
 
+  // Handle pipeline analysis
+  const handleAnalyzePipeline = async () => {
+    try {
+      console.log('Starting pipeline analysis...');
+      
+      // Prepare pipeline data for backend analysis
+      const pipelineData = {
+        modules: placedModules.map(module => ({
+          id: module.id,
+          templateId: module.template.id,
+          template: {
+            id: module.template.id,
+            name: module.template.name,
+            description: module.template.description,
+            category: module.template.category,
+            color: module.template.color
+          },
+          position: module.position,
+          config: module.config,
+          nodes: {
+            inputs: module.nodes.inputs.map(input => ({
+              id: input.id,
+              name: input.name,
+              type: input.type,
+              description: input.description,
+              required: input.required
+            })),
+            outputs: module.nodes.outputs.map(output => ({
+              id: output.id,
+              name: output.name,
+              type: output.type,
+              description: output.description,
+              required: output.required || false
+            }))
+          }
+        })),
+        connections: connections.map(conn => ({
+          id: conn.id,
+          from: {
+            moduleId: conn.fromModuleId,
+            outputIndex: conn.fromOutputIndex
+          },
+          to: {
+            moduleId: conn.toModuleId,
+            inputIndex: conn.toInputIndex
+          }
+        }))
+      };
+      
+      console.log('Pipeline data prepared:', pipelineData);
+      
+      // Call backend analyzer
+      const result = await apiClient.analyzePipeline(pipelineData);
+      
+      console.log('Pipeline analysis result:', result);
+      
+      if (result.success) {
+        console.log('\n=== PIPELINE TRANSFORMATION STEPS ===');
+        if (result.transformation_steps && result.transformation_steps.length > 0) {
+          result.transformation_steps.forEach(step => {
+            console.log(`Step ${step.step_number}: ${step.template_id}`);
+            console.log(`  Input: ${step.input_field} -> Output: ${step.output_field}`);
+            console.log(`  Config: ${JSON.stringify(step.config)}`);
+            console.log('');
+          });
+        } else {
+          console.log('No transformation steps found');
+        }
+        
+        console.log('Field Mappings:', result.field_mappings);
+        console.log('Total Steps:', result.total_steps);
+      } else {
+        console.error('Pipeline analysis failed:', result.error);
+      }
+    } catch (error) {
+      console.error('Error analyzing pipeline:', error);
+      // Show error to user (you could add a toast notification here)
+      alert(`Error analyzing pipeline: ${error.message}`);
+    }
+  };
+
   // Handle module deletion
   const handleModuleDelete = (moduleId: string) => () => {
     setPlacedModules(prev => prev.filter(module => module.id !== moduleId));
@@ -1064,7 +1213,7 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
           
           // For input/output definers, sync node type with data_type config
           if (module.template.category === 'Module Definers' && config.data_type) {
-            const newType = config.data_type as 'string' | 'number' | 'boolean' | 'datetime' | 'variant';
+            const newType = config.data_type as 'string' | 'number' | 'boolean' | 'datetime';
             
             // Update the single node's type
             if (module.nodes.inputs.length > 0) {
@@ -1197,8 +1346,13 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
         const startNodeType = getNodeType(start.moduleId, start.type, start.index);
         const endNodeType = getNodeType(moduleId, nodeType, nodeIndex);
         
-        // Only allow connections between nodes of the same type
-        if (startNodeType === endNodeType) {
+        // Allow connections between nodes of the same type, or if either node is an I/O definer
+        const startModule = placedModules.find(m => m.id === start.moduleId);
+        const endModule = placedModules.find(m => m.id === moduleId);
+        const isStartIODefiner = startModule?.template.category === 'Module Definers';
+        const isEndIODefiner = endModule?.template.category === 'Module Definers';
+        
+        if (startNodeType === endNodeType || isStartIODefiner || isEndIODefiner) {
           const newConnection: NodeConnection = {
             id: `${Date.now()}`,
             fromModuleId: start.type === 'output' ? start.moduleId : moduleId,
@@ -1238,6 +1392,45 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
               // Add the new connection
               return [...updatedConnections, newConnection];
             });
+            
+            // Update I/O definer types based on connection
+            const startModule = placedModules.find(m => m.id === start.moduleId);
+            const endModule = placedModules.find(m => m.id === moduleId);
+            const isStartIODefiner = startModule?.template.category === 'Module Definers';
+            const isEndIODefiner = endModule?.template.category === 'Module Definers';
+            
+            if (isStartIODefiner || isEndIODefiner) {
+              setPlacedModules(prevModules => {
+                return prevModules.map(module => {
+                  // Update I/O definer types to match connected node types
+                  if (isStartIODefiner && module.id === start.moduleId) {
+                    const connectedType = getNodeType(moduleId, nodeType, nodeIndex);
+                    const nodeToUpdate = start.type === 'input' 
+                      ? { inputs: module.nodes.inputs.map((node, idx) => 
+                          idx === start.index ? { ...node, type: connectedType } : node
+                        ), outputs: module.nodes.outputs }
+                      : { inputs: module.nodes.inputs, outputs: module.nodes.outputs.map((node, idx) => 
+                          idx === start.index ? { ...node, type: connectedType } : node
+                        ) };
+                    return { ...module, nodes: nodeToUpdate };
+                  }
+                  
+                  if (isEndIODefiner && module.id === moduleId) {
+                    const connectedType = getNodeType(start.moduleId, start.type, start.index);
+                    const nodeToUpdate = nodeType === 'input'
+                      ? { inputs: module.nodes.inputs.map((node, idx) => 
+                          idx === nodeIndex ? { ...node, type: connectedType } : node
+                        ), outputs: module.nodes.outputs }
+                      : { inputs: module.nodes.inputs, outputs: module.nodes.outputs.map((node, idx) => 
+                          idx === nodeIndex ? { ...node, type: connectedType } : node
+                        ) };
+                    return { ...module, nodes: nodeToUpdate };
+                  }
+                  
+                  return module;
+                });
+              });
+            }
           }
         }
       }
@@ -1305,26 +1498,9 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
           description: data.type === 'input_definer' ? 'Define an input for your custom module' : 'Define an output for your custom module',
           category: 'Module Definers',
           color: data.type === 'input_definer' ? '#FFFFFF' : '#000000',
-          inputs: data.type === 'input_definer' ? [] : [{ name: 'Value', type: 'variant', description: 'Input value', required: true }],
-          outputs: data.type === 'input_definer' ? [{ name: 'Value', type: 'variant', description: 'Output value', required: true }] : [],
-          config: [
-            {
-              name: 'field_name',
-              type: 'text',
-              description: 'Field Name',
-              required: true,
-              defaultValue: data.type === 'input_definer' ? 'input_name' : 'output_name',
-              placeholder: 'Enter field name'
-            },
-            {
-              name: 'data_type',
-              type: 'select',
-              description: 'Data Type',
-              required: true,
-              defaultValue: 'string',
-              options: ['string', 'number', 'boolean', 'datetime', 'variant']
-            }
-          ]
+          inputs: data.type === 'input_definer' ? [] : [{ name: 'Value', type: 'string', description: 'Input value', required: true }],
+          outputs: data.type === 'input_definer' ? [{ name: 'Value', type: 'string', description: 'Output value', required: true }] : [],
+          config: [] // No config needed - field name and type are handled inline
         };
         
         // Process as regular module
@@ -1424,6 +1600,7 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
         onZoomOut={zoomOut}
         onResetZoom={resetZoom}
         onConnectionDelete={handleConnectionDelete}
+        onAnalyzePipeline={handleAnalyzePipeline}
         getTypeColor={getTypeColor}
       />
     </div>
