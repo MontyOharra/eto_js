@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { PdfViewer } from '../pdf/PdfViewer';
-import { apiClient } from '../services/api';
+import { apiClient } from '../../services/api';
 
 interface ExtractionResultViewerModalProps {
   runId: string | null;

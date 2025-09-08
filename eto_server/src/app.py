@@ -26,10 +26,10 @@ def create_app(config_name: str = 'development') -> Flask:
     """
     app = Flask(__name__)
     
-    # Configure CORS
+    # Configure CORS - Allow all origins for development
     CORS(app, resources={
-        r"/api/*": {
-            "origins": ["http://localhost:3000", "http://127.0.0.1:3000"],
+        r"/*": {
+            "origins": "*",
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization"]
         }

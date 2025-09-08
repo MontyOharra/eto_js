@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { TemplateSummary } from "../types/eto";
+import { TemplateSummary } from "../../types/eto";
 import { TemplateCard } from "./TemplateCard";
 
 interface TemplatesListProps {

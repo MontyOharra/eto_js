@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { EtoRunSummary } from "../types/eto";
+import { EtoRunSummary } from "../../types/eto";
 import { EtoRunRow } from "./EtoRunRow";
 
 interface EtoRunsTableProps {

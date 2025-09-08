@@ -5,11 +5,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { BaseModuleTemplate } from '../types/modules';
 import { fetchBaseModules } from '../services/transformationPipelineApi';
-import { testModules } from '../data/testModules';
 
 export interface UseTransformationModulesResult {
   modules: BaseModuleTemplate[];
-  mockModules: BaseModuleTemplate[];
   backendModules: BaseModuleTemplate[];
   isLoading: boolean;
   error: string | null;
@@ -22,7 +20,6 @@ export interface UseTransformationModulesResult {
  */
 export function useTransformationModules(): UseTransformationModulesResult {
   const [backendModules, setBackendModules] = useState<BaseModuleTemplate[]>([]);
-  const [mockModules] = useState<BaseModuleTemplate[]>(testModules);
   const [modules, setModules] = useState<BaseModuleTemplate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +33,7 @@ export function useTransformationModules(): UseTransformationModulesResult {
       const fetchedBackendModules = await fetchBaseModules();
       setBackendModules(fetchedBackendModules);
       
-      // Use backend modules directly (no need for mock modules anymore)
+      // Use backend modules directly
       setModules(fetchedBackendModules);
       
       console.log(`Loaded ${fetchedBackendModules.length} backend modules`);
@@ -51,7 +48,7 @@ export function useTransformationModules(): UseTransformationModulesResult {
     } finally {
       setIsLoading(false);
     }
-  }, [mockModules]);
+  }, []);
 
   const refreshModules = useCallback(async () => {
     await loadModules();
@@ -70,7 +67,6 @@ export function useTransformationModules(): UseTransformationModulesResult {
 
   return {
     modules,
-    mockModules,
     backendModules,
     isLoading,
     error,

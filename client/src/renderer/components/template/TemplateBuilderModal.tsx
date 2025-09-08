@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { PdfViewer } from '../pdf/PdfViewer';
-import { apiClient } from '../services/api';
-import { EtoDataTransforms } from '../types/eto';
+import { apiClient } from '../../services/api';
+import { EtoDataTransforms } from '../../types/eto';
 
 interface TemplateBuilderModalProps {
   runId: string | null;

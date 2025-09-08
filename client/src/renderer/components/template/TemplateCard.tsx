@@ -1,4 +1,4 @@
-import { TemplateSummary, EtoDataTransforms } from "../types/eto";
+import { TemplateSummary, EtoDataTransforms } from "../../types/eto";
 
 interface TemplateCardProps {
   template: TemplateSummary;

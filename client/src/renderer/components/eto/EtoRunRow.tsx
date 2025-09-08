@@ -1,4 +1,4 @@
-import { EtoRunSummary, EtoDataTransforms } from "../types/eto";
+import { EtoRunSummary, EtoDataTransforms } from "../../types/eto";
 
 interface EtoRunRowProps {
   run: EtoRunSummary;

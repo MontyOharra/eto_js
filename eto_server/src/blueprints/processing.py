@@ -13,13 +13,14 @@ def get_eto_runs():
     """Get ETO processing runs"""
     try:
         # TODO: Implement with unified database service
+        # For now, return empty but properly formatted response
         return jsonify({
-            'success': True,
-            'data': []
+            'eto_runs': [],
+            'total': 0
         })
     except Exception as e:
         logger.error(f"Error fetching ETO runs: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+        return jsonify({'error': str(e)}), 500
 
 @processing_bp.route('/runs/<int:run_id>', methods=['GET'])
 def get_eto_run(run_id: int):
