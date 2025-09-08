@@ -9,7 +9,7 @@ function TransformationPipelineLayout() {
   const location = useLocation();
   
   const tabs = [
-    { id: 'graph', label: 'Graph Testing', path: '/transformation_pipeline/graph' },
+    { id: 'graph', label: 'Pipeline Designer', path: '/transformation_pipeline/graph' },
     { id: 'modules', label: 'Module Management', path: '/transformation_pipeline/modules' }
   ];
   

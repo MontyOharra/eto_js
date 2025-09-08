@@ -36,15 +36,8 @@ export function useTransformationModules(): UseTransformationModulesResult {
       const fetchedBackendModules = await fetchBaseModules();
       setBackendModules(fetchedBackendModules);
       
-      // Use backend modules as the primary source (no mock modules for extraction/order generation)
-      const backendModulesWithSource = fetchedBackendModules.map(module => ({
-        ...module,
-        id: `backend_${module.id}`,
-        name: module.name,
-        description: module.description
-      }));
-      
-      setModules(backendModulesWithSource);
+      // Use backend modules directly (no need for mock modules anymore)
+      setModules(fetchedBackendModules);
       
       console.log(`Loaded ${fetchedBackendModules.length} backend modules`);
 

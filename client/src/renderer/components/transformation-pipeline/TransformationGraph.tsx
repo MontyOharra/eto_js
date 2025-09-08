@@ -7,7 +7,9 @@ import { ModuleLayer } from './layers/ModuleLayer';
 import { ConnectionLayer } from './layers/ConnectionLayer';
 import { GraphOverlays } from './overlays/GraphOverlays';
 import { InputOutputDefinerComponent } from './module-builder/InputOutputDefinerComponent';
+import { InputCollectionModal } from './modals/InputCollectionModal';
 import { apiClient } from '../../services/api';
+import { analyzePipelineWithSteps } from '../../services/transformationPipelineApi';
 
 // Types (extracted from original file)
 interface NodeState {
@@ -103,6 +105,15 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
   const [connections, setConnections] = useState<NodeConnection[]>([]);
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
   const [startingConnection, setStartingConnection] = useState<StartingConnection | null>(null);
+
+  // Modal state
+  const [isInputModalOpen, setIsInputModalOpen] = useState(false);
+  const [currentExecutionData, setCurrentExecutionData] = useState<{
+    processingModules: any[];
+    inputDefinitions: any[];
+    outputDefinitions: any[];
+    pipelineConnections: any[];
+  } | null>(null);
   const [currentMousePosition, setCurrentMousePosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
   // Node position tracking
@@ -1107,77 +1118,111 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
   // Handle pipeline analysis
   const handleAnalyzePipeline = async () => {
     try {
-      console.log('Starting pipeline analysis...');
+      console.log('Starting step-based pipeline analysis...');
       
-      // Prepare pipeline data for backend analysis
-      const pipelineData = {
-        modules: placedModules.map(module => ({
-          id: module.id,
-          templateId: module.template.id,
-          template: {
-            id: module.template.id,
-            name: module.template.name,
-            description: module.template.description,
-            category: module.template.category,
-            color: module.template.color
-          },
-          position: module.position,
-          config: module.config,
-          nodes: {
-            inputs: module.nodes.inputs.map(input => ({
-              id: input.id,
-              name: input.name,
-              type: input.type,
-              description: input.description,
-              required: input.required
-            })),
-            outputs: module.nodes.outputs.map(output => ({
-              id: output.id,
-              name: output.name,
-              type: output.type,
-              description: output.description,
-              required: output.required || false
-            }))
+      // Separate I/O definers from processing modules
+      const processingModules = [];
+      const inputDefinitions = [];
+      const outputDefinitions = [];
+      
+      placedModules.forEach(module => {
+        if (module.template.category === 'Module Definers') {
+          if (module.template.id === 'input_definer') {
+            inputDefinitions.push({
+              id: module.id,
+              name: module.template.name,
+              nodes: module.nodes
+            });
+          } else if (module.template.id === 'output_definer') {
+            outputDefinitions.push({
+              id: module.id,
+              name: module.template.name,
+              nodes: module.nodes
+            });
           }
-        })),
-        connections: connections.map(conn => ({
-          id: conn.id,
-          from: {
-            moduleId: conn.fromModuleId,
-            outputIndex: conn.fromOutputIndex
-          },
-          to: {
-            moduleId: conn.toModuleId,
-            inputIndex: conn.toInputIndex
-          }
-        }))
-      };
+        } else {
+          processingModules.push({
+            id: module.id,
+            templateId: module.template.id,
+            template: {
+              id: module.template.id,
+              name: module.template.name,
+              description: module.template.description,
+              category: module.template.category,
+              color: module.template.color
+            },
+            position: module.position,
+            config: module.config,
+            nodes: {
+              inputs: module.nodes.inputs.map(input => ({
+                id: input.id,
+                name: input.name,
+                type: input.type,
+                description: input.description,
+                required: input.required
+              })),
+              outputs: module.nodes.outputs.map(output => ({
+                id: output.id,
+                name: output.name,
+                type: output.type,
+                description: output.description,
+                required: output.required || false
+              }))
+            }
+          });
+        }
+      });
       
-      console.log('Pipeline data prepared:', pipelineData);
+      // Prepare connections in the new format
+      const pipelineConnections = connections.map(conn => ({
+        id: conn.id,
+        fromModuleId: conn.fromModuleId,
+        fromOutputIndex: conn.fromOutputIndex,
+        toModuleId: conn.toModuleId,
+        toInputIndex: conn.toInputIndex
+      }));
       
-      // Call backend analyzer
+      console.log(`Separated pipeline: ${processingModules.length} processing modules, ${inputDefinitions.length} inputs, ${outputDefinitions.length} outputs`);
       
-      const result = await apiClient.analyzePipeline(pipelineData);
+      // Call new step-based analyzer
+      const result = await analyzePipelineWithSteps(
+        processingModules,
+        pipelineConnections,
+        inputDefinitions,
+        outputDefinitions
+      );
       
-      console.log('Pipeline analysis result:', result);
+      console.log('Step-based pipeline analysis result:', result);
       
       if (result.success) {
-        console.log('\n=== PIPELINE TRANSFORMATION STEPS ===');
-        if (result.transformation_steps && result.transformation_steps.length > 0) {
-          result.transformation_steps.forEach(step => {
-            console.log(`Step ${step.step_number}: ${step.template_id}`);
-            console.log(`  Input: ${step.input_field} -> Output: ${step.output_field}`);
-            console.log(`  Config: ${JSON.stringify(step.config)}`);
-            console.log('');
-          });
-        } else {
-          console.log('No transformation steps found');
-        }
+        console.log('\n=== STEP-BASED PIPELINE ANALYSIS ===');
+        console.log(`Algorithm: ${result.algorithm}`);
+        console.log(`Total Steps: ${result.total_steps}`);
+        console.log(`Parallel Opportunities: ${result.parallel_opportunities}`);
+        console.log(`Input Definitions: ${result.input_count}`);
+        console.log(`Output Definitions: ${result.output_count}`);
+        console.log(`Processing Modules: ${result.processing_module_count}`);
+        console.log(`Total Entities: ${result.total_entities}`);
+        console.log('');
         
-        console.log('Field Mappings:', result.field_mappings);
-        console.log('Total Steps:', result.total_steps);
+        // Display step assignments
+        console.log('=== STEP ASSIGNMENTS ===');
+        Object.entries(result.step_assignments).forEach(([entityId, step]) => {
+          console.log(`Step ${step}: ${entityId}`);
+        });
+        console.log('');
+        
+        // Display grouped steps
+        console.log('=== EXECUTION STEPS ===');
+        Object.entries(result.steps).forEach(([stepNum, entities]) => {
+          console.log(`\nStep ${stepNum} (${entities.length} entities${entities.length > 1 ? ' - PARALLEL' : ''}):`);
+          entities.forEach(entity => {
+            console.log(`  ${entity.type.toUpperCase()}: ${entity.name} (${entity.id})`);
+          });
+        });
+        console.log('\n=== ANALYSIS COMPLETE ===');
       } else {
-        console.error('Pipeline analysis failed:', result.error);
+        console.error('Step-based pipeline analysis failed');
       }
 
       
@@ -1186,6 +1231,123 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
       // Show error to user (you could add a toast notification here)
       alert(`Error analyzing pipeline: ${error.message}`);
     }
+  };
+
+  // Handle execute pipeline - with input collection modal
+  const handleExecutePipeline = async () => {
+    try {
+      console.log('Starting step-based pipeline execution...');
+      
+      // Step 1: Prepare pipeline data (same as analyze)
+      const processingModules = [];
+      const inputDefinitions = [];
+      const outputDefinitions = [];
+      
+      placedModules.forEach(module => {
+        if (module.template.category === 'Module Definers') {
+          if (module.template.id === 'input_definer') {
+            inputDefinitions.push({
+              id: module.id,
+              name: module.template.name,
+              nodes: module.nodes
+            });
+          } else if (module.template.id === 'output_definer') {
+            outputDefinitions.push({
+              id: module.id,
+              name: module.template.name,
+              nodes: module.nodes
+            });
+          }
+        } else {
+          processingModules.push({
+            id: module.id,
+            templateId: module.template.id,
+            config: module.config,
+            position: module.position,
+            nodes: module.nodes
+          });
+        }
+      });
+      
+      const pipelineConnections = connections.map(conn => ({
+        id: conn.id,
+        fromModuleId: conn.fromModuleId,
+        fromOutputIndex: conn.fromOutputIndex,
+        toModuleId: conn.toModuleId,
+        toInputIndex: conn.toInputIndex
+      }));
+
+      // Step 2: Check if we have input definitions
+      if (inputDefinitions.length === 0) {
+        alert('No input definitions found. Please add input definers to your pipeline.');
+        return;
+      }
+
+      // Step 3: Store execution data and open input collection modal
+      setCurrentExecutionData({
+        processingModules,
+        inputDefinitions,
+        outputDefinitions,
+        pipelineConnections
+      });
+      setIsInputModalOpen(true);
+      
+    } catch (error) {
+      console.error('Error executing pipeline:', error);
+      alert(`Error executing pipeline: ${error.message}`);
+    }
+  };
+
+  // Handle modal submission - execute pipeline with collected input data
+  const handleInputModalSubmit = async (inputData: Record<string, any>) => {
+    try {
+      if (!currentExecutionData) {
+        console.error('No execution data available');
+        return;
+      }
+
+      setIsInputModalOpen(false);
+      console.log('Input data collected:', inputData);
+
+      // Execute pipeline with collected data
+      const { executePipelineWithSteps } = await import('../../services/transformationPipelineApi');
+      
+      const result = await executePipelineWithSteps(
+        currentExecutionData.processingModules,
+        currentExecutionData.pipelineConnections,
+        currentExecutionData.inputDefinitions,
+        currentExecutionData.outputDefinitions,
+        inputData
+      );
+      
+      console.log('Pipeline execution result:', result);
+      
+      if (result.success) {
+        console.log('\n=== PIPELINE EXECUTION SUCCESSFUL ===');
+        console.log('Analysis:', result.analysis);
+        console.log('Final outputs:', result.outputs);
+        console.log('=== EXECUTION COMPLETE ===');
+        
+        // Show success to user
+        alert(`Pipeline executed successfully! Final outputs: ${JSON.stringify(result.outputs, null, 2)}`);
+      } else {
+        console.error('Pipeline execution failed');
+        alert('Pipeline execution failed. Check console for details.');
+      }
+      
+    } catch (error) {
+      console.error('Error executing pipeline:', error);
+      alert(`Error executing pipeline: ${error.message}`);
+    } finally {
+      // Clean up execution data
+      setCurrentExecutionData(null);
+    }
+  };
+
+  // Handle modal cancellation
+  const handleInputModalCancel = () => {
+    setIsInputModalOpen(false);
+    setCurrentExecutionData(null);
   };
 
   // Handle print objects (debug function)
@@ -1359,7 +1521,7 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
       
     } catch (error) {
       console.error('Error fetching base modules:', error);
-      console.error('Make sure the transformation pipeline server is running on port 8090');
+      console.error('Make sure the unified ETO server is running on port 8080');
     }
   };
 
@@ -1927,9 +2089,18 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
         onResetZoom={resetZoom}
         onConnectionDelete={handleConnectionDelete}
         onAnalyzePipeline={handleAnalyzePipeline}
+        onExecutePipeline={handleExecutePipeline}
         onPrintObjects={handlePrintObjects}
         onGetBaseModules={handleGetBaseModules}
         getTypeColor={getTypeColor}
+      />
+
+      {/* Input Collection Modal */}
+      <InputCollectionModal
+        isOpen={isInputModalOpen}
+        inputDefinitions={currentExecutionData?.inputDefinitions || []}
+        onSubmit={handleInputModalSubmit}
+        onCancel={handleInputModalCancel}
       />
     </div>
   );

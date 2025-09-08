@@ -52,6 +52,7 @@ interface GraphOverlaysProps {
   onResetZoom: () => void;
   onConnectionDelete: (connectionId: string) => void;
   onAnalyzePipeline?: () => void;
+  onExecutePipeline?: () => void;
   onPrintObjects?: () => void;
   onGetBaseModules?: () => void;
   
@@ -71,6 +72,7 @@ export const GraphOverlays: React.FC<GraphOverlaysProps> = ({
   onResetZoom,
   onConnectionDelete,
   onAnalyzePipeline,
+  onExecutePipeline,
   onPrintObjects,
   onGetBaseModules,
   getTypeColor
@@ -93,6 +95,22 @@ export const GraphOverlays: React.FC<GraphOverlaysProps> = ({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
           </svg>
           <span className="text-sm font-medium">Analyze Pipeline</span>
+        </button>
+        
+        <button
+          onClick={onExecutePipeline}
+          disabled={isDraggingModule}
+          className={`px-4 py-2 rounded-lg shadow-lg border transition-colors flex items-center gap-2 ${
+            isDraggingModule
+              ? 'bg-gray-700 border-gray-600 text-gray-500 cursor-not-allowed'
+              : 'bg-green-600 border-green-500 text-white hover:bg-green-700'
+          }`}
+          title={isDraggingModule ? "Cannot execute while dragging" : "Execute Pipeline"}
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h1m4 0h1m6-10V8a2 2 0 01-2 2H9a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2z" />
+          </svg>
+          <span className="text-sm font-medium">Execute Pipeline</span>
         </button>
         
         <button

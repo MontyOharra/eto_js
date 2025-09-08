@@ -7,6 +7,7 @@ from .database import init_database, get_db_service, create_database_if_not_exis
 from .modules import get_module_registry, populate_database_with_modules
 from .services import get_pipeline_analyzer, get_pipeline_executor, PipelineAnalysisError, PipelineExecutionError
 from .services.simple_pipeline_execution import get_simple_pipeline_executor
+from .services.step_based_execution import get_step_based_pipeline_executor
 
 # Load environment variables
 load_dotenv()
@@ -209,7 +210,7 @@ def execute_module(module_id):
 
 @app.post("/api/pipeline/analyze")
 def analyze_pipeline():
-    """Analyze a pipeline for execution planning"""
+    """Analyze a pipeline for execution planning with step-based algorithm"""
     try:
         data = request.get_json()
         if not data:
@@ -220,16 +221,17 @@ def analyze_pipeline():
         
         modules = data.get('modules', [])
         connections = data.get('connections', [])
-        target_module_id = data.get('target_module_id')
+        input_definitions = data.get('input_definitions', [])
+        output_definitions = data.get('output_definitions', [])
         
-        if not modules:
+        if not modules and not input_definitions and not output_definitions:
             return jsonify({
                 "success": False,
-                "message": "Modules list is required"
+                "message": "At least one module or I/O definition is required"
             }), 400
         
         analyzer = get_pipeline_analyzer()
-        result = analyzer.analyze_pipeline(modules, connections, target_module_id)
+        result = analyzer.analyze_pipeline_with_steps(modules, connections, input_definitions, output_definitions)
         
         return jsonify(result)
         
@@ -359,6 +361,103 @@ def validate_pipeline():
         return jsonify({
             "success": False,
             "message": f"Validation failed: {str(e)}"
+        }), 500
+
+@app.post("/api/pipeline/execute-steps")
+def execute_pipeline_with_steps():
+    """Execute a pipeline using step-based dependency analysis with parallel processing"""
+    try:
+        logger.info("Step-based pipeline execution request received")
+        
+        data = request.get_json()
+        if not data:
+            logger.error("No request body provided")
+            return jsonify({
+                "success": False,
+                "message": "Request body required"
+            }), 400
+        
+        logger.info(f"Request data keys: {list(data.keys())}")
+        
+        modules = data.get('modules', [])
+        connections = data.get('connections', [])
+        input_definitions = data.get('input_definitions', [])
+        output_definitions = data.get('output_definitions', [])
+        input_data = data.get('input_data', {})  # Node ID -> value mapping
+        
+        logger.info(f"Received {len(modules)} modules, {len(connections)} connections")
+        logger.info(f"Input definitions: {len(input_definitions)}, Output definitions: {len(output_definitions)}")
+        logger.info(f"Input data keys: {list(input_data.keys())}")
+        
+        if not modules and not input_definitions:
+            logger.error("No modules or input definitions provided")
+            return jsonify({
+                "success": False,
+                "message": "Modules or input definitions are required"
+            }), 400
+        
+        # Step 1: Analyze pipeline to get step-based execution plan
+        logger.info("🔍 Step 1: Analyzing pipeline with steps...")
+        analyzer = get_pipeline_analyzer()
+        analysis_result = analyzer.analyze_pipeline_with_steps(
+            modules, connections, input_definitions, output_definitions
+        )
+        
+        if not analysis_result['success']:
+            logger.error("Step-based pipeline analysis failed")
+            return jsonify({
+                "success": False,
+                "message": "Pipeline analysis failed"
+            }), 400
+        
+        steps = analysis_result['steps']
+        output_endpoints = analysis_result['output_endpoints']
+        
+        logger.info(f"📋 Analysis complete: {len(steps)} steps, {len(output_endpoints)} output endpoints")
+        
+        # Step 2: Execute pipeline using step-based executor
+        logger.info("⚙️ Step 2: Executing pipeline with steps...")
+        import asyncio
+        executor = get_step_based_pipeline_executor()
+        
+        # Run async executor in sync context
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            final_outputs = loop.run_until_complete(
+                executor.execute_pipeline_with_steps(
+                    steps=steps,
+                    connections=connections,
+                    input_data=input_data,
+                    output_endpoints=output_endpoints
+                )
+            )
+        finally:
+            loop.close()
+        
+        logger.info("✅ Step-based pipeline execution completed successfully")
+        return jsonify({
+            "success": True,
+            "analysis": {
+                "steps": steps,
+                "output_endpoints": output_endpoints,
+                "total_steps": analysis_result['total_steps'],
+                "parallel_opportunities": analysis_result['parallel_opportunities']
+            },
+            "outputs": final_outputs
+        })
+        
+    except PipelineAnalysisError as e:
+        logger.error(f"Pipeline analysis error: {str(e)}")
+        return jsonify({
+            "success": False,
+            "message": f"Analysis error: {str(e)}"
+        }), 400
+    except Exception as e:
+        logger.error(f"Unexpected error executing step-based pipeline: {str(e)}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "message": f"Execution failed: {str(e)}"
         }), 500
 
 if __name__ == "__main__":

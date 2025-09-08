@@ -1,0 +1,24 @@
+# Web Framework
+Flask==3.0.3
+Flask-CORS==4.0.1
+
+# Database
+SQLAlchemy==2.0.31
+pyodbc>=4.0.39
+
+# Windows integration (for email processing)
+pywin32>=306
+
+# Data processing
+requests>=2.31.0
+sqlparse>=0.4.0
+
+# PDF Processing
+PyPDF2>=3.0.1
+pdfplumber>=0.7.6
+
+# Environment variables
+python-dotenv==1.0.1
+
+# Async support for pipeline execution
+aiofiles>=23.0.0

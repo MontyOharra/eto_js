@@ -63,6 +63,25 @@ export const ModuleConfiguration: React.FC<ModuleConfigurationProps> = ({
                     </option>
                   ))}
                 </select>
+              ) : configItem.type === 'boolean' ? (
+                <select
+                  value={String(config[configItem.name] ?? configItem.defaultValue ?? false)}
+                  onChange={(e) => handleConfigChange(configItem.name, e.target.value === 'true')}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  className="w-full bg-gray-700 border border-gray-600 text-white text-xs rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="false">False</option>
+                  <option value="true">True</option>
+                </select>
+              ) : configItem.type === 'textarea' ? (
+                <textarea
+                  value={config[configItem.name] || configItem.defaultValue || ''}
+                  onChange={(e) => handleConfigChange(configItem.name, e.target.value)}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  placeholder={configItem.placeholder}
+                  rows={3}
+                  className="w-full bg-gray-700 border border-gray-600 text-white text-xs rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-vertical"
+                />
               ) : (
                 <input
                   type={configItem.type === 'number' ? 'number' : 'text'}

@@ -96,8 +96,8 @@ export interface ApiError {
   details?: any;
 }
 
-// API Configuration
-const API_BASE_URL = 'http://localhost:8090';
+// API Configuration - Updated for unified ETO server
+const API_BASE_URL = 'http://localhost:8080';
 
 class ApiClient {
   private baseUrl: string;
@@ -164,7 +164,7 @@ class ApiClient {
       searchParams.append('limit', params.limit.toString());
     }
 
-    const endpoint = `/api/eto-runs${searchParams.toString() ? `?${searchParams}` : ''}`;
+    const endpoint = `/api/processing/runs${searchParams.toString() ? `?${searchParams}` : ''}`;
     return this.fetchApi<ApiEtoRunsResponse>(endpoint);
   }
 
@@ -172,14 +172,14 @@ class ApiClient {
    * Get System Statistics
    */
   async getSystemStats(): Promise<ApiSystemStats> {
-    return this.fetchApi('/api/system/stats');
+    return this.fetchApi('/api/health/metrics');
   }
 
   /**
    * Get Email Status
    */
   async getEmailStatus(): Promise<ApiEmailStatus> {
-    return this.fetchApi('/api/email/status');
+    return this.fetchApi('/api/emails');
   }
 
   /**
@@ -189,7 +189,7 @@ class ApiClient {
     email_address?: string;
     folder_name?: string;
   }): Promise<{ success: boolean; message: string }> {
-    return this.fetchApi('/api/email/start', {
+    return this.fetchApi('/api/emails/process', {
       method: 'POST',
       body: JSON.stringify(params || {}),
     });
@@ -199,8 +199,8 @@ class ApiClient {
    * Stop Email Monitoring
    */
   async stopEmailMonitoring(): Promise<{ success: boolean; message: string }> {
-    return this.fetchApi('/api/email/stop', {
-      method: 'POST',
+    return this.fetchApi('/api/emails/process', {
+      method: 'DELETE',
     });
   }
 
@@ -228,7 +228,7 @@ class ApiClient {
    * Get PDF File (binary data)
    */
   getPdfFileUrl(pdfId: number): string {
-    return `${this.baseUrl}/api/pdf/${pdfId}`;
+    return `${this.baseUrl}/api/pdfs/${pdfId}`;
   }
 
   /**
@@ -241,7 +241,7 @@ class ApiClient {
     object_count: number;
     objects: any[];
   }> {
-    return this.fetchApi(`/api/pdf/${pdfId}/objects`);
+    return this.fetchApi(`/api/pdfs/${pdfId}/objects`);
   }
 
   /**
@@ -276,7 +276,7 @@ class ApiClient {
       error_message?: string;
     };
   }> {
-    return this.fetchApi(`/api/eto-run/${runId}/pdf-data`);
+    return this.fetchApi(`/api/processing/runs/${runId}`);
   }
 
   /**
@@ -510,14 +510,14 @@ class ApiClient {
     };
     error?: string;
   }> {
-    return this.fetchApi('/api/pipeline/analyze', {
+    return this.fetchApi('/api/pipelines/analyze', {
       method: 'POST',
       body: JSON.stringify(pipelineData),
     });
   }
 
   /**
-   * Get base modules from transformation pipeline database
+   * Get base modules from unified server
    */
   async getBaseModules(): Promise<{
     success: boolean;
@@ -554,33 +554,7 @@ class ApiClient {
     }>;
     message?: string;
   }> {
-    // Use transformation pipeline server port (8090) instead of main server port (8080)
-    const transformationApiUrl = 'http://localhost:8090';
-    const url = `${transformationApiUrl}/api/modules`;
-    
-    try {
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new ApiError(`HTTP ${response.status}: ${response.statusText}`, errorData);
-      }
-
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      if (error instanceof ApiError) {
-        throw error;
-      }
-      
-      // Network or parsing errors
-      throw new ApiError(`Network error: ${error.message}`, error);
-    }
+    return this.fetchApi('/api/modules');
   }
 
   /**
