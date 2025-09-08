@@ -8,11 +8,11 @@ import json
 import re
 import sqlparse
 from typing import Dict, Any, List, Optional
-from ...types import (
+from ....types import (
     ModuleID, ModuleInfo, ExecutionInputs, ExecutionConfig, 
     ExecutionOutputs, ExecutionNodeInfo, NodeSchema, NodeConfiguration, ConfigSchema
 )
-from ..module import BaseModuleExecutor, ModuleExecutionError, ModuleValidationError
+from ...module import BaseModuleExecutor, ModuleExecutionError, ModuleValidationError
 
 
 class SQLParserModule(BaseModuleExecutor):
@@ -173,9 +173,9 @@ class SQLParserModule(BaseModuleExecutor):
             if not output_node_ids:
                 raise ModuleExecutionError("No output node configured")
             
-            return {
+            return ExecutionOutputs({
                 output_node_ids[0]: formatted_result
-            }
+            })
             
         except Exception as e:
             self.logger.error(f"SQL parsing failed: {e}")

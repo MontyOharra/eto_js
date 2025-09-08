@@ -7,11 +7,11 @@ Advanced text cleaner with configurable cleaning options.
 import json
 import re
 from typing import Dict, Any, List, Optional
-from ...types import (
+from ....types import (
     ModuleID, ModuleInfo, ExecutionInputs, ExecutionConfig, 
     ExecutionOutputs, ExecutionNodeInfo, NodeSchema, NodeConfiguration, ConfigSchema
 )
-from ..module import BaseModuleExecutor, ModuleExecutionError
+from ...module import BaseModuleExecutor, ModuleExecutionError
 
 
 class AdvancedTextCleanerModule(BaseModuleExecutor):
@@ -145,9 +145,9 @@ class AdvancedTextCleanerModule(BaseModuleExecutor):
             if not output_node_ids:
                 raise ModuleExecutionError("No output node configured")
             
-            return {
+            return ExecutionOutputs({
                 output_node_ids[0]: cleaned_text
-            }
+            })
             
         except Exception as e:
             self.logger.error(f"Advanced text cleaning failed: {e}")

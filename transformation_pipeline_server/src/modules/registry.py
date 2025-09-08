@@ -13,10 +13,10 @@ from ..types import (
     ModuleExecutionError, ModuleValidationError
 )
 from .module import BaseModuleExecutor
-from .text_processing.basic_text_cleaner import BasicTextCleanerModule
-from .text_processing.advanced_text_cleaner import AdvancedTextCleanerModule
-from .data_processing.sql_parser import SQLParserModule
-from .data_processing.type_converter import TypeConverterModule
+from .definitions.text_processing.basic_text_cleaner import BasicTextCleanerModule
+from .definitions.text_processing.advanced_text_cleaner import AdvancedTextCleanerModule
+from .definitions.data_processing.sql_parser import SQLParserModule
+from .definitions.data_processing.type_converter import TypeConverterModule
 
 logger = logging.getLogger(__name__)
 

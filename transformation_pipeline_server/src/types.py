@@ -5,7 +5,16 @@ This module contains all type definitions, aliases, and protocols used throughou
 the transformation pipeline system for better type safety and IDE support.
 """
 
-from typing import Dict, List, Optional, Union, Any, Protocol, TypedDict, NotRequired, Literal
+from typing import Dict, List, Optional, Union, Any, Protocol, TypedDict, Literal
+try:
+    from typing import NotRequired
+except ImportError:
+    # For Python < 3.11, use typing_extensions
+    try:
+        from typing_extensions import NotRequired
+    except ImportError:
+        # Fallback for environments without typing_extensions
+        NotRequired = Optional
 from abc import abstractmethod
 
 # Basic type aliases

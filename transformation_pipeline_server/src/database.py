@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 # SQLAlchemy Base
 Base = declarative_base()
-
+ 
 # Global database variables
 _engine = None
 _session_factory = None

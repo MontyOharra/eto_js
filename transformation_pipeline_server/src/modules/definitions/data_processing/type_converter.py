@@ -9,12 +9,12 @@ node types rather than configuration options.
 import json
 from datetime import datetime
 from typing import Dict, Any, List, Optional
-from ...types import (
+from ....types import (
     ModuleID, ModuleInfo, ExecutionInputs, ExecutionConfig, 
     ExecutionOutputs, ExecutionNodeInfo, NodeSchema, NodeConfiguration, 
     ConfigSchema, NodeType
 )
-from ..module import BaseModuleExecutor, ModuleExecutionError
+from ...module import BaseModuleExecutor, ModuleExecutionError
 
 
 class TypeConverterModule(BaseModuleExecutor):
@@ -116,7 +116,7 @@ class TypeConverterModule(BaseModuleExecutor):
             input_types = {node['nodeId']: node['type'] for node in node_info['inputs']}
             output_types = {node['nodeId']: node['type'] for node in node_info['outputs']}
             
-            results = {}
+            results: ExecutionOutputs = ExecutionOutputs({})
             
             # Process each output node
             for output_node in node_info['outputs']:
