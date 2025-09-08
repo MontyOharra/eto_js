@@ -1131,6 +1131,7 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
       console.log('Pipeline data prepared:', pipelineData);
       
       // Call backend analyzer
+      
       const result = await apiClient.analyzePipeline(pipelineData);
       
       console.log('Pipeline analysis result:', result);
@@ -1153,10 +1154,187 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
       } else {
         console.error('Pipeline analysis failed:', result.error);
       }
+
+      
     } catch (error) {
       console.error('Error analyzing pipeline:', error);
       // Show error to user (you could add a toast notification here)
       alert(`Error analyzing pipeline: ${error.message}`);
+    }
+  };
+
+  // Handle print objects (debug function)
+  const handlePrintObjects = () => {
+    console.log('=== PIPELINE OBJECTS DEBUG ===');
+    
+    // Prepare the same pipeline data that would be sent to backend
+    const pipelineData = {
+      modules: placedModules.map(module => ({
+        id: module.id,
+        templateId: module.template.id,
+        template: {
+          id: module.template.id,
+          name: module.template.name,
+          description: module.template.description,
+          category: module.template.category,
+          color: module.template.color
+        },
+        position: module.position,
+        config: module.config,
+        nodes: {
+          inputs: module.nodes.inputs.map(input => ({
+            id: input.id,
+            name: input.name,
+            type: input.type,
+            description: input.description,
+            required: input.required
+          })),
+          outputs: module.nodes.outputs.map(output => ({
+            id: output.id,
+            name: output.name,
+            type: output.type,
+            description: output.description,
+            required: output.required || false
+          }))
+        }
+      })),
+      connections: connections.map(conn => ({
+        id: conn.id,
+        from: {
+          moduleId: conn.fromModuleId,
+          outputIndex: conn.fromOutputIndex
+        },
+        to: {
+          moduleId: conn.toModuleId,
+          inputIndex: conn.toInputIndex
+        }
+      }))
+    };
+    
+    console.log('Pipeline Data Structure:');
+    console.log(JSON.stringify(pipelineData, null, 2));
+    
+    console.log('\n=== MODULES ===');
+    pipelineData.modules.forEach(module => {
+      console.log(`Module: ${module.template.name} (${module.id})`);
+      console.log(`  Template ID: ${module.templateId}`);
+      console.log(`  Category: ${module.template.category}`);
+      console.log(`  Position: (${module.position.x}, ${module.position.y})`);
+      console.log(`  Config:`, module.config);
+      console.log(`  Inputs: ${module.nodes.inputs.length}`);
+      module.nodes.inputs.forEach((input, idx) => {
+        console.log(`    ${idx}: ${input.name} (${input.type}) - ${input.description}`);
+      });
+      console.log(`  Outputs: ${module.nodes.outputs.length}`);
+      module.nodes.outputs.forEach((output, idx) => {
+        console.log(`    ${idx}: ${output.name} (${output.type}) - ${output.description}`);
+      });
+      console.log('');
+    });
+    
+    console.log('=== CONNECTIONS ===');
+    pipelineData.connections.forEach(conn => {
+      const fromModule = pipelineData.modules.find(m => m.id === conn.from.moduleId);
+      const toModule = pipelineData.modules.find(m => m.id === conn.to.moduleId);
+      const fromOutput = fromModule?.nodes.outputs[conn.from.outputIndex];
+      const toInput = toModule?.nodes.inputs[conn.to.inputIndex];
+      
+      console.log(`Connection ${conn.id}:`);
+      console.log(`  From: ${fromModule?.template.name}[${fromOutput?.name}] (index ${conn.from.outputIndex})`);
+      console.log(`  To: ${toModule?.template.name}[${toInput?.name}] (index ${conn.to.inputIndex})`);
+      console.log(`  Type: ${fromOutput?.type} -> ${toInput?.type}`);
+      console.log('');
+    });
+    
+    console.log(`Total Modules: ${pipelineData.modules.length}`);
+    console.log(`Total Connections: ${pipelineData.connections.length}`);
+    console.log('=== END DEBUG ===');
+  };
+
+  // Handle get base modules (debug function)
+  const handleGetBaseModules = async () => {
+    try {
+      console.log('=== BASE MODULES FROM DATABASE ===');
+      console.log('Fetching base modules from transformation pipeline database...');
+      
+      const result = await apiClient.getBaseModules();
+      
+      if (result.success) {
+        console.log('\n=== DATABASE MODULES ===');
+        console.log(`Total modules in database: ${result.modules.length}`);
+        console.log('');
+        
+        // Group by category for better organization
+        const modulesByCategory = result.modules.reduce((acc, module) => {
+          const category = module.category || 'Uncategorized';
+          if (!acc[category]) {
+            acc[category] = [];
+          }
+          acc[category].push(module);
+          return acc;
+        }, {} as Record<string, typeof result.modules>);
+        
+        Object.entries(modulesByCategory).forEach(([category, modules]) => {
+          console.log(`\n📁 CATEGORY: ${category.toUpperCase()}`);
+          console.log(`   Modules: ${modules.length}`);
+          console.log('   ' + '─'.repeat(50));
+          
+          modules.forEach(module => {
+            console.log(`\n   🔧 ${module.name} (${module.id})`);
+            console.log(`      📝 Description: ${module.description || 'No description'}`);
+            console.log(`      🏷️ Version: ${module.version}`);
+            console.log(`      🎨 Color: ${module.color}`);
+            console.log(`      📥 Inputs: ${module.inputs.length}`);
+            module.inputs.forEach((input, idx) => {
+              const required = input.required ? ' (required)' : '';
+              console.log(`         ${idx + 1}. ${input.name} (${input.type})${required} - ${input.description}`);
+            });
+            console.log(`      📤 Outputs: ${module.outputs.length}`);
+            module.outputs.forEach((output, idx) => {
+              const required = output.required ? ' (required)' : '';
+              console.log(`         ${idx + 1}. ${output.name} (${output.type})${required} - ${output.description}`);
+            });
+            console.log(`      ⚙️ Configuration: ${module.config.length} options`);
+            module.config.forEach((config, idx) => {
+              const required = config.required ? ' (required)' : '';
+              const defaultVal = config.defaultValue !== undefined ? ` [default: ${JSON.stringify(config.defaultValue)}]` : '';
+              console.log(`         ${idx + 1}. ${config.name} (${config.type})${required}${defaultVal} - ${config.description}`);
+            });
+            
+            // Show dynamic configuration if available
+            if (module.maxInputs !== undefined) {
+              console.log(`      🔗 Max Inputs: ${module.maxInputs || 'unlimited'}`);
+            }
+            if (module.maxOutputs !== undefined) {
+              console.log(`      🔗 Max Outputs: ${module.maxOutputs || 'unlimited'}`);
+            }
+            if (module.dynamicInputs) {
+              console.log(`      🔄 Dynamic Inputs: ${JSON.stringify(module.dynamicInputs)}`);
+            }
+            if (module.dynamicOutputs) {
+              console.log(`      🔄 Dynamic Outputs: ${JSON.stringify(module.dynamicOutputs)}`);
+            }
+          });
+        });
+        
+        console.log('\n=== SUMMARY ===');
+        console.log(`Categories: ${Object.keys(modulesByCategory).length}`);
+        Object.entries(modulesByCategory).forEach(([category, modules]) => {
+          console.log(`  ${category}: ${modules.length} modules`);
+        });
+        
+        console.log('\n=== FULL JSON DATA ===');
+        console.log(JSON.stringify(result, null, 2));
+        
+      } else {
+        console.error('Failed to fetch base modules:', result.message);
+      }
+      
+      console.log('=== END BASE MODULES DEBUG ===');
+      
+    } catch (error) {
+      console.error('Error fetching base modules:', error);
+      console.error('Make sure the transformation pipeline server is running on port 8090');
     }
   };
 
@@ -1601,6 +1779,8 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
         onResetZoom={resetZoom}
         onConnectionDelete={handleConnectionDelete}
         onAnalyzePipeline={handleAnalyzePipeline}
+        onPrintObjects={handlePrintObjects}
+        onGetBaseModules={handleGetBaseModules}
         getTypeColor={getTypeColor}
       />
     </div>

@@ -4,10 +4,9 @@
 
 ## Session Rituals
 
-CHANGELOG.md exists in the context/ dir. This dir should be used for any references you need. There will also be a context/docs/ dir to contain specifics regarding the code itself.
 
 ### Before every chat
-1. **Read `CHANGELOG.md`** (entire file) to recover context, the last plan, and pending next steps.
+1. **Read `CHANGELOG.md`** (entire file) to recover context, the last plan, and pending next steps. CHANGELOG.md exists in the ./context/ dir. This dir should be used for any references you need. There will also be a context/docs/ dir to contain specifics regarding the code itself.
 2. If `CHANGELOG.md` is missing, **create it** using the template in “Changelog Policy & Format”.
 
 ### After every chat

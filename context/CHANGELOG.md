@@ -5,6 +5,35 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-01-06 20:15] — Pipeline Analysis System Communication Fixes
+
+### Spec / Intent
+- Fix critical communication issues between frontend visual graph builder and backend pipeline analyzer
+- Resolve API port mismatches, data structure incompatibilities, and response format issues
+- Implement proper separation between processing modules (transformation steps) and I/O modules (configuration)
+- Make pipeline analysis work correctly for visual transformation pipelines
+
+### Changes Made
+- Files: client/src/renderer/services/api.ts:100, client/src/renderer/components/transformation-pipeline/TransformationGraph.tsx:1091,1118-1128,1138-1155
+- Summary: Fixed API port (8080→8090), added templateId field, corrected connection data structure, updated response handling
+- Files: transformation_pipeline_server/src/services/pipeline_analysis.py:81-103,91-92,117-127
+- Summary: Made input/output modules optional, added flexible module identification patterns, focused analysis on processing modules only
+- Files: context/pipeline_analysis_fixes_2025_01_06.md
+- Summary: Comprehensive documentation of pipeline analysis system architecture and fixes applied
+
+### Next Actions
+- Implement pipeline execution functionality using the analyzed transformation steps
+- Add real-time data preview flowing through pipeline modules
+- Enhance module connection validation and error handling
+
+### Notes
+- Pipeline analysis now correctly processes visual graphs: input("test") -> text_cleaner("cleaned_value") -> output
+- System properly separates transformation logic (processing modules) from I/O configuration (input/output modules)
+- Flexible module identification supports various naming patterns and template types
+- Frontend-backend communication fully functional with proper data structure alignment
+
+---
+
 ## [2025-01-05 19:30] — Field ID System Simplification & Documentation Update
 
 ### Spec / Intent

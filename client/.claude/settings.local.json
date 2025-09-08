@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(/C:\\Users\\Owner\\Software_Projects\\eto_js\\client\\src\\renderer\\routes\\transformation_pipeline/**)",
+      "Read(/C:\\Users\\Owner\\Software_Projects\\eto_js\\client\\src\\renderer\\data/**)",
+      "Read(/C:\\Users\\Owner\\Software_Projects\\eto_js\\client\\src\\renderer\\data/**)",
+      "Read(/C:\\Users\\Owner\\Software_Projects\\eto_js\\client\\src\\renderer\\data/**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

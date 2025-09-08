@@ -10,6 +10,25 @@ export const GraphModuleHeader: React.FC<GraphModuleHeaderProps> = ({
   template,
   onDeleteClick
 }) => {
+  // Helper function to determine if a color is light or dark
+  const isLightColor = (hexColor: string): boolean => {
+    // Remove # if present
+    const color = hexColor.replace('#', '');
+    
+    // Parse RGB values
+    const r = parseInt(color.substring(0, 2), 16);
+    const g = parseInt(color.substring(2, 4), 16);
+    const b = parseInt(color.substring(4, 6), 16);
+    
+    // Calculate luminance using relative luminance formula
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    
+    // Return true if light (luminance > 0.5)
+    return luminance > 0.5;
+  };
+  
+  const textColor = isLightColor(template.color) ? '#000000' : '#ffffff';
+  const deleteButtonHoverBg = isLightColor(template.color) ? 'rgba(220, 38, 38, 0.8)' : '#dc2626';
   return (
     <div>
       {/* Header */}
@@ -17,10 +36,25 @@ export const GraphModuleHeader: React.FC<GraphModuleHeaderProps> = ({
         className="px-4 py-3 rounded-t-lg flex items-center justify-between gap-4"
         style={{ backgroundColor: template.color }}
       >
-        <div className="text-white font-medium text-sm flex-1">{template.name}</div>
+        <div className="font-medium text-sm flex-1" style={{ color: textColor }}>{template.name}</div>
         <button
           onClick={onDeleteClick}
-          className="w-7 h-7 flex items-center justify-center text-white hover:bg-red-600 hover:text-white rounded transition-colors"
+          className="w-7 h-7 flex items-center justify-center rounded transition-colors"
+          style={{ 
+            color: textColor,
+            ':hover': {
+              backgroundColor: deleteButtonHoverBg,
+              color: '#ffffff'
+            }
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = deleteButtonHoverBg;
+            e.currentTarget.style.color = '#ffffff';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'transparent';
+            e.currentTarget.style.color = textColor;
+          }}
           title="Delete module"
         >
           <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">

@@ -517,6 +517,73 @@ class ApiClient {
   }
 
   /**
+   * Get base modules from transformation pipeline database
+   */
+  async getBaseModules(): Promise<{
+    success: boolean;
+    modules: Array<{
+      id: string;
+      name: string;
+      description: string;
+      category: string;
+      color: string;
+      version: string;
+      inputs: Array<{
+        name: string;
+        type: string;
+        description: string;
+        required: boolean;
+      }>;
+      outputs: Array<{
+        name: string;
+        type: string;
+        description: string;
+        required: boolean;
+      }>;
+      config: Array<{
+        name: string;
+        type: string;
+        description: string;
+        required: boolean;
+        defaultValue?: any;
+      }>;
+      maxInputs?: number;
+      maxOutputs?: number;
+      dynamicInputs?: any;
+      dynamicOutputs?: any;
+    }>;
+    message?: string;
+  }> {
+    // Use transformation pipeline server port (8090) instead of main server port (8080)
+    const transformationApiUrl = 'http://localhost:8090';
+    const url = `${transformationApiUrl}/api/modules`;
+    
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new ApiError(`HTTP ${response.status}: ${response.statusText}`, errorData);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      
+      // Network or parsing errors
+      throw new ApiError(`Network error: ${error.message}`, error);
+    }
+  }
+
+  /**
    * Generic GET request (for flexibility)
    */
   async get<T = any>(endpoint: string): Promise<{ data: T }> {

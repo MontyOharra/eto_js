@@ -14,7 +14,6 @@ const DATA_TYPES: { value: IODataType; label: string; color: string }[] = [
   { value: 'number', label: 'Number', color: '#10B981' },
   { value: 'boolean', label: 'Boolean', color: '#F59E0B' },
   { value: 'datetime', label: 'DateTime', color: '#8B5CF6' },
-  { value: 'variable', label: 'Variable', color: '#6B7280' }
 ];
 
 export const InputOutputDefinerComponent: React.FC<InputOutputDefinerComponentProps> = ({

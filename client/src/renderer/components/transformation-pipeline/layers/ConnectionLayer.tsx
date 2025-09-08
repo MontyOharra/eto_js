@@ -92,6 +92,7 @@ export const ConnectionLayer: React.FC<ConnectionLayerProps> = ({
           const connectionColor = getTypeColor(outputNodeType);
           const isSelected = selectedConnectionId === connection.id;
           
+          
           return (
             <g key={connection.id}>
               {isSelected ? (
@@ -125,7 +126,7 @@ export const ConnectionLayer: React.FC<ConnectionLayerProps> = ({
                 </>
               ) : (
                 /* Normal connection path */
-                (<path
+                <path
                   d={path}
                   stroke={connectionColor}
                   strokeWidth="2"
@@ -134,7 +135,7 @@ export const ConnectionLayer: React.FC<ConnectionLayerProps> = ({
                   style={{ cursor: 'pointer' }}
                   onClick={onConnectionClick(connection.id)}
                   onMouseDown={(e) => e.stopPropagation()}
-                />)
+                />
               )}
               {/* Invisible thicker path for easier clicking */}
               <path

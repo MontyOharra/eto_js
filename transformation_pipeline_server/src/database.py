@@ -53,20 +53,14 @@ class BaseModule(Base):
     description = Column(Text)
     version = Column(String(50), default='1.0.0')
     
-    # JSON schemas for inputs, outputs, and configuration
-    input_schema = Column(Text, nullable=False)  # Use Text instead of JSON for SQL Server compatibility
-    output_schema = Column(Text, nullable=False)
-    config_schema = Column(Text)
+    # New consolidated node configuration (JSON strings)
+    input_config = Column(Text, nullable=False)   # JSON: NodeConfiguration for inputs
+    output_config = Column(Text, nullable=False)  # JSON: NodeConfiguration for outputs
+    config_schema = Column(Text)                  # JSON: List[ConfigSchema] for configuration options
     
     # Service endpoint information
     service_endpoint = Column(String(512))
     handler_name = Column(String(255))
-    
-    # Dynamic node configuration (for frontend)
-    max_inputs = Column(Integer)  # null = unlimited, number = fixed max
-    max_outputs = Column(Integer)  # null = unlimited, number = fixed max
-    dynamic_inputs = Column(Text)  # JSON: DynamicNodeConfig for inputs
-    dynamic_outputs = Column(Text)  # JSON: DynamicNodeConfig for outputs
     
     # UI theming
     color = Column(String(50), default='#3B82F6')
