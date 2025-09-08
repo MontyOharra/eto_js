@@ -130,22 +130,25 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
   };
 
   // Helper function to initialize module nodes from template
-  const initializeModuleNodes = (template: BaseModuleTemplate, config: Record<string, unknown>): ModuleNodeState => {
+  const initializeModuleNodes = (template: BaseModuleTemplate, config: Record<string, unknown>, moduleId?: string): ModuleNodeState => {
     let inputs: NodeState[] = [];
     let outputs: NodeState[] = [];
+    
+    // Generate unique timestamp for this module instance if no moduleId provided
+    const instanceId = moduleId || `${template.id}_${Date.now()}`;
     
     // Use generateNodes if available for dynamic modules
     if (template.generateNodes) {
       const generated = template.generateNodes(config);
       inputs = generated.inputs.map((input, index) => ({
-        id: `${template.id}_input_${index}`,
+        id: `${instanceId}_input_${index}`,
         name: input.name || `Input ${index + 1}`,
         type: input.type,
         description: input.description,
         required: input.required
       }));
       outputs = generated.outputs.map((output, index) => ({
-        id: `${template.id}_output_${index}`,
+        id: `${instanceId}_output_${index}`,
         name: output.name || `Output ${index + 1}`,
         type: output.type,
         description: output.description,
@@ -154,14 +157,14 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
     } else {
       // Use template nodes for static modules
       inputs = template.inputs.map((input, index) => ({
-        id: `${template.id}_input_${index}`,
+        id: `${instanceId}_input_${index}`,
         name: input.name || `Input ${index + 1}`,
         type: input.type,
         description: input.description,
         required: input.required
       }));
       outputs = template.outputs.map((output, index) => ({
-        id: `${template.id}_output_${index}`,
+        id: `${instanceId}_output_${index}`,
         name: output.name || `Output ${index + 1}`,
         type: output.type,
         description: output.description,
@@ -199,9 +202,19 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
     if (!module) return false;
 
     if (nodeType === 'input') {
-      return module.template.dynamicInputs?.allowTypeConfiguration || false;
+      // Check both dynamic and static type configuration support
+      return (
+        module.template.dynamicInputs?.allowTypeConfiguration || 
+        module.template.allowInputTypeConfig || 
+        false
+      );
     } else {
-      return module.template.dynamicOutputs?.allowTypeConfiguration || false;
+      // Check both dynamic and static type configuration support
+      return (
+        module.template.dynamicOutputs?.allowTypeConfiguration || 
+        module.template.allowOutputTypeConfig || 
+        false
+      );
     }
   };
 
@@ -590,25 +603,36 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
     });
   };
 
-  // Handle node name changes for outputs
+  // Handle node name changes for inputs and outputs
   const handleNodeNameChange = (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number, newName: string) => {
-    // Only allow name changes for outputs
-    if (nodeType !== 'output') return;
-    
     setPlacedModules(prev => prev.map(module => {
       if (module.id !== moduleId) return module;
       
-      const updatedOutputs = module.nodes.outputs.map((node, index) => 
-        index === nodeIndex ? { ...node, name: newName } : node
-      );
-      
-      return {
-        ...module,
-        nodes: {
-          ...module.nodes,
-          outputs: updatedOutputs
-        }
-      };
+      if (nodeType === 'input') {
+        const updatedInputs = module.nodes.inputs.map((node, index) => 
+          index === nodeIndex ? { ...node, name: newName } : node
+        );
+        
+        return {
+          ...module,
+          nodes: {
+            ...module.nodes,
+            inputs: updatedInputs
+          }
+        };
+      } else {
+        const updatedOutputs = module.nodes.outputs.map((node, index) => 
+          index === nodeIndex ? { ...node, name: newName } : node
+        );
+        
+        return {
+          ...module,
+          nodes: {
+            ...module.nodes,
+            outputs: updatedOutputs
+          }
+        };
+      }
     }));
   };
 
@@ -650,17 +674,17 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
         setPlacedModules(prevModules => {
           return prevModules.map(module => {
             if (isFromIODefiner && module.id === connectionToDelete.fromModuleId) {
-              // Reset output node type to string
+              // Reset output node type to undefined (I/O definers start undefined)
               const updatedOutputs = module.nodes.outputs.map((node, idx) => 
-                idx === connectionToDelete.fromOutputIndex ? { ...node, type: 'string' } : node
+                idx === connectionToDelete.fromOutputIndex ? { ...node, type: 'undefined' } : node
               );
               return { ...module, nodes: { ...module.nodes, outputs: updatedOutputs } };
             }
             
             if (isToIODefiner && module.id === connectionToDelete.toModuleId) {
-              // Reset input node type to string
+              // Reset input node type to undefined (I/O definers start undefined)
               const updatedInputs = module.nodes.inputs.map((node, idx) => 
-                idx === connectionToDelete.toInputIndex ? { ...node, type: 'string' } : node
+                idx === connectionToDelete.toInputIndex ? { ...node, type: 'undefined' } : node
               );
               return { ...module, nodes: { ...module.nodes, inputs: updatedInputs } };
             }
@@ -887,12 +911,13 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
     });
     
     // Create and place module immediately on click
+    const moduleId = `${selectedModuleTemplate.id}_${Date.now()}`;
     const newModule: PlacedModule = {
-      id: `${selectedModuleTemplate.id}_${Date.now()}`,
+      id: moduleId,
       template: selectedModuleTemplate,
       position: { x: clickX, y: clickY },
       config,
-      nodes: initializeModuleNodes(selectedModuleTemplate, config)
+      nodes: initializeModuleNodes(selectedModuleTemplate, config, moduleId)
     };
     
     setPlacedModules(prev => [...prev, newModule]);
@@ -1510,16 +1535,19 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
     
     if (!startingConnection) {
       // Start new connection
+      console.log(`Starting connection from ${moduleId}[${nodeType}${nodeIndex}]`);
       setStartingConnection({ moduleId, type: nodeType, index: nodeIndex });
       // Initialize mouse position to the starting node position
       const startPos = getNodePosition(moduleId, nodeType, nodeIndex);
       setCurrentMousePosition(startPos);
     } else {
       // Try to complete connection
+      console.log(`Trying to complete connection from ${startingConnection.moduleId}[${startingConnection.type}${startingConnection.index}] to ${moduleId}[${nodeType}${nodeIndex}]`);
       const start = startingConnection;
       
       // Can only connect output to input or input to output, and not to same module
       if (start.type !== nodeType && start.moduleId !== moduleId) {
+        console.log(`Connection validation passed: ${start.type} -> ${nodeType}, different modules`);
         // Get types of both nodes for validation
         const startNodeType = getNodeType(start.moduleId, start.type, start.index);
         const endNodeType = getNodeType(moduleId, nodeType, nodeIndex);
@@ -1530,7 +1558,54 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
         const isStartIODefiner = startModule?.template.category === 'Module Definers';
         const isEndIODefiner = endModule?.template.category === 'Module Definers';
         
-        if (startNodeType === endNodeType || isStartIODefiner || isEndIODefiner) {
+        
+        // Check if connection should be allowed
+        let connectionAllowed = false;
+        let reason = "";
+        
+        // Allow if types already match
+        if (startNodeType === endNodeType) {
+          connectionAllowed = true;
+          reason = "types match";
+        }
+        // Allow if either node has undefined type (I/O definers start undefined)
+        else if (startNodeType === 'undefined' || endNodeType === 'undefined') {
+          connectionAllowed = true;
+          reason = "undefined type can connect to any type";
+        }
+        // Allow if either is an I/O definer (existing logic)
+        else if (isStartIODefiner || isEndIODefiner) {
+          connectionAllowed = true;
+          reason = "I/O definer present";
+        }
+        // NEW: Allow if target node can change to match source type
+        else if (getNodeTypeConfigAllowed(moduleId, nodeType)) {
+          const targetAllowedTypes = nodeType === 'input' 
+            ? endModule?.template.inputAllowedTypes || []
+            : endModule?.template.outputAllowedTypes || [];
+          const canTargetAcceptSourceType = targetAllowedTypes.length === 0 || targetAllowedTypes.includes(startNodeType);
+          
+          if (canTargetAcceptSourceType) {
+            connectionAllowed = true;
+            reason = "target can change to match source";
+          }
+        }
+        // NEW: Allow if source node can change to match target type
+        else if (getNodeTypeConfigAllowed(start.moduleId, start.type)) {
+          const sourceAllowedTypes = start.type === 'input' 
+            ? startModule?.template.inputAllowedTypes || []
+            : startModule?.template.outputAllowedTypes || [];
+          const canSourceAcceptTargetType = sourceAllowedTypes.length === 0 || sourceAllowedTypes.includes(endNodeType);
+          
+          if (canSourceAcceptTargetType) {
+            connectionAllowed = true;
+            reason = "source can change to match target";
+          }
+        }
+        
+        console.log(`Connection decision: ${connectionAllowed ? 'ALLOWED' : 'REJECTED'} - ${reason}`);
+        
+        if (connectionAllowed) {
           const newConnection: NodeConnection = {
             id: `${Date.now()}`,
             fromModuleId: start.type === 'output' ? start.moduleId : moduleId,
@@ -1554,6 +1629,117 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
               conn.toInputIndex === newConnection.toInputIndex
             );
             
+            // BEFORE adding connection: Automatic type matching
+            const sourceType = getNodeType(start.moduleId, start.type, start.index);
+            const targetType = getNodeType(moduleId, nodeType, nodeIndex);
+            
+            
+            // Auto-match types if they're different
+            if (sourceType !== targetType) {
+              
+              // Get type flexibility for both nodes
+              const sourceCanChange = getNodeTypeConfigAllowed(start.moduleId, start.type);
+              const targetCanChange = getNodeTypeConfigAllowed(moduleId, nodeType);
+              
+              const sourceAllowedTypes = start.type === 'input' 
+                ? startModule?.template.inputAllowedTypes || []
+                : startModule?.template.outputAllowedTypes || [];
+              const targetAllowedTypes = nodeType === 'input' 
+                ? endModule?.template.inputAllowedTypes || []
+                : endModule?.template.outputAllowedTypes || [];
+              
+              const sourceIsRestricted = sourceAllowedTypes.length > 0; // Has specific allowed types
+              const targetIsRestricted = targetAllowedTypes.length > 0; // Has specific allowed types
+              
+              
+              let changeSource = false;
+              let changeTarget = false;
+              let newSourceType = sourceType;
+              let newTargetType = targetType;
+              
+              // Check if either node is an I/O definer
+              const sourceIsIODefiner = startModule?.template.category === 'Module Definers';
+              const targetIsIODefiner = endModule?.template.category === 'Module Definers';
+              
+              // Special rule for undefined types: they always change to match the defined type
+              if (sourceType === 'undefined' && targetType !== 'undefined') {
+                changeSource = true;
+                newSourceType = targetType;
+              }
+              else if (targetType === 'undefined' && sourceType !== 'undefined') {
+                changeTarget = true;
+                newTargetType = sourceType;
+              }
+              // Special rule for I/O definers: they always change to match the other module (unless undefined rule already applies)
+              else if (sourceIsIODefiner && !targetIsIODefiner) {
+                changeSource = true;
+                newSourceType = targetType;
+              }
+              else if (targetIsIODefiner && !sourceIsIODefiner) {
+                changeTarget = true;
+                newTargetType = sourceType;
+              }
+              // If both are I/O definers, use the default behavior
+              else if (!sourceIsIODefiner && !targetIsIODefiner) {
+                // Rule 1: If one node has restricted types and the other can change types → dynamic node switches
+                if (sourceIsRestricted && !targetIsRestricted && targetCanChange && targetAllowedTypes.includes(sourceType)) {
+                  changeTarget = true;
+                  newTargetType = sourceType;
+                }
+                else if (targetIsRestricted && !sourceIsRestricted && sourceCanChange && sourceAllowedTypes.includes(targetType)) {
+                  changeSource = true;
+                  newSourceType = targetType;
+                }
+                // Rule 2: In any other scenario → target node switches to match source
+                else if (targetCanChange && (targetAllowedTypes.length === 0 || targetAllowedTypes.includes(sourceType))) {
+                  changeTarget = true;
+                  newTargetType = sourceType;
+                }
+                // Fallback: If target can't change but source can
+                else if (sourceCanChange && (sourceAllowedTypes.length === 0 || sourceAllowedTypes.includes(targetType))) {
+                  changeSource = true;
+                  newSourceType = targetType;
+                }
+              }
+              
+              // Apply the type changes
+              if (changeSource || changeTarget) {
+                setPlacedModules(prevModules => {
+                  return prevModules.map(module => {
+                    // Change source node type
+                    if (changeSource && module.id === start.moduleId) {
+                      const nodeToUpdate = start.type === 'input'
+                        ? { inputs: module.nodes.inputs.map((node, idx) => 
+                            idx === start.index ? { ...node, type: newSourceType } : node
+                          ), outputs: module.nodes.outputs }
+                        : { inputs: module.nodes.inputs, outputs: module.nodes.outputs.map((node, idx) => 
+                            idx === start.index ? { ...node, type: newSourceType } : node
+                          ) };
+                      return { ...module, nodes: nodeToUpdate };
+                    }
+                    
+                    // Change target node type
+                    if (changeTarget && module.id === moduleId) {
+                      const nodeToUpdate = nodeType === 'input'
+                        ? { inputs: module.nodes.inputs.map((node, idx) => 
+                            idx === nodeIndex ? { ...node, type: newTargetType } : node
+                          ), outputs: module.nodes.outputs }
+                        : { inputs: module.nodes.inputs, outputs: module.nodes.outputs.map((node, idx) => 
+                            idx === nodeIndex ? { ...node, type: newTargetType } : node
+                          ) };
+                      return { ...module, nodes: nodeToUpdate };
+                    }
+                    
+                    return module;
+                  });
+                });
+              } else {
+                console.log(`No type changes applied - no compatible match found`);
+              }
+            } else {
+              console.log(`Types already match - no auto-matching needed`);
+            }
+
             setConnections(prev => {
               let updatedConnections = [...prev];
               
@@ -1570,45 +1756,6 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
               // Add the new connection
               return [...updatedConnections, newConnection];
             });
-            
-            // Update I/O definer types based on connection
-            const startModule = placedModules.find(m => m.id === start.moduleId);
-            const endModule = placedModules.find(m => m.id === moduleId);
-            const isStartIODefiner = startModule?.template.category === 'Module Definers';
-            const isEndIODefiner = endModule?.template.category === 'Module Definers';
-            
-            if (isStartIODefiner || isEndIODefiner) {
-              setPlacedModules(prevModules => {
-                return prevModules.map(module => {
-                  // Update I/O definer types to match connected node types
-                  if (isStartIODefiner && module.id === start.moduleId) {
-                    const connectedType = getNodeType(moduleId, nodeType, nodeIndex);
-                    const nodeToUpdate = start.type === 'input' 
-                      ? { inputs: module.nodes.inputs.map((node, idx) => 
-                          idx === start.index ? { ...node, type: connectedType } : node
-                        ), outputs: module.nodes.outputs }
-                      : { inputs: module.nodes.inputs, outputs: module.nodes.outputs.map((node, idx) => 
-                          idx === start.index ? { ...node, type: connectedType } : node
-                        ) };
-                    return { ...module, nodes: nodeToUpdate };
-                  }
-                  
-                  if (isEndIODefiner && module.id === moduleId) {
-                    const connectedType = getNodeType(start.moduleId, start.type, start.index);
-                    const nodeToUpdate = nodeType === 'input'
-                      ? { inputs: module.nodes.inputs.map((node, idx) => 
-                          idx === nodeIndex ? { ...node, type: connectedType } : node
-                        ), outputs: module.nodes.outputs }
-                      : { inputs: module.nodes.inputs, outputs: module.nodes.outputs.map((node, idx) => 
-                          idx === nodeIndex ? { ...node, type: connectedType } : node
-                        ) };
-                    return { ...module, nodes: nodeToUpdate };
-                  }
-                  
-                  return module;
-                });
-              });
-            }
           }
         }
       }
@@ -1676,8 +1823,8 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
           description: data.type === 'input_definer' ? 'Define an input for your custom module' : 'Define an output for your custom module',
           category: 'Module Definers',
           color: data.type === 'input_definer' ? '#FFFFFF' : '#000000',
-          inputs: data.type === 'input_definer' ? [] : [{ name: 'Value', type: 'string', description: 'Input value', required: true }],
-          outputs: data.type === 'input_definer' ? [{ name: 'Value', type: 'string', description: 'Output value', required: true }] : [],
+          inputs: data.type === 'input_definer' ? [] : [{ name: 'Value', type: 'undefined', description: 'Input value', required: true }],
+          outputs: data.type === 'input_definer' ? [{ name: 'Value', type: 'undefined', description: 'Output value', required: true }] : [],
           config: [] // No config needed - field name and type are handled inline
         };
         
@@ -1697,12 +1844,13 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
       });
       
       // Create new placed module
+      const moduleId = `${moduleData.id}_${Date.now()}`;
       const newModule: PlacedModule = {
-        id: `${moduleData.id}_${Date.now()}`,
+        id: moduleId,
         template: moduleData,
         position: { x: dropX, y: dropY },
         config,
-        nodes: initializeModuleNodes(moduleData, config)
+        nodes: initializeModuleNodes(moduleData, config, moduleId)
       };
       
       setPlacedModules(prev => [...prev, newModule]);

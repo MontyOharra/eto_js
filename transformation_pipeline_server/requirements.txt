@@ -3,3 +3,4 @@ Flask-CORS==4.0.1
 python-dotenv==1.0.1
 SQLAlchemy==2.0.31
 pyodbc>=4.0.39
+sqlparse>=0.4.0

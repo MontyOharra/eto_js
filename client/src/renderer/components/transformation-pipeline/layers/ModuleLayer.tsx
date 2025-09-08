@@ -1,6 +1,6 @@
 import React from 'react';
 import { ExtractedDataModuleComponent } from '../modules/ExtractedDataModuleComponent';
-import { GraphModule } from '../modules/GraphModule';
+import { Module } from '../modules/Module';
 import { BaseModuleTemplate } from '../../../types/modules';
 
 // Types
@@ -106,9 +106,9 @@ export const ModuleLayer: React.FC<ModuleLayerProps> = ({
           );
         }
         
-        // Use GraphModule for all other modules
+        // Use Module for all other modules
         return (
-          <GraphModule
+          <Module
             key={placedModule.id}
             moduleId={placedModule.id}
             template={placedModule.template}

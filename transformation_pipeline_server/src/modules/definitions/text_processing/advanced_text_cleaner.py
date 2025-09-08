@@ -74,7 +74,8 @@ class AdvancedTextCleanerModule(BaseModuleExecutor):
                 "name": "custom_replacements",
                 "type": "textarea",
                 "description": "Custom text replacements (JSON format: {\"old\": \"new\"})",
-                "required": False
+                "required": False,
+                "defaultValue": ""
             }
         ]
         

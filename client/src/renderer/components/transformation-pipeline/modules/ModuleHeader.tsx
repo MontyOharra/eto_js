@@ -1,12 +1,12 @@
 import React from 'react';
 import { BaseModuleTemplate } from '../../../types/modules';
 
-interface GraphModuleHeaderProps {
+interface ModuleHeaderProps {
   template: BaseModuleTemplate;
   onDeleteClick: (e: React.MouseEvent) => void;
 }
 
-export const GraphModuleHeader: React.FC<GraphModuleHeaderProps> = ({
+export const ModuleHeader: React.FC<ModuleHeaderProps> = ({
   template,
   onDeleteClick
 }) => {
@@ -41,11 +41,7 @@ export const GraphModuleHeader: React.FC<GraphModuleHeaderProps> = ({
           onClick={onDeleteClick}
           className="w-7 h-7 flex items-center justify-center rounded transition-colors"
           style={{ 
-            color: textColor,
-            ':hover': {
-              backgroundColor: deleteButtonHoverBg,
-              color: '#ffffff'
-            }
+            color: textColor
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.backgroundColor = deleteButtonHoverBg;

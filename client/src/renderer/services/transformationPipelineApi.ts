@@ -2,7 +2,7 @@
  * API service for Transformation Pipeline Server
  */
 
-import { BaseModuleTemplate } from '../types/modules';
+import { BaseModuleTemplate, BackendModuleInfo, convertBackendModuleToFrontend } from '../types/modules';
 
 const TRANSFORMATION_PIPELINE_API_BASE = 'http://localhost:8090';
 
@@ -14,7 +14,7 @@ export interface ApiResponse<T> {
 
 export interface ModulesResponse {
   success: boolean;
-  modules: BaseModuleTemplate[];
+  modules: BackendModuleInfo[];
   message?: string;
 }
 
@@ -52,10 +52,11 @@ export async function fetchBaseModules(): Promise<BaseModuleTemplate[]> {
       );
     }
 
-    // Backend API already returns modules in frontend format (camelCase)
-    const modules = data.modules || [];
+    // Convert backend modules to frontend format
+    const backendModules = data.modules || [];
+    const frontendModules = backendModules.map(convertBackendModuleToFrontend);
     
-    return modules;
+    return frontendModules;
   } catch (error) {
     if (error instanceof TransformationPipelineApiError) {
       throw error;
@@ -116,54 +117,6 @@ export async function executeModule(
   }
 }
 
-/**
- * Get dynamic outputs for a module based on configuration
- */
-export async function getDynamicOutputs(
-  moduleId: string,
-  config: Record<string, any>
-): Promise<{ outputs: any[], supports_dynamic: boolean }> {
-  try {
-    const response = await fetch(`${TRANSFORMATION_PIPELINE_API_BASE}/api/modules/${moduleId}/outputs`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        config,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new TransformationPipelineApiError(
-        `HTTP error! status: ${response.status}`,
-        response.status
-      );
-    }
-
-    const data = await response.json();
-
-    if (!data.success) {
-      throw new TransformationPipelineApiError(
-        data.message || 'Failed to get dynamic outputs'
-      );
-    }
-
-    return {
-      outputs: data.outputs || [],
-      supports_dynamic: data.supports_dynamic || false
-    };
-  } catch (error) {
-    if (error instanceof TransformationPipelineApiError) {
-      throw error;
-    }
-    
-    console.error('Error getting dynamic outputs:', error);
-    throw new TransformationPipelineApiError(
-      `Failed to get dynamic outputs: ${error instanceof Error ? error.message : 'Unknown error'}`
-    );
-  }
-}
 
 /**
  * Analyze a pipeline for execution planning

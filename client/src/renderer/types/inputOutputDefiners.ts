@@ -2,7 +2,7 @@
  * Type definitions for input/output definers in custom modules
  */
 
-export type IODataType = 'string' | 'number' | 'boolean' | 'datetime';
+export type IODataType = 'string' | 'number' | 'boolean' | 'datetime' | 'undefined';
 
 export interface InputDefiner {
   id: string;

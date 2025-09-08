@@ -1,14 +1,14 @@
-import React, { useState } from 'react';
-import { BaseModuleTemplate } from '../../../types/modules';
-import { NodeListComponent } from '../nodes/NodeListComponent';
-import { ModuleDeletionModal } from '../ui/ModuleDeletionModal';
-import { GraphModuleHeader } from './GraphModuleHeader';
-import { GraphModuleConfiguration } from './GraphModuleConfiguration';
+import React, { useState } from "react";
+import { BaseModuleTemplate } from "../../../types/modules";
+import { NodeListComponent } from "../nodes/NodeListComponent";
+import { ModuleDeletionModal } from "./ModuleDeletionModal";
+import { ModuleHeader } from "./ModuleHeader";
+import { ModuleConfiguration } from "./ModuleConfiguration";
 
 interface NodeState {
   id: string;
   name: string;
-  type: 'string' | 'number' | 'boolean' | 'datetime';
+  type: "string" | "number" | "boolean" | "datetime";
   description: string;
   required: boolean;
 }
@@ -37,7 +37,7 @@ interface PlacedModule {
   };
 }
 
-interface GraphModuleProps {
+interface ModuleProps {
   moduleId: string;
   template: BaseModuleTemplate;
   position: { x: number; y: number };
@@ -50,20 +50,42 @@ interface GraphModuleProps {
   onMouseDown?: (e: React.MouseEvent) => void;
   onDelete?: () => void;
   onConfigChange?: (config: Record<string, any>) => void;
-  onNodeClick?: (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number) => (e: React.MouseEvent) => void;
+  onNodeClick?: (
+    moduleId: string,
+    nodeType: "input" | "output",
+    nodeIndex: number
+  ) => (e: React.MouseEvent) => void;
   onAddInput?: (moduleId: string) => void;
   onRemoveInput?: (moduleId: string, inputIndex: number) => void;
   onAddOutput?: (moduleId: string) => void;
   onRemoveOutput?: (moduleId: string, outputIndex: number) => void;
-  onNodeTypeChange?: (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number, newType: 'string' | 'number' | 'boolean' | 'datetime') => void;
-  onNodePositionUpdate?: (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number, position: { x: number; y: number }) => void;
-  onNameChange?: (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number, newName: string) => void;
+  onNodeTypeChange?: (
+    moduleId: string,
+    nodeType: "input" | "output",
+    nodeIndex: number,
+    newType: "string" | "number" | "boolean" | "datetime"
+  ) => void;
+  onNodePositionUpdate?: (
+    moduleId: string,
+    nodeType: "input" | "output",
+    nodeIndex: number,
+    position: { x: number; y: number }
+  ) => void;
+  onNameChange?: (
+    moduleId: string,
+    nodeType: "input" | "output",
+    nodeIndex: number,
+    newName: string
+  ) => void;
   getInputDisplayName?: (moduleId: string, nodeIndex: number) => string;
-  canChangeType?: (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number) => boolean;
+  canChangeType?: (
+    moduleId: string,
+    nodeType: "input" | "output",
+    nodeIndex: number
+  ) => boolean;
 }
 
-
-export const GraphModule: React.FC<GraphModuleProps> = ({
+export const Module: React.FC<ModuleProps> = ({
   moduleId,
   template,
   position,
@@ -85,7 +107,7 @@ export const GraphModule: React.FC<GraphModuleProps> = ({
   onNodePositionUpdate,
   onNameChange,
   getInputDisplayName,
-  canChangeType
+  canChangeType,
 }) => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
@@ -112,18 +134,27 @@ export const GraphModule: React.FC<GraphModuleProps> = ({
     }
   };
 
+  const canAddInputs =
+    (template.dynamicInputs?.enabled &&
+      (!template.dynamicInputs.maxNodes ||
+        nodes.inputs.length < template.dynamicInputs.maxNodes)) ||
+    false;
 
-  const canAddInputs = (template.dynamicInputs?.enabled && 
-    (!template.dynamicInputs.maxNodes || nodes.inputs.length < template.dynamicInputs.maxNodes)) || false;
-  
-  const canAddOutputs = (template.dynamicOutputs?.enabled && 
-    (!template.dynamicOutputs.maxNodes || nodes.outputs.length < template.dynamicOutputs.maxNodes)) || false;
+  const canAddOutputs =
+    (template.dynamicOutputs?.enabled &&
+      (!template.dynamicOutputs.maxNodes ||
+        nodes.outputs.length < template.dynamicOutputs.maxNodes)) ||
+    false;
 
-  const canRemoveInputs = (template.dynamicInputs?.enabled && 
-    nodes.inputs.length > (template.dynamicInputs.minNodes || 0)) || false;
-  
-  const canRemoveOutputs = (template.dynamicOutputs?.enabled && 
-    nodes.outputs.length > (template.dynamicOutputs.minNodes || 0)) || false;
+  const canRemoveInputs =
+    (template.dynamicInputs?.enabled &&
+      nodes.inputs.length > (template.dynamicInputs.minNodes || 0)) ||
+    false;
+
+  const canRemoveOutputs =
+    (template.dynamicOutputs?.enabled &&
+      nodes.outputs.length > (template.dynamicOutputs.minNodes || 0)) ||
+    false;
 
   return (
     <div
@@ -131,24 +162,24 @@ export const GraphModule: React.FC<GraphModuleProps> = ({
       style={{
         left: `${position.x}px`,
         top: `${position.y}px`,
-        minWidth: '240px',
-        width: 'max-content',
-        maxWidth: '320px',
-        transform: 'translate(-50%, 0)',
-        userSelect: 'none',
-        WebkitUserSelect: 'none',
-        MozUserSelect: 'none',
-        msUserSelect: 'none'
+        minWidth: "240px",
+        width: "max-content",
+        maxWidth: "320px",
+        transform: "translate(-50%, 0)",
+        userSelect: "none",
+        WebkitUserSelect: "none",
+        MozUserSelect: "none",
+        msUserSelect: "none",
       }}
       onMouseDown={handleMouseDown}
     >
-      <GraphModuleHeader 
-        template={template}
-        onDeleteClick={handleDeleteClick}
-      />
+      <ModuleHeader template={template} onDeleteClick={handleDeleteClick} />
 
       {/* Nodes Section */}
-      {(nodes.inputs.length > 0 || nodes.outputs.length > 0 || canAddInputs || canAddOutputs) && (
+      {(nodes.inputs.length > 0 ||
+        nodes.outputs.length > 0 ||
+        canAddInputs ||
+        canAddOutputs) && (
         <NodeListComponent
           moduleId={moduleId}
           modulePosition={position}
@@ -162,8 +193,12 @@ export const GraphModule: React.FC<GraphModuleProps> = ({
           canAddOutputs={canAddOutputs}
           canRemoveInputs={canRemoveInputs}
           canRemoveOutputs={canRemoveOutputs}
-          allowInputTypeConfiguration={template.dynamicInputs?.allowTypeConfiguration || false}
-          allowOutputTypeConfiguration={template.dynamicOutputs?.allowTypeConfiguration || false}
+          allowInputTypeConfiguration={
+            template.dynamicInputs?.allowTypeConfiguration || template.allowInputTypeConfig || false
+          }
+          allowOutputTypeConfiguration={
+            template.dynamicOutputs?.allowTypeConfiguration || template.allowOutputTypeConfig || false
+          }
           onNodeClick={onNodeClick}
           onRemoveInput={onRemoveInput}
           onRemoveOutput={onRemoveOutput}
@@ -177,7 +212,7 @@ export const GraphModule: React.FC<GraphModuleProps> = ({
         />
       )}
 
-      <GraphModuleConfiguration
+      <ModuleConfiguration
         template={template}
         config={config}
         onConfigChange={onConfigChange || (() => {})}

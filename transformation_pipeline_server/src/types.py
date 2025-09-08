@@ -5,21 +5,12 @@ This module contains all type definitions, aliases, and protocols used throughou
 the transformation pipeline system for better type safety and IDE support.
 """
 
-from typing import Dict, List, Optional, Union, Any, Protocol, TypedDict, Literal
-try:
-    from typing import NotRequired
-except ImportError:
-    # For Python < 3.11, use typing_extensions
-    try:
-        from typing_extensions import NotRequired
-    except ImportError:
-        # Fallback for environments without typing_extensions
-        NotRequired = Optional
+from typing import Dict, List, Optional, Union, Any, Protocol, TypedDict, Literal, NotRequired
 from abc import abstractmethod
 
 # Basic type aliases
 ModuleID = str
-NodeType = Literal['string', 'number', 'boolean', 'datetime']
+NodeType = Literal['string', 'number', 'boolean', 'datetime', 'undefined']
 ModuleCategory = Literal['Text Processing', 'AI/ML', 'Data Processing', \
                          'Module Definers', 'Testing']
 
@@ -35,7 +26,7 @@ class ConfigSchema(TypedDict):
     type: str  # 'string', 'number', 'boolean', 'select', 'textarea'
     description: str
     required: bool
-    defaultValue: NotRequired[Any]
+    defaultValue: Any
     options: NotRequired[List[str]]  # For select type
 
 # Dynamic Node Configuration

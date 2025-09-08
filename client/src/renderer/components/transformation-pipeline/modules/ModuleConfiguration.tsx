@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { BaseModuleTemplate } from '../../../types/modules';
 
-interface GraphModuleConfigurationProps {
+interface ModuleConfigurationProps {
   template: BaseModuleTemplate;
   config: Record<string, any>;
   onConfigChange: (config: Record<string, any>) => void;
 }
 
-export const GraphModuleConfiguration: React.FC<GraphModuleConfigurationProps> = ({
+export const ModuleConfiguration: React.FC<ModuleConfigurationProps> = ({
   template,
   config,
   onConfigChange

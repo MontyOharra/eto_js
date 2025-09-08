@@ -10,6 +10,7 @@ interface InputOutputDefinerComponentProps {
 }
 
 const DATA_TYPES: { value: IODataType; label: string; color: string }[] = [
+  { value: 'undefined', label: 'Undefined', color: '#6B7280' },
   { value: 'string', label: 'String', color: '#3B82F6' },
   { value: 'number', label: 'Number', color: '#10B981' },
   { value: 'boolean', label: 'Boolean', color: '#F59E0B' },

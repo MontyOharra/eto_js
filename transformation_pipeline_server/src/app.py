@@ -43,14 +43,7 @@ try:
 except Exception as e:
     logger.error(f"Failed to initialize services: {e}")
     logger.error("Server will start but some functionality may be limited")
-
-@app.get("/")
-def hello_world():
-    return jsonify({
-        "message": "Hello from ETO Transformation Pipeline Server!",
-        "version": "1.0.0",
-        "port": int(os.environ.get("PORT", "8090"))
-    })
+    
 
 @app.get("/health")
 def health():
@@ -100,49 +93,66 @@ def get_modules():
         try:
             modules = session.query(BaseModule).filter(BaseModule.is_active == True).all()
             
-            # Convert to frontend format
+            # Convert to frontend format using new schema
             modules_data = []
             for module in modules:
                 import json
                 
-                # Parse dynamic node configurations if they exist
-                dynamic_inputs = None
-                dynamic_outputs = None
-                
-                if module.dynamic_inputs:
-                    try:
-                        dynamic_inputs = json.loads(module.dynamic_inputs)
-                    except (json.JSONDecodeError, TypeError):
-                        pass
-                
-                if module.dynamic_outputs:
-                    try:
-                        dynamic_outputs = json.loads(module.dynamic_outputs)
-                    except (json.JSONDecodeError, TypeError):
-                        pass
-                
-                module_data = {
-                    "id": module.id,
-                    "name": module.name,
-                    "description": module.description,
-                    "category": module.category or "Text Processing",
-                    "color": module.color or "#3B82F6",
-                    "version": module.version,
-                    "inputs": json.loads(module.input_schema),
-                    "outputs": json.loads(module.output_schema),
-                    "config": json.loads(module.config_schema) if module.config_schema else [],
-                    "maxInputs": module.max_inputs,
-                    "maxOutputs": module.max_outputs,
-                }
-                
-                # Add dynamic node configurations if they exist
-                if dynamic_inputs:
-                    module_data["dynamicInputs"] = dynamic_inputs
-                
-                if dynamic_outputs:
-                    module_data["dynamicOutputs"] = dynamic_outputs
-                
-                modules_data.append(module_data)
+                try:
+                    # Parse the backend configurations directly
+                    input_config = {"nodes": [], "dynamic": None, "allowedTypes": []}
+                    output_config = {"nodes": [], "dynamic": None, "allowedTypes": []}
+                    config_schema = []
+                    
+                    # Get the actual string values from the database row
+                    input_config_str = getattr(module, 'input_config', None)
+                    output_config_str = getattr(module, 'output_config', None)
+                    config_schema_str = getattr(module, 'config_schema', None)
+                    
+                    if input_config_str and isinstance(input_config_str, str):
+                        try:
+                            parsed_input = json.loads(input_config_str)
+                            if parsed_input and isinstance(parsed_input, dict):
+                                input_config = parsed_input
+                        except (json.JSONDecodeError, TypeError) as e:
+                            logger.warning(f"Failed to parse input_config for module {module.id}: {e}")
+                    
+                    if output_config_str and isinstance(output_config_str, str):
+                        try:
+                            parsed_output = json.loads(output_config_str)
+                            if parsed_output and isinstance(parsed_output, dict):
+                                output_config = parsed_output
+                        except (json.JSONDecodeError, TypeError) as e:
+                            logger.warning(f"Failed to parse output_config for module {module.id}: {e}")
+                    
+                    if config_schema_str and isinstance(config_schema_str, str):
+                        try:
+                            parsed_config = json.loads(config_schema_str)
+                            if parsed_config and isinstance(parsed_config, list):
+                                config_schema = parsed_config
+                        except (json.JSONDecodeError, TypeError) as e:
+                            logger.warning(f"Failed to parse config_schema for module {module.id}: {e}")
+                    
+                    # Return the exact backend NodeConfiguration objects
+                    module_data = {
+                        "id": module.id,
+                        "name": module.name,
+                        "description": module.description or "",
+                        "category": module.category or "Text Processing",
+                        "color": module.color or "#3B82F6",
+                        "version": module.version or "1.0.0",
+                        # Direct backend schema format
+                        "inputConfig": input_config,
+                        "outputConfig": output_config,
+                        "config": config_schema
+                    }
+                    
+                    modules_data.append(module_data)
+                    
+                except (json.JSONDecodeError, TypeError) as e:
+                    logger.error(f"Error parsing module {module.id} configuration: {e}")
+                    # Skip malformed modules
+                    continue
             
             return jsonify({
                 "success": True,
@@ -194,43 +204,6 @@ def execute_module(module_id):
             "message": f"Execution error: {str(e)}"
         }), 500
 
-@app.post("/api/modules/<module_id>/outputs")
-def get_dynamic_outputs(module_id):
-    """Get dynamic outputs for a module based on configuration"""
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({
-                "success": False,
-                "message": "Request body with config required"
-            }), 400
-        
-        config = data.get('config', {})
-        
-        registry = get_module_registry()
-        module = registry.get_module(module_id)
-        
-        if not module:
-            return jsonify({
-                "success": False,
-                "message": f"Module not found: {module_id}"
-            }), 404
-        
-        # Get dynamic outputs based on config
-        outputs = module.get_dynamic_outputs(config)
-        
-        return jsonify({
-            "success": True,
-            "outputs": outputs,
-            "supports_dynamic": module.supports_dynamic_outputs()
-        })
-        
-    except Exception as e:
-        logger.error(f"Error getting dynamic outputs for module {module_id}: {e}")
-        return jsonify({
-            "success": False,
-            "message": f"Error: {str(e)}"
-        }), 500
 
 # Pipeline Execution Endpoints
 

@@ -24,7 +24,7 @@ class SQLParserModule(BaseModuleExecutor):
     def get_module_info(self) -> ModuleInfo:
         """Return the module template information for database storage"""
         
-        # Input configuration - single SQL query input
+        # Input configuration - variable SQL query inputs
         input_config: NodeConfiguration = {
             "nodes": [
                 {
@@ -32,11 +32,17 @@ class SQLParserModule(BaseModuleExecutor):
                     "type": "string"
                 }
             ],
-            "dynamic": None,  # Static node count
+            "dynamic": {
+                "maxNodes": 10,  # Allow up to 10 inputs
+                "defaultNode": {
+                    "defaultName": "sql_query",
+                    "type": "string"
+                }
+            },
             "allowedTypes": ["string"]  # Only string inputs allowed
         }
         
-        # Output configuration - single parsed result output
+        # Output configuration - variable parsed result outputs
         output_config: NodeConfiguration = {
             "nodes": [
                 {
@@ -44,7 +50,13 @@ class SQLParserModule(BaseModuleExecutor):
                     "type": "string"
                 }
             ],
-            "dynamic": None,  # Static node count
+            "dynamic": {
+                "maxNodes": 10,  # Allow up to 10 outputs
+                "defaultNode": {
+                    "defaultName": "parsed_result", 
+                    "type": "string"
+                }
+            },
             "allowedTypes": ["string"]  # Only string outputs
         }
         
@@ -70,13 +82,15 @@ class SQLParserModule(BaseModuleExecutor):
                 "name": "table_filter",
                 "type": "string",
                 "description": "Filter results to tables matching pattern (regex). Use {input_0} to reference input data",
-                "required": False
+                "required": False,
+                "defaultValue": ""
             },
             {
                 "name": "column_filter",
                 "type": "string",
                 "description": "Filter results to columns matching pattern (regex). Use {output_0} to reference output node",
-                "required": False
+                "required": False,
+                "defaultValue": ""
             }
         ]
         
@@ -125,57 +139,29 @@ class SQLParserModule(BaseModuleExecutor):
         node_info: ExecutionNodeInfo,
         output_names: Optional[List[str]] = None
     ) -> ExecutionOutputs:
-        """Parse the SQL query based on configuration"""
+        """Parse SQL queries from variable inputs to variable outputs - NON-WORKING PLACEHOLDER"""
         try:
             # Validate inputs and config
             self.validate_inputs(inputs)
             self.validate_config(config)
-            self.validate_config_template_references(config, node_info)
             
-            # Get the first (and only) input value
-            input_values = list(inputs.values())
-            if not input_values:
-                raise ModuleExecutionError("No SQL query provided")
+            self.logger.info(f"SQL Parser: Processing {len(inputs)} inputs to {len(node_info['outputs'])} outputs")
+            self.logger.info(f"Input node IDs: {list(inputs.keys())}")
+            self.logger.info(f"Output node IDs: {[node['nodeId'] for node in node_info['outputs']]}")
             
-            sql_query = str(input_values[0])
-            parse_mode = config.get('parse_mode', 'columns')
-            output_format = config.get('output_format', 'json')
+            # TODO: Implement actual SQL parsing logic for variable inputs/outputs
+            # For now, just return placeholder data
+            results: ExecutionOutputs = ExecutionOutputs({})
             
-            # Resolve template references in filters
-            table_filter = self.resolve_config_template(config.get('table_filter', ''), node_info)
-            column_filter = self.resolve_config_template(config.get('column_filter', ''), node_info)
+            # Generate placeholder outputs for each output node
+            for output_node in node_info['outputs']:
+                output_node_id = output_node['nodeId']
+                placeholder_result = f"Parsed SQL result for {output_node_id} (placeholder)"
+                results[output_node_id] = placeholder_result
+                
+                self.logger.info(f"Generated placeholder output for {output_node_id}")
             
-            # Parse SQL query
-            try:
-                parsed = sqlparse.parse(sql_query)[0]
-            except Exception as e:
-                raise ModuleExecutionError(f"Failed to parse SQL query: {e}")
-            
-            # Extract based on parse mode
-            if parse_mode == 'columns':
-                result = self._extract_columns(parsed, column_filter)
-            elif parse_mode == 'tables':
-                result = self._extract_tables(parsed, table_filter)
-            elif parse_mode == 'conditions':
-                result = self._extract_conditions(parsed)
-            elif parse_mode == 'full_parse':
-                result = self._full_parse(parsed)
-            else:
-                raise ModuleExecutionError(f"Unknown parse mode: {parse_mode}")
-            
-            # Format output
-            formatted_result = self._format_output(result, output_format)
-            
-            self.logger.info(f"SQL parsed in {parse_mode} mode, {len(result)} items extracted")
-            
-            # Get the first (and only) output node ID
-            output_node_ids = [node['nodeId'] for node in node_info['outputs']]
-            if not output_node_ids:
-                raise ModuleExecutionError("No output node configured")
-            
-            return ExecutionOutputs({
-                output_node_ids[0]: formatted_result
-            })
+            return results
             
         except Exception as e:
             self.logger.error(f"SQL parsing failed: {e}")
