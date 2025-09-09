@@ -340,7 +340,7 @@ export function useServerHealth(autoCheck: boolean = true, checkInterval: number
     };
   }, []);
 
-  const isServerOnline = state.data?.status === 'ok' && !state.error;
+  const isServerOnline = (state.data?.status === 'ok' || state.data?.status === 'healthy') && !state.error;
 
   return {
     ...state,

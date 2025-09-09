@@ -1,15 +1,14 @@
 """
-Unified ETO Server - Flask Application Factory
+Unified ETO Server - Flask Application
 Combines email/template processing with transformation pipelines
 """
 import os
 import logging
 from flask import Flask, jsonify
 from flask_cors import CORS
-from typing import Optional
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
+# Load environment variables
 load_dotenv()
 
 # Configure logging
@@ -38,47 +37,35 @@ def create_app(config_name: str = 'development') -> Flask:
     # Load configuration
     app.config.from_object(get_config_class(config_name))
     
-    # Initialize database
+    # Initialize database with SQL Server
     try:
-        from .database import init_unified_database
         database_url = os.getenv('DATABASE_URL', app.config.get('DATABASE_URL'))
-        if database_url:
-            init_unified_database(database_url)
-            logger.info("Unified database initialized successfully")
-        else:
-            logger.warning("No database URL configured")
+        if not database_url:
+            raise ValueError("DATABASE_URL environment variable is required")
+        
+        # TODO: Initialize database connection with new architecture
+        logger.info(f"Database connection configured: {database_url.split('://')[0]}://***")
+        
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
+        # Print available drivers for debugging
+        try:
+            import pyodbc
+            drivers = pyodbc.drivers()
+            logger.info(f"Available ODBC drivers: {drivers}")
+        except ImportError:
+            logger.warning("pyodbc not available for driver debugging")
+        except Exception:
+            pass
+        raise
     
-    # Initialize module registry
-    try:
-        from .modules import get_module_registry, populate_database_with_modules
-        registry = get_module_registry()
-        
-        # Registry automatically discovers modules during initialization
-        module_count = registry.get_registered_module_count()
-        if module_count > 0:
-            populate_database_with_modules()
-            logger.info(f"Module registry initialized with {module_count} modules")
-        else:
-            logger.warning("No modules discovered in registry")
-    except Exception as e:
-        logger.error(f"Failed to initialize module registry: {e}")
+    # TODO: Initialize services (modules, processing worker, etc.)
     
     # Register blueprints
     register_blueprints(app)
     
     # Register error handlers
     register_error_handlers(app)
-    
-    # Health check endpoint
-    @app.route('/health')
-    def health_check():
-        return jsonify({
-            'status': 'healthy',
-            'service': 'unified-eto-server',
-            'version': '1.0.0'
-        })
     
     logger.info("Unified ETO server application created successfully")
     return app
@@ -88,19 +75,21 @@ def register_blueprints(app: Flask) -> None:
     try:
         # Import blueprints
         from .blueprints.health import health_bp
-        from .blueprints.modules import modules_bp
         from .blueprints.emails import emails_bp
-        from .blueprints.pdfs import pdfs_bp
         from .blueprints.templates import templates_bp
+        from .blueprints.pdfs import pdfs_bp
+        from .blueprints.eto_runs import eto_runs_bp
+        from .blueprints.modules import modules_bp
         from .blueprints.pipelines import pipelines_bp
         from .blueprints.processing import processing_bp
         
         # Register blueprints
         app.register_blueprint(health_bp)
-        app.register_blueprint(modules_bp)
         app.register_blueprint(emails_bp)
-        app.register_blueprint(pdfs_bp)
         app.register_blueprint(templates_bp)
+        app.register_blueprint(pdfs_bp)
+        app.register_blueprint(eto_runs_bp)
+        app.register_blueprint(modules_bp)
         app.register_blueprint(pipelines_bp)
         app.register_blueprint(processing_bp)
         
@@ -108,9 +97,10 @@ def register_blueprints(app: Flask) -> None:
         
     except ImportError as e:
         logger.error(f"Failed to import blueprint: {e}")
-        # Continue without the missing blueprint for now
+        raise
     except Exception as e:
         logger.error(f"Failed to register blueprints: {e}")
+        raise
 
 def register_error_handlers(app: Flask) -> None:
     """Register global error handlers"""
@@ -144,13 +134,18 @@ def get_config_class(config_name: str):
     
     class DevelopmentConfig:
         DEBUG = True
-        DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///eto_unified_dev.db')
+        DATABASE_URL = os.getenv('DATABASE_URL', 'mssql+pyodbc://test:testing@localhost:1433/eto_unified?driver=ODBC+Driver+17+for+SQL+Server&TrustServerCertificate=yes')
         SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
     
     class ProductionConfig:
         DEBUG = False
         DATABASE_URL = os.getenv('DATABASE_URL')
         SECRET_KEY = os.getenv('SECRET_KEY')
+        
+        if not DATABASE_URL:
+            raise ValueError("DATABASE_URL is required for production")
+        if not SECRET_KEY or SECRET_KEY == 'dev-secret-key-change-in-production':
+            raise ValueError("SECRET_KEY must be set for production")
     
     class TestingConfig:
         TESTING = True
@@ -164,9 +159,6 @@ def get_config_class(config_name: str):
     }
     
     return configs.get(config_name, DevelopmentConfig)
-
-# For backwards compatibility
-app = None
 
 if __name__ == '__main__':
     app = create_app()
