@@ -94,8 +94,38 @@ class BaseRepository(ABC, Generic[ModelType]):
                 # Refresh to get updated fields (like auto-generated timestamps)
                 session.refresh(instance)
                 
+                # Expunge the instance so it can be used outside this session
+                session.expunge(instance)
+                
                 logger.debug(f"Created {self.model_class.__name__} with ID: {instance.id}")
                 return instance
+                
+        except SQLAlchemyError as e:
+            logger.error(f"Error creating {self.model_class.__name__}: {e}")
+            raise RepositoryError(f"Failed to create record: {e}") from e
+        except Exception as e:
+            logger.error(f"Unexpected error creating {self.model_class.__name__}: {e}")
+            raise RepositoryError(f"Unexpected error: {e}") from e
+    
+    def create_and_get_id(self, data: Dict[str, Any]) -> int:
+        """Create a new record and return just the ID"""
+        if not data:
+            raise ValueError("Data dictionary cannot be empty")
+            
+        try:
+            with self.connection_manager.session_scope() as session:
+                # Create new instance of the model
+                instance = self.model_class(**data)
+                
+                # Add to session and flush to get ID
+                session.add(instance)
+                session.flush()  # This populates the ID without committing
+                
+                # Access ID while session is still open
+                record_id = instance.id
+                
+                logger.debug(f"Created {self.model_class.__name__} with ID: {record_id}")
+                return record_id
                 
         except SQLAlchemyError as e:
             logger.error(f"Error creating {self.model_class.__name__}: {e}")

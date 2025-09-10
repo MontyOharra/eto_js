@@ -4,7 +4,7 @@ Data access layer for PdfTemplate model operations
 """
 import logging
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import func, desc
 from .base_repository import BaseRepository, RepositoryError
@@ -85,7 +85,7 @@ class TemplateRepository(BaseRepository[PdfTemplate]):
             raise ValueError("template_id cannot be None")
         
         if last_used_at is None:
-            last_used_at = datetime.utcnow()
+            last_used_at = datetime.now(timezone.utc)
         
         try:
             # Get current template to increment usage count

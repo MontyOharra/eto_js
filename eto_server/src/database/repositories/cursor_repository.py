@@ -4,7 +4,7 @@ Data access layer for EmailCursor model operations
 """
 import logging
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from .base_repository import BaseRepository, RepositoryError
 from ..models import EmailCursor
@@ -52,7 +52,7 @@ class CursorRepository(BaseRepository[EmailCursor]):
                 # Update existing cursor
                 update_data = {
                     **cursor_data,
-                    'last_check_time': datetime.utcnow()
+                    'last_check_time': datetime.now(timezone.utc)
                 }
                 updated_cursor = self.update(existing_cursor.id, update_data)
                 logger.debug(f"Updated cursor for {email_address}/{folder_name}")
@@ -62,7 +62,7 @@ class CursorRepository(BaseRepository[EmailCursor]):
                 create_data = {
                     'email_address': email_address,
                     'folder_name': folder_name,
-                    'last_check_time': datetime.utcnow(),
+                    'last_check_time': datetime.now(timezone.utc),
                     'total_emails_processed': 0,
                     'total_pdfs_found': 0,
                     **cursor_data
@@ -79,7 +79,7 @@ class CursorRepository(BaseRepository[EmailCursor]):
                 if existing_cursor:
                     update_data = {
                         **cursor_data,
-                        'last_check_time': datetime.utcnow()
+                        'last_check_time': datetime.now(timezone.utc)
                     }
                     return self.update(existing_cursor.id, update_data)
             raise RepositoryError(f"Failed to create or update cursor: {e}") from e
@@ -111,7 +111,7 @@ class CursorRepository(BaseRepository[EmailCursor]):
             update_data = {
                 'total_emails_processed': new_emails_processed,
                 'total_pdfs_found': new_pdfs_found,
-                'last_check_time': datetime.utcnow()
+                'last_check_time': datetime.now(timezone.utc)
             }
             
             updated_cursor = self.update(cursor_id, update_data)

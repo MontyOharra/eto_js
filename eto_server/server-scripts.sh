@@ -31,8 +31,12 @@ show_help() {
     echo -e "  cleardata  - Clear data folders (logs, storage) without affecting database${NC}"
     echo -e "  help       - Show this help message${NC}"
     echo ""
+    echo -e "${YELLOW}Options:${NC}"
+    echo -e "  --confirm  - Skip confirmation prompts (for automation)${NC}"
+    echo ""
     echo -e "${YELLOW}Examples:${NC}"
     echo -e "  ./server-scripts.sh build${NC}"
+    echo -e "  ./server-scripts.sh build --confirm${NC}"
     echo -e "  ./server-scripts.sh start${NC}"
     echo -e "  ./server-scripts.sh resetdb${NC}"
     echo -e "  ./server-scripts.sh killpython${NC}"
@@ -50,7 +54,12 @@ ACTION="$1"
 case "$ACTION" in
     "build")
         echo -e "${GREEN}Building and deploying Flask server...${NC}"
-        "$SCRIPTS_DIR/build-server.sh"
+        # Pass through --confirm flag if provided
+        if [ "$2" = "--confirm" ]; then
+            "$SCRIPTS_DIR/build-server.sh" --confirm
+        else
+            "$SCRIPTS_DIR/build-server.sh"
+        fi
         ;;
     "refresh")
         echo -e "${GREEN}Refreshing deployed Flask server files (no venv rebuild)...${NC}"

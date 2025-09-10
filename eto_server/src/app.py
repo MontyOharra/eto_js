@@ -43,7 +43,9 @@ def create_app(config_name: str = 'development') -> Flask:
         if not database_url:
             raise ValueError("DATABASE_URL environment variable is required")
         
-        # TODO: Initialize database connection with new architecture
+        # Initialize database connection with new architecture
+        from .database import init_database_connection
+        connection_manager = init_database_connection(database_url)
         logger.info(f"Database connection configured: {database_url.split('://')[0]}://***")
         
     except Exception as e:
@@ -82,6 +84,7 @@ def register_blueprints(app: Flask) -> None:
         from .blueprints.modules import modules_bp
         from .blueprints.pipelines import pipelines_bp
         from .blueprints.processing import processing_bp
+        from .blueprints.email_ingestion import email_ingestion_bp
         
         # Register blueprints
         app.register_blueprint(health_bp)
@@ -92,6 +95,7 @@ def register_blueprints(app: Flask) -> None:
         app.register_blueprint(modules_bp)
         app.register_blueprint(pipelines_bp)
         app.register_blueprint(processing_bp)
+        app.register_blueprint(email_ingestion_bp)
         
         logger.info("All blueprints registered successfully")
         
@@ -135,17 +139,18 @@ def get_config_class(config_name: str):
     class DevelopmentConfig:
         DEBUG = True
         DATABASE_URL = os.getenv('DATABASE_URL', 'mssql+pyodbc://test:testing@localhost:1433/eto_unified?driver=ODBC+Driver+17+for+SQL+Server&TrustServerCertificate=yes')
-        SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
+        # SECRET_KEY not needed for our REST API, but Flask requires it
+        SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-not-used-for-sessions')
     
     class ProductionConfig:
         DEBUG = False
         DATABASE_URL = os.getenv('DATABASE_URL')
-        SECRET_KEY = os.getenv('SECRET_KEY')
+        # For production, allow a default since we don't actually use sessions/cookies
+        SECRET_KEY = os.getenv('SECRET_KEY', 'production-secret-key-placeholder')
         
         if not DATABASE_URL:
             raise ValueError("DATABASE_URL is required for production")
-        if not SECRET_KEY or SECRET_KEY == 'dev-secret-key-change-in-production':
-            raise ValueError("SECRET_KEY must be set for production")
+        # Remove SECRET_KEY requirement since we don't use Flask sessions
     
     class TestingConfig:
         TESTING = True

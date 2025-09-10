@@ -4,7 +4,7 @@ Data access layer for EtoRun model operations
 """
 import logging
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import func, case
 from .base_repository import BaseRepository, RepositoryError
@@ -91,7 +91,7 @@ class EtoRunRepository(BaseRepository[EtoRun]):
         update_data = {'status': status, **kwargs}
         
         # Add automatic timestamp updates based on status
-        current_time = datetime.utcnow()
+        current_time = datetime.now(timezone.utc)
         if status == 'processing' and 'started_at' not in update_data:
             update_data['started_at'] = current_time
         elif status in ['success', 'failure', 'skipped'] and 'completed_at' not in update_data:

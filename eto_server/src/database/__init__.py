@@ -22,7 +22,8 @@ from .models import (
     EtoRun,
     EmailCursor,
     BaseModule,
-    Pipeline
+    Pipeline,
+    EmailIngestionConfig
 )
 
 # Repositories
@@ -34,7 +35,8 @@ from .repositories import (
     EtoRunRepository,
     ModuleRepository,
     PipelineRepository,
-    CursorRepository
+    CursorRepository,
+    EmailConfigRepository
 )
 
 # Main database service
@@ -61,6 +63,7 @@ __all__ = [
     'EmailCursor',
     'BaseModule',
     'Pipeline',
+    'EmailIngestionConfig',
     
     # For advanced usage
     'EmailRepository',
@@ -69,7 +72,8 @@ __all__ = [
     'EtoRunRepository',
     'ModuleRepository',
     'PipelineRepository',
-    'CursorRepository'
+    'CursorRepository',
+    'EmailConfigRepository'
 ]
 
 

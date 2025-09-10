@@ -304,3 +304,45 @@ class Pipeline(Base):
         Index('idx_pipelines_status', 'status'),
         Index('idx_pipelines_active', 'is_active'),
     )
+
+
+class EmailIngestionConfig(Base):
+    """Email ingestion configuration settings"""
+    __tablename__ = 'email_ingestion_configs'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text)
+    
+    # Connection settings
+    email_address = Column(String(255))  # None = default account
+    folder_name = Column(String(255), nullable=False, default='Inbox')
+    
+    # Filter configuration (JSON)
+    filter_rules = Column(Text, nullable=False)
+    
+    # Monitoring settings
+    poll_interval_seconds = Column(Integer, default=5)
+    max_backlog_hours = Column(Integer, default=24)
+    error_retry_attempts = Column(Integer, default=3)
+    
+    # Status and control
+    is_active = Column(Boolean, default=True)
+    is_running = Column(Boolean, default=False)
+    
+    # Audit fields
+    created_by = Column(String(255), nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    last_used_at = Column(DateTime)
+    
+    # Statistics
+    emails_processed = Column(Integer, default=0)
+    pdfs_found = Column(Integer, default=0)
+    last_error_message = Column(Text)
+    last_error_at = Column(DateTime)
+
+    __table_args__ = (
+        Index('idx_email_config_active', 'is_active'),
+        Index('idx_email_config_running', 'is_running'),
+    )
