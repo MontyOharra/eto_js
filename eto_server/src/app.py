@@ -77,7 +77,6 @@ def register_blueprints(app: Flask) -> None:
     try:
         # Import blueprints
         from .blueprints.health import health_bp
-        from .blueprints.emails import emails_bp
         from .blueprints.templates import templates_bp
         from .blueprints.pdfs import pdfs_bp
         from .blueprints.eto_runs import eto_runs_bp
