@@ -23,5 +23,6 @@ python-dotenv==1.0.1
 # Async support for pipeline execution
 aiofiles>=23.0.0
 
-# JSON Schema validation
+# Validation and serialization
 jsonschema>=4.0.0
+pydantic>=2.0.0

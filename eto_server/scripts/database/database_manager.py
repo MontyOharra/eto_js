@@ -16,7 +16,7 @@ sys.path.insert(0, str(project_root))
 
 try:
     from dotenv import load_dotenv
-    from src.database.connection import DatabaseCreator, DatabaseConnectionError, DatabaseNotFoundError
+    from src_old.database.connection import DatabaseCreator, DatabaseConnectionError, DatabaseNotFoundError
 except ImportError as e:
     print(f"❌ Import error: {e}", file=sys.stderr)
     print("Make sure you're running from the project root and dependencies are installed", file=sys.stderr)
@@ -133,7 +133,7 @@ class DatabaseManager:
                 
                 # Try to get table information
                 try:
-                    from src.database.connection import DatabaseConnectionManager
+                    from src_old.database.connection import DatabaseConnectionManager
                     conn_manager = DatabaseConnectionManager(database_url)
                     conn_manager.initialize_connection()
                     
@@ -145,7 +145,7 @@ class DatabaseManager:
                         
                     # Get table count
                     with conn_manager.session_scope() as session:
-                        from src.database.models import Base
+                        from src_old.database.models import Base
                         table_count = len(Base.metadata.tables)
                         self.logger.info(f"📋 Database schema defines {table_count} tables")
                     
