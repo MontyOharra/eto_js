@@ -11,8 +11,9 @@ from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, field
 from contextlib import asynccontextmanager
 
-from .outlook_connection_service import OutlookConnectionService, ConnectionConfig
-from .email_filter_service import EmailFilterService, EmailData
+from .outlook_connection_service import OutlookConnectionService
+from .email_filter_service import EmailFilterService
+from .email_types import EmailConnectionConfig, EmailData
 from .email_cursor_service import EmailCursorService
 from .email_config_service import EmailConfigService, ConfigurationData
 from ..database import get_connection_manager
@@ -77,6 +78,83 @@ class EmailIngestionService:
         self._lock = threading.Lock()
         self.logger = logging.getLogger(__name__)
 
+
+    # === Service Health and Status ===
+    async def get_health_status(self) -> ServiceHealth:
+        """Get comprehensive service health status"""
+        try:
+            # Update uptime
+            if self.start_time and self.is_running:
+                uptime_delta = datetime.now(timezone.utc) - self.start_time
+                self.stats.uptime_seconds = int(uptime_delta.total_seconds())
+            
+            # Check connection health
+            connection_status = await self.connection_service.get_connection_status()
+            
+            return ServiceHealth(
+                is_running=self.is_running,
+                is_connected=connection_status.is_connected,
+                configuration_loaded=self.current_config is not None,
+                last_error=connection_status.last_error,
+                stats=self.stats
+            )
+        
+        except Exception as e:
+            self.logger.error(f"Error getting health status: {e}")
+            return ServiceHealth(
+                is_running=self.is_running,
+                is_connected=False,
+                configuration_loaded=False,
+                last_error=str(e),
+                stats=self.stats
+            )
+    
+    async def get_detailed_status(self) -> Dict[str, Any]:
+        """Get detailed service status including configuration and statistics"""
+        try:
+            health = await self.get_health_status()
+            
+            connection_status = await self.connection_service.get_connection_status()
+            
+            status = {
+                "service": {
+                    "is_running": health.is_running,
+                    "uptime_minutes": self._get_uptime_minutes(),
+                    "last_health_check": self.last_health_check
+                },
+                "connection": {
+                    "is_connected": health.is_connected,
+                    "email_address": connection_status.email_address,
+                    "folder_name": connection_status.folder_name,
+                    "inbox_count": connection_status.inbox_count,
+                    "last_error": connection_status.last_error
+                },
+                "statistics": {
+                    "emails_processed": health.stats.emails_processed,
+                    "emails_filtered": health.stats.emails_filtered,
+                    "pdfs_extracted": health.stats.pdfs_extracted,
+                    "processing_errors": health.stats.processing_errors,
+                    "reconnections": health.stats.reconnections,
+                    "last_processed_at": health.stats.last_processed_at
+                }
+            }
+            
+            # Add configuration info if loaded
+            if self.current_config:
+                status["configuration"] = {
+                    "filter_name": self.current_config.filters.name,
+                    "polling_interval": self.current_config.connection.polling_interval,
+                    "auto_reconnect": self.current_config.monitoring.auto_reconnect,
+                    "rule_count": len(self.current_config.filters.rules)
+                }
+            
+            return status
+        
+        except Exception as e:
+            self.logger.error(f"Error getting detailed status: {e}")
+            return {"error": str(e)}
+
+
     # === High-Level Service Lifecycle ===
     
     async def start_service(self) -> Dict[str, Any]:
@@ -92,21 +170,15 @@ class EmailIngestionService:
                 
                 self.logger.info("Starting Email Ingestion Service")
                 
-                # Load active configuration
                 self.current_config = self.config_service.get_active_configuration()
-                if not self.current_config:
-                    raise Exception("No active email ingestion configuration found")
+                assert self.current_config is not None
                 
                 # Initialize services with configuration
                 await self._initialize_services()
                 
-                # Connect to Outlook
-                connection_config = ConnectionConfig(
-                    email_address=self.current_config.connection.email_address,
-                    folder_name=self.current_config.connection.folder_name
-                )
+                connection_status = await self.connection_service.get_connection_status()
                 
-                connection_status = await self.connection_service.connect(connection_config)
+                # Connect to Outlook
                 if not connection_status.is_connected:
                     raise Exception(f"Failed to connect to Outlook: {connection_status.last_error}")
                 
@@ -127,6 +199,7 @@ class EmailIngestionService:
                 await self._process_downtime_backlog()
                 
                 self.logger.info("Email Ingestion Service started successfully")
+                
                 
                 return {
                     "success": True,
@@ -229,81 +302,6 @@ class EmailIngestionService:
                 "message": "Failed to restart service"
             }
 
-    # === Service Health and Status ===
-    async def get_health_status(self) -> ServiceHealth:
-        """Get comprehensive service health status"""
-        try:
-            # Update uptime
-            if self.start_time and self.is_running:
-                uptime_delta = datetime.now(timezone.utc) - self.start_time
-                self.stats.uptime_seconds = int(uptime_delta.total_seconds())
-            
-            # Check connection health
-            connection_status = await self.connection_service.get_connection_status()
-            
-            return ServiceHealth(
-                is_running=self.is_running,
-                is_connected=connection_status.is_connected,
-                configuration_loaded=self.current_config is not None,
-                last_error=connection_status.last_error,
-                stats=self.stats
-            )
-        
-        except Exception as e:
-            self.logger.error(f"Error getting health status: {e}")
-            return ServiceHealth(
-                is_running=self.is_running,
-                is_connected=False,
-                configuration_loaded=False,
-                last_error=str(e),
-                stats=self.stats
-            )
-    
-    async def get_detailed_status(self) -> Dict[str, Any]:
-        """Get detailed service status including configuration and statistics"""
-        try:
-            health = await self.get_health_status()
-            
-            connection_status = await self.connection_service.get_connection_status()
-            
-            status = {
-                "service": {
-                    "is_running": health.is_running,
-                    "uptime_minutes": self._get_uptime_minutes(),
-                    "last_health_check": self.last_health_check
-                },
-                "connection": {
-                    "is_connected": health.is_connected,
-                    "email_address": connection_status.email_address,
-                    "folder_name": connection_status.folder_name,
-                    "inbox_count": connection_status.inbox_count,
-                    "last_error": connection_status.last_error
-                },
-                "statistics": {
-                    "emails_processed": health.stats.emails_processed,
-                    "emails_filtered": health.stats.emails_filtered,
-                    "pdfs_extracted": health.stats.pdfs_extracted,
-                    "processing_errors": health.stats.processing_errors,
-                    "reconnections": health.stats.reconnections,
-                    "last_processed_at": health.stats.last_processed_at
-                }
-            }
-            
-            # Add configuration info if loaded
-            if self.current_config:
-                status["configuration"] = {
-                    "filter_name": self.current_config.filters.name,
-                    "polling_interval": self.current_config.connection.polling_interval,
-                    "auto_reconnect": self.current_config.monitoring.auto_reconnect,
-                    "rule_count": len(self.current_config.filters.rules)
-                }
-            
-            return status
-        
-        except Exception as e:
-            self.logger.error(f"Error getting detailed status: {e}")
-            return {"error": str(e)}
-
     # === Configuration Management ===
     
     async def reload_configuration(self) -> Dict[str, Any]:
@@ -334,7 +332,7 @@ class EmailIngestionService:
             if connection_changed and self.is_running:
                 self.logger.info("Connection settings changed, reconnecting...")
                 
-                connection_config = ConnectionConfig(
+                connection_config = EmailConnectionConfig(
                     email_address=new_config.connection.email_address,
                     folder_name=new_config.connection.folder_name
                 )
@@ -370,19 +368,22 @@ class EmailIngestionService:
     
     async def _initialize_services(self) -> None:
         """Initialize all sub-services with current configuration"""
+                
         if not self.current_config:
             raise Exception("No configuration loaded")
         
-        # Initialize filter service
-        await self.filter_service.load_configuration(self.current_config.filters)
-        
-        # Initialize cursor service
-        await self.cursor_service.initialize_cursor(
-            email_address=self.current_config.connection.email_address or "default",
-            folder=self.current_config.connection.folder_name
+        # Create connection config once for both services
+        connection_config = EmailConnectionConfig(
+            email_address=self.current_config.connection.email_address,
+            folder_name=self.current_config.connection.folder_name
         )
         
+        await self.filter_service.load_configuration(self.current_config.filters)
+        await self.cursor_service.initialize_cursor(connection_config)
+        await self.connection_service.connect(connection_config)
+        
         self.logger.debug("Sub-services initialized with current configuration")
+
     
     def _run_monitoring_loop(self) -> None:
         """Main monitoring loop (runs in separate thread)"""
@@ -500,7 +501,8 @@ class EmailIngestionService:
                         success = await self._process_matching_email(email_item, email_data, filter_result)
                         if success:
                             processed_count += 1
-                            self.stats.pdfs_extracted += len(email_data.attachments)
+                            pdf_count = len([f for f in email_data.attachment_filenames if f.lower().endswith('.pdf')])
+                            self.stats.pdfs_extracted += pdf_count
                     
                 except Exception as email_error:
                     self.logger.error(f"Error processing individual email: {email_error}")
@@ -527,25 +529,35 @@ class EmailIngestionService:
                         "content_type": "application/pdf" if attachment.FileName.lower().endswith('.pdf') else "unknown"
                     })
             
+            # Process attachment info
+            attachment_filenames = [att["filename"] for att in attachments]
+            has_pdf_attachments = any(filename.lower().endswith('.pdf') for filename in attachment_filenames)
+            
             return EmailData(
-                sender=email_item.SenderEmailAddress or email_item.SenderName,
                 subject=email_item.Subject or "",
-                body=email_item.Body or "",
+                sender_email=email_item.SenderEmailAddress or "unknown",
+                sender_name=email_item.SenderName,
                 received_time=email_item.ReceivedTime,
-                attachments=attachments,
-                message_id=email_item.EntryID
+                has_attachments=len(attachments) > 0,
+                attachment_count=len(attachments),
+                attachment_filenames=attachment_filenames,
+                has_pdf_attachments=has_pdf_attachments,
+                body_preview=email_item.Body[:200] if email_item.Body else None
             )
         
         except Exception as e:
             self.logger.error(f"Error converting Outlook email: {e}")
             # Return minimal EmailData on error
             return EmailData(
-                sender="unknown",
                 subject="error",
-                body="",
+                sender_email="unknown",
+                sender_name=None,
                 received_time=datetime.now(timezone.utc),
-                attachments=[],
-                message_id="error"
+                has_attachments=False,
+                attachment_count=0,
+                attachment_filenames=[],
+                has_pdf_attachments=False,
+                body_preview=None
             )
     
     async def _process_matching_email(self, email_item, email_data: EmailData, filter_result: Dict[str, Any]) -> bool:
@@ -556,10 +568,9 @@ class EmailIngestionService:
             # This is where you'd integrate with the PDF extraction and ETO run creation
             # For now, we'll just log the processing
             
-            pdf_attachments = [att for att in email_data.attachments if att["filename"].lower().endswith('.pdf')]
-            
-            if pdf_attachments:
-                self.logger.info(f"Found {len(pdf_attachments)} PDF attachments to process")
+            if email_data.has_pdf_attachments:
+                pdf_filenames = [f for f in email_data.attachment_filenames if f.lower().endswith('.pdf')]
+                self.logger.info(f"Found {len(pdf_filenames)} PDF attachments to process")
                 
                 # Here you would:
                 # 1. Save PDF attachments to storage

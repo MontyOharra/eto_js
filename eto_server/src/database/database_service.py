@@ -10,8 +10,8 @@ from .repositories import (
     PdfRepository, 
     TemplateRepository,
     EtoRunRepository,
-    ModuleRepository,
-    PipelineRepository,
+    TransformationPipelineModuleRepository,
+    TransformationPipelineRepository,
     CursorRepository
 )
 
@@ -32,14 +32,14 @@ class DatabaseService:
         self.cursors = CursorRepository(connection_manager)
         
         # Transformation pipeline repositories
-        self.modules = ModuleRepository(connection_manager)
-        self.pipelines = PipelineRepository(connection_manager)
+        self.modules = TransformationPipelineModuleRepository(connection_manager)
+        self.pipelines = TransformationPipelineRepository(connection_manager)
         
         # Store connection manager for complex transactions
         self.connection_manager = connection_manager
     
     # High-level business operations that span multiple repositories
     
-    def create_email_with_attachments(self, email_data: dict, pdf_attachments: List[dict]) -> dict:
+    def create_email_with_attachments(self, email_data: dict, pdf_attachments: List[dict]) -> None:
         """Create email record with associated PDF attachments"""
         pass

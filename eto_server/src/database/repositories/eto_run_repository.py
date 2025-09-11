@@ -1,6 +1,6 @@
 """
 ETO Run Repository
-Data access layer for EtoRun model operations
+Data access layer for EtoRunModel model operations
 """
 import logging
 from typing import Optional, List, Dict, Any
@@ -8,20 +8,20 @@ from datetime import datetime, timezone
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import func, case
 from .base_repository import BaseRepository, RepositoryError
-from ..models import EtoRun
+from ..models import EtoRunModel
 
 
 logger = logging.getLogger(__name__)
 
 
-class EtoRunRepository(BaseRepository[EtoRun]):
-    """Repository for EtoRun model operations"""
+class EtoRunRepository(BaseRepository[EtoRunModel]):
+    """Repository for EtoRunModel model operations"""
     
     @property
     def model_class(self):
-        return EtoRun
+        return EtoRunModel
     
-    def get_by_status(self, status: str, limit: Optional[int] = None) -> List[EtoRun]:
+    def get_by_status(self, status: str, limit: Optional[int] = None) -> List[EtoRunModel]:
         """Get ETO runs by status"""
         if not status:
             return []
@@ -41,48 +41,48 @@ class EtoRunRepository(BaseRepository[EtoRun]):
             logger.error(f"Error getting ETO runs by status {status}: {e}")
             raise RepositoryError(f"Failed to get ETO runs by status: {e}") from e
     
-    def get_by_email_id(self, email_id: int) -> List[EtoRun]:
+    def get_by_email_id(self, email_id: int) -> List[EtoRunModel]:
         """Get all ETO runs for a specific email"""
         if email_id is None:
             return []
         
         return self.get_by_field('email_id', email_id)
     
-    def get_by_pdf_id(self, pdf_file_id: int) -> List[EtoRun]:
+    def get_by_pdf_id(self, pdf_file_id: int) -> List[EtoRunModel]:
         """Get all ETO runs for a specific PDF file"""
         if pdf_file_id is None:
             return []
         
         return self.get_by_field('pdf_file_id', pdf_file_id)
     
-    def get_by_template_id(self, template_id: int) -> List[EtoRun]:
+    def get_by_template_id(self, template_id: int) -> List[EtoRunModel]:
         """Get all ETO runs that used a specific template"""
         if template_id is None:
             return []
         
         return self.get_by_field('matched_template_id', template_id)
     
-    def get_pending_runs(self, limit: Optional[int] = None) -> List[EtoRun]:
+    def get_pending_runs(self, limit: Optional[int] = None) -> List[EtoRunModel]:
         """Get runs with status 'not_started'"""
         return self.get_by_status('not_started', limit)
     
-    def get_processing_runs(self) -> List[EtoRun]:
+    def get_processing_runs(self) -> List[EtoRunModel]:
         """Get runs currently being processed"""
         return self.get_by_status('processing')
     
-    def get_failed_runs(self, limit: Optional[int] = None) -> List[EtoRun]:
+    def get_failed_runs(self, limit: Optional[int] = None) -> List[EtoRunModel]:
         """Get runs with status 'failure'"""
         return self.get_by_status('failure', limit)
     
-    def get_successful_runs(self, limit: Optional[int] = None) -> List[EtoRun]:
+    def get_successful_runs(self, limit: Optional[int] = None) -> List[EtoRunModel]:
         """Get runs with status 'success'"""
         return self.get_by_status('success', limit)
     
-    def get_runs_needing_templates(self, limit: Optional[int] = None) -> List[EtoRun]:
+    def get_runs_needing_templates(self, limit: Optional[int] = None) -> List[EtoRunModel]:
         """Get runs with status 'needs_template'"""
         return self.get_by_status('needs_template', limit)
     
-    def update_status(self, run_id: int, status: str, **kwargs) -> Optional[EtoRun]:
+    def update_status(self, run_id: int, status: str, **kwargs) -> Optional[EtoRunModel]:
         """Update run status and related fields"""
         if run_id is None or not status:
             raise ValueError("run_id and status are required")

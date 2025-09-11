@@ -5,24 +5,12 @@ Manages processing cursors and downtime recovery
 import logging
 from typing import Optional, Dict, Any, List, Tuple
 from datetime import datetime, timedelta, timezone
-from dataclasses import dataclass
 
+from .email_types import EmailConnectionConfig
 from ..database.repositories import CursorRepository
 from ..database.models import EmailCursor
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class CursorState:
-    """Cursor state information"""
-    email_address: str
-    folder_name: str
-    last_processed_message_id: Optional[str]
-    last_processed_received_date: Optional[datetime]
-    total_emails_processed: int
-    total_pdfs_found: int
-    last_check_time: datetime
 
 
 class EmailCursorService:
@@ -30,12 +18,12 @@ class EmailCursorService:
     
     def __init__(self, cursor_repository: CursorRepository):
         self.cursor_repository = cursor_repository
-        self.active_cursors: Dict[str, CursorState] = {}  # Cache for performance
+        self.active_cursors: Dict[str, EmailCursor] = {}  # Cache for performance
         self.logger = logging.getLogger(__name__)
 
     # === High-Level API Methods ===
     
-    async def get_cursor_state(self, email_address: str, folder: str) -> Optional[CursorState]:
+    async def get_cursor_state(self, email_address: str, folder: str) -> Optional[EmailCursor]:
         """Retrieve current cursor state for email/folder combination"""
         try:
             cache_key = self._get_cursor_cache_key(email_address, folder)
@@ -46,25 +34,15 @@ class EmailCursorService:
                 logger.debug(f"Retrieved cursor from cache: {email_address}/{folder}")
                 return cached_cursor
             
-            # Get from database
-            db_cursor = self.cursor_repository.get_by_email_and_folder(email_address, folder)
+            # Get from database using repository method
+            cursor = self.cursor_repository.get_by_email_and_folder(email_address, folder)
             
-            if db_cursor:
-                cursor_state = CursorState(
-                    email_address=db_cursor.email_address,
-                    folder_name=db_cursor.folder_name,
-                    last_processed_message_id=db_cursor.last_processed_message_id,
-                    last_processed_received_date=db_cursor.last_processed_received_date,
-                    total_emails_processed=db_cursor.total_emails_processed or 0,
-                    total_pdfs_found=db_cursor.total_pdfs_found or 0,
-                    last_check_time=db_cursor.last_check_time or datetime.now(timezone.utc)
-                )
+            if cursor:
+                # Cache the cursor
+                self._cache_cursor(cursor)
                 
-                # Cache the cursor state
-                self._cache_cursor_state(cursor_state)
-                
-                logger.info(f"Retrieved cursor state: {email_address}/{folder} - Last processed: {cursor_state.last_processed_received_date}")
-                return cursor_state
+                logger.info(f"Retrieved cursor: {email_address}/{folder} - Last processed: {cursor.last_processed_received_date}")
+                return cursor
             else:
                 logger.info(f"No cursor found for {email_address}/{folder}")
                 return None
@@ -73,14 +51,14 @@ class EmailCursorService:
             logger.error(f"Error getting cursor state for {email_address}/{folder}: {e}")
             return None
     
-    async def initialize_cursor(self, email_address: str, folder: str) -> CursorState:
+    async def initialize_cursor(self, connection_config: EmailConnectionConfig) -> EmailCursor:
         """Initialize new cursor at current timestamp"""
         try:
             current_time = datetime.now(timezone.utc)
             
             cursor_data = {
-                'email_address': email_address,
-                'folder_name': folder,
+                'email_address': connection_config.email_address or "default",
+                'folder_name': connection_config.folder_name,
                 'last_processed_message_id': None,
                 'last_processed_received_date': current_time,
                 'last_check_time': current_time,
@@ -88,33 +66,45 @@ class EmailCursorService:
                 'total_pdfs_found': 0
             }
             
-            # Use the repository's create_or_update_cursor method
-            db_cursor = self.cursor_repository.create_or_update_cursor(
-                email_address, folder, cursor_data
-            )
+            # Check if cursor already exists
+            email_address = connection_config.email_address or "default"
+            folder_name = connection_config.folder_name
             
-            cursor_state = CursorState(
-                email_address=db_cursor.email_address,
-                folder_name=db_cursor.folder_name,
-                last_processed_message_id=db_cursor.last_processed_message_id,
-                last_processed_received_date=db_cursor.last_processed_received_date,
-                total_emails_processed=db_cursor.total_emails_processed or 0,
-                total_pdfs_found=db_cursor.total_pdfs_found or 0,
-                last_check_time=db_cursor.last_check_time or current_time
-            )
+            existing_cursor = self.cursor_repository.get_by_email_and_folder(email_address, folder_name)
             
-            # Cache the new cursor state
-            self._cache_cursor_state(cursor_state)
+            if existing_cursor:
+                # Update existing cursor
+                update_data = {
+                    **cursor_data,
+                    'last_check_time': current_time
+                }
+                cursor = self.cursor_repository.update(existing_cursor.id, update_data)
+                logger.debug(f"Updated existing cursor for {email_address}/{folder_name}")
+            else:
+                # Create new cursor
+                create_data = {
+                    'email_address': email_address,
+                    'folder_name': folder_name,
+                    'last_check_time': current_time,
+                    'total_emails_processed': 0,
+                    'total_pdfs_found': 0,
+                    **cursor_data
+                }
+                cursor = self.cursor_repository.create(create_data)
+                logger.debug(f"Created new cursor for {email_address}/{folder_name}")
             
-            logger.info(f"Initialized new cursor: {email_address}/{folder} at {current_time}")
-            return cursor_state
+            # Cache the cursor
+            self._cache_cursor(cursor)
+            
+            logger.info(f"Initialized cursor: {email_address}/{folder_name} at {current_time}")
+            return cursor
             
         except Exception as e:
-            logger.error(f"Error initializing cursor for {email_address}/{folder}: {e}")
+            logger.error(f"Error initializing cursor for {connection_config.email_address or 'default'}/{connection_config.folder_name}: {e}")
             raise Exception(f"Failed to initialize cursor: {e}")
     
     async def update_cursor(self, email_address: str, folder: str, 
-                          last_email_data: Dict[str, Any]) -> CursorState:
+                          last_email_data: Dict[str, Any]) -> EmailCursor:
         """Update cursor with latest processed email information"""
         try:
             # Prepare cursor update data
@@ -124,33 +114,39 @@ class EmailCursorService:
                 'last_check_time': datetime.now(timezone.utc)
             }
             
-            # Update using repository
-            db_cursor = self.cursor_repository.create_or_update_cursor(
-                email_address, folder, cursor_data
-            )
+            # Get existing cursor and update it
+            existing_cursor = self.cursor_repository.get_by_email_and_folder(email_address, folder)
             
-            # Create updated cursor state
-            cursor_state = CursorState(
-                email_address=db_cursor.email_address,
-                folder_name=db_cursor.folder_name,
-                last_processed_message_id=db_cursor.last_processed_message_id,
-                last_processed_received_date=db_cursor.last_processed_received_date,
-                total_emails_processed=db_cursor.total_emails_processed or 0,
-                total_pdfs_found=db_cursor.total_pdfs_found or 0,
-                last_check_time=db_cursor.last_check_time or datetime.now(timezone.utc)
-            )
+            if existing_cursor:
+                # Update existing cursor
+                update_data = {
+                    **cursor_data,
+                    'last_check_time': datetime.now(timezone.utc)
+                }
+                db_cursor = self.cursor_repository.update(existing_cursor.id, update_data)
+            else:
+                # Create new cursor if none exists
+                create_data = {
+                    'email_address': email_address,
+                    'folder_name': folder,
+                    'last_check_time': datetime.now(timezone.utc),
+                    'total_emails_processed': 0,
+                    'total_pdfs_found': 0,
+                    **cursor_data
+                }
+                db_cursor = self.cursor_repository.create(create_data)
             
             # Update cache
-            self._cache_cursor_state(cursor_state)
+            self._cache_cursor(db_cursor)
             
             logger.debug(f"Updated cursor: {email_address}/{folder} with message {last_email_data.get('message_id')}")
-            return cursor_state
+            return db_cursor
             
         except Exception as e:
             logger.error(f"Error updating cursor for {email_address}/{folder}: {e}")
             raise Exception(f"Failed to update cursor: {e}")
     
-    async def reset_cursor_to_current(self, email_address: str, folder: str) -> CursorState:
+    async def reset_cursor_to_current(self, email_address: str, folder: str) -> EmailCursor:
         """Reset cursor to current timestamp (for configuration changes)"""
         try:
             current_time = datetime.now(timezone.utc)

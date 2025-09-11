@@ -1,25 +1,25 @@
 """
-Module Repository
-Data access layer for BaseModule and CustomModule model operations
+Transformation Pipeline Module Repository
+Data access layer for TransformationPipelineModuleModel operations
 """
 import logging
 from typing import Optional, List, Dict, Any
 from sqlalchemy.exc import SQLAlchemyError
 from .base_repository import BaseRepository, RepositoryError
-from ..models import BaseModule
+from ..models import TransformationPipelineModuleModel
 
 
 logger = logging.getLogger(__name__)
 
 
-class ModuleRepository(BaseRepository[BaseModule]):
-    """Repository for BaseModule model operations"""
+class TransformationPipelineModuleRepository(BaseRepository[TransformationPipelineModuleModel]):
+    """Repository for TransformationPipelineModuleModel model operations"""
     
     @property
     def model_class(self):
-        return BaseModule
+        return TransformationPipelineModuleModel
     
-    def get_active_modules(self) -> List[BaseModule]:
+    def get_active_modules(self) -> List[TransformationPipelineModuleModel]:
         """Get all active base modules"""
         try:
             with self.connection_manager.session_scope() as session:
@@ -32,7 +32,7 @@ class ModuleRepository(BaseRepository[BaseModule]):
             logger.error(f"Error getting active modules: {e}")
             raise RepositoryError(f"Failed to get active modules: {e}") from e
     
-    def get_by_category(self, category: str) -> List[BaseModule]:
+    def get_by_category(self, category: str) -> List[TransformationPipelineModuleModel]:
         """Get modules by category"""
         if not category:
             return []
@@ -48,7 +48,7 @@ class ModuleRepository(BaseRepository[BaseModule]):
             logger.error(f"Error getting modules by category {category}: {e}")
             raise RepositoryError(f"Failed to get modules by category: {e}") from e
     
-    def get_by_name(self, name: str) -> Optional[BaseModule]:
+    def get_by_name(self, name: str) -> Optional[TransformationPipelineModuleModel]:
         """Get module by name"""
         if not name:
             return None

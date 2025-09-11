@@ -7,20 +7,20 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from .base_repository import BaseRepository, RepositoryError
-from ..models import EmailCursor
+from ..models import EmailCursorModel
 
 
 logger = logging.getLogger(__name__)
 
 
-class CursorRepository(BaseRepository[EmailCursor]):
-    """Repository for EmailCursor model operations"""
+class CursorRepository(BaseRepository[EmailCursorModel]):
+    """Repository for EmailCursorModel model operations"""
     
     @property
     def model_class(self):
-        return EmailCursor
+        return EmailCursorModel
     
-    def get_by_email_and_folder(self, email_address: str, folder_name: str) -> Optional[EmailCursor]:
+    def get_by_email_and_folder(self, email_address: str, folder_name: str) -> Optional[EmailCursorModel]:
         """Get cursor for specific email and folder combination"""
         if not email_address or not folder_name:
             return None
@@ -36,58 +36,8 @@ class CursorRepository(BaseRepository[EmailCursor]):
             logger.error(f"Error getting cursor for {email_address}/{folder_name}: {e}")
             raise RepositoryError(f"Failed to get cursor: {e}") from e
     
-    def create_or_update_cursor(self, email_address: str, folder_name: str, cursor_data: Dict[str, Any]) -> EmailCursor:
-        """Create new cursor or update existing one"""
-        if not email_address or not folder_name:
-            raise ValueError("email_address and folder_name are required")
-        
-        if not cursor_data:
-            raise ValueError("cursor_data cannot be empty")
-        
-        try:
-            # Check if cursor already exists
-            existing_cursor = self.get_by_email_and_folder(email_address, folder_name)
-            
-            if existing_cursor:
-                # Update existing cursor
-                update_data = {
-                    **cursor_data,
-                    'last_check_time': datetime.now(timezone.utc)
-                }
-                updated_cursor = self.update(existing_cursor.id, update_data)
-                logger.debug(f"Updated cursor for {email_address}/{folder_name}")
-                return updated_cursor
-            else:
-                # Create new cursor
-                create_data = {
-                    'email_address': email_address,
-                    'folder_name': folder_name,
-                    'last_check_time': datetime.now(timezone.utc),
-                    'total_emails_processed': 0,
-                    'total_pdfs_found': 0,
-                    **cursor_data
-                }
-                new_cursor = self.create(create_data)
-                logger.debug(f"Created new cursor for {email_address}/{folder_name}")
-                return new_cursor
-                
-        except IntegrityError as e:
-            # Handle race condition where another process created the cursor
-            if "_email_folder_cursor_uc" in str(e) or "UNIQUE constraint" in str(e):
-                logger.warning(f"Cursor already exists for {email_address}/{folder_name}, retrying update")
-                existing_cursor = self.get_by_email_and_folder(email_address, folder_name)
-                if existing_cursor:
-                    update_data = {
-                        **cursor_data,
-                        'last_check_time': datetime.now(timezone.utc)
-                    }
-                    return self.update(existing_cursor.id, update_data)
-            raise RepositoryError(f"Failed to create or update cursor: {e}") from e
-        except Exception as e:
-            logger.error(f"Error creating/updating cursor for {email_address}/{folder_name}: {e}")
-            raise RepositoryError(f"Failed to create or update cursor: {e}") from e
     
-    def update_processing_stats(self, cursor_id: int, emails_processed: int, pdfs_found: int) -> Optional[EmailCursor]:
+    def update_processing_stats(self, cursor_id: int, emails_processed: int, pdfs_found: int) -> Optional[EmailCursorModel]:
         """Update processing statistics for a cursor"""
         if cursor_id is None:
             raise ValueError("cursor_id cannot be None")
@@ -133,3 +83,4 @@ class CursorRepository(BaseRepository[EmailCursor]):
         except SQLAlchemyError as e:
             logger.error(f"Error getting all active cursors: {e}")
             raise RepositoryError(f"Failed to get active cursors: {e}") from e
+

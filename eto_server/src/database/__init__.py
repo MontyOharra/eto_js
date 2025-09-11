@@ -14,16 +14,16 @@ from .connection import (
 # Models
 from .models import (
     Base,
-    Email,
-    PdfFile,
-    PdfTemplate,
-    TemplateExtractionRule,
-    TemplateExtractionStep,
-    EtoRun,
-    EmailCursor,
-    BaseModule,
-    Pipeline,
-    EmailIngestionConfig
+    EmailModel,
+    PdfFileModel,
+    PdfTemplateModel,
+    TemplateExtractionRuleModel,
+    TemplateExtractionStepModel,
+    EtoRunModel,
+    EmailCursorModel,
+    TransformationPipelineModuleModel,
+    TransformationPipelineModel,
+    EmailIngestionConfigModel
 )
 
 # Repositories
@@ -33,8 +33,8 @@ from .repositories import (
     PdfRepository,
     TemplateRepository,
     EtoRunRepository,
-    ModuleRepository,
-    PipelineRepository,
+    TransformationPipelineModuleRepository,
+    TransformationPipelineRepository,
     CursorRepository,
     EmailConfigRepository
 )
@@ -54,24 +54,24 @@ __all__ = [
     'DatabaseCreator',
     
     # Models (for type hints)
-    'Email',
-    'PdfFile',
-    'PdfTemplate', 
-    'TemplateExtractionRule',
-    'TemplateExtractionStep',
-    'EtoRun',
-    'EmailCursor',
-    'BaseModule',
-    'Pipeline',
-    'EmailIngestionConfig',
+    'EmailModel',
+    'PdfFileModel',
+    'PdfTemplateModel', 
+    'TemplateExtractionRuleModel',
+    'TemplateExtractionStepModel',
+    'EtoRunModel',
+    'EmailCursorModel',
+    'TransformationPipelineModuleModel',
+    'TransformationPipelineModel',
+    'EmailIngestionConfigModel',
     
     # For advanced usage
     'EmailRepository',
     'PdfRepository',
     'TemplateRepository',
     'EtoRunRepository',
-    'ModuleRepository',
-    'PipelineRepository',
+    'TransformationPipelineModuleRepository',
+    'TransformationPipelineRepository',
     'CursorRepository',
     'EmailConfigRepository'
 ]

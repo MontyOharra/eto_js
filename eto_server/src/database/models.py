@@ -16,7 +16,7 @@ Base = declarative_base()
 # EMAIL PROCESSING MODELS (from server/)
 # =============================================================================
 
-class Email(Base):
+class EmailModel(Base):
     """Email records from Outlook monitoring"""
     __tablename__ = 'emails'
     
@@ -32,11 +32,11 @@ class Email(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
-    pdf_files = relationship("PdfFile", back_populates="email")
-    eto_runs = relationship("EtoRun", back_populates="email")
+    pdf_files = relationship("PdfFileModel", back_populates="email")
+    eto_runs = relationship("EtoRunModel", back_populates="email")
 
 
-class PdfFile(Base):
+class PdfFileModel(Base):
     """PDF files extracted from emails"""
     __tablename__ = 'pdf_files'
     
@@ -55,11 +55,11 @@ class PdfFile(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
-    email = relationship("Email", back_populates="pdf_files")
-    eto_runs = relationship("EtoRun", back_populates="pdf_file")
+    email = relationship("EmailModel", back_populates="pdf_files")
+    eto_runs = relationship("EtoRunModel", back_populates="pdf_file")
 
 
-class PdfTemplate(Base):
+class PdfTemplateModel(Base):
     """PDF templates for pattern matching and field extraction"""
     __tablename__ = 'pdf_templates'
     
@@ -94,11 +94,11 @@ class PdfTemplate(Base):
     status = Column(String(50), default='active')  # 'active', 'archived', 'draft'
     
     # Relationships
-    eto_runs = relationship("EtoRun", back_populates="template")
-    extraction_rules = relationship("TemplateExtractionRule", back_populates="template")
+    eto_runs = relationship("EtoRunModel", back_populates="template")
+    extraction_rules = relationship("TemplateExtractionRuleModel", back_populates="template")
 
 
-class TemplateExtractionRule(Base):
+class TemplateExtractionRuleModel(Base):
     """Extraction rules for templates (multi-step data transformation)"""
     __tablename__ = 'template_extraction_rules'
     
@@ -110,11 +110,11 @@ class TemplateExtractionRule(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
-    template = relationship("PdfTemplate", back_populates="extraction_rules")
-    extraction_steps = relationship("TemplateExtractionStep", back_populates="extraction_rule", cascade="all, delete-orphan")
+    template = relationship("PdfTemplateModel", back_populates="extraction_rules")
+    extraction_steps = relationship("TemplateExtractionStepModel", back_populates="extraction_rule", cascade="all, delete-orphan")
 
 
-class TemplateExtractionStep(Base):
+class TemplateExtractionStepModel(Base):
     """Individual steps within extraction rules"""
     __tablename__ = 'template_extraction_steps'
     
@@ -143,8 +143,8 @@ class TemplateExtractionStep(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
-    extraction_rule = relationship("TemplateExtractionRule", back_populates="extraction_steps")
-    failed_eto_runs = relationship("EtoRun", foreign_keys="[EtoRun.failed_step_id]")
+    extraction_rule = relationship("TemplateExtractionRuleModel", back_populates="extraction_steps")
+    failed_eto_runs = relationship("EtoRunModel", foreign_keys="[EtoRunModel.failed_step_id]")
     
     # Constraints
     __table_args__ = (
@@ -152,7 +152,7 @@ class TemplateExtractionStep(Base):
     )
 
 
-class EtoRun(Base):
+class EtoRunModel(Base):
     """ETO processing runs - tracks PDF processing workflow"""
     __tablename__ = 'eto_runs'
     
@@ -204,13 +204,13 @@ class EtoRun(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
-    email = relationship("Email", back_populates="eto_runs")
-    pdf_file = relationship("PdfFile", back_populates="eto_runs")
-    template = relationship("PdfTemplate", back_populates="eto_runs")
-    failed_step = relationship("TemplateExtractionStep", foreign_keys=[failed_step_id], overlaps="failed_eto_runs")
+    email = relationship("EmailModel", back_populates="eto_runs")
+    pdf_file = relationship("PdfFileModel", back_populates="eto_runs")
+    template = relationship("PdfTemplateModel", back_populates="eto_runs")
+    failed_step = relationship("TemplateExtractionStepModel", foreign_keys=[failed_step_id], overlaps="failed_eto_runs")
 
 
-class EmailCursor(Base):
+class EmailCursorModel(Base):
     """Track email processing cursors for downtime recovery"""
     __tablename__ = 'email_cursors'
     
@@ -240,9 +240,9 @@ class EmailCursor(Base):
 # TRANSFORMATION PIPELINE MODELS (from transformation_pipeline_server/)
 # =============================================================================
 
-class BaseModule(Base):
-    """Base transformation modules defined by developers"""
-    __tablename__ = 'base_modules'
+class TransformationPipelineModuleModel(Base):
+    """Transformation pipeline modules defined by developers"""
+    __tablename__ = 'transformation_pipeline_modules'
     
     id = Column(String(100), primary_key=True)
     name = Column(String(255), nullable=False)
@@ -268,14 +268,14 @@ class BaseModule(Base):
     is_active = Column(Boolean, default=True)
 
     __table_args__ = (
-        Index('idx_base_modules_name', 'name'),
-        Index('idx_base_modules_active', 'is_active'),
+        Index('idx_transformation_pipeline_modules_name', 'name'),
+        Index('idx_transformation_pipeline_modules_active', 'is_active'),
     )
 
 
-class Pipeline(Base):
+class TransformationPipelineModel(Base):
     """Data transformation pipelines"""
-    __tablename__ = 'pipelines'
+    __tablename__ = 'transformation_pipelines'
     
     id = Column(String(100), primary_key=True)
     name = Column(String(255), nullable=False)
@@ -299,14 +299,14 @@ class Pipeline(Base):
     is_active = Column(Boolean, default=True)
 
     __table_args__ = (
-        Index('idx_pipelines_name', 'name'),
-        Index('idx_pipelines_user', 'created_by_user'), 
-        Index('idx_pipelines_status', 'status'),
-        Index('idx_pipelines_active', 'is_active'),
+        Index('idx_transformation_pipelines_name', 'name'),
+        Index('idx_transformation_pipelines_user', 'created_by_user'), 
+        Index('idx_transformation_pipelines_status', 'status'),
+        Index('idx_transformation_pipelines_active', 'is_active'),
     )
 
 
-class EmailIngestionConfig(Base):
+class EmailIngestionConfigModel(Base):
     """Email ingestion configuration settings"""
     __tablename__ = 'email_ingestion_configs'
     

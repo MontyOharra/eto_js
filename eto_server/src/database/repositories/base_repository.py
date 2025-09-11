@@ -4,13 +4,19 @@ Abstract base class providing common CRUD operations for all repositories
 """
 import logging
 from abc import ABC, abstractmethod
-from typing import Optional, List, Dict, Any, Type, TypeVar, Generic
+from typing import Optional, List, Dict, Any, Type, TypeVar, Generic, Protocol
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from ..connection import DatabaseConnectionManager
 
-# Generic type for model classes - represents SQLAlchemy models
-ModelType = TypeVar('ModelType')
+
+class HasId(Protocol):
+    """Protocol for models that have an id attribute"""
+    id: Any
+
+
+# Generic type for model classes - represents SQLAlchemy models with id
+ModelType = TypeVar('ModelType', bound=HasId)
 
 logger = logging.getLogger(__name__)
 
@@ -59,11 +65,20 @@ class BaseRepository(ABC, Generic[ModelType]):
             logger.error(f"Error getting {self.model_class.__name__} by ID {id_value}: {e}")
             raise RepositoryError(f"Failed to get record by ID: {e}") from e
     
-    def get_all(self, limit: Optional[int] = None, offset: Optional[int] = None) -> List[ModelType]:
-        """Get all records with optional pagination"""
+    def get_all(self, order_by: Optional[str] = None, desc: bool = False, 
+               limit: Optional[int] = None, offset: Optional[int] = None) -> List[ModelType]:
+        """Get all records with optional sorting and pagination"""
         try:
             with self.connection_manager.session_scope() as session:
                 query = session.query(self.model_class)
+                
+                # Apply sorting if specified
+                if order_by:
+                    if hasattr(self.model_class, order_by):
+                        column = getattr(self.model_class, order_by)
+                        query = query.order_by(column.desc() if desc else column)
+                    else:
+                        logger.warning(f"Field '{order_by}' does not exist on {self.model_class.__name__}, skipping sort")
                 
                 if offset is not None:
                     query = query.offset(offset)
@@ -93,9 +108,7 @@ class BaseRepository(ABC, Generic[ModelType]):
                 
                 # Refresh to get updated fields (like auto-generated timestamps)
                 session.refresh(instance)
-                
-                # Expunge the instance so it can be used outside this session
-                session.expunge(instance)
+                session.expunge(instance)  # Remove from session to prevent future commits
                 
                 logger.debug(f"Created {self.model_class.__name__} with ID: {instance.id}")
                 return instance

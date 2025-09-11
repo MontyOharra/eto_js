@@ -4,62 +4,14 @@ Manages email ingestion configuration with validation and admin operations
 """
 import json
 import logging
-import asyncio
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime, timezone
 from jsonschema import validate as json_validate, ValidationError
-from dataclasses import dataclass
-
-from ..database import get_connection_manager, EmailIngestionConfig
+from .email_types import ConnectionSettings, FilterRule, FilterConfig, MonitoringSettings, ConfigurationData
+from ..database import get_connection_manager, EmailIngestionConfigModel
 from ..database.repositories import EmailConfigRepository
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class ConnectionSettings:
-    """Connection settings data structure"""
-    email_address: Optional[str]
-    folder_name: str
-    polling_interval: int = 60
-    max_hours_back: int = 24
-
-
-@dataclass
-class FilterRule:
-    """Individual filter rule data structure"""
-    type: str  # 'sender', 'subject', 'attachment', 'date'
-    pattern: str
-    operation: str = 'contains'  # 'contains', 'equals', 'regex', 'before', 'after'
-
-
-@dataclass
-class FilterConfig:
-    """Complete filter configuration data structure"""
-    name: str
-    rules: List[FilterRule]
-    require_attachments: bool = True
-    pdf_only: bool = True
-    enabled: bool = True
-
-
-@dataclass
-class MonitoringSettings:
-    """Monitoring and recovery settings"""
-    auto_reconnect: bool = True
-    max_reconnect_attempts: int = 5
-    connection_timeout: int = 30
-    health_check_interval: int = 300
-
-
-@dataclass
-class ConfigurationData:
-    """Complete configuration data structure"""
-    connection: ConnectionSettings
-    filters: FilterConfig
-    monitoring: MonitoringSettings
-    created_at: datetime
-    updated_at: datetime
 
 
 class EmailConfigService:
@@ -131,11 +83,8 @@ class EmailConfigService:
             # Validate configuration structure  
             try:
                 json_validate(config_data, self.config_schema)
-                validation_result = {"valid": True}
             except ValidationError as e:
-                validation_result = {"valid": False, "errors": [str(e)]}
-            if not validation_result["valid"]:
-                raise Exception(f"Configuration validation failed: {validation_result['errors']}")
+                raise Exception(f"Configuration validation failed: {[str(e)]}")
             
             # Serialize configuration to JSON
             config_json = json.dumps(config_data, indent=2, default=str)
@@ -174,7 +123,7 @@ class EmailConfigService:
             self.logger.info(f"Updating email configuration ID {config_id}")
             
             # Validate configuration structure
-            validation_result = self.validate_configuration_sync(config_data)
+            validation_result = self.validate_configuration(config_data)
             if not validation_result["valid"]:
                 raise Exception(f"Configuration validation failed: {validation_result['errors']}")
             
@@ -219,11 +168,13 @@ class EmailConfigService:
         try:
             self.logger.info(f"Activating email configuration ID {config_id}")
             
-            # Set this configuration as active and get its name
-            config_name = self.config_repo.set_config_active_and_get_name(config_id)
+            # Set this configuration as active
+            config = self.config_repo.set_config_active(config_id)
             
-            if not config_name:
+            if not config:
                 raise Exception(f"Configuration with ID {config_id} not found")
+            
+            config_name = config.name
             
             self.logger.info(f"Activated email configuration: {config_name}")
             
@@ -245,14 +196,14 @@ class EmailConfigService:
     def get_active_configuration(self) -> Optional[ConfigurationData]:
         """Get currently active email ingestion configuration"""
         try:
-            config_data_raw = self.config_repo.get_active_config_data()
+            config = self.config_repo.get_active_config()
             
-            if not config_data_raw:
+            if not config:
                 self.logger.warning("No active email configuration found")
                 return None
             
             # Parse configuration JSON
-            config_data = json.loads(config_data_raw["filter_rules"])
+            config_data = json.loads(config.filter_rules)
             
             return ConfigurationData(
                 connection=ConnectionSettings(**config_data["connection"]),
@@ -264,8 +215,8 @@ class EmailConfigService:
                     enabled=config_data["filters"].get("enabled", True)
                 ),
                 monitoring=MonitoringSettings(**config_data["monitoring"]),
-                created_at=config_data_raw["created_at"],
-                updated_at=config_data_raw["updated_at"]
+                created_at=config.created_at,
+                updated_at=config.updated_at
             )
         
         except Exception as e:
@@ -301,10 +252,15 @@ class EmailConfigService:
             self.logger.error(f"Error getting configuration {config_id}: {e}")
             return None
     
-    def list_configurations(self) -> List[Dict[str, Any]]:
+    def list_configurations(self, order_by: Optional[str] = None, desc: bool = False) -> List[Dict[str, Any]]:
         """List all email ingestion configurations with summary info"""
         try:
-            configs = self.config_repo.get_all()
+            if order_by:
+                # Use generic sorting from base repository
+                configs = self.config_repo.get_all(order_by=order_by, desc=desc)
+            else:
+                # Use business-specific ordering (active first, then by recency)
+                configs = self.config_repo.get_all_configs()
             
             config_summaries = []
             for config in configs:
@@ -342,35 +298,36 @@ class EmailConfigService:
             self.logger.error(f"Error listing configurations: {e}")
             return []
     
-    async def delete_configuration(self, config_id: int) -> Dict[str, Any]:
+    def delete_configuration(self, config_id: int) -> Dict[str, Any]:
         """Delete an email ingestion configuration"""
         try:
             self.logger.info(f"Deleting email configuration ID {config_id}")
             
-            async with self.connection_manager.get_session() as session:
-                # Check if configuration exists and is not active
-                config = await self.config_repo.get_by_id(session, config_id)
-                
-                if not config:
-                    raise Exception(f"Configuration with ID {config_id} not found")
-                
-                if config.is_active:
-                    raise Exception("Cannot delete active configuration. Please activate another configuration first.")
-                
-                # Delete configuration
-                success = await self.config_repo.delete(session, config_id)
-                
-                if not success:
-                    raise Exception("Failed to delete configuration")
-                
-                self.logger.info(f"Deleted email configuration: {config.name}")
-                
-                return {
-                    "success": True,
-                    "config_id": config_id,
-                    "name": config.name,
-                    "message": "Configuration deleted successfully"
-                }
+            # Check if configuration exists and is not active
+            config = self.config_repo.get_by_id(config_id)
+            
+            if not config:
+                raise Exception(f"Configuration with ID {config_id} not found")
+            
+            if config.is_active:
+                raise Exception("Cannot delete active configuration. Please activate another configuration first.")
+            
+            config_name = config.name  # Store name before deletion
+            
+            # Delete configuration
+            success = self.config_repo.delete(config_id)
+            
+            if not success:
+                raise Exception("Failed to delete configuration")
+            
+            self.logger.info(f"Deleted email configuration: {config_name}")
+            
+            return {
+                "success": True,
+                "config_id": config_id,
+                "name": config_name,
+                "message": "Configuration deleted successfully"
+            }
         
         except Exception as e:
             self.logger.error(f"Error deleting configuration: {e}")
@@ -382,8 +339,8 @@ class EmailConfigService:
 
     # === Validation Methods ===
     
-    def validate_configuration_sync(self, config_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Validate email ingestion configuration structure and data (synchronous version)"""
+    def validate_configuration(self, config_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Validate email ingestion configuration structure and data"""
         try:
             # Schema validation
             json_validate(config_data, self.config_schema)
@@ -462,87 +419,8 @@ class EmailConfigService:
                 "warnings": []
             }
     
-    async def validate_configuration(self, config_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Validate email ingestion configuration structure and data"""
-        try:
-            # Schema validation
-            validate(config_data, self.config_schema)
-            
-            validation_errors = []
-            warnings = []
-            
-            # Additional business logic validation
-            connection = config_data.get("connection", {})
-            filters = config_data.get("filters", {})
-            monitoring = config_data.get("monitoring", {})
-            
-            # Connection validation
-            folder_name = connection.get("folder_name", "").strip()
-            if not folder_name:
-                validation_errors.append("Folder name cannot be empty")
-            
-            polling_interval = connection.get("polling_interval", 60)
-            if polling_interval < 10:
-                validation_errors.append("Polling interval must be at least 10 seconds")
-            elif polling_interval < 30:
-                warnings.append("Polling intervals under 30 seconds may impact performance")
-            
-            # Filter validation
-            rules = filters.get("rules", [])
-            if not rules:
-                validation_errors.append("At least one filter rule is required")
-            
-            for i, rule in enumerate(rules):
-                rule_type = rule.get("type")
-                pattern = rule.get("pattern", "").strip()
-                operation = rule.get("operation", "contains")
-                
-                if not pattern:
-                    validation_errors.append(f"Rule {i+1}: Pattern cannot be empty")
-                
-                if rule_type == "date" and operation not in ["before", "after"]:
-                    validation_errors.append(f"Rule {i+1}: Date rules must use 'before' or 'after' operation")
-                
-                if operation == "regex":
-                    try:
-                        import re
-                        re.compile(pattern)
-                    except re.error as regex_error:
-                        validation_errors.append(f"Rule {i+1}: Invalid regex pattern: {regex_error}")
-            
-            # Monitoring validation
-            max_attempts = monitoring.get("max_reconnect_attempts", 5)
-            if max_attempts < 1:
-                validation_errors.append("Max reconnect attempts must be at least 1")
-            elif max_attempts > 10:
-                warnings.append("High reconnect attempt values may cause extended downtime")
-            
-            timeout = monitoring.get("connection_timeout", 30)
-            if timeout < 5:
-                validation_errors.append("Connection timeout must be at least 5 seconds")
-            
-            return {
-                "valid": len(validation_errors) == 0,
-                "errors": validation_errors,
-                "warnings": warnings
-            }
-        
-        except ValidationError as ve:
-            return {
-                "valid": False,
-                "errors": [f"Schema validation failed: {ve.message}"],
-                "warnings": []
-            }
-        
-        except Exception as e:
-            self.logger.error(f"Error validating configuration: {e}")
-            return {
-                "valid": False,
-                "errors": [f"Validation error: {str(e)}"],
-                "warnings": []
-            }
     
-    async def get_configuration_template(self) -> Dict[str, Any]:
+    def get_configuration_template(self) -> Dict[str, Any]:
         """Get a template configuration for creating new configs"""
         return {
             "connection": {
@@ -574,46 +452,45 @@ class EmailConfigService:
 
     # === Statistics and Health Methods ===
     
-    async def get_configuration_stats(self, config_id: Optional[int] = None) -> Dict[str, Any]:
+    def get_configuration_stats(self, config_id: Optional[int] = None) -> Dict[str, Any]:
         """Get processing statistics for configuration(s)"""
         try:
-            async with self.connection_manager.get_session() as session:
-                if config_id:
-                    # Get stats for specific configuration
-                    config = await self.config_repo.get_by_id(session, config_id)
-                    if not config:
-                        return {"error": "Configuration not found"}
-                    
-                    return {
-                        "config_id": config.id,
+            if config_id:
+                # Get stats for specific configuration
+                config = self.config_repo.get_by_id(config_id)
+                if not config:
+                    return {"error": "Configuration not found"}
+                
+                return {
+                    "config_id": config.id,
+                    "name": config.name,
+                    "is_active": config.is_active,
+                    "emails_processed": config.emails_processed,
+                    "last_used_at": config.last_used_at,
+                    "created_at": config.created_at,
+                    "updated_at": config.updated_at
+                }
+            else:
+                # Get stats for all configurations
+                configs = self.config_repo.get_all()
+                
+                stats = {
+                    "total_configs": len(configs),
+                    "active_configs": sum(1 for c in configs if c.is_active),
+                    "total_emails_processed": sum(c.emails_processed or 0 for c in configs),
+                    "configurations": []
+                }
+                
+                for config in configs:
+                    stats["configurations"].append({
+                        "id": config.id,
                         "name": config.name,
                         "is_active": config.is_active,
                         "emails_processed": config.emails_processed,
-                        "last_used_at": config.last_used_at,
-                        "created_at": config.created_at,
-                        "updated_at": config.updated_at
-                    }
-                else:
-                    # Get stats for all configurations
-                    configs = await self.config_repo.get_all(session)
-                    
-                    stats = {
-                        "total_configs": len(configs),
-                        "active_configs": sum(1 for c in configs if c.is_active),
-                        "total_emails_processed": sum(c.emails_processed for c in configs),
-                        "configurations": []
-                    }
-                    
-                    for config in configs:
-                        stats["configurations"].append({
-                            "id": config.id,
-                            "name": config.name,
-                            "is_active": config.is_active,
-                            "emails_processed": config.emails_processed,
-                            "last_used_at": config.last_used_at
-                        })
-                    
-                    return stats
+                        "last_used_at": config.last_used_at
+                    })
+                
+                return stats
         
         except Exception as e:
             self.logger.error(f"Error getting configuration stats: {e}")

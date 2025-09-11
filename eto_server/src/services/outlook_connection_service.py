@@ -9,27 +9,13 @@ import threading
 import time
 from typing import Optional, Dict, List, Any, Tuple
 from datetime import datetime, timezone
-from dataclasses import dataclass
+
+from .email_types import EmailConnectionConfig, ConnectionStatus
 
 logger = logging.getLogger(__name__)
 
-
-@dataclass
-class ConnectionConfig:
-    """Connection configuration data structure"""
-    email_address: Optional[str]
-    folder_name: str
-
-
-@dataclass
-class ConnectionStatus:
-    """Connection status information"""
-    is_connected: bool
-    email_address: Optional[str]
-    folder_name: Optional[str]
-    inbox_count: int
-    last_error: Optional[str]
-    connection_time: Optional[datetime]
+# Legacy alias for backward compatibility
+ConnectionConfig = EmailConnectionConfig
 
 
 class OutlookConnectionService:
@@ -62,7 +48,7 @@ class OutlookConnectionService:
 
     # === High-Level API Methods ===
     
-    async def connect(self, connection_config: ConnectionConfig) -> ConnectionStatus:
+    async def connect(self, connection_config: EmailConnectionConfig) -> ConnectionStatus:
         """Establish connection using configuration"""
         try:
             with self._lock:

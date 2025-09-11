@@ -1,46 +1,46 @@
 """
 PDF Repository
-Data access layer for PdfFile model operations
+Data access layer for PdfFileModel model operations
 """
 import logging
 from typing import Optional, List
 from sqlalchemy.exc import SQLAlchemyError
 from .base_repository import BaseRepository, RepositoryError
-from ..models import PdfFile
+from ..models import PdfFileModel
 
 
 logger = logging.getLogger(__name__)
 
 
-class PdfRepository(BaseRepository[PdfFile]):
-    """Repository for PdfFile model operations"""
+class PdfRepository(BaseRepository[PdfFileModel]):
+    """Repository for PdfFileModel model operations"""
     
     @property
     def model_class(self):
-        return PdfFile
+        return PdfFileModel
     
-    def get_by_email_id(self, email_id: int) -> List[PdfFile]:
+    def get_by_email_id(self, email_id: int) -> List[PdfFileModel]:
         """Get all PDF files for a specific email"""
         if email_id is None:
             return []
         
         return self.get_by_field('email_id', email_id)
     
-    def get_by_hash(self, sha256_hash: str) -> List[PdfFile]:
+    def get_by_hash(self, sha256_hash: str) -> List[PdfFileModel]:
         """Get PDF files by SHA256 hash (may be multiple)"""
         if not sha256_hash:
             return []
         
         return self.get_by_field('sha256_hash', sha256_hash)
     
-    def get_by_filename(self, filename: str) -> List[PdfFile]:
+    def get_by_filename(self, filename: str) -> List[PdfFileModel]:
         """Get PDF files by filename"""
         if not filename:
             return []
         
         return self.get_by_field('filename', filename)
     
-    def get_with_extracted_objects(self, limit: Optional[int] = None) -> List[PdfFile]:
+    def get_with_extracted_objects(self, limit: Optional[int] = None) -> List[PdfFileModel]:
         """Get PDF files that have extracted objects"""
         try:
             with self.connection_manager.session_scope() as session:
@@ -58,7 +58,7 @@ class PdfRepository(BaseRepository[PdfFile]):
             logger.error(f"Error getting PDF files with extracted objects: {e}")
             raise RepositoryError(f"Failed to get PDF files with extracted objects: {e}") from e
     
-    def get_without_extracted_objects(self, limit: Optional[int] = None) -> List[PdfFile]:
+    def get_without_extracted_objects(self, limit: Optional[int] = None) -> List[PdfFileModel]:
         """Get PDF files that need object extraction"""
         try:
             with self.connection_manager.session_scope() as session:
@@ -76,7 +76,7 @@ class PdfRepository(BaseRepository[PdfFile]):
             logger.error(f"Error getting PDF files without extracted objects: {e}")
             raise RepositoryError(f"Failed to get PDF files without extracted objects: {e}") from e
     
-    def update_objects_json(self, pdf_id: int, objects_json: str) -> Optional[PdfFile]:
+    def update_objects_json(self, pdf_id: int, objects_json: str) -> Optional[PdfFileModel]:
         """Update the objects_json field for a PDF file"""
         if pdf_id is None:
             raise ValueError("pdf_id cannot be None")

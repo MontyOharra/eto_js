@@ -1,6 +1,6 @@
 """
 Template Repository
-Data access layer for PdfTemplate model operations
+Data access layer for PdfTemplateModel model operations
 """
 import logging
 from typing import Optional, List, Dict, Any
@@ -8,31 +8,31 @@ from datetime import datetime, timezone
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import func, desc
 from .base_repository import BaseRepository, RepositoryError
-from ..models import PdfTemplate
+from ..models import PdfTemplateModel
 
 
 logger = logging.getLogger(__name__)
 
 
-class TemplateRepository(BaseRepository[PdfTemplate]):
-    """Repository for PdfTemplate model operations"""
+class TemplateRepository(BaseRepository[PdfTemplateModel]):
+    """Repository for PdfTemplateModel model operations"""
     
     @property
     def model_class(self):
-        return PdfTemplate
+        return PdfTemplateModel
     
-    def get_active_templates(self) -> List[PdfTemplate]:
+    def get_active_templates(self) -> List[PdfTemplateModel]:
         """Get all active templates"""
         return self.get_by_status('active')
     
-    def get_by_customer(self, customer_name: str) -> List[PdfTemplate]:
+    def get_by_customer(self, customer_name: str) -> List[PdfTemplateModel]:
         """Get templates by customer name"""
         if not customer_name:
             return []
         
         return self.get_by_field('customer_name', customer_name)
     
-    def get_by_status(self, status: str, limit: Optional[int] = None) -> List[PdfTemplate]:
+    def get_by_status(self, status: str, limit: Optional[int] = None) -> List[PdfTemplateModel]:
         """Get templates by status (active, archived, draft)"""
         if not status:
             return []
@@ -53,7 +53,7 @@ class TemplateRepository(BaseRepository[PdfTemplate]):
             logger.error(f"Error getting templates by status {status}: {e}")
             raise RepositoryError(f"Failed to get templates by status: {e}") from e
     
-    def get_current_versions(self) -> List[PdfTemplate]:
+    def get_current_versions(self) -> List[PdfTemplateModel]:
         """Get only current version templates"""
         try:
             with self.connection_manager.session_scope() as session:
@@ -66,7 +66,7 @@ class TemplateRepository(BaseRepository[PdfTemplate]):
             logger.error(f"Error getting current version templates: {e}")
             raise RepositoryError(f"Failed to get current version templates: {e}") from e
     
-    def get_most_used(self, limit: int = 10) -> List[PdfTemplate]:
+    def get_most_used(self, limit: int = 10) -> List[PdfTemplateModel]:
         """Get most frequently used templates"""
         try:
             with self.connection_manager.session_scope() as session:
@@ -79,7 +79,7 @@ class TemplateRepository(BaseRepository[PdfTemplate]):
             logger.error(f"Error getting most used templates: {e}")
             raise RepositoryError(f"Failed to get most used templates: {e}") from e
     
-    def update_usage_stats(self, template_id: int, last_used_at: datetime) -> Optional[PdfTemplate]:
+    def update_usage_stats(self, template_id: int, last_used_at: datetime) -> Optional[PdfTemplateModel]:
         """Update usage count and last used timestamp"""
         if template_id is None:
             raise ValueError("template_id cannot be None")

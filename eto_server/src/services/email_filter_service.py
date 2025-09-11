@@ -8,6 +8,8 @@ from typing import Dict, List, Any, Optional, Pattern
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
+from .email_types import EmailData
+
 logger = logging.getLogger(__name__)
 
 
@@ -20,19 +22,6 @@ class FilterConfig:
     date_filters: Dict[str, Any]
     advanced_filters: Dict[str, Any]
 
-
-@dataclass
-class EmailData:
-    """Standardized email data structure"""
-    subject: str
-    sender_email: str
-    sender_name: Optional[str]
-    received_time: datetime
-    has_attachments: bool
-    attachment_count: int
-    attachment_filenames: List[str]
-    has_pdf_attachments: bool
-    body_preview: Optional[str]
 
 
 class EmailFilterService:

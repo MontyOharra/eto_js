@@ -1,25 +1,25 @@
 """
-Pipeline Repository  
-Data access layer for Pipeline model operations
+TransformationPipelineModel Repository  
+Data access layer for TransformationPipelineModel model operations
 """
 import logging
 from typing import Optional, List
 from sqlalchemy.exc import SQLAlchemyError
 from .base_repository import BaseRepository, RepositoryError
-from ..models import Pipeline
+from ..models import TransformationPipelineModel
 
 
 logger = logging.getLogger(__name__)
 
 
-class PipelineRepository(BaseRepository[Pipeline]):
-    """Repository for Pipeline model operations"""
+class TransformationPipelineRepository(BaseRepository[TransformationPipelineModel]):
+    """Repository for TransformationPipelineModel model operations"""
     
     @property
     def model_class(self):
-        return Pipeline
+        return TransformationPipelineModel
     
-    def get_by_user(self, user_id: str) -> List[Pipeline]:
+    def get_by_user(self, user_id: str) -> List[TransformationPipelineModel]:
         """Get pipelines created by a specific user"""
         if not user_id:
             return []
@@ -34,7 +34,7 @@ class PipelineRepository(BaseRepository[Pipeline]):
             logger.error(f"Error getting pipelines by user {user_id}: {e}")
             raise RepositoryError(f"Failed to get pipelines by user: {e}") from e
     
-    def get_by_status(self, status: str) -> List[Pipeline]:
+    def get_by_status(self, status: str) -> List[TransformationPipelineModel]:
         """Get pipelines by status (draft, active, archived)"""
         if not status:
             return []
@@ -49,7 +49,7 @@ class PipelineRepository(BaseRepository[Pipeline]):
             logger.error(f"Error getting pipelines by status {status}: {e}")
             raise RepositoryError(f"Failed to get pipelines by status: {e}") from e
     
-    def get_active_pipelines(self) -> List[Pipeline]:
+    def get_active_pipelines(self) -> List[TransformationPipelineModel]:
         """Get all active pipelines"""
         try:
             with self.connection_manager.session_scope() as session:
@@ -62,7 +62,7 @@ class PipelineRepository(BaseRepository[Pipeline]):
             logger.error(f"Error getting active pipelines: {e}")
             raise RepositoryError(f"Failed to get active pipelines: {e}") from e
     
-    def get_by_name(self, name: str) -> Optional[Pipeline]:
+    def get_by_name(self, name: str) -> Optional[TransformationPipelineModel]:
         """Get pipeline by name"""
         if not name:
             return None
