@@ -43,6 +43,9 @@ def create_app(config_name: str = 'development') -> Flask:
     # Initialize database connection
     initialize_database(app)
     
+    # Initialize email ingestion service
+    initialize_email_ingestion(app)
+    
     # Register blueprints
     register_blueprints(app)
     
@@ -73,8 +76,8 @@ def initialize_database(app: Flask) -> None:
         else:
             logger.warning("Database connection established but test failed")
             
-        # Store connection manager in app context for access by blueprints
-        app.connection_manager = connection_manager
+        # Store connection manager in app config for access by blueprints
+        app.config['CONNECTION_MANAGER'] = connection_manager
         
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
@@ -91,6 +94,54 @@ def initialize_database(app: Flask) -> None:
         
         # Re-raise to prevent app startup with broken database
         raise
+
+
+def initialize_email_ingestion(app: Flask) -> None:
+    """Initialize email ingestion service and attempt auto-connection"""
+    try:
+        logger.info("Initializing Email Ingestion Service...")
+        
+        # Import and create the email ingestion service
+        from .features.email_ingestion.service import EmailIngestionService
+        email_service = EmailIngestionService()
+        
+        # Store service in app config for global access
+        app.config['EMAIL_INGESTION_SERVICE'] = email_service
+        
+        # Check for active configuration and attempt auto-connect
+        try:
+            active_configs = email_service.config_service.get_active_configurations()
+            
+            if not active_configs:
+                logger.info("No active email ingestion configurations found - service ready for configuration")
+                return
+            
+            # For now, use the first active configuration
+            active_config = active_configs[0]
+            logger.info(f"Found active configuration: {active_config.name} (ID: {active_config.id})")
+            
+            # Attempt to connect to Outlook using the active configuration
+            connection_config = {
+                'email_address': active_config.email_address,
+                'folder_name': active_config.folder_name
+            }
+            
+            # Start the email ingestion service
+            result = email_service.start_ingestion(active_config.id)
+            
+            if result.get('success'):
+                logger.info(f"Email ingestion service started successfully for config: {active_config.name}")
+            else:
+                logger.warning(f"Failed to start email ingestion: {result.get('message')}")
+                
+        except Exception as service_error:
+            logger.warning(f"Email ingestion auto-connect failed: {service_error}")
+            logger.info("Email ingestion service initialized but not connected - waiting for configuration")
+        
+    except Exception as e:
+        logger.error(f"Failed to initialize email ingestion service: {e}")
+        # Don't re-raise - allow app to continue without email service
+        logger.info("Application will continue without email ingestion service")
 
 
 def register_blueprints(app: Flask) -> None:

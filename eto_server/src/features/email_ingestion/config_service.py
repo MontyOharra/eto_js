@@ -10,19 +10,19 @@ from jsonschema import validate as json_validate, ValidationError
 
 from .types import EmailIngestionConfig, EmailConfigSummary, EmailConfigStats, EmailFilterRule
 from ...shared.database import get_connection_manager, EmailIngestionConfigModel
-from ...shared.database.repositories import EmailConfigRepository
+from ...shared.database.repositories import EmailIngestionConfigRepository
 
 logger = logging.getLogger(__name__)
 
 
-class EmailConfigurationService:
+class EmailIngestionConfigurationService:
     """Manages email ingestion configuration with validation and admin operations"""
     
     def __init__(self):
         self.connection_manager = get_connection_manager()
         assert self.connection_manager is not None
         
-        self.config_repo = EmailConfigRepository(self.connection_manager)
+        self.config_repo = EmailIngestionConfigRepository(self.connection_manager)
         self.logger = logging.getLogger(__name__)
         
         # JSON schema for configuration validation
@@ -187,12 +187,14 @@ class EmailConfigurationService:
             if not config:
                 raise Exception(f"Configuration with ID {config_id} not found")
             
-            self.logger.info(f"Updated email configuration {config.name}")
+            # Extract name to avoid Column type issues
+            config_name = config.name
+            self.logger.info(f"Updated email configuration {config_name}")
             
             return {
                 "success": True,
                 "config_id": config_id,
-                "name": config.name,
+                "name": config_name,
                 "message": "Configuration updated successfully"
             }
         
@@ -215,12 +217,14 @@ class EmailConfigurationService:
             if not config:
                 raise Exception(f"Configuration with ID {config_id} not found")
             
-            self.logger.info(f"Activated email configuration: {config.name}")
+            # Extract name to avoid Column type issues
+            config_name = config.name
+            self.logger.info(f"Activated email configuration: {config_name}")
             
             return {
                 "success": True,
                 "config_id": config_id,
-                "name": config.name,
+                "name": config_name,
                 "message": "Configuration activated successfully"
             }
         
@@ -269,19 +273,22 @@ class EmailConfigurationService:
             else:
                 configs = self.config_repo.get_all_configs()
             
-            return [
-                EmailConfigSummary(
-                    id=config.id,
-                    name=config.name,
-                    folder_name=config.folder_name,
-                    is_active=config.is_active,
-                    is_running=config.is_running,
-                    emails_processed=config.emails_processed,
-                    pdfs_found=config.pdfs_found,
-                    last_used_at=config.last_used_at
-                )
-                for config in configs
-            ]
+            # Convert models to summary objects with proper extraction
+            summaries = []
+            for config in configs:
+                summary_data = {
+                    'id': config.id,
+                    'name': config.name,
+                    'folder_name': config.folder_name,
+                    'is_active': config.is_active,
+                    'is_running': config.is_running,
+                    'emails_processed': config.emails_processed,
+                    'pdfs_found': config.pdfs_found,
+                    'last_used_at': config.last_used_at
+                }
+                summaries.append(EmailConfigSummary(**summary_data))
+            
+            return summaries
         
         except Exception as e:
             self.logger.error(f"Error listing configurations: {e}")
@@ -292,29 +299,18 @@ class EmailConfigurationService:
         try:
             self.logger.info(f"Deleting email configuration ID {config_id}")
             
-            # Check if configuration exists and is not active
-            config = self.config_repo.get_by_id(config_id)
+            # Delegate to repository for atomic delete operation
+            result = self.config_repo.delete_if_inactive(config_id)
             
-            if not config:
-                raise Exception(f"Configuration with ID {config_id} not found")
+            if not result["success"]:
+                raise Exception(result["message"])
             
-            if config.is_active:
-                raise Exception("Cannot delete active configuration. Please activate another configuration first.")
-            
-            config_name = config.name  # Store name before deletion
-            
-            # Delete configuration
-            success = self.config_repo.delete(config_id)
-            
-            if not success:
-                raise Exception("Failed to delete configuration")
-            
-            self.logger.info(f"Deleted email configuration: {config_name}")
+            self.logger.info(f"Deleted email configuration: {result['name']}")
             
             return {
                 "success": True,
                 "config_id": config_id,
-                "name": config_name,
+                "name": result["name"],
                 "message": "Configuration deleted successfully"
             }
         
@@ -329,40 +325,37 @@ class EmailConfigurationService:
     # === Helper Methods ===
     
     def _convert_to_domain_object(self, config_model: EmailIngestionConfigModel) -> EmailIngestionConfig:
-        """Convert database model to domain object"""
-        # Parse filter rules from JSON
-        filter_rules_data = json.loads(config_model.filter_rules)
-        filter_rules = [
-            EmailFilterRule(
-                field=rule["field"],
-                operation=rule["operation"],
-                value=rule["value"],
-                case_sensitive=rule.get("case_sensitive", False)
-            )
-            for rule in filter_rules_data
-        ]
-        
-        return EmailIngestionConfig(
-            id=config_model.id,
-            name=config_model.name,
-            description=config_model.description,
-            email_address=config_model.email_address,
-            folder_name=config_model.folder_name,
-            filter_rules=filter_rules,
-            poll_interval_seconds=config_model.poll_interval_seconds,
-            max_backlog_hours=config_model.max_backlog_hours,
-            error_retry_attempts=config_model.error_retry_attempts,
-            is_active=config_model.is_active,
-            is_running=config_model.is_running,
-            created_by=config_model.created_by,
-            created_at=config_model.created_at,
-            updated_at=config_model.updated_at,
-            last_used_at=config_model.last_used_at,
-            emails_processed=config_model.emails_processed,
-            pdfs_found=config_model.pdfs_found,
-            last_error_message=config_model.last_error_message,
-            last_error_at=config_model.last_error_at
-        )
+        """Convert database model to domain object. Must be called within session scope."""
+        # Extract all values to force SQLAlchemy type evaluation
+        config_data = {
+            'id': config_model.id,
+            'name': config_model.name,
+            'description': config_model.description,
+            'email_address': config_model.email_address,
+            'folder_name': config_model.folder_name,
+            'filter_rules': [
+                EmailFilterRule(
+                    field=rule.field,
+                    operation=rule.operation,
+                    value=rule.value,
+                    case_sensitive=rule.case_sensitive
+                ) for rule in config_model.filter_rules
+            ],
+            'poll_interval_seconds': config_model.poll_interval_seconds,
+            'max_backlog_hours': config_model.max_backlog_hours,
+            'error_retry_attempts': config_model.error_retry_attempts,
+            'is_active': config_model.is_active,
+            'is_running': config_model.is_running,
+            'created_by': config_model.created_by,
+            'created_at': config_model.created_at,
+            'updated_at': config_model.updated_at,
+            'last_used_at': config_model.last_used_at,
+            'emails_processed': config_model.emails_processed,
+            'pdfs_found': config_model.pdfs_found,
+            'last_error_message': config_model.last_error_message,
+            'last_error_at': config_model.last_error_at
+        }
+        return EmailIngestionConfig(**config_data)
 
     # === Validation Methods ===
     

@@ -91,7 +91,7 @@ def main():
         logger.info("Starting database reset...")
         
         # Import database components
-        from src.database.connection import DatabaseCreator
+        from src.shared.database.connection import DatabaseCreator
         
         # Get database URL
         database_url = os.getenv('DATABASE_URL')

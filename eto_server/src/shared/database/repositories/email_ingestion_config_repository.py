@@ -1,5 +1,5 @@
 """
-Email Config Repository
+Email Ingestion Config Repository
 Data access layer for EmailIngestionConfig model operations
 """
 import logging
@@ -12,8 +12,8 @@ from ..models import EmailIngestionConfigModel
 logger = logging.getLogger(__name__)
 
 
-class EmailConfigRepository(BaseRepository[EmailIngestionConfigModel]):
-    """Repository for email configuration operations"""
+class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
+    """Repository for email ingestion configuration operations"""
     
     @property
     def model_class(self):
@@ -23,10 +23,12 @@ class EmailConfigRepository(BaseRepository[EmailIngestionConfigModel]):
         """Get all configurations with business-specific ordering: active first, then by recency"""
         try:
             with self.connection_manager.session_scope() as session:
-                return session.query(self.model_class).order_by(
+                models = session.query(self.model_class).order_by(
                     self.model_class.is_active.desc(),
                     self.model_class.updated_at.desc()
                 ).all()
+                
+                return models
                 
         except SQLAlchemyError as e:
             logger.error(f"Error getting all configurations: {e}")
@@ -133,8 +135,7 @@ class EmailConfigRepository(BaseRepository[EmailIngestionConfigModel]):
             
             updated_config = self.update(config_id, update_data)
             if updated_config:
-                status_text = "running" if is_running else "stopped"
-                logger.debug(f"Updated configuration {config_id} runtime status to: {status_text}")
+                logger.debug(f"Updated configuration {config_id} runtime status to: {"running" if is_running else "stopped"}")
             
             return updated_config
             
@@ -204,4 +205,42 @@ class EmailConfigRepository(BaseRepository[EmailIngestionConfigModel]):
         except Exception as e:
             logger.error(f"Error recording error for config {config_id}: {e}")
             raise RepositoryError(f"Failed to record error: {e}") from e
+    
+    def delete_if_inactive(self, config_id: int) -> Dict[str, Any]:
+        """Delete configuration only if it's not active. Returns result with name for logging."""
+        try:
+            with self.connection_manager.session_scope() as session:
+                # Get config to check if it exists and is not active
+                config = session.query(self.model_class).get(config_id)
+                
+                if not config:
+                    return {
+                        "success": False,
+                        "message": f"Configuration with ID {config_id} not found"
+                    }
+                
+                # Extract values while still in session
+                is_active = config.is_active
+                config_name = config.name
+                
+                if is_active:
+                    return {
+                        "success": False,
+                        "message": "Cannot delete active configuration. Please activate another configuration first."
+                    }
+                
+                # Delete the configuration
+                session.delete(config)
+                session.commit()
+                
+                logger.info(f"Deleted email configuration: {config_name}")
+                
+                return {
+                    "success": True,
+                    "name": config_name
+                }
+                
+        except Exception as e:
+            logger.error(f"Error deleting configuration {config_id}: {e}")
+            raise RepositoryError(f"Failed to delete configuration: {e}") from e
     

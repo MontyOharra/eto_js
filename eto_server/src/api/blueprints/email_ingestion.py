@@ -1,5 +1,5 @@
 """
-Email Configuration API Blueprint
+Email Ingestion API Blueprint
 REST endpoints for managing email ingestion configuration
 """
 from flask import Blueprint, request, jsonify
@@ -8,7 +8,7 @@ from pydantic import ValidationError
 import logging
 from typing import Dict, Any
 
-from ..schemas.email_configuration import (
+from ..schemas.email_ingestion import (
     CreateEmailConfigRequest,
     UpdateEmailConfigRequest,
     ValidateConfigRequest,
@@ -18,12 +18,12 @@ from ..schemas.email_configuration import (
     ActivateConfigResponse
 )
 from ..schemas.common import APIResponse, ValidationResponse
-from ...features.email_configuration import EmailConfigurationService
+from ...features.email_ingestion.config_service import EmailConfigurationService
 
 logger = logging.getLogger(__name__)
 
 # Create blueprint
-email_config_bp = Blueprint('email_configuration', __name__, url_prefix='/api/email-configuration')
+email_ingestion_bp = Blueprint('email_ingestion', __name__, url_prefix='/api/email-ingestion')
 
 # Initialize service
 config_service = EmailConfigurationService()
@@ -46,7 +46,7 @@ def handle_validation_error(e: ValidationError) -> Dict[str, Any]:
     }
 
 
-@email_config_bp.route('/configurations', methods=['GET'])
+@email_ingestion_bp.route('/configurations', methods=['GET'])
 @cross_origin()
 def list_configurations():
     """List all email ingestion configurations"""
@@ -87,7 +87,7 @@ def list_configurations():
         }), 500
 
 
-@email_config_bp.route('/configurations', methods=['POST'])
+@email_ingestion_bp.route('/configurations', methods=['POST'])
 @cross_origin()
 def create_configuration():
     """Create new email ingestion configuration"""
@@ -155,7 +155,7 @@ def create_configuration():
         }), 500
 
 
-@email_config_bp.route('/configurations/<int:config_id>', methods=['GET'])
+@email_ingestion_bp.route('/configurations/<int:config_id>', methods=['GET'])
 @cross_origin()
 def get_configuration(config_id: int):
     """Get specific email ingestion configuration"""
@@ -218,7 +218,7 @@ def get_configuration(config_id: int):
         }), 500
 
 
-@email_config_bp.route('/configurations/<int:config_id>', methods=['PUT'])
+@email_ingestion_bp.route('/configurations/<int:config_id>', methods=['PUT'])
 @cross_origin()
 def update_configuration(config_id: int):
     """Update existing email ingestion configuration"""
@@ -283,7 +283,7 @@ def update_configuration(config_id: int):
         }), 500
 
 
-@email_config_bp.route('/configurations/<int:config_id>', methods=['DELETE'])
+@email_ingestion_bp.route('/configurations/<int:config_id>', methods=['DELETE'])
 @cross_origin()
 def delete_configuration(config_id: int):
     """Delete email ingestion configuration"""
@@ -304,7 +304,7 @@ def delete_configuration(config_id: int):
         }), 500
 
 
-@email_config_bp.route('/configurations/<int:config_id>/activate', methods=['POST'])
+@email_ingestion_bp.route('/configurations/<int:config_id>/activate', methods=['POST'])
 @cross_origin()
 def activate_configuration(config_id: int):
     """Activate an email ingestion configuration"""
@@ -330,7 +330,7 @@ def activate_configuration(config_id: int):
         }), 500
 
 
-@email_config_bp.route('/configurations/active', methods=['GET'])
+@email_ingestion_bp.route('/configurations/active', methods=['GET'])
 @cross_origin()
 def get_active_configuration():
     """Get currently active email ingestion configuration"""
@@ -393,7 +393,7 @@ def get_active_configuration():
         }), 500
 
 
-@email_config_bp.route('/configurations/validate', methods=['POST'])
+@email_ingestion_bp.route('/configurations/validate', methods=['POST'])
 @cross_origin()
 def validate_configuration():
     """Validate email ingestion configuration"""
@@ -453,7 +453,7 @@ def validate_configuration():
         }), 500
 
 
-@email_config_bp.route('/configurations/template', methods=['GET'])
+@email_ingestion_bp.route('/configurations/template', methods=['GET'])
 @cross_origin()
 def get_configuration_template():
     """Get configuration template for creating new configurations"""
@@ -498,7 +498,7 @@ def get_configuration_template():
 
 # === Error Handlers ===
 
-@email_config_bp.errorhandler(404)
+@email_ingestion_bp.errorhandler(404)
 def handle_not_found(error):
     """Handle 404 errors"""
     return jsonify({
@@ -508,7 +508,7 @@ def handle_not_found(error):
     }), 404
 
 
-@email_config_bp.errorhandler(405)
+@email_ingestion_bp.errorhandler(405)
 def handle_method_not_allowed(error):
     """Handle 405 errors"""
     return jsonify({
@@ -518,7 +518,7 @@ def handle_method_not_allowed(error):
     }), 405
 
 
-@email_config_bp.errorhandler(500)
+@email_ingestion_bp.errorhandler(500)
 def handle_internal_error(error):
     """Handle 500 errors"""
     logger.error(f"Internal server error: {error}")
@@ -530,4 +530,4 @@ def handle_internal_error(error):
 
 
 # Export the blueprint
-__all__ = ['email_config_bp']
+__all__ = ['email_ingestion_bp']

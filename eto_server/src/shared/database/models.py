@@ -210,9 +210,9 @@ class EtoRunModel(Base):
     failed_step = relationship("TemplateExtractionStepModel", foreign_keys=[failed_step_id], overlaps="failed_eto_runs")
 
 
-class EmailCursorModel(Base):
+class EmailIngestionCursorModel(Base):
     """Track email processing cursors for downtime recovery"""
-    __tablename__ = 'email_cursors'
+    __tablename__ = 'email_ingestion_cursors'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     email_address = Column(String(255), nullable=False)

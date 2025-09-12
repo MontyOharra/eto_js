@@ -1,26 +1,26 @@
 """
-Cursor Repository
-Data access layer for EmailCursor model operations
+Email Ingestion Cursor Repository
+Data access layer for EmailIngestionCursor model operations
 """
 import logging
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from .base_repository import BaseRepository, RepositoryError
-from ..models import EmailCursorModel
+from ..models import EmailIngestionCursorModel
 
 
 logger = logging.getLogger(__name__)
 
 
-class CursorRepository(BaseRepository[EmailCursorModel]):
-    """Repository for EmailCursorModel model operations"""
+class EmailIngestionCursorRepository(BaseRepository[EmailIngestionCursorModel]):
+    """Repository for EmailIngestionCursorModel model operations"""
     
     @property
     def model_class(self):
-        return EmailCursorModel
+        return EmailIngestionCursorModel
     
-    def get_by_email_and_folder(self, email_address: str, folder_name: str) -> Optional[EmailCursorModel]:
+    def get_by_email_and_folder(self, email_address: str, folder_name: str) -> Optional[EmailIngestionCursorModel]:
         """Get cursor for specific email and folder combination"""
         if not email_address or not folder_name:
             return None
@@ -37,7 +37,7 @@ class CursorRepository(BaseRepository[EmailCursorModel]):
             raise RepositoryError(f"Failed to get cursor: {e}") from e
     
     
-    def update_processing_stats(self, cursor_id: int, emails_processed: int, pdfs_found: int) -> Optional[EmailCursorModel]:
+    def update_processing_stats(self, cursor_id: int, emails_processed: int, pdfs_found: int) -> Optional[EmailIngestionCursorModel]:
         """Update processing statistics for a cursor"""
         if cursor_id is None:
             raise ValueError("cursor_id cannot be None")
@@ -72,7 +72,7 @@ class CursorRepository(BaseRepository[EmailCursorModel]):
             logger.error(f"Error updating processing stats for cursor {cursor_id}: {e}")
             raise RepositoryError(f"Failed to update processing stats: {e}") from e
     
-    def get_all_active_cursors(self) -> List[EmailCursor]:
+    def get_all_active_cursors(self) -> List[EmailIngestionCursorModel]:
         """Get all email cursors ordered by last check time"""
         try:
             with self.connection_manager.session_scope() as session:

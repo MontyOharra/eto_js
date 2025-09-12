@@ -13,7 +13,7 @@ from .common import (
     ValidationResponse
 )
 
-from .email_configuration import (
+from .email_ingestion import (
     EmailFilterRuleSchema,
     EmailConnectionConfigSchema,
     EmailMonitoringConfigSchema,

@@ -87,7 +87,7 @@ class UpdatePdfTemplateRequest(BaseModel):
     extraction_fields: Optional[List[PdfExtractionBoundsResponse]] = None
     coverage_threshold: Optional[float] = Field(None, ge=0.0, le=1.0)
     is_complete: Optional[bool] = None
-    status: Optional[str] = Field(None, regex="^(active|archived|draft)$")
+    status: Optional[str] = Field(None, pattern="^(active|archived|draft)$")
 
 
 class TemplateMatchResultResponse(BaseModel):

@@ -1,6 +1,6 @@
 """
-Email Configuration API Schemas
-Request/response models for email configuration endpoints
+Email Ingestion API Schemas
+Request/response models for email ingestion endpoints
 """
 from pydantic import BaseModel, Field, validator
 from typing import Optional, List
