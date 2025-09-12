@@ -54,7 +54,7 @@ class EmailIngestionCursorService:
     async def initialize_cursor(self, connection_config: EmailConnectionConfig) -> EmailIngestionCursorModel:
         """Initialize cursor for new email/folder combination"""
         try:
-            email_address = connection_config.email_address or "default"
+            email_address = connection_config.email_address
             folder = connection_config.folder_name
             
             # Check if cursor already exists

@@ -3,11 +3,13 @@ Email Ingestion Config Repository
 Data access layer for EmailIngestionConfig model operations
 """
 import logging
+import json
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 from sqlalchemy.exc import SQLAlchemyError
 from .base_repository import BaseRepository, RepositoryError
 from ..models import EmailIngestionConfigModel
+from src.features.email_ingestion.types import EmailIngestionConfig, EmailConfigSummary, EmailFilterRule
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +21,85 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
     def model_class(self):
         return EmailIngestionConfigModel
     
-    def get_all_configs(self) -> List[EmailIngestionConfigModel]:
+    def _convert_to_domain_object(self, config_model: EmailIngestionConfigModel) -> EmailIngestionConfig:
+        """Convert database model to domain object while session is active"""
+        # Parse filter rules from JSON
+        try:
+            filter_rules_data = json.loads(config_model.filter_rules or "[]")
+            filter_rules = [
+                EmailFilterRule(
+                    field=rule["field"],
+                    operation=rule["operation"],
+                    value=rule["value"],
+                    case_sensitive=rule.get("case_sensitive", False)
+                )
+                for rule in filter_rules_data
+            ]
+        except (json.JSONDecodeError, KeyError) as e:
+            logger.warning(f"Invalid filter rules JSON in config {config_model.id}: {e}")
+            filter_rules = []
+        
+        # Extract all values to force SQLAlchemy type evaluation while session is active
+        config_data = {
+            'id': config_model.id,
+            'name': config_model.name,
+            'description': config_model.description,
+            'email_address': config_model.email_address,
+            'folder_name': config_model.folder_name,
+            'filter_rules': filter_rules,
+            'poll_interval_seconds': config_model.poll_interval_seconds,
+            'max_backlog_hours': config_model.max_backlog_hours,
+            'error_retry_attempts': config_model.error_retry_attempts,
+            'is_active': config_model.is_active,
+            'is_running': config_model.is_running,
+            'created_by': config_model.created_by,
+            'created_at': config_model.created_at,
+            'updated_at': config_model.updated_at,
+            'last_used_at': config_model.last_used_at,
+            'emails_processed': config_model.emails_processed,
+            'pdfs_found': config_model.pdfs_found,
+            'last_error_message': config_model.last_error_message,
+            'last_error_at': config_model.last_error_at
+        }
+        return EmailIngestionConfig(**config_data)
+    
+    def _convert_to_summary(self, config_model: EmailIngestionConfigModel) -> EmailConfigSummary:
+        """Convert database model to summary domain object while session is active"""
+        summary_data = {
+            'id': config_model.id,
+            'name': config_model.name,
+            'folder_name': config_model.folder_name,
+            'is_active': config_model.is_active,
+            'is_running': config_model.is_running,
+            'emails_processed': config_model.emails_processed,
+            'pdfs_found': config_model.pdfs_found,
+            'last_used_at': config_model.last_used_at,
+            'created_at': config_model.created_at,
+            'updated_at': config_model.updated_at
+        }
+        return EmailConfigSummary(**summary_data)
+    
+    def get_by_id(self, id: int) -> Optional[EmailIngestionConfig]:
+        """Override BaseRepository method to return domain object"""
+        model = super().get_by_id(id)
+        if model:
+            # Need to be careful about session scope here
+            with self.connection_manager.session_scope() as session:
+                # Reattach to current session
+                config = session.merge(model)
+                return self._convert_to_domain_object(config)
+        return None
+    
+    def update(self, id: int, data: Dict[str, Any]) -> Optional[EmailIngestionConfig]:
+        """Override BaseRepository method to return domain object"""
+        model = super().update(id, data)
+        if model:
+            with self.connection_manager.session_scope() as session:
+                config = session.merge(model)
+                return self._convert_to_domain_object(config)
+        return None
+    
+    def get_all_configs(self) -> List[EmailConfigSummary]:
         """Get all configurations with business-specific ordering: active first, then by recency"""
         try:
             with self.connection_manager.session_scope() as session:
@@ -28,13 +108,14 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
                     self.model_class.updated_at.desc()
                 ).all()
                 
-                return models
+                # Convert to domain objects while session is active
+                return [self._convert_to_summary(model) for model in models]
                 
         except SQLAlchemyError as e:
             logger.error(f"Error getting all configurations: {e}")
             raise RepositoryError(f"Failed to get all configurations: {e}") from e    
     
-    def get_active_config(self) -> Optional[EmailIngestionConfigModel]:
+    def get_active_config(self) -> Optional[EmailIngestionConfig]:
         """Get the currently active configuration"""
         try:
             with self.connection_manager.session_scope() as session:
@@ -45,23 +126,8 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
                 if not config:
                     return None
                 
-                # Force load all attributes that services need while session is active
-                _ = config.filter_rules
-                _ = config.name
-                _ = config.is_active
-                _ = config.emails_processed
-                _ = config.created_at
-                _ = config.updated_at
-                _ = config.last_used_at
-                _ = config.last_error_message
-                _ = config.last_error_at
-                _ = config.pdfs_found
-                _ = config.is_running
-                _ = config.created_by
-                
-                # Remove from session but keep loaded data
-                session.expunge(config)
-                return config
+                # Convert to domain object while session is active
+                return self._convert_to_domain_object(config)
                 
         except SQLAlchemyError as e:
             logger.error(f"Error getting active configuration: {e}")
@@ -83,7 +149,7 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
             logger.error(f"Error deactivating all configurations: {e}")
             raise RepositoryError(f"Failed to deactivate configurations: {e}") from e
     
-    def set_config_active(self, config_id: int) -> Optional[EmailIngestionConfigModel]:
+    def set_config_active(self, config_id: int) -> Optional[EmailIngestionConfig]:
         """Activate specific configuration and deactivate others"""
         try:
             with self.connection_manager.session_scope() as session:
@@ -110,7 +176,8 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
                     config = session.query(self.model_class).get(config_id)
                     session.commit()
                     logger.info(f"Activated email configuration: {config_id}")
-                    return config
+                    # Convert to domain object while session is active
+                    return self._convert_to_domain_object(config)
                 else:
                     logger.warning(f"Configuration {config_id} not found for activation")
                     return None
@@ -119,7 +186,7 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
             logger.error(f"Error setting config {config_id} active: {e}")
             raise RepositoryError(f"Failed to activate configuration: {e}") from e
     
-    def update_runtime_status(self, config_id: int, is_running: bool) -> Optional[EmailIngestionConfigModel]:
+    def update_runtime_status(self, config_id: int, is_running: bool) -> Optional[EmailIngestionConfig]:
         """Update runtime status"""
         if config_id is None:
             raise ValueError("config_id cannot be None")
@@ -143,7 +210,7 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
             logger.error(f"Error updating runtime status for config {config_id}: {e}")
             raise RepositoryError(f"Failed to update runtime status: {e}") from e
     
-    def increment_processing_stats(self, config_id: int, emails: int, pdfs: int) -> Optional[EmailIngestionConfigModel]:
+    def increment_processing_stats(self, config_id: int, emails: int, pdfs: int) -> Optional[EmailIngestionConfig]:
         """Update processing statistics"""
         if config_id is None:
             raise ValueError("config_id cannot be None")

@@ -18,7 +18,8 @@ from ..schemas.email_ingestion import (
     ActivateConfigResponse
 )
 from ..schemas.common import APIResponse, ValidationResponse
-from ...features.email_ingestion.config_service import EmailConfigurationService
+from ...features.email_ingestion.config_service import EmailIngestionConfigurationService
+from flask import current_app
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,7 @@ logger = logging.getLogger(__name__)
 email_ingestion_bp = Blueprint('email_ingestion', __name__, url_prefix='/api/email-ingestion')
 
 # Initialize service
-config_service = EmailConfigurationService()
+config_service = EmailIngestionConfigurationService()
 
 
 def handle_validation_error(e: ValidationError) -> Dict[str, Any]:
@@ -125,6 +126,7 @@ def create_configuration():
                 "folder_name": create_request.connection.folder_name
             },
             "filters": {
+                "name": f"Filter for {create_request.name}",
                 "rules": filter_rules_data
             },
             "monitoring": {
@@ -249,6 +251,7 @@ def update_configuration(config_id: int):
         
         if update_request.filter_rules:
             config_data["filters"] = {
+                "name": "Updated Filter Rules",
                 "rules": [
                     {
                         "field": rule.field,
@@ -307,19 +310,72 @@ def delete_configuration(config_id: int):
 @email_ingestion_bp.route('/configurations/<int:config_id>/activate', methods=['POST'])
 @cross_origin()
 def activate_configuration(config_id: int):
-    """Activate an email ingestion configuration"""
+    """Activate an email ingestion configuration with optional auto-start"""
     try:
+        # Check if auto_start parameter is provided
+        data = request.get_json() or {}
+        auto_start = data.get('auto_start', False)
+        
+        # Activate the configuration
         result = config_service.activate_configuration(config_id)
         
-        if result["success"]:
-            response = ActivateConfigResponse(
-                config_id=result["config_id"],
-                config_name=result["name"],
-                message=result["message"]
-            )
-            return jsonify(response.dict()), 200
-        else:
+        if not result["success"]:
             return jsonify(result), 400
+        
+        # If auto_start is requested, try to start ingestion
+        if auto_start:
+            email_service = current_app.config.get('EMAIL_INGESTION_SERVICE')
+            if email_service:
+                start_result = email_service.start_ingestion()
+                
+                if start_result["success"]:
+                    # Return combined response with activation and start info
+                    response = {
+                        "success": True,
+                        "config_id": result["config_id"],
+                        "config_name": result["name"],
+                        "message": f"Configuration activated and email ingestion started",
+                        "activated": True,
+                        "auto_started": True,
+                        "ingestion_status": {
+                            "is_running": True,
+                            "folder_name": start_result.get("folder_name"),
+                            "cursor_id": start_result.get("cursor_id")
+                        }
+                    }
+                    return jsonify(response), 200
+                else:
+                    # Activation succeeded but start failed
+                    response = {
+                        "success": True,
+                        "config_id": result["config_id"],
+                        "config_name": result["name"],
+                        "message": f"Configuration activated but auto-start failed: {start_result.get('message', 'Unknown error')}",
+                        "activated": True,
+                        "auto_started": False,
+                        "start_error": start_result.get("error")
+                    }
+                    return jsonify(response), 200
+            else:
+                # Email service not available
+                response = {
+                    "success": True,
+                    "config_id": result["config_id"],
+                    "config_name": result["name"],
+                    "message": "Configuration activated but email service not available for auto-start",
+                    "activated": True,
+                    "auto_started": False,
+                    "start_error": "Email service not initialized"
+                }
+                return jsonify(response), 200
+        
+        # Standard activation response (no auto-start)
+        response = ActivateConfigResponse(
+            config_id=result["config_id"],
+            config_name=result["name"],
+            message=result["message"]
+        )
+        return jsonify(response.dict()), 200
     
     except Exception as e:
         logger.error(f"Error activating configuration {config_id}: {e}")
@@ -420,6 +476,7 @@ def validate_configuration():
                 "folder_name": validate_request.connection.folder_name
             },
             "filters": {
+                "name": "Validation Filter Rules",
                 "rules": [
                     {
                         "field": rule.field,
@@ -527,6 +584,118 @@ def handle_internal_error(error):
         "error": "Internal server error",
         "message": "An unexpected error occurred"
     }), 500
+
+
+# === Service Control Endpoints ===
+
+@email_ingestion_bp.route('/start', methods=['POST'])
+@cross_origin()
+def start_ingestion():
+    """Start email ingestion service"""
+    try:
+        # Get the email service from app config
+        email_service = current_app.config.get('EMAIL_INGESTION_SERVICE')
+        if not email_service:
+            return jsonify({
+                "success": False,
+                "error": "Email ingestion service not initialized",
+                "message": "Service not available"
+            }), 503
+        
+        # Start the ingestion service
+        result = email_service.start_ingestion()
+        
+        if result["success"]:
+            return jsonify(result), 200
+        else:
+            return jsonify(result), 400
+    
+    except Exception as e:
+        logger.error(f"Error starting email ingestion: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "message": "Failed to start email ingestion"
+        }), 500
+
+
+@email_ingestion_bp.route('/stop', methods=['POST'])
+@cross_origin()
+def stop_ingestion():
+    """Stop email ingestion service"""
+    try:
+        # Get the email service from app config
+        email_service = current_app.config.get('EMAIL_INGESTION_SERVICE')
+        if not email_service:
+            return jsonify({
+                "success": False,
+                "error": "Email ingestion service not initialized",
+                "message": "Service not available"
+            }), 503
+        
+        # Stop the ingestion service
+        result = email_service.stop_ingestion()
+        
+        if result["success"]:
+            return jsonify(result), 200
+        else:
+            return jsonify(result), 400
+    
+    except Exception as e:
+        logger.error(f"Error stopping email ingestion: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "message": "Failed to stop email ingestion"
+        }), 500
+
+
+@email_ingestion_bp.route('/status', methods=['GET'])
+@cross_origin()
+def get_ingestion_status():
+    """Get email ingestion service status"""
+    try:
+        # Get the email service from app config
+        email_service = current_app.config.get('EMAIL_INGESTION_SERVICE')
+        if not email_service:
+            return jsonify({
+                "success": False,
+                "error": "Email ingestion service not initialized",
+                "message": "Service not available"
+            }), 503
+        
+        # Get service status
+        status = {
+            "success": True,
+            "data": {
+                "is_running": email_service.is_running,
+                "is_connected": email_service.is_connected,
+                "current_config_id": email_service.current_config.id if email_service.current_config else None,
+                "current_config_name": email_service.current_config.name if email_service.current_config else None,
+                "stats": {
+                    "emails_processed": email_service.stats.emails_processed,
+                    "pdfs_found": email_service.stats.pdfs_found,
+                    "errors_encountered": email_service.stats.errors_encountered,
+                    "last_processing_time": email_service.stats.last_processing_time.isoformat() if email_service.stats.last_processing_time else None
+                },
+                "health": {
+                    "status": email_service.health.status,
+                    "last_heartbeat": email_service.health.last_heartbeat.isoformat() if email_service.health.last_heartbeat else None,
+                    "error_count": email_service.health.error_count,
+                    "last_error": email_service.health.last_error
+                }
+            }
+        }
+        
+        return jsonify(status), 200
+    
+    except Exception as e:
+        logger.error(f"Error getting ingestion status: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "message": "Failed to get ingestion status"
+        }), 500
 
 
 # Export the blueprint

@@ -55,6 +55,8 @@ class EmailConfigSummary:
     emails_processed: int
     pdfs_found: int
     last_used_at: Optional[datetime]
+    created_at: datetime
+    updated_at: datetime
 
 
 @dataclass
@@ -77,14 +79,14 @@ class EmailConfigStats:
 @dataclass
 class EmailConnectionConfig:
     """Email connection configuration data structure"""
-    email_address: Optional[str]
+    email_address: str
     folder_name: str
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'EmailConnectionConfig':
         """Create from dictionary data"""
         return cls(
-            email_address=data.get('email_address'),
+            email_address=data['email_address'],  # Required field
             folder_name=data.get('folder_name', 'Inbox')
         )
 

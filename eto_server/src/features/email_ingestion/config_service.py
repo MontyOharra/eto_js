@@ -32,9 +32,9 @@ class EmailIngestionConfigurationService:
             "properties": {
                 "connection": {
                     "type": "object",
-                    "required": ["folder_name"],
+                    "required": ["email_address", "folder_name"],
                     "properties": {
-                        "email_address": {"type": ["string", "null"]},
+                        "email_address": {"type": "string", "minLength": 1},
                         "folder_name": {"type": "string", "minLength": 1},
                         "polling_interval": {"type": "integer", "minimum": 10},
                         "max_hours_back": {"type": "integer", "minimum": 1}
@@ -136,7 +136,7 @@ class EmailIngestionConfigurationService:
             }
         
         except Exception as e:
-            self.logger.error(f"Error creating configuration: {e}")
+            self.logger.exception(f"Error creating configuration: {e}")
             return {
                 "success": False,
                 "error": str(e),
@@ -199,7 +199,7 @@ class EmailIngestionConfigurationService:
             }
         
         except Exception as e:
-            self.logger.error(f"Error updating configuration: {e}")
+            self.logger.exception(f"Error updating configuration: {e}")
             return {
                 "success": False,
                 "error": str(e),
@@ -229,7 +229,7 @@ class EmailIngestionConfigurationService:
             }
         
         except Exception as e:
-            self.logger.error(f"Error activating configuration: {e}")
+            self.logger.exception(f"Error activating configuration: {e}")
             return {
                 "success": False,
                 "error": str(e),
@@ -239,59 +239,47 @@ class EmailIngestionConfigurationService:
     def get_active_configuration(self) -> Optional[EmailIngestionConfig]:
         """Get currently active email ingestion configuration as domain object"""
         try:
-            config_model = self.config_repo.get_active_config()
+            config = self.config_repo.get_active_config()
             
-            if not config_model:
+            if not config:
                 self.logger.warning("No active email configuration found")
                 return None
             
-            return self._convert_to_domain_object(config_model)
+            return config  # Repository now returns domain object directly
         
         except Exception as e:
-            self.logger.error(f"Error getting active configuration: {e}")
+            self.logger.exception(f"Error getting active configuration: {e}")
             return None
     
     def get_configuration(self, config_id: int) -> Optional[EmailIngestionConfig]:
         """Get specific email ingestion configuration by ID as domain object"""
         try:
-            config_model = self.config_repo.get_by_id(config_id)
+            config = self.config_repo.get_by_id(config_id)
             
-            if not config_model:
+            if not config:
                 return None
             
-            return self._convert_to_domain_object(config_model)
+            return config  # Repository now returns domain object directly
         
         except Exception as e:
-            self.logger.error(f"Error getting configuration {config_id}: {e}")
+            self.logger.exception(f"Error getting configuration {config_id}: {e}")
             return None
     
     def list_configurations(self, order_by: Optional[str] = None, desc: bool = False) -> List[EmailConfigSummary]:
         """List all email ingestion configurations with summary info"""
         try:
             if order_by:
-                configs = self.config_repo.get_all(order_by=order_by, desc=desc)
+                # For custom ordering, would need to update repository to support this
+                # For now, just use get_all_configs which returns domain objects
+                configs = self.config_repo.get_all_configs()
             else:
                 configs = self.config_repo.get_all_configs()
             
-            # Convert models to summary objects with proper extraction
-            summaries = []
-            for config in configs:
-                summary_data = {
-                    'id': config.id,
-                    'name': config.name,
-                    'folder_name': config.folder_name,
-                    'is_active': config.is_active,
-                    'is_running': config.is_running,
-                    'emails_processed': config.emails_processed,
-                    'pdfs_found': config.pdfs_found,
-                    'last_used_at': config.last_used_at
-                }
-                summaries.append(EmailConfigSummary(**summary_data))
-            
-            return summaries
+            # Repository now returns domain objects directly
+            return configs
         
         except Exception as e:
-            self.logger.error(f"Error listing configurations: {e}")
+            self.logger.exception(f"Error listing configurations: {e}")
             return []
     
     def delete_configuration(self, config_id: int) -> Dict[str, Any]:
@@ -315,7 +303,7 @@ class EmailIngestionConfigurationService:
             }
         
         except Exception as e:
-            self.logger.error(f"Error deleting configuration: {e}")
+            self.logger.exception(f"Error deleting configuration: {e}")
             return {
                 "success": False,
                 "error": str(e),
@@ -324,39 +312,6 @@ class EmailIngestionConfigurationService:
 
     # === Helper Methods ===
     
-    def _convert_to_domain_object(self, config_model: EmailIngestionConfigModel) -> EmailIngestionConfig:
-        """Convert database model to domain object. Must be called within session scope."""
-        # Extract all values to force SQLAlchemy type evaluation
-        config_data = {
-            'id': config_model.id,
-            'name': config_model.name,
-            'description': config_model.description,
-            'email_address': config_model.email_address,
-            'folder_name': config_model.folder_name,
-            'filter_rules': [
-                EmailFilterRule(
-                    field=rule.field,
-                    operation=rule.operation,
-                    value=rule.value,
-                    case_sensitive=rule.case_sensitive
-                ) for rule in config_model.filter_rules
-            ],
-            'poll_interval_seconds': config_model.poll_interval_seconds,
-            'max_backlog_hours': config_model.max_backlog_hours,
-            'error_retry_attempts': config_model.error_retry_attempts,
-            'is_active': config_model.is_active,
-            'is_running': config_model.is_running,
-            'created_by': config_model.created_by,
-            'created_at': config_model.created_at,
-            'updated_at': config_model.updated_at,
-            'last_used_at': config_model.last_used_at,
-            'emails_processed': config_model.emails_processed,
-            'pdfs_found': config_model.pdfs_found,
-            'last_error_message': config_model.last_error_message,
-            'last_error_at': config_model.last_error_at
-        }
-        return EmailIngestionConfig(**config_data)
-
     # === Validation Methods ===
     
     def validate_configuration(self, config_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -374,6 +329,12 @@ class EmailIngestionConfigurationService:
             monitoring = config_data.get("monitoring", {})
             
             # Connection validation
+            email_address = connection.get("email_address", "").strip()
+            if not email_address:
+                validation_errors.append("Email address is required and cannot be empty")
+            elif "@" not in email_address or "." not in email_address:
+                validation_errors.append("Email address must be a valid email format")
+            
             folder_name = connection.get("folder_name", "").strip()
             if not folder_name:
                 validation_errors.append("Folder name cannot be empty")
@@ -421,7 +382,7 @@ class EmailIngestionConfigurationService:
             }
         
         except Exception as e:
-            self.logger.error(f"Error validating configuration: {e}")
+            self.logger.exception(f"Error validating configuration: {e}")
             return {
                 "valid": False,
                 "errors": [f"Validation error: {str(e)}"],
@@ -432,7 +393,7 @@ class EmailIngestionConfigurationService:
         """Get a template configuration for creating new configs"""
         return {
             "connection": {
-                "email_address": None,  # Use default Outlook account
+                "email_address": "user@example.com",  # Must specify email address
                 "folder_name": "Inbox"
             },
             "filters": {

@@ -110,14 +110,11 @@ def initialize_email_ingestion(app: Flask) -> None:
         
         # Check for active configuration and attempt auto-connect
         try:
-            active_configs = email_service.config_service.get_active_configurations()
+            active_config = email_service.config_service.get_active_configuration()
             
-            if not active_configs:
-                logger.info("No active email ingestion configurations found - service ready for configuration")
+            if not active_config:
+                logger.info("No active email ingestion configuration found - service ready for configuration")
                 return
-            
-            # For now, use the first active configuration
-            active_config = active_configs[0]
             logger.info(f"Found active configuration: {active_config.name} (ID: {active_config.id})")
             
             # Attempt to connect to Outlook using the active configuration

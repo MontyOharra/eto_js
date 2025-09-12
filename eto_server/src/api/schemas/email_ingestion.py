@@ -32,7 +32,7 @@ class EmailFilterRuleSchema(BaseModel):
 
 class EmailConnectionConfigSchema(BaseModel):
     """Email connection configuration schema"""
-    email_address: Optional[str] = Field(None, description="Email address (None for default account)")
+    email_address: str = Field(..., description="Email address to monitor", min_length=1)
     folder_name: str = Field(..., description="Email folder name")
 
 

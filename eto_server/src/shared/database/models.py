@@ -315,7 +315,7 @@ class EmailIngestionConfigModel(Base):
     description = Column(Text)
     
     # Connection settings
-    email_address = Column(String(255))  # None = default account
+    email_address = Column(String(255), nullable=False)  # Required specific email address
     folder_name = Column(String(255), nullable=False, default='Inbox')
     
     # Filter configuration (JSON)
