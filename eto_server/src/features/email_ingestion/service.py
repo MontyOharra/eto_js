@@ -2,7 +2,6 @@
 Email Ingestion Service
 Main orchestrator for email processing with automatic startup and downtime recovery
 """
-import asyncio
 import logging
 import threading
 import time
@@ -16,7 +15,7 @@ from .cursor_service import EmailIngestionCursorService
 from .types import EmailIngestionConfig, IngestionStats, ServiceHealth, EmailData, EmailConnectionConfig
 from .integrations.outlook_com_service import OutlookComService
 from ...shared.database import get_connection_manager
-from ...shared.database.repositories import EmailIngestionConfigRepository, EmailIngestionCursorRepository
+from ...shared.database.repositories import EmailIngestionConfigRepository, EmailIngestionCursorRepository, EmailRepository
 
 logger = logging.getLogger(__name__)
 
@@ -25,15 +24,17 @@ class EmailIngestionService:
     """Main orchestrator for email processing with automatic startup and downtime recovery"""
     
     def __init__(self):
+        # Infrastructure layer - single source of truth
         self.connection_manager = get_connection_manager()
         assert self.connection_manager is not None
         
-        # Repository dependencies
+        # Repository layer - all created at top level with shared connection manager
         self.config_repo = EmailIngestionConfigRepository(self.connection_manager)
         self.cursor_repo = EmailIngestionCursorRepository(self.connection_manager)
+        self.email_repo = EmailRepository(self.connection_manager)
         
-        # Service dependencies
-        self.config_service = EmailIngestionConfigurationService()
+        # Service layer - repositories injected as dependencies
+        self.config_service = EmailIngestionConfigurationService(self.config_repo)
         self.filter_service = EmailIngestionFilterService()
         self.cursor_service = EmailIngestionCursorService(self.cursor_repo)
         self.outlook_service = OutlookComService()
@@ -102,7 +103,7 @@ class EmailIngestionService:
             )
             
             # Create or get existing cursor
-            cursor = asyncio.run(self.cursor_service.initialize_cursor(connection_config))
+            cursor = self.cursor_service.initialize_cursor(connection_config)
             if not cursor:
                 return {
                     "success": False,
@@ -111,7 +112,8 @@ class EmailIngestionService:
                 }
             
             # Update configuration status to running
-            self.config_repo.update(self.current_config.id, {"is_running": True})
+            assert self.current_config.id is not None
+            self.config_service.update_runtime_status(self.current_config.id, True)
             
             # Connect to Outlook service
             try:
@@ -120,7 +122,7 @@ class EmailIngestionService:
                     email_address=self.current_config.email_address,
                     folder_name=self.current_config.folder_name
                 )
-                outlook_result = asyncio.run(self.outlook_service.connect(connection_config))
+                outlook_result = self.outlook_service.connect(connection_config)
                 
                 if not outlook_result.get("success", False):
                     raise Exception(f"Outlook connection failed: {outlook_result.get('error', 'Unknown error')}")
@@ -158,7 +160,7 @@ class EmailIngestionService:
             except Exception as e:
                 self.logger.exception(f"Failed to connect to Outlook service: {e}")
                 # Rollback the running status
-                self.config_repo.update(self.current_config.id, {"is_running": False})
+                self.config_service.update_runtime_status(self.current_config.id, False)
                 return {
                     "success": False,
                     "message": f"Failed to connect to email service: {str(e)}",
@@ -187,7 +189,8 @@ class EmailIngestionService:
             try:
                 # Update current configuration to not running
                 if self.current_config:
-                    self.config_repo.update(self.current_config.id, {"is_running": False})
+                    assert self.current_config.id is not None
+                    self.config_service.update_runtime_status(self.current_config.id, False)
                 
                 # Stop processing thread if running
                 if self.processing_thread and self.processing_thread.is_alive():
@@ -195,7 +198,7 @@ class EmailIngestionService:
                     self.processing_thread.join(timeout=5.0)
                 
                 # Disconnect from Outlook
-                disconnect_result = asyncio.run(self.outlook_service.disconnect())
+                disconnect_result = self.outlook_service.disconnect()
                 if not disconnect_result.get("success", False):
                     self.logger.warning(f"Outlook disconnect warning: {disconnect_result.get('error')}")
                 
@@ -250,10 +253,11 @@ class EmailIngestionService:
             "current_config": self.current_config.name if self.current_config else None,
             "stats": {
                 "emails_processed": self.stats.emails_processed,
-                "emails_filtered": self.stats.emails_filtered,
-                "pdfs_extracted": self.stats.pdfs_extracted,
-                "processing_errors": self.stats.processing_errors,
-                "uptime_seconds": self.stats.uptime_seconds
+                "pdfs_found": getattr(self.stats, 'pdfs_found', 0),
+                "processing_errors": getattr(self.stats, 'processing_errors', 0),
+                "uptime_seconds": self.stats.uptime_seconds,
+                "last_processed_at": self.stats.last_processed_at,
+                "reconnections": self.stats.reconnections
             },
             "health": {
                 "configuration_loaded": self.health.configuration_loaded,
@@ -270,11 +274,8 @@ class EmailIngestionService:
         try:
             while not self.stop_event.is_set():
                 try:
-                    # Run async processing cycle
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    loop.run_until_complete(self._process_emails_cycle())
-                    loop.close()
+                    # Run processing cycle
+                    self._process_emails_cycle()
                     
                     # Wait for next cycle (use poll interval from config)
                     poll_interval = self.current_config.poll_interval_seconds if self.current_config else 60
@@ -284,6 +285,9 @@ class EmailIngestionService:
                 except Exception as e:
                     self.logger.exception(f"Error in processing cycle: {e}")
                     self.health.last_error = str(e)
+                    if not hasattr(self.stats, 'processing_errors'):
+                        self.stats.processing_errors = 0
+                    self.stats.processing_errors += 1
                     
                     # Wait before retrying on error
                     if self.stop_event.wait(30):
@@ -292,11 +296,16 @@ class EmailIngestionService:
         except Exception as fatal_error:
             self.logger.exception(f"Fatal error in processing loop: {fatal_error}")
             self.health.last_error = str(fatal_error)
+            self.health.is_running = False
+            self.health.is_connected = False
+            if not hasattr(self.stats, 'processing_errors'):
+                self.stats.processing_errors = 0
+            self.stats.processing_errors += 1
             
         finally:
             self.logger.info("Email processing loop stopped")
     
-    async def _process_emails_cycle(self):
+    def _process_emails_cycle(self):
         """Single processing cycle - check for new emails and process them"""
         if not self.current_config or not self.is_running:
             return
@@ -305,7 +314,7 @@ class EmailIngestionService:
             self.logger.debug("Starting email processing cycle")
             
             # Get cursor state
-            cursor = await self.cursor_service.get_cursor_state(
+            cursor = self.cursor_service.get_cursor_state(
                 self.current_config.email_address, 
                 self.current_config.folder_name
             )
@@ -327,7 +336,7 @@ class EmailIngestionService:
                 self.logger.debug(f"No cursor date - looking back {hours_back} hours from {start_date}")
             
             # Get emails from Outlook
-            emails_result = await self.outlook_service.get_emails_in_date_range(
+            emails_result = self.outlook_service.get_emails_in_date_range(
                 start_date=start_date,
                 end_date=datetime.now(timezone.utc)
             )
@@ -351,7 +360,7 @@ class EmailIngestionService:
                         continue
                     
                     # Apply filters
-                    if await self._process_single_email(email_data):
+                    if self._process_single_email(email_data):
                         processed_count += 1
                     
                     # Track latest email date for cursor update
@@ -360,11 +369,13 @@ class EmailIngestionService:
                         
                 except Exception as e:
                     self.logger.exception(f"Error processing email: {email_data.subject}: {e}")
-                    self.stats.errors_encountered = getattr(self.stats, 'errors_encountered', 0) + 1
+                    if not hasattr(self.stats, 'processing_errors'):
+                        self.stats.processing_errors = 0
+                    self.stats.processing_errors += 1
             
             # Update cursor with latest processed date
             if latest_email_date and latest_email_date != cursor.last_processed_received_date:
-                await self.cursor_service.update_cursor(
+                self.cursor_service.update_cursor(
                     self.current_config.email_address,
                     self.current_config.folder_name,
                     {
@@ -384,7 +395,7 @@ class EmailIngestionService:
             self.logger.exception(f"Error in email processing cycle: {e}")
             raise
     
-    async def _process_single_email(self, email_data: EmailData) -> bool:
+    def _process_single_email(self, email_data: EmailData) -> bool:
         """Process a single email with filtering and rule application"""
         try:
             self.logger.debug(f"Processing email: {email_data.subject} from {email_data.sender_email}")
@@ -392,7 +403,7 @@ class EmailIngestionService:
             # Apply email filters
             if not self.current_config or not self.current_config.filter_rules:
                 self.logger.debug("No filter rules configured - accepting all emails")
-                return await self._handle_matching_email(email_data)
+                return self._handle_matching_email(email_data)
             
             # Check each filter rule
             matches_all_rules = True
@@ -403,7 +414,7 @@ class EmailIngestionService:
             
             if matches_all_rules:
                 self.logger.info(f"Email matches filters: {email_data.subject}")
-                return await self._handle_matching_email(email_data)
+                return self._handle_matching_email(email_data)
             else:
                 self.logger.debug(f"Email filtered out: {email_data.subject}")
                 return False
@@ -460,7 +471,7 @@ class EmailIngestionService:
             self.logger.exception(f"Error applying filter rule: {e}")
             return False
     
-    async def _handle_matching_email(self, email_data: EmailData) -> bool:
+    def _handle_matching_email(self, email_data: EmailData) -> bool:
         """Handle an email that passed all filters"""
         try:
             self.logger.info(f"Handling matching email: {email_data.subject}")
@@ -482,7 +493,9 @@ class EmailIngestionService:
                 if email_data.has_pdf_attachments:
                     self.logger.info("  Contains PDF attachments - would process for ETO")
                     # Increment PDF stats
-                    self.stats.pdfs_found = getattr(self.stats, 'pdfs_found', 0) + 1
+                    if not hasattr(self.stats, 'pdfs_found'):
+                        self.stats.pdfs_found = 0
+                    self.stats.pdfs_found += 1
             
             return True
             

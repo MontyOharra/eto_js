@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from jsonschema import validate as json_validate, ValidationError
 
 from .types import EmailIngestionConfig, EmailConfigSummary, EmailConfigStats, EmailFilterRule
-from ...shared.database import get_connection_manager, EmailIngestionConfigModel
+from ...shared.database import EmailIngestionConfigModel
 from ...shared.database.repositories import EmailIngestionConfigRepository
 
 logger = logging.getLogger(__name__)
@@ -18,14 +18,50 @@ logger = logging.getLogger(__name__)
 class EmailIngestionConfigurationService:
     """Manages email ingestion configuration with validation and admin operations"""
     
-    def __init__(self):
-        self.connection_manager = get_connection_manager()
-        assert self.connection_manager is not None
-        
-        self.config_repo = EmailIngestionConfigRepository(self.connection_manager)
+    def __init__(self, config_repo: EmailIngestionConfigRepository):
+        self.config_repo = config_repo
         self.logger = logging.getLogger(__name__)
         
         # JSON schema for configuration validation
+        
+        '''
+        Example config:
+        {
+            "connection": {
+                "email_address": "test@test.com",
+                "folder_name": "test"
+            },
+            "filters": {
+                "name": "Production Email Filter",
+                "rules": [
+                    {
+                        "field": "sender_email",
+                        "operation": "contains",
+                        "value": "@supplier.com",
+                        "case_sensitive": false
+                    },
+                    {
+                        "field": "subject",
+                        "operation": "contains",
+                        "value": "invoice",
+                        "case_sensitive": false
+                    },
+                    {
+                        "field": "has_attachments",
+                        "operation": "equals",
+                        "value": "true",
+                        "case_sensitive": false
+                    }
+                ],
+            },
+            "monitoring": {
+                "poll_interval_seconds": 60,
+                "pdf_only": True,
+                "enabled": True
+            }
+        }
+        '''
+        
         self.config_schema = {
             "type": "object",
             "required": ["connection", "filters", "monitoring"],
@@ -254,19 +290,14 @@ class EmailIngestionConfigurationService:
     def get_configuration(self, config_id: int) -> Optional[EmailIngestionConfig]:
         """Get specific email ingestion configuration by ID as domain object"""
         try:
-            config = self.config_repo.get_by_id(config_id)
-            
-            if not config:
-                return None
-            
-            return config  # Repository now returns domain object directly
+            return self.config_repo.get_by_id(config_id)
         
         except Exception as e:
             self.logger.exception(f"Error getting configuration {config_id}: {e}")
             return None
     
-    def list_configurations(self, order_by: Optional[str] = None, desc: bool = False) -> List[EmailConfigSummary]:
-        """List all email ingestion configurations with summary info"""
+    def list_configurations(self, order_by: Optional[str] = None, desc: bool = False) -> List[EmailIngestionConfig]:
+        """List all email ingestion configurations with full details"""
         try:
             if order_by:
                 # For custom ordering, would need to update repository to support this
@@ -308,6 +339,36 @@ class EmailIngestionConfigurationService:
                 "success": False,
                 "error": str(e),
                 "message": "Failed to delete configuration"
+            }
+    
+    def update_runtime_status(self, config_id: int, is_running: bool) -> Dict[str, Any]:
+        """Update runtime status of configuration"""
+        try:
+            self.logger.info(f"Updating runtime status for config {config_id} to: {'running' if is_running else 'stopped'}")
+            
+            config = self.config_repo.update_runtime_status(config_id, is_running)
+            
+            if not config:
+                raise Exception(f"Configuration with ID {config_id} not found")
+            
+            # Extract name to avoid Column type issues
+            config_name = config.name
+            self.logger.info(f"Updated runtime status for config: {config_name}")
+            
+            return {
+                "success": True,
+                "config_id": config_id,
+                "config_name": config_name,
+                "is_running": is_running,
+                "message": f"Runtime status updated to {'running' if is_running else 'stopped'}"
+            }
+        
+        except Exception as e:
+            self.logger.exception(f"Error updating runtime status for config {config_id}: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "message": "Failed to update runtime status"
             }
 
     # === Helper Methods ===

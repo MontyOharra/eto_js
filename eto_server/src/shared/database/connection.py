@@ -94,6 +94,7 @@ class DatabaseConnectionManager:
         """Verify that the database exists - raises error if not"""
         try:
             # Simple query to test connection and database existence
+            assert self.engine is not None
             with self.engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
                 logger.debug("Database existence verified")

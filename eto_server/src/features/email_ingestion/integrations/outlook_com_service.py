@@ -55,7 +55,7 @@ class OutlookComService:
 
     # === High-Level API Methods ===
     
-    async def connect(self, connection_config: EmailConnectionConfig) -> Dict[str, Any]:
+    def connect(self, connection_config: EmailConnectionConfig) -> Dict[str, Any]:
         """Connect to Outlook with specified configuration"""
         if not COM_AVAILABLE:
             return {
@@ -69,6 +69,7 @@ class OutlookComService:
                 logger.info(f"Connecting to Outlook - Email: {connection_config.email_address or 'Default'}, Folder: {connection_config.folder_name}")
                 
                 # Initialize COM
+                assert pythoncom is not None and win32com is not None
                 pythoncom.CoInitialize()
                 
                 # Create Outlook application
@@ -98,7 +99,7 @@ class OutlookComService:
                 "message": "Failed to connect to Outlook"
             }
     
-    async def disconnect(self) -> Dict[str, Any]:
+    def disconnect(self) -> Dict[str, Any]:
         """Disconnect from Outlook"""
         try:
             with self._lock:
@@ -140,7 +141,7 @@ class OutlookComService:
             connection_time=self.connection_time
         )
     
-    async def test_connection(self, connection_config: EmailConnectionConfig) -> Dict[str, Any]:
+    def test_connection(self, connection_config: EmailConnectionConfig) -> Dict[str, Any]:
         """Test connection without persisting state"""
         try:
             logger.info(f"Testing connection - Email: {connection_config.email_address or 'Default'}, Folder: {connection_config.folder_name}")
@@ -165,7 +166,7 @@ class OutlookComService:
                 "message": "Connection test failed"
             }
 
-    async def get_recent_emails(self, limit: int = 10, 
+    def get_recent_emails(self, limit: int = 10, 
                               start_date: Optional[datetime] = None) -> List[EmailData]:
         """Get recent emails from current folder"""
         try:
@@ -182,8 +183,8 @@ class OutlookComService:
             logger.error(f"Error getting recent emails: {e}")
             raise Exception(f"Failed to get emails: {e}")
 
-    async def get_emails_in_date_range(self, start_date: datetime, 
-                                     end_date: datetime) -> List[EmailData]:
+    def get_emails_in_date_range(self, start_date: datetime, 
+                                     end_date: datetime) -> Dict[str, Any]:
         """Get emails within specified date range"""
         try:
             if not self.is_connected:
@@ -192,8 +193,11 @@ class OutlookComService:
             # TODO: Implement date range email retrieval
             logger.debug(f"Getting emails from {start_date} to {end_date}")
             
-            # Placeholder return
-            return []
+            # Placeholder return - return success format for now
+            return {
+                "success": True,
+                "emails": []
+            }
             
         except Exception as e:
             logger.error(f"Error getting emails in date range: {e}")

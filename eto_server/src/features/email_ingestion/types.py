@@ -77,6 +77,21 @@ class EmailConfigStats:
 # === Email Processing Types ===
 
 @dataclass
+class EmailIngestionCursor:
+    """Email ingestion cursor domain object"""
+    id: int
+    email_address: str
+    folder_name: str
+    last_processed_message_id: Optional[str]
+    last_processed_received_date: Optional[datetime]
+    last_check_time: datetime
+    total_emails_processed: int
+    total_pdfs_found: int
+    created_at: datetime
+    updated_at: datetime
+
+
+@dataclass
 class EmailConnectionConfig:
     """Email connection configuration data structure"""
     email_address: str
@@ -136,3 +151,20 @@ class ServiceHealth:
     configuration_loaded: bool = False
     last_error: Optional[str] = None
     stats: IngestionStats = field(default_factory=IngestionStats)
+
+
+# === Email Record Types ===
+
+@dataclass
+class Email:
+    """Email record domain object"""
+    id: int
+    message_id: str
+    subject: Optional[str]
+    sender_email: Optional[str]
+    sender_name: Optional[str]
+    received_date: datetime
+    folder_name: Optional[str]
+    has_pdf_attachments: bool
+    attachment_count: int
+    created_at: datetime

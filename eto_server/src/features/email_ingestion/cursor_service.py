@@ -6,9 +6,8 @@ import logging
 from typing import Optional, Dict, Any, List, Tuple
 from datetime import datetime, timedelta, timezone
 
-from .types import EmailConnectionConfig
+from .types import EmailConnectionConfig, EmailIngestionCursor
 from ...shared.database.repositories import EmailIngestionCursorRepository
-from ...shared.database.models import EmailIngestionCursorModel
 
 logger = logging.getLogger(__name__)
 
@@ -18,12 +17,12 @@ class EmailIngestionCursorService:
     
     def __init__(self, cursor_repository: EmailIngestionCursorRepository):
         self.cursor_repository = cursor_repository
-        self.active_cursors: Dict[str, EmailIngestionCursorModel] = {}  # Cache for performance
+        self.active_cursors: Dict[str, EmailIngestionCursor] = {}  # Cache for performance
         self.logger = logging.getLogger(__name__)
 
     # === High-Level API Methods ===
     
-    async def get_cursor_state(self, email_address: str, folder: str) -> Optional[EmailIngestionCursorModel]:
+    def get_cursor_state(self, email_address: str, folder: str) -> Optional[EmailIngestionCursor]:
         """Retrieve current cursor state for email/folder combination"""
         try:
             cache_key = self._get_cursor_cache_key(email_address, folder)
@@ -51,14 +50,14 @@ class EmailIngestionCursorService:
             logger.error(f"Error getting cursor state for {email_address}/{folder}: {e}")
             raise Exception(f"Failed to get cursor state: {e}")
     
-    async def initialize_cursor(self, connection_config: EmailConnectionConfig) -> EmailIngestionCursorModel:
+    def initialize_cursor(self, connection_config: EmailConnectionConfig) -> EmailIngestionCursor:
         """Initialize cursor for new email/folder combination"""
         try:
             email_address = connection_config.email_address
             folder = connection_config.folder_name
             
             # Check if cursor already exists
-            existing_cursor = await self.get_cursor_state(email_address, folder)
+            existing_cursor = self.get_cursor_state(email_address, folder)
             if existing_cursor:
                 logger.info(f"Cursor already exists for {email_address}/{folder}")
                 return existing_cursor
@@ -85,8 +84,8 @@ class EmailIngestionCursorService:
             logger.error(f"Error initializing cursor for {connection_config.email_address or 'default'}/{connection_config.folder_name}: {e}")
             raise Exception(f"Failed to initialize cursor: {e}")
     
-    async def update_cursor(self, email_address: str, folder: str, 
-                          last_email_data: Dict[str, Any]) -> EmailIngestionCursorModel:
+    def update_cursor(self, email_address: str, folder: str, 
+                          last_email_data: Dict[str, Any]) -> EmailIngestionCursor:
         """Update cursor with latest processed email information"""
         try:
             # Prepare cursor update data
@@ -97,7 +96,7 @@ class EmailIngestionCursorService:
             }
             
             # Get existing cursor and update it
-            existing_cursor = await self.get_cursor_state(email_address, folder)
+            existing_cursor = self.get_cursor_state(email_address, folder)
             
             if existing_cursor:
                 # Update existing cursor
@@ -128,14 +127,14 @@ class EmailIngestionCursorService:
             logger.error(f"Error updating cursor for {email_address}/{folder}: {e}")
             raise Exception(f"Failed to update cursor: {e}")
 
-    async def get_backlog_scope(self, email_address: str, folder: str, 
+    def get_backlog_scope(self, email_address: str, folder: str, 
                               max_hours_back: int) -> Optional[Tuple[datetime, datetime]]:
         """
         Determine time range for backlog processing
         Returns: (start_time, end_time) or None if no backlog
         """
         try:
-            cursor_state = await self.get_cursor_state(email_address, folder)
+            cursor_state = self.get_cursor_state(email_address, folder)
             
             if not cursor_state or not cursor_state.last_processed_received_date:
                 # No cursor or no last processed date - process from max_hours_back
@@ -191,7 +190,7 @@ class EmailIngestionCursorService:
         """Generate cache key for cursor"""
         return f"{email_address or 'default'}:{folder}"
     
-    def _cache_cursor(self, cursor: EmailIngestionCursorModel) -> None:
+    def _cache_cursor(self, cursor: EmailIngestionCursor) -> None:
         """Cache cursor for performance"""
         cache_key = self._get_cursor_cache_key(cursor.email_address, cursor.folder_name)
         self.active_cursors[cache_key] = cursor
