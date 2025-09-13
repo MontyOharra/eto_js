@@ -21,6 +21,7 @@ function DashboardLayout() {
   const tabs = [
     { name: "ETO Information", href: "/dashboard/eto-info" },
     { name: "Templates", href: "/dashboard/templates" },
+    { name: "Emails", href: "/dashboard/emails" },
     { name: "Transformation Pipeline", href: "/transformation_pipeline/graph" },
   ];
 
@@ -29,7 +30,7 @@ function DashboardLayout() {
       <div className="flex-1 flex flex-col">
         {/* Tab Navigation */}
         <div
-          className={`sticky top-0 z-20 bg-gray-800 ${location.pathname === "/dashboard/eto-info" || location.pathname === "/dashboard/templates" || location.pathname === "/transformation_pipeline/graph" ? "" : "border-b border-gray-600"}`}
+          className={`sticky top-0 z-20 bg-gray-800 ${location.pathname === "/dashboard/eto-info" || location.pathname === "/dashboard/templates" || location.pathname === "/dashboard/emails" || location.pathname === "/transformation_pipeline/graph" ? "" : "border-b border-gray-600"}`}
           style={{ marginTop: "8px" }}
         >
           <div className="flex items-end justify-between px-2">

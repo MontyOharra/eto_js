@@ -15,7 +15,9 @@ from .cursor_service import EmailIngestionCursorService
 from .types import EmailIngestionConfig, IngestionStats, ServiceHealth, EmailData, EmailConnectionConfig
 from .integrations.outlook_com_service import OutlookComService
 from ...shared.database import get_connection_manager
-from ...shared.database.repositories import EmailIngestionConfigRepository, EmailIngestionCursorRepository, EmailRepository
+from ...shared.database.repositories import EmailIngestionConfigRepository, EmailIngestionCursorRepository, EmailRepository, PdfRepository
+from ...features.pdf_processing.storage_service import PdfStorageService
+from ...features.pdf_processing.extraction_service import PdfExtractionService
 
 logger = logging.getLogger(__name__)
 
@@ -32,12 +34,18 @@ class EmailIngestionService:
         self.config_repo = EmailIngestionConfigRepository(self.connection_manager)
         self.cursor_repo = EmailIngestionCursorRepository(self.connection_manager)
         self.email_repo = EmailRepository(self.connection_manager)
+        self.pdf_repo = PdfRepository(self.connection_manager)
         
         # Service layer - repositories injected as dependencies
         self.config_service = EmailIngestionConfigurationService(self.config_repo)
         self.filter_service = EmailIngestionFilterService()
         self.cursor_service = EmailIngestionCursorService(self.cursor_repo)
         self.outlook_service = OutlookComService()
+        
+        # PDF processing services - initialized with dependencies
+        # TODO: Make storage path configurable from app config
+        self.pdf_storage_service = PdfStorageService("C:/apps/eto/server/storage")
+        self.pdf_extraction_service = PdfExtractionService(self.pdf_storage_service, self.pdf_repo)
         
         # Service state
         self.is_running = False
@@ -533,19 +541,48 @@ class EmailIngestionService:
             email_record = self.email_repo.create_email_record(email_record_data)
             self.logger.info(f"Saved email record: {email_record.subject} (ID: {email_record.id})")
             
-            # Update stats
+            # Process PDF attachments if present
+            pdf_records = []
             if email_data.has_pdf_attachments:
-                self.logger.info("  Contains PDF attachments - would process for ETO")
-                self.stats.pdfs_found += 1
-            
-            # TODO: Future iteration - save PDF attachments and create PDF records
-            # if email_data.has_pdf_attachments:
-            #     for filename in email_data.attachment_filenames:
-            #         if filename.lower().endswith('.pdf'):
-            #             # Download PDF attachment to storage
-            #             # Create PDF record in database
-            #             # Link to ETO processing system
-            #             pass
+                self.logger.info("  Contains PDF attachments - processing for storage and analysis")
+                try:
+                    # Get the raw Outlook mail object for PDF extraction
+                    outlook_mail_object = self.outlook_service.get_mail_object_by_id(email_data.message_id)
+                    if outlook_mail_object:
+                        # Extract PDFs using PDF extraction service
+                        pdf_records = self.pdf_extraction_service.extract_pdfs_from_email(
+                            email_record.id, 
+                            outlook_mail_object
+                        )
+                        
+                        # Update statistics
+                        for pdf_record in pdf_records:
+                            if not pdf_record.get('duplicate', False):
+                                self.stats.pdfs_found += 1
+                        
+                        self.logger.info(f"  Extracted {len(pdf_records)} PDF records (including {sum(1 for p in pdf_records if p.get('duplicate', False))} duplicates)")
+                        
+                        # Update configuration statistics
+                        if self.current_config and self.current_config.id:
+                            self.config_service.increment_processing_stats(
+                                self.current_config.id, 
+                                emails=1, 
+                                pdfs=len([p for p in pdf_records if not p.get('duplicate', False)])
+                            )
+                    else:
+                        self.logger.warning(f"Could not retrieve Outlook mail object for PDF extraction: {email_data.message_id}")
+                        
+                except Exception as e:
+                    self.logger.error(f"Error processing PDF attachments for email {email_record.id}: {e}")
+                    # Continue processing even if PDF extraction fails
+            else:
+                # Update configuration statistics for emails without PDFs
+                if self.current_config and self.current_config.id:
+                    self.config_service.increment_processing_stats(
+                        self.current_config.id, 
+                        emails=1, 
+                        pdfs=0
+                    )
             
             return True
             

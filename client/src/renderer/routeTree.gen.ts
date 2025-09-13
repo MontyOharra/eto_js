@@ -19,6 +19,7 @@ import { Route as DashboardTemplatesRouteImport } from './routes/dashboard/templ
 import { Route as DashboardSettingsRouteImport } from './routes/dashboard/settings'
 import { Route as DashboardHomeRouteImport } from './routes/dashboard/home'
 import { Route as DashboardEtoInfoRouteImport } from './routes/dashboard/eto-info'
+import { Route as DashboardEmailsRouteImport } from './routes/dashboard/emails'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -73,12 +74,18 @@ const DashboardEtoInfoRoute = DashboardEtoInfoRouteImport.update({
   path: '/eto-info',
   getParentRoute: () => DashboardRouteRoute,
 } as any)
+const DashboardEmailsRoute = DashboardEmailsRouteImport.update({
+  id: '/emails',
+  path: '/emails',
+  getParentRoute: () => DashboardRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRouteRouteWithChildren
   '/transformation_pipeline': typeof Transformation_pipelineRouteRouteWithChildren
   '/login': typeof LoginRoute
+  '/dashboard/emails': typeof DashboardEmailsRoute
   '/dashboard/eto-info': typeof DashboardEtoInfoRoute
   '/dashboard/home': typeof DashboardHomeRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
@@ -91,6 +98,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof DashboardRouteRouteWithChildren
   '/transformation_pipeline': typeof Transformation_pipelineRouteRouteWithChildren
   '/login': typeof LoginRoute
+  '/dashboard/emails': typeof DashboardEmailsRoute
   '/dashboard/eto-info': typeof DashboardEtoInfoRoute
   '/dashboard/home': typeof DashboardHomeRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
@@ -104,6 +112,7 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRouteRouteWithChildren
   '/transformation_pipeline': typeof Transformation_pipelineRouteRouteWithChildren
   '/login': typeof LoginRoute
+  '/dashboard/emails': typeof DashboardEmailsRoute
   '/dashboard/eto-info': typeof DashboardEtoInfoRoute
   '/dashboard/home': typeof DashboardHomeRoute
   '/dashboard/settings': typeof DashboardSettingsRoute
@@ -118,6 +127,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/transformation_pipeline'
     | '/login'
+    | '/dashboard/emails'
     | '/dashboard/eto-info'
     | '/dashboard/home'
     | '/dashboard/settings'
@@ -130,6 +140,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/transformation_pipeline'
     | '/login'
+    | '/dashboard/emails'
     | '/dashboard/eto-info'
     | '/dashboard/home'
     | '/dashboard/settings'
@@ -142,6 +153,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/transformation_pipeline'
     | '/login'
+    | '/dashboard/emails'
     | '/dashboard/eto-info'
     | '/dashboard/home'
     | '/dashboard/settings'
@@ -229,10 +241,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardEtoInfoRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
+    '/dashboard/emails': {
+      id: '/dashboard/emails'
+      path: '/emails'
+      fullPath: '/dashboard/emails'
+      preLoaderRoute: typeof DashboardEmailsRouteImport
+      parentRoute: typeof DashboardRouteRoute
+    }
   }
 }
 
 interface DashboardRouteRouteChildren {
+  DashboardEmailsRoute: typeof DashboardEmailsRoute
   DashboardEtoInfoRoute: typeof DashboardEtoInfoRoute
   DashboardHomeRoute: typeof DashboardHomeRoute
   DashboardSettingsRoute: typeof DashboardSettingsRoute
@@ -240,6 +260,7 @@ interface DashboardRouteRouteChildren {
 }
 
 const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
+  DashboardEmailsRoute: DashboardEmailsRoute,
   DashboardEtoInfoRoute: DashboardEtoInfoRoute,
   DashboardHomeRoute: DashboardHomeRoute,
   DashboardSettingsRoute: DashboardSettingsRoute,

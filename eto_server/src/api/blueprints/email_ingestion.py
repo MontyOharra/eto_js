@@ -3,7 +3,7 @@ Email Ingestion API Blueprint
 REST endpoints for managing email ingestion configuration
 """
 from flask import Blueprint, request, jsonify, current_app
-from flask_cors import cross_origin
+from flask_cors import cross_origin, CORS
 from pydantic import ValidationError
 import logging
 from typing import Dict, Any
@@ -20,6 +20,23 @@ logger = logging.getLogger(__name__)
 
 # Create blueprint
 email_ingestion_bp = Blueprint('email_ingestion', __name__, url_prefix='/api/email-ingestion')
+
+# Configure CORS for this blueprint specifically
+CORS(email_ingestion_bp, resources={
+    r"/*": {
+        "origins": "*",
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"],
+        "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"],
+        "supports_credentials": False
+    }
+})
+
+# Add explicit OPTIONS handler for all routes
+@email_ingestion_bp.route('/<path:path>', methods=['OPTIONS'])
+@cross_origin()
+def handle_options(path):
+    """Handle preflight OPTIONS requests for all routes"""
+    return '', 200
 
 # Service helper
 def get_email_service() -> EmailIngestionService:
@@ -330,9 +347,16 @@ def get_ingestion_status():
             "success": True,
             "data": {
                 "is_running": email_service.is_running,
-                "is_connected": email_service.is_connected,
-                "current_config_id": email_service.current_config.id if email_service.current_config else None,
-                "current_config_name": email_service.current_config.name if email_service.current_config else None,
+                "current_config": {
+                    "id": email_service.current_config.id if email_service.current_config else None,
+                    "name": email_service.current_config.name if email_service.current_config else None,
+                    "email_address": getattr(email_service.current_config, 'email_address', None) if email_service.current_config else None,
+                    "folder_name": getattr(email_service.current_config, 'folder_name', None) if email_service.current_config else None
+                } if email_service.current_config else None,
+                "connection_status": {
+                    "is_connected": email_service.is_connected,
+                    "last_error": getattr(email_service, 'last_error', None)
+                },
                 "stats": {
                     "emails_processed": email_service.stats.emails_processed,
                     "pdfs_found": email_service.stats.pdfs_found,
@@ -352,6 +376,73 @@ def get_ingestion_status():
             "success": False,
             "error": str(e),
             "message": "Failed to get ingestion status"
+        }), 500
+
+
+@email_ingestion_bp.route('/emails', methods=['GET'])
+@cross_origin()
+def get_processed_emails():
+    """Get processed emails with pagination"""
+    try:
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        limit = min(int(request.args.get('limit', 50)), 100)  # Max 100 per page
+        folder = request.args.get('folder')
+        
+        email_service = get_email_service()
+        
+        # Calculate offset
+        offset = (page - 1) * limit
+        
+        # Use repository session scope for database operations
+        with email_service.email_repo.connection_manager.session_scope() as session:
+            # Build query
+            query = session.query(email_service.email_repo.model_class)
+            
+            # Apply folder filter if provided
+            if folder:
+                query = query.filter(email_service.email_repo.model_class.folder_name == folder)
+            
+            # Get total count before applying pagination
+            total = query.count()
+            
+            # Apply pagination and ordering
+            emails = query.order_by(email_service.email_repo.model_class.received_date.desc())\
+                          .offset(offset)\
+                          .limit(limit)\
+                          .all()
+            
+            # Convert to response format
+            emails_data = []
+            for email in emails:
+                emails_data.append({
+                    'id': email.id,
+                    'message_id': email.message_id,
+                    'subject': email.subject,
+                    'sender_email': email.sender_email,
+                    'sender_name': email.sender_name,
+                    'received_date': email.received_date.isoformat() if email.received_date else None,
+                    'folder_name': email.folder_name,
+                    'has_attachments': getattr(email, 'has_attachments', False) or getattr(email, 'has_pdf_attachments', False),
+                    'attachment_count': getattr(email, 'attachment_count', 0) or 0,
+                    'created_at': email.created_at.isoformat() if hasattr(email, 'created_at') and email.created_at else None
+                })
+        
+        return jsonify({
+            "success": True,
+            "data": emails_data,
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "pages": (total + limit - 1) // limit  # Calculate total pages
+        }), 200
+    
+    except Exception as e:
+        logger.error(f"Error getting processed emails: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "message": "Failed to get processed emails"
         }), 500
 
 

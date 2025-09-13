@@ -388,6 +388,83 @@ class OutlookComService:
             logger.error(f"Error getting recent emails: {e}")
             raise Exception(f"Failed to get emails: {e}")
     
+    def get_mail_object_by_id(self, message_id: str) -> Optional[Any]:
+        """Get raw Outlook mail object by message ID for attachment processing"""
+        try:
+            if not self.is_connected or not self.connection_config:
+                logger.warning("Not connected to Outlook when trying to get mail object")
+                return None
+            
+            logger.debug(f"Searching for mail object with message ID: {message_id}")
+            
+            # Initialize COM for this thread
+            if COM_AVAILABLE:
+                assert pythoncom is not None and win32com is not None
+                pythoncom.CoInitialize()
+            
+            try:
+                # Create fresh COM objects for this thread
+                assert win32com is not None
+                outlook = win32com.client.Dispatch("Outlook.Application")
+                namespace = outlook.GetNamespace("MAPI")
+                
+                # Find the folder again (thread-safe approach)
+                current_folder = None
+                
+                # Try to find the folder using the same logic as connect()
+                for account in namespace.Accounts:
+                    if not self.connection_config.email_address or account.SmtpAddress.lower() == self.connection_config.email_address.lower():
+                        try:
+                            delivery_store = account.DeliveryStore
+                            if delivery_store:
+                                root_folder = delivery_store.GetRootFolder()
+                                current_folder = self._search_folder_recursive(root_folder, self.connection_config.folder_name)
+                                if current_folder:
+                                    break
+                        except Exception as e:
+                            logger.debug(f"Error searching account {account.SmtpAddress}: {e}")
+                            continue
+                
+                if not current_folder:
+                    logger.error(f"Folder '{self.connection_config.folder_name}' not found for mail object retrieval")
+                    return None
+                
+                # Search for the email by message ID
+                items = current_folder.Items
+                
+                # Use Restrict method to find the email efficiently
+                filter_str = f"[InternetMessageId] = '{message_id}'"
+                filtered_items = items.Restrict(filter_str)
+                
+                if filtered_items.Count > 0:
+                    mail_object = filtered_items.GetFirst()
+                    logger.debug(f"Found mail object for message ID: {message_id}")
+                    return mail_object
+                else:
+                    # Fallback: search through items manually (slower but more reliable)
+                    logger.debug(f"Direct filter failed, searching manually for message ID: {message_id}")
+                    for mail in items:
+                        try:
+                            if hasattr(mail, 'InternetMessageId') and mail.InternetMessageId == message_id:
+                                logger.debug(f"Found mail object via manual search: {message_id}")
+                                return mail
+                        except Exception as e:
+                            logger.debug(f"Error checking mail item: {e}")
+                            continue
+                
+                logger.warning(f"Mail object not found for message ID: {message_id}")
+                return None
+                
+            finally:
+                # Clean up COM for this thread
+                if COM_AVAILABLE:
+                    assert pythoncom is not None
+                    pythoncom.CoUninitialize()
+            
+        except Exception as e:
+            logger.error(f"Error getting mail object by ID {message_id}: {e}")
+            return None
+    
     def _search_folder_recursive(self, parent_folder, target_name, max_depth=3, current_depth=0):
         """Helper method for thread-safe folder searching"""
         if current_depth >= max_depth:

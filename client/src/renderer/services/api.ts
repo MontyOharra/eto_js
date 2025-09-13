@@ -96,6 +96,86 @@ export interface ApiError {
   details?: any;
 }
 
+// Email Ingestion Types
+export interface EmailIngestionConfig {
+  id: number;
+  name: string;
+  description?: string;
+  connection: {
+    email_address: string;
+    folder_name: string;
+  };
+  filter_rules?: Array<{
+    field: string;
+    operation: string;
+    value: string;
+    case_sensitive: boolean;
+  }>;
+  monitoring: {
+    poll_interval_seconds: number;
+    max_backlog_hours: number;
+    error_retry_attempts: number;
+  };
+  is_active: boolean;
+  is_running: boolean;
+  emails_processed: number;
+  pdfs_found: number;
+  last_error_message?: string;
+  last_error_at?: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  last_used_at?: string;
+}
+
+export interface EmailIngestionConfigSummary {
+  id: number;
+  name: string;
+  folder_name: string;
+  is_active: boolean;
+  is_running: boolean;
+  emails_processed: number;
+  pdfs_found: number;
+  last_used_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProcessedEmail {
+  id: number;
+  message_id: string;
+  subject: string;
+  sender_email: string;
+  sender_name?: string;
+  received_date: string;
+  folder_name: string;
+  has_attachments: boolean;
+  attachment_count: number;
+  created_at: string;
+}
+
+export interface EmailIngestionStatus {
+  is_running: boolean;
+  current_config?: {
+    id: number;
+    name: string;
+    email_address: string;
+    folder_name: string;
+  };
+  connection_status: {
+    is_connected: boolean;
+    last_error?: string;
+  };
+  stats: {
+    emails_processed: number;
+    pdfs_found: number;
+    processing_errors: number;
+    last_processed_at?: string;
+    uptime_seconds: number;
+    reconnections: number;
+  };
+}
+
 // API Configuration - Updated for unified ETO server
 const API_BASE_URL = 'http://localhost:8080';
 
@@ -564,6 +644,205 @@ class ApiClient {
     const data = await this.fetchApi<T>(endpoint);
     return { data };
   }
+
+  // === Email Ingestion API Methods ===
+
+  /**
+   * Get all email ingestion configurations
+   */
+  async getEmailIngestionConfigs(): Promise<{
+    success: boolean;
+    data: EmailIngestionConfigSummary[];
+  }> {
+    return this.fetchApi('/api/email-ingestion/configurations');
+  }
+
+  /**
+   * Get specific email ingestion configuration
+   */
+  async getEmailIngestionConfig(configId: number): Promise<{
+    success: boolean;
+    data: EmailIngestionConfig;
+  }> {
+    return this.fetchApi(`/api/email-ingestion/configurations/${configId}`);
+  }
+
+  /**
+   * Create new email ingestion configuration
+   */
+  async createEmailIngestionConfig(configData: {
+    name: string;
+    description?: string;
+    connection: {
+      email_address: string;
+      folder_name: string;
+    };
+    filter_rules?: Array<{
+      field: string;
+      operation: string;
+      value: string;
+      case_sensitive: boolean;
+    }>;
+    monitoring: {
+      poll_interval_seconds: number;
+      max_backlog_hours: number;
+      error_retry_attempts: number;
+    };
+    created_by: string;
+  }): Promise<{
+    success: boolean;
+    config_id: number;
+    message: string;
+  }> {
+    return this.fetchApi('/api/email-ingestion/configurations', {
+      method: 'POST',
+      body: JSON.stringify(configData),
+    });
+  }
+
+  /**
+   * Update email ingestion configuration (filter rules only)
+   */
+  async updateEmailIngestionConfig(configId: number, updateData: {
+    description?: string;
+    filter_rules?: Array<{
+      field: string;
+      operation: string;
+      value: string;
+      case_sensitive: boolean;
+    }>;
+    monitoring?: {
+      poll_interval_seconds: number;
+      max_backlog_hours: number;
+      error_retry_attempts: number;
+    };
+  }): Promise<{
+    success: boolean;
+    message: string;
+  }> {
+    return this.fetchApi(`/api/email-ingestion/configurations/${configId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updateData),
+    });
+  }
+
+  /**
+   * Delete email ingestion configuration
+   */
+  async deleteEmailIngestionConfig(configId: number): Promise<{
+    success: boolean;
+    message: string;
+  }> {
+    return this.fetchApi(`/api/email-ingestion/configurations/${configId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  /**
+   * Activate email ingestion configuration
+   */
+  async activateEmailIngestionConfig(configId: number, autoStart: boolean = false): Promise<{
+    success: boolean;
+    config_id: number;
+    config_name: string;
+    message: string;
+    activated: boolean;
+    auto_started?: boolean;
+    start_error?: string;
+  }> {
+    return this.fetchApi(`/api/email-ingestion/configurations/${configId}/activate`, {
+      method: 'POST',
+      body: JSON.stringify({ auto_start: autoStart }),
+    });
+  }
+
+  /**
+   * Start email ingestion service
+   */
+  async startEmailIngestionService(): Promise<{
+    success: boolean;
+    message: string;
+    config_id?: number;
+    folder_name?: string;
+    cursor_id?: number;
+  }> {
+    return this.fetchApi('/api/email-ingestion/start', {
+      method: 'POST',
+    });
+  }
+
+  /**
+   * Stop email ingestion service
+   */
+  async stopEmailIngestionService(): Promise<{
+    success: boolean;
+    message: string;
+  }> {
+    return this.fetchApi('/api/email-ingestion/stop', {
+      method: 'POST',
+    });
+  }
+
+  /**
+   * Get email ingestion service status
+   */
+  async getEmailIngestionStatus(): Promise<{
+    success: boolean;
+    data: EmailIngestionStatus;
+  }> {
+    return this.fetchApi('/api/email-ingestion/status');
+  }
+
+  /**
+   * Get processed emails
+   */
+  async getProcessedEmails(params?: {
+    page?: number;
+    limit?: number;
+    folder?: string;
+  }): Promise<{
+    success: boolean;
+    data: ProcessedEmail[];
+    total: number;
+  }> {
+    const searchParams = new URLSearchParams();
+    
+    if (params?.page) {
+      searchParams.append('page', params.page.toString());
+    }
+    if (params?.limit) {
+      searchParams.append('limit', params.limit.toString());
+    }
+    if (params?.folder) {
+      searchParams.append('folder', params.folder);
+    }
+
+    const endpoint = `/api/email-ingestion/emails${searchParams.toString() ? `?${searchParams}` : ''}`;
+    return this.fetchApi(endpoint);
+  }
+
+  /**
+   * Test Outlook folder connection
+   */
+  async testOutlookFolders(emailAddress?: string): Promise<{
+    success: boolean;
+    data: {
+      folders: Array<{
+        account: string;
+        folders: Array<{
+          name: string;
+          display_name?: string;
+          path: string;
+          type: 'standard' | 'custom' | 'folder';
+          count: number;
+        }>;
+      }>;
+      total_accounts: number;
+    };
+  }> {
+    const endpoint = `/api/email-ingestion/test/folders${emailAddress ? `?email_address=${encodeURIComponent(emailAddress)}` : ''}`;
+    return this.fetchApi(endpoint);
+  }
 }
 
 // Custom error class for API errors
@@ -581,4 +860,15 @@ export class ApiError extends Error {
 export const apiClient = new ApiClient();
 
 // Export types
-export type { ApiEtoRun, ApiEtoRunsResponse, ApiSystemStats, ApiEmailStatus, ApiTemplate, ApiTemplatesResponse };
+export type { 
+  ApiEtoRun, 
+  ApiEtoRunsResponse, 
+  ApiSystemStats, 
+  ApiEmailStatus, 
+  ApiTemplate, 
+  ApiTemplatesResponse,
+  EmailIngestionConfig,
+  EmailIngestionConfigSummary,
+  ProcessedEmail,
+  EmailIngestionStatus
+};
