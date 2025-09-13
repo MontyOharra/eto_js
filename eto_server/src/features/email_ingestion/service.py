@@ -314,6 +314,7 @@ class EmailIngestionService:
             self.logger.debug("Starting email processing cycle")
             
             # Get cursor state
+            assert self.current_config.email_address is not None and self.current_config.folder_name is not None
             cursor = self.cursor_service.get_cursor_state(
                 self.current_config.email_address, 
                 self.current_config.folder_name
@@ -326,49 +327,67 @@ class EmailIngestionService:
             # Determine date range for email retrieval
             # Look back from cursor position or last 24 hours if no cursor
             if cursor.last_processed_received_date:
+                # Use cursor date without buffer - we'll handle duplicates by message ID
                 start_date = cursor.last_processed_received_date
                 self.logger.debug(f"Processing emails since cursor date: {start_date}")
             else:
                 # No previous processing - look back based on max_backlog_hours
-                from datetime import timedelta
                 hours_back = self.current_config.max_backlog_hours or 24
                 start_date = datetime.now(timezone.utc) - timedelta(hours=hours_back)
                 self.logger.debug(f"No cursor date - looking back {hours_back} hours from {start_date}")
             
-            # Get emails from Outlook
-            emails_result = self.outlook_service.get_emails_in_date_range(
-                start_date=start_date,
-                end_date=datetime.now(timezone.utc)
+            # Get emails from Outlook using cursor-based retrieval
+            self.logger.info(f"Searching for emails from {start_date} onwards...")
+            emails = self.outlook_service.get_recent_emails(
+                limit=100,  # Process in batches
+                start_date=start_date
             )
+            self.logger.info(f"Found {len(emails)} emails in date range")
             
-            if not emails_result.get("success", False):
-                self.logger.warning(f"Failed to retrieve emails: {emails_result.get('error')}")
+            if not emails:
+                self.logger.info("No emails found in date range - cycle complete")
                 return
-            
-            emails = emails_result.get("emails", [])
+                
             self.logger.info(f"Retrieved {len(emails)} emails from Outlook")
             
             # Process each email
             processed_count = 0
             latest_email_date = cursor.last_processed_received_date
             
-            for email_data in emails:
+            for i, email_data in enumerate(emails):
                 try:
+                    self.logger.info(f"Email {i+1}/{len(emails)}: '{email_data.subject}' from {email_data.sender_email} at {email_data.received_time}")
+                    
                     # Skip emails we've already processed
-                    if (cursor.last_processed_received_date and 
-                        email_data.received_time <= cursor.last_processed_received_date):
-                        continue
+                    if cursor.last_processed_received_date:
+                        # Ensure both datetimes are timezone-naive for comparison
+                        email_time = email_data.received_time
+                        cursor_time = cursor.last_processed_received_date
+                        
+                        # Remove timezone info if present for comparison
+                        if hasattr(email_time, 'replace') and email_time.tzinfo is not None:
+                            email_time = email_time.replace(tzinfo=None)
+                        if hasattr(cursor_time, 'replace') and cursor_time.tzinfo is not None:
+                            cursor_time = cursor_time.replace(tzinfo=None)
+                        
+                        if email_time <= cursor_time:
+                            self.logger.info(f"Skipping email {i+1} - already processed (received {email_time} <= cursor {cursor_time})")
+                            continue
                     
                     # Apply filters
                     if self._process_single_email(email_data):
                         processed_count += 1
+                        self.logger.info(f"Email {i+1} processed successfully")
+                    else:
+                        self.logger.info(f"Email {i+1} was filtered out or failed processing")
                     
                     # Track latest email date for cursor update
                     if not latest_email_date or email_data.received_time > latest_email_date:
                         latest_email_date = email_data.received_time
                         
                 except Exception as e:
-                    self.logger.exception(f"Error processing email: {email_data.subject}: {e}")
+                    subject = getattr(email_data, 'subject', 'Unknown') or 'Unknown'
+                    self.logger.exception(f"Error processing email: {subject}: {e}")
                     if not hasattr(self.stats, 'processing_errors'):
                         self.stats.processing_errors = 0
                     self.stats.processing_errors += 1
@@ -387,36 +406,45 @@ class EmailIngestionService:
             
             # Update statistics
             if processed_count > 0:
-                self.stats.emails_processed = getattr(self.stats, 'emails_processed', 0) + processed_count
-                self.stats.last_processing_time = datetime.now(timezone.utc)
+                if not hasattr(self.stats, 'emails_processed'):
+                    self.stats.emails_processed = 0
+                self.stats.emails_processed += processed_count
+                
+                if not hasattr(self.stats, 'last_processed_at'):
+                    self.stats.last_processed_at = None
+                self.stats.last_processed_at = datetime.now(timezone.utc)
+                
                 self.logger.info(f"Processed {processed_count} emails in this cycle")
                 
         except Exception as e:
             self.logger.exception(f"Error in email processing cycle: {e}")
-            raise
+            # Don't re-raise - let the loop continue with error handling
     
     def _process_single_email(self, email_data: EmailData) -> bool:
         """Process a single email with filtering and rule application"""
         try:
-            self.logger.debug(f"Processing email: {email_data.subject} from {email_data.sender_email}")
+            self.logger.info(f"Processing email: '{email_data.subject}' from {email_data.sender_email}")
             
             # Apply email filters
             if not self.current_config or not self.current_config.filter_rules:
-                self.logger.debug("No filter rules configured - accepting all emails")
+                self.logger.info("No filter rules configured - accepting all emails")
                 return self._handle_matching_email(email_data)
             
             # Check each filter rule
+            self.logger.info(f"Applying {len(self.current_config.filter_rules)} filter rules")
             matches_all_rules = True
-            for rule in self.current_config.filter_rules:
-                if not self._apply_filter_rule(email_data, rule):
+            for i, rule in enumerate(self.current_config.filter_rules):
+                rule_result = self._apply_filter_rule(email_data, rule)
+                self.logger.info(f"Filter rule {i+1}: {rule.field} {rule.operation} '{rule.value}' = {rule_result}")
+                if not rule_result:
                     matches_all_rules = False
                     break
             
             if matches_all_rules:
-                self.logger.info(f"Email matches filters: {email_data.subject}")
+                self.logger.info(f"Email matches all filters: {email_data.subject}")
                 return self._handle_matching_email(email_data)
             else:
-                self.logger.debug(f"Email filtered out: {email_data.subject}")
+                self.logger.info(f"Email filtered out by rules: {email_data.subject}")
                 return False
                 
         except Exception as e:
@@ -430,9 +458,9 @@ class EmailIngestionService:
             
             # Get the field value to check
             if rule.field == "sender_email":
-                field_value = email_data.sender_email
+                field_value = email_data.sender_email or ""
             elif rule.field == "subject":
-                field_value = email_data.subject
+                field_value = email_data.subject or ""
             elif rule.field == "has_attachments":
                 # Special handling for boolean field
                 expected_value = rule.value.lower() in ['true', '1', 'yes']
@@ -440,21 +468,25 @@ class EmailIngestionService:
             elif rule.field == "received_date":
                 # Date field handling would need additional logic
                 self.logger.warning(f"Date filtering not yet implemented for rule: {rule.field}")
-                return True
+                # For unimplemented features, be conservative and reject the email
+                return False
             else:
                 self.logger.warning(f"Unknown filter field: {rule.field}")
-                return True
-            
-            if field_value is None:
+                # For unknown fields, be conservative and reject the email
                 return False
             
-            # Apply the operation
+            # Ensure field_value is a string and not None
+            if not isinstance(field_value, str):
+                field_value = str(field_value) if field_value is not None else ""
+            
+            # Apply case sensitivity
             if not rule.case_sensitive:
                 field_value = field_value.lower()
-                rule_value = rule.value.lower()
+                rule_value = rule.value.lower() if rule.value else ""
             else:
-                rule_value = rule.value
+                rule_value = rule.value if rule.value else ""
             
+            # Apply the operation
             if rule.operation == "contains":
                 return rule_value in field_value
             elif rule.operation == "equals":
@@ -465,10 +497,12 @@ class EmailIngestionService:
                 return field_value.endswith(rule_value)
             else:
                 self.logger.warning(f"Unknown filter operation: {rule.operation}")
-                return True
+                # For unknown operations, be conservative and reject the email
+                return False
                 
         except Exception as e:
             self.logger.exception(f"Error applying filter rule: {e}")
+            # On any error, be conservative and reject the email
             return False
     
     def _handle_matching_email(self, email_data: EmailData) -> bool:
@@ -476,26 +510,42 @@ class EmailIngestionService:
         try:
             self.logger.info(f"Handling matching email: {email_data.subject}")
             
-            # For now, just log the email details and count it as processed
-            # In a full implementation, this would:
-            # 1. Save email to database
-            # 2. Download PDF attachments
-            # 3. Create ETO runs
-            # 4. Send to processing pipeline
+            # Check if email already exists to avoid duplicates
+            if self.email_repo.email_exists_by_message_id(email_data.message_id):
+                self.logger.debug(f"Email already exists: {email_data.subject}")
+                return True
             
-            self.logger.info(f"  From: {email_data.sender_email}")
-            self.logger.info(f"  Subject: {email_data.subject}")
-            self.logger.info(f"  Received: {email_data.received_time}")
-            self.logger.info(f"  Has attachments: {email_data.has_attachments}")
+            # Convert EmailData to database record format
+            assert self.current_config is not None
+            email_record_data = {
+                'message_id': email_data.message_id,
+                'subject': email_data.subject,
+                'sender_email': email_data.sender_email,
+                'sender_name': email_data.sender_name,
+                'received_date': email_data.received_time,
+                'folder_name': self.current_config.folder_name,
+                'has_pdf_attachments': email_data.has_pdf_attachments,
+                'attachment_count': email_data.attachment_count,
+                'created_at': datetime.now(timezone.utc)
+            }
             
-            if email_data.has_attachments:
-                self.logger.info(f"  Attachment count: {email_data.attachment_count}")
-                if email_data.has_pdf_attachments:
-                    self.logger.info("  Contains PDF attachments - would process for ETO")
-                    # Increment PDF stats
-                    if not hasattr(self.stats, 'pdfs_found'):
-                        self.stats.pdfs_found = 0
-                    self.stats.pdfs_found += 1
+            # Save email record to database
+            email_record = self.email_repo.create_email_record(email_record_data)
+            self.logger.info(f"Saved email record: {email_record.subject} (ID: {email_record.id})")
+            
+            # Update stats
+            if email_data.has_pdf_attachments:
+                self.logger.info("  Contains PDF attachments - would process for ETO")
+                self.stats.pdfs_found += 1
+            
+            # TODO: Future iteration - save PDF attachments and create PDF records
+            # if email_data.has_pdf_attachments:
+            #     for filename in email_data.attachment_filenames:
+            #         if filename.lower().endswith('.pdf'):
+            #             # Download PDF attachment to storage
+            #             # Create PDF record in database
+            #             # Link to ETO processing system
+            #             pass
             
             return True
             

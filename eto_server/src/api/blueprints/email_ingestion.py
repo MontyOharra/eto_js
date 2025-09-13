@@ -2,32 +2,34 @@
 Email Ingestion API Blueprint
 REST endpoints for managing email ingestion configuration
 """
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_cors import cross_origin
 from pydantic import ValidationError
 import logging
 from typing import Dict, Any
 
-from ..schemas.email_ingestion import (
+from src.api.schemas.email_ingestion import (
     CreateEmailConfigRequest,
-    UpdateEmailConfigRequest,
-    ValidateConfigRequest,
     EmailConfigSummaryResponse,
-    EmailConfigDetailResponse,
-    ConfigTemplateResponse,
     ActivateConfigResponse
 )
-from ..schemas.common import APIResponse, ValidationResponse
-from ...features.email_ingestion.config_service import EmailIngestionConfigurationService
-from flask import current_app
+from src.api.schemas.common import APIResponse
+from src.features.email_ingestion.service import EmailIngestionService
 
 logger = logging.getLogger(__name__)
 
 # Create blueprint
 email_ingestion_bp = Blueprint('email_ingestion', __name__, url_prefix='/api/email-ingestion')
 
-# Initialize service
-config_service = EmailIngestionConfigurationService()
+# Service helper
+def get_email_service() -> EmailIngestionService:
+    """Get email ingestion service from app config"""
+    email_service = current_app.config.get('EMAIL_INGESTION_SERVICE')
+    if not email_service:
+        raise RuntimeError("Email ingestion service not initialized")
+    
+    assert type(email_service) == EmailIngestionService 
+    return email_service
 
 
 def handle_validation_error(e: ValidationError) -> Dict[str, Any]:
@@ -55,7 +57,8 @@ def list_configurations():
         order_by = request.args.get('order_by')
         desc = request.args.get('desc', 'false').lower() == 'true'
         
-        configs = config_service.list_configurations(order_by=order_by, desc=desc)
+        email_service = get_email_service()
+        configs = email_service.config_service.list_configurations(order_by=order_by, desc=desc)
         
         # Convert domain objects to response schemas
         config_responses = [
@@ -70,7 +73,7 @@ def list_configurations():
                 last_used_at=config.last_used_at,
                 created_at=config.created_at,
                 updated_at=config.updated_at
-            ).dict()
+            ).dict() if config.id is not None else None
             for config in configs
         ]
         
@@ -109,15 +112,17 @@ def create_configuration():
             return jsonify(handle_validation_error(e)), 400
         
         # Convert schema filter rules to domain objects
-        filter_rules_data = [
-            {
-                "field": rule.field,
-                "operation": rule.operation,
-                "value": rule.value,
-                "case_sensitive": rule.case_sensitive
-            }
-            for rule in create_request.filter_rules
-        ]
+        filter_rules_data = []
+        if create_request.filter_rules:
+            filter_rules_data = [
+                {
+                    "field": rule.field,
+                    "operation": rule.operation,
+                    "value": rule.value,
+                    "case_sensitive": rule.case_sensitive
+                }
+                for rule in create_request.filter_rules
+            ]
         
         # Build configuration data for service
         config_data = {
@@ -136,7 +141,8 @@ def create_configuration():
             }
         }
         
-        result = config_service.create_configuration(
+        email_service = get_email_service()
+        result = email_service.config_service.create_configuration(
             name=create_request.name,
             description=create_request.description or "",
             config_data=config_data,
@@ -157,154 +163,6 @@ def create_configuration():
         }), 500
 
 
-@email_ingestion_bp.route('/configurations/<int:config_id>', methods=['GET'])
-@cross_origin()
-def get_configuration(config_id: int):
-    """Get specific email ingestion configuration"""
-    try:
-        config = config_service.get_configuration(config_id)
-        
-        if not config:
-            return jsonify({
-                "success": False,
-                "error": "Configuration not found",
-                "message": f"Configuration with ID {config_id} does not exist"
-            }), 404
-        
-        # Convert domain object to response schema
-        config_response = EmailConfigDetailResponse(
-            id=config.id,
-            name=config.name,
-            description=config.description,
-            connection={
-                "email_address": config.email_address,
-                "folder_name": config.folder_name
-            },
-            filter_rules=[
-                {
-                    "field": rule.field,
-                    "operation": rule.operation,
-                    "value": rule.value,
-                    "case_sensitive": rule.case_sensitive
-                }
-                for rule in config.filter_rules
-            ],
-            monitoring={
-                "poll_interval_seconds": config.poll_interval_seconds,
-                "max_backlog_hours": config.max_backlog_hours,
-                "error_retry_attempts": config.error_retry_attempts
-            },
-            is_active=config.is_active,
-            is_running=config.is_running,
-            emails_processed=config.emails_processed,
-            pdfs_found=config.pdfs_found,
-            last_error_message=config.last_error_message,
-            last_error_at=config.last_error_at,
-            created_by=config.created_by,
-            created_at=config.created_at,
-            updated_at=config.updated_at,
-            last_used_at=config.last_used_at
-        )
-        
-        return jsonify({
-            "success": True,
-            "data": config_response.dict()
-        }), 200
-    
-    except Exception as e:
-        logger.error(f"Error getting configuration {config_id}: {e}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "message": "Failed to get configuration"
-        }), 500
-
-
-@email_ingestion_bp.route('/configurations/<int:config_id>', methods=['PUT'])
-@cross_origin()
-def update_configuration(config_id: int):
-    """Update existing email ingestion configuration"""
-    try:
-        data = request.get_json()
-        
-        if not data:
-            return jsonify({
-                "success": False,
-                "error": "Request body is required",
-                "message": "Missing configuration data"
-            }), 400
-        
-        # Validate request data
-        try:
-            update_request = UpdateEmailConfigRequest(**data)
-        except ValidationError as e:
-            return jsonify(handle_validation_error(e)), 400
-        
-        # Build configuration data for service (only include provided fields)
-        config_data = {}
-        
-        if update_request.connection:
-            config_data["connection"] = {
-                "email_address": update_request.connection.email_address,
-                "folder_name": update_request.connection.folder_name
-            }
-        
-        if update_request.filter_rules:
-            config_data["filters"] = {
-                "name": "Updated Filter Rules",
-                "rules": [
-                    {
-                        "field": rule.field,
-                        "operation": rule.operation,
-                        "value": rule.value,
-                        "case_sensitive": rule.case_sensitive
-                    }
-                    for rule in update_request.filter_rules
-                ]
-            }
-        
-        if update_request.monitoring:
-            config_data["monitoring"] = {
-                "poll_interval_seconds": update_request.monitoring.poll_interval_seconds,
-                "max_backlog_hours": update_request.monitoring.max_backlog_hours,
-                "error_retry_attempts": update_request.monitoring.error_retry_attempts
-            }
-        
-        result = config_service.update_configuration(config_id, config_data)
-        
-        if result["success"]:
-            return jsonify(result), 200
-        else:
-            return jsonify(result), 400
-    
-    except Exception as e:
-        logger.error(f"Error updating configuration {config_id}: {e}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "message": "Failed to update configuration"
-        }), 500
-
-
-@email_ingestion_bp.route('/configurations/<int:config_id>', methods=['DELETE'])
-@cross_origin()
-def delete_configuration(config_id: int):
-    """Delete email ingestion configuration"""
-    try:
-        result = config_service.delete_configuration(config_id)
-        
-        if result["success"]:
-            return jsonify(result), 200
-        else:
-            return jsonify(result), 400
-    
-    except Exception as e:
-        logger.error(f"Error deleting configuration {config_id}: {e}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "message": "Failed to delete configuration"
-        }), 500
 
 
 @email_ingestion_bp.route('/configurations/<int:config_id>/activate', methods=['POST'])
@@ -317,55 +175,43 @@ def activate_configuration(config_id: int):
         auto_start = data.get('auto_start', False)
         
         # Activate the configuration
-        result = config_service.activate_configuration(config_id)
+        email_service = get_email_service()
+        result = email_service.config_service.activate_configuration(config_id)
         
         if not result["success"]:
             return jsonify(result), 400
         
         # If auto_start is requested, try to start ingestion
         if auto_start:
-            email_service = current_app.config.get('EMAIL_INGESTION_SERVICE')
-            if email_service:
+            try:
                 start_result = email_service.start_ingestion()
                 
-                if start_result["success"]:
-                    # Return combined response with activation and start info
-                    response = {
-                        "success": True,
-                        "config_id": result["config_id"],
-                        "config_name": result["name"],
-                        "message": f"Configuration activated and email ingestion started",
-                        "activated": True,
-                        "auto_started": True,
-                        "ingestion_status": {
-                            "is_running": True,
-                            "folder_name": start_result.get("folder_name"),
-                            "cursor_id": start_result.get("cursor_id")
-                        }
-                    }
-                    return jsonify(response), 200
-                else:
-                    # Activation succeeded but start failed
-                    response = {
-                        "success": True,
-                        "config_id": result["config_id"],
-                        "config_name": result["name"],
-                        "message": f"Configuration activated but auto-start failed: {start_result.get('message', 'Unknown error')}",
-                        "activated": True,
-                        "auto_started": False,
-                        "start_error": start_result.get("error")
-                    }
-                    return jsonify(response), 200
-            else:
-                # Email service not available
+                # Return combined response
                 response = {
                     "success": True,
                     "config_id": result["config_id"],
                     "config_name": result["name"],
-                    "message": "Configuration activated but email service not available for auto-start",
+                    "message": f"Configuration activated and email ingestion started",
+                    "activated": True,
+                    "auto_started": start_result.get("success", False),
+                    "start_message": start_result.get("message", "")
+                }
+                
+                if not start_result.get("success"):
+                    response["start_error"] = start_result.get("error", "Unknown error")
+                
+                return jsonify(response), 200
+                
+            except Exception as e:
+                logger.warning(f"Auto-start failed after activation: {e}")
+                response = {
+                    "success": True,
+                    "config_id": result["config_id"],
+                    "config_name": result["name"],
+                    "message": f"Configuration activated but auto-start failed: {str(e)}",
                     "activated": True,
                     "auto_started": False,
-                    "start_error": "Email service not initialized"
+                    "start_error": str(e)
                 }
                 return jsonify(response), 200
         
@@ -373,7 +219,8 @@ def activate_configuration(config_id: int):
         response = ActivateConfigResponse(
             config_id=result["config_id"],
             config_name=result["name"],
-            message=result["message"]
+            message=result["message"],
+            previous_active_config=None
         )
         return jsonify(response.dict()), 200
     
@@ -386,171 +233,6 @@ def activate_configuration(config_id: int):
         }), 500
 
 
-@email_ingestion_bp.route('/configurations/active', methods=['GET'])
-@cross_origin()
-def get_active_configuration():
-    """Get currently active email ingestion configuration"""
-    try:
-        config = config_service.get_active_configuration()
-        
-        if not config:
-            return jsonify({
-                "success": False,
-                "error": "No active configuration found",
-                "message": "No configuration is currently active"
-            }), 404
-        
-        # Convert domain object to response schema
-        config_response = EmailConfigDetailResponse(
-            id=config.id,
-            name=config.name,
-            description=config.description,
-            connection={
-                "email_address": config.email_address,
-                "folder_name": config.folder_name
-            },
-            filter_rules=[
-                {
-                    "field": rule.field,
-                    "operation": rule.operation,
-                    "value": rule.value,
-                    "case_sensitive": rule.case_sensitive
-                }
-                for rule in config.filter_rules
-            ],
-            monitoring={
-                "poll_interval_seconds": config.poll_interval_seconds,
-                "max_backlog_hours": config.max_backlog_hours,
-                "error_retry_attempts": config.error_retry_attempts
-            },
-            is_active=config.is_active,
-            is_running=config.is_running,
-            emails_processed=config.emails_processed,
-            pdfs_found=config.pdfs_found,
-            last_error_message=config.last_error_message,
-            last_error_at=config.last_error_at,
-            created_by=config.created_by,
-            created_at=config.created_at,
-            updated_at=config.updated_at,
-            last_used_at=config.last_used_at
-        )
-        
-        return jsonify({
-            "success": True,
-            "data": config_response.dict()
-        }), 200
-    
-    except Exception as e:
-        logger.error(f"Error getting active configuration: {e}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "message": "Failed to get active configuration"
-        }), 500
-
-
-@email_ingestion_bp.route('/configurations/validate', methods=['POST'])
-@cross_origin()
-def validate_configuration():
-    """Validate email ingestion configuration"""
-    try:
-        data = request.get_json()
-        
-        if not data:
-            return jsonify({
-                "success": False,
-                "error": "Request body is required",
-                "message": "Missing configuration data"
-            }), 400
-        
-        # Validate request schema first
-        try:
-            validate_request = ValidateConfigRequest(**data)
-        except ValidationError as e:
-            return jsonify(handle_validation_error(e)), 400
-        
-        # Build configuration data for service validation
-        config_data = {
-            "connection": {
-                "email_address": validate_request.connection.email_address,
-                "folder_name": validate_request.connection.folder_name
-            },
-            "filters": {
-                "name": "Validation Filter Rules",
-                "rules": [
-                    {
-                        "field": rule.field,
-                        "operation": rule.operation,
-                        "value": rule.value,
-                        "case_sensitive": rule.case_sensitive
-                    }
-                    for rule in validate_request.filter_rules
-                ]
-            },
-            "monitoring": {
-                "poll_interval_seconds": validate_request.monitoring.poll_interval_seconds,
-                "max_backlog_hours": validate_request.monitoring.max_backlog_hours,
-                "error_retry_attempts": validate_request.monitoring.error_retry_attempts
-            }
-        }
-        
-        result = config_service.validate_configuration(config_data)
-        
-        return jsonify({
-            "success": True,
-            "data": result
-        }), 200
-    
-    except Exception as e:
-        logger.error(f"Error validating configuration: {e}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "message": "Failed to validate configuration"
-        }), 500
-
-
-@email_ingestion_bp.route('/configurations/template', methods=['GET'])
-@cross_origin()
-def get_configuration_template():
-    """Get configuration template for creating new configurations"""
-    try:
-        template = config_service.get_configuration_template()
-        
-        # Convert to response schema
-        template_response = ConfigTemplateResponse(
-            connection={
-                "email_address": template["connection"]["email_address"],
-                "folder_name": template["connection"]["folder_name"]
-            },
-            filter_rules=[
-                {
-                    "field": rule["field"],
-                    "operation": rule["operation"],
-                    "value": rule["value"],
-                    "case_sensitive": rule.get("case_sensitive", False)
-                }
-                for rule in template["filters"]["rules"]
-            ],
-            monitoring={
-                "poll_interval_seconds": template["monitoring"]["poll_interval_seconds"],
-                "max_backlog_hours": template["monitoring"]["max_backlog_hours"],
-                "error_retry_attempts": template["monitoring"]["error_retry_attempts"]
-            }
-        )
-        
-        return jsonify({
-            "success": True,
-            "data": template_response.dict()
-        }), 200
-    
-    except Exception as e:
-        logger.error(f"Error getting configuration template: {e}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "message": "Failed to get configuration template"
-        }), 500
 
 
 # === Error Handlers ===
@@ -593,14 +275,7 @@ def handle_internal_error(error):
 def start_ingestion():
     """Start email ingestion service"""
     try:
-        # Get the email service from app config
-        email_service = current_app.config.get('EMAIL_INGESTION_SERVICE')
-        if not email_service:
-            return jsonify({
-                "success": False,
-                "error": "Email ingestion service not initialized",
-                "message": "Service not available"
-            }), 503
+        email_service = get_email_service()
         
         # Start the ingestion service
         result = email_service.start_ingestion()
@@ -624,14 +299,7 @@ def start_ingestion():
 def stop_ingestion():
     """Stop email ingestion service"""
     try:
-        # Get the email service from app config
-        email_service = current_app.config.get('EMAIL_INGESTION_SERVICE')
-        if not email_service:
-            return jsonify({
-                "success": False,
-                "error": "Email ingestion service not initialized",
-                "message": "Service not available"
-            }), 503
+        email_service = get_email_service()
         
         # Stop the ingestion service
         result = email_service.stop_ingestion()
@@ -655,14 +323,7 @@ def stop_ingestion():
 def get_ingestion_status():
     """Get email ingestion service status"""
     try:
-        # Get the email service from app config
-        email_service = current_app.config.get('EMAIL_INGESTION_SERVICE')
-        if not email_service:
-            return jsonify({
-                "success": False,
-                "error": "Email ingestion service not initialized",
-                "message": "Service not available"
-            }), 503
+        email_service = get_email_service()
         
         # Get service status
         status = {
@@ -675,14 +336,10 @@ def get_ingestion_status():
                 "stats": {
                     "emails_processed": email_service.stats.emails_processed,
                     "pdfs_found": email_service.stats.pdfs_found,
-                    "errors_encountered": email_service.stats.errors_encountered,
-                    "last_processing_time": email_service.stats.last_processing_time.isoformat() if email_service.stats.last_processing_time else None
-                },
-                "health": {
-                    "status": email_service.health.status,
-                    "last_heartbeat": email_service.health.last_heartbeat.isoformat() if email_service.health.last_heartbeat else None,
-                    "error_count": email_service.health.error_count,
-                    "last_error": email_service.health.last_error
+                    "processing_errors": email_service.stats.processing_errors,
+                    "last_processed_at": email_service.stats.last_processed_at.isoformat() if email_service.stats.last_processed_at else None,
+                    "uptime_seconds": email_service.stats.uptime_seconds,
+                    "reconnections": email_service.stats.reconnections
                 }
             }
         }
@@ -695,6 +352,141 @@ def get_ingestion_status():
             "success": False,
             "error": str(e),
             "message": "Failed to get ingestion status"
+        }), 500
+
+
+@email_ingestion_bp.route('/test/folders', methods=['GET'])
+@cross_origin()
+def list_outlook_folders():
+    """Test endpoint to list available Outlook folders for a given email"""
+    try:
+        email_address = request.args.get('email_address')
+        
+        # Get email service and create temporary connection
+        email_service = get_email_service()
+        outlook_service = email_service.outlook_service
+        
+        # Test connection to get folder list
+        from ...features.email_ingestion.types import EmailConnectionConfig
+        test_config = EmailConnectionConfig(
+            email_address=email_address,
+            folder_name="Inbox"  # Use Inbox as default for connection test
+        )
+        
+        # Initialize COM and get namespace
+        import win32com.client
+        import pythoncom
+        
+        pythoncom.CoInitialize()
+        try:
+            outlook = win32com.client.Dispatch("Outlook.Application")
+            namespace = outlook.GetNamespace("MAPI")
+            
+            folders = []
+            
+            def get_all_folders(parent_folder, path="", max_depth=3, current_depth=0):
+                """Recursively get all folders including subfolders"""
+                folder_list = []
+                if current_depth >= max_depth:
+                    return folder_list
+                
+                try:
+                    for folder in parent_folder.Folders:
+                        try:
+                            folder_path = f"{path}/{folder.Name}" if path else folder.Name
+                            folder_info = {
+                                "name": folder.Name,
+                                "path": folder_path,
+                                "type": "folder",
+                                "count": folder.Items.Count if hasattr(folder, 'Items') else 0
+                            }
+                            folder_list.append(folder_info)
+                            
+                            # Get subfolders recursively
+                            if hasattr(folder, 'Folders') and folder.Folders.Count > 0:
+                                subfolders = get_all_folders(folder, folder_path, max_depth, current_depth + 1)
+                                folder_list.extend(subfolders)
+                                
+                        except Exception as e:
+                            logger.debug(f"Error accessing folder: {e}")
+                            continue
+                except Exception as e:
+                    logger.debug(f"Error enumerating folders: {e}")
+                
+                return folder_list
+            
+            # Get all accounts and their folders
+            for account in namespace.Accounts:
+                if not email_address or account.SmtpAddress.lower() == email_address.lower():
+                    account_folders = {
+                        "account": account.SmtpAddress,
+                        "folders": []
+                    }
+                    
+                    try:
+                        # Get the delivery store for this account
+                        delivery_store = account.DeliveryStore
+                        if delivery_store:
+                            # Get root folder for this account's store
+                            root_folder = delivery_store.GetRootFolder()
+                            
+                            # Add standard folders first
+                            for folder_name, folder_id in outlook_service.folder_mapping.items():
+                                try:
+                                    folder = namespace.GetDefaultFolder(folder_id)
+                                    # Check if this folder belongs to the current account
+                                    if folder.Store == delivery_store:
+                                        account_folders["folders"].append({
+                                            "name": folder_name,
+                                            "display_name": folder.Name,
+                                            "path": folder.Name,
+                                            "type": "standard",
+                                            "count": folder.Items.Count
+                                        })
+                                except:
+                                    continue
+                            
+                            # Get all custom folders recursively from this account's store
+                            custom_folders = get_all_folders(root_folder)
+                            
+                            # Filter out standard folders we already added
+                            standard_names = [f["display_name"] for f in account_folders["folders"]]
+                            for custom_folder in custom_folders:
+                                if custom_folder["name"] not in standard_names:
+                                    custom_folder["type"] = "custom"
+                                    account_folders["folders"].append(custom_folder)
+                    
+                    except Exception as e:
+                        logger.warning(f"Error accessing account {account.SmtpAddress}: {e}")
+                        # Fallback to namespace folders if account-specific access fails
+                        try:
+                            all_folders = get_all_folders(namespace)
+                            account_folders["folders"] = all_folders
+                        except:
+                            pass
+                    
+                    folders.append(account_folders)
+                    
+                    if email_address:  # If specific email requested, only get that one
+                        break
+            
+            return jsonify({
+                "success": True,
+                "data": {
+                    "folders": folders,
+                    "total_accounts": len(folders)
+                }
+            }), 200
+            
+        finally:
+            pythoncom.CoUninitialize()
+    
+    except Exception as e:
+        logger.error(f"Error listing Outlook folders: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "message": "Failed to list Outlook folders"
         }), 500
 
 

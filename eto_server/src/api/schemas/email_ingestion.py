@@ -48,7 +48,7 @@ class CreateEmailConfigRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255, description="Configuration name")
     description: Optional[str] = Field(None, max_length=1000, description="Configuration description")
     connection: EmailConnectionConfigSchema
-    filter_rules: List[EmailFilterRuleSchema] = Field(..., min_items=1, description="Email filter rules")
+    filter_rules: Optional[List[EmailFilterRuleSchema]] = Field(None, description="Email filter rules")
     monitoring: EmailMonitoringConfigSchema
     created_by: str = Field(..., description="User who created the configuration")
 
@@ -57,7 +57,7 @@ class UpdateEmailConfigRequest(BaseModel):
     """Request schema for updating email configuration"""
     description: Optional[str] = Field(None, max_length=1000, description="Configuration description")
     connection: Optional[EmailConnectionConfigSchema] = None
-    filter_rules: Optional[List[EmailFilterRuleSchema]] = Field(None, min_items=1, description="Email filter rules")
+    filter_rules: Optional[List[EmailFilterRuleSchema]] = Field(None, min_length=1, description="Email filter rules")
     monitoring: Optional[EmailMonitoringConfigSchema] = None
 
 

@@ -120,6 +120,7 @@ class ConnectionStatus:
 @dataclass
 class EmailData:
     """Standardized email data structure"""
+    message_id: str
     subject: str
     sender_email: str
     sender_name: Optional[str]
@@ -135,8 +136,7 @@ class EmailData:
 class IngestionStats:
     """Email ingestion statistics"""
     emails_processed: int = 0
-    emails_filtered: int = 0
-    pdfs_extracted: int = 0
+    pdfs_found: int = 0
     processing_errors: int = 0
     last_processed_at: Optional[datetime] = None
     uptime_seconds: int = 0
