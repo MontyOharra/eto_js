@@ -40,52 +40,33 @@ class ExtractionRule:
 @dataclass
 class EtoRun:
     """ETO processing run domain object"""
+    # Required fields first
     id: Optional[int]
     email_id: int
     pdf_file_id: int
-    
-    # Overall processing status
     status: ProcessingStatus
+    created_at: datetime
+    updated_at: datetime
     
-    # Current processing step (only when status=PROCESSING)
+    # Optional fields with defaults
     processing_step: Optional[str] = None
-    
-    # Error tracking (for status=FAILURE)
     error_type: Optional[str] = None
     error_message: Optional[str] = None
     error_details: Optional[Dict[str, Any]] = None
-    
-    # Template matching results
     matched_template_id: Optional[int] = None
     template_version: Optional[int] = None
     template_match_coverage: Optional[float] = None
     unmatched_object_count: Optional[int] = None
     suggested_new_template: bool = False
-    
-    # Data extraction results
     extracted_data: Optional[Dict[str, Any]] = None
-    
-    # Data transformation audit trail
     transformation_audit: Optional[Dict[str, Any]] = None
-    
-    # Final transformed data
     target_data: Optional[Dict[str, Any]] = None
-    
-    # Pipeline execution tracking
     failed_step_id: Optional[int] = None
     step_execution_log: Optional[Dict[str, Any]] = None
-    
-    # Processing timeline
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     processing_duration_ms: Optional[int] = None
-    
-    # Order integration
     order_id: Optional[int] = None
-    
-    # Audit
-    created_at: datetime
-    updated_at: datetime
 
 
 @dataclass
