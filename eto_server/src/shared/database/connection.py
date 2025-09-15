@@ -243,7 +243,14 @@ class DatabaseCreator:
     def create_tables(database_url: str) -> bool:
         """Create all database tables from models"""
         try:
-            from .models import Base
+            # Import database models directly to avoid package cascade
+            import importlib.util
+            import os
+            models_path = os.path.join(os.path.dirname(__file__), 'database_models.py')
+            spec = importlib.util.spec_from_file_location('database_models', models_path)
+            models_module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(models_module)
+            Base = models_module.Base
             
             database_name = DatabaseCreator._parse_database_name(database_url)
             logger.info(f"Creating tables in database '{database_name}'...")
@@ -272,7 +279,14 @@ class DatabaseCreator:
     def drop_all_tables(database_url: str) -> bool:
         """Drop all tables from database"""
         try:
-            from .models import Base
+            # Import database models directly to avoid package cascade
+            import importlib.util
+            import os
+            models_path = os.path.join(os.path.dirname(__file__), 'database_models.py')
+            spec = importlib.util.spec_from_file_location('database_models', models_path)
+            models_module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(models_module)
+            Base = models_module.Base
             
             database_name = DatabaseCreator._parse_database_name(database_url)
             logger.info(f"Dropping all tables from database '{database_name}'...")

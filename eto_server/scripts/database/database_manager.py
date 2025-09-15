@@ -16,7 +16,9 @@ sys.path.insert(0, str(project_root))
 
 try:
     from dotenv import load_dotenv
-    from src.shared.database.connection import DatabaseCreator, DatabaseConnectionError, DatabaseNotFoundError
+    # Import directly from connection.py to avoid package cascade
+    sys.path.insert(0, str(project_root / 'src' / 'shared' / 'database'))
+    from connection import DatabaseCreator, DatabaseConnectionError, DatabaseNotFoundError, DatabaseConnectionManager
 except ImportError as e:
     print(f"❌ Import error: {e}", file=sys.stderr)
     print("Make sure you're running from the project root and dependencies are installed", file=sys.stderr)
@@ -133,7 +135,6 @@ class DatabaseManager:
                 
                 # Try to get table information
                 try:
-                    from src.shared.database.connection import DatabaseConnectionManager
                     conn_manager = DatabaseConnectionManager(database_url)
                     conn_manager.initialize_connection()
                     
@@ -145,7 +146,14 @@ class DatabaseManager:
                         
                     # Get table count
                     with conn_manager.session_scope() as session:
-                        from src.shared.database.models import Base
+                        # Import database models directly to avoid package cascade
+                        import importlib.util
+                        import os
+                        models_path = os.path.join(project_root, 'src', 'shared', 'database', 'database_models.py')
+                        spec = importlib.util.spec_from_file_location('database_models', models_path)
+                        models_module = importlib.util.module_from_spec(spec)
+                        spec.loader.exec_module(models_module)That 
+                        Base = models_module.Base
                         table_count = len(Base.metadata.tables)
                         self.logger.info(f"📋 Database schema defines {table_count} tables")
                     
