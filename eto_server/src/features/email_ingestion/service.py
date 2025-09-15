@@ -16,7 +16,7 @@ from .cursor_service import EmailIngestionCursorService
 from .types import EmailIngestionConfig, IngestionStats, ServiceHealth, EmailData, EmailConnectionConfig
 from .integrations.outlook_com_service import OutlookComService
 from ...shared.database import get_connection_manager
-from ...shared.database.repositories import EmailIngestionConfigRepository, EmailIngestionCursorRepository, EmailRepository, PdfRepository
+from ...shared.database.repositories import EmailIngestionConfigRepository, EmailIngestionCursorRepository, EmailRepository, PdfRepository, EtoRunRepository
 from ...features.pdf_processing.object_extraction_service import PdfObjectExtractionService
 
 logger = logging.getLogger(__name__)
@@ -35,6 +35,7 @@ class EmailIngestionService:
         self.cursor_repo = EmailIngestionCursorRepository(self.connection_manager)
         self.email_repo = EmailRepository(self.connection_manager)
         self.pdf_repo = PdfRepository(self.connection_manager)
+        self.eto_run_repo = EtoRunRepository(self.connection_manager)
         
         # Service layer - repositories injected as dependencies
         self.config_service = EmailIngestionConfigurationService(self.config_repo)
@@ -676,14 +677,33 @@ class EmailIngestionService:
             
             pdf_id = self.pdf_repo.create_pdf_record(pdf_data_record)
             
-            self.logger.info(f"Successfully processed PDF {filename} -> record {pdf_id}")
+            # Auto-trigger ETO processing by creating ETO run record
+            eto_run_data = {
+                'email_id': email_id,
+                'pdf_file_id': pdf_id,
+                'status': 'not_started',
+                'created_at': datetime.now(timezone.utc),
+                'updated_at': datetime.now(timezone.utc)
+            }
+            
+            try:
+                eto_run = self.eto_run_repo.create(eto_run_data)
+                eto_run_id = eto_run.id if eto_run else None
+                self.logger.info(f"Created ETO run {eto_run_id} for PDF {pdf_id}")
+            except Exception as eto_error:
+                self.logger.error(f"Failed to create ETO run for PDF {pdf_id}: {eto_error}")
+                # Don't fail the entire PDF processing if ETO run creation fails
+                eto_run_id = None
+            
+            self.logger.info(f"Successfully processed PDF {filename} -> record {pdf_id}, ETO run {eto_run_id}")
             
             return {
                 'id': pdf_id,
                 'filename': pdf_data_record['filename'],
                 'file_size': pdf_data_record['file_size'],
                 'sha256_hash': file_hash,
-                'duplicate': False
+                'duplicate': False,
+                'eto_run_id': eto_run_id
             }
             
         except Exception as e:

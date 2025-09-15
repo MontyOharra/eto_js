@@ -111,43 +111,6 @@ class PdfRepository(BaseRepository[PdfFileModel]):
             logger.error(f"Error getting PDFs by filename {filename}: {e}")
             raise RepositoryError(f"Failed to get PDFs by filename: {e}") from e
 
-    
-    def get_with_extracted_objects(self, limit: Optional[int] = None) -> List[PdfFileModel]:
-        """Get PDF files that have extracted objects"""
-        try:
-            with self.connection_manager.session_scope() as session:
-                query = session.query(self.model_class).filter(
-                    self.model_class.objects_json.isnot(None),
-                    self.model_class.objects_json != ''
-                ).order_by(self.model_class.created_at.desc())
-                
-                if limit is not None:
-                    query = query.limit(limit)
-                
-                return query.all()
-                
-        except SQLAlchemyError as e:
-            logger.error(f"Error getting PDF files with extracted objects: {e}")
-            raise RepositoryError(f"Failed to get PDF files with extracted objects: {e}") from e
-    
-    def get_without_extracted_objects(self, limit: Optional[int] = None) -> List[PdfFileModel]:
-        """Get PDF files that need object extraction"""
-        try:
-            with self.connection_manager.session_scope() as session:
-                query = session.query(self.model_class).filter(
-                    (self.model_class.objects_json.is_(None)) | 
-                    (self.model_class.objects_json == '')
-                ).order_by(self.model_class.created_at.asc())
-                
-                if limit is not None:
-                    query = query.limit(limit)
-                
-                return query.all()
-                
-        except SQLAlchemyError as e:
-            logger.error(f"Error getting PDF files without extracted objects: {e}")
-            raise RepositoryError(f"Failed to get PDF files without extracted objects: {e}") from e
-    
     # === Phase 1: Essential PDF Repository Methods ===
     
     def create_pdf_record(self, pdf_data: Dict[str, Any]) -> int:

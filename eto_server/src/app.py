@@ -68,6 +68,9 @@ def create_app(config_name: str = 'development') -> Flask:
     # Initialize email ingestion service
     initialize_email_ingestion(app)
     
+    # Initialize ETO processing service
+    initialize_eto_processing(app)
+    
     # Register blueprints
     register_blueprints(app)
     
@@ -173,6 +176,67 @@ def initialize_email_ingestion(app: Flask) -> None:
         logger.error(f"Failed to initialize email ingestion service: {e}")
         # Don't re-raise - allow app to continue without email service
         logger.info("Application will continue without email ingestion service")
+
+
+def initialize_eto_processing(app: Flask) -> None:
+    """Initialize ETO processing service with background worker"""
+    try:
+        logger.info("Initializing ETO Processing Service...")
+        
+        # Get connection manager from app config
+        connection_manager = app.config.get('CONNECTION_MANAGER')
+        if not connection_manager:
+            logger.error("Cannot initialize ETO processing: database connection not available")
+            return
+        
+        # Initialize ETO processing service and dependencies
+        from .features.eto_processing import (
+            init_eto_processing_service,
+            init_template_matching_service,
+            init_data_extraction_service,
+            init_transformation_service,
+            start_eto_processing_service
+        )
+        from .shared.database.repositories import TemplateRepository
+        
+        # Initialize dependent services with placeholders
+        template_repo = TemplateRepository(connection_manager)
+        template_matching_service = init_template_matching_service(template_repo)
+        data_extraction_service = init_data_extraction_service(template_repo)
+        transformation_service = init_transformation_service()
+        
+        # Initialize main ETO processing service
+        eto_service = init_eto_processing_service(
+            connection_manager=connection_manager,
+            poll_interval=int(os.getenv('ETO_POLL_INTERVAL', '10')),
+            batch_size=int(os.getenv('ETO_BATCH_SIZE', '5'))
+        )
+        
+        # Configure service dependencies
+        eto_service.set_template_matching_service(template_matching_service)
+        eto_service.set_data_extraction_service(data_extraction_service)
+        eto_service.set_transformation_service(transformation_service)
+        
+        # Store services in app config for global access
+        app.config['ETO_PROCESSING_SERVICE'] = eto_service
+        app.config['TEMPLATE_MATCHING_SERVICE'] = template_matching_service
+        app.config['DATA_EXTRACTION_SERVICE'] = data_extraction_service
+        app.config['TRANSFORMATION_SERVICE'] = transformation_service
+        
+        # Start the background worker if enabled
+        worker_enabled = os.getenv('ETO_WORKER_ENABLED', 'true').lower() == 'true'
+        if worker_enabled:
+            start_eto_processing_service()
+            logger.info("ETO processing background worker started")
+        else:
+            logger.info("ETO processing service initialized but worker not started (ETO_WORKER_ENABLED=false)")
+            
+        logger.info("ETO processing service initialized successfully")
+        
+    except Exception as e:
+        logger.error(f"Failed to initialize ETO processing service: {e}")
+        # Don't re-raise - allow app to continue without ETO processing
+        logger.info("Application will continue without ETO processing service")
 
 
 def register_blueprints(app: Flask) -> None:
