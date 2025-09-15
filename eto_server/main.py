@@ -14,9 +14,21 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 # Load environment variables
 load_dotenv()
 
-# Configure logging
+# Configure logging with environment variable support
+def get_log_level() -> int:
+    """Get logging level from environment variable"""
+    log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
+    level_mapping = {
+        'DEBUG': logging.DEBUG,
+        'INFO': logging.INFO,
+        'WARNING': logging.WARNING,
+        'ERROR': logging.ERROR,
+        'CRITICAL': logging.CRITICAL
+    }
+    return level_mapping.get(log_level, logging.INFO)
+
 logging.basicConfig(
-    level=logging.INFO,
+    level=get_log_level(),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler('logs/eto_server.log'),
@@ -25,6 +37,10 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+# Log the configured logging level
+log_level_name = os.getenv('LOG_LEVEL', 'INFO').upper()
+logger.info(f"Main logging configured at {log_level_name} level")
 
 def main():
     """Main entry point for the ETO Server"""
