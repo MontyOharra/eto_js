@@ -113,15 +113,15 @@ class PdfRepository(BaseRepository[PdfFileModel]):
 
     # === Phase 1: Essential PDF Repository Methods ===
     
-    def create_pdf_record(self, pdf_data: Dict[str, Any]) -> int:
+    def create_pdf_record(self, pdf_data: Dict[str, Any]) -> PdfFile:
         """
-        Create PDF record and return the ID
+        Create PDF record and return the domain object
         
         Args:
             pdf_data: Dictionary containing PDF metadata
             
         Returns:
-            int: Created PDF record ID
+            PdfFile: Created PDF domain object
         """
         try:
             # Ensure required fields are present
@@ -139,7 +139,14 @@ class PdfRepository(BaseRepository[PdfFileModel]):
             pdf_record = self.create(pdf_data)
             
             logger.info(f"Created PDF record {pdf_record.id} for email {pdf_data['email_id']}: {pdf_data['filename']}")
-            return pdf_record.id
+            
+            # Convert to domain object before returning
+            with self.connection_manager.session_scope() as session:
+                fresh_model = session.get(self.model_class, pdf_record.id)
+                if fresh_model:
+                    return self._convert_to_domain_object(fresh_model)
+                else:
+                    raise RepositoryError(f"Failed to retrieve created PDF record {pdf_record.id}")
             
         except Exception as e:
             logger.error(f"Error creating PDF record: {e}")
@@ -235,7 +242,7 @@ class PdfRepository(BaseRepository[PdfFileModel]):
             logger.error(f"Error updating PDF processing status for {pdf_id}: {e}")
             raise RepositoryError(f"Failed to update PDF processing status: {e}") from e
     
-    def update_objects_json(self, pdf_id: int, objects_json: str) -> Optional[PdfFileModel]:
+    def update_objects_json(self, pdf_id: int, objects_json: str) -> Optional[PdfFile]:
         """Update the objects_json field for a PDF file"""
         if pdf_id is None:
             raise ValueError("pdf_id cannot be None")
@@ -261,8 +268,14 @@ class PdfRepository(BaseRepository[PdfFileModel]):
             updated_pdf = self.update(pdf_id, update_data)
             if updated_pdf:
                 logger.debug(f"Updated objects_json for PDF {pdf_id} with {object_count} objects")
+                
+                # Convert to domain object before returning
+                with self.connection_manager.session_scope() as session:
+                    fresh_model = session.get(self.model_class, pdf_id)
+                    if fresh_model:
+                        return self._convert_to_domain_object(fresh_model)
             
-            return updated_pdf
+            return None
             
         except Exception as e:
             logger.error(f"Error updating objects_json for PDF {pdf_id}: {e}")

@@ -675,7 +675,8 @@ class EmailIngestionService:
                 'objects_json': objects_json
             }
             
-            pdf_id = self.pdf_repo.create_pdf_record(pdf_data_record)
+            pdf_record = self.pdf_repo.create_pdf_record(pdf_data_record)
+            pdf_id = pdf_record.id
             
             # Auto-trigger ETO processing by creating ETO run record
             eto_run_data = {
