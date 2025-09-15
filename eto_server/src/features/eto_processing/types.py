@@ -32,9 +32,9 @@ class ExtractionRule:
     template_id: int
     rule_name: str
     final_target_field: str
-    is_required: bool = True
     extraction_steps: List[ExtractionStep]
     created_at: datetime
+    is_required: bool = True
 
 
 @dataclass

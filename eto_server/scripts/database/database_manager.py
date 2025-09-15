@@ -152,7 +152,7 @@ class DatabaseManager:
                         models_path = os.path.join(project_root, 'src', 'shared', 'database', 'database_models.py')
                         spec = importlib.util.spec_from_file_location('database_models', models_path)
                         models_module = importlib.util.module_from_spec(spec)
-                        spec.loader.exec_module(models_module)That 
+                        spec.loader.exec_module(models_module)
                         Base = models_module.Base
                         table_count = len(Base.metadata.tables)
                         self.logger.info(f"📋 Database schema defines {table_count} tables")
