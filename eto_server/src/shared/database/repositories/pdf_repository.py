@@ -75,19 +75,42 @@ class PdfRepository(BaseRepository[PdfFileModel]):
             logger.error(f"Error getting PDFs for email {email_id}: {e}")
             raise RepositoryError(f"Failed to get PDFs for email: {e}") from e
     
-    def get_by_hash(self, sha256_hash: str) -> List[PdfFileModel]:
+    def get_by_hash(self, sha256_hash: str) -> List[PdfFile]:
         """Get PDF files by SHA256 hash (may be multiple)"""
         if not sha256_hash:
             return []
         
-        return self.get_by_field('sha256_hash', sha256_hash)
+        try:
+            with self.connection_manager.session_scope() as session:
+                models = session.query(self.model_class).filter(
+                    self.model_class.sha256_hash == sha256_hash
+                ).all()
+                
+                # Convert all models to domain objects
+                return [self._convert_to_domain_object(model) for model in models]
+                
+        except SQLAlchemyError as e:
+            logger.error(f"Error getting PDFs by hash {sha256_hash}: {e}")
+            raise RepositoryError(f"Failed to get PDFs by hash: {e}") from e
     
-    def get_by_filename(self, filename: str) -> List[PdfFileModel]:
+    def get_by_filename(self, filename: str) -> List[PdfFile]:
         """Get PDF files by filename"""
         if not filename:
-            return []
+            return []   
         
-        return self.get_by_field('filename', filename)
+        try:
+            with self.connection_manager.session_scope() as session:
+                models = session.query(self.model_class).filter(
+                    self.model_class.filename == filename
+                ).all()
+                
+                # Convert all models to domain objects
+                return [self._convert_to_domain_object(model) for model in models]
+                
+        except SQLAlchemyError as e:
+            logger.error(f"Error getting PDFs by filename {filename}: {e}")
+            raise RepositoryError(f"Failed to get PDFs by filename: {e}") from e
+
     
     def get_with_extracted_objects(self, limit: Optional[int] = None) -> List[PdfFileModel]:
         """Get PDF files that have extracted objects"""

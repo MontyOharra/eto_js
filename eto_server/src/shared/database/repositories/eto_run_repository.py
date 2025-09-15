@@ -105,6 +105,53 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
         
         return self.update(run_id, update_data)
     
+    def update_processing_step(self, run_id: int, status: str, processing_step: str, **kwargs) -> Optional[EtoRunModel]:
+        """Update processing status and current step atomically"""
+        if run_id is None or not status:
+            raise ValueError("run_id and status are required")
+        
+        update_data = {
+            'status': status,
+            'processing_step': processing_step,
+            **kwargs
+        }
+        
+        return self.update_status(run_id, status, **update_data)
+    
+    def mark_as_failed(self, run_id: int, error_message: str, error_type: str = None, error_details: Dict[str, Any] = None) -> Optional[EtoRunModel]:
+        """Mark run as failed with error details"""
+        if run_id is None or not error_message:
+            raise ValueError("run_id and error_message are required")
+        
+        update_data = {
+            'error_message': error_message,
+            'error_type': error_type,
+            'error_details': error_details,
+            'processing_step': None  # Clear processing step on failure
+        }
+        
+        return self.update_status(run_id, 'failure', **update_data)
+    
+    def get_runs_by_status(self, status_list: List[str], limit: Optional[int] = None) -> List[EtoRunModel]:
+        """Get runs matching any of the provided statuses"""
+        if not status_list:
+            return []
+        
+        try:
+            with self.connection_manager.session_scope() as session:
+                query = session.query(self.model_class).filter(
+                    self.model_class.status.in_(status_list)
+                ).order_by(self.model_class.created_at.desc())
+                
+                if limit is not None:
+                    query = query.limit(limit)
+                
+                return query.all()
+                
+        except SQLAlchemyError as e:
+            logger.error(f"Error getting ETO runs by status list {status_list}: {e}")
+            raise RepositoryError(f"Failed to get ETO runs by status list: {e}") from e
+    
     def get_processing_statistics(self) -> Dict[str, Any]:
         """Get processing statistics by status"""
         try:
