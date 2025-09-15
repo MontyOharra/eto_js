@@ -18,12 +18,12 @@ class PdfFile:
     file_path: str
     file_size: int
     sha256_hash: str
+    created_at: datetime
+    updated_at: datetime
     mime_type: str = 'application/pdf'
     page_count: Optional[int] = None
     object_count: Optional[int] = None
     objects_json: Optional[str] = None
-    created_at: datetime
-    updated_at: datetime
 
 
 @dataclass
@@ -55,32 +55,20 @@ class PdfTemplate:
     """PDF template for pattern matching domain object"""
     id: Optional[int]
     name: str
-    customer_name: Optional[str]
-    description: Optional[str]
-    
-    # Template matching signature
     signature_objects: List[PdfObject]
     signature_object_count: int
-    
-    # Spatial extraction field definitions
     extraction_fields: List[PdfExtractionBounds]
-    
-    # Template metadata
-    is_complete: bool = False
-    coverage_threshold: float = 0.6
-    
-    # Usage statistics
-    usage_count: int = 0
-    last_used_at: Optional[datetime] = None
-    
-    # Versioning
-    version: int = 1
-    is_current_version: bool = True
-    
-    # Audit fields
-    created_by: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    customer_name: Optional[str] = None
+    description: Optional[str] = None
+    is_complete: bool = False
+    coverage_threshold: float = 0.6
+    usage_count: int = 0
+    last_used_at: Optional[datetime] = None
+    version: int = 1
+    is_current_version: bool = True
+    created_by: Optional[str] = None
     status: str = 'active'
 
 

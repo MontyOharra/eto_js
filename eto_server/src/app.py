@@ -19,6 +19,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Import storage configuration utilities
+from .shared.utils.storage_config import get_storage_configuration, get_development_storage_path, get_default_storage_path
+
 
 def create_app(config_name: str = 'development') -> Flask:
     """
@@ -100,16 +103,28 @@ def initialize_database(app: Flask) -> None:
 
 
 def initialize_email_ingestion(app: Flask) -> None:
-    """Initialize email ingestion service and attempt auto-connection"""
+    """Initialize email ingestion service with PDF support and attempt auto-connection"""
     try:
-        logger.info("Initializing Email Ingestion Service...")
+        logger.info("Initializing Email Ingestion Service with PDF processing...")
         
-        # Import and create the email ingestion service
+        # Create PDF storage service with configured path from app config
+        from .features.pdf_processing.storage_service import PdfStorageService
+        pdf_storage_service = PdfStorageService(app.config['PDF_STORAGE_ROOT'])
+        
+        # Log storage information
+        storage_info = pdf_storage_service.get_storage_info()
+        logger.info(f"PDF storage initialized: {storage_info['current_root']}")
+        if storage_info.get('fallback_used'):
+            logger.warning(f"PDF storage using fallback location (original: {storage_info['original_root']})")
+        
+        # Import and create the email ingestion service with PDF support
         from .features.email_ingestion.service import EmailIngestionService
-        email_service = EmailIngestionService()
+        email_service = EmailIngestionService(pdf_storage_service=pdf_storage_service)
         
-        # Store service in app config for global access
+        # Store services in app config for global access
         app.config['EMAIL_INGESTION_SERVICE'] = email_service
+        app.config['PDF_STORAGE_SERVICE'] = pdf_storage_service
+        app.config['PDF_REPOSITORY'] = email_service.pdf_repo  # For API access
         
         # Check for active configuration and attempt auto-connect
         try:
@@ -261,6 +276,11 @@ def get_config_class(config_name: str):
         # API settings
         API_TITLE = 'Unified ETO Server API'
         API_VERSION = 'v1'
+        
+        # PDF Storage settings - cross-platform defaults
+        PDF_STORAGE_ROOT = os.getenv('PDF_STORAGE_ROOT', get_storage_configuration())
+        PDF_STORAGE_MAX_SIZE_MB = int(os.getenv('PDF_STORAGE_MAX_SIZE_MB', '100'))
+        PDF_STORAGE_CLEANUP_ENABLED = os.getenv('PDF_STORAGE_CLEANUP_ENABLED', 'true').lower() == 'true'
     
     class DevelopmentConfig(BaseConfig):
         """Development environment configuration"""
@@ -273,6 +293,9 @@ def get_config_class(config_name: str):
         
         # Development-specific settings
         CORS_ORIGINS = ["*"]  # Allow all origins in development
+        
+        # Development PDF storage - use current C:/apps/eto/ for testing
+        PDF_STORAGE_ROOT = os.getenv('PDF_STORAGE_ROOT', get_development_storage_path())
     
     class ProductionConfig(BaseConfig):
         """Production environment configuration"""
@@ -288,6 +311,10 @@ def get_config_class(config_name: str):
         # Production-specific settings
         CORS_ORIGINS = os.getenv('CORS_ORIGINS', '').split(',') if os.getenv('CORS_ORIGINS') else []
         SECRET_KEY = os.getenv('SECRET_KEY', 'production-secret-key-placeholder')
+        
+        # Production PDF storage - use platform-specific defaults or configured path
+        PDF_STORAGE_ROOT = os.getenv('PDF_STORAGE_ROOT', get_default_storage_path())
+        PDF_STORAGE_MAX_SIZE_MB = int(os.getenv('PDF_STORAGE_MAX_SIZE_MB', '1000'))  # Larger for production
     
     class TestingConfig(BaseConfig):
         """Testing environment configuration"""
@@ -298,11 +325,35 @@ def get_config_class(config_name: str):
         
         # Testing-specific settings
         WTF_CSRF_ENABLED = False
+        
+        # Testing PDF storage - use temp directory
+        import tempfile
+        PDF_STORAGE_ROOT = os.path.join(tempfile.gettempdir(), 'eto_test_storage')
+    
+    class PortableAppConfig(BaseConfig):
+        """Portable application configuration for executable distributions"""
+        DEBUG = False
+        TESTING = False
+        
+        # Portable apps typically use SQLite for simplicity
+        DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///data/eto_portable.db')
+        
+        # Security
+        SECRET_KEY = os.getenv('SECRET_KEY', 'portable-app-secret-change-in-production')
+        
+        # Portable PDF storage - relative to executable
+        from .shared.utils.storage_config import get_portable_storage_path
+        PDF_STORAGE_ROOT = os.getenv('PDF_STORAGE_ROOT', get_portable_storage_path())
+        PDF_STORAGE_MAX_SIZE_MB = int(os.getenv('PDF_STORAGE_MAX_SIZE_MB', '500'))
+        
+        # Portable-specific settings
+        CORS_ORIGINS = ["*"]  # More permissive for local usage
     
     configs = {
         'development': DevelopmentConfig,
         'production': ProductionConfig,
-        'testing': TestingConfig
+        'testing': TestingConfig,
+        'portable': PortableAppConfig
     }
     
     config_class = configs.get(config_name, DevelopmentConfig)

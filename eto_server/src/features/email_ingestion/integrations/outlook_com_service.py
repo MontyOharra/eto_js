@@ -357,7 +357,7 @@ class OutlookComService:
                     # Convert to local time
                     local_start_date = start_date_utc.astimezone()
                     start_str = local_start_date.strftime("%m/%d/%Y %H:%M")
-                    date_filter = f"[ReceivedTime] >= '{start_str}'"
+                    date_filter = f"[ReceivedTime] > '{start_str}'"
                     items = items.Restrict(date_filter)
                     logger.debug(f"Applied date filter (converted UTC to local): {date_filter} (original UTC: {start_date})")
                 
@@ -432,25 +432,19 @@ class OutlookComService:
                 # Search for the email by message ID
                 items = current_folder.Items
                 
-                # Use Restrict method to find the email efficiently
-                filter_str = f"[InternetMessageId] = '{message_id}'"
-                filtered_items = items.Restrict(filter_str)
+                # The message_id is actually the EntryID, so search by EntryID
+                # Note: EntryID is unique per email and is what we store as message_id
+                logger.debug(f"Searching for mail object with EntryID: {message_id}")
                 
-                if filtered_items.Count > 0:
-                    mail_object = filtered_items.GetFirst()
-                    logger.debug(f"Found mail object for message ID: {message_id}")
-                    return mail_object
-                else:
-                    # Fallback: search through items manually (slower but more reliable)
-                    logger.debug(f"Direct filter failed, searching manually for message ID: {message_id}")
-                    for mail in items:
-                        try:
-                            if hasattr(mail, 'InternetMessageId') and mail.InternetMessageId == message_id:
-                                logger.debug(f"Found mail object via manual search: {message_id}")
-                                return mail
-                        except Exception as e:
-                            logger.debug(f"Error checking mail item: {e}")
-                            continue
+                # Search through items manually to find matching EntryID
+                for mail in items:
+                    try:
+                        if hasattr(mail, 'EntryID') and mail.EntryID == message_id:
+                            logger.debug(f"Found mail object via EntryID search: {message_id}")
+                            return mail
+                    except Exception as e:
+                        logger.debug(f"Error checking mail item: {e}")
+                        continue
                 
                 logger.warning(f"Mail object not found for message ID: {message_id}")
                 return None

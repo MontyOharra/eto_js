@@ -16,8 +16,6 @@ from .types import EmailIngestionConfig, IngestionStats, ServiceHealth, EmailDat
 from .integrations.outlook_com_service import OutlookComService
 from ...shared.database import get_connection_manager
 from ...shared.database.repositories import EmailIngestionConfigRepository, EmailIngestionCursorRepository, EmailRepository, PdfRepository
-from ...features.pdf_processing.storage_service import PdfStorageService
-from ...features.pdf_processing.extraction_service import PdfExtractionService
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +23,7 @@ logger = logging.getLogger(__name__)
 class EmailIngestionService:
     """Main orchestrator for email processing with automatic startup and downtime recovery"""
     
-    def __init__(self):
+    def __init__(self, pdf_storage_service = None):
         # Infrastructure layer - single source of truth
         self.connection_manager = get_connection_manager()
         assert self.connection_manager is not None
@@ -42,9 +40,18 @@ class EmailIngestionService:
         self.cursor_service = EmailIngestionCursorService(self.cursor_repo)
         self.outlook_service = OutlookComService()
         
-        # PDF processing services - initialized with dependencies
-        # TODO: Make storage path configurable from app config
-        self.pdf_storage_service = PdfStorageService("C:/apps/eto/server/storage")
+        # PDF processing services - use injected service or create with fallback
+        if pdf_storage_service:
+            self.pdf_storage_service = pdf_storage_service
+        else:
+            # Fallback for backwards compatibility or when called without Flask context
+            from ...shared.utils.storage_config import get_storage_configuration
+            from ...features.pdf_processing.storage_service import PdfStorageService
+            storage_path = get_storage_configuration()
+            logger.warning(f"PDF storage service not provided, creating with path: {storage_path}")
+            self.pdf_storage_service = PdfStorageService(storage_path)
+            
+        from ...features.pdf_processing.extraction_service import PdfExtractionService
         self.pdf_extraction_service = PdfExtractionService(self.pdf_storage_service, self.pdf_repo)
         
         # Service state
@@ -547,8 +554,10 @@ class EmailIngestionService:
                 self.logger.info("  Contains PDF attachments - processing for storage and analysis")
                 try:
                     # Get the raw Outlook mail object for PDF extraction
+                    self.logger.debug(f"Attempting to get Outlook mail object for EntryID: {email_data.message_id}")
                     outlook_mail_object = self.outlook_service.get_mail_object_by_id(email_data.message_id)
                     if outlook_mail_object:
+                        self.logger.debug(f"Successfully retrieved Outlook mail object for email {email_record.id}")
                         # Extract PDFs using PDF extraction service
                         pdf_records = self.pdf_extraction_service.extract_pdfs_from_email(
                             email_record.id, 

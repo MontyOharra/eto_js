@@ -40,21 +40,39 @@ class PdfExtractionService:
         pdf_records = []
         
         try:
-            # Check if email has attachments
-            if not hasattr(outlook_mail_object, 'Attachments') or outlook_mail_object.Attachments.Count == 0:
+            # Check if email has attachments using the working pattern from outlook_service.py
+            logger.debug(f"Checking attachments for email {email_id}")
+            logger.debug(f"Mail object type: {type(outlook_mail_object)}")
+            
+            # Use the working pattern - direct access to message.Attachments
+            try:
+                attachment_count = outlook_mail_object.Attachments.Count
+                logger.debug(f"Email {email_id} has {attachment_count} total attachments")
+            except Exception as e:
+                logger.error(f"Error accessing attachments for email {email_id}: {e}")
+                return pdf_records
+            
+            if attachment_count == 0:
                 logger.debug(f"Email {email_id} has no attachments")
                 return pdf_records
             
-            logger.info(f"Processing {outlook_mail_object.Attachments.Count} attachments for email {email_id}")
+            logger.info(f"Processing {attachment_count} attachments for email {email_id}")
             
-            # Process each attachment
-            for i in range(1, outlook_mail_object.Attachments.Count + 1):
-                attachment = outlook_mail_object.Attachments.Item(i)
+            # Process each attachment using the working pattern
+            for attachment in outlook_mail_object.Attachments:
                 
                 try:
+                    # Log attachment details
+                    attachment_filename = getattr(attachment, 'FileName', 'Unknown')
+                    attachment_size = getattr(attachment, 'Size', 0)
+                    logger.debug(f"Processing attachment {i}: '{attachment_filename}' ({attachment_size} bytes)")
+                    
                     # Check if attachment is a PDF
-                    if self.is_pdf_attachment(attachment):
-                        logger.info(f"Found PDF attachment: {attachment.FileName}")
+                    is_pdf = self.is_pdf_attachment(attachment)
+                    logger.debug(f"Attachment '{attachment_filename}' PDF check result: {is_pdf}")
+                    
+                    if is_pdf:
+                        logger.info(f"Found PDF attachment: {attachment_filename}")
                         
                         # Download attachment content
                         pdf_content = self.download_attachment(attachment)
@@ -218,6 +236,9 @@ class PdfExtractionService:
         """
         try:
             filename = getattr(attachment_object, 'FileName', '').lower()
+            display_name = getattr(attachment_object, 'DisplayName', '').lower()
+            
+            logger.debug(f"PDF check - FileName: '{filename}', DisplayName: '{display_name}'")
             
             # Check file extension
             if filename.endswith('.pdf'):
@@ -225,11 +246,11 @@ class PdfExtractionService:
                 return True
             
             # Additional check: examine MIME type if available
-            display_name = getattr(attachment_object, 'DisplayName', '').lower()
             if '.pdf' in display_name:
                 logger.debug(f"Attachment {filename} identified as PDF by display name")
                 return True
             
+            logger.debug(f"Attachment '{filename}' is not a PDF")
             return False
             
         except Exception as e:

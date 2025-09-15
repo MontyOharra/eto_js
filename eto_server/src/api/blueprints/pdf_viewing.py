@@ -34,12 +34,12 @@ def handle_options(path):
 def get_pdf_storage_service():
     """Get PDF storage service from app config"""
     from flask import current_app
-    return getattr(current_app, 'pdf_storage_service', None)
+    return current_app.config.get('PDF_STORAGE_SERVICE')
 
 def get_pdf_repository():
     """Get PDF repository from app config"""
     from flask import current_app
-    return getattr(current_app, 'pdf_repository', None)
+    return current_app.config.get('PDF_REPOSITORY')
 
 
 @pdf_viewing_bp.route('/<int:pdf_id>', methods=['GET'])

@@ -370,6 +370,23 @@ class EmailIngestionConfigurationService:
                 "error": str(e),
                 "message": "Failed to update runtime status"
             }
+    
+    def increment_processing_stats(self, config_id: int, emails: int, pdfs: int) -> Optional[EmailIngestionConfig]:
+        """Increment processing statistics for configuration"""
+        try:
+            self.logger.debug(f"Incrementing stats for config {config_id}: +{emails} emails, +{pdfs} PDFs")
+            
+            config = self.config_repo.increment_processing_stats(config_id, emails, pdfs)
+            
+            if not config:
+                self.logger.warning(f"Configuration with ID {config_id} not found for stats update")
+                return None
+            
+            return config
+        
+        except Exception as e:
+            self.logger.exception(f"Error incrementing processing stats for config {config_id}: {e}")
+            return None
 
     # === Helper Methods ===
     
