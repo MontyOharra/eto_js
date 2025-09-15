@@ -374,7 +374,7 @@ class EmailIngestionService:
             
             for i, email_data in enumerate(emails):
                 try:
-                    self.logger.info(f"Email {i+1}/{len(emails)}: '{email_data.subject}' from {email_data.sender_email} at {email_data.received_time}")
+                    self.logger.debug(f"Email {i+1}/{len(emails)}: '{email_data.subject}' from {email_data.sender_email} at {email_data.received_time}")
                     
                     # Skip emails we've already processed
                     if cursor.last_processed_received_date:
@@ -389,15 +389,15 @@ class EmailIngestionService:
                             cursor_time = cursor_time.replace(tzinfo=None)
                         
                         if email_time <= cursor_time:
-                            self.logger.info(f"Skipping email {i+1} - already processed (received {email_time} <= cursor {cursor_time})")
+                            self.logger.debug(f"Skipping email {i+1} - already processed (received {email_time} <= cursor {cursor_time})")
                             continue
                     
                     # Apply filters
                     if self._process_single_email(email_data):
                         processed_count += 1
-                        self.logger.info(f"Email {i+1} processed successfully")
+                        self.logger.debug(f"Email {i+1} processed successfully")
                     else:
-                        self.logger.info(f"Email {i+1} was filtered out or failed processing")
+                        self.logger.debug(f"Email {i+1} was filtered out or failed processing")
                     
                     # Track latest email date for cursor update
                     if not latest_email_date or email_data.received_time > latest_email_date:
@@ -441,28 +441,28 @@ class EmailIngestionService:
     def _process_single_email(self, email_data: EmailData) -> bool:
         """Process a single email with filtering and rule application"""
         try:
-            self.logger.info(f"Processing email: '{email_data.subject}' from {email_data.sender_email}")
+            self.logger.debug(f"Processing email: '{email_data.subject}' from {email_data.sender_email}")
             
             # Apply email filters
             if not self.current_config or not self.current_config.filter_rules:
-                self.logger.info("No filter rules configured - accepting all emails")
+                self.logger.debug("No filter rules configured - accepting all emails")
                 return self._handle_matching_email(email_data)
             
             # Check each filter rule
-            self.logger.info(f"Applying {len(self.current_config.filter_rules)} filter rules")
+            self.logger.debug(f"Applying {len(self.current_config.filter_rules)} filter rules")
             matches_all_rules = True
             for i, rule in enumerate(self.current_config.filter_rules):
                 rule_result = self._apply_filter_rule(email_data, rule)
-                self.logger.info(f"Filter rule {i+1}: {rule.field} {rule.operation} '{rule.value}' = {rule_result}")
+                self.logger.debug(f"Filter rule {i+1}: {rule.field} {rule.operation} '{rule.value}' = {rule_result}")
                 if not rule_result:
                     matches_all_rules = False
                     break
             
             if matches_all_rules:
-                self.logger.info(f"Email matches all filters: {email_data.subject}")
+                self.logger.debug(f"Email matches all filters: {email_data.subject}")
                 return self._handle_matching_email(email_data)
             else:
-                self.logger.info(f"Email filtered out by rules: {email_data.subject}")
+                self.logger.debug(f"Email filtered out by rules: {email_data.subject}")
                 return False
                 
         except Exception as e:
@@ -526,7 +526,7 @@ class EmailIngestionService:
     def _handle_matching_email(self, email_data: EmailData) -> bool:
         """Handle an email that passed all filters"""
         try:
-            self.logger.info(f"Handling matching email: {email_data.subject}")
+            self.logger.debug(f"Handling matching email: {email_data.subject}")
             
             # Check if email already exists to avoid duplicates
             if self.email_repo.email_exists_by_message_id(email_data.message_id):
@@ -554,7 +554,7 @@ class EmailIngestionService:
             # Process PDF attachments if present (using pre-extracted data)
             pdf_records = []
             if email_data.has_pdf_attachments:
-                self.logger.info(f"  Contains {len(email_data.pdf_attachments_data)} PDF attachments - processing for storage and analysis")
+                self.logger.info(f"  Processing {len(email_data.pdf_attachments_data)} PDF attachments")
                 try:
                     # Process each pre-extracted PDF attachment
                     for pdf_data in email_data.pdf_attachments_data:
@@ -611,7 +611,7 @@ class EmailIngestionService:
             content_bytes = pdf_data['content_bytes']
             file_size = pdf_data['size']
             
-            self.logger.info(f"Processing extracted PDF: {filename} ({file_size} bytes)")
+            self.logger.debug(f"Processing extracted PDF: {filename} ({file_size} bytes)")
             
             # Validate PDF content
             if not self._validate_pdf_content(content_bytes):
@@ -623,7 +623,7 @@ class EmailIngestionService:
             existing_pdf = self.pdf_repo.get_duplicate_by_hash(file_hash)
             
             if existing_pdf:
-                self.logger.info(f"Duplicate PDF found (hash: {file_hash[:16]}...), skipping storage")
+                self.logger.debug(f"Duplicate PDF found (hash: {file_hash[:16]}...), skipping storage")
                 return {
                     'id': existing_pdf.id,
                     'filename': existing_pdf.filename,
@@ -639,12 +639,10 @@ class EmailIngestionService:
                 email_id
             )
             
-            # Get PDF metadata
-            metadata = self._get_pdf_metadata(content_bytes, filename)
-            
             # Extract PDF objects for template matching
             objects_json = None
-            object_count = metadata.get('object_count')
+            page_count = None
+            object_count = None
             
             try:
                 self.logger.debug(f"Extracting PDF objects for {filename}")
@@ -653,8 +651,9 @@ class EmailIngestionService:
                 if extraction_result['success']:
                     import json
                     objects_json = json.dumps(extraction_result['objects'], default=str)
+                    page_count = extraction_result['page_count']
                     object_count = extraction_result['object_count']
-                    self.logger.info(f"Extracted {object_count} PDF objects for {filename}")
+                    self.logger.debug(f"Extracted {object_count} PDF objects from {page_count} pages for {filename}")
                 else:
                     self.logger.warning(f"PDF object extraction failed for {filename}: {extraction_result.get('error', 'Unknown error')}")
                     
@@ -670,7 +669,7 @@ class EmailIngestionService:
                 'file_size': len(content_bytes),
                 'sha256_hash': file_hash,
                 'mime_type': 'application/pdf',
-                'page_count': metadata.get('page_count'),
+                'page_count': page_count,
                 'object_count': object_count,
                 'objects_json': objects_json
             }
@@ -723,37 +722,6 @@ class EmailIngestionService:
             self.logger.warning(f"Error validating PDF content: {e}")
             return False
     
-    def _get_pdf_metadata(self, pdf_content: bytes, filename: str) -> Dict[str, Any]:
-        """Extract basic metadata from PDF content"""
-        metadata = {
-            'page_count': None,
-            'object_count': None
-        }
-        
-        try:
-            # Basic PDF metadata extraction without external dependencies
-            content_str = pdf_content.decode('latin-1', errors='ignore')
-            
-            # Simple page count extraction
-            if '/Count' in content_str:
-                import re
-                count_matches = re.findall(r'/Count\s+(\d+)', content_str)
-                if count_matches:
-                    page_counts = [int(c) for c in count_matches if int(c) < 10000]
-                    if page_counts:
-                        metadata['page_count'] = max(page_counts)
-            
-            # Simple object count
-            obj_matches = re.findall(r'\d+\s+\d+\s+obj', content_str)
-            if obj_matches:
-                metadata['object_count'] = len(obj_matches)
-            
-            self.logger.debug(f"Extracted metadata for {filename}: pages={metadata['page_count']}, objects={metadata['object_count']}")
-            
-        except Exception as e:
-            self.logger.warning(f"Could not extract PDF metadata from {filename}: {e}")
-        
-        return metadata
     
     def _extract_pdf_objects(self, pdf_content: bytes, filename: str) -> Dict[str, Any]:
         """

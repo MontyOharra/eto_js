@@ -12,12 +12,28 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-# Configure logging
+# Configure logging with environment variable support
+def get_log_level() -> int:
+    """Get logging level from environment variable"""
+    log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
+    level_mapping = {
+        'DEBUG': logging.DEBUG,
+        'INFO': logging.INFO,
+        'WARNING': logging.WARNING,
+        'ERROR': logging.ERROR,
+        'CRITICAL': logging.CRITICAL
+    }
+    return level_mapping.get(log_level, logging.INFO)
+
 logging.basicConfig(
-    level=logging.INFO,
+    level=get_log_level(),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Log the configured logging level
+log_level_name = os.getenv('LOG_LEVEL', 'INFO').upper()
+logger.info(f"Logging configured at {log_level_name} level")
 
 # Import storage configuration utilities
 from .shared.utils.storage_config import get_storage_configuration, get_development_storage_path, get_default_storage_path

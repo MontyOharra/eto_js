@@ -4,14 +4,15 @@ Handles PDF storage, extraction, and management
 """
 
 from .storage_service import PdfStorageService
-from .extraction_service import PdfExtractionService
-from .types import PdfFile, PdfObject, PdfExtractionBounds, PdfTemplate
+from .object_extraction_service import PdfObjectExtractionService
+from .types import PdfFile, PdfObject, PdfExtractionBounds, PdfTemplate, TemplateMatchResult
 
 __all__ = [
     'PdfStorageService',
-    'PdfExtractionService',
+    'PdfObjectExtractionService',
     'PdfFile',
     'PdfObject', 
     'PdfExtractionBounds',
-    'PdfTemplate'
+    'PdfTemplate',
+    'TemplateMatchResult'
 ]

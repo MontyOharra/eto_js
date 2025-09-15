@@ -531,7 +531,7 @@ class OutlookComService:
                     
                     # Check if it's a PDF
                     if filename.lower().endswith('.pdf'):
-                        logger.info(f"Extracting PDF attachment: {filename} ({file_size} bytes)")
+                        logger.debug(f"Extracting PDF attachment: {filename} ({file_size} bytes)")
                         
                         # Extract bytes immediately while COM object is fresh
                         content_bytes = self._extract_attachment_bytes(attachment)
@@ -542,7 +542,7 @@ class OutlookComService:
                                 'size': file_size,
                                 'content_bytes': content_bytes
                             })
-                            logger.info(f"Successfully extracted PDF: {filename} ({len(content_bytes)} bytes)")
+                            logger.debug(f"Successfully extracted PDF: {filename} ({len(content_bytes)} bytes)")
                         else:
                             logger.warning(f"Failed to extract bytes for PDF: {filename}")
                     else:
@@ -608,11 +608,11 @@ class OutlookComService:
             
             # Convert received time to UTC for consistent storage
             received_time_local = outlook_mail.ReceivedTime
-            logger.info(f"Raw Outlook ReceivedTime: {received_time_local}, tzinfo: {getattr(received_time_local, 'tzinfo', 'No tzinfo attribute')}")
+            logger.debug(f"Raw Outlook ReceivedTime: {received_time_local}, tzinfo: {getattr(received_time_local, 'tzinfo', 'No tzinfo attribute')}")
             
             # Handle timezone conversion - Outlook mislabels local time as UTC
             if hasattr(received_time_local, 'tzinfo') and received_time_local.tzinfo is not None:
-                logger.info("Outlook returned timezone-aware datetime - treating as local time mislabeled as UTC")
+                logger.debug("Outlook returned timezone-aware datetime - treating as local time mislabeled as UTC")
                 # Outlook mislabels local time as UTC, so we ignore the timezone info
                 # and treat the time values as local time, then convert to UTC
                 import time
@@ -642,9 +642,9 @@ class OutlookComService:
                 offset_seconds = (local_timestamp - datetime.fromtimestamp(local_timestamp, tz=dt_timezone.utc).replace(tzinfo=None).timestamp())
                 offset_hours = -offset_seconds / 3600  # Negative because we're going from local to UTC
                 
-                logger.info(f"Converted email time: {received_time_local} (mislabeled as UTC) -> {local_time_naive} (local) -> {received_time} (UTC naive) [offset: {offset_hours:+.0f} hours]")
+                logger.debug(f"Converted email time: {received_time_local} (mislabeled as UTC) -> {local_time_naive} (local) -> {received_time} (UTC naive) [offset: {offset_hours:+.0f} hours]")
             elif hasattr(received_time_local, 'replace') and received_time_local.tzinfo is None:
-                logger.info("Converting local time to UTC...")
+                logger.debug("Converting local time to UTC...")
                 # Outlook returned timezone-naive datetime - treat as local time and convert to UTC
                 import time
                 from datetime import timezone as dt_timezone
@@ -664,9 +664,9 @@ class OutlookComService:
                 offset_seconds = (local_timestamp - datetime.fromtimestamp(local_timestamp, tz=dt_timezone.utc).replace(tzinfo=None).timestamp())
                 offset_hours = -offset_seconds / 3600
                 
-                logger.info(f"Converted email time: {received_time_local} (local) -> {received_time} (UTC) [offset: {offset_hours:+.0f} hours], tzinfo: {received_time.tzinfo}")
+                logger.debug(f"Converted email time: {received_time_local} (local) -> {received_time} (UTC) [offset: {offset_hours:+.0f} hours], tzinfo: {received_time.tzinfo}")
             else:
-                logger.info("Using fallback - no timezone conversion")
+                logger.debug("Using fallback - no timezone conversion")
                 # Fallback - assume it's already in correct format
                 received_time = received_time_local
             
@@ -688,7 +688,7 @@ class OutlookComService:
             if has_pdf_attachments:
                 logger.debug(f"Extracting {attachment_count} attachments for PDFs from email: {subject}")
                 pdf_attachments_data = self.extract_pdf_attachments_from_message(outlook_mail)
-                logger.info(f"Extracted {len(pdf_attachments_data)} PDF attachments from email: {subject}")
+                logger.debug(f"Extracted {len(pdf_attachments_data)} PDF attachments from email: {subject}")
             
             # Get body preview (first 200 characters)
             body_preview = None
