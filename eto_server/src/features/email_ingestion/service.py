@@ -5,6 +5,7 @@ Main orchestrator for email processing with automatic startup and downtime recov
 import logging
 import threading
 import time
+import os
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, field
@@ -16,6 +17,7 @@ from .types import EmailIngestionConfig, IngestionStats, ServiceHealth, EmailDat
 from .integrations.outlook_com_service import OutlookComService
 from ...shared.database import get_connection_manager
 from ...shared.database.repositories import EmailIngestionConfigRepository, EmailIngestionCursorRepository, EmailRepository, PdfRepository
+from ...features.pdf_processing.object_extraction_service import PdfObjectExtractionService
 
 logger = logging.getLogger(__name__)
 
@@ -51,8 +53,9 @@ class EmailIngestionService:
             logger.warning(f"PDF storage service not provided, creating with path: {storage_path}")
             self.pdf_storage_service = PdfStorageService(storage_path)
             
-        from ...features.pdf_processing.extraction_service import PdfExtractionService
-        self.pdf_extraction_service = PdfExtractionService(self.pdf_storage_service, self.pdf_repo)
+        # PDF extraction now handled directly in COM service during enumeration
+        # PDF object extraction service for detailed analysis
+        self.pdf_object_extraction_service = PdfObjectExtractionService()
         
         # Service state
         self.is_running = False
@@ -548,38 +551,31 @@ class EmailIngestionService:
             email_record = self.email_repo.create_email_record(email_record_data)
             self.logger.info(f"Saved email record: {email_record.subject} (ID: {email_record.id})")
             
-            # Process PDF attachments if present
+            # Process PDF attachments if present (using pre-extracted data)
             pdf_records = []
             if email_data.has_pdf_attachments:
-                self.logger.info("  Contains PDF attachments - processing for storage and analysis")
+                self.logger.info(f"  Contains {len(email_data.pdf_attachments_data)} PDF attachments - processing for storage and analysis")
                 try:
-                    # Get the raw Outlook mail object for PDF extraction
-                    self.logger.debug(f"Attempting to get Outlook mail object for EntryID: {email_data.message_id}")
-                    outlook_mail_object = self.outlook_service.get_mail_object_by_id(email_data.message_id)
-                    if outlook_mail_object:
-                        self.logger.debug(f"Successfully retrieved Outlook mail object for email {email_record.id}")
-                        # Extract PDFs using PDF extraction service
-                        pdf_records = self.pdf_extraction_service.extract_pdfs_from_email(
-                            email_record.id, 
-                            outlook_mail_object
+                    # Process each pre-extracted PDF attachment
+                    for pdf_data in email_data.pdf_attachments_data:
+                        pdf_record = self._process_extracted_pdf(pdf_data, email_record.id)
+                        if pdf_record:
+                            pdf_records.append(pdf_record)
+                    
+                    # Update statistics
+                    for pdf_record in pdf_records:
+                        if not pdf_record.get('duplicate', False):
+                            self.stats.pdfs_found += 1
+                    
+                    self.logger.info(f"  Processed {len(pdf_records)} PDF records (including {sum(1 for p in pdf_records if p.get('duplicate', False))} duplicates)")
+                    
+                    # Update configuration statistics
+                    if self.current_config and self.current_config.id:
+                        self.config_service.increment_processing_stats(
+                            self.current_config.id, 
+                            emails=1, 
+                            pdfs=len([p for p in pdf_records if not p.get('duplicate', False)])
                         )
-                        
-                        # Update statistics
-                        for pdf_record in pdf_records:
-                            if not pdf_record.get('duplicate', False):
-                                self.stats.pdfs_found += 1
-                        
-                        self.logger.info(f"  Extracted {len(pdf_records)} PDF records (including {sum(1 for p in pdf_records if p.get('duplicate', False))} duplicates)")
-                        
-                        # Update configuration statistics
-                        if self.current_config and self.current_config.id:
-                            self.config_service.increment_processing_stats(
-                                self.current_config.id, 
-                                emails=1, 
-                                pdfs=len([p for p in pdf_records if not p.get('duplicate', False)])
-                            )
-                    else:
-                        self.logger.warning(f"Could not retrieve Outlook mail object for PDF extraction: {email_data.message_id}")
                         
                 except Exception as e:
                     self.logger.error(f"Error processing PDF attachments for email {email_record.id}: {e}")
@@ -598,3 +594,188 @@ class EmailIngestionService:
         except Exception as e:
             self.logger.exception(f"Error handling matching email: {e}")
             return False
+    
+    def _process_extracted_pdf(self, pdf_data: Dict[str, Any], email_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Process pre-extracted PDF bytes from COM service
+        
+        Args:
+            pdf_data: Dictionary with 'filename', 'size', 'content_bytes'
+            email_id: Database ID of the email
+            
+        Returns:
+            Dict with PDF processing results or None if failed
+        """
+        try:
+            filename = pdf_data['filename']
+            content_bytes = pdf_data['content_bytes']
+            file_size = pdf_data['size']
+            
+            self.logger.info(f"Processing extracted PDF: {filename} ({file_size} bytes)")
+            
+            # Validate PDF content
+            if not self._validate_pdf_content(content_bytes):
+                self.logger.warning(f"Invalid PDF content for: {filename}")
+                return None
+            
+            # Check for duplicate by hash
+            file_hash = self.pdf_storage_service.calculate_file_hash(content_bytes)
+            existing_pdf = self.pdf_repo.get_duplicate_by_hash(file_hash)
+            
+            if existing_pdf:
+                self.logger.info(f"Duplicate PDF found (hash: {file_hash[:16]}...), skipping storage")
+                return {
+                    'id': existing_pdf.id,
+                    'filename': existing_pdf.filename,
+                    'file_size': existing_pdf.file_size,
+                    'sha256_hash': file_hash,
+                    'duplicate': True
+                }
+            
+            # Store PDF file using pre-extracted bytes
+            file_path = self.pdf_storage_service.store_pdf(
+                content_bytes, 
+                filename, 
+                email_id
+            )
+            
+            # Get PDF metadata
+            metadata = self._get_pdf_metadata(content_bytes, filename)
+            
+            # Extract PDF objects for template matching
+            objects_json = None
+            object_count = metadata.get('object_count')
+            
+            try:
+                self.logger.debug(f"Extracting PDF objects for {filename}")
+                extraction_result = self._extract_pdf_objects(content_bytes, filename)
+                
+                if extraction_result['success']:
+                    import json
+                    objects_json = json.dumps(extraction_result['objects'], default=str)
+                    object_count = extraction_result['object_count']
+                    self.logger.info(f"Extracted {object_count} PDF objects for {filename}")
+                else:
+                    self.logger.warning(f"PDF object extraction failed for {filename}: {extraction_result.get('error', 'Unknown error')}")
+                    
+            except Exception as extract_error:
+                self.logger.error(f"Error during PDF object extraction for {filename}: {extract_error}")
+            
+            # Create PDF database record
+            pdf_data_record = {
+                'email_id': email_id,
+                'filename': os.path.basename(file_path),
+                'original_filename': filename,
+                'file_path': file_path,
+                'file_size': len(content_bytes),
+                'sha256_hash': file_hash,
+                'mime_type': 'application/pdf',
+                'page_count': metadata.get('page_count'),
+                'object_count': object_count,
+                'objects_json': objects_json
+            }
+            
+            pdf_id = self.pdf_repo.create_pdf_record(pdf_data_record)
+            
+            self.logger.info(f"Successfully processed PDF {filename} -> record {pdf_id}")
+            
+            return {
+                'id': pdf_id,
+                'filename': pdf_data_record['filename'],
+                'file_size': pdf_data_record['file_size'],
+                'sha256_hash': file_hash,
+                'duplicate': False
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error processing extracted PDF {pdf_data.get('filename', 'unknown')}: {e}")
+            return None
+    
+    def _validate_pdf_content(self, content: bytes) -> bool:
+        """Validate that content is a valid PDF file"""
+        try:
+            # Check minimum file size
+            if len(content) < 10:
+                self.logger.debug("Content too small to be a valid PDF")
+                return False
+            
+            # Check PDF magic bytes at start of file
+            if not content.startswith(b'%PDF-'):
+                self.logger.debug("Content does not start with PDF magic bytes")
+                return False
+            
+            # Check for PDF version (should be something like %PDF-1.4)
+            header = content[:10].decode('ascii', errors='ignore')
+            if not header.startswith('%PDF-1.'):
+                self.logger.debug(f"Invalid PDF version header: {header}")
+                return False
+            
+            # Check for EOF marker (basic validation)
+            content_str = content.decode('latin-1', errors='ignore')
+            if '%%EOF' not in content_str:
+                self.logger.debug("PDF missing EOF marker")
+                return False
+            
+            self.logger.debug("PDF content validation passed")
+            return True
+            
+        except Exception as e:
+            self.logger.warning(f"Error validating PDF content: {e}")
+            return False
+    
+    def _get_pdf_metadata(self, pdf_content: bytes, filename: str) -> Dict[str, Any]:
+        """Extract basic metadata from PDF content"""
+        metadata = {
+            'page_count': None,
+            'object_count': None
+        }
+        
+        try:
+            # Basic PDF metadata extraction without external dependencies
+            content_str = pdf_content.decode('latin-1', errors='ignore')
+            
+            # Simple page count extraction
+            if '/Count' in content_str:
+                import re
+                count_matches = re.findall(r'/Count\s+(\d+)', content_str)
+                if count_matches:
+                    page_counts = [int(c) for c in count_matches if int(c) < 10000]
+                    if page_counts:
+                        metadata['page_count'] = max(page_counts)
+            
+            # Simple object count
+            obj_matches = re.findall(r'\d+\s+\d+\s+obj', content_str)
+            if obj_matches:
+                metadata['object_count'] = len(obj_matches)
+            
+            self.logger.debug(f"Extracted metadata for {filename}: pages={metadata['page_count']}, objects={metadata['object_count']}")
+            
+        except Exception as e:
+            self.logger.warning(f"Could not extract PDF metadata from {filename}: {e}")
+        
+        return metadata
+    
+    def _extract_pdf_objects(self, pdf_content: bytes, filename: str) -> Dict[str, Any]:
+        """
+        Extract PDF objects using the proper PDF object extraction service
+        
+        Args:
+            pdf_content: Raw PDF file bytes
+            filename: Original filename for logging
+            
+        Returns:
+            Dict: Extraction result with objects, success status, etc.
+        """
+        try:
+            result = self.pdf_object_extraction_service.extract_objects_from_bytes(pdf_content)
+            self.logger.debug(f"PDF object extraction result for {filename}: success={result.get('success')}, objects={result.get('object_count', 0)}")
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"Error extracting PDF objects from {filename}: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'objects': [],
+                'object_count': 0
+            }

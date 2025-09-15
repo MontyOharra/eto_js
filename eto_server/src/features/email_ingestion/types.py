@@ -130,6 +130,7 @@ class EmailData:
     attachment_filenames: List[str]
     has_pdf_attachments: bool
     body_preview: Optional[str]
+    pdf_attachments_data: List[Dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass

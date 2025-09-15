@@ -5,6 +5,8 @@ Manages Outlook COM connections and basic folder operations
 import logging
 import threading
 import time
+import tempfile
+import os
 from typing import Optional, Dict, List, Any, Tuple
 from datetime import datetime, timezone, timedelta
 
@@ -388,76 +390,6 @@ class OutlookComService:
             logger.error(f"Error getting recent emails: {e}")
             raise Exception(f"Failed to get emails: {e}")
     
-    def get_mail_object_by_id(self, message_id: str) -> Optional[Any]:
-        """Get raw Outlook mail object by message ID for attachment processing"""
-        try:
-            if not self.is_connected or not self.connection_config:
-                logger.warning("Not connected to Outlook when trying to get mail object")
-                return None
-            
-            logger.debug(f"Searching for mail object with message ID: {message_id}")
-            
-            # Initialize COM for this thread
-            if COM_AVAILABLE:
-                assert pythoncom is not None and win32com is not None
-                pythoncom.CoInitialize()
-            
-            try:
-                # Create fresh COM objects for this thread
-                assert win32com is not None
-                outlook = win32com.client.Dispatch("Outlook.Application")
-                namespace = outlook.GetNamespace("MAPI")
-                
-                # Find the folder again (thread-safe approach)
-                current_folder = None
-                
-                # Try to find the folder using the same logic as connect()
-                for account in namespace.Accounts:
-                    if not self.connection_config.email_address or account.SmtpAddress.lower() == self.connection_config.email_address.lower():
-                        try:
-                            delivery_store = account.DeliveryStore
-                            if delivery_store:
-                                root_folder = delivery_store.GetRootFolder()
-                                current_folder = self._search_folder_recursive(root_folder, self.connection_config.folder_name)
-                                if current_folder:
-                                    break
-                        except Exception as e:
-                            logger.debug(f"Error searching account {account.SmtpAddress}: {e}")
-                            continue
-                
-                if not current_folder:
-                    logger.error(f"Folder '{self.connection_config.folder_name}' not found for mail object retrieval")
-                    return None
-                
-                # Search for the email by message ID
-                items = current_folder.Items
-                
-                # The message_id is actually the EntryID, so search by EntryID
-                # Note: EntryID is unique per email and is what we store as message_id
-                logger.debug(f"Searching for mail object with EntryID: {message_id}")
-                
-                # Search through items manually to find matching EntryID
-                for mail in items:
-                    try:
-                        if hasattr(mail, 'EntryID') and mail.EntryID == message_id:
-                            logger.debug(f"Found mail object via EntryID search: {message_id}")
-                            return mail
-                    except Exception as e:
-                        logger.debug(f"Error checking mail item: {e}")
-                        continue
-                
-                logger.warning(f"Mail object not found for message ID: {message_id}")
-                return None
-                
-            finally:
-                # Clean up COM for this thread
-                if COM_AVAILABLE:
-                    assert pythoncom is not None
-                    pythoncom.CoUninitialize()
-            
-        except Exception as e:
-            logger.error(f"Error getting mail object by ID {message_id}: {e}")
-            return None
     
     def _search_folder_recursive(self, parent_folder, target_name, max_depth=3, current_depth=0):
         """Helper method for thread-safe folder searching"""
@@ -572,6 +504,99 @@ class OutlookComService:
             logger.error(f"Error finding folder {folder_name}: {e}")
             return None
     
+    def extract_pdf_attachments_from_message(self, outlook_mail: Any) -> List[Dict[str, Any]]:
+        """
+        Extract PDF attachment data immediately from fresh message object
+        
+        Args:
+            outlook_mail: Fresh Outlook COM mail object
+            
+        Returns:
+            List[Dict]: List of PDF attachment data with content bytes
+        """
+        pdf_attachments = []
+        
+        try:
+            if not hasattr(outlook_mail, 'Attachments'):
+                logger.debug("Mail object has no Attachments attribute")
+                return pdf_attachments
+                
+            attachment_count = outlook_mail.Attachments.Count
+            logger.debug(f"Processing {attachment_count} attachments for PDF extraction")
+            
+            for attachment in outlook_mail.Attachments:
+                try:
+                    filename = getattr(attachment, 'FileName', 'unknown')
+                    file_size = getattr(attachment, 'Size', 0)
+                    
+                    # Check if it's a PDF
+                    if filename.lower().endswith('.pdf'):
+                        logger.info(f"Extracting PDF attachment: {filename} ({file_size} bytes)")
+                        
+                        # Extract bytes immediately while COM object is fresh
+                        content_bytes = self._extract_attachment_bytes(attachment)
+                        
+                        if content_bytes:
+                            pdf_attachments.append({
+                                'filename': filename,
+                                'size': file_size,
+                                'content_bytes': content_bytes
+                            })
+                            logger.info(f"Successfully extracted PDF: {filename} ({len(content_bytes)} bytes)")
+                        else:
+                            logger.warning(f"Failed to extract bytes for PDF: {filename}")
+                    else:
+                        logger.debug(f"Skipping non-PDF attachment: {filename}")
+                        
+                except Exception as att_error:
+                    logger.error(f"Error processing attachment: {att_error}")
+                    continue
+                    
+        except Exception as e:
+            logger.error(f"Error extracting PDF attachments: {e}")
+            
+        logger.debug(f"Extracted {len(pdf_attachments)} PDF attachments")
+        return pdf_attachments
+    
+    def _extract_attachment_bytes(self, attachment) -> Optional[bytes]:
+        """
+        Extract bytes from COM attachment object immediately
+        Uses the proven pattern from working pdf_storage.py
+        
+        Args:
+            attachment: Outlook COM attachment object
+            
+        Returns:
+            bytes: Attachment content or None if failed
+        """
+        temp_path = None
+        try:
+            # Create temporary file to save attachment (same pattern as working code)
+            with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+                temp_path = temp_file.name
+            
+            # Save attachment to temporary file
+            attachment.SaveAsFile(temp_path)
+            
+            # Read the file data
+            with open(temp_path, 'rb') as f:
+                content_bytes = f.read()
+            
+            logger.debug(f"Extracted {len(content_bytes)} bytes from attachment")
+            return content_bytes
+            
+        except Exception as e:
+            logger.error(f"Error extracting attachment bytes: {e}")
+            return None
+            
+        finally:
+            # Clean up temporary file
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    os.unlink(temp_path)
+                except Exception as cleanup_error:
+                    logger.debug(f"Could not delete temp file {temp_path}: {cleanup_error}")
+    
     def _convert_outlook_email(self, outlook_mail: Any) -> EmailData:
         """Convert Outlook mail item to EmailData"""
         try:
@@ -658,6 +683,13 @@ class OutlookComService:
                     if filename.lower().endswith('.pdf'):
                         has_pdf_attachments = True
             
+            # Extract PDF attachments immediately while COM object is fresh
+            pdf_attachments_data = []
+            if has_pdf_attachments:
+                logger.debug(f"Extracting {attachment_count} attachments for PDFs from email: {subject}")
+                pdf_attachments_data = self.extract_pdf_attachments_from_message(outlook_mail)
+                logger.info(f"Extracted {len(pdf_attachments_data)} PDF attachments from email: {subject}")
+            
             # Get body preview (first 200 characters)
             body_preview = None
             if outlook_mail.Body:
@@ -673,7 +705,8 @@ class OutlookComService:
                 attachment_count=attachment_count,
                 attachment_filenames=attachment_filenames,
                 has_pdf_attachments=has_pdf_attachments,
-                body_preview=body_preview
+                body_preview=body_preview,
+                pdf_attachments_data=pdf_attachments_data
             )
             
         except Exception as e:
