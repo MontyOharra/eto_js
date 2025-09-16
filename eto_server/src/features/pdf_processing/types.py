@@ -3,9 +3,24 @@ PDF Processing Domain Types
 Domain objects for PDF file processing and analysis
 """
 from dataclasses import dataclass
-from typing import Optional, Dict, Any, List
+from typing import Optional, List
 from datetime import datetime
-from ...shared.types.common import ProcessingStatus, OptionalString
+
+
+@dataclass
+class PdfObject:
+    """Individual PDF object for template matching"""
+    type: str  # 'word', 'text_line', 'rect', 'line', 'image', etc.
+    page: int
+    text: str  # content for text objects, empty for shapes/images
+    x: float
+    y: float
+    width: float
+    height: float
+    font_name: Optional[str] = None
+    font_size: Optional[float] = None
+    char_count: Optional[int] = None
+    bbox: Optional[List[float]] = None
 
 
 @dataclass
@@ -18,13 +33,25 @@ class PdfStoreRequest:
 
 
 @dataclass
+class PdfObjectExtractionResult:
+    """Service-level result for PDF object extraction (no pdf_id)"""
+    success: bool
+    objects: List[PdfObject]
+    signature_hash: Optional[str]
+    page_count: int
+    object_count: int
+    error_message: Optional[str] = None
+
+
+@dataclass
 class PdfExtractionResult:
-    """Domain object for extraction results"""
+    """Domain object for extraction results (with pdf_id)"""
     success: bool
     pdf_id: int
     object_count: int
     page_count: int
-    objects_json: Optional[str] = None
+    objects: List[PdfObject]
+    signature_hash: Optional[str] = None
     error_message: Optional[str] = None
     extraction_time_ms: int = 0
 
@@ -47,17 +74,6 @@ class PdfFile:
     objects_json: Optional[str] = None
 
 
-@dataclass
-class PdfObject:
-    """Individual PDF object for template matching"""
-    object_type: str  # 'text', 'image', 'line', etc.
-    content: str
-    x: float
-    y: float  
-    width: float
-    height: float
-    font_size: Optional[float] = None
-    font_name: Optional[str] = None
 
 
 @dataclass

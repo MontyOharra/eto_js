@@ -8,7 +8,7 @@ from datetime import datetime, timezone, timedelta
 from sqlalchemy.exc import SQLAlchemyError
 from .base_repository import BaseRepository, RepositoryError
 from ..models import EmailModel
-from src.features.email_ingestion.types import Email
+from src.features.email_ingestion.types import Email, EmailCreate
 
 logger = logging.getLogger(__name__)
 
@@ -167,17 +167,23 @@ class EmailRepository(BaseRepository[EmailModel]):
             logger.error(f"Error getting recent emails: {e}")
             raise RepositoryError(f"Failed to get recent emails: {e}") from e
     
-    def create_email_record(self, email_data: Dict[str, Any]) -> Email:
+    def create_email_record(self, email_data: EmailCreate) -> Email:
         """Create new email record"""
         try:
             with self.connection_manager.session_scope() as session:
                 # Create new email model
                 model = self.model_class()
                 
-                # Set attributes using setattr for consistency
-                for key, value in email_data.items():
-                    if hasattr(model, key):
-                        setattr(model, key, value)
+                # Set attributes from domain object
+                setattr(model, 'message_id', email_data.message_id)
+                setattr(model, 'subject', email_data.subject)
+                setattr(model, 'sender_email', email_data.sender_email)
+                setattr(model, 'sender_name', email_data.sender_name)
+                setattr(model, 'received_date', email_data.received_date)
+                setattr(model, 'folder_name', email_data.folder_name)
+                setattr(model, 'has_pdf_attachments', email_data.has_pdf_attachments)
+                setattr(model, 'attachment_count', email_data.attachment_count)
+                setattr(model, 'created_at', datetime.now(timezone.utc))
                 
                 # Add to session
                 session.add(model)

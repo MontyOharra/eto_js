@@ -6,7 +6,7 @@ import logging
 from typing import Optional, Dict, Any, List, Tuple
 from datetime import datetime, timedelta, timezone
 
-from .types import EmailConnectionConfig, EmailIngestionCursor, EmailIngestionCursorCreate, CursorStatistics, EmailData
+from .types import EmailIngestionConnectionConfig, EmailIngestionCursor, EmailIngestionCursorCreate, EmailIngestionCursorStatistics, EmailData
 from ...shared.database.repositories import EmailIngestionCursorRepository
 
 logger = logging.getLogger(__name__)
@@ -50,7 +50,7 @@ class EmailIngestionCursorService:
             logger.error(f"Error getting cursor state for {email_address}/{folder}: {e}")
             raise Exception(f"Failed to get cursor state: {e}")
     
-    def initialize_cursor(self, connection_config: EmailConnectionConfig) -> EmailIngestionCursor:
+    def initialize_cursor(self, connection_config: EmailIngestionConnectionConfig) -> EmailIngestionCursor:
         """Initialize cursor for new email/folder combination"""
         try:
             email_address = connection_config.email_address
@@ -194,14 +194,14 @@ class EmailIngestionCursorService:
             logger.error(f"Error calculating backlog scope for {email_address}/{folder}: {e}")
             raise Exception(f"Failed to calculate backlog scope: {e}")
 
-    def get_cursor_statistics(self, email_address: str, folder: str) -> Optional[CursorStatistics]:
+    def get_cursor_statistics(self, email_address: str, folder: str) -> Optional[EmailIngestionCursorStatistics]:
         """Get cursor statistics for email/folder combination"""
         try:
             cursor = self.cursor_repository.get_by_email_and_folder(email_address, folder)
             if not cursor:
                 return None
 
-            return CursorStatistics(
+            return EmailIngestionCursorStatistics(
                 email_address=cursor.email_address,
                 folder_name=cursor.folder_name,
                 total_emails_processed=cursor.total_emails_processed or 0,

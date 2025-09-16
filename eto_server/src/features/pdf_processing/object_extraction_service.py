@@ -11,6 +11,7 @@ import json
 import logging
 from pathlib import Path
 from typing import List, Dict, Any, Optional
+from .types import PdfObject, PdfObjectExtractionResult
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +25,7 @@ class PdfObjectExtractionService:
     def __init__(self):
         self.rounding_precision = 3
     
-    def extract_objects_from_file_path(self, file_path: str) -> Dict[str, Any]:
+    def extract_objects_from_file_path(self, file_path: str) -> PdfObjectExtractionResult:
         """Extract objects from PDF file path"""
         try:
             with open(file_path, 'rb') as f:
@@ -32,57 +33,57 @@ class PdfObjectExtractionService:
             return self.extract_objects_from_bytes(pdf_bytes)
         except Exception as e:
             logger.error(f"Error reading PDF file {file_path}: {e}")
-            return {"success": False, "error": str(e), "objects": []}
+            return PdfObjectExtractionResult(
+                success=False,
+                objects=[],
+                signature_hash=None,
+                page_count=0,
+                object_count=0,
+                error_message=str(e)
+            )
     
-    def extract_objects_from_bytes(self, pdf_bytes: bytes) -> Dict[str, Any]:
+    def extract_objects_from_bytes(self, pdf_bytes: bytes) -> PdfObjectExtractionResult:
         """
         Extract all PDF objects from bytes and return with signature
-        
+
         Returns:
-        {
-            "success": bool,
-            "objects": List[Dict],
-            "signature_hash": str,
-            "page_count": int,
-            "object_count": int,
-            "error": str (if failed)
-        }
+            PdfObjectExtractionResult with success status, objects, and metadata
         """
         try:
             objects = []
-            
+
             with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
                 page_count = len(pdf.pages)
-                
+
                 for page_num, page in enumerate(pdf.pages):
                     page_objects = self._extract_page_objects(page, page_num)
                     objects.extend(page_objects)
-            
+
             # Generate signature hash from objects
             signature_hash = self._generate_signature_hash(objects)
-            
+
             logger.info(f"Extracted {len(objects)} objects from {page_count} pages. Signature: {signature_hash[:8]}...")
-            
-            return {
-                "success": True,
-                "objects": objects,
-                "signature_hash": signature_hash,
-                "page_count": page_count,
-                "object_count": len(objects)
-            }
-            
+
+            return PdfObjectExtractionResult(
+                success=True,
+                objects=objects,
+                signature_hash=signature_hash,
+                page_count=page_count,
+                object_count=len(objects)
+            )
+
         except Exception as e:
             logger.error(f"Error extracting PDF objects: {e}")
-            return {
-                "success": False,
-                "error": str(e),
-                "objects": [],
-                "signature_hash": None,
-                "page_count": 0,
-                "object_count": 0
-            }
+            return PdfObjectExtractionResult(
+                success=False,
+                objects=[],
+                signature_hash=None,
+                page_count=0,
+                object_count=0,
+                error_message=str(e)
+            )
     
-    def _extract_page_objects(self, page, page_num: int) -> List[Dict[str, Any]]:
+    def _extract_page_objects(self, page, page_num: int) -> List[PdfObject]:
         """Extract all objects from a single page"""
         objects = []
         page_height = page.height
@@ -117,134 +118,132 @@ class PdfObjectExtractionService:
         
         return objects
     
-    def _extract_word_object(self, word: Dict, page_num: int, page_height: float) -> Optional[Dict[str, Any]]:
+    def _extract_word_object(self, word: Dict, page_num: int, page_height: float) -> Optional[PdfObject]:
         """Extract word object with enhanced font details"""
         try:
-            return {
-                "type": "word",
-                "page": page_num + 1,
-                "text": word.get('text', ''),
-                "x": _round(word.get('x0', 0), self.rounding_precision),
-                "y": _round(page_height - word.get('y1', 0), self.rounding_precision),  # Convert to top-down
-                "width": _round(word.get('x1', 0) - word.get('x0', 0), self.rounding_precision),
-                "height": _round(word.get('y1', 0) - word.get('y0', 0), self.rounding_precision),
-                "font_name": word.get('fontname', ''),
-                "font_size": _round(word.get('size', 0), self.rounding_precision),
-                "char_count": len(word.get('text', '')),
-                "bbox": [
+            return PdfObject(
+                type="word",
+                page=page_num + 1,
+                text=word.get('text', ''),
+                x=_round(word.get('x0', 0), self.rounding_precision),
+                y=_round(page_height - word.get('y1', 0), self.rounding_precision),  # Convert to top-down
+                width=_round(word.get('x1', 0) - word.get('x0', 0), self.rounding_precision),
+                height=_round(word.get('y1', 0) - word.get('y0', 0), self.rounding_precision),
+                font_name=word.get('fontname', ''),
+                font_size=_round(word.get('size', 0), self.rounding_precision),
+                char_count=len(word.get('text', '')),
+                bbox=[
                     _round(word.get('x0', 0), self.rounding_precision),
                     _round(word.get('y0', 0), self.rounding_precision),
                     _round(word.get('x1', 0), self.rounding_precision),
                     _round(word.get('y1', 0), self.rounding_precision)
                 ]
-            }
+            )
         except Exception as e:
             logger.debug(f"Error extracting word object: {e}")
             return None
     
-    def _extract_text_line_object(self, line: Dict, page_num: int, page_height: float) -> Optional[Dict[str, Any]]:
+    def _extract_text_line_object(self, line: Dict, page_num: int, page_height: float) -> Optional[PdfObject]:
         """Extract text line object with line characteristics"""
         try:
-            return {
-                "type": "text_line",
-                "page": page_num + 1,
-                "text": line.get('text', ''),
-                "x": _round(line.get('x0', 0), self.rounding_precision),
-                "y": _round(page_height - line.get('y1', 0), self.rounding_precision),  # Convert to top-down
-                "width": _round(line.get('x1', 0) - line.get('x0', 0), self.rounding_precision),
-                "height": _round(line.get('y1', 0) - line.get('y0', 0), self.rounding_precision),
-                "word_count": len(line.get('text', '').split()),
-                "char_count": len(line.get('text', '')),
-                "bbox": [
+            return PdfObject(
+                type="text_line",
+                page=page_num + 1,
+                text=line.get('text', ''),
+                x=_round(line.get('x0', 0), self.rounding_precision),
+                y=_round(page_height - line.get('y1', 0), self.rounding_precision),  # Convert to top-down
+                width=_round(line.get('x1', 0) - line.get('x0', 0), self.rounding_precision),
+                height=_round(line.get('y1', 0) - line.get('y0', 0), self.rounding_precision),
+                char_count=len(line.get('text', '')),
+                bbox=[
                     _round(line.get('x0', 0), self.rounding_precision),
                     _round(line.get('y0', 0), self.rounding_precision),
                     _round(line.get('x1', 0), self.rounding_precision),
                     _round(line.get('y1', 0), self.rounding_precision)
                 ]
-            }
+            )
         except Exception as e:
             logger.debug(f"Error extracting text line object: {e}")
             return None
     
-    def _extract_shape_object(self, shape: Dict, page_num: int, page_height: float) -> Optional[Dict[str, Any]]:
+    def _extract_shape_object(self, shape: Dict, page_num: int, page_height: float) -> Optional[PdfObject]:
         """Extract shape object (rectangle, line, curve)"""
         try:
             object_type = shape.get('object_type', 'shape')
             if object_type in ['rect', 'line', 'curve']:
-                return {
-                    "type": object_type,
-                    "page": page_num + 1,
-                    "x": _round(shape.get('x0', 0), self.rounding_precision),
-                    "y": _round(page_height - shape.get('y1', 0), self.rounding_precision),  # Convert to top-down
-                    "width": _round(shape.get('x1', 0) - shape.get('x0', 0), self.rounding_precision),
-                    "height": _round(shape.get('y1', 0) - shape.get('y0', 0), self.rounding_precision),
-                    "stroke_width": _round(shape.get('linewidth', 0), self.rounding_precision),
-                    "fill": shape.get('fill', False),
-                    "bbox": [
+                return PdfObject(
+                    type=object_type,
+                    page=page_num + 1,
+                    text="",  # Shapes don't have text content
+                    x=_round(shape.get('x0', 0), self.rounding_precision),
+                    y=_round(page_height - shape.get('y1', 0), self.rounding_precision),  # Convert to top-down
+                    width=_round(shape.get('x1', 0) - shape.get('x0', 0), self.rounding_precision),
+                    height=_round(shape.get('y1', 0) - shape.get('y0', 0), self.rounding_precision),
+                    bbox=[
                         _round(shape.get('x0', 0), self.rounding_precision),
                         _round(shape.get('y0', 0), self.rounding_precision),
                         _round(shape.get('x1', 0), self.rounding_precision),
                         _round(shape.get('y1', 0), self.rounding_precision)
                     ]
-                }
+                )
         except Exception as e:
             logger.debug(f"Error extracting shape object: {e}")
             return None
     
-    def _extract_image_object(self, image: Dict, page_num: int, page_height: float) -> Optional[Dict[str, Any]]:
+    def _extract_image_object(self, image: Dict, page_num: int, page_height: float) -> Optional[PdfObject]:
         """Extract image object"""
         try:
-            return {
-                "type": "image",
-                "page": page_num + 1,
-                "x": _round(image.get('x0', 0), self.rounding_precision),
-                "y": _round(page_height - image.get('y1', 0), self.rounding_precision),  # Convert to top-down
-                "width": _round(image.get('x1', 0) - image.get('x0', 0), self.rounding_precision),
-                "height": _round(image.get('y1', 0) - image.get('y0', 0), self.rounding_precision),
-                "name": image.get('name', ''),
-                "bbox": [
+            return PdfObject(
+                type="image",
+                page=page_num + 1,
+                text="",  # Images don't have text content
+                x=_round(image.get('x0', 0), self.rounding_precision),
+                y=_round(page_height - image.get('y1', 0), self.rounding_precision),  # Convert to top-down
+                width=_round(image.get('x1', 0) - image.get('x0', 0), self.rounding_precision),
+                height=_round(image.get('y1', 0) - image.get('y0', 0), self.rounding_precision),
+                bbox=[
                     _round(image.get('x0', 0), self.rounding_precision),
                     _round(image.get('y0', 0), self.rounding_precision),
                     _round(image.get('x1', 0), self.rounding_precision),
                     _round(image.get('y1', 0), self.rounding_precision)
                 ]
-            }
+            )
         except Exception as e:
             logger.debug(f"Error extracting image object: {e}")
             return None
     
-    def _generate_signature_hash(self, objects: List[Dict[str, Any]]) -> str:
+    def _generate_signature_hash(self, objects: List[PdfObject]) -> str:
         """Generate signature hash from objects for template matching"""
         try:
             # Create a simplified representation for hashing
             signature_data = []
-            
+
             for obj in objects:
-                if obj.get('type') in ['word', 'text_line']:
+                if obj.type in ['word', 'text_line']:
                     # For text objects, include position and some text characteristics
                     signature_data.append({
-                        'type': obj.get('type'),
-                        'x': obj.get('x'),
-                        'y': obj.get('y'),
-                        'width': obj.get('width'),
-                        'height': obj.get('height'),
-                        'char_count': obj.get('char_count', 0),
-                        'font_size': obj.get('font_size')
+                        'type': obj.type,
+                        'x': obj.x,
+                        'y': obj.y,
+                        'width': obj.width,
+                        'height': obj.height,
+                        'char_count': obj.char_count or 0,
+                        'font_size': obj.font_size
                     })
-                elif obj.get('type') in ['rect', 'line', 'curve', 'image']:
+                elif obj.type in ['rect', 'line', 'curve', 'image']:
                     # For shapes and images, include position and dimensions
                     signature_data.append({
-                        'type': obj.get('type'),
-                        'x': obj.get('x'),
-                        'y': obj.get('y'),
-                        'width': obj.get('width'),
-                        'height': obj.get('height')
+                        'type': obj.type,
+                        'x': obj.x,
+                        'y': obj.y,
+                        'width': obj.width,
+                        'height': obj.height
                     })
-            
+
             # Create hash from signature data
             signature_string = json.dumps(signature_data, sort_keys=True)
             return hashlib.sha256(signature_string.encode()).hexdigest()
-            
+
         except Exception as e:
             logger.error(f"Error generating signature hash: {e}")
             return hashlib.sha256(b"error").hexdigest()

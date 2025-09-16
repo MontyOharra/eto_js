@@ -32,3 +32,15 @@ def get_storage_configuration() -> str:
 
     logger.info(f"Using project-relative storage path: {default_path}")
     return default_path
+
+
+def get_fallback_storage() -> str:
+    """
+    Get fallback storage path for when primary storage fails
+
+    Returns:
+        str: Fallback storage path
+    """
+    fallback_path = "C:/Users/Owner/Software_projects/eto_js/eto_server/storage/fallback_pdf/"
+    logger.info(f"Using fallback storage path: {fallback_path}")
+    return fallback_path

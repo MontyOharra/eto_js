@@ -8,12 +8,11 @@ import os
 import re
 import tempfile
 from pathlib import Path
-from datetime import datetime, timezone
-from typing import Optional, Dict, Any, TYPE_CHECKING
+from datetime import datetime
+from typing import Dict, Any, Optional
 
-if TYPE_CHECKING:
-    from ...shared.database.repositories import PdfRepository
-    from .types import PdfStoreRequest, PdfFile
+from ...shared.database.repositories.pdf_repository import PdfRepository
+from .types import PdfStoreRequest, PdfFile
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +20,7 @@ logger = logging.getLogger(__name__)
 class PdfStorageService:
     """Service for managing complete PDF storage workflow with database integration"""
     
-    def __init__(self, storage_root: str, pdf_repository: "PdfRepository"):
+    def __init__(self, storage_root: str, pdf_repository: PdfRepository):
         """
         Initialize PDF storage service with auto-creation and fallback
         
@@ -39,7 +38,7 @@ class PdfStorageService:
         
         logger.info(f"Initialized PDF storage service with root: {self.storage_root}")
     
-    def store_pdf_complete(self, content_bytes: bytes, store_request: "PdfStoreRequest") -> "PdfFile":
+    def store_pdf(self, content_bytes: bytes, store_request: PdfStoreRequest) -> PdfFile:
         """
         Complete PDF storage workflow including file storage and database record creation
         
@@ -61,7 +60,7 @@ class PdfStorageService:
                 return existing_pdf
             
             # Store PDF file to disk
-            file_path = self.store_pdf(
+            file_path = self._write_pdf_file(
                 pdf_content=content_bytes,
                 original_filename=store_request.original_filename,
                 email_id=store_request.email_id
@@ -152,7 +151,7 @@ class PdfStorageService:
         logger.info(f"Using temp directory fallback: {temp_storage}")
         return temp_storage
     
-    def store_pdf(self, pdf_content: bytes, original_filename: str, email_id: int) -> str:
+    def _write_pdf_file(self, pdf_content: bytes, original_filename: str, email_id: Optional[int]) -> str:
         """
         Store PDF file to disk with organized directory structure
         
@@ -169,7 +168,7 @@ class PdfStorageService:
             safe_filename = self.sanitize_filename(original_filename)
             
             # Generate organized file path
-            file_path = self.generate_file_path(email_id, safe_filename)
+            file_path = self.generate_file_path(safe_filename, email_id)
             
             # Ensure directory exists
             directory_path = str(Path(file_path).parent)
@@ -213,30 +212,39 @@ class PdfStorageService:
             logger.error(f"Error retrieving PDF content from {file_path}: {e}")
             raise
     
-    def generate_file_path(self, email_id: int, filename: str) -> str:
+    def generate_file_path(self, filename: str, email_id: Optional[int] = None) -> str:
         """
         Generate organized file path for PDF storage
-        Structure: /storage/pdfs/YYYY/MM/email_{email_id}_{filename}.pdf
-        
+        Structure:
+        - Email PDFs: /storage/pdfs/YYYY/MM/email_{email_id}_{filename}.pdf
+        - Manual PDFs: /storage/pdfs/YYYY/MM/manual_{timestamp}_{filename}.pdf
+
         Args:
-            email_id: Email ID
             filename: Sanitized filename
-            
+            email_id: Email ID (None for manual uploads)
+
         Returns:
             str: Generated file path
         """
         now = datetime.now()
         year = now.strftime("%Y")
         month = now.strftime("%m")
-        
+
         # Create directory structure: pdfs/YYYY/MM/
         directory = self.pdf_root / year / month
-        
-        # Generate unique filename with email ID prefix
+
         # Remove .pdf extension if already present, we'll add it
         base_filename = filename.replace('.pdf', '').replace('.PDF', '')
-        unique_filename = f"email_{email_id}_{base_filename}.pdf"
-        
+
+        # Generate unique filename based on source
+        if email_id is not None:
+            # Email-sourced PDF
+            unique_filename = f"email_{email_id}_{base_filename}.pdf"
+        else:
+            # Manual upload - use timestamp for uniqueness
+            timestamp = now.strftime("%Y%m%d_%H%M%S")
+            unique_filename = f"manual_{timestamp}_{base_filename}.pdf"
+
         file_path = directory / unique_filename
         return str(file_path)
     
@@ -310,9 +318,9 @@ class PdfStorageService:
     def get_storage_info(self) -> Dict[str, Any]:
         """
         Get information about the storage configuration and status
-        
+
         Returns:
-            Dict[str, Any]: Storage information including paths, sizes, and status
+            Dict[str, Any]: Storage information including paths and basic status
         """
         try:
             storage_info = {
@@ -321,14 +329,11 @@ class PdfStorageService:
                 'pdf_directory': str(self.pdf_root),
                 'root_exists': self.storage_root.exists(),
                 'pdf_directory_exists': self.pdf_root.exists(),
-                'is_writable': self._test_write_permissions(),
-                'storage_size_mb': self._get_storage_size_mb(),
-                'file_count': self._get_file_count(),
                 'fallback_used': str(self.storage_root) != self.original_storage_root
             }
-            
+
             return storage_info
-            
+
         except Exception as e:
             logger.error(f"Error getting storage info: {e}")
             return {
@@ -336,31 +341,3 @@ class PdfStorageService:
                 'original_root': self.original_storage_root,
                 'current_root': str(self.storage_root)
             }
-    
-    def _test_write_permissions(self) -> bool:
-        """Test if storage directory is writable"""
-        try:
-            test_file = self.storage_root / ".permission_test"
-            test_file.write_text("test")
-            test_file.unlink()
-            return True
-        except Exception:
-            return False
-    
-    def _get_storage_size_mb(self) -> float:
-        """Get total storage size in MB"""
-        try:
-            total_size = 0
-            for file_path in self.storage_root.rglob('*'):
-                if file_path.is_file():
-                    total_size += file_path.stat().st_size
-            return round(total_size / (1024 * 1024), 2)
-        except Exception:
-            return 0.0
-    
-    def _get_file_count(self) -> int:
-        """Get total number of files in storage"""
-        try:
-            return len([f for f in self.storage_root.rglob('*') if f.is_file()])
-        except Exception:
-            return 0

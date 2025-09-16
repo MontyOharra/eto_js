@@ -86,7 +86,7 @@ class EmailIngestionCursor:
 
 
 @dataclass
-class CursorStatistics:
+class EmailIngestionCursorStatistics:
     """Cursor statistics response object"""
     email_address: str
     folder_name: str
@@ -98,13 +98,13 @@ class CursorStatistics:
 
 
 @dataclass
-class EmailConnectionConfig:
+class EmailIngestionConnectionConfig:
     """Email connection config data structure"""
     email_address: str
     folder_name: str
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'EmailConnectionConfig':
+    def from_dict(cls, data: Dict[str, Any]) -> 'EmailIngestionConnectionConfig':
         """Create from dictionary data"""
         return cls(
             email_address=data['email_address'],  # Required field
@@ -113,14 +113,19 @@ class EmailConnectionConfig:
 
 
 @dataclass
-class ConnectionStatus:
+class EmailServiceConnectionStatus:
     """Connection status information"""
     is_connected: bool
+    last_error: Optional[str] = None
+
+
+@dataclass
+class EmailConfigSummary:
+    """Summary of current email config"""
+    id: Optional[int]
+    name: Optional[str]
     email_address: Optional[str]
     folder_name: Optional[str]
-    inbox_count: int
-    last_error: Optional[str]
-    connection_time: Optional[datetime]
 
 
 @dataclass
@@ -140,7 +145,7 @@ class EmailData:
 
 
 @dataclass
-class IngestionStats:
+class EmailIngestionStats:
     """Email ingestion statistics"""
     emails_processed: int = 0
     pdfs_found: int = 0
@@ -151,12 +156,83 @@ class IngestionStats:
 
 
 @dataclass
-class ServiceHealth:
+class EmailServiceHealth:
     """Service health status"""
     is_running: bool = False
     is_connected: bool = False
     config_loaded: bool = False
     last_error: Optional[str] = None
-    stats: IngestionStats = field(default_factory=IngestionStats)
+    stats: EmailIngestionStats = field(default_factory=EmailIngestionStats)
+
+
+@dataclass
+class EmailCreate:
+    """Domain object for creating email records (no ID)"""
+    message_id: str
+    subject: str
+    sender_email: str
+    sender_name: Optional[str]
+    received_date: datetime
+    folder_name: str
+    has_pdf_attachments: bool
+    attachment_count: int
+
+
+@dataclass
+class Email:
+    """Email domain object (with ID and timestamps)"""
+    id: int
+    message_id: str
+    subject: str
+    sender_email: str
+    sender_name: Optional[str]
+    received_date: datetime
+    folder_name: str
+    has_pdf_attachments: bool
+    attachment_count: int
+    created_at: datetime
+
+
+@dataclass
+class EtoRunCreate:
+    """Domain object for creating ETO runs (no ID)"""
+    email_id: int
+    pdf_file_id: int
+    status: str = 'not_started'
+
+
+@dataclass
+class EmailServiceStartResponse:
+    """Response for service start operations"""
+    success: bool
+    message: str
+    is_running: bool
+    config_name: Optional[str] = None
+    config_id: Optional[int] = None
+    folder_name: Optional[str] = None
+    cursor_id: Optional[int] = None
+    is_connected: bool = False
+
+
+@dataclass
+class EmailServiceStopResponse:
+    """Response for service stop operations"""
+    success: bool
+    message: str
+    is_running: bool
+    is_connected: bool = False
+    warning: Optional[str] = None
+
+
+@dataclass
+class EmailServiceStatusResponse:
+    """Response for service status queries"""
+    is_running: bool
+    is_connected: bool
+    current_config: Optional[str]
+    current_config_details: Optional[EmailConfigSummary]
+    connection_status: EmailServiceConnectionStatus
+    stats: EmailIngestionStats
+    health: EmailServiceHealth
 
 

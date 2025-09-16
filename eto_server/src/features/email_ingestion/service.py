@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 
 from .config_service import EmailIngestionConfigService
 from .cursor_service import EmailIngestionCursorService
-from .types import EmailIngestionConfig, IngestionStats, ServiceHealth, EmailData, EmailConnectionConfig
+from .types import EmailIngestionConfig, EmailIngestionStats, EmailServiceHealth, EmailData, EmailIngestionConnectionConfig, EmailCreate, EtoRunCreate, EmailServiceStartResponse, EmailServiceStopResponse, EmailServiceStatusResponse, EmailConfigSummary, EmailServiceConnectionStatus
 from .integrations.outlook_com_service import OutlookComService
 from ...shared.database import get_connection_manager
 from ...shared.database.repositories import EmailIngestionConfigRepository, EmailIngestionCursorRepository, EmailRepository, EtoRunRepository
@@ -49,57 +49,57 @@ class EmailIngestionService:
         self.stop_event = threading.Event()
         
         # Statistics and health
-        self.stats = IngestionStats()
-        self.health = ServiceHealth()
+        self.stats = EmailIngestionStats()
+        self.health = EmailServiceHealth()
         
         self.logger = logging.getLogger(__name__)
 
     # === High-Level API Methods ===
     
-    def start(self, config_id: Optional[int] = None) -> Dict[str, Any]:
+    def start(self, config_id: Optional[int] = None) -> EmailServiceStartResponse:
         """Start email ingestion with active config"""
         try:
             if self.is_running:
-                return {
-                    "success": False,
-                    "message": "Email ingestion is already running",
-                    "is_running": True
-                }
+                return EmailServiceStartResponse(
+                    success=False,
+                    message="Email ingestion is already running",
+                    is_running=True
+                )
             
             # Load config (either specified config_id or active config)
             if config_id:
                 self.current_config = self.config_service.get_config(config_id)
                 if not self.current_config:
-                    return {
-                        "success": False,
-                        "message": f"Email config {config_id} not found",
-                        "is_running": False
-                    }
+                    return EmailServiceStartResponse(
+                        success=False,
+                        message=f"Email config {config_id} not found",
+                        is_running=False
+                    )
                 if not self.current_config.is_active:
-                    return {
-                        "success": False,
-                        "message": f"Email config {config_id} is not active",
-                        "is_running": False
-                    }
+                    return EmailServiceStartResponse(
+                        success=False,
+                        message=f"Email config {config_id} is not active",
+                        is_running=False
+                    )
             else:
                 self.current_config = self.config_service.get_active_config()
                 if not self.current_config:
-                    return {
-                        "success": False,
-                        "message": "No active email config found",
-                        "is_running": False
-                    }
+                    return EmailServiceStartResponse(
+                        success=False,
+                        message="No active email config found",
+                        is_running=False
+                    )
             
             # Validate that email address is provided
             if not self.current_config.email_address:
-                return {
-                    "success": False,
-                    "message": "Active config missing required email address",
-                    "is_running": False
-                }
+                return EmailServiceStartResponse(
+                    success=False,
+                    message="Active config missing required email address",
+                    is_running=False
+                )
             
             # Initialize cursor for the active config
-            connection_config = EmailConnectionConfig(
+            connection_config = EmailIngestionConnectionConfig(
                 email_address=self.current_config.email_address,
                 folder_name=self.current_config.folder_name
             )
@@ -107,11 +107,11 @@ class EmailIngestionService:
             # Create or get existing cursor
             cursor = self.cursor_service.initialize_cursor(connection_config)
             if not cursor:
-                return {
-                    "success": False,
-                    "message": f"Failed to initialize cursor for {self.current_config.folder_name}",
-                    "is_running": False
-                }
+                return EmailServiceStartResponse(
+                    success=False,
+                    message=f"Failed to initialize cursor for {self.current_config.folder_name}",
+                    is_running=False
+                )
             
             # Update config status to running
             assert self.current_config.id is not None
@@ -120,7 +120,7 @@ class EmailIngestionService:
             # Connect to Outlook service
             try:
                 # Connect to Outlook service
-                connection_config = EmailConnectionConfig(
+                connection_config = EmailIngestionConnectionConfig(
                     email_address=self.current_config.email_address,
                     folder_name=self.current_config.folder_name
                 )
@@ -148,44 +148,44 @@ class EmailIngestionService:
                 self.logger.debug(f"Monitoring folder: {self.current_config.folder_name}")
                 self.logger.debug(f"Cursor initialized with last processed: {cursor.last_processed_received_date}")
                 
-                return {
-                    "success": True,
-                    "message": "Email ingestion started successfully",
-                    "config_name": self.current_config.name,
-                    "config_id": self.current_config.id,
-                    "folder_name": self.current_config.folder_name,
-                    "cursor_id": cursor.id,
-                    "is_running": True,
-                    "is_connected": True
-                }
+                return EmailServiceStartResponse(
+                    success=True,
+                    message="Email ingestion started successfully",
+                    config_name=self.current_config.name,
+                    config_id=self.current_config.id,
+                    folder_name=self.current_config.folder_name,
+                    cursor_id=cursor.id,
+                    is_running=True,
+                    is_connected=True
+                )
                 
             except Exception as e:
                 self.logger.exception(f"Failed to connect to Outlook service: {e}")
                 # Rollback the running status
                 self.config_service.update_runtime_status(self.current_config.id, False)
-                return {
-                    "success": False,
-                    "message": f"Failed to connect to email service: {str(e)}",
-                    "is_running": False
-                }
+                return EmailServiceStartResponse(
+                    success=False,
+                    message=f"Failed to connect to email service: {str(e)}",
+                    is_running=False
+                )
             
         except Exception as e:
             self.logger.exception(f"Error starting email ingestion: {e}")
-            return {
-                "success": False,
-                "error": str(e),
-                "message": "Failed to start email ingestion"
-            }
+            return EmailServiceStartResponse(
+                success=False,
+                is_running=False,
+                message="Failed to start email ingestion"
+            )
     
-    def stop(self) -> Dict[str, Any]:
+    def stop(self) -> EmailServiceStopResponse:
         """Stop email ingestion"""
         try:
             if not self.is_running:
-                return {
-                    "success": False,
-                    "message": "Email ingestion is not running",
-                    "is_running": False
-                }
+                return EmailServiceStopResponse(
+                    success=False,
+                    message="Email ingestion is not running",
+                    is_running=False
+                )
             
             # Stop processing and cleanup
             try:
@@ -217,12 +217,12 @@ class EmailIngestionService:
                 
                 self.logger.info(f"Email ingestion service stopped for config: {config_name}")
                 
-                return {
-                    "success": True,
-                    "message": "Email ingestion stopped successfully",
-                    "is_running": False,
-                    "is_connected": False
-                }
+                return EmailServiceStopResponse(
+                    success=True,
+                    message="Email ingestion stopped successfully",
+                    is_running=False,
+                    is_connected=False
+                )
                 
             except Exception as e:
                 self.logger.exception(f"Error during ingestion stop cleanup: {e}")
@@ -232,40 +232,48 @@ class EmailIngestionService:
                 self.health.is_running = False
                 self.health.is_connected = False
                 
-                return {
-                    "success": True,
-                    "message": "Email ingestion stopped (with cleanup errors)",
-                    "is_running": False,
-                    "warning": f"Cleanup error: {str(e)}"
-                }
+                return EmailServiceStopResponse(
+                    success=True,
+                    message="Email ingestion stopped (with cleanup errors)",
+                    is_running=False,
+                    warning=f"Cleanup error: {str(e)}"
+                )
             
         except Exception as e:
             self.logger.exception(f"Error stopping email ingestion: {e}")
-            return {
-                "success": False,
-                "error": str(e),
-                "message": "Failed to stop email ingestion"
-            }
+            return EmailServiceStopResponse(
+                success=False,
+                message="Failed to stop email ingestion",
+                is_running=False
+            )
     
-    def get_ingestion_status(self) -> Dict[str, Any]:
-        """Get current ingestion status"""
-        return {
-            "is_running": self.is_running,
-            "is_connected": self.is_connected,
-            "current_config": self.current_config.name if self.current_config else None,
-            "stats": {
-                "emails_processed": self.stats.emails_processed,
-                "pdfs_found": getattr(self.stats, 'pdfs_found', 0),
-                "processing_errors": getattr(self.stats, 'processing_errors', 0),
-                "uptime_seconds": self.stats.uptime_seconds,
-                "last_processed_at": self.stats.last_processed_at,
-                "reconnections": self.stats.reconnections
-            },
-            "health": {
-                "config_loaded": self.health.config_loaded,
-                "last_error": self.health.last_error
-            }
-        }
+    def get_ingestion_status(self) -> EmailServiceStatusResponse:
+        """Get comprehensive ingestion status"""
+        # Create current config summary
+        current_config_details = None
+        if self.current_config:
+            current_config_details = EmailConfigSummary(
+                id=self.current_config.id,
+                name=self.current_config.name,
+                email_address=self.current_config.email_address,
+                folder_name=self.current_config.folder_name
+            )
+
+        # Create connection status
+        connection_status = EmailServiceConnectionStatus(
+            is_connected=self.is_connected,
+            last_error=getattr(self.health, 'last_error', None)
+        )
+
+        return EmailServiceStatusResponse(
+            is_running=self.is_running,
+            is_connected=self.is_connected,
+            current_config=self.current_config.name if self.current_config else None,
+            current_config_details=current_config_details,
+            connection_status=connection_status,
+            stats=self.stats,
+            health=self.health
+        )
 
     # === Internal Processing Methods ===
     
@@ -396,13 +404,24 @@ class EmailIngestionService:
             
             # Update cursor with latest processed date
             if latest_email_date and latest_email_date != cursor.last_processed_received_date:
+                # Create proper EmailData object for cursor update
+                cursor_email_data = EmailData(
+                    message_id=f"cycle_{int(datetime.now().timestamp())}",
+                    subject="",
+                    sender_email="system",
+                    sender_name=None,
+                    received_time=latest_email_date,
+                    has_attachments=False,
+                    attachment_count=0,
+                    attachment_filenames=[],
+                    has_pdf_attachments=False,
+                    body_preview=None
+                )
+
                 self.cursor_service.update_cursor(
                     self.current_config.email_address,
                     self.current_config.folder_name,
-                    EmailData({
-                        "message_id": f"cycle_{int(datetime.now().timestamp())}",
-                        "received_date": latest_email_date
-                    })
+                    cursor_email_data
                 )
                 self.logger.debug(f"Updated cursor to {latest_email_date}")
             
@@ -517,22 +536,21 @@ class EmailIngestionService:
                 self.logger.debug(f"Email already exists: {email_data.subject}")
                 return True
             
-            # Convert EmailData to database record format
+            # Create domain object for email record
             assert self.current_config is not None
-            email_record_data = {
-                'message_id': email_data.message_id,
-                'subject': email_data.subject,
-                'sender_email': email_data.sender_email,
-                'sender_name': email_data.sender_name,
-                'received_date': email_data.received_time,
-                'folder_name': self.current_config.folder_name,
-                'has_pdf_attachments': email_data.has_pdf_attachments,
-                'attachment_count': email_data.attachment_count,
-                'created_at': datetime.now(timezone.utc)
-            }
-            
+            email_record_create = EmailCreate(
+                message_id=email_data.message_id,
+                subject=email_data.subject,
+                sender_email=email_data.sender_email,
+                sender_name=email_data.sender_name,
+                received_date=email_data.received_time,
+                folder_name=self.current_config.folder_name,
+                has_pdf_attachments=email_data.has_pdf_attachments,
+                attachment_count=email_data.attachment_count
+            )
+
             # Save email record to database
-            email_record = self.email_repo.create_email_record(email_record_data)
+            email_record = self.email_repo.create_email_record(email_record_create)
             self.logger.info(f"Saved email record: {email_record.subject} (ID: {email_record.id})")
             
             # Process PDF attachments if present (using pre-extracted data)
@@ -627,16 +645,14 @@ class EmailIngestionService:
                 # Continue processing even if object extraction fails
             
             # Auto-trigger ETO processing by creating ETO run record
-            eto_run_data = {
-                'email_id': email_id,
-                'pdf_file_id': pdf_id,
-                'status': 'not_started',
-                'created_at': datetime.now(timezone.utc),
-                'updated_at': datetime.now(timezone.utc)
-            }
-            
+            eto_run_create = EtoRunCreate(
+                email_id=email_id,
+                pdf_file_id=pdf_id,
+                status='not_started'
+            )
+
             try:
-                eto_run = self.eto_run_repo.create(eto_run_data)
+                eto_run = self.eto_run_repo.create(eto_run_create)
                 eto_run_id = eto_run.id if eto_run else None
                 self.logger.debug(f"Created ETO run {eto_run_id} for PDF {pdf_id}")
             except Exception as eto_error:
