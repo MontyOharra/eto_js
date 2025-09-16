@@ -1,6 +1,6 @@
 """
 Email Ingestion Domain Types
-Domain objects for email ingestion and configuration management
+Domain objects for email ingestion and config management
 """
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List
@@ -16,10 +16,25 @@ class EmailFilterRule:
 
 
 @dataclass
+class EmailIngestionConfigCreate:
+    """Domain object for creating email configs (no ID)"""
+    name: str
+    description: Optional[str]
+    email_address: Optional[str]  # None = default account
+    folder_name: str
+    filter_rules: List[EmailFilterRule]
+    created_by: str
+    # Optional fields (with defaults)
+    poll_interval_seconds: int = 5
+    max_backlog_hours: int = 24
+    error_retry_attempts: int = 3
+
+
+@dataclass
 class EmailIngestionConfig:
-    """Email ingestion configuration domain object"""
+    """Email ingestion config domain object"""
     # Required fields (no defaults)
-    id: Optional[int]
+    id: int
     name: str
     description: Optional[str]
     email_address: Optional[str]  # None = default account
@@ -30,18 +45,30 @@ class EmailIngestionConfig:
     updated_at: datetime
     
     # Optional fields (with defaults)
-    poll_interval_seconds: int = 5
-    max_backlog_hours: int = 24
-    error_retry_attempts: int = 3
-    is_active: bool = True
-    is_running: bool = False
-    last_used_at: Optional[datetime] = None
-    emails_processed: int = 0
-    pdfs_found: int = 0
-    last_error_message: Optional[str] = None
-    last_error_at: Optional[datetime] = None
+    poll_interval_seconds: int
+    max_backlog_hours: int
+    error_retry_attempts: int
+    is_active: bool
+    is_running: bool
+    last_used_at: Optional[datetime]
+    emails_processed: int
+    pdfs_found: int
+    last_error_message: Optional[str]
+    last_error_at: Optional[datetime]
 
 # === Email Processing Types ===
+
+@dataclass
+class EmailIngestionCursorCreate:
+    """Domain object for creating email cursors (no ID)"""
+    email_address: str
+    folder_name: str
+    last_processed_message_id: Optional[str] = None
+    last_processed_received_date: Optional[datetime] = None
+    last_check_time: Optional[datetime] = None
+    total_emails_processed: int = 0
+    total_pdfs_found: int = 0
+
 
 @dataclass
 class EmailIngestionCursor:
@@ -59,8 +86,20 @@ class EmailIngestionCursor:
 
 
 @dataclass
+class CursorStatistics:
+    """Cursor statistics response object"""
+    email_address: str
+    folder_name: str
+    total_emails_processed: int
+    total_pdfs_found: int
+    last_processed_date: Optional[datetime]
+    last_check_time: datetime
+    last_message_id: Optional[str]
+
+
+@dataclass
 class EmailConnectionConfig:
-    """Email connection configuration data structure"""
+    """Email connection config data structure"""
     email_address: str
     folder_name: str
     
@@ -116,7 +155,7 @@ class ServiceHealth:
     """Service health status"""
     is_running: bool = False
     is_connected: bool = False
-    configuration_loaded: bool = False
+    config_loaded: bool = False
     last_error: Optional[str] = None
     stats: IngestionStats = field(default_factory=IngestionStats)
 

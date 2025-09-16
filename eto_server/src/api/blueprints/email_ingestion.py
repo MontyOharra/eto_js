@@ -9,34 +9,15 @@ import logging
 from typing import Dict, Any
 
 from src.api.schemas.email_ingestion import (
-    CreateEmailConfigRequest,
+    EmailConfigCreateRequest,
     EmailConfigSummaryResponse,
-    ActivateConfigResponse
+    EmailConfigActivateResponse
 )
 from src.api.schemas.common import APIResponse
 from src.features.email_ingestion.service import EmailIngestionService
+from src.features.email_ingestion.types import EmailIngestionConfig, EmailIngestionConfigCreate, EmailFilterRule
 
 logger = logging.getLogger(__name__)
-
-# Create blueprint
-email_ingestion_bp = Blueprint('email_ingestion', __name__, url_prefix='/api/email-ingestion')
-
-# Configure CORS for this blueprint specifically
-CORS(email_ingestion_bp, resources={
-    r"/*": {
-        "origins": "*",
-        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"],
-        "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"],
-        "supports_credentials": False
-    }
-})
-
-# Add explicit OPTIONS handler for all routes
-@email_ingestion_bp.route('/<path:path>', methods=['OPTIONS'])
-@cross_origin()
-def handle_options(path):
-    """Handle preflight OPTIONS requests for all routes"""
-    return '', 200
 
 # Service helper
 def get_email_service() -> EmailIngestionService:
@@ -66,6 +47,27 @@ def handle_validation_error(e: ValidationError) -> Dict[str, Any]:
     }
 
 
+# Create blueprint
+email_ingestion_bp = Blueprint('email_ingestion', __name__, url_prefix='/api/email-ingestion')
+
+# Configure CORS for this blueprint specifically
+CORS(email_ingestion_bp, resources={
+    r"/*": {
+        "origins": "*",
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"],
+        "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"],
+        "supports_credentials": False
+    }
+})
+
+# Add explicit OPTIONS handler for all routes
+@email_ingestion_bp.route('/<path:path>', methods=['OPTIONS'])
+@cross_origin()
+def handle_options(path):
+    """Handle preflight OPTIONS requests for all routes"""
+    return '', 200
+
+
 @email_ingestion_bp.route('/configs', methods=['GET'])
 @cross_origin()
 def list_email_configs():
@@ -90,7 +92,7 @@ def list_email_configs():
                 last_used_at=config.last_used_at,
                 created_at=config.created_at,
                 updated_at=config.updated_at
-            ).dict() if config.id is not None else None
+            ) 
             for config in configs
         ]
         
@@ -124,52 +126,46 @@ def create_email_config():
         
         # Validate request data
         try:
-            create_request = CreateEmailConfigRequest(**data)
+            create_request = EmailConfigCreateRequest(**data)
         except ValidationError as e:
             return jsonify(handle_validation_error(e)), 400
         
-        # Convert schema filter rules to domain objects
-        filter_rules_data = []
-        if create_request.filter_rules:
-            filter_rules_data = [
-                {
-                    "field": rule.field,
-                    "operation": rule.operation,
-                    "value": rule.value,
-                    "case_sensitive": rule.case_sensitive
-                }
-                for rule in create_request.filter_rules
-            ]
-        
-        # Build config data for service
-        config_data = {
-            "connection": {
-                "email_address": create_request.connection.email_address,
-                "folder_name": create_request.connection.folder_name
-            },
-            "filters": {
-                "name": f"Filter for {create_request.name}",
-                "rules": filter_rules_data
-            },
-            "monitoring": {
-                "poll_interval_seconds": create_request.monitoring.poll_interval_seconds,
-                "max_backlog_hours": create_request.monitoring.max_backlog_hours,
-                "error_retry_attempts": create_request.monitoring.error_retry_attempts
-            }
-        }
-        
-        email_service = get_email_service()
-        result = email_service.config_service.create_config(
+        # Convert Pydantic filter rules to domain objects
+        filter_rules = [
+            EmailFilterRule(
+                field=rule.field,
+                operation=rule.operation,
+                value=rule.value,
+                case_sensitive=rule.case_sensitive
+            )
+            for rule in create_request.filter_rules or []
+        ]
+
+        # Create domain object for creation (no ID)
+        config_create = EmailIngestionConfigCreate(
             name=create_request.name,
             description=create_request.description or "",
-            config_data=config_data,
-            created_by=create_request.created_by
+            email_address=create_request.connection.email_address,
+            folder_name=create_request.connection.folder_name,
+            filter_rules=filter_rules,
+            created_by=create_request.created_by,
+            poll_interval_seconds=create_request.monitoring.poll_interval_seconds,
+            max_backlog_hours=create_request.monitoring.max_backlog_hours,
+            error_retry_attempts=create_request.monitoring.error_retry_attempts
         )
-        
-        if result["success"]:
-            return jsonify(result), 201
-        else:
-            return jsonify(result), 400
+
+        email_service = get_email_service()
+        created_config = email_service.config_service.create_config(config_create)
+
+        # Convert domain object to API response
+        return jsonify({
+            "success": True,
+            "data": {
+                "id": created_config.id,
+                "name": created_config.name,
+                "message": "Configuration created successfully"
+            }
+        }), 201
     
     except Exception as e:
         logger.error(f"Error creating config: {e}")
@@ -177,9 +173,7 @@ def create_email_config():
             "success": False,
             "error": str(e),
             "message": "Failed to create config"
-        }), 500
-
-
+        }), 400
 
 
 @email_ingestion_bp.route('/configs/<int:config_id>/activate', methods=['POST'])
@@ -193,50 +187,47 @@ def activate_config(config_id: int):
         
         # Activate the config
         email_service = get_email_service()
-        result = email_service.config_service.activate_config(config_id)
-        
-        if not result:
-            return jsonify(result), 400
+        activated_config = email_service.config_service.activate_config(config_id)
         
         # If auto_start is requested, try to start ingestion
         if auto_start:
             try:
                 start_result = email_service.start()
-                
+
                 # Return combined response
                 response = {
                     "success": True,
-                    "config_id": result["config_id"],
-                    "config_name": result["name"],
+                    "config_id": activated_config.id,
+                    "config_name": activated_config.name,
                     "message": f"Config activated and email ingestion started",
                     "activated": True,
                     "auto_started": start_result.get("success", False),
                     "start_message": start_result.get("message", "")
                 }
-                
+
                 if not start_result.get("success"):
                     response["start_error"] = start_result.get("error", "Unknown error")
-                
+
                 return jsonify(response), 200
-                
+
             except Exception as e:
                 logger.warning(f"Auto-start failed after activation: {e}")
                 response = {
                     "success": True,
-                    "config_id": result["config_id"],
-                    "config_name": result["name"],
+                    "config_id": activated_config.id,
+                    "config_name": activated_config.name,
                     "message": f"Config activated but auto-start failed: {str(e)}",
                     "activated": True,
                     "auto_started": False,
                     "start_error": str(e)
                 }
                 return jsonify(response), 200
-        
+
         # Standard activation response (no auto-start)
-        response = ActivateConfigResponse(
-            config_id=result["config_id"],
-            config_name=result["name"],
-            message=result["message"],
+        response = EmailConfigActivateResponse(
+            config_id=activated_config.id,
+            config_name=activated_config.name,
+            message="Configuration activated successfully",
             previous_active_config=None
         )
         return jsonify(response.dict()), 200
@@ -247,43 +238,7 @@ def activate_config(config_id: int):
             "success": False,
             "error": str(e),
             "message": "Failed to activate config"
-        }), 500
-
-
-
-
-# === Error Handlers ===
-
-@email_ingestion_bp.errorhandler(404)
-def handle_not_found(error):
-    """Handle 404 errors"""
-    return jsonify({
-        "success": False,
-        "error": "Endpoint not found",
-        "message": "The requested endpoint does not exist"
-    }), 404
-
-
-@email_ingestion_bp.errorhandler(405)
-def handle_method_not_allowed(error):
-    """Handle 405 errors"""
-    return jsonify({
-        "success": False,
-        "error": "Method not allowed",
-        "message": "The HTTP method is not allowed for this endpoint"
-    }), 405
-
-
-@email_ingestion_bp.errorhandler(500)
-def handle_internal_error(error):
-    """Handle 500 errors"""
-    logger.error(f"Internal server error: {error}")
-    return jsonify({
-        "success": False,
-        "error": "Internal server error",
-        "message": "An unexpected error occurred"
-    }), 500
-
+        }), 400
 
 # === Service Control Endpoints ===
 
@@ -579,6 +534,41 @@ def list_outlook_folders():
             "error": str(e),
             "message": "Failed to list Outlook folders"
         }), 500
+
+
+# === Error Handlers ===
+
+@email_ingestion_bp.errorhandler(404)
+def handle_not_found(error):
+    """Handle 404 errors"""
+    return jsonify({
+        "success": False,
+        "error": "Endpoint not found",
+        "message": "The requested endpoint does not exist"
+    }), 404
+
+
+@email_ingestion_bp.errorhandler(405)
+def handle_method_not_allowed(error):
+    """Handle 405 errors"""
+    return jsonify({
+        "success": False,
+        "error": "Method not allowed",
+        "message": "The HTTP method is not allowed for this endpoint"
+    }), 405
+
+
+@email_ingestion_bp.errorhandler(500)
+def handle_internal_error(error):
+    """Handle 500 errors"""
+    logger.error(f"Internal server error: {error}")
+    return jsonify({
+        "success": False,
+        "error": "Internal server error",
+        "message": "An unexpected error occurred"
+    }), 500
+
+
 
 
 # Export the blueprint

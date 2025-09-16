@@ -6,7 +6,7 @@ import logging
 from typing import Optional, Dict, Any, List, Tuple
 from datetime import datetime, timedelta, timezone
 
-from .types import EmailConnectionConfig, EmailIngestionCursor
+from .types import EmailConnectionConfig, EmailIngestionCursor, EmailIngestionCursorCreate, CursorStatistics, EmailData
 from ...shared.database.repositories import EmailIngestionCursorRepository
 
 logger = logging.getLogger(__name__)
@@ -64,17 +64,31 @@ class EmailIngestionCursorService:
             
             # Create new cursor starting from current time
             current_time = datetime.now(timezone.utc)
-            cursor_data = {
-                'email_address': email_address,
-                'folder_name': folder,
-                'last_processed_message_id': f"init_{int(current_time.timestamp())}",
-                'last_processed_received_date': current_time,
-                'last_check_time': current_time,
-                'total_emails_processed': 0,
-                'total_pdfs_found': 0
-            }
-            
-            cursor = self.cursor_repository.create(cursor_data)
+            cursor_create = EmailIngestionCursorCreate(
+                email_address=email_address,
+                folder_name=folder,
+                last_processed_message_id=f"init_{int(current_time.timestamp())}",
+                last_processed_received_date=current_time,
+                last_check_time=current_time,
+                total_emails_processed=0,
+                total_pdfs_found=0
+            )
+
+            # Create cursor record and get ID (following config service pattern)
+            cursor_id = self.cursor_repository.create_and_get_id({
+                "email_address": cursor_create.email_address,
+                "folder_name": cursor_create.folder_name,
+                "last_processed_message_id": cursor_create.last_processed_message_id,
+                "last_processed_received_date": cursor_create.last_processed_received_date,
+                "last_check_time": cursor_create.last_check_time,
+                "total_emails_processed": cursor_create.total_emails_processed,
+                "total_pdfs_found": cursor_create.total_pdfs_found
+            })
+
+            # Return the created cursor from repository
+            cursor = self.cursor_repository.get_by_id(cursor_id)
+            if not cursor:
+                raise Exception(f"Failed to retrieve created cursor with ID {cursor_id}")
             self._cache_cursor(cursor)
             
             logger.info(f"Initialized new cursor for {email_address}/{folder}")
@@ -84,14 +98,14 @@ class EmailIngestionCursorService:
             logger.error(f"Error initializing cursor for {connection_config.email_address or 'default'}/{connection_config.folder_name}: {e}")
             raise Exception(f"Failed to initialize cursor: {e}")
     
-    def update_cursor(self, email_address: str, folder: str, 
-                          last_email_data: Dict[str, Any]) -> EmailIngestionCursor:
+    def update_cursor(self, email_address: str, folder: str,
+                          last_email: EmailData) -> EmailIngestionCursor:
         """Update cursor with latest processed email information"""
         try:
-            # Prepare cursor update data
+            # Prepare cursor update data from EmailData object
             cursor_data = {
-                'last_processed_message_id': last_email_data.get('message_id'),
-                'last_processed_received_date': last_email_data.get('received_date', datetime.now(timezone.utc)),
+                'last_processed_message_id': last_email.message_id,
+                'last_processed_received_date': last_email.received_time,
                 'last_check_time': datetime.now(timezone.utc)
             }
             
@@ -105,22 +119,38 @@ class EmailIngestionCursorService:
                     'last_check_time': datetime.now(timezone.utc)
                 }
                 db_cursor = self.cursor_repository.update(existing_cursor.id, update_data)
+                if not db_cursor:
+                    raise Exception(f"Failed to update cursor with ID {existing_cursor.id}")
             else:
-                # Create new cursor if none exists
-                create_data = {
-                    'email_address': email_address,
-                    'folder_name': folder,
-                    'last_check_time': datetime.now(timezone.utc),
-                    'total_emails_processed': 0,
-                    'total_pdfs_found': 0,
-                    **cursor_data
-                }
-                db_cursor = self.cursor_repository.create(create_data)
+                # Create new cursor if none exists (following config service pattern)
+                cursor_create = EmailIngestionCursorCreate(
+                    email_address=email_address,
+                    folder_name=folder,
+                    last_processed_message_id=last_email.message_id,
+                    last_processed_received_date=last_email.received_time,
+                    last_check_time=datetime.now(timezone.utc),
+                    total_emails_processed=0,
+                    total_pdfs_found=0
+                )
+
+                cursor_id = self.cursor_repository.create_and_get_id({
+                    "email_address": cursor_create.email_address,
+                    "folder_name": cursor_create.folder_name,
+                    "last_processed_message_id": cursor_create.last_processed_message_id,
+                    "last_processed_received_date": cursor_create.last_processed_received_date,
+                    "last_check_time": cursor_create.last_check_time,
+                    "total_emails_processed": cursor_create.total_emails_processed,
+                    "total_pdfs_found": cursor_create.total_pdfs_found
+                })
+
+                db_cursor = self.cursor_repository.get_by_id(cursor_id)
+                if not db_cursor:
+                    raise Exception(f"Failed to retrieve created cursor with ID {cursor_id}")
             
             # Update cache
             self._cache_cursor(db_cursor)
             
-            logger.debug(f"Updated cursor: {email_address}/{folder} with message {last_email_data.get('message_id')}")
+            logger.debug(f"Updated cursor: {email_address}/{folder} with message {last_email.message_id}")
             return db_cursor
             
         except Exception as e:
@@ -164,22 +194,22 @@ class EmailIngestionCursorService:
             logger.error(f"Error calculating backlog scope for {email_address}/{folder}: {e}")
             raise Exception(f"Failed to calculate backlog scope: {e}")
 
-    def get_cursor_statistics(self, email_address: str, folder: str) -> Optional[Dict[str, Any]]:
+    def get_cursor_statistics(self, email_address: str, folder: str) -> Optional[CursorStatistics]:
         """Get cursor statistics for email/folder combination"""
         try:
             cursor = self.cursor_repository.get_by_email_and_folder(email_address, folder)
             if not cursor:
                 return None
-            
-            return {
-                "email_address": cursor.email_address,
-                "folder_name": cursor.folder_name,
-                "total_emails_processed": cursor.total_emails_processed or 0,
-                "total_pdfs_found": cursor.total_pdfs_found or 0,
-                "last_processed_date": cursor.last_processed_received_date,
-                "last_check_time": cursor.last_check_time,
-                "last_message_id": cursor.last_processed_message_id
-            }
+
+            return CursorStatistics(
+                email_address=cursor.email_address,
+                folder_name=cursor.folder_name,
+                total_emails_processed=cursor.total_emails_processed or 0,
+                total_pdfs_found=cursor.total_pdfs_found or 0,
+                last_processed_date=cursor.last_processed_received_date,
+                last_check_time=cursor.last_check_time,
+                last_message_id=cursor.last_processed_message_id
+            )
         except Exception as e:
             logger.error(f"Error getting cursor statistics: {e}")
             return None

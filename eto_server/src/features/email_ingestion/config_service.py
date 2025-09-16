@@ -6,7 +6,7 @@ import json
 import logging
 from typing import Dict, List, Any, Optional
 
-from .types import EmailIngestionConfig, EmailFilterRule
+from .types import EmailIngestionConfig, EmailIngestionConfigCreate, EmailFilterRule
 from ...shared.database.repositories import EmailIngestionConfigRepository
 
 logger = logging.getLogger(__name__)
@@ -20,10 +20,10 @@ class EmailIngestionConfigService:
         self.logger = logging.getLogger(__name__)
 
     # === High-Level API Methods ===
-    def create_config(self, config: EmailIngestionConfig) -> EmailIngestionConfig:
-        """Create new email ingestion config from domain object"""
+    def create_config(self, config_create: EmailIngestionConfigCreate) -> EmailIngestionConfig:
+        """Create new email ingestion config from creation domain object"""
         try:
-            self.logger.debug(f"Creating new email config: {config.name}")
+            self.logger.debug(f"Creating new email config: {config_create.name}")
 
             # Serialize filter rules to JSON for database storage
             filter_rules_json = json.dumps([
@@ -33,27 +33,27 @@ class EmailIngestionConfigService:
                     "value": rule.value,
                     "case_sensitive": rule.case_sensitive
                 }
-                for rule in config.filter_rules
+                for rule in config_create.filter_rules
             ])
 
             # Create config record and get ID
             config_id = self.config_repo.create_and_get_id({
-                "name": config.name,
-                "description": config.description,
-                "email_address": config.email_address,
-                "folder_name": config.folder_name,
+                "name": config_create.name,
+                "description": config_create.description,
+                "email_address": config_create.email_address,
+                "folder_name": config_create.folder_name,
                 "filter_rules": filter_rules_json,
-                "poll_interval_seconds": config.poll_interval_seconds,
-                "max_backlog_hours": config.max_backlog_hours,
-                "error_retry_attempts": config.error_retry_attempts,
+                "poll_interval_seconds": config_create.poll_interval_seconds,
+                "max_backlog_hours": config_create.max_backlog_hours,
+                "error_retry_attempts": config_create.error_retry_attempts,
                 "is_active": False,  # New configs start inactive
                 "is_running": False,
-                "created_by": config.created_by,
+                "created_by": config_create.created_by,
                 "emails_processed": 0,
                 "pdfs_found": 0
             })
             
-            self.logger.info(f"Created email config {config.name} with ID {config_id}")
+            self.logger.info(f"Created email config {config_create.name} with ID {config_id}")
 
             # Return the created config from repository
             created_config = self.config_repo.get_by_id(config_id)

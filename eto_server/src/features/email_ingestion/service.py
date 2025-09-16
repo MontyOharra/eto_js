@@ -10,8 +10,7 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass, field
 
-from .config_service import EmailIngestionConfigurationService
-from .filter_service import EmailIngestionFilterService
+from .config_service import EmailIngestionConfigService
 from .cursor_service import EmailIngestionCursorService
 from .types import EmailIngestionConfig, IngestionStats, ServiceHealth, EmailData, EmailConnectionConfig
 from .integrations.outlook_com_service import OutlookComService
@@ -38,8 +37,7 @@ class EmailIngestionService:
         self.eto_run_repo = EtoRunRepository(self.connection_manager)
 
         # Service layer - repositories injected as dependencies
-        self.config_service = EmailIngestionConfigurationService(self.config_repo)
-        self.filter_service = EmailIngestionFilterService()
+        self.config_service = EmailIngestionConfigService(self.config_repo)
         self.cursor_service = EmailIngestionCursorService(self.cursor_repo)
         self.outlook_service = OutlookComService()
         
@@ -59,7 +57,7 @@ class EmailIngestionService:
     # === High-Level API Methods ===
     
     def start(self, config_id: Optional[int] = None) -> Dict[str, Any]:
-        """Start email ingestion with active configuration"""
+        """Start email ingestion with active config"""
         try:
             if self.is_running:
                 return {
@@ -68,27 +66,27 @@ class EmailIngestionService:
                     "is_running": True
                 }
             
-            # Load configuration (either specified config_id or active configuration)
+            # Load config (either specified config_id or active config)
             if config_id:
-                self.current_config = self.config_service.get_configuration(config_id)
+                self.current_config = self.config_service.get_config(config_id)
                 if not self.current_config:
                     return {
                         "success": False,
-                        "message": f"Email configuration {config_id} not found",
+                        "message": f"Email config {config_id} not found",
                         "is_running": False
                     }
                 if not self.current_config.is_active:
                     return {
                         "success": False,
-                        "message": f"Email configuration {config_id} is not active",
+                        "message": f"Email config {config_id} is not active",
                         "is_running": False
                     }
             else:
-                self.current_config = self.config_service.get_active_configuration()
+                self.current_config = self.config_service.get_active_config()
                 if not self.current_config:
                     return {
                         "success": False,
-                        "message": "No active email configuration found",
+                        "message": "No active email config found",
                         "is_running": False
                     }
             
@@ -96,11 +94,11 @@ class EmailIngestionService:
             if not self.current_config.email_address:
                 return {
                     "success": False,
-                    "message": "Active configuration missing required email address",
+                    "message": "Active config missing required email address",
                     "is_running": False
                 }
             
-            # Initialize cursor for the active configuration
+            # Initialize cursor for the active config
             connection_config = EmailConnectionConfig(
                 email_address=self.current_config.email_address,
                 folder_name=self.current_config.folder_name
@@ -115,7 +113,7 @@ class EmailIngestionService:
                     "is_running": False
                 }
             
-            # Update configuration status to running
+            # Update config status to running
             assert self.current_config.id is not None
             self.config_service.update_runtime_status(self.current_config.id, True)
             
@@ -144,7 +142,7 @@ class EmailIngestionService:
                 self.is_running = True
                 self.health.is_running = True
                 self.health.is_connected = True
-                self.health.configuration_loaded = True
+                self.health.config_loaded = True
                 
                 self.logger.debug(f"Email ingestion service started for config: {self.current_config.name}")
                 self.logger.debug(f"Monitoring folder: {self.current_config.folder_name}")
@@ -191,7 +189,7 @@ class EmailIngestionService:
             
             # Stop processing and cleanup
             try:
-                # Update current configuration to not running
+                # Update current config to not running
                 if self.current_config:
                     assert self.current_config.id is not None
                     self.config_service.update_runtime_status(self.current_config.id, False)
@@ -264,7 +262,7 @@ class EmailIngestionService:
                 "reconnections": self.stats.reconnections
             },
             "health": {
-                "configuration_loaded": self.health.configuration_loaded,
+                "config_loaded": self.health.config_loaded,
                 "last_error": self.health.last_error
             }
         }
@@ -401,10 +399,10 @@ class EmailIngestionService:
                 self.cursor_service.update_cursor(
                     self.current_config.email_address,
                     self.current_config.folder_name,
-                    {
+                    EmailData({
                         "message_id": f"cycle_{int(datetime.now().timestamp())}",
                         "received_date": latest_email_date
-                    }
+                    })
                 )
                 self.logger.debug(f"Updated cursor to {latest_email_date}")
             
@@ -555,7 +553,7 @@ class EmailIngestionService:
                     
                     self.logger.info(f"  Processed {len(pdf_records)} PDF records (including {sum(1 for p in pdf_records if p.get('duplicate', False))} duplicates)")
                     
-                    # Update configuration statistics
+                    # Update config statistics
                     if self.current_config and self.current_config.id:
                         self.config_service.increment_processing_stats(
                             self.current_config.id, 
@@ -567,7 +565,7 @@ class EmailIngestionService:
                     self.logger.error(f"Error processing PDF attachments for email {email_record.id}: {e}")
                     # Continue processing even if PDF extraction fails
             else:
-                # Update configuration statistics for emails without PDFs
+                # Update config statistics for emails without PDFs
                 if self.current_config and self.current_config.id:
                     self.config_service.increment_processing_stats(
                         self.current_config.id, 

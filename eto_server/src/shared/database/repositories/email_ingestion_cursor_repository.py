@@ -36,7 +36,7 @@ class EmailIngestionCursorRepository(BaseRepository[EmailIngestionCursorModel]):
             'updated_at': getattr(cursor_model, 'updated_at')
         }
         return EmailIngestionCursor(**cursor_data)
-    
+
     def get_by_id(self, id: int) -> Optional[EmailIngestionCursor]:
         """Override BaseRepository method to return domain object"""
         try:

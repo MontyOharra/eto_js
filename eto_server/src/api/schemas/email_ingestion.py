@@ -2,27 +2,29 @@
 Email Ingestion API Schemas
 Request/response models for email ingestion endpoints
 """
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from datetime import datetime
 from .common import APIResponse, ValidationResponse
 
 
-class EmailFilterRuleSchema(BaseModel):
+class EmailFilterSchema(BaseModel):
     """Email filter rule schema"""
     field: str = Field(..., description="Field to filter on")
     operation: str = Field(..., description="Filter operation")
     value: str = Field(..., description="Filter value")
     case_sensitive: bool = Field(False, description="Case sensitive matching")
 
-    @validator('field')
+    @field_validator('field')
+    @classmethod
     def validate_field(cls, v):
         allowed_fields = ['sender_email', 'subject', 'has_attachments', 'received_date']
         if v not in allowed_fields:
             raise ValueError(f"Field must be one of: {allowed_fields}")
         return v
 
-    @validator('operation')
+    @field_validator('operation')
+    @classmethod
     def validate_operation(cls, v):
         allowed_operations = ['contains', 'equals', 'starts_with', 'ends_with', 'before', 'after']
         if v not in allowed_operations:
@@ -36,7 +38,7 @@ class EmailConfigConnectionSchema(BaseModel):
     folder_name: str = Field(..., description="Email folder name")
 
 
-class EmailMonitoringConfigSchema(BaseModel):
+class EmailConfigMonitoringSchema(BaseModel):
     """Email monitoring configuration schema"""
     poll_interval_seconds: int = Field(5, ge=5, description="Polling interval in seconds")
     max_backlog_hours: int = Field(24, ge=1, description="Maximum backlog hours")
@@ -48,17 +50,17 @@ class EmailConfigCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255, description="Configuration name")
     description: Optional[str] = Field(None, max_length=1000, description="Configuration description")
     connection: EmailConfigConnectionSchema
-    filter_rules: Optional[List[EmailFilterRuleSchema]] = Field(None, description="Email filter rules")
-    monitoring: EmailMonitoringConfigSchema
+    filter_rules: Optional[List[EmailFilterSchema]] = Field(None, description="Email filter rules")
+    monitoring: EmailConfigMonitoringSchema
     created_by: str = Field(..., description="User who created the configuration")
 
 
 class EmailConfigUpdateRequest(BaseModel):
     """Request schema for updating email configuration"""
     description: Optional[str] = Field(None, max_length=1000, description="Configuration description")
-    connection: Optional[EmailConnectionConfigSchema] = None
-    filter_rules: Optional[List[EmailFilterRuleSchema]] = Field(None, min_length=1, description="Email filter rules")
-    monitoring: Optional[EmailMonitoringConfigSchema] = None
+    connection: Optional[EmailConfigConnectionSchema] = None
+    filter_rules: Optional[List[EmailFilterSchema]] = Field(None, min_length=1, description="Email filter rules")
+    monitoring: Optional[EmailConfigMonitoringSchema] = None
 
 
 class EmailConfigSummaryResponse(BaseModel):
@@ -80,9 +82,9 @@ class EmailConfigDetailResponse(BaseModel):
     id: int
     name: str
     description: Optional[str] = None
-    connection: EmailConnectionConfigSchema
-    filter_rules: List[EmailFilterRuleSchema]
-    monitoring: EmailMonitoringConfigSchema
+    connection: EmailConfigConnectionSchema
+    filter_rules: List[EmailFilterSchema]
+    monitoring: EmailConfigMonitoringSchema
     is_active: bool
     is_running: bool
     emails_processed: int
@@ -109,26 +111,26 @@ class EmailConfigStatsResponse(BaseModel):
     last_error_at: Optional[datetime] = None
 
 
-class ConfigTemplateResponse(BaseModel):
+class EmailConfigTemplateResponse(BaseModel):
     """Configuration template response"""
-    connection: EmailConnectionConfigSchema
-    filter_rules: List[EmailFilterRuleSchema]
-    monitoring: EmailMonitoringConfigSchema
+    connection: EmailConfigConnectionSchema
+    filter_rules: List[EmailFilterSchema]
+    monitoring: EmailConfigMonitoringSchema
 
 
-class ValidateConfigRequest(BaseModel):
+class EmailConfigValidateRequest(BaseModel):
     """Request schema for configuration validation"""
-    connection: EmailConnectionConfigSchema
-    filter_rules: List[EmailFilterRuleSchema]
-    monitoring: EmailMonitoringConfigSchema
+    connection: EmailConfigConnectionSchema
+    filter_rules: List[EmailFilterSchema]
+    monitoring: EmailConfigMonitoringSchema
 
 
-class ActivateConfigRequest(BaseModel):
+class EmailConfigActivateRequest(BaseModel):
     """Request schema for activating configuration"""
     config_id: int = Field(..., description="Configuration ID to activate")
 
 
-class ActivateConfigResponse(BaseModel):
+class EmailConfigActivateResponse(BaseModel):
     """Response schema for configuration activation"""
     success: bool = True
     config_id: int
