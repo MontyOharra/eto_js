@@ -1,6 +1,6 @@
 """
 PDF Storage Service
-Handles physical file storage and retrieval operations for PDF files
+Handles complete PDF storage workflow including file operations and database persistence
 """
 import logging
 import hashlib
@@ -8,30 +8,84 @@ import os
 import re
 import tempfile
 from pathlib import Path
-from datetime import datetime
-from typing import Optional, Dict, Any
+from datetime import datetime, timezone
+from typing import Optional, Dict, Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ...shared.database.repositories import PdfRepository
+    from .types import PdfStoreRequest, PdfFile
 
 logger = logging.getLogger(__name__)
 
 
 class PdfStorageService:
-    """Service for managing PDF file storage operations with cross-platform support"""
+    """Service for managing complete PDF storage workflow with database integration"""
     
-    def __init__(self, storage_root: str):
+    def __init__(self, storage_root: str, pdf_repository: "PdfRepository"):
         """
         Initialize PDF storage service with auto-creation and fallback
         
         Args:
             storage_root: Root directory for PDF storage
+            pdf_repository: Repository for PDF database operations
         """
         self.original_storage_root = storage_root
         self.storage_root = Path(storage_root)
         self.pdf_root = self.storage_root / "pdfs"
+        self.pdf_repo = pdf_repository
         
         # Initialize storage directories with auto-creation and fallback
         self._initialize_storage()
         
         logger.info(f"Initialized PDF storage service with root: {self.storage_root}")
+    
+    def store_pdf_complete(self, content_bytes: bytes, store_request: "PdfStoreRequest") -> "PdfFile":
+        """
+        Complete PDF storage workflow including file storage and database record creation
+        
+        Args:
+            content_bytes: PDF file content
+            store_request: Domain object with storage request details
+            
+        Returns:
+            PdfFile: Created PDF domain object
+        """
+        try:
+            # Calculate file hash for deduplication
+            file_hash = self.calculate_file_hash(content_bytes)
+            
+            # Check for existing PDF with same hash
+            existing_pdf = self.pdf_repo.get_duplicate_by_hash(file_hash)
+            if existing_pdf:
+                logger.info(f"PDF already exists with hash {file_hash[:16]}...: {existing_pdf.filename}")
+                return existing_pdf
+            
+            # Store PDF file to disk
+            file_path = self.store_pdf(
+                pdf_content=content_bytes,
+                original_filename=store_request.original_filename,
+                email_id=store_request.email_id
+            )
+            
+            # Create database record
+            pdf_data = {
+                'email_id': store_request.email_id,
+                'filename': store_request.filename,
+                'original_filename': store_request.original_filename,
+                'file_path': file_path,
+                'file_size': len(content_bytes),
+                'sha256_hash': file_hash,
+                'mime_type': store_request.mime_type
+            }
+            
+            pdf_file = self.pdf_repo.create_pdf_record(pdf_data)
+            logger.info(f"Stored PDF: {pdf_file.filename} (ID: {pdf_file.id}, Hash: {file_hash[:16]}...)")
+            
+            return pdf_file
+            
+        except Exception as e:
+            logger.error(f"Error in complete PDF storage workflow: {e}")
+            raise
     
     def _initialize_storage(self):
         """Initialize storage directories with proper permissions and fallback handling"""

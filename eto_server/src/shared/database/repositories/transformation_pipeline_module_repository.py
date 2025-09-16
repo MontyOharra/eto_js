@@ -91,7 +91,7 @@ class TransformationPipelineModuleRepository(BaseRepository[TransformationPipeli
                         logger.debug(f"Created module: {module_id}")
             
             total_processed = updated_count + created_count
-            logger.info(f"Module population complete: {created_count} created, {updated_count} updated, {total_processed} total")
+            logger.debug(f"Module population complete: {created_count} created, {updated_count} updated, {total_processed} total")
             return total_processed
             
         except Exception as e:

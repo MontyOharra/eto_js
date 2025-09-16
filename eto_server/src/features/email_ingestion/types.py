@@ -5,8 +5,6 @@ Domain objects for email ingestion and configuration management
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List
 from datetime import datetime
-from ...shared.types.common import ProcessingStatus, OptionalString
-
 
 @dataclass
 class EmailFilterRule:
@@ -42,37 +40,6 @@ class EmailIngestionConfig:
     pdfs_found: int = 0
     last_error_message: Optional[str] = None
     last_error_at: Optional[datetime] = None
-
-
-@dataclass
-class EmailConfigSummary:
-    """Summary information for email configurations"""
-    id: int
-    name: str
-    folder_name: str
-    is_active: bool
-    is_running: bool
-    emails_processed: int
-    pdfs_found: int
-    last_used_at: Optional[datetime]
-    created_at: datetime
-    updated_at: datetime
-
-
-@dataclass
-class EmailConfigStats:
-    """Statistics for email configuration performance"""
-    config_id: int
-    config_name: str
-    total_emails_processed: int
-    total_pdfs_found: int
-    success_rate: float
-    avg_processing_time_ms: int
-    last_24h_emails: int
-    last_24h_pdfs: int
-    last_error: Optional[str]
-    last_error_at: Optional[datetime]
-
 
 # === Email Processing Types ===
 
@@ -154,18 +121,3 @@ class ServiceHealth:
     stats: IngestionStats = field(default_factory=IngestionStats)
 
 
-# === Email Record Types ===
-
-@dataclass
-class Email:
-    """Email record domain object"""
-    id: int
-    message_id: str
-    subject: Optional[str]
-    sender_email: Optional[str]
-    sender_name: Optional[str]
-    received_date: datetime
-    folder_name: Optional[str]
-    has_pdf_attachments: bool
-    attachment_count: int
-    created_at: datetime

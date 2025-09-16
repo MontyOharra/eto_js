@@ -30,16 +30,11 @@ def handle_options(path):
     return '', 200
 
 
-# Service helper functions
-def get_pdf_storage_service():
-    """Get PDF storage service from app config"""
+# Service helper function
+def get_email_ingestion_service():
+    """Get email ingestion service from app config"""
     from flask import current_app
-    return current_app.config.get('PDF_STORAGE_SERVICE')
-
-def get_pdf_repository():
-    """Get PDF repository from app config"""
-    from flask import current_app
-    return current_app.config.get('PDF_REPOSITORY')
+    return current_app.config.get('EMAIL_INGESTION_SERVICE')
 
 
 @pdf_viewing_bp.route('/<int:pdf_id>', methods=['GET'])
@@ -52,30 +47,15 @@ def get_pdf_metadata(pdf_id: int):
         JSON response with PDF metadata
     """
     try:
-        pdf_repo = get_pdf_repository()
-        if not pdf_repo:
-            return jsonify({"error": "PDF repository not available"}), 500
+        email_service = get_email_ingestion_service()
+        if not email_service:
+            return jsonify({"error": "Email ingestion service not available"}), 500
         
-        pdf_file = pdf_repo.get_by_id(pdf_id)
-        if not pdf_file:
+        pdf_data = email_service.get_pdf_metadata(pdf_id)
+        if not pdf_data:
             return jsonify({"error": "PDF not found"}), 404
         
-        # Convert domain object to JSON-serializable dict
-        pdf_data = {
-            "id": pdf_file.id,
-            "email_id": pdf_file.email_id,
-            "filename": pdf_file.filename,
-            "original_filename": pdf_file.original_filename,
-            "file_size": pdf_file.file_size,
-            "sha256_hash": pdf_file.sha256_hash,
-            "mime_type": pdf_file.mime_type,
-            "page_count": pdf_file.page_count,
-            "object_count": pdf_file.object_count,
-            "created_at": pdf_file.created_at.isoformat() if pdf_file.created_at else None,
-            "updated_at": pdf_file.updated_at.isoformat() if pdf_file.updated_at else None
-        }
-        
-        logger.info(f"Retrieved PDF metadata for {pdf_id}: {pdf_file.filename}")
+        logger.info(f"Retrieved PDF metadata for {pdf_id}: {pdf_data.get('filename')}")
         return jsonify(pdf_data), 200
         
     except Exception as e:
@@ -93,22 +73,19 @@ def download_pdf_content(pdf_id: int):
         PDF file content with proper headers
     """
     try:
-        pdf_repo = get_pdf_repository()
-        pdf_storage = get_pdf_storage_service()
+        email_service = get_email_ingestion_service()
+        if not email_service:
+            return jsonify({"error": "Email ingestion service not available"}), 500
         
-        if not pdf_repo or not pdf_storage:
-            return jsonify({"error": "PDF services not available"}), 500
-        
-        # Get PDF metadata
-        pdf_file = pdf_repo.get_by_id(pdf_id)
-        if not pdf_file:
+        # Get PDF metadata first
+        pdf_data = email_service.get_pdf_metadata(pdf_id)
+        if not pdf_data:
             return jsonify({"error": "PDF not found"}), 404
         
-        # Retrieve PDF content from storage
-        try:
-            pdf_content = pdf_storage.retrieve_pdf_content(pdf_file.file_path)
-        except FileNotFoundError:
-            logger.error(f"PDF file not found on disk: {pdf_file.file_path}")
+        # Get PDF content
+        pdf_content = email_service.get_pdf_content(pdf_id)
+        if not pdf_content:
+            logger.error(f"PDF content not found for {pdf_id}")
             return jsonify({"error": "PDF file not found on disk"}), 404
         
         # Create response with proper headers for PDF viewing
@@ -116,13 +93,13 @@ def download_pdf_content(pdf_id: int):
             pdf_content,
             mimetype='application/pdf',
             headers={
-                'Content-Disposition': f'inline; filename="{pdf_file.original_filename}"',
+                'Content-Disposition': f'inline; filename="{pdf_data["original_filename"]}"',
                 'Content-Length': str(len(pdf_content)),
                 'Cache-Control': 'public, max-age=3600'  # Cache for 1 hour
             }
         )
         
-        logger.info(f"Served PDF content for {pdf_id}: {pdf_file.filename} ({len(pdf_content)} bytes)")
+        logger.info(f"Served PDF content for {pdf_id}: {pdf_data['filename']} ({len(pdf_content)} bytes)")
         return response
         
     except Exception as e:
@@ -140,48 +117,29 @@ def get_pdf_info(pdf_id: int):
         JSON response with detailed PDF information
     """
     try:
-        pdf_repo = get_pdf_repository()
-        pdf_storage = get_pdf_storage_service()
+        email_service = get_email_ingestion_service()
+        if not email_service:
+            return jsonify({"error": "Email ingestion service not available"}), 500
         
-        if not pdf_repo:
-            return jsonify({"error": "PDF repository not available"}), 500
-        
-        pdf_file = pdf_repo.get_by_id(pdf_id)
-        if not pdf_file:
+        pdf_data = email_service.get_pdf_metadata(pdf_id)
+        if not pdf_data:
             return jsonify({"error": "PDF not found"}), 404
         
-        # Basic PDF information
-        pdf_info = {
-            "id": pdf_file.id,
-            "email_id": pdf_file.email_id,
-            "filename": pdf_file.filename,
-            "original_filename": pdf_file.original_filename,
-            "file_size": pdf_file.file_size,
-            "sha256_hash": pdf_file.sha256_hash,
-            "mime_type": pdf_file.mime_type,
-            "page_count": pdf_file.page_count,
-            "object_count": pdf_file.object_count,
-            "created_at": pdf_file.created_at.isoformat() if pdf_file.created_at else None,
-            "updated_at": pdf_file.updated_at.isoformat() if pdf_file.updated_at else None,
-            "processing_status": {
-                "has_extracted_objects": pdf_file.objects_json is not None and pdf_file.objects_json != '',
-                "objects_json_size": len(pdf_file.objects_json) if pdf_file.objects_json else 0
-            }
+        # Basic PDF information (already in the right format from service)
+        pdf_info = pdf_data.copy()
+        
+        # Add processing status information
+        # Note: We'd need to add this to the service method if needed
+        pdf_info["processing_status"] = {
+            "has_extracted_objects": False,  # Would need service method to check this
+            "objects_json_size": 0
         }
         
-        # Check file existence on disk
-        if pdf_storage and pdf_file.file_path:
-            try:
-                import os
-                pdf_info["file_status"] = {
-                    "exists_on_disk": os.path.exists(pdf_file.file_path),
-                    "file_path": pdf_file.file_path
-                }
-            except Exception as e:
-                logger.warning(f"Error checking file status for PDF {pdf_id}: {e}")
-                pdf_info["file_status"] = {"exists_on_disk": None, "file_path": pdf_file.file_path}
+        # Add storage information
+        storage_info = email_service.get_pdf_storage_info()
+        pdf_info["storage_info"] = storage_info
         
-        logger.info(f"Retrieved detailed PDF info for {pdf_id}: {pdf_file.filename}")
+        logger.info(f"Retrieved detailed PDF info for {pdf_id}: {pdf_data['filename']}")
         return jsonify(pdf_info), 200
         
     except Exception as e:
@@ -203,29 +161,13 @@ def get_email_pdfs(email_id: int):
         JSON response with list of PDF metadata
     """
     try:
-        pdf_repo = get_pdf_repository()
-        if not pdf_repo:
-            return jsonify({"error": "PDF repository not available"}), 500
+        email_service = get_email_ingestion_service()
+        if not email_service:
+            return jsonify({"error": "Email ingestion service not available"}), 500
         
-        pdf_files = pdf_repo.get_by_email_id(email_id)
+        pdf_list = email_service.get_pdfs_by_email(email_id)
         
-        # Convert domain objects to JSON-serializable dicts
-        pdf_list = []
-        for pdf_file in pdf_files:
-            pdf_data = {
-                "id": pdf_file.id,
-                "email_id": pdf_file.email_id,
-                "filename": pdf_file.filename,
-                "original_filename": pdf_file.original_filename,
-                "file_size": pdf_file.file_size,
-                "sha256_hash": pdf_file.sha256_hash,
-                "mime_type": pdf_file.mime_type,
-                "page_count": pdf_file.page_count,
-                "object_count": pdf_file.object_count,
-                "created_at": pdf_file.created_at.isoformat() if pdf_file.created_at else None,
-                "updated_at": pdf_file.updated_at.isoformat() if pdf_file.updated_at else None
-            }
-            pdf_list.append(pdf_data)
+        # PDF list is already in the right format from service
         
         logger.info(f"Retrieved {len(pdf_list)} PDFs for email {email_id}")
         return jsonify({
@@ -254,9 +196,9 @@ def list_pdfs():
         JSON response with paginated PDF list
     """
     try:
-        pdf_repo = get_pdf_repository()
-        if not pdf_repo:
-            return jsonify({"error": "PDF repository not available"}), 500
+        email_service = get_email_ingestion_service()
+        if not email_service:
+            return jsonify({"error": "Email ingestion service not available"}), 500
         
         # Parse query parameters
         page = request.args.get('page', 1, type=int)
@@ -272,38 +214,16 @@ def list_pdfs():
         # Get PDFs based on filters
         if email_id:
             # Filter by specific email
-            pdf_files = pdf_repo.get_by_email_id(email_id)
+            all_pdfs = email_service.get_pdfs_by_email(email_id)
             # Simple in-memory pagination for email-specific results
             start_idx = (page - 1) * limit
             end_idx = start_idx + limit
-            paginated_files = pdf_files[start_idx:end_idx]
-            total_count = len(pdf_files)
+            pdf_list = all_pdfs[start_idx:end_idx]
+            total_count = len(all_pdfs)
         else:
-            # For now, we'll use a simple approach since we don't have pagination in repository
-            # In a production system, we'd implement proper database pagination
-            all_files = pdf_repo.get_all()  # This would need to be implemented
-            total_count = len(all_files) if all_files else 0
-            start_idx = (page - 1) * limit
-            end_idx = start_idx + limit
-            paginated_files = all_files[start_idx:end_idx] if all_files else []
-        
-        # Convert domain objects to JSON-serializable dicts
-        pdf_list = []
-        for pdf_file in paginated_files:
-            pdf_data = {
-                "id": pdf_file.id,
-                "email_id": pdf_file.email_id,
-                "filename": pdf_file.filename,
-                "original_filename": pdf_file.original_filename,
-                "file_size": pdf_file.file_size,
-                "sha256_hash": pdf_file.sha256_hash,
-                "mime_type": pdf_file.mime_type,
-                "page_count": pdf_file.page_count,
-                "object_count": pdf_file.object_count,
-                "created_at": pdf_file.created_at.isoformat() if pdf_file.created_at else None,
-                "updated_at": pdf_file.updated_at.isoformat() if pdf_file.updated_at else None
-            }
-            pdf_list.append(pdf_data)
+            # For now, return an error since we don't have a "get all PDFs" service method
+            # In production, we'd implement proper pagination in the service layer
+            return jsonify({"error": "Global PDF listing not implemented. Please specify email_id parameter."}), 400
         
         # Calculate pagination metadata
         total_pages = (total_count + limit - 1) // limit  # Ceiling division

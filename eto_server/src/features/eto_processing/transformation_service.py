@@ -4,6 +4,7 @@ Will be implemented in Phase 5 of the plan
 """
 import logging
 from typing import Dict, Any, Optional
+from ...shared.utils import get_service, ServiceNames
 
 logger = logging.getLogger(__name__)
 
@@ -43,23 +44,13 @@ class TransformationService:
         }
 
 
-# Global service instance
-_transformation_service: Optional[TransformationService] = None
-
-
 def get_transformation_service() -> Optional[TransformationService]:
-    """Get the global transformation service instance"""
-    return _transformation_service
+    """Get the transformation service from service registry"""
+    return get_service(ServiceNames.TRANSFORMATION)
 
 
 def init_transformation_service() -> TransformationService:
-    """Initialize the global transformation service"""
-    global _transformation_service
-    
-    if _transformation_service is not None:
-        logger.warning("Transformation service already initialized")
-        return _transformation_service
-    
-    _transformation_service = TransformationService()
+    """Create a new transformation service instance"""
+    service = TransformationService()
     logger.info("Transformation service initialized")
-    return _transformation_service
+    return service

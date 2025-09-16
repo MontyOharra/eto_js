@@ -40,7 +40,7 @@ class EmailIngestionCursorService:
                 # Cache the cursor
                 self._cache_cursor(cursor)
                 
-                logger.info(f"Retrieved cursor: {email_address}/{folder} - Last processed: {cursor.last_processed_received_date}")
+                logger.debug(f"Retrieved cursor: {email_address}/{folder} - Last processed: {cursor.last_processed_received_date}")
                 return cursor
             else:
                 logger.info(f"No cursor found for {email_address}/{folder}")
@@ -59,7 +59,7 @@ class EmailIngestionCursorService:
             # Check if cursor already exists
             existing_cursor = self.get_cursor_state(email_address, folder)
             if existing_cursor:
-                logger.info(f"Cursor already exists for {email_address}/{folder}")
+                logger.debug(f"Cursor already exists for {email_address}/{folder}")
                 return existing_cursor
             
             # Create new cursor starting from current time
@@ -140,7 +140,7 @@ class EmailIngestionCursorService:
                 # No cursor or no last processed date - process from max_hours_back
                 end_time = datetime.now(timezone.utc)
                 start_time = end_time - timedelta(hours=max_hours_back)
-                logger.info(f"No cursor history, processing last {max_hours_back} hours")
+                logger.debug(f"No cursor history, processing last {max_hours_back} hours")
                 return (start_time, end_time)
             
             # Calculate time windows
@@ -152,11 +152,11 @@ class EmailIngestionCursorService:
             if cursor_time < max_backlog_start:
                 # Cursor is older than max backlog - start from max_backlog_start
                 start_time = max_backlog_start
-                logger.info(f"Cursor too old, limiting backlog to {max_hours_back} hours")
+                logger.debug(f"Cursor too old, limiting backlog to {max_hours_back} hours")
             else:
                 # Start from cursor position
                 start_time = cursor_time
-                logger.info(f"Processing from cursor position: {cursor_time}")
+                logger.debug(f"Processing from cursor position: {cursor_time}")
             
             return (start_time, current_time)
             

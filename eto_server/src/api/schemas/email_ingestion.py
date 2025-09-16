@@ -30,7 +30,7 @@ class EmailFilterRuleSchema(BaseModel):
         return v
 
 
-class EmailConnectionConfigSchema(BaseModel):
+class EmailConfigConnectionSchema(BaseModel):
     """Email connection configuration schema"""
     email_address: str = Field(..., description="Email address to monitor", min_length=1)
     folder_name: str = Field(..., description="Email folder name")
@@ -43,17 +43,17 @@ class EmailMonitoringConfigSchema(BaseModel):
     error_retry_attempts: int = Field(3, ge=1, le=10, description="Error retry attempts")
 
 
-class CreateEmailConfigRequest(BaseModel):
+class EmailConfigCreateRequest(BaseModel):
     """Request schema for creating email configuration"""
     name: str = Field(..., min_length=1, max_length=255, description="Configuration name")
     description: Optional[str] = Field(None, max_length=1000, description="Configuration description")
-    connection: EmailConnectionConfigSchema
+    connection: EmailConfigConnectionSchema
     filter_rules: Optional[List[EmailFilterRuleSchema]] = Field(None, description="Email filter rules")
     monitoring: EmailMonitoringConfigSchema
     created_by: str = Field(..., description="User who created the configuration")
 
 
-class UpdateEmailConfigRequest(BaseModel):
+class EmailConfigUpdateRequest(BaseModel):
     """Request schema for updating email configuration"""
     description: Optional[str] = Field(None, max_length=1000, description="Configuration description")
     connection: Optional[EmailConnectionConfigSchema] = None

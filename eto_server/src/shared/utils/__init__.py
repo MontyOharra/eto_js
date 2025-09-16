@@ -3,24 +3,13 @@ Shared Utilities Package
 Common utility functions and helpers for the ETO server
 """
 
-from .storage_config import (
-    get_default_storage_path,
-    get_portable_storage_path,
-    get_development_storage_path,
-    get_storage_configuration,
-    setup_first_run_storage,
-    validate_storage_path,
-    is_development_mode,
-    get_fallback_storage
-)
+from .storage_config import get_storage_configuration
+from .service_registry import get_service, require_service, is_service_available, ServiceNames
 
 __all__ = [
-    'get_default_storage_path',
-    'get_portable_storage_path', 
-    'get_development_storage_path',
     'get_storage_configuration',
-    'setup_first_run_storage',
-    'validate_storage_path',
-    'is_development_mode',
-    'get_fallback_storage'
+    'get_service',
+    'require_service',
+    'is_service_available',
+    'ServiceNames'
 ]

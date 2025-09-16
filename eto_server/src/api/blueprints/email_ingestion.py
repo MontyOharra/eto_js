@@ -1,6 +1,6 @@
 """
 Email Ingestion API Blueprint
-REST endpoints for managing email ingestion configuration
+REST endpoints for managing email ingestion config
 """
 from flask import Blueprint, request, jsonify, current_app
 from flask_cors import cross_origin, CORS
@@ -66,16 +66,16 @@ def handle_validation_error(e: ValidationError) -> Dict[str, Any]:
     }
 
 
-@email_ingestion_bp.route('/configurations', methods=['GET'])
+@email_ingestion_bp.route('/configs', methods=['GET'])
 @cross_origin()
-def list_configurations():
-    """List all email ingestion configurations"""
+def list_email_configs():
+    """List all email ingestion configs"""
     try:
         order_by = request.args.get('order_by')
         desc = request.args.get('desc', 'false').lower() == 'true'
         
         email_service = get_email_service()
-        configs = email_service.config_service.list_configurations(order_by=order_by, desc=desc)
+        configs = email_service.config_service.list_configs(order_by=order_by, desc=desc)
         
         # Convert domain objects to response schemas
         config_responses = [
@@ -100,18 +100,18 @@ def list_configurations():
         }), 200
     
     except Exception as e:
-        logger.error(f"Error listing configurations: {e}")
+        logger.error(f"Error listing configs: {e}")
         return jsonify({
             "success": False,
             "error": str(e),
-            "message": "Failed to list configurations"
+            "message": "Failed to list configs"
         }), 500
 
 
-@email_ingestion_bp.route('/configurations', methods=['POST'])
+@email_ingestion_bp.route('/configs', methods=['POST'])
 @cross_origin()
-def create_configuration():
-    """Create new email ingestion configuration"""
+def create_email_config():
+    """Create new email ingestion config"""
     try:
         data = request.get_json()
         
@@ -119,7 +119,7 @@ def create_configuration():
             return jsonify({
                 "success": False,
                 "error": "Request body is required",
-                "message": "Missing configuration data"
+                "message": "Missing config data"
             }), 400
         
         # Validate request data
@@ -141,7 +141,7 @@ def create_configuration():
                 for rule in create_request.filter_rules
             ]
         
-        # Build configuration data for service
+        # Build config data for service
         config_data = {
             "connection": {
                 "email_address": create_request.connection.email_address,
@@ -159,7 +159,7 @@ def create_configuration():
         }
         
         email_service = get_email_service()
-        result = email_service.config_service.create_configuration(
+        result = email_service.config_service.create_config(
             name=create_request.name,
             description=create_request.description or "",
             config_data=config_data,
@@ -172,43 +172,43 @@ def create_configuration():
             return jsonify(result), 400
     
     except Exception as e:
-        logger.error(f"Error creating configuration: {e}")
+        logger.error(f"Error creating config: {e}")
         return jsonify({
             "success": False,
             "error": str(e),
-            "message": "Failed to create configuration"
+            "message": "Failed to create config"
         }), 500
 
 
 
 
-@email_ingestion_bp.route('/configurations/<int:config_id>/activate', methods=['POST'])
+@email_ingestion_bp.route('/configs/<int:config_id>/activate', methods=['POST'])
 @cross_origin()
-def activate_configuration(config_id: int):
-    """Activate an email ingestion configuration with optional auto-start"""
+def activate_config(config_id: int):
+    """Activate an email ingestion config with optional auto-start"""
     try:
         # Check if auto_start parameter is provided
         data = request.get_json() or {}
         auto_start = data.get('auto_start', False)
         
-        # Activate the configuration
+        # Activate the config
         email_service = get_email_service()
-        result = email_service.config_service.activate_configuration(config_id)
+        result = email_service.config_service.activate_config(config_id)
         
-        if not result["success"]:
+        if not result:
             return jsonify(result), 400
         
         # If auto_start is requested, try to start ingestion
         if auto_start:
             try:
-                start_result = email_service.start_ingestion()
+                start_result = email_service.start()
                 
                 # Return combined response
                 response = {
                     "success": True,
                     "config_id": result["config_id"],
                     "config_name": result["name"],
-                    "message": f"Configuration activated and email ingestion started",
+                    "message": f"Config activated and email ingestion started",
                     "activated": True,
                     "auto_started": start_result.get("success", False),
                     "start_message": start_result.get("message", "")
@@ -225,7 +225,7 @@ def activate_configuration(config_id: int):
                     "success": True,
                     "config_id": result["config_id"],
                     "config_name": result["name"],
-                    "message": f"Configuration activated but auto-start failed: {str(e)}",
+                    "message": f"Config activated but auto-start failed: {str(e)}",
                     "activated": True,
                     "auto_started": False,
                     "start_error": str(e)
@@ -242,11 +242,11 @@ def activate_configuration(config_id: int):
         return jsonify(response.dict()), 200
     
     except Exception as e:
-        logger.error(f"Error activating configuration {config_id}: {e}")
+        logger.error(f"Error activating config {config_id}: {e}")
         return jsonify({
             "success": False,
             "error": str(e),
-            "message": "Failed to activate configuration"
+            "message": "Failed to activate config"
         }), 500
 
 
@@ -295,7 +295,7 @@ def start_ingestion():
         email_service = get_email_service()
         
         # Start the ingestion service
-        result = email_service.start_ingestion()
+        result = email_service.start()
         
         if result["success"]:
             return jsonify(result), 200
@@ -319,7 +319,7 @@ def stop_ingestion():
         email_service = get_email_service()
         
         # Stop the ingestion service
-        result = email_service.stop_ingestion()
+        result = email_service.stop()
         
         if result["success"]:
             return jsonify(result), 200

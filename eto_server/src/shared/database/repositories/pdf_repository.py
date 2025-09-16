@@ -3,12 +3,14 @@ PDF Repository
 Data access layer for PdfFileModel model operations
 """
 import logging
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, TYPE_CHECKING
 from datetime import datetime, timezone
 from sqlalchemy.exc import SQLAlchemyError
 from .base_repository import BaseRepository, RepositoryError
 from ..models import PdfFileModel
-from src.features.pdf_processing.types import PdfFile
+
+if TYPE_CHECKING:
+    from src.features.pdf_processing.types import PdfFile
 
 
 logger = logging.getLogger(__name__)
@@ -21,7 +23,7 @@ class PdfRepository(BaseRepository[PdfFileModel]):
     def model_class(self):
         return PdfFileModel
     
-    def _convert_to_domain_object(self, pdf_model: PdfFileModel) -> PdfFile:
+    def _convert_to_domain_object(self, pdf_model: PdfFileModel) -> "PdfFile":
         """Convert database model to domain object while session is active"""
         pdf_data = {
             'id': getattr(pdf_model, 'id'),
@@ -38,9 +40,11 @@ class PdfRepository(BaseRepository[PdfFileModel]):
             'created_at': getattr(pdf_model, 'created_at'),
             'updated_at': getattr(pdf_model, 'updated_at')
         }
+        # Import PdfFile dynamically to avoid circular imports
+        from src.features.pdf_processing.types import PdfFile
         return PdfFile(**pdf_data)
     
-    def get_by_id(self, id: int) -> Optional[PdfFile]:
+    def get_by_id(self, id: int) -> Optional["PdfFile"]:
         """Override BaseRepository method to return domain object"""
         try:
             with self.connection_manager.session_scope() as session:
@@ -49,7 +53,7 @@ class PdfRepository(BaseRepository[PdfFileModel]):
                 
                 if model:
                     # Convert to domain object while session is still active
-                    logger.info(f"Retrieved PDF: {getattr(model, 'filename')} from email {getattr(model, 'email_id')}")
+                    logger.debug(f"Retrieved PDF: {getattr(model, 'filename')} from email {getattr(model, 'email_id')}")
                     return self._convert_to_domain_object(model)
                 else:
                     return None
@@ -57,7 +61,7 @@ class PdfRepository(BaseRepository[PdfFileModel]):
             logger.error(f"Error getting PDF {id}: {e}")
             raise RepositoryError(f"Failed to get PDF: {e}") from e
     
-    def get_by_email_id(self, email_id: int) -> List[PdfFile]:
+    def get_by_email_id(self, email_id: int) -> List["PdfFile"]:
         """Get all PDF files for a specific email - returns domain objects"""
         if email_id is None:
             return []
@@ -75,7 +79,7 @@ class PdfRepository(BaseRepository[PdfFileModel]):
             logger.error(f"Error getting PDFs for email {email_id}: {e}")
             raise RepositoryError(f"Failed to get PDFs for email: {e}") from e
     
-    def get_by_hash(self, sha256_hash: str) -> List[PdfFile]:
+    def get_by_hash(self, sha256_hash: str) -> List["PdfFile"]:
         """Get PDF files by SHA256 hash (may be multiple)"""
         if not sha256_hash:
             return []
@@ -93,7 +97,7 @@ class PdfRepository(BaseRepository[PdfFileModel]):
             logger.error(f"Error getting PDFs by hash {sha256_hash}: {e}")
             raise RepositoryError(f"Failed to get PDFs by hash: {e}") from e
     
-    def get_by_filename(self, filename: str) -> List[PdfFile]:
+    def get_by_filename(self, filename: str) -> List["PdfFile"]:
         """Get PDF files by filename"""
         if not filename:
             return []   
@@ -113,7 +117,7 @@ class PdfRepository(BaseRepository[PdfFileModel]):
 
     # === Phase 1: Essential PDF Repository Methods ===
     
-    def create_pdf_record(self, pdf_data: Dict[str, Any]) -> PdfFile:
+    def create_pdf_record(self, pdf_data: Dict[str, Any]) -> "PdfFile":
         """
         Create PDF record and return the domain object
         
@@ -138,7 +142,7 @@ class PdfRepository(BaseRepository[PdfFileModel]):
             # Create the record using base repository method
             pdf_record = self.create(pdf_data)
             
-            logger.info(f"Created PDF record {pdf_record.id} for email {pdf_data['email_id']}: {pdf_data['filename']}")
+            logger.debug(f"Created PDF record {pdf_record.id} for email {pdf_data['email_id']}: {pdf_data['filename']}")
             
             # Convert to domain object before returning
             with self.connection_manager.session_scope() as session:
@@ -178,7 +182,7 @@ class PdfRepository(BaseRepository[PdfFileModel]):
             logger.error(f"Error checking if hash exists {sha256_hash}: {e}")
             raise RepositoryError(f"Failed to check hash existence: {e}") from e
     
-    def get_duplicate_by_hash(self, sha256_hash: str) -> Optional[PdfFile]:
+    def get_duplicate_by_hash(self, sha256_hash: str) -> Optional["PdfFile"]:
         """
         Get existing PDF with same hash for deduplication
         
@@ -198,7 +202,7 @@ class PdfRepository(BaseRepository[PdfFileModel]):
                 ).first()
                 
                 if model:
-                    logger.info(f"Found duplicate PDF by hash {sha256_hash[:16]}...: {model.filename}")
+                    logger.debug(f"Found duplicate PDF by hash {sha256_hash[:16]}...: {model.filename}")
                     return self._convert_to_domain_object(model)
                 else:
                     return None
@@ -207,7 +211,7 @@ class PdfRepository(BaseRepository[PdfFileModel]):
             logger.error(f"Error getting duplicate by hash {sha256_hash}: {e}")
             raise RepositoryError(f"Failed to get duplicate by hash: {e}") from e
     
-    def update_pdf_processing_status(self, pdf_id: int, status_data: Dict[str, Any]) -> Optional[PdfFile]:
+    def update_pdf_processing_status(self, pdf_id: int, status_data: Dict[str, Any]) -> Optional["PdfFile"]:
         """
         Update PDF processing metadata (page_count, object_count, etc.)
         
@@ -229,7 +233,7 @@ class PdfRepository(BaseRepository[PdfFileModel]):
             updated_model = self.update(pdf_id, status_data)
             
             if updated_model:
-                logger.info(f"Updated processing status for PDF {pdf_id}: {list(status_data.keys())}")
+                logger.debug(f"Updated processing status for PDF {pdf_id}: {list(status_data.keys())}")
                 # Convert to domain object (need to fetch from session to get latest data)
                 with self.connection_manager.session_scope() as session:
                     fresh_model = session.get(self.model_class, pdf_id)
@@ -242,7 +246,7 @@ class PdfRepository(BaseRepository[PdfFileModel]):
             logger.error(f"Error updating PDF processing status for {pdf_id}: {e}")
             raise RepositoryError(f"Failed to update PDF processing status: {e}") from e
     
-    def update_objects_json(self, pdf_id: int, objects_json: str) -> Optional[PdfFile]:
+    def update_objects_json(self, pdf_id: int, objects_json: str) -> Optional["PdfFile"]:
         """Update the objects_json field for a PDF file"""
         if pdf_id is None:
             raise ValueError("pdf_id cannot be None")

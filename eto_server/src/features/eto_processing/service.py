@@ -13,6 +13,10 @@ from datetime import datetime, timezone
 from ...shared.database import get_connection_manager
 from ...shared.database.repositories import EtoRunRepository, PdfRepository, TemplateRepository
 from ...features.pdf_processing.object_extraction_service import PdfObjectExtractionService
+from ...shared.utils import get_service, require_service, ServiceNames
+from .template_matching_service import TemplateMatchingService
+from .data_extraction_service import DataExtractionService
+from .transformation_service import TransformationService
 
 logger = logging.getLogger(__name__)
 
@@ -20,47 +24,33 @@ logger = logging.getLogger(__name__)
 class EtoProcessingService:
     """Background worker service for processing ETO runs through the complete pipeline"""
     
-    def __init__(self, connection_manager=None, poll_interval: int = 10, batch_size: int = 5):
-        # Database infrastructure
-        self.connection_manager = connection_manager or get_connection_manager()
+    def __init__(self, poll_interval: int = 10, batch_size: int = 5):
+        # Database infrastructure - get from service registry
+        self.connection_manager = get_service(ServiceNames.CONNECTION_MANAGER)
         if not self.connection_manager:
             raise RuntimeError("Database connection manager is required")
-        
+
         # Repository layer
         self.eto_run_repo = EtoRunRepository(self.connection_manager)
         self.pdf_repo = PdfRepository(self.connection_manager)
         self.template_repo = TemplateRepository(self.connection_manager)
-        
-        # Service dependencies (to be injected later)
-        self.template_matching_service = None
-        self.data_extraction_service = None
-        self.transformation_service = None
-        
+
+        # Service layer - create dependent services internally
+        self.template_matching_service = TemplateMatchingService()
+        self.data_extraction_service = DataExtractionService()
+        self.transformation_service = TransformationService()
+
         # Worker configuration
         self.poll_interval = poll_interval  # seconds between queue checks
         self.batch_size = batch_size  # max runs to process per batch
-        
+
         # Worker state
         self.running = False
         self.worker_thread = None
         self._lock = threading.Lock()
-        
+
         logger.info("ETO Processing Service initialized")
     
-    def set_template_matching_service(self, service):
-        """Inject template matching service dependency"""
-        self.template_matching_service = service
-        logger.info("Template matching service configured")
-    
-    def set_data_extraction_service(self, service):
-        """Inject data extraction service dependency"""
-        self.data_extraction_service = service
-        logger.info("Data extraction service configured")
-    
-    def set_transformation_service(self, service):
-        """Inject transformation service dependency"""
-        self.transformation_service = service
-        logger.info("Transformation service configured")
     
     def start(self):
         """Start the background processing worker"""
@@ -85,7 +75,7 @@ class EtoProcessingService:
                 return
             
             self.running = False
-            logger.info("ETO processing worker stopping...")
+            logger.debug("ETO processing worker stopping...")
             
             if self.worker_thread:
                 self.worker_thread.join(timeout=30)
@@ -97,9 +87,9 @@ class EtoProcessingService:
     def _services_configured(self) -> bool:
         """Check if all required services are configured"""
         return all([
-            self.template_matching_service,
-            self.data_extraction_service,
-            self.transformation_service
+            self.template_matching_service is not None,
+            self.data_extraction_service is not None,
+            self.transformation_service is not None
         ])
     
     def _worker_loop(self):
@@ -112,7 +102,7 @@ class EtoProcessingService:
                 pending_runs = self.eto_run_repo.get_pending_runs(limit=self.batch_size)
                 
                 if pending_runs:
-                    logger.info(f"Processing {len(pending_runs)} pending ETO runs")
+                    logger.debug(f"Processing {len(pending_runs)} pending ETO runs")
                     
                     for eto_run in pending_runs:
                         if not self.running:
@@ -144,7 +134,7 @@ class EtoProcessingService:
         Process a single ETO run through the complete workflow:
         not_started -> processing (template_matching -> data_extraction -> data_transformation) -> success
         """
-        logger.info(f"Starting ETO run {eto_run.id} processing workflow")
+        logger.debug(f"Starting ETO run {eto_run.id} processing workflow")
         
         # Step 1: Update status to 'processing' and start with template matching
         self.eto_run_repo.update_processing_step(
@@ -192,7 +182,7 @@ class EtoProcessingService:
         Reads PDF objects from pdf_files.objects_json and attempts to match against templates.
         Returns template_id if match found, None if no match (sets status to 'needs_template').
         """
-        logger.info(f"Starting template matching step for ETO run {eto_run.id}")
+        logger.debug(f"Starting template matching step for ETO run {eto_run.id}")
         
         try:
             # Get PDF file record to access objects_json
@@ -256,7 +246,7 @@ class EtoProcessingService:
         Process data extraction step using the matched template.
         Returns extracted data dictionary.
         """
-        logger.info(f"Starting data extraction step for ETO run {run_id} with template {template_id}")
+        logger.debug(f"Starting data extraction step for ETO run {run_id} with template {template_id}")
         
         # Update processing step
         self.eto_run_repo.update_processing_step(run_id, 'processing', 'extracting_data')
@@ -285,7 +275,7 @@ class EtoProcessingService:
         Process data transformation step to convert extracted data to target format.
         Returns transformed target data dictionary.
         """
-        logger.info(f"Starting data transformation step for ETO run {run_id}")
+        logger.debug(f"Starting data transformation step for ETO run {run_id}")
         
         # Update processing step
         self.eto_run_repo.update_processing_step(run_id, 'processing', 'transforming_data')
@@ -350,41 +340,29 @@ class EtoProcessingService:
             return False
 
 
-# Global service instance
-_eto_processing_service: Optional[EtoProcessingService] = None
-
-
 def get_eto_processing_service() -> Optional[EtoProcessingService]:
-    """Get the global ETO processing service instance"""
-    return _eto_processing_service
+    """Get the ETO processing service from service registry"""
+    return get_service(ServiceNames.ETO_PROCESSING)
 
 
-def init_eto_processing_service(connection_manager=None, **config) -> EtoProcessingService:
-    """Initialize the global ETO processing service"""
-    global _eto_processing_service
-    
-    if _eto_processing_service is not None:
-        logger.warning("ETO processing service already initialized")
-        return _eto_processing_service
-    
-    _eto_processing_service = EtoProcessingService(
-        connection_manager=connection_manager,
-        **config
-    )
-    
+def init_eto_processing_service(**config) -> EtoProcessingService:
+    """Create a new ETO processing service instance"""
+    service = EtoProcessingService(**config)
     logger.info("ETO processing service initialized")
-    return _eto_processing_service
+    return service
 
 
 def start_eto_processing_service():
-    """Start the background ETO processing worker"""
-    if _eto_processing_service:
-        _eto_processing_service.start()
+    """Start the ETO processing service worker"""
+    service = get_eto_processing_service()
+    if service:
+        service.start()
     else:
-        logger.error("ETO processing service not initialized")
+        logger.error("ETO processing service not available")
 
 
 def stop_eto_processing_service():
-    """Stop the background ETO processing worker"""
-    if _eto_processing_service:
-        _eto_processing_service.stop()
+    """Stop the ETO processing service worker"""
+    service = get_eto_processing_service()
+    if service:
+        service.stop()

@@ -5,6 +5,146 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-09-16 20:15] — Application Startup Cleanup and Duplicate Code Removal
+### Spec / Intent
+- Fix duplicate logging configuration between main.py and app.py that was overwriting file logging
+- Remove redundant environment loading and import-time side effects
+- Clean up duplicate main block in app.py that created confusion about entry points
+- Establish single, clear application startup lifecycle
+
+### Changes Made
+- Files: `src/app.py`
+- Summary: Removed duplicate logging configuration that was overwriting main.py's file+console setup with console-only logging. Removed duplicate `load_dotenv()` call since main.py already handles environment loading. Removed duplicate `if __name__ == '__main__'` block that duplicated server startup logic. Cleaned up import-time side effects.
+
+### Next Actions
+- Test application startup to ensure logging works correctly with file output
+- Verify all services initialize properly through cleaned up lifecycle
+
+### Notes
+- Application startup lifecycle is now clean: main.py → app.create_app() → service initialization
+- Logging is configured once in main.py with both file and console output
+- No more import-time configuration side effects in app.py
+- Single entry point through main.py eliminates confusion
+
+---
+
+## [2025-09-15 19:45] — PDF Service Architecture Refactoring and Domain Object Implementation
+### Spec / Intent
+- Fix redundant functionality in PDF processing services where PdfProcessingService was duplicating storage workflow logic
+- Implement proper domain objects (PdfStoreRequest) instead of loose Dict[str, Any] parameters for service contracts  
+- Ensure PdfProcessingService acts as pure orchestrator delegating to sub-services instead of bypassing them
+- Move complete storage workflow (including repository access) to PdfStorageService for proper separation of concerns
+- Fix circular import issues between repositories and domain types using TYPE_CHECKING pattern
+
+### Changes Made
+- Files: `src/features/pdf_processing/storage_service.py`
+- Summary: Updated constructor to accept `pdf_repository` parameter. Added `store_pdf_complete()` method that handles complete storage workflow including file storage and database record creation, eliminating redundancy in PdfProcessingService.
+- Files: `src/features/pdf_processing/service.py`  
+- Summary: Refactored `store_pdf()` method to use `PdfStoreRequest` domain object and delegate to `storage_service.store_pdf_complete()`. Updated constructor to inject repository into storage service. Now acts as pure orchestrator.
+- Files: `src/features/pdf_processing/types.py`
+- Summary: Domain objects already existed for typed service contracts including `PdfStoreRequest` with proper field ordering.
+- Files: `src/features/email_ingestion/service.py`
+- Summary: Updated to use `PdfStoreRequest` domain object instead of Dict metadata when calling PDF processing service.
+- Files: `src/shared/database/repositories/pdf_repository.py`, `src/shared/database/repositories/eto_run_repository.py`
+- Summary: Fixed circular import issues by using TYPE_CHECKING imports and quoted type annotations. Updated domain object conversion to use dynamic imports.
+
+### Next Actions
+- Test PDF processing pipeline with new architecture
+- Verify email ingestion service works with domain objects
+- Update ETO Processing Service to use shared PDF service
+
+### Notes
+- All files successfully compile, indicating proper type annotation structure
+- Architecture now properly separates concerns with storage service handling complete workflow
+- PdfProcessingService is now a clean orchestrator without redundant repository access
+
+---
+
+## [2025-09-15 17:30] — PDF Processing Service Separation and Shared Architecture
+### Spec / Intent
+- Extract PDF processing functionality from Email Ingestion Service into standalone, reusable service
+- Enable PDF functionality to be shared across multiple features (email ingestion, manual upload, ETO processing)
+- Implement proper dependency injection pattern for shared services
+- Prepare architecture for future manual PDF upload feature and other PDF entry points
+
+### Changes Made
+- Files: `src/features/pdf_processing/service.py` (Created)
+- Summary: New standalone `PdfProcessingService` containing all PDF operations: storage, extraction, metadata management, and API access methods. Service can be instantiated with just a storage path and handles all PDF concerns internally.
+- Files: `src/features/pdf_processing/__init__.py`
+- Summary: Added exports for `PdfProcessingService`, `get_pdf_processing_service`, `init_pdf_processing_service` to support both direct instantiation and global singleton patterns.
+- Files: `src/features/email_ingestion/service.py`
+- Summary: Major refactor to remove embedded PDF functionality. Changed constructor to accept `pdf_processing_service` dependency. All PDF methods now delegate to the shared service. Removed PDF repository, storage service, and object extraction service dependencies.
+- Files: `src/app.py`
+- Summary: Added `initialize_pdf_processing()` function to create shared PDF service. Updated initialization order: database → PDF processing → email ingestion → ETO processing. Services now properly share PDF functionality through dependency injection.
+
+### Next Actions
+- Update ETO Processing Service to use shared PDF service (currently uses repository directly)
+- Implement manual PDF upload feature using shared PDF service
+- Test complete PDF processing pipeline through shared service architecture
+
+### Notes
+- **Separation of Concerns**: PDF processing is now isolated from email-specific logic
+- **Reusability**: PDF service can be shared across multiple features (email, manual upload, ETO processing)
+- **Dependency Injection**: Clean service injection pattern with simple configuration (storage path)
+- **Future Ready**: Architecture supports manual PDF uploads and other PDF entry points
+- **Service Boundaries**: Each service now has clear, focused responsibilities
+
+---
+
+## [2025-09-15 17:00] — Architectural Fixes: PDF Storage Integration and Repository Exposure
+### Spec / Intent
+- Fix PDF storage service integration pattern to follow consistent dependency injection
+- Remove repository exposure from API layer to enforce proper architectural boundaries
+- Ensure APIs only access functionality through service layer, never directly through repositories
+- Simplify email ingestion service constructor to accept configuration parameters instead of complex service injection
+
+### Changes Made
+- Files: `src/features/email_ingestion/service.py`
+- Summary: Changed constructor from `__init__(pdf_storage_service=None)` to `__init__(pdf_storage_path: str = None)`. Service now creates PDF storage internally using provided path, matching the pattern used by other services.
+- Files: `src/app.py`
+- Summary: Simplified email ingestion initialization to pass storage path instead of creating and injecting service. Removed repository exposure (`PDF_REPOSITORY`) from Flask app config.
+- Files: `src/api/blueprints/pdf_viewing.py`
+- Summary: Complete API refactor to access PDFs through service layer. Replaced direct repository access with service methods. Added comprehensive PDF service methods to EmailIngestionService for API consumption.
+
+### Next Actions
+- Test complete PDF viewing functionality through service layer
+- Verify no other APIs are directly accessing repositories
+- Consider adding similar service methods to other features that need API access
+
+### Notes
+- **Architecture Enforcement**: APIs now properly respect layer boundaries (API → Service → Repository → Database)
+- **Dependency Injection**: Services use simple parameter injection (paths, config values) instead of complex service injection
+- **Repository Isolation**: Repositories are no longer exposed outside service layer, preventing layer violations
+- **Service Methods**: Added `get_pdf_metadata()`, `get_pdf_content()`, `get_pdfs_by_email()`, `get_pdf_storage_info()` to EmailIngestionService for API consumption
+
+---
+
+## [2025-09-15 16:45] — Repository Domain Object Consistency Fixes
+### Spec / Intent
+- Fix repository pattern inconsistencies across codebase where some repositories returned domain objects and others returned database models
+- Ensure all repositories follow established pattern of returning domain objects instead of raw SQLAlchemy models
+- Apply consistent session-scoped domain object conversion pattern used in EmailIngestionConfigRepository
+- Update PDF and ETO Run repositories to match established domain object consistency
+
+### Changes Made
+- Files: `src/shared/database/repositories/pdf_repository.py`
+- Summary: Fixed `create_pdf_record()` and `update_objects_json()` methods to return `PdfFile` domain objects instead of raw `int` or `PdfFileModel`. Added proper session-scoped domain object conversion before returning.
+- Files: `src/shared/database/repositories/eto_run_repository.py`  
+- Summary: Complete repository refactor - added `_convert_to_domain_object()` method, imported `EtoRun` domain type, updated all 14 methods to return `EtoRun` domain objects instead of `EtoRunModel`. Added session-scoped conversions throughout.
+
+### Next Actions
+- Test ETO processing service integration with updated repository return types
+- Verify no breaking changes in service layer that depends on these repositories
+- Consider applying same pattern to any other repositories that may have inconsistencies
+
+### Notes
+- **Repository Pattern**: All repositories now consistently return domain objects from `src/features/*/types.py` instead of database models from `src/shared/database/models.py`
+- **Session Management**: Proper SQLAlchemy session scoping ensures domain object conversion happens while database session is active
+- **Type Safety**: Updated method signatures reflect actual return types (`Optional[EtoRun]`, `List[EtoRun]`, etc.)
+- **Domain Objects**: ETO Run repository now converts all 21 model fields to domain object properties using `getattr()` pattern for proper column access
+
+---
+
 ## [2025-01-13 16:30] — Complete PDF Processing Pipeline Implementation
 ### Spec / Intent
 - Build comprehensive PDF processing system integrating with existing email ingestion service

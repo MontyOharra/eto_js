@@ -7,17 +7,11 @@ import threading
 import time
 import tempfile
 import os
+import win32com.client
+import pythoncom
 from typing import Optional, Dict, List, Any, Tuple
 from datetime import datetime, timezone, timedelta
 
-try:
-    import win32com.client
-    import pythoncom
-    COM_AVAILABLE = True
-except ImportError:
-    COM_AVAILABLE = False
-    win32com = None
-    pythoncom = None
 
 from ..types import EmailConnectionConfig, ConnectionStatus, EmailData
 
@@ -28,9 +22,6 @@ class OutlookComService:
     """Manages Outlook COM connections and basic folder operations"""
     
     def __init__(self):
-        if not COM_AVAILABLE:
-            logger.warning("Windows COM components not available - Outlook integration disabled")
-        
         # COM objects
         self.outlook: Optional[Any] = None
         self.namespace: Optional[Any] = None
@@ -59,16 +50,9 @@ class OutlookComService:
     
     def connect(self, connection_config: EmailConnectionConfig) -> Dict[str, Any]:
         """Connect to Outlook with specified configuration"""
-        if not COM_AVAILABLE:
-            return {
-                "success": False,
-                "error": "COM components not available",
-                "message": "Windows COM components required for Outlook integration"
-            }
-        
         try:
             with self._lock:
-                logger.info(f"Connecting to Outlook - Email: {connection_config.email_address or 'Default'}, Folder: {connection_config.folder_name}")
+                logger.debug(f"Connecting to Outlook - Email: {connection_config.email_address or 'Default'}, Folder: {connection_config.folder_name}")
                 
                 # Initialize COM
                 assert pythoncom is not None and win32com is not None
@@ -154,10 +138,8 @@ class OutlookComService:
                         except:
                             pass  # Outlook may already be closed
                         self.outlook = None
-                    
-                    if COM_AVAILABLE:
-                        assert pythoncom is not None
-                        pythoncom.CoUninitialize()
+                
+                    pythoncom.CoUninitialize()
                         
                 finally:
                     # Always reset state regardless of cleanup success
@@ -219,18 +201,8 @@ class OutlookComService:
         test_folder = None
         
         try:
-            logger.info(f"Testing connection - Email: {connection_config.email_address or 'Default'}, Folder: {connection_config.folder_name}")
-            
-            # Test COM availability
-            if not COM_AVAILABLE:
-                return {
-                    "success": False,
-                    "error": "COM components not available",
-                    "message": "Windows COM components required for Outlook integration"
-                }
-            
-            # Initialize COM for test
-            assert pythoncom is not None and win32com is not None
+            logger.debug(f"Testing connection - Email: {connection_config.email_address or 'Default'}, Folder: {connection_config.folder_name}")
+
             pythoncom.CoInitialize()
             
             try:
@@ -307,11 +279,8 @@ class OutlookComService:
                 raise Exception("Not connected to Outlook")
             
             logger.debug(f"Getting {limit} recent emails from {self.connection_config.folder_name}")
-            
-            # Initialize COM for this thread
-            if COM_AVAILABLE:
-                assert pythoncom is not None and win32com is not None
-                pythoncom.CoInitialize()
+        
+            pythoncom.CoInitialize()
             
             try:
                 # Create fresh COM objects for this thread
@@ -381,10 +350,7 @@ class OutlookComService:
                 return emails
                 
             finally:
-                # Clean up COM for this thread
-                if COM_AVAILABLE:
-                    assert pythoncom is not None
-                    pythoncom.CoUninitialize()
+                pythoncom.CoUninitialize()
             
         except Exception as e:
             logger.error(f"Error getting recent emails: {e}")

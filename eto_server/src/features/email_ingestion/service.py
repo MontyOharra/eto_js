@@ -16,47 +16,32 @@ from .cursor_service import EmailIngestionCursorService
 from .types import EmailIngestionConfig, IngestionStats, ServiceHealth, EmailData, EmailConnectionConfig
 from .integrations.outlook_com_service import OutlookComService
 from ...shared.database import get_connection_manager
-from ...shared.database.repositories import EmailIngestionConfigRepository, EmailIngestionCursorRepository, EmailRepository, PdfRepository, EtoRunRepository
-from ...features.pdf_processing.object_extraction_service import PdfObjectExtractionService
+from ...shared.database.repositories import EmailIngestionConfigRepository, EmailIngestionCursorRepository, EmailRepository, EtoRunRepository
+from ..pdf_processing.types import PdfStoreRequest
+from ...shared.utils import get_service, ServiceNames
 
 logger = logging.getLogger(__name__)
 
 
 class EmailIngestionService:
     """Main orchestrator for email processing with automatic startup and downtime recovery"""
-    
-    def __init__(self, pdf_storage_service = None):
+
+    def __init__(self):
         # Infrastructure layer - single source of truth
         self.connection_manager = get_connection_manager()
         assert self.connection_manager is not None
-        
-        # Repository layer - all created at top level with shared connection manager
+
+        # Repository layer - only email-specific repositories
         self.config_repo = EmailIngestionConfigRepository(self.connection_manager)
         self.cursor_repo = EmailIngestionCursorRepository(self.connection_manager)
         self.email_repo = EmailRepository(self.connection_manager)
-        self.pdf_repo = PdfRepository(self.connection_manager)
         self.eto_run_repo = EtoRunRepository(self.connection_manager)
-        
+
         # Service layer - repositories injected as dependencies
         self.config_service = EmailIngestionConfigurationService(self.config_repo)
         self.filter_service = EmailIngestionFilterService()
         self.cursor_service = EmailIngestionCursorService(self.cursor_repo)
         self.outlook_service = OutlookComService()
-        
-        # PDF processing services - use injected service or create with fallback
-        if pdf_storage_service:
-            self.pdf_storage_service = pdf_storage_service
-        else:
-            # Fallback for backwards compatibility or when called without Flask context
-            from ...shared.utils.storage_config import get_storage_configuration
-            from ...features.pdf_processing.storage_service import PdfStorageService
-            storage_path = get_storage_configuration()
-            logger.warning(f"PDF storage service not provided, creating with path: {storage_path}")
-            self.pdf_storage_service = PdfStorageService(storage_path)
-            
-        # PDF extraction now handled directly in COM service during enumeration
-        # PDF object extraction service for detailed analysis
-        self.pdf_object_extraction_service = PdfObjectExtractionService()
         
         # Service state
         self.is_running = False
@@ -73,7 +58,7 @@ class EmailIngestionService:
 
     # === High-Level API Methods ===
     
-    def start_ingestion(self, config_id: Optional[int] = None) -> Dict[str, Any]:
+    def start(self, config_id: Optional[int] = None) -> Dict[str, Any]:
         """Start email ingestion with active configuration"""
         try:
             if self.is_running:
@@ -161,9 +146,9 @@ class EmailIngestionService:
                 self.health.is_connected = True
                 self.health.configuration_loaded = True
                 
-                self.logger.info(f"Email ingestion service started for config: {self.current_config.name}")
-                self.logger.info(f"Monitoring folder: {self.current_config.folder_name}")
-                self.logger.info(f"Cursor initialized with last processed: {cursor.last_processed_received_date}")
+                self.logger.debug(f"Email ingestion service started for config: {self.current_config.name}")
+                self.logger.debug(f"Monitoring folder: {self.current_config.folder_name}")
+                self.logger.debug(f"Cursor initialized with last processed: {cursor.last_processed_received_date}")
                 
                 return {
                     "success": True,
@@ -194,7 +179,7 @@ class EmailIngestionService:
                 "message": "Failed to start email ingestion"
             }
     
-    def stop_ingestion(self) -> Dict[str, Any]:
+    def stop(self) -> Dict[str, Any]:
         """Stop email ingestion"""
         try:
             if not self.is_running:
@@ -361,10 +346,10 @@ class EmailIngestionService:
                 limit=100,  # Process in batches
                 start_date=start_date
             )
-            self.logger.info(f"Found {len(emails)} emails in date range")
+            self.logger.debug(f"Found {len(emails)} emails in date range")
             
             if not emails:
-                self.logger.info("No emails found in date range - cycle complete")
+                self.logger.debug("No emails found in date range - cycle complete")
                 return
                 
             self.logger.info(f"Retrieved {len(emails)} emails from Outlook")
@@ -555,7 +540,7 @@ class EmailIngestionService:
             # Process PDF attachments if present (using pre-extracted data)
             pdf_records = []
             if email_data.has_pdf_attachments:
-                self.logger.info(f"  Processing {len(email_data.pdf_attachments_data)} PDF attachments")
+                self.logger.debug(f"  Processing {len(email_data.pdf_attachments_data)} PDF attachments")
                 try:
                     # Process each pre-extracted PDF attachment
                     for pdf_data in email_data.pdf_attachments_data:
@@ -619,64 +604,29 @@ class EmailIngestionService:
                 self.logger.warning(f"Invalid PDF content for: {filename}")
                 return None
             
-            # Check for duplicate by hash
-            file_hash = self.pdf_storage_service.calculate_file_hash(content_bytes)
-            existing_pdf = self.pdf_repo.get_duplicate_by_hash(file_hash)
-            
-            if existing_pdf:
-                self.logger.debug(f"Duplicate PDF found (hash: {file_hash[:16]}...), skipping storage")
-                return {
-                    'id': existing_pdf.id,
-                    'filename': existing_pdf.filename,
-                    'file_size': existing_pdf.file_size,
-                    'sha256_hash': file_hash,
-                    'duplicate': True
-                }
-            
-            # Store PDF file using pre-extracted bytes
-            file_path = self.pdf_storage_service.store_pdf(
-                content_bytes, 
-                filename, 
-                email_id
+            # Store PDF using the shared PDF processing service with domain object
+            store_request = PdfStoreRequest(
+                original_filename=filename,
+                email_id=email_id,
+                filename=os.path.basename(filename),
+                mime_type='application/pdf'
             )
             
+            pdf_service = get_service(ServiceNames.PDF_PROCESSING)
+            if not pdf_service:
+                logger.error("PDF processing service not available")
+                return None
+
+            pdf_file = pdf_service.store_pdf(content_bytes, store_request)
+            pdf_id = pdf_file.id
+
             # Extract PDF objects for template matching
-            objects_json = None
-            page_count = None
-            object_count = None
-            
             try:
-                self.logger.debug(f"Extracting PDF objects for {filename}")
-                extraction_result = self._extract_pdf_objects(content_bytes, filename)
-                
-                if extraction_result['success']:
-                    import json
-                    objects_json = json.dumps(extraction_result['objects'], default=str)
-                    page_count = extraction_result['page_count']
-                    object_count = extraction_result['object_count']
-                    self.logger.debug(f"Extracted {object_count} PDF objects from {page_count} pages for {filename}")
-                else:
-                    self.logger.warning(f"PDF object extraction failed for {filename}: {extraction_result.get('error', 'Unknown error')}")
-                    
+                logger.debug(f"Extracting PDF objects for {filename}")
+                pdf_service.extract_pdf_objects(pdf_id)
             except Exception as extract_error:
                 self.logger.error(f"Error during PDF object extraction for {filename}: {extract_error}")
-            
-            # Create PDF database record
-            pdf_data_record = {
-                'email_id': email_id,
-                'filename': os.path.basename(file_path),
-                'original_filename': filename,
-                'file_path': file_path,
-                'file_size': len(content_bytes),
-                'sha256_hash': file_hash,
-                'mime_type': 'application/pdf',
-                'page_count': page_count,
-                'object_count': object_count,
-                'objects_json': objects_json
-            }
-            
-            pdf_record = self.pdf_repo.create_pdf_record(pdf_data_record)
-            pdf_id = pdf_record.id
+                # Continue processing even if object extraction fails
             
             # Auto-trigger ETO processing by creating ETO run record
             eto_run_data = {
@@ -690,7 +640,7 @@ class EmailIngestionService:
             try:
                 eto_run = self.eto_run_repo.create(eto_run_data)
                 eto_run_id = eto_run.id if eto_run else None
-                self.logger.info(f"Created ETO run {eto_run_id} for PDF {pdf_id}")
+                self.logger.debug(f"Created ETO run {eto_run_id} for PDF {pdf_id}")
             except Exception as eto_error:
                 self.logger.error(f"Failed to create ETO run for PDF {pdf_id}: {eto_error}")
                 # Don't fail the entire PDF processing if ETO run creation fails
@@ -700,9 +650,9 @@ class EmailIngestionService:
             
             return {
                 'id': pdf_id,
-                'filename': pdf_data_record['filename'],
-                'file_size': pdf_data_record['file_size'],
-                'sha256_hash': file_hash,
+                'filename': pdf_file.filename,
+                'file_size': pdf_file.file_size,
+                'sha256_hash': pdf_file.sha256_hash,
                 'duplicate': False,
                 'eto_run_id': eto_run_id
             }
@@ -742,29 +692,3 @@ class EmailIngestionService:
         except Exception as e:
             self.logger.warning(f"Error validating PDF content: {e}")
             return False
-    
-    
-    def _extract_pdf_objects(self, pdf_content: bytes, filename: str) -> Dict[str, Any]:
-        """
-        Extract PDF objects using the proper PDF object extraction service
-        
-        Args:
-            pdf_content: Raw PDF file bytes
-            filename: Original filename for logging
-            
-        Returns:
-            Dict: Extraction result with objects, success status, etc.
-        """
-        try:
-            result = self.pdf_object_extraction_service.extract_objects_from_bytes(pdf_content)
-            self.logger.debug(f"PDF object extraction result for {filename}: success={result.get('success')}, objects={result.get('object_count', 0)}")
-            return result
-            
-        except Exception as e:
-            self.logger.error(f"Error extracting PDF objects from {filename}: {e}")
-            return {
-                'success': False,
-                'error': str(e),
-                'objects': [],
-                'object_count': 0
-            }

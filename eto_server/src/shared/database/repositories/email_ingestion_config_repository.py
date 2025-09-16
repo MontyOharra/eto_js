@@ -71,7 +71,7 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
                 
                 if model:
                     # Convert to domain object while session is still active
-                    logger.info(f"Retrieved email configuration: {model.name}")
+                    logger.debug(f"Retrieved email configuration: {model.name}")
                     return self._convert_to_domain_object(model)
                 else:
                     return None
@@ -89,7 +89,7 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
                 ).all()
                 
                 # Convert to domain objects while session is active
-                logger.info(f"Retrieved {len(models)} email configurations")
+                logger.debug(f"Retrieved {len(models)} email configurations")
                 return [self._convert_to_domain_object(model) for model in models]
                 
         except SQLAlchemyError as e:
@@ -108,7 +108,7 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
                     return None
                 
                 # Convert to domain object while session is active
-                logger.info(f"Retrieved active email configuration: {config.name}")
+                logger.debug(f"Retrieved active email configuration: {config.name}")
                 return self._convert_to_domain_object(config)
                 
         except SQLAlchemyError as e:
@@ -131,7 +131,7 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
                         setattr(model, key, value)
                 
                 # Convert to domain object while session is still active
-                logger.info(f"Updated email configuration: {model.name}")
+                logger.debug(f"Updated email configuration: {model.name}")
                 return self._convert_to_domain_object(model)
                 
         except SQLAlchemyError as e:
@@ -148,7 +148,7 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
                     'updated_at': datetime.now(timezone.utc)
                 })
                 # session_scope handles commit automatically
-                logger.info("Deactivated all email configurations")
+                logger.debug("Deactivated all email configurations")
                 
         except SQLAlchemyError as e:
             logger.error(f"Error deactivating all configurations: {e}")
@@ -179,7 +179,7 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
                 setattr(target_config, 'is_running', False)  # Will be set to True when service starts
                 setattr(target_config, 'updated_at', current_time)
                 
-                logger.info(f"Activated email configuration: {target_config.name}")
+                logger.debug(f"Activated email configuration: {target_config.name}")
                 
                 return self._convert_to_domain_object(target_config)
             
@@ -314,7 +314,7 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
                 session.delete(config)
                 # session_scope handles commit automatically
                 
-                logger.info(f"Deleted email configuration: {config_name}")
+                logger.debug(f"Deleted email configuration: {config_name}")
                 
                 return {
                     "success": True,

@@ -46,7 +46,7 @@ class EmailIngestionCursorRepository(BaseRepository[EmailIngestionCursorModel]):
                 
                 if model:
                     # Convert to domain object while session is still active
-                    logger.info(f"Retrieved email cursor: {getattr(model, 'email_address')}/{getattr(model, 'folder_name')}")
+                    logger.debug(f"Retrieved email cursor: {getattr(model, 'email_address')}/{getattr(model, 'folder_name')}")
                     return self._convert_to_domain_object(model)
                 else:
                     return None
@@ -70,7 +70,7 @@ class EmailIngestionCursorRepository(BaseRepository[EmailIngestionCursorModel]):
                         setattr(model, key, value)
                 
                 # Convert to domain object while session is still active
-                logger.info(f"Updated email cursor: {getattr(model, 'email_address')}/{getattr(model, 'folder_name')}")
+                logger.debug(f"Updated email cursor: {getattr(model, 'email_address')}/{getattr(model, 'folder_name')}")
                 return self._convert_to_domain_object(model)
                 
         except SQLAlchemyError as e:
@@ -90,7 +90,7 @@ class EmailIngestionCursorRepository(BaseRepository[EmailIngestionCursorModel]):
                 ).first()
                 
                 if cursor_model:
-                    logger.info(f"Retrieved cursor for {email_address}/{folder_name}")
+                    logger.debug(f"Retrieved cursor for {email_address}/{folder_name}")
                     return self._convert_to_domain_object(cursor_model)
                 return None
                 
@@ -146,7 +146,7 @@ class EmailIngestionCursorRepository(BaseRepository[EmailIngestionCursorModel]):
                 ).all()
                 
                 # Convert to domain objects while session is active
-                logger.info(f"Retrieved {len(models)} email cursors")
+                logger.debug(f"Retrieved {len(models)} email cursors")
                 return [self._convert_to_domain_object(model) for model in models]
                 
         except SQLAlchemyError as e:

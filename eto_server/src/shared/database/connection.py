@@ -51,7 +51,7 @@ class DatabaseConnectionManager:
                 return
             
             try:
-                logger.info(f"Initializing database connection to: {self._safe_url()}")
+                logger.debug(f"Initializing database connection to: {self._safe_url()}")
                 
                 # Create engine with SQL Server optimized settings
                 self.engine = create_engine(
@@ -154,12 +154,13 @@ class DatabaseConnectionManager:
         """Close database connections and cleanup"""
         with self._lock:
             if self.engine:
-                logger.info("Closing database connections")
                 self.engine.dispose()
                 self.engine = None
                 self.session_factory = None
                 self._initialized = False
     
+        logger.info("Closed database connections")
+        
     def _safe_url(self) -> str:
         """Return database URL with credentials masked for logging"""
         try:
@@ -215,7 +216,7 @@ class DatabaseCreator:
                 logger.info(f"Database '{database_name}' already exists")
                 return True
             
-            logger.info(f"Creating database '{database_name}'...")
+            logger.debug(f"Creating database '{database_name}'...")
             
             # Get master database URL for creation
             master_url = DatabaseCreator._get_master_url(database_url)
@@ -253,7 +254,7 @@ class DatabaseCreator:
             Base = models_module.Base
             
             database_name = DatabaseCreator._parse_database_name(database_url)
-            logger.info(f"Creating tables in database '{database_name}'...")
+            logger.debug(f"Creating tables in database '{database_name}'...")
             
             # Create temporary engine for table creation
             engine = create_engine(database_url)
@@ -289,7 +290,7 @@ class DatabaseCreator:
             Base = models_module.Base
             
             database_name = DatabaseCreator._parse_database_name(database_url)
-            logger.info(f"Dropping all tables from database '{database_name}'...")
+            logger.debug(f"Dropping all tables from database '{database_name}'...")
             
             # Create temporary engine for table operations
             engine = create_engine(database_url)
@@ -314,7 +315,7 @@ class DatabaseCreator:
         """Complete database reset - drop database and recreate with tables"""
         try:
             database_name = DatabaseCreator._parse_database_name(database_url)
-            logger.info(f"Resetting database '{database_name}'...")
+            logger.debug(f"Resetting database '{database_name}'...")
             
             # Step 1: Drop entire database
             DatabaseCreator.drop_database_if_exists(database_url)
@@ -340,7 +341,7 @@ class DatabaseCreator:
                 logger.info(f"Database '{database_name}' doesn't exist")
                 return True
             
-            logger.info(f"Dropping database '{database_name}'...")
+            logger.debug(f"Dropping database '{database_name}'...")
             
             # Get master database URL
             master_url = DatabaseCreator._get_master_url(database_url)

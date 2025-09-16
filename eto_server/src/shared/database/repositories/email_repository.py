@@ -45,7 +45,7 @@ class EmailRepository(BaseRepository[EmailModel]):
                 
                 if model:
                     # Convert to domain object while session is still active
-                    logger.info(f"Retrieved email: {getattr(model, 'subject')} from {getattr(model, 'sender_email')}")
+                    logger.debug(f"Retrieved email: {getattr(model, 'subject')} from {getattr(model, 'sender_email')}")
                     return self._convert_to_domain_object(model)
                 else:
                     return None
@@ -69,7 +69,7 @@ class EmailRepository(BaseRepository[EmailModel]):
                         setattr(model, key, value)
                 
                 # Convert to domain object while session is still active
-                logger.info(f"Updated email: {getattr(model, 'subject')}")
+                logger.debug(f"Updated email: {getattr(model, 'subject')}")
                 return self._convert_to_domain_object(model)
                 
         except SQLAlchemyError as e:
@@ -88,7 +88,7 @@ class EmailRepository(BaseRepository[EmailModel]):
                 ).first()
                 
                 if email_model:
-                    logger.info(f"Retrieved email by message_id: {message_id}")
+                    logger.debug(f"Retrieved email by message_id: {message_id}")
                     return self._convert_to_domain_object(email_model)
                 return None
                 
@@ -112,7 +112,7 @@ class EmailRepository(BaseRepository[EmailModel]):
                 models = query.order_by(self.model_class.received_date.desc()).all()
                 
                 # Convert to domain objects while session is active
-                logger.info(f"Retrieved {len(models)} emails for date range {start_date} to {end_date}")
+                logger.debug(f"Retrieved {len(models)} emails for date range {start_date} to {end_date}")
                 return [self._convert_to_domain_object(model) for model in models]
                 
         except SQLAlchemyError as e:
@@ -139,7 +139,7 @@ class EmailRepository(BaseRepository[EmailModel]):
                 models = query.all()
                 
                 # Convert to domain objects while session is active
-                logger.info(f"Retrieved {len(models)} emails with PDF attachments")
+                logger.debug(f"Retrieved {len(models)} emails with PDF attachments")
                 return [self._convert_to_domain_object(model) for model in models]
                 
         except SQLAlchemyError as e:
@@ -160,7 +160,7 @@ class EmailRepository(BaseRepository[EmailModel]):
                 ).limit(limit).all()
                 
                 # Convert to domain objects while session is active
-                logger.info(f"Retrieved {len(models)} recent emails from {folder_name} (last {hours}h)")
+                logger.debug(f"Retrieved {len(models)} recent emails from {folder_name} (last {hours}h)")
                 return [self._convert_to_domain_object(model) for model in models]
                 
         except SQLAlchemyError as e:
@@ -183,7 +183,7 @@ class EmailRepository(BaseRepository[EmailModel]):
                 session.add(model)
                 session.flush()  # Get the ID
                 
-                logger.info(f"Created email record: {getattr(model, 'subject')} from {getattr(model, 'sender_email')}")
+                logger.debug(f"Created email record: {getattr(model, 'subject')} from {getattr(model, 'sender_email')}")
                 
                 # Convert to domain object while session is active
                 return self._convert_to_domain_object(model)

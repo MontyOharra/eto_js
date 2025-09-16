@@ -8,11 +8,32 @@ from datetime import datetime
 from ...shared.types.common import ProcessingStatus, OptionalString
 
 
+@dataclass
+class PdfStoreRequest:
+    """Domain object for storing any PDF (email, manual, API)"""
+    original_filename: str
+    email_id: Optional[int] = None  # None for manual/API uploads
+    filename: Optional[str] = None  # Auto-generated if None
+    mime_type: str = 'application/pdf'
+
+
+@dataclass
+class PdfExtractionResult:
+    """Domain object for extraction results"""
+    success: bool
+    pdf_id: int
+    object_count: int
+    page_count: int
+    objects_json: Optional[str] = None
+    error_message: Optional[str] = None
+    extraction_time_ms: int = 0
+
+
 @dataclass 
 class PdfFile:
     """PDF file domain object"""
     id: Optional[int]
-    email_id: int
+    email_id: Optional[int]  # Made optional for manual uploads
     filename: str
     original_filename: str
     file_path: str
@@ -48,36 +69,3 @@ class PdfExtractionBounds:
     width: float
     height: float
     page_number: int = 1
-
-
-@dataclass
-class PdfTemplate:
-    """PDF template for pattern matching domain object"""
-    id: Optional[int]
-    name: str
-    signature_objects: List[PdfObject]
-    signature_object_count: int
-    extraction_fields: List[PdfExtractionBounds]
-    created_at: datetime
-    updated_at: datetime
-    customer_name: Optional[str] = None
-    description: Optional[str] = None
-    is_complete: bool = False
-    coverage_threshold: float = 0.6
-    usage_count: int = 0
-    last_used_at: Optional[datetime] = None
-    version: int = 1
-    is_current_version: bool = True
-    created_by: Optional[str] = None
-    status: str = 'active'
-
-
-@dataclass
-class TemplateMatchResult:
-    """Result of template matching against PDF"""
-    template_id: int
-    template_name: str
-    coverage_ratio: float
-    matched_objects: int
-    unmatched_objects: int
-    confidence_score: float

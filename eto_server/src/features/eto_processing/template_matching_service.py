@@ -4,6 +4,7 @@ Will be implemented in Phase 2 of the plan
 """
 import logging
 from typing import List, Dict, Any, Optional
+from ...shared.utils import get_service, ServiceNames
 
 logger = logging.getLogger(__name__)
 
@@ -11,8 +12,8 @@ logger = logging.getLogger(__name__)
 class TemplateMatchingService:
     """Service for matching PDF objects against known templates"""
     
-    def __init__(self, template_repository=None):
-        self.template_repo = template_repository
+    def __init__(self):
+        # Get template repository from service registry when needed
         logger.info("Template matching service initialized (placeholder)")
     
     def find_best_template_match(self, pdf_objects: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
@@ -38,23 +39,13 @@ class TemplateMatchingService:
         }
 
 
-# Global service instance
-_template_matching_service: Optional[TemplateMatchingService] = None
-
-
 def get_template_matching_service() -> Optional[TemplateMatchingService]:
-    """Get the global template matching service instance"""
-    return _template_matching_service
+    """Get the template matching service from service registry"""
+    return get_service(ServiceNames.TEMPLATE_MATCHING)
 
 
-def init_template_matching_service(template_repository=None) -> TemplateMatchingService:
-    """Initialize the global template matching service"""
-    global _template_matching_service
-    
-    if _template_matching_service is not None:
-        logger.warning("Template matching service already initialized")
-        return _template_matching_service
-    
-    _template_matching_service = TemplateMatchingService(template_repository)
+def init_template_matching_service() -> TemplateMatchingService:
+    """Create a new template matching service instance"""
+    service = TemplateMatchingService()
     logger.info("Template matching service initialized")
-    return _template_matching_service
+    return service

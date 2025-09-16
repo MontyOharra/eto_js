@@ -4,84 +4,19 @@ Feature-based architecture with clean separation of concerns
 """
 import os
 import logging
-from typing import Optional
 from flask import Flask, jsonify
 from flask_cors import CORS
-from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
+from .shared.database import init_database_connection
+from .shared.utils.storage_config import get_storage_configuration
 
-# Configure logging with environment variable support
-def get_log_level() -> int:
-    """Get logging level from environment variable"""
-    log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
-    level_mapping = {
-        'DEBUG': logging.DEBUG,
-        'INFO': logging.INFO,
-        'WARNING': logging.WARNING,
-        'ERROR': logging.ERROR,
-        'CRITICAL': logging.CRITICAL
-    }
-    return level_mapping.get(log_level, logging.INFO)
+from .features.email_ingestion.service import EmailIngestionService
+from .features.pdf_processing import PdfProcessingService
+from .features.eto_processing import EtoProcessingService
 
-logging.basicConfig(
-    level=get_log_level(),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+from .api import BLUEPRINTS
+        
 logger = logging.getLogger(__name__)
-
-# Log the configured logging level
-log_level_name = os.getenv('LOG_LEVEL', 'INFO').upper()
-logger.info(f"Logging configured at {log_level_name} level")
-
-# Import storage configuration utilities
-from .shared.utils.storage_config import get_storage_configuration, get_development_storage_path, get_default_storage_path
-
-
-def create_app(config_name: str = 'development') -> Flask:
-    """
-    Flask application factory with feature-based architecture
-    Creates and configures the Flask app with all blueprints and services
-    """
-    app = Flask(__name__)
-    
-    # Configure CORS - Allow all origins for development
-    CORS(app, resources={
-        r"/*": {
-            "origins": "*",
-            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"],
-            "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"],
-            "expose_headers": ["Content-Range", "X-Content-Range"],
-            "supports_credentials": False,
-            "max_age": 86400
-        }
-    })
-    
-    # Load configuration
-    app.config.from_object(get_config_class(config_name))
-    logger.info(f"Application configured for {config_name} environment")
-    
-    # Initialize database connection
-    initialize_database(app)
-    
-    # Initialize email ingestion service
-    initialize_email_ingestion(app)
-    
-    # Initialize ETO processing service
-    initialize_eto_processing(app)
-    
-    # Register blueprints
-    register_blueprints(app)
-    
-    # Register error handlers  
-    register_error_handlers(app)
-    
-    # Add startup info endpoint
-    register_info_endpoint(app)
-    
-    logger.info("Unified ETO Server application created successfully")
-    return app
 
 
 def initialize_database(app: Flask) -> None:
@@ -92,7 +27,6 @@ def initialize_database(app: Flask) -> None:
             raise ValueError("DATABASE_URL environment variable is required")
         
         # Initialize database connection
-        from .shared.database import init_database_connection
         connection_manager = init_database_connection(database_url)
         
         # Test connection
@@ -111,7 +45,7 @@ def initialize_database(app: Flask) -> None:
         try:
             import pyodbc
             drivers = pyodbc.drivers()
-            logger.info(f"Available ODBC drivers: {drivers}")
+            logger.debug(f"Available ODBC drivers: {drivers}")
         except ImportError:
             logger.warning("pyodbc not available for driver debugging")
         except Exception:
@@ -121,29 +55,42 @@ def initialize_database(app: Flask) -> None:
         raise
 
 
+def initialize_pdf_processing(app: Flask) -> None:
+    """Initialize PDF processing service"""
+    try:
+        logger.debug("Initializing PDF Processing Service...")
+        
+        # Get PDF storage path from app config
+        pdf_storage_path = app.config['PDF_STORAGE_ROOT']
+        logger.debug(f"PDF storage path configured: {pdf_storage_path}")
+        
+        pdf_service = PdfProcessingService(pdf_storage_path)
+        
+        # Store PDF service in app config for global access
+        app.config['PDF_PROCESSING_SERVICE'] = pdf_service
+        logger.info("PDF Processing Service initialized successfully")
+        
+    except Exception as e:
+        logger.error(f"Failed to initialize PDF processing service: {e}")
+        # Don't re-raise - allow app to continue without PDF processing
+        logger.info("Application will continue without PDF processing service")
+
+
 def initialize_email_ingestion(app: Flask) -> None:
     """Initialize email ingestion service with PDF support and attempt auto-connection"""
     try:
-        logger.info("Initializing Email Ingestion Service with PDF processing...")
+        logger.debug("Initializing Email Ingestion Service...")
         
-        # Create PDF storage service with configured path from app config
-        from .features.pdf_processing.storage_service import PdfStorageService
-        pdf_storage_service = PdfStorageService(app.config['PDF_STORAGE_ROOT'])
+        pdf_service = app.config.get('PDF_PROCESSING_SERVICE')
+        if not pdf_service:
+            logger.error("PDF processing service not available for email ingestion")
+            return
         
-        # Log storage information
-        storage_info = pdf_storage_service.get_storage_info()
-        logger.info(f"PDF storage initialized: {storage_info['current_root']}")
-        if storage_info.get('fallback_used'):
-            logger.warning(f"PDF storage using fallback location (original: {storage_info['original_root']})")
+        # Import and create the email ingestion service
+        email_service = EmailIngestionService()
         
-        # Import and create the email ingestion service with PDF support
-        from .features.email_ingestion.service import EmailIngestionService
-        email_service = EmailIngestionService(pdf_storage_service=pdf_storage_service)
-        
-        # Store services in app config for global access
+        # Store only the service in app config for global access
         app.config['EMAIL_INGESTION_SERVICE'] = email_service
-        app.config['PDF_STORAGE_SERVICE'] = pdf_storage_service
-        app.config['PDF_REPOSITORY'] = email_service.pdf_repo  # For API access
         
         # Check for active configuration and attempt auto-connect
         try:
@@ -161,7 +108,7 @@ def initialize_email_ingestion(app: Flask) -> None:
             }
             
             # Start the email ingestion service
-            result = email_service.start_ingestion(active_config.id)
+            result = email_service.start(active_config.id)
             
             if result.get('success'):
                 logger.info(f"Email ingestion service started successfully for config: {active_config.name}")
@@ -181,58 +128,27 @@ def initialize_email_ingestion(app: Flask) -> None:
 def initialize_eto_processing(app: Flask) -> None:
     """Initialize ETO processing service with background worker"""
     try:
-        logger.info("Initializing ETO Processing Service...")
-        
-        # Get connection manager from app config
-        connection_manager = app.config.get('CONNECTION_MANAGER')
-        if not connection_manager:
-            logger.error("Cannot initialize ETO processing: database connection not available")
-            return
-        
-        # Initialize ETO processing service and dependencies
-        from .features.eto_processing import (
-            init_eto_processing_service,
-            init_template_matching_service,
-            init_data_extraction_service,
-            init_transformation_service,
-            start_eto_processing_service
-        )
-        from .shared.database.repositories import TemplateRepository
-        
-        # Initialize dependent services with placeholders
-        template_repo = TemplateRepository(connection_manager)
-        template_matching_service = init_template_matching_service(template_repo)
-        data_extraction_service = init_data_extraction_service(template_repo)
-        transformation_service = init_transformation_service()
-        
-        # Initialize main ETO processing service
-        eto_service = init_eto_processing_service(
-            connection_manager=connection_manager,
+        logger.debug("Initializing ETO Processing Service...")
+
+        # Initialize ETO processing service (creates dependent services internally)
+        eto_service = EtoProcessingService(
             poll_interval=int(os.getenv('ETO_POLL_INTERVAL', '10')),
             batch_size=int(os.getenv('ETO_BATCH_SIZE', '5'))
         )
-        
-        # Configure service dependencies
-        eto_service.set_template_matching_service(template_matching_service)
-        eto_service.set_data_extraction_service(data_extraction_service)
-        eto_service.set_transformation_service(transformation_service)
-        
-        # Store services in app config for global access
+
+        # Store service in app config for global access
         app.config['ETO_PROCESSING_SERVICE'] = eto_service
-        app.config['TEMPLATE_MATCHING_SERVICE'] = template_matching_service
-        app.config['DATA_EXTRACTION_SERVICE'] = data_extraction_service
-        app.config['TRANSFORMATION_SERVICE'] = transformation_service
-        
+
         # Start the background worker if enabled
         worker_enabled = os.getenv('ETO_WORKER_ENABLED', 'true').lower() == 'true'
         if worker_enabled:
-            start_eto_processing_service()
+            eto_service.start()
             logger.info("ETO processing background worker started")
         else:
             logger.info("ETO processing service initialized but worker not started (ETO_WORKER_ENABLED=false)")
-            
+
         logger.info("ETO processing service initialized successfully")
-        
+
     except Exception as e:
         logger.error(f"Failed to initialize ETO processing service: {e}")
         # Don't re-raise - allow app to continue without ETO processing
@@ -242,13 +158,9 @@ def initialize_eto_processing(app: Flask) -> None:
 def register_blueprints(app: Flask) -> None:
     """Register all Flask blueprints from the feature-based API structure"""
     try:
-        # Import all blueprints from the API package
-        from .api import BLUEPRINTS
-        
-        # Register each blueprint
         for blueprint in BLUEPRINTS:
             app.register_blueprint(blueprint)
-            logger.info(f"Registered blueprint: {blueprint.name}")
+            logger.debug(f"Registered blueprint: {blueprint.name}")
         
         logger.info(f"Successfully registered {len(BLUEPRINTS)} blueprints")
         
@@ -340,143 +252,47 @@ def register_info_endpoint(app: Flask) -> None:
         })
 
 
-def get_config_class(config_name: str):
+def get_config_class():
     """Get configuration class based on environment"""
-    
-    class BaseConfig:
-        """Base configuration with common settings"""
-        # Flask settings
-        SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-not-used-for-sessions')
-        JSON_SORT_KEYS = False
-        JSONIFY_PRETTYPRINT_REGULAR = True
-        
-        # Database settings
+
+    class Config:
+        DEBUG = os.getenv('DEBUG', 'true').lower() == 'true'
         DATABASE_URL = os.getenv('DATABASE_URL')
-        
-        # API settings
-        API_TITLE = 'Unified ETO Server API'
-        API_VERSION = 'v1'
-        
-        # PDF Storage settings - cross-platform defaults
-        PDF_STORAGE_ROOT = os.getenv('PDF_STORAGE_ROOT', get_storage_configuration())
-        PDF_STORAGE_MAX_SIZE_MB = int(os.getenv('PDF_STORAGE_MAX_SIZE_MB', '100'))
-        PDF_STORAGE_CLEANUP_ENABLED = os.getenv('PDF_STORAGE_CLEANUP_ENABLED', 'true').lower() == 'true'
-    
-    class DevelopmentConfig(BaseConfig):
-        """Development environment configuration"""
-        DEBUG = True
-        TESTING = False
-        DATABASE_URL = os.getenv(
-            'DATABASE_URL',
-            'mssql+pyodbc://test:testing@localhost:1433/eto_unified?driver=ODBC+Driver+17+for+SQL+Server&TrustServerCertificate=yes'
-        )
-        
-        # Development-specific settings
-        CORS_ORIGINS = ["*"]  # Allow all origins in development
-        
-        # Development PDF storage - use current C:/apps/eto/ for testing
-        PDF_STORAGE_ROOT = os.getenv('PDF_STORAGE_ROOT', get_development_storage_path())
-    
-    class ProductionConfig(BaseConfig):
-        """Production environment configuration"""
-        DEBUG = False
-        TESTING = False
-        
-        # Require DATABASE_URL in production
-        if not os.getenv('DATABASE_URL'):
-            raise ValueError("DATABASE_URL environment variable is required for production")
-        
-        DATABASE_URL = os.getenv('DATABASE_URL')
-        
-        # Production-specific settings
-        CORS_ORIGINS = os.getenv('CORS_ORIGINS', '').split(',') if os.getenv('CORS_ORIGINS') else []
-        SECRET_KEY = os.getenv('SECRET_KEY', 'production-secret-key-placeholder')
-        
-        # Production PDF storage - use platform-specific defaults or configured path
-        PDF_STORAGE_ROOT = os.getenv('PDF_STORAGE_ROOT', get_default_storage_path())
-        PDF_STORAGE_MAX_SIZE_MB = int(os.getenv('PDF_STORAGE_MAX_SIZE_MB', '1000'))  # Larger for production
-    
-    class TestingConfig(BaseConfig):
-        """Testing environment configuration"""
-        DEBUG = False
-        TESTING = True
-        DATABASE_URL = os.getenv('TEST_DATABASE_URL', 'sqlite:///:memory:')
-        SECRET_KEY = 'test-secret-key'
-        
-        # Testing-specific settings
-        WTF_CSRF_ENABLED = False
-        
-        # Testing PDF storage - use temp directory
-        import tempfile
-        PDF_STORAGE_ROOT = os.path.join(tempfile.gettempdir(), 'eto_test_storage')
-    
-    class PortableAppConfig(BaseConfig):
-        """Portable application configuration for executable distributions"""
-        DEBUG = False
-        TESTING = False
-        
-        # Portable apps typically use SQLite for simplicity
-        DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///data/eto_portable.db')
-        
-        # Security
-        SECRET_KEY = os.getenv('SECRET_KEY', 'portable-app-secret-change-in-production')
-        
-        # Portable PDF storage - relative to executable
-        from .shared.utils.storage_config import get_portable_storage_path
-        PDF_STORAGE_ROOT = os.getenv('PDF_STORAGE_ROOT', get_portable_storage_path())
-        PDF_STORAGE_MAX_SIZE_MB = int(os.getenv('PDF_STORAGE_MAX_SIZE_MB', '500'))
-        
-        # Portable-specific settings
-        CORS_ORIGINS = ["*"]  # More permissive for local usage
-    
-    configs = {
-        'development': DevelopmentConfig,
-        'production': ProductionConfig,
-        'testing': TestingConfig,
-        'portable': PortableAppConfig
-    }
-    
-    config_class = configs.get(config_name, DevelopmentConfig)
-    logger.info(f"Using configuration: {config_class.__name__}")
-    return config_class
+        PDF_STORAGE_ROOT = get_storage_configuration()
+
+    logger.debug(f"Using simplified configuration (DEBUG={Config.DEBUG})")
+    return Config
 
 
-def get_app_info() -> dict:
-    """Get application information for monitoring and debugging"""
-    try:
-        from .shared.database import get_connection_manager
-        connection_manager = get_connection_manager()
-        db_status = "connected" if connection_manager and connection_manager.test_connection() else "disconnected"
-    except Exception:
-        db_status = "error"
+def create_app(config_name: str = 'development') -> Flask:
+    """
+    Flask application factory with feature-based architecture
+    Creates and configures the Flask app with all blueprints and services
+    """
+    app = Flask(__name__)
     
-    return {
-        'service': 'Unified ETO Server',
-        'version': '2.0.0',
-        'architecture': 'feature-based',
-        'environment': os.getenv('FLASK_ENV', 'development'),
-        'database_status': db_status,
-        'features': {
-            'email_configuration': 'Available',
-            'eto_processing': 'Available', 
-            'pdf_processing': 'Planned',
-            'pipeline_execution': 'Planned'
+    # Configure CORS - Allow all origins for development
+    CORS(app, resources={
+        r"/*": {
+            "origins": "*",
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"],
+            "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"],
+            "expose_headers": ["Content-Range", "X-Content-Range"],
+            "supports_credentials": False,
+            "max_age": 86400
         }
-    }
-
-
-if __name__ == '__main__':
-    """Run the Flask application directly for development"""
-    # Get configuration from environment
-    config_name = os.getenv('FLASK_ENV', 'development')
+    })
     
-    # Create application
-    app = create_app(config_name)
+    # Load configuration
+    app.config.from_object(get_config_class())
     
-    # Run application
-    port = int(os.getenv('PORT', 8080))
-    host = os.getenv('HOST', '0.0.0.0')
-    debug = config_name == 'development'
+    initialize_database(app)
+    initialize_pdf_processing(app)
+    initialize_email_ingestion(app)
+    initialize_eto_processing(app)
+    register_blueprints(app)
+    register_error_handlers(app)
+    register_info_endpoint(app)
     
-    logger.info(f"Starting Unified ETO Server on {host}:{port} (debug={debug})")
-    app.run(host=host, port=port, debug=debug)
+    logger.info("Unified ETO Server application created successfully")
+    return app

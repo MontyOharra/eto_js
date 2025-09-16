@@ -4,6 +4,7 @@ Will be implemented in Phase 3 of the plan
 """
 import logging
 from typing import List, Dict, Any, Optional
+from ...shared.utils import get_service, ServiceNames
 
 logger = logging.getLogger(__name__)
 
@@ -11,8 +12,8 @@ logger = logging.getLogger(__name__)
 class DataExtractionService:
     """Service for extracting field data from PDF objects using spatial bounding boxes"""
     
-    def __init__(self, template_repository=None):
-        self.template_repo = template_repository
+    def __init__(self):
+        # Get template repository from service registry when needed
         logger.info("Data extraction service initialized (placeholder)")
     
     def extract_fields_from_pdf(self, pdf_objects: List[Dict[str, Any]], template_id: int) -> Dict[str, Any]:
@@ -37,23 +38,13 @@ class DataExtractionService:
         }
 
 
-# Global service instance
-_data_extraction_service: Optional[DataExtractionService] = None
-
-
 def get_data_extraction_service() -> Optional[DataExtractionService]:
-    """Get the global data extraction service instance"""
-    return _data_extraction_service
+    """Get the data extraction service from service registry"""
+    return get_service(ServiceNames.DATA_EXTRACTION)
 
 
-def init_data_extraction_service(template_repository=None) -> DataExtractionService:
-    """Initialize the global data extraction service"""
-    global _data_extraction_service
-    
-    if _data_extraction_service is not None:
-        logger.warning("Data extraction service already initialized")
-        return _data_extraction_service
-    
-    _data_extraction_service = DataExtractionService(template_repository)
+def init_data_extraction_service() -> DataExtractionService:
+    """Create a new data extraction service instance"""
+    service = DataExtractionService()
     logger.info("Data extraction service initialized")
-    return _data_extraction_service
+    return service
