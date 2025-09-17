@@ -11,7 +11,7 @@ from .base_repository import BaseRepository, RepositoryError
 from ..models import EtoRunModel
 
 if TYPE_CHECKING:
-    from ....features.eto_processing.types import EtoRun
+    from features.eto_processing.types import EtoRun
 
 
 logger = logging.getLogger(__name__)

@@ -15,40 +15,38 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 try:
-    print(f"🔍 Project root: {project_root}")
-    print(f"🔍 Script location: {Path(__file__).parent}")
-    print(f"🔍 Current working directory: {os.getcwd()}")
+    print(f"DEBUG: Project root: {project_root}")
+    print(f"DEBUG: Script location: {Path(__file__).parent}")
+    print(f"DEBUG: Current working directory: {os.getcwd()}")
 
     # Load dotenv first
     from dotenv import load_dotenv
-    print("✅ dotenv imported successfully")
+    print("SUCCESS: dotenv imported successfully")
 
     # Import database creator from local scripts directory
-    print(f"🔍 Attempting to import from: {Path(__file__).parent / 'database_creator.py'}")
+    print(f"DEBUG: Attempting to import from: {Path(__file__).parent / 'database_creator.py'}")
     from database_creator import DatabaseCreator, DatabaseConnectionError, DatabaseNotFoundError
-    print("✅ database_creator imported successfully")
+    print("SUCCESS: database_creator imported successfully")
 
     # Import connection manager from main application
     src_path = project_root / 'src'
-    print(f"🔍 Adding to Python path: {src_path}")
+    print(f"DEBUG: Adding to Python path: {src_path}")
     sys.path.insert(0, str(src_path))
 
-    print(f"🔍 Attempting to import from: {src_path / 'shared' / 'database' / 'connection.py'}")
-    from shared.database.connection import DatabaseConnectionManager
-    print("✅ DatabaseConnectionManager imported successfully")
+    print("SUCCESS: Skipping DatabaseConnectionManager import to avoid circular dependencies")
 
 except ImportError as e:
-    print(f"❌ Import error: {e}", file=sys.stderr)
-    print(f"❌ Error type: {type(e).__name__}", file=sys.stderr)
-    print(f"❌ Error details: {str(e)}", file=sys.stderr)
+    print(f"ERROR: Import error: {e}", file=sys.stderr)
+    print(f"ERROR: Error type: {type(e).__name__}", file=sys.stderr)
+    print(f"ERROR: Error details: {str(e)}", file=sys.stderr)
     print("", file=sys.stderr)
-    print("🔍 Debug information:", file=sys.stderr)
+    print("DEBUG: Debug information:", file=sys.stderr)
     print(f"   Project root: {project_root}", file=sys.stderr)
     print(f"   Script directory: {Path(__file__).parent}", file=sys.stderr)
     print(f"   Current working directory: {os.getcwd()}", file=sys.stderr)
     print(f"   Python path: {sys.path[:3]}...", file=sys.stderr)
     print("", file=sys.stderr)
-    print("💡 Troubleshooting:", file=sys.stderr)
+    print("HELP: Troubleshooting:", file=sys.stderr)
     print("   1. Make sure you're running from the eto_server directory", file=sys.stderr)
     print("   2. Check that database_creator.py exists in scripts/database/", file=sys.stderr)
     print("   3. Verify virtual environment is activated", file=sys.stderr)
@@ -56,14 +54,14 @@ except ImportError as e:
 
     import traceback
     print("", file=sys.stderr)
-    print("📍 Full traceback:", file=sys.stderr)
+    print("DEBUG: Full traceback:", file=sys.stderr)
     traceback.print_exc()
     sys.exit(3)
 except Exception as e:
-    print(f"❌ Unexpected error during imports: {e}", file=sys.stderr)
-    print(f"❌ Error type: {type(e).__name__}", file=sys.stderr)
+    print(f"ERROR: Unexpected error during imports: {e}", file=sys.stderr)
+    print(f"ERROR: Error type: {type(e).__name__}", file=sys.stderr)
     import traceback
-    print("📍 Full traceback:", file=sys.stderr)
+    print("DEBUG: Full traceback:", file=sys.stderr)
     traceback.print_exc()
     sys.exit(3)
 
@@ -103,11 +101,11 @@ class DatabaseManager:
         """Load environment variables from .env file"""
         env_file = project_root / '.env'
 
-        self.logger.info(f"🔍 Looking for .env file at: {env_file}")
+        self.logger.info(f"DEBUG: Looking for .env file at: {env_file}")
 
         if not env_file.exists():
-            self.logger.error(f"❌ Environment file not found: {env_file}")
-            self.logger.error("📁 Files in project root:")
+            self.logger.error(f"ERROR: Environment file not found: {env_file}")
+            self.logger.error("DEBUG: Files in project root:")
             try:
                 for file in project_root.iterdir():
                     if file.is_file():
@@ -115,37 +113,37 @@ class DatabaseManager:
             except Exception as e:
                 self.logger.error(f"   Could not list files: {e}")
             self.logger.error("")
-            self.logger.error("💡 To fix this:")
+            self.logger.error("HELP: To fix this:")
             self.logger.error("   1. Copy .env.example to .env")
             self.logger.error("   2. Configure your DATABASE_URL in the .env file")
             return None
 
         try:
             load_dotenv(env_file)
-            self.logger.info(f"✅ Environment file loaded: {env_file}")
+            self.logger.info(f"SUCCESS: Environment file loaded: {env_file}")
         except Exception as e:
-            self.logger.error(f"❌ Failed to load .env file: {e}")
+            self.logger.error(f"ERROR: Failed to load .env file: {e}")
             return None
 
         database_url = os.getenv('DATABASE_URL')
         if not database_url:
-            self.logger.error("❌ DATABASE_URL not found in .env file")
-            self.logger.error("🔍 Available environment variables:")
+            self.logger.error("ERROR: DATABASE_URL not found in .env file")
+            self.logger.error("DEBUG: Available environment variables:")
             env_vars = [key for key in os.environ.keys() if not key.startswith('_')]
             for var in sorted(env_vars)[:10]:  # Show first 10 to avoid spam
                 self.logger.error(f"   {var}")
             if len(env_vars) > 10:
                 self.logger.error(f"   ... and {len(env_vars) - 10} more")
             self.logger.error("")
-            self.logger.error("💡 Add this line to your .env file:")
+            self.logger.error("HELP: Add this line to your .env file:")
             self.logger.error('   DATABASE_URL="mssql+pyodbc://user:pass@server:port/dbname?driver=ODBC+Driver+17+for+SQL+Server"')
             return None
 
         # Validate DATABASE_URL format
         if not database_url.startswith(('mssql+', 'sqlite://', 'postgresql://')):
-            self.logger.warning(f"⚠️  Unusual DATABASE_URL format: {database_url[:50]}...")
+            self.logger.warning(f"WARNING: Unusual DATABASE_URL format: {database_url[:50]}...")
 
-        self.logger.debug(f"✅ DATABASE_URL loaded: {database_url[:30]}...")
+        self.logger.debug(f"SUCCESS: DATABASE_URL loaded: {database_url[:30]}...")
         return database_url
     
     def create_database(self, database_url):
@@ -203,38 +201,25 @@ class DatabaseManager:
             exists = DatabaseCreator.database_exists(database_url)
             
             if exists:
-                self.logger.info("✅ Database exists and is accessible")
-                
-                # Try to get table information
+                self.logger.info("SUCCESS: Database exists and is accessible")
+
+                # Try to test connection with simple query
                 try:
-                    conn_manager = DatabaseConnectionManager(database_url)
-                    conn_manager.initialize_connection()
-                    
-                    # Test connection
-                    if conn_manager.test_connection():
-                        self.logger.info("✅ Database connection test successful")
+                    # Use DatabaseCreator's test_connection method since it's simpler
+                    connection_test = DatabaseCreator.test_connection(database_url)
+                    if connection_test:
+                        self.logger.info("SUCCESS: Database connection test successful")
                     else:
-                        self.logger.warning("⚠️  Database exists but connection test failed")
-                        
-                    # Get table count
-                    with conn_manager.session_scope() as session:
-                        # Import models from main application
-                        from shared.database.models import Base
-                        table_count = len(Base.metadata.tables)
-                        self.logger.info(f"📋 Database schema defines {table_count} tables")
-                    
-                    conn_manager.close()
+                        self.logger.warning("WARNING: Database exists but connection test failed")
+
                     return True
-                    
-                except DatabaseNotFoundError:
-                    self.logger.error("❌ Database exists but is not accessible")
-                    return False
+
                 except Exception as e:
-                    self.logger.warning(f"⚠️  Database exists but connection check failed: {e}")
+                    self.logger.warning(f"WARNING: Database exists but connection check failed: {e}")
                     return True  # Database exists even if we can't fully test it
-                    
+
             else:
-                self.logger.error("❌ Database does not exist")
+                self.logger.error("ERROR: Database does not exist")
                 self.logger.info("Run with 'create' action to create the database")
                 return False
                 
