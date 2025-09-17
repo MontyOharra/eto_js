@@ -7,7 +7,7 @@ import logging
 from typing import Optional, List, Dict, Any
 
 from ...shared.database import get_connection_manager
-from ...shared.database.repositories import PdfTemplateRepository
+from ...shared.database.repositories.pdf_template_repository import PdfTemplateRepository
 from ...shared.utils import get_service, ServiceNames
 from .types import (
     TemplateMatchResult, PdfObject, TemplateCreateRequest,
@@ -27,7 +27,7 @@ class PdfTemplateService:
             raise RuntimeError("Database connection manager is required")
 
         # Repository layer
-        self.template_repo = PdfTemplateRepository(self.connection_manager)
+        self.pdf_template_repo = PdfTemplateRepository(self.connection_manager)
 
         logger.info("PDF Template Service initialized")
 
@@ -45,7 +45,7 @@ class PdfTemplateService:
         """
         try:
             # Get all active templates
-            active_templates = self.template_repo.get_active_templates()
+            active_templates = self.pdf_template_repo.get_active_templates()
 
             if not active_templates:
                 logger.info("No active templates found for matching")
@@ -75,7 +75,7 @@ class PdfTemplateService:
                 unmatched_count = self._count_unmatched_objects(pdf_objects, best_match)
 
                 # Update template usage statistics
-                self.template_repo.increment_usage_count(best_match.id)
+                self.pdf_template_repo.increment_usage_count(best_match.id)
 
                 logger.info(f"Template match found: {best_match.id} with {best_coverage:.2f}% coverage")
 
@@ -307,7 +307,7 @@ class PdfTemplateService:
             'usage_count': 0
         }
 
-        template = self.template_repo.create(template_data)
+        template = self.pdf_template_repo.create(template_data)
         logger.info(f"Created new template: {template.id} - {template.name}")
 
         return template
@@ -323,15 +323,15 @@ class PdfTemplateService:
             Created template version
         """
         # Get base template to determine next version number
-        base_template = self.template_repo.get_by_id(version_request.base_template_id)
+        base_template = self.pdf_template_repo.get_by_id(version_request.base_template_id)
         if not base_template:
             raise ValueError(f"Base template {version_request.base_template_id} not found")
 
         # Mark previous versions as not current
-        self.template_repo.mark_versions_as_not_current(version_request.base_template_id)
+        self.pdf_template_repo.mark_versions_as_not_current(version_request.base_template_id)
 
         # Get next version number
-        next_version = self.template_repo.get_next_version_number(version_request.base_template_id)
+        next_version = self.pdf_template_repo.get_next_version_number(version_request.base_template_id)
 
         # Create new version (similar to create_template but with version info)
         signature_objects_json = json.dumps([
@@ -376,23 +376,23 @@ class PdfTemplateService:
             'parent_template_id': version_request.base_template_id  # Link to original template
         }
 
-        template = self.template_repo.create(template_data)
+        template = self.pdf_template_repo.create(template_data)
         logger.info(f"Created template version {next_version}: {template.id} - {template.name}")
 
         return template
 
     def get_template_by_id(self, template_id: int) -> Optional[PdfTemplate]:
         """Get a specific template by ID"""
-        return self.template_repo.get_by_id(template_id)
+        return self.pdf_template_repo.get_by_id(template_id)
 
     def get_active_templates(self) -> List[PdfTemplate]:
         """Get all active templates for matching"""
-        return self.template_repo.get_active_templates()
+        return self.pdf_template_repo.get_active_templates()
 
     def get_templates_by_customer(self, customer_name: str) -> List[PdfTemplate]:
         """Get all templates for a specific customer"""
-        return self.template_repo.get_by_customer_name(customer_name)
+        return self.pdf_template_repo.get_by_customer_name(customer_name)
 
     def get_template_versions(self, base_template_id: int) -> List[PdfTemplate]:
         """Get all versions of a template"""
-        return self.template_repo.get_template_versions(base_template_id)
+        return self.pdf_template_repo.get_template_versions(base_template_id)
