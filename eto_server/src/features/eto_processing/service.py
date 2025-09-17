@@ -111,13 +111,65 @@ class EtoProcessingService:
 
     def _process_template_matching_step(self, eto_run) -> Optional[int]:
         """
-        Handle template matching step, update processing_status
+        Handle template matching step using PDF Template Service
+
+        Args:
+            eto_run: EtoRun domain object
 
         Returns:
             template_id if match found, None if no match or error
         """
-        # TODO: Implement
-        pass
+        try:
+            # 1. Get PDF Template Service
+            pdf_template_service = get_service(ServiceNames.PDF_TEMPLATE)
+            if not pdf_template_service:
+                raise RuntimeError("PDF template service not available")
+
+            # 2. Get PDF objects from PDF Processing Service
+            pdf_processing_service = get_service(ServiceNames.PDF_PROCESSING)
+            if not pdf_processing_service:
+                raise RuntimeError("PDF processing service not available")
+
+            pdf_objects = pdf_processing_service.get_pdf_objects(eto_run.pdf_file_id)
+            if not pdf_objects:
+                logger.warning(f"No PDF objects found for PDF {eto_run.pdf_file_id}")
+                self._mark_as_needs_template(eto_run.id)
+                return None
+
+            # 3. Perform template matching
+            match_result = pdf_template_service.find_best_template_match(pdf_objects)
+
+            # 4. Handle results and update ETO run accordingly
+            if match_result.template_found:
+                # SUCCESS: Update with template match and move to data extraction
+                self.eto_run_repo.update_status(
+                    run_id=eto_run.id,
+                    status='processing',
+                    processing_step='extracting_data',  # Move to next step
+                    matched_template_id=match_result.template_id,
+                    template_version=match_result.template_version,
+                    template_match_coverage=match_result.coverage_percentage,
+                    unmatched_object_count=match_result.unmatched_object_count
+                )
+
+                logger.info(f"Template match found for ETO run {eto_run.id}: "
+                           f"template {match_result.template_id} with {match_result.coverage_percentage:.2f}% coverage")
+
+                return match_result.template_id
+            else:
+                # NO MATCH: Mark as needs_template
+                self._mark_as_needs_template(eto_run.id)
+                logger.info(f"No template match found for ETO run {eto_run.id}")
+                return None
+
+        except Exception as e:
+            logger.error(f"Error in template matching for ETO run {eto_run.id}: {e}")
+            self._mark_as_failed(
+                eto_run.id,
+                f"Template matching failed: {str(e)}",
+                error_type="template_matching_error"
+            )
+            return None
 
     def _process_data_extraction_step(self, eto_run, template_id) -> Dict[str, Any]:
         """Handle data extraction step"""
@@ -152,14 +204,13 @@ class EtoProcessingService:
             logger.error(f"Error marking ETO run {run_id} as failed: {e}")
             raise
 
-    def _mark_as_needs_template(self, run_id: int, suggested_new_template: bool = True):
+    def _mark_as_needs_template(self, run_id: int):
         """Set status to 'needs_template' and end processing"""
         try:
             updated_run = self.eto_run_repo.update_status(
                 run_id=run_id,
                 status='needs_template',
-                processing_step=None,  # Clear processing step
-                suggested_new_template=suggested_new_template
+                processing_step=None  # Clear processing step
             )
 
             if updated_run:

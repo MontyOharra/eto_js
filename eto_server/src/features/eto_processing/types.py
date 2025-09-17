@@ -30,7 +30,6 @@ class EtoRun:
     template_version: Optional[int] = None
     template_match_coverage: Optional[float] = None
     unmatched_object_count: Optional[int] = None
-    suggested_new_template: Optional[bool] = None
 
     # Data extraction and transformation results
     extracted_data: Optional[str] = None  # JSON string

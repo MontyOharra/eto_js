@@ -42,7 +42,6 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                 eto_run_model, "template_match_coverage"
             ),
             "unmatched_object_count": getattr(eto_run_model, "unmatched_object_count"),
-            "suggested_new_template": getattr(eto_run_model, "suggested_new_template"),
             "extracted_data": getattr(eto_run_model, "extracted_data"),
             "transformation_audit": getattr(eto_run_model, "transformation_audit"),
             "target_data": getattr(eto_run_model, "target_data"),
