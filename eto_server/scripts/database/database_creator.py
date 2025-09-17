@@ -121,8 +121,15 @@ class DatabaseCreator:
             src_path = project_root / 'src'
             sys.path.insert(0, str(src_path))
 
-            # Import the main models file (not database_models.py)
-            from shared.database.models import Base
+            # Import models directly to avoid circular imports
+            import importlib.util
+            models_spec = importlib.util.spec_from_file_location(
+                "models",
+                src_path / 'shared' / 'database' / 'models.py'
+            )
+            models_module = importlib.util.module_from_spec(models_spec)
+            models_spec.loader.exec_module(models_module)
+            Base = models_module.Base
 
             database_name = DatabaseCreator._parse_database_name(database_url)
             logger.debug(f"Creating tables in database '{database_name}'...")
@@ -160,8 +167,15 @@ class DatabaseCreator:
             src_path = project_root / 'src'
             sys.path.insert(0, str(src_path))
 
-            # Import the main models file (not database_models.py)
-            from shared.database.models import Base
+            # Import models directly to avoid circular imports
+            import importlib.util
+            models_spec = importlib.util.spec_from_file_location(
+                "models",
+                src_path / 'shared' / 'database' / 'models.py'
+            )
+            models_module = importlib.util.module_from_spec(models_spec)
+            models_spec.loader.exec_module(models_module)
+            Base = models_module.Base
 
             database_name = DatabaseCreator._parse_database_name(database_url)
             logger.debug(f"Dropping all tables from database '{database_name}'...")
