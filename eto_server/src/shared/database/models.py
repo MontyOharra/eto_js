@@ -134,7 +134,7 @@ class EtoRunModel(Base):
     target_data = Column(Text)  # JSON: final transformed data ready for order creation
     
     # Pipeline execution tracking
-    failed_step_id = Column(Integer, ForeignKey('template_extraction_steps.id'))
+    failed_pipeline_step_id = Column(Integer, ForeignKey('transformation_pipeline_steps.id'))
     step_execution_log = Column(Text)  # JSON: step-by-step execution details
     
     # Processing timeline
@@ -153,7 +153,7 @@ class EtoRunModel(Base):
     email = relationship("EmailModel", back_populates="eto_runs")
     pdf_file = relationship("PdfFileModel", back_populates="eto_runs")
     template = relationship("PdfTemplateModel", back_populates="eto_runs")
-    failed_step = relationship("TemplateExtractionStepModel", foreign_keys=[failed_step_id], overlaps="failed_eto_runs")
+    failed_pipeline_step = relationship("TransformationPipelineStepModel", foreign_keys=[failed_pipeline_step_id])
 
 
 class PdfFileModel(Base):
@@ -181,155 +181,177 @@ class PdfFileModel(Base):
 class PdfTemplateModel(Base):
     """PDF templates for pattern matching and field extraction"""
     __tablename__ = 'pdf_templates'
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(255), nullable=False)
     customer_name = Column(String(255))
     description = Column(Text)
-    
+
     # Template matching signature
     signature_objects = Column(Text)  # JSON: objects that define this template
     signature_object_count = Column(Integer)  # For quick subset matching
-    
+
     # Spatial extraction field definitions
     extraction_fields = Column(Text)  # JSON: spatial bounding box extraction fields
-    
-    # Template metadata  
+
+    # Transformation pipeline integration
+    transformation_pipeline_id = Column(String(100), ForeignKey('transformation_pipelines.id'), nullable=True)
+
+    # Template metadata
     is_complete = Column(Boolean, default=False)  # User-marked completeness
     coverage_threshold = Column(Float, default=0.6)  # Expected coverage ratio
-    
+
     # Usage statistics
     usage_count = Column(Integer, default=0)
     last_used_at = Column(DateTime)
-    
+
     # Versioning
     version = Column(Integer, default=1)
     is_current_version = Column(Boolean, default=True)
-    
+
     # Audit fields
     created_by = Column(String(255))
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     status = Column(String(50), default='active')  # 'active', 'archived', 'draft'
-    
+
     # Relationships
     eto_runs = relationship("EtoRunModel", back_populates="template")
-    extraction_rules = relationship("TemplateExtractionRuleModel", back_populates="template")
+    transformation_pipeline = relationship("TransformationPipelineModel", foreign_keys=[transformation_pipeline_id])
 
 
-class TemplateExtractionRuleModel(Base):
-    """Extraction rules for templates (multi-step data transformation)"""
-    __tablename__ = 'template_extraction_rules'
-    
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    template_id = Column(Integer, ForeignKey('pdf_templates.id'), nullable=False, index=True)
-    rule_name = Column(String(255), nullable=False)  # "carrier_processing", "pickup_date_processing"
-    final_target_field = Column(String(255), nullable=False)  # "address_id", "pickup_date"
-    is_required = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    
-    # Relationships
-    template = relationship("PdfTemplateModel", back_populates="extraction_rules")
-    extraction_steps = relationship("TemplateExtractionStepModel", back_populates="extraction_rule", cascade="all, delete-orphan")
-
-
-class TemplateExtractionStepModel(Base):
-    """Individual steps within extraction rules"""
-    __tablename__ = 'template_extraction_steps'
-    
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    extraction_rule_id = Column(Integer, ForeignKey('template_extraction_rules.id'), nullable=False, index=True)
-    step_number = Column(Integer, nullable=False)  # 1, 2, 3... (execution order)
-    step_name = Column(String(255), nullable=False)  # "extract_raw_carrier", "lookup_address_id"
-    
-    # Step configuration
-    step_type = Column(String(50), nullable=False)  # 'raw_extract', 'sql_lookup', 'llm_parse'
-    step_config = Column(Text)  # JSON: method-specific configuration
-    
-    # Input/Output
-    input_fields = Column(Text)  # JSON: ["carrier_raw"]
-    output_field = Column(String(255))  # "carrier_raw", "address_id"
-    
-    # Error handling
-    error_handling = Column(String(50), default='fail_rule')  # 'fail_rule', 'skip_step', 'use_default'
-    default_value = Column(Text)
-    
-    # Performance tracking
-    avg_execution_time_ms = Column(Integer, default=0)
-    execution_count = Column(Integer, default=0)
-    last_executed_at = Column(DateTime)
-    
-    created_at = Column(DateTime, default=datetime.utcnow)
-    
-    # Relationships
-    extraction_rule = relationship("TemplateExtractionRuleModel", back_populates="extraction_steps")
-    failed_eto_runs = relationship("EtoRunModel", foreign_keys="[EtoRunModel.failed_step_id]")
-    
-    # Constraints
-    __table_args__ = (
-        UniqueConstraint('extraction_rule_id', 'step_number', name='_rule_step_number_uc'),
-    )
 
 class TransformationPipelineModel(Base):
     """Data transformation pipelines"""
     __tablename__ = 'transformation_pipelines'
-    
+
     id = Column(String(100), primary_key=True)
     name = Column(String(255), nullable=False)
     description = Column(Text)
     created_by_user = Column(String(255), nullable=False)
-    
+
     # Pipeline definition (module references and connections)
-    pipeline_definition = Column(Text, nullable=False)
-    
+    pipeline_definition = Column(Text, nullable=False)  # JSON: PipelineData with modules/connections
+
     # Start and end modules for execution planning
-    start_modules = Column(Text)  # Array of module IDs that begin the pipeline
-    end_modules = Column(Text)   # Array of module IDs that end the pipeline
-    
-    # Execution metadata
-    execution_metadata = Column(Text)
-    
+    start_modules = Column(Text)  # JSON: Array of module IDs that begin the pipeline
+    end_modules = Column(Text)   # JSON: Array of module IDs that end the pipeline
+
+    # Execution metadata (from pipeline analysis)
+    execution_metadata = Column(Text)  # JSON: Analysis results, step assignments, parallel opportunities
+
     # Status and metadata
     status = Column(String(50), default='draft')  # draft, active, archived
-    created_at = Column(DateTime, server_default=func.now())
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     is_active = Column(Boolean, default=True)
+
+    # Relationships
+    pipeline_steps = relationship("TransformationPipelineStepModel", back_populates="pipeline", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index('idx_transformation_pipelines_name', 'name'),
-        Index('idx_transformation_pipelines_user', 'created_by_user'), 
+        Index('idx_transformation_pipelines_user', 'created_by_user'),
         Index('idx_transformation_pipelines_status', 'status'),
         Index('idx_transformation_pipelines_active', 'is_active'),
     )
     
 class TransformationPipelineModuleModel(Base):
-    """Transformation pipeline modules defined by developers"""
+    """Base transformation modules defined by developers"""
     __tablename__ = 'transformation_pipeline_modules'
-    
+
     id = Column(String(100), primary_key=True)
     name = Column(String(255), nullable=False)
     description = Column(Text)
     version = Column(String(50), default='1.0.0')
-    
-    # New consolidated node configuration (JSON strings)
+
+    # Consolidated node configuration (JSON strings)
     input_config = Column(Text, nullable=False)   # JSON: NodeConfiguration for inputs
     output_config = Column(Text, nullable=False)  # JSON: NodeConfiguration for outputs
     config_schema = Column(Text)                  # JSON: List[ConfigSchema] for configuration options
-    
+
     # Service endpoint information
     service_endpoint = Column(String(512))
-    handler_name = Column(String(255))
-    
+    handler_name = Column(String(255), nullable=False)
+
     # UI theming
     color = Column(String(50), default='#3B82F6')
     category = Column(String(100), default='Processing')
-    
+
     # Metadata
-    created_at = Column(DateTime, server_default=func.now())
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     is_active = Column(Boolean, default=True)
 
     __table_args__ = (
         Index('idx_transformation_pipeline_modules_name', 'name'),
         Index('idx_transformation_pipeline_modules_active', 'is_active'),
+    )
+
+
+class TransformationPipelineStepModel(Base):
+    """Pre-computed linear execution steps for transformation pipelines"""
+    __tablename__ = 'transformation_pipeline_steps'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    pipeline_id = Column(String(100), ForeignKey('transformation_pipelines.id'), nullable=False, index=True)
+    step_number = Column(Integer, nullable=False)  # Execution order: 1, 2, 3...
+
+    # Module execution details
+    module_id = Column(String(100), nullable=False)  # Module instance ID from pipeline
+    template_id = Column(String(100), nullable=False)  # Base module template ID
+    module_config = Column(Text)  # JSON: Module-specific configuration
+
+    # Field mappings for data flow
+    input_field_mappings = Column(Text)  # JSON: {input_node_id: field_name}
+    output_field_mappings = Column(Text)  # JSON: {output_node_id: field_name}
+
+    # Parallel execution grouping
+    parallel_group_id = Column(Integer)  # Steps with same group_id can run in parallel
+
+    # Execution metadata
+    execution_order_within_step = Column(Integer, default=0)  # Order within parallel group
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    pipeline = relationship("TransformationPipelineModel", back_populates="pipeline_steps")
+
+    __table_args__ = (
+        Index('idx_pipeline_steps_pipeline_id', 'pipeline_id'),
+        Index('idx_pipeline_steps_step_number', 'step_number'),
+        Index('idx_pipeline_steps_parallel_group', 'parallel_group_id'),
+        UniqueConstraint('pipeline_id', 'step_number', 'module_id', name='_pipeline_step_module_uc'),
+    )
+
+
+class CustomTransformationModuleModel(Base):
+    """Custom transformation modules created by users"""
+    __tablename__ = 'custom_transformation_modules'
+
+    id = Column(String(100), primary_key=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text)
+    created_by_user = Column(String(255), nullable=False)
+
+    # JSON schemas for inputs, outputs, and configuration
+    input_config = Column(Text, nullable=False)   # JSON: NodeConfiguration for inputs
+    output_config = Column(Text, nullable=False)  # JSON: NodeConfiguration for outputs
+    config_schema = Column(Text)                  # JSON: List[ConfigSchema] for configuration options
+
+    # Pipeline definition (references to other modules and connections)
+    pipeline_definition = Column(Text, nullable=False)  # JSON: Nested pipeline definition
+
+    # UI theming
+    color = Column(String(50), default='#9333EA')  # Purple for custom modules
+    category = Column(String(100), default='Custom')
+
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    is_active = Column(Boolean, default=True)
+
+    __table_args__ = (
+        Index('idx_custom_transformation_modules_name', 'name'),
+        Index('idx_custom_transformation_modules_user', 'created_by_user'),
+        Index('idx_custom_transformation_modules_active', 'is_active'),
     )

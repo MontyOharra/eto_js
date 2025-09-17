@@ -15,13 +15,56 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 try:
+    print(f"🔍 Project root: {project_root}")
+    print(f"🔍 Script location: {Path(__file__).parent}")
+    print(f"🔍 Current working directory: {os.getcwd()}")
+
+    # Load dotenv first
     from dotenv import load_dotenv
-    # Import directly from connection.py to avoid package cascade
-    sys.path.insert(0, str(project_root / 'src' / 'shared' / 'database'))
-    from connection import DatabaseCreator, DatabaseConnectionError, DatabaseNotFoundError, DatabaseConnectionManager
+    print("✅ dotenv imported successfully")
+
+    # Import database creator from local scripts directory
+    print(f"🔍 Attempting to import from: {Path(__file__).parent / 'database_creator.py'}")
+    from database_creator import DatabaseCreator, DatabaseConnectionError, DatabaseNotFoundError
+    print("✅ database_creator imported successfully")
+
+    # Import connection manager from main application
+    src_path = project_root / 'src'
+    print(f"🔍 Adding to Python path: {src_path}")
+    sys.path.insert(0, str(src_path))
+
+    print(f"🔍 Attempting to import from: {src_path / 'shared' / 'database' / 'connection.py'}")
+    from shared.database.connection import DatabaseConnectionManager
+    print("✅ DatabaseConnectionManager imported successfully")
+
 except ImportError as e:
     print(f"❌ Import error: {e}", file=sys.stderr)
-    print("Make sure you're running from the project root and dependencies are installed", file=sys.stderr)
+    print(f"❌ Error type: {type(e).__name__}", file=sys.stderr)
+    print(f"❌ Error details: {str(e)}", file=sys.stderr)
+    print("", file=sys.stderr)
+    print("🔍 Debug information:", file=sys.stderr)
+    print(f"   Project root: {project_root}", file=sys.stderr)
+    print(f"   Script directory: {Path(__file__).parent}", file=sys.stderr)
+    print(f"   Current working directory: {os.getcwd()}", file=sys.stderr)
+    print(f"   Python path: {sys.path[:3]}...", file=sys.stderr)
+    print("", file=sys.stderr)
+    print("💡 Troubleshooting:", file=sys.stderr)
+    print("   1. Make sure you're running from the eto_server directory", file=sys.stderr)
+    print("   2. Check that database_creator.py exists in scripts/database/", file=sys.stderr)
+    print("   3. Verify virtual environment is activated", file=sys.stderr)
+    print("   4. Run: pip install -r requirements.txt", file=sys.stderr)
+
+    import traceback
+    print("", file=sys.stderr)
+    print("📍 Full traceback:", file=sys.stderr)
+    traceback.print_exc()
+    sys.exit(3)
+except Exception as e:
+    print(f"❌ Unexpected error during imports: {e}", file=sys.stderr)
+    print(f"❌ Error type: {type(e).__name__}", file=sys.stderr)
+    import traceback
+    print("📍 Full traceback:", file=sys.stderr)
+    traceback.print_exc()
     sys.exit(3)
 
 # Exit codes (matching bash script)
@@ -59,21 +102,50 @@ class DatabaseManager:
     def load_environment(self):
         """Load environment variables from .env file"""
         env_file = project_root / '.env'
-        
+
+        self.logger.info(f"🔍 Looking for .env file at: {env_file}")
+
         if not env_file.exists():
-            self.logger.error(f"Environment file not found: {env_file}")
-            self.logger.error("Please copy .env.example to .env and configure your database settings.")
+            self.logger.error(f"❌ Environment file not found: {env_file}")
+            self.logger.error("📁 Files in project root:")
+            try:
+                for file in project_root.iterdir():
+                    if file.is_file():
+                        self.logger.error(f"   {file.name}")
+            except Exception as e:
+                self.logger.error(f"   Could not list files: {e}")
+            self.logger.error("")
+            self.logger.error("💡 To fix this:")
+            self.logger.error("   1. Copy .env.example to .env")
+            self.logger.error("   2. Configure your DATABASE_URL in the .env file")
             return None
-            
-        load_dotenv(env_file)
-        
+
+        try:
+            load_dotenv(env_file)
+            self.logger.info(f"✅ Environment file loaded: {env_file}")
+        except Exception as e:
+            self.logger.error(f"❌ Failed to load .env file: {e}")
+            return None
+
         database_url = os.getenv('DATABASE_URL')
         if not database_url:
-            self.logger.error("DATABASE_URL not found in .env file")
-            self.logger.error("Please configure DATABASE_URL in your .env file")
+            self.logger.error("❌ DATABASE_URL not found in .env file")
+            self.logger.error("🔍 Available environment variables:")
+            env_vars = [key for key in os.environ.keys() if not key.startswith('_')]
+            for var in sorted(env_vars)[:10]:  # Show first 10 to avoid spam
+                self.logger.error(f"   {var}")
+            if len(env_vars) > 10:
+                self.logger.error(f"   ... and {len(env_vars) - 10} more")
+            self.logger.error("")
+            self.logger.error("💡 Add this line to your .env file:")
+            self.logger.error('   DATABASE_URL="mssql+pyodbc://user:pass@server:port/dbname?driver=ODBC+Driver+17+for+SQL+Server"')
             return None
-            
-        self.logger.debug(f"Environment loaded from: {env_file}")
+
+        # Validate DATABASE_URL format
+        if not database_url.startswith(('mssql+', 'sqlite://', 'postgresql://')):
+            self.logger.warning(f"⚠️  Unusual DATABASE_URL format: {database_url[:50]}...")
+
+        self.logger.debug(f"✅ DATABASE_URL loaded: {database_url[:30]}...")
         return database_url
     
     def create_database(self, database_url):
@@ -146,14 +218,8 @@ class DatabaseManager:
                         
                     # Get table count
                     with conn_manager.session_scope() as session:
-                        # Import database models directly to avoid package cascade
-                        import importlib.util
-                        import os
-                        models_path = os.path.join(project_root, 'src', 'shared', 'database', 'database_models.py')
-                        spec = importlib.util.spec_from_file_location('database_models', models_path)
-                        models_module = importlib.util.module_from_spec(spec)
-                        spec.loader.exec_module(models_module)
-                        Base = models_module.Base
+                        # Import models from main application
+                        from shared.database.models import Base
                         table_count = len(Base.metadata.tables)
                         self.logger.info(f"📋 Database schema defines {table_count} tables")
                     

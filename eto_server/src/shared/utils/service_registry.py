@@ -34,7 +34,7 @@ def get_service(service_name: str) -> Optional[Any]:
     try:
         service = current_app.config.get(service_name)
         if service is None:
-            logger.debug(f"Service '{service_name}' not found in registry")
+            logger.error(f"Service '{service_name}' not found in registry")
         return service
     except RuntimeError:
         # Not in Flask application context

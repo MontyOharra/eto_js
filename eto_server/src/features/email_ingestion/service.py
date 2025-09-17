@@ -12,7 +12,12 @@ from dataclasses import dataclass, field
 
 from .config_service import EmailIngestionConfigService
 from .cursor_service import EmailIngestionCursorService
-from .types import EmailIngestionConfig, EmailIngestionStats, EmailServiceHealth, EmailData, EmailIngestionConnectionConfig, EmailCreate, EtoRunCreate, EmailServiceStartResponse, EmailServiceStopResponse, EmailServiceStatusResponse, EmailConfigSummary, EmailServiceConnectionStatus
+from .types import (
+    EmailIngestionConfig, EmailIngestionStats, EmailServiceHealth,
+    EmailData, EmailIngestionConnectionConfig, EmailCreate, 
+    EtoRunCreate, EmailServiceStartResponse, EmailServiceStopResponse, 
+    EmailServiceStatusResponse, EmailConfigSummary, EmailServiceConnectionStatus
+)
 from .integrations.outlook_com_service import OutlookComService
 from ...shared.database import get_connection_manager
 from ...shared.database.repositories import EmailIngestionConfigRepository, EmailIngestionCursorRepository, EmailRepository, EtoRunRepository
