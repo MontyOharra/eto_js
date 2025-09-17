@@ -10,7 +10,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 
 from ...shared.database import get_connection_manager
-from ...shared.database.repositories import EtoRunRepository, PdfRepository
+from ...shared.database.repositories import EtoRunRepository
 from ...shared.utils import get_service, ServiceNames
 
 logger = logging.getLogger(__name__)
@@ -27,7 +27,6 @@ class EtoProcessingService:
 
         # Repository layer
         self.eto_run_repo = EtoRunRepository(self.connection_manager)
-        self.pdf_repo = PdfRepository(self.connection_manager)
 
         # Worker configuration
         self.poll_interval = poll_interval  # seconds between queue checks
@@ -52,8 +51,36 @@ class EtoProcessingService:
         Returns:
             EtoRun: Created ETO run domain object
         """
-        # TODO: Implement
-        pass
+        if pdf_id is None:
+            raise ValueError("pdf_id is required")
+
+        # Validate PDF exists and get its email_id using PDF processing service
+        pdf_processing_service = get_service(ServiceNames.PDF_PROCESSING)
+        if not pdf_processing_service:
+            raise RuntimeError("PDF processing service is not available")
+
+        pdf_file = pdf_processing_service.get_pdf_metadata(pdf_id)
+        if not pdf_file:
+            raise ValueError(f"PDF file {pdf_id} not found")
+
+        # Check if ETO run already exists for this PDF
+        existing_runs = self.eto_run_repo.get_by_pdf_id(pdf_id)
+        if existing_runs:
+            # Return existing run if it exists
+            logger.info(f"ETO run already exists for PDF {pdf_id}: {existing_runs[0].id}")
+            return existing_runs[0]
+
+        # Create new ETO run record
+        eto_run_data = {
+            "email_id": pdf_file.email_id,
+            "pdf_file_id": pdf_id,
+            "status": "not_started"
+        }
+
+        eto_run = self.eto_run_repo.create(eto_run_data)
+        logger.info(f"Created ETO run {eto_run.id} for PDF {pdf_id}")
+
+        return eto_run
 
     # === Worker Process Management ===
 
@@ -104,20 +131,67 @@ class EtoProcessingService:
 
     # === Error & Status Management ===
 
-    def _mark_as_failed(self, run_id: int, error_message: str):
-        """Set status to 'failed' and end processing"""
-        # TODO: Implement
-        pass
+    def _mark_as_failed(self, run_id: int, error_message: str, error_type: str = None, error_details: dict = None):
+        """Set status to 'failure' and end processing"""
+        try:
+            updated_run = self.eto_run_repo.mark_as_failed(
+                run_id=run_id,
+                error_message=error_message,
+                error_type=error_type,
+                error_details=error_details
+            )
 
-    def _mark_as_needs_template(self, run_id: int):
+            if updated_run:
+                logger.info(f"ETO run {run_id} marked as failed: {error_message}")
+                return updated_run
+            else:
+                logger.error(f"Failed to mark ETO run {run_id} as failed")
+                return None
+
+        except Exception as e:
+            logger.error(f"Error marking ETO run {run_id} as failed: {e}")
+            raise
+
+    def _mark_as_needs_template(self, run_id: int, suggested_new_template: bool = True):
         """Set status to 'needs_template' and end processing"""
-        # TODO: Implement
-        pass
+        try:
+            updated_run = self.eto_run_repo.update_status(
+                run_id=run_id,
+                status='needs_template',
+                processing_step=None,  # Clear processing step
+                suggested_new_template=suggested_new_template
+            )
+
+            if updated_run:
+                logger.info(f"ETO run {run_id} marked as needs template")
+                return updated_run
+            else:
+                logger.error(f"Failed to mark ETO run {run_id} as needs template")
+                return None
+
+        except Exception as e:
+            logger.error(f"Error marking ETO run {run_id} as needs template: {e}")
+            raise
 
     def _mark_as_success(self, run_id: int):
-        """Set status to 'success', processing_status to null"""
-        # TODO: Implement
-        pass
+        """Set status to 'success', processing_step to null"""
+        try:
+            updated_run = self.eto_run_repo.update_status(
+                run_id=run_id,
+                status='success',
+                processing_step=None  # Clear processing step on success
+            )
+
+            if updated_run:
+                logger.info(f"ETO run {run_id} marked as successful")
+                return updated_run
+            else:
+                logger.error(f"Failed to mark ETO run {run_id} as successful")
+                return None
+
+        except Exception as e:
+            logger.error(f"Error marking ETO run {run_id} as successful: {e}")
+            raise
 
     # === Utility Methods ===
 
