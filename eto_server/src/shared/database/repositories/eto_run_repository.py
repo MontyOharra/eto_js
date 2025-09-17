@@ -10,7 +10,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import func, case
 from .base_repository import BaseRepository, RepositoryError
 from ..models import EtoRunModel
-from ....features.eto_processing.types import EtoRun
+from ...domain.types import EtoRun
 
 
 logger = logging.getLogger(__name__)

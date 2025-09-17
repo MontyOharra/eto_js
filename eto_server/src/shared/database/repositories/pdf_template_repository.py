@@ -8,7 +8,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from .base_repository import BaseRepository, RepositoryError
 from ..models import PdfTemplateModel
-from ...features.pdf_template.types import PdfTemplate
+from ...domain.types import PdfTemplate
 from ..connection import DatabaseConnectionManager
 
 logger = logging.getLogger(__name__)

@@ -9,7 +9,7 @@ from typing import Optional, List, Dict, Any
 from ...shared.database import get_connection_manager
 from ...shared.database.repositories.pdf_template_repository import PdfTemplateRepository
 from ...shared.utils import get_service, ServiceNames
-from .types import (
+from ...shared.domain.types import (
     TemplateMatchResult, PdfObject, TemplateCreateRequest,
     TemplateVersionRequest, PdfTemplate, ExtractionField
 )
