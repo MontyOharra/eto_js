@@ -210,7 +210,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
         if run_id is None or not status:
             raise ValueError("run_id and status are required")
 
-        update_data = {"status": status, "processing_step": processing_step, **kwargs}
+        update_data = {"processing_step": processing_step, **kwargs}
 
         return self.update_status(run_id, status, **update_data)
 

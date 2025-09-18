@@ -10,9 +10,8 @@ import time
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 
-from shared.database import get_connection_manager
 from shared.database.repositories import EtoRunRepository
-from shared.utils.service_registry import get_pdf_processing_service, get_pdf_template_service
+from shared.services import get_pdf_processing_service, get_pdf_template_service
 from shared.domain import EtoErrorType, EtoRunStatus, EtoProcessingStep, PdfObject
 
 logger = logging.getLogger(__name__)
@@ -22,11 +21,10 @@ class EtoProcessingService:
     """Background worker service for processing ETO runs through the complete pipeline"""
 
     def __init__(self, poll_interval: int = 10, batch_size: int = 5, connection_manager=None):
-
-        self.connection_manager = connection_manager or get_connection_manager()
-
-        if not self.connection_manager:
+        if not connection_manager:
             raise RuntimeError("Database connection manager is required")
+
+        self.connection_manager = connection_manager
 
         # Repository layer
         self.eto_run_repo = EtoRunRepository(self.connection_manager)
@@ -391,8 +389,8 @@ class EtoProcessingService:
             if match_result.template_found:
                 # SUCCESS: Update with template match and move to data extraction
                 self.eto_run_repo.update_status(
-                    id=eto_run.id,
-                    status="processing",
+                    eto_run.id,
+                    "processing",
                     processing_step="extracting_data",  # Move to next step
                     matched_template_id=match_result.template_id,
                     template_version=match_result.template_version,
@@ -442,8 +440,8 @@ class EtoProcessingService:
 
             # Store extracted data in ETO run
             self.eto_run_repo.update_status(
-                id=eto_run.id,
-                status="processing",
+                eto_run.id,
+                "processing",
                 extracted_data=json.dumps(extracted_data)
             )
 
@@ -499,8 +497,8 @@ class EtoProcessingService:
 
             # Mark as successful and store final data
             self.eto_run_repo.update_status(
-                id=eto_run.id,
-                status="success",
+                eto_run.id,
+                "success",
                 processing_step=None,  # Clear processing step on success
                 target_data=json.dumps(transformed_data),
                 transformation_audit=json.dumps(transformation_audit)
@@ -546,8 +544,8 @@ class EtoProcessingService:
         """Set status to 'needs_template' and end processing"""
         try:
             updated_run = self.eto_run_repo.update_status(
-                id=id,
-                status="needs_template",
+                id,
+                "needs_template",
                 processing_step=None  # Clear processing step
             )
 
@@ -566,8 +564,8 @@ class EtoProcessingService:
         """Set status to 'success', processing_step to null"""
         try:
             updated_run = self.eto_run_repo.update_status(
-                id=id,
-                status="success",
+                id,
+                "success",
                 processing_step=None  # Clear processing step on success
             )
 

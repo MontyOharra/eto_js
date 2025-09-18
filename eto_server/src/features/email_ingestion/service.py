@@ -16,7 +16,7 @@ from .integrations.outlook_com_service import OutlookComService
 
 from shared.database import get_connection_manager
 from shared.database.repositories import EmailIngestionConfigRepository, EmailIngestionCursorRepository, EmailRepository
-from shared.utils.service_registry import get_pdf_processing_service, get_eto_processing_service
+from shared.services import get_pdf_processing_service, get_eto_processing_service
 from shared.domain import (
     EmailIngestionConfig, EmailIngestionStats, EmailServiceHealth,
     EmailData, EmailIngestionConnectionConfig, EmailCreate, 
@@ -447,6 +447,8 @@ class EmailIngestionService:
                         if hasattr(cursor_time, 'replace') and cursor_time.tzinfo is not None:
                             cursor_time = cursor_time.replace(tzinfo=None)
                         
+                        # Use exact cursor time comparison - rely on database duplicate detection
+                        # for emails with identical timestamps due to Outlook's second-level precision
                         if email_time <= cursor_time:
                             self.logger.debug(f"Skipping email {i+1} - already processed (received {email_time} <= cursor {cursor_time})")
                             continue
@@ -620,16 +622,20 @@ class EmailIngestionService:
             email_record = self.email_repo.create_email_record(email_record_create)
             self.logger.info(f"Saved email record: {email_record.subject} (ID: {email_record.id})")
             
-            # Process PDF attachments if present (using pre-extracted data)
+            # Process PDF attachments using pre-extracted data
             pdf_records = []
             if email_data.has_pdf_attachments:
-                self.logger.debug(f"  Processing {len(email_data.pdf_attachments_data)} PDF attachments")
+                self.logger.debug(f"  Email has PDF attachments - processing pre-extracted PDF data")
                 try:
-                    # Process each pre-extracted PDF attachment
-                    for pdf_data in email_data.pdf_attachments_data:
-                        pdf_record = self._process_extracted_pdf(pdf_data, email_record.id)
-                        if pdf_record:
-                            pdf_records.append(pdf_record)
+                    # Use pre-extracted PDF data (extracted during email conversion while COM object was fresh)
+                    if email_data.pdf_attachments_data:
+                        self.logger.debug(f"  Processing {len(email_data.pdf_attachments_data)} pre-extracted PDF attachments")
+                        for pdf_data in email_data.pdf_attachments_data:
+                            pdf_record = self._process_extracted_pdf(pdf_data, email_record.id)
+                            if pdf_record:
+                                pdf_records.append(pdf_record)
+                    else:
+                        self.logger.warning(f"  Email has PDF attachments but no pre-extracted data available")
                     
                     # Update statistics
                     for pdf_record in pdf_records:
@@ -696,10 +702,6 @@ class EmailIngestionService:
             )
             
             pdf_service = get_pdf_processing_service()
-            if not pdf_service:
-                logger.error("PDF processing service not available")
-                return None
-
             pdf_file = pdf_service.store_pdf(content_bytes, store_request)
             assert pdf_file.id is not None
             pdf_id = pdf_file.id
@@ -716,12 +718,9 @@ class EmailIngestionService:
             eto_run_id = None
             try:
                 eto_service = get_eto_processing_service()
-                if eto_service:
-                    eto_run = eto_service.create_eto_run(pdf_id)
-                    eto_run_id = eto_run.id if eto_run else None
-                    self.logger.debug(f"Created ETO run {eto_run_id} for PDF {pdf_id}")
-                else:
-                    self.logger.warning("ETO processing service not available - skipping ETO run creation")
+                eto_run = eto_service.create_eto_run(pdf_id)
+                eto_run_id = eto_run.id if eto_run else None
+                self.logger.debug(f"Created ETO run {eto_run_id} for PDF {pdf_id}")
             except Exception as eto_error:
                 self.logger.error(f"Failed to create ETO run for PDF {pdf_id}: {eto_error}")
                 # Don't fail the entire PDF processing if ETO run creation fails

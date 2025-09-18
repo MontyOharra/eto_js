@@ -9,10 +9,11 @@ from flask_cors import CORS
 
 from .shared.database import init_database_connection
 from .shared.utils.storage_config import get_storage_configuration
-
-from .features.email_ingestion.service import EmailIngestionService
-from .features.pdf_processing import PdfProcessingService
-from .features.eto_processing import EtoProcessingService
+import sys
+import os
+# Add the src directory to Python path to enable absolute imports
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from shared.services import ServiceContainer
 
 from .api import BLUEPRINTS
         
@@ -55,10 +56,10 @@ def initialize_database_connection(app: Flask) -> None:
         raise
 
 
-def initialize_pdf_processing(app: Flask) -> None:
-    """Initialize PDF processing service"""
+def initialize_services(app: Flask) -> None:
+    """Initialize all services using the ServiceContainer singleton"""
     try:
-        logger.debug("Initializing PDF Processing Service...")
+        logger.debug("Initializing services via ServiceContainer...")
 
         # Get connection manager from app config
         connection_manager = app.config.get('CONNECTION_MANAGER')
@@ -69,106 +70,60 @@ def initialize_pdf_processing(app: Flask) -> None:
         pdf_storage_path = app.config['PDF_STORAGE_ROOT']
         logger.debug(f"PDF storage path configured: {pdf_storage_path}")
 
-        pdf_service = PdfProcessingService(pdf_storage_path, connection_manager)
-        
-        # Store PDF service in app config for global access
-        app.config['PDF_PROCESSING_SERVICE'] = pdf_service
-        logger.info("PDF Processing Service initialized successfully")
-        
-    except Exception as e:
-        logger.error(f"Failed to initialize PDF processing service: {e}")
-        # Don't re-raise - allow app to continue without PDF processing
-        logger.info("Application will continue without PDF processing service")
+        # Initialize the service container with all services
+        logger.info("Creating ServiceContainer singleton instance...")
 
+        # Import the private getter to ensure we set the module-level instance
+        from shared.services.service_container import _get_container
 
-def initialize_email_ingestion(app: Flask) -> None:
-    """Initialize email ingestion service with PDF support and attempt auto-connection"""
-    try:
-        logger.debug("Initializing Email Ingestion Service...")
+        service_container = _get_container()
+        logger.info(f"ServiceContainer instance created (ID: {id(service_container)}), calling initialize with cm={type(connection_manager)}")
+        service_container.initialize(connection_manager, pdf_storage_path)
+        logger.info("ServiceContainer.initialize() completed successfully")
 
-        # Get connection manager from app config
-        connection_manager = app.config.get('CONNECTION_MANAGER')
-        if not connection_manager:
-            raise RuntimeError("Database connection manager not available")
+        # Store references in Flask app config for blueprint access
+        app.config['EMAIL_INGESTION_SERVICE'] = service_container.get_email_service()
+        app.config['PDF_PROCESSING_SERVICE'] = service_container.get_pdf_service()
+        app.config['ETO_PROCESSING_SERVICE'] = service_container.get_eto_service()
+        app.config['PDF_TEMPLATE_SERVICE'] = service_container.get_pdf_template_service()
 
-        pdf_service = app.config.get('PDF_PROCESSING_SERVICE')
-        if not pdf_service:
-            logger.error("PDF processing service not available for email ingestion")
-            return
+        logger.info("All services initialized successfully via ServiceContainer")
 
-        # Import and create the email ingestion service
-        email_service = EmailIngestionService(connection_manager)
-        
-        # Store only the service in app config for global access
-        app.config['EMAIL_INGESTION_SERVICE'] = email_service
-        
-        # Check for active configuration and attempt auto-connect
+        # Auto-start email ingestion if active config exists
         try:
+            email_service = service_container.get_email_service()
             active_config = email_service.config_service.get_active_config()
-            
-            if not active_config:
-                logger.info("No active email ingestion configuration found - service ready for configuration")
-                return
-            logger.info(f"Found active configuration: {active_config.name} (ID: {active_config.id})")
-            
-            # Attempt to connect to Outlook using the active configuration
-            connection_config = {
-                'email_address': active_config.email_address,
-                'folder_name': active_config.folder_name
-            }
-            
-            # Start the email ingestion service
-            result = email_service.start(active_config.id)
-            
-            if result.success: 
-                logger.info(f"Email ingestion service started successfully for config: {active_config.name}")
+
+            if active_config:
+                logger.info(f"Found active configuration: {active_config.name} (ID: {active_config.id})")
+                result = email_service.start(active_config.id)
+
+                if result.success:
+                    logger.info(f"Email ingestion service started successfully for config: {active_config.name}")
+                else:
+                    logger.warning(f"Failed to start email ingestion: {result.message}")
             else:
-                logger.warning(f"Failed to start email ingestion: {result.message}") 
-                
+                logger.info("No active email ingestion configuration found - service ready for configuration")
+
         except Exception as service_error:
             logger.warning(f"Email ingestion auto-connect failed: {service_error}")
-            logger.info("Email ingestion service initialized but not connected - waiting for configuration")
-        
-    except Exception as e:
-        logger.error(f"Failed to initialize email ingestion service: {e}")
-        # Don't re-raise - allow app to continue without email service
-        logger.info("Application will continue without email ingestion service")
 
-
-def initialize_eto_processing(app: Flask) -> None:
-    """Initialize ETO processing service with background worker"""
-    try:
-        logger.debug("Initializing ETO Processing Service...")
-
-        # Get connection manager from app config
-        connection_manager = app.config.get('CONNECTION_MANAGER')
-        if not connection_manager:
-            raise RuntimeError("Database connection manager not available")
-
-        # Initialize ETO processing service with connection manager
-        eto_service = EtoProcessingService(
-            poll_interval=int(os.getenv('ETO_POLL_INTERVAL', '10')),
-            batch_size=int(os.getenv('ETO_BATCH_SIZE', '5')),
-            connection_manager=connection_manager
-        )
-
-        # Store service in app config for global access
-        app.config['ETO_PROCESSING_SERVICE'] = eto_service
-
-        # Start the background worker if enabled
-        worker_enabled = os.getenv('ETO_WORKER_ENABLED', 'true').lower() == 'true'
-        if worker_enabled:
-            eto_service.start()
-            logger.info("ETO processing background worker started")
-        else:
-            logger.info("ETO processing service initialized but worker not started (ETO_WORKER_ENABLED=false)")
-
-        logger.info("ETO processing service initialized successfully")
+        # Auto-start ETO processing if enabled
+        try:
+            worker_enabled = os.getenv('ETO_WORKER_ENABLED', 'true').lower() == 'true'
+            if worker_enabled:
+                eto_service = service_container.get_eto_service()
+                eto_service.start()
+                logger.info("ETO processing background worker started")
+            else:
+                logger.info("ETO processing service initialized but worker not started (ETO_WORKER_ENABLED=false)")
+        except Exception as eto_error:
+            logger.warning(f"ETO processing auto-start failed: {eto_error}")
 
     except Exception as e:
-        logger.error(f"Failed to initialize ETO processing service: {e}")
-        # Don't re-raise - allow app to continue without ETO processing
-        logger.info("Application will continue without ETO processing service")
+        logger.error(f"Failed to initialize services: {e}")
+        # Don't re-raise - allow app to continue with limited functionality
+        logger.info("Application will continue with limited functionality")
 
 
 def register_blueprints(app: Flask) -> None:
@@ -301,14 +256,14 @@ def create_app(config_name: str = 'development') -> Flask:
     
     # Load configuration
     app.config.from_object(get_config_class())
-    
+
+    # Initialize database and services
     initialize_database_connection(app)
-    initialize_pdf_processing(app)
-    initialize_email_ingestion(app)
-    initialize_eto_processing(app)
+    initialize_services(app)
     register_blueprints(app)
     register_error_handlers(app)
     register_info_endpoint(app)
-    
+
+
     logger.info("Unified ETO Server application created successfully")
     return app

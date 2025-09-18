@@ -670,6 +670,12 @@ class OutlookComService:
         except Exception as e:
             logger.error(f"Error extracting PDF attachments: {e}")
             
+            # Re-raise COM connection errors so the calling service can handle fallback
+            error_code = getattr(e, 'args', [None])[0] if hasattr(e, 'args') and e.args else None
+            if error_code == -2147220995:  # COM object disconnected error
+                logger.debug("Re-raising COM disconnection error for fallback handling")
+                raise e
+            # For other errors, return empty list but log the issue
         logger.debug(f"Extracted {len(pdf_attachments)} PDF attachments")
         return pdf_attachments
     
@@ -804,12 +810,12 @@ class OutlookComService:
                 logger.debug(f"Extracting {attachment_count} attachments for PDFs from email: {subject}")
                 pdf_attachments_data = self.extract_pdf_attachments_from_message(outlook_mail)
                 logger.debug(f"Extracted {len(pdf_attachments_data)} PDF attachments from email: {subject}")
-            
+
             # Get body preview (first 200 characters)
             body_preview = None
             if outlook_mail.Body:
                 body_preview = outlook_mail.Body[:200]
-            
+
             return EmailData(
                 message_id=message_id,
                 subject=subject,
@@ -821,7 +827,8 @@ class OutlookComService:
                 attachment_filenames=attachment_filenames,
                 has_pdf_attachments=has_pdf_attachments,
                 body_preview=body_preview,
-                pdf_attachments_data=pdf_attachments_data
+                pdf_attachments_data=pdf_attachments_data,  # Contains extracted PDF data
+                _outlook_mail_object=outlook_mail  # Store for backup (should not be needed now)
             )
             
         except Exception as e:

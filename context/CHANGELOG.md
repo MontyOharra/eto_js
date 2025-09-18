@@ -5,6 +5,28 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-09-18 10:30] — Email Service PDF Processing Independence
+### Spec / Intent
+- Complete the independence of email service PDF processing from Flask service registry to avoid "no Flask app available" errors in background threads
+- Implement direct PDF service instantiation within EmailIngestionService constructor to eliminate service registry dependencies
+- Fix COM object disconnection and Flask context issues that were preventing PDF extraction from emails
+
+### Changes Made
+- Files: `eto_server/src/features/email_ingestion/service.py`
+- Summary: Updated `_process_extracted_pdf()` method to use `self.pdf_service` instead of `get_pdf_processing_service()` from service registry. Removed service registry dependency by utilizing the independent PDF service created in constructor. Changed lines 715-716 and 726 to use instance variable rather than global service registry access.
+
+### Next Actions
+- Test email ingestion with PDF extraction to ensure Flask context issues are resolved
+- Verify PDF processing works correctly in background threads without service registry
+
+### Notes
+- PDF service is now created independently in EmailIngestionService constructor using storage configuration
+- Background threads can now process PDFs without requiring Flask application context
+- Addresses user request to "make it so that the services are accessed independently and dynamically instead of trying to make them dependent on each other"
+- Completes the fix for "Cannot access PDF processing service - no Flask app available" error
+
+---
+
 ## [2025-09-16 20:15] — Application Startup Cleanup and Duplicate Code Removal
 ### Spec / Intent
 - Fix duplicate logging configuration between main.py and app.py that was overwriting file logging

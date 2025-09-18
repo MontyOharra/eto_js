@@ -129,7 +129,7 @@ class DatabaseCreator:
             )
             models_module = importlib.util.module_from_spec(models_spec)
             models_spec.loader.exec_module(models_module)
-            Base = models_module.Base
+            Base = models_module.BaseModel
 
             database_name = DatabaseCreator._parse_database_name(database_url)
             logger.debug(f"Creating tables in database '{database_name}'...")
@@ -175,7 +175,7 @@ class DatabaseCreator:
             )
             models_module = importlib.util.module_from_spec(models_spec)
             models_spec.loader.exec_module(models_module)
-            Base = models_module.Base
+            Base = models_module.BaseModel
 
             database_name = DatabaseCreator._parse_database_name(database_url)
             logger.debug(f"Dropping all tables from database '{database_name}'...")

@@ -14,23 +14,15 @@ from api.schemas.email_ingestion import (
     EmailConfigActivateResponse
 )
 from api.schemas.common import APIResponse
-from features.email_ingestion.service import EmailIngestionService
+from shared.services import get_email_ingestion_service
 from shared.domain import EmailIngestionConnectionConfig, EmailIngestionConfigCreate, EmailFilterRule
 
 logger = logging.getLogger(__name__)
 
 # Service helper
-def get_email_service() -> EmailIngestionService:
-    """Get email ingestion service from app config"""
-    email_service = current_app.config.get('EMAIL_INGESTION_SERVICE')
-    if not email_service:
-        raise RuntimeError("Email ingestion service not initialized")
-
-    # Use isinstance instead of strict type equality to handle import path differences
-    if not hasattr(email_service, 'start') or not hasattr(email_service, 'stop'):
-        raise RuntimeError("Invalid email service object - missing required methods")
-
-    return email_service
+def get_email_service():
+    """Get email ingestion service from service container"""
+    return get_email_ingestion_service()
 
 
 def handle_validation_error(e: ValidationError) -> Dict[str, Any]:
@@ -95,10 +87,10 @@ def list_email_configs():
                 last_used_at=config.last_used_at,
                 created_at=config.created_at,
                 updated_at=config.updated_at
-            ) 
+            ).dict()
             for config in configs
         ]
-        
+
         return jsonify({
             "success": True,
             "data": config_responses
@@ -118,19 +110,25 @@ def list_email_configs():
 def create_email_config():
     """Create new email ingestion config"""
     try:
+        logger.info("Creating new email config - starting request processing")
         data = request.get_json()
-        
+        logger.debug(f"Received config data: {data}")
+
         if not data:
+            logger.error("No request body provided")
             return jsonify({
                 "success": False,
                 "error": "Request body is required",
                 "message": "Missing config data"
             }), 400
-        
+
         # Validate request data
         try:
+            logger.debug("Validating request data with EmailConfigCreateRequest schema")
             create_request = EmailConfigCreateRequest(**data)
+            logger.debug("Request validation successful")
         except ValidationError as e:
+            logger.error(f"Pydantic validation failed: {e}")
             return jsonify(handle_validation_error(e)), 400
         
         # Convert Pydantic filter rules to domain objects
@@ -157,8 +155,13 @@ def create_email_config():
             error_retry_attempts=create_request.monitoring.error_retry_attempts
         )
 
+        logger.debug("Getting email service")
         email_service = get_email_service()
+
+        logger.debug("Creating config via email service")
         created_config = email_service.config_service.create_config(config_create)
+
+        logger.info(f"Successfully created config: {created_config.name} (ID: {created_config.id})")
 
         # Convert domain object to API response
         return jsonify({
@@ -169,9 +172,12 @@ def create_email_config():
                 "message": "Configuration created successfully"
             }
         }), 201
-    
+
     except Exception as e:
         logger.error(f"Error creating config: {e}")
+        logger.error(f"Exception type: {type(e)}")
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
         return jsonify({
             "success": False,
             "error": str(e),
@@ -192,9 +198,26 @@ def activate_config(config_id: int):
         email_service = get_email_service()
         activated_config = email_service.config_service.activate_config(config_id)
         
-        # If auto_start is requested, try to start ingestion
+        # If auto_start is requested, restart ingestion with new config
         if auto_start:
             try:
+                # Check if service is already running
+                current_status = email_service.get_ingestion_status()
+                service_was_running = current_status.is_running
+
+                restart_message = ""
+
+                # If service is running, stop it first
+                if service_was_running:
+                    logger.info(f"Stopping email service to switch from old config to new config: {activated_config.name}")
+                    stop_result = email_service.stop()
+                    if stop_result.success:
+                        restart_message = "Service restarted with new config. "
+                    else:
+                        logger.warning(f"Failed to stop service before restart: {stop_result.message}")
+                        restart_message = "Service stop failed, but attempting start. "
+
+                # Start service with new active config
                 start_result = email_service.start()
 
                 # Return combined response
@@ -202,10 +225,11 @@ def activate_config(config_id: int):
                     "success": True,
                     "config_id": activated_config.id,
                     "config_name": activated_config.name,
-                    "message": f"Config activated and email ingestion started",
+                    "message": f"Config activated and email ingestion {('restarted' if service_was_running else 'started')}",
                     "activated": True,
                     "auto_started": start_result.success,
-                    "start_message": start_result.message
+                    "start_message": restart_message + start_result.message,
+                    "service_restarted": service_was_running
                 }
 
                 if not start_result.success:
@@ -466,8 +490,37 @@ def handle_internal_error(error):
         "message": "An unexpected error occurred"
     }), 500
 
+@email_ingestion_bp.route('/configs/<int:config_id>', methods=['DELETE'])
+@cross_origin()
+def delete_email_config(config_id: int):
+    """Delete an email ingestion config"""
+    try:
+        logger.info(f"DELETE /configs/{config_id} - Deleting email config")
 
+        email_service = get_email_service()
 
+        # Delete the config using the service
+        success = email_service.config_service.delete_config(config_id)
+
+        if success:
+            return jsonify({
+                "success": True,
+                "message": f"Email config {config_id} deleted successfully"
+            }), 200
+        else:
+            return jsonify({
+                "success": False,
+                "error": "Delete failed",
+                "message": f"Failed to delete email config {config_id}"
+            }), 400
+
+    except Exception as e:
+        logger.error(f"Error deleting email config {config_id}: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "message": f"Failed to delete email config {config_id}"
+        }), 400
 
 # Export the blueprint
 __all__ = ['email_ingestion_bp']

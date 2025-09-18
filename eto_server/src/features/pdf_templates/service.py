@@ -6,9 +6,8 @@ import json
 import logging
 from typing import Optional, List, Dict, Any
 
-from shared.database import get_connection_manager
 from shared.database.repositories.pdf_template_repository import PdfTemplateRepository
-from shared.utils.service_registry import get_pdf_processing_service
+from shared.services import get_pdf_processing_service
 
 from shared.domain import ( 
     TemplateMatchResult, PdfObject, TemplateCreateRequest,
@@ -21,11 +20,11 @@ logger = logging.getLogger(__name__)
 class PdfTemplateService:
     """Service for PDF template matching and management"""
 
-    def __init__(self):
-        self.connection_manager = get_connection_manager()
-
-        if not self.connection_manager:
+    def __init__(self, connection_manager):
+        if not connection_manager:
             raise RuntimeError("Database connection manager is required")
+
+        self.connection_manager = connection_manager
 
         # Repository layer
         self.pdf_template_repo = PdfTemplateRepository(self.connection_manager)

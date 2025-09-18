@@ -142,6 +142,7 @@ class EmailData:
     has_pdf_attachments: bool
     body_preview: Optional[str]
     pdf_attachments_data: List[Dict[str, Any]] = field(default_factory=list)
+    _outlook_mail_object: Optional[Any] = None  # For deferred PDF extraction
 
 
 @dataclass

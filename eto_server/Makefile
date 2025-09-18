@@ -19,7 +19,7 @@ $(VENV_DIR): ## Create virtual environment
 	@echo "Virtual environment created at $(VENV_DIR)"
 
 install-deps: $(VENV_DIR) requirements.txt ## Install Python dependencies from requirements.txt
-	$(PIP) install --upgrade pip
+	$(PYTHON) -m pip install --upgrade pip
 	$(PIP) install -r requirements.txt
 	@touch install-deps
 	@echo "Dependencies installed"
@@ -42,6 +42,10 @@ logs:
 
 storage:
 	@mkdir -p storage
+
+clean-data: ## Clean up logs and storage data (keep venv)
+	@rm -rf logs/* storage/*
+	@echo "Cleaned up logs and storage data (virtual environment preserved)"
 
 clean: ## Clean up virtual environment and generated files
 	@rm -rf $(VENV_DIR) logs storage
