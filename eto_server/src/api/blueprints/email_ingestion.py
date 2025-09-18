@@ -14,8 +14,8 @@ from api.schemas.email_ingestion import (
     EmailConfigActivateResponse
 )
 from api.schemas.common import APIResponse
-from eto_server.src.features.email_ingestion.service import EmailIngestionService
-from features.email_ingestion.types import EmailIngestionConnectionConfig, EmailIngestionConfigCreate, EmailFilterRule
+from features.email_ingestion import EmailIngestionService
+from shared.domain import EmailIngestionConnectionConfig, EmailIngestionConfigCreate, EmailFilterRule
 
 logger = logging.getLogger(__name__)
 

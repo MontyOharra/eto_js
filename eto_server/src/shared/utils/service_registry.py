@@ -6,6 +6,15 @@ from typing import Optional, Any
 from flask import current_app
 import logging
 
+# Import service types for proper typing
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from features.pdf_processing.service import PdfProcessingService
+    from features.eto_processing.service import EtoProcessingService
+    from features.email_ingestion.service import EmailIngestionService
+    from features.pdf_templates.service import PdfTemplateService
+    from shared.database.connection import DatabaseConnectionManager
+
 logger = logging.getLogger(__name__)
 
 # Service name constants to avoid magic strings
@@ -96,3 +105,50 @@ def list_available_services() -> list[str]:
     except RuntimeError:
         logger.warning("Cannot list services - not in Flask context")
         return []
+
+
+# === Type-Safe Individual Service Getters ===
+
+def get_pdf_processing_service() -> Optional["PdfProcessingService"]:
+    """Get PDF processing service with proper typing"""
+    try:
+        return current_app.config.get('PDF_PROCESSING_SERVICE')
+    except RuntimeError:
+        logger.warning("Cannot access PDF processing service - not in Flask context")
+        return None
+
+
+def get_eto_processing_service() -> Optional["EtoProcessingService"]:
+    """Get ETO processing service with proper typing"""
+    try:
+        return current_app.config.get('ETO_PROCESSING_SERVICE')
+    except RuntimeError:
+        logger.warning("Cannot access ETO processing service - not in Flask context")
+        return None
+
+
+def get_email_ingestion_service() -> Optional["EmailIngestionService"]:
+    """Get email ingestion service with proper typing"""
+    try:
+        return current_app.config.get('EMAIL_INGESTION_SERVICE')
+    except RuntimeError:
+        logger.warning("Cannot access email ingestion service - not in Flask context")
+        return None
+
+
+def get_pdf_template_service() -> Optional["PdfTemplateService"]:
+    """Get PDF template service with proper typing"""
+    try:
+        return current_app.config.get('PDF_TEMPLATE_SERVICE')
+    except RuntimeError:
+        logger.warning("Cannot access PDF template service - not in Flask context")
+        return None
+
+
+def get_connection_manager() -> Optional["DatabaseConnectionManager"]:
+    """Get database connection manager with proper typing"""
+    try:
+        return current_app.config.get('CONNECTION_MANAGER')
+    except RuntimeError:
+        logger.warning("Cannot access connection manager - not in Flask context")
+        return None

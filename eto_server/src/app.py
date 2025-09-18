@@ -19,7 +19,7 @@ from .api import BLUEPRINTS
 logger = logging.getLogger(__name__)
 
 
-def initialize_database(app: Flask) -> None:
+def initialize_database_connection(app: Flask) -> None:
     """Initialize database connection and verify connectivity"""
     try:
         database_url = os.getenv('DATABASE_URL', app.config.get('DATABASE_URL'))
@@ -94,7 +94,7 @@ def initialize_email_ingestion(app: Flask) -> None:
         
         # Check for active configuration and attempt auto-connect
         try:
-            active_config = email_service.config_service.get_active_configuration()
+            active_config = email_service.config_service.get_active_config()
             
             if not active_config:
                 logger.info("No active email ingestion configuration found - service ready for configuration")
@@ -110,10 +110,10 @@ def initialize_email_ingestion(app: Flask) -> None:
             # Start the email ingestion service
             result = email_service.start(active_config.id)
             
-            if result.get('success'):
+            if result.success: 
                 logger.info(f"Email ingestion service started successfully for config: {active_config.name}")
             else:
-                logger.warning(f"Failed to start email ingestion: {result.get('message')}")
+                logger.warning(f"Failed to start email ingestion: {result.message}") 
                 
         except Exception as service_error:
             logger.warning(f"Email ingestion auto-connect failed: {service_error}")
@@ -130,8 +130,14 @@ def initialize_eto_processing(app: Flask) -> None:
     try:
         logger.debug("Initializing ETO Processing Service...")
 
-        # Initialize ETO processing service (creates dependent services internally)
+        # Get connection manager from app config
+        connection_manager = app.config.get('CONNECTION_MANAGER')
+        if not connection_manager:
+            raise RuntimeError("Database connection manager not available")
+
+        # Initialize ETO processing service with connection manager
         eto_service = EtoProcessingService(
+            connection_manager=connection_manager,
             poll_interval=int(os.getenv('ETO_POLL_INTERVAL', '10')),
             batch_size=int(os.getenv('ETO_BATCH_SIZE', '5'))
         )

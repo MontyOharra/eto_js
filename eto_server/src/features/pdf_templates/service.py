@@ -22,8 +22,8 @@ class PdfTemplateService:
     """Service for PDF template matching and management"""
 
     def __init__(self):
-        # Database infrastructure
-        self.connection_manager = get_service(ServiceNames.CONNECTION_MANAGER)
+        self.connection_manager = get_connection_manager()
+
         if not self.connection_manager:
             raise RuntimeError("Database connection manager is required")
 
