@@ -8,7 +8,7 @@ from typing import Optional, List, Dict, Any
 
 from shared.database import get_connection_manager
 from shared.database.repositories.pdf_template_repository import PdfTemplateRepository
-from shared.utils import get_service, ServiceNames
+from shared.utils.service_registry import get_pdf_processing_service
 
 from shared.domain import ( 
     TemplateMatchResult, PdfObject, TemplateCreateRequest,

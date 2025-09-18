@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from shared.database import get_connection_manager
 from shared.database.repositories import EtoRunRepository
 from shared.utils.service_registry import get_pdf_processing_service, get_pdf_template_service
-from shared.domain import EtoErrorType, EtoRunStatus, EtoProcessingStep
+from shared.domain import EtoErrorType, EtoRunStatus, EtoProcessingStep, PdfObject
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +75,7 @@ class EtoProcessingService:
 
         # Create new ETO run record
         eto_run_data = {
-            "email_id": pdf_file.email_id,
+            "email_id": pdf_file['email_id'],
             "pdf_file_id": pdf_id,
             "status": "not_started"
         }
@@ -206,10 +206,23 @@ class EtoProcessingService:
             if not pdf_processing_service:
                 raise RuntimeError("PDF processing service not available")
 
-            pdf_objects = pdf_processing_service.get_pdf_objects(eto_run.pdf_file_id)
-            if not pdf_objects:
+            if not (pdf_file := pdf_processing_service.get_pdf_by_id(eto_run.pdf_file_id)) or not (objects_json := pdf_file.objects_json):
                 logger.warning(f"No PDF objects found for PDF {eto_run.pdf_file_id}")
                 self._mark_as_needs_template(eto_run.id)
+                return None
+
+            # Parse JSON and convert to PdfObject instances
+            try:
+                objects_data = json.loads(objects_json)
+                pdf_objects = [PdfObject(**obj_data) for obj_data in objects_data]
+            except (json.JSONDecodeError, TypeError, ValueError) as e:
+                logger.error(f"Failed to parse PDF objects JSON for PDF {eto_run.pdf_file_id}: {e}")
+                self._mark_as_failed(
+                    eto_run.id,
+                    f"Invalid PDF objects data: {str(e)}",
+                    error_type="template_matching_error",
+                    error_details={"error": str(e), "step": "json_parsing"}
+                )
                 return None
 
             # 3. Perform template matching

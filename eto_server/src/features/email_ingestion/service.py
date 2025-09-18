@@ -16,7 +16,7 @@ from .integrations.outlook_com_service import OutlookComService
 
 from shared.database import get_connection_manager
 from shared.database.repositories import EmailIngestionConfigRepository, EmailIngestionCursorRepository, EmailRepository, EtoRunRepository
-from shared.utils import get_service, ServiceNames
+from shared.utils.service_registry import get_pdf_processing_service
 from shared.domain import (
     EmailIngestionConfig, EmailIngestionStats, EmailServiceHealth,
     EmailData, EmailIngestionConnectionConfig, EmailCreate, 
@@ -634,7 +634,7 @@ class EmailIngestionService:
                 mime_type='application/pdf'
             )
             
-            pdf_service = get_service(ServiceNames.PDF_PROCESSING)
+            pdf_service = get_pdf_processing_service()
             if not pdf_service:
                 logger.error("PDF processing service not available")
                 return None
