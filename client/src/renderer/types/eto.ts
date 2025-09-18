@@ -10,28 +10,23 @@ export interface EtoRun {
   pdf_file_id: number;
   status: "not_started" | "processing" | "success" | "failure" | "needs_template" | "skipped";
   processing_step?: "template_matching" | "extracting_data" | "transforming_data";
+
+  // Basic metadata
+  pdf_filename: string;
+  email_subject: string;
+  sender_email: string;
+  file_size: number;
+
+  // Processing info
   matched_template_id?: number;
-  has_extracted_data?: boolean;
-  has_transformation_audit?: boolean;
-  has_target_data?: boolean;
-  error_type?: string;
+  template_name?: string;
+  processing_duration_ms?: number;
   error_message?: string;
-  created_at?: string;
+
+  // Timestamps
+  created_at: string;
   started_at?: string;
   completed_at?: string;
-  
-  // Nested objects from backend
-  pdf_file: {
-    original_filename: string;
-    sha256_hash: string;
-    file_size: number;
-  };
-  
-  email: {
-    subject: string;
-    sender_email: string;
-    received_date: string;
-  };
 }
 
 // Frontend-friendly summary interface for table display
@@ -128,20 +123,20 @@ export class EtoDataTransforms {
   static toSummary(apiRun: EtoRun): EtoRunSummary {
     return {
       id: apiRun.id,
-      fileName: apiRun.pdf_file.original_filename,
+      fileName: apiRun.pdf_filename,
       status: apiRun.status,
       processing_step: apiRun.processing_step,
-      receivedAt: new Date(apiRun.email.received_date),
+      receivedAt: new Date(apiRun.created_at),
       processingCompletedAt: apiRun.completed_at ? new Date(apiRun.completed_at) : undefined,
       matchedTemplateId: apiRun.matched_template_id,
-      hasExtractedData: apiRun.has_extracted_data,
-      hasTransformationAudit: apiRun.has_transformation_audit,
-      hasTargetData: apiRun.has_target_data,
+      hasExtractedData: false, // This field is not in the backend schema
+      hasTransformationAudit: false, // This field is not in the backend schema
+      hasTargetData: false, // This field is not in the backend schema
       errorMessage: apiRun.error_message,
-      emailSubject: apiRun.email.subject,
-      senderEmail: apiRun.email.sender_email,
-      fileSize: apiRun.pdf_file.file_size,
-      fileSizeFormatted: this.formatFileSize(apiRun.pdf_file.file_size),
+      emailSubject: apiRun.email_subject,
+      senderEmail: apiRun.sender_email,
+      fileSize: apiRun.file_size,
+      fileSizeFormatted: this.formatFileSize(apiRun.file_size),
     };
   }
 
@@ -325,12 +320,4 @@ export class EtoDataTransforms {
   }
 }
 
-// Export all types
-export type { 
-  EtoRun, 
-  EtoRunSummary, 
-  Template, 
-  TemplateSummary,
-  SystemStats, 
-  EmailServiceStatus 
-};
+// Types are exported as part of the interface definitions above

@@ -5,14 +5,12 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { apiClient, ApiError } from '../services/api';
-import type { 
-  EtoRun, 
-  EtoRunSummary, 
-  SystemStats, 
+import type {
+  EtoRun,
+  EtoRunSummary,
+  SystemStats,
   EmailServiceStatus,
-  Template,
-  TemplateSummary,
-  EtoDataTransforms 
+  TemplateSummary
 } from '../types/eto';
 import { EtoDataTransforms } from '../types/eto';
 
@@ -38,18 +36,22 @@ export function useEtoRuns(params?: {
     lastFetch: null,
   });
 
-  const intervalRef = useRef<NodeJS.Timeout>();
+  const intervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const { status, limit, autoRefresh = false, refreshInterval = 30000 } = params || {};
 
   const fetchEtoRuns = useCallback(async () => {
     try {
       setState(prev => ({ ...prev, loading: true, error: null }));
-      
+
       const response = await apiClient.getEtoRuns({ status, limit });
-      
+
       // Transform API data to frontend summary format
-      const summaries = response.eto_runs.map(run => EtoDataTransforms.toSummary(run));
-      
+      const summaries = response.data.map(apiRun => {
+        // Convert ApiEtoRun to EtoRun (they have the same structure)
+        const etoRun: EtoRun = apiRun as EtoRun;
+        return EtoDataTransforms.toSummary(etoRun);
+      });
+
       setState({
         data: summaries,
         loading: false,
@@ -108,7 +110,7 @@ export function useSystemStats(autoRefresh: boolean = false, refreshInterval: nu
     lastFetch: null,
   });
 
-  const intervalRef = useRef<NodeJS.Timeout>();
+  const intervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -174,7 +176,7 @@ export function useEmailStatus(autoRefresh: boolean = true, refreshInterval: num
     lastFetch: null,
   });
 
-  const intervalRef = useRef<NodeJS.Timeout>();
+  const intervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -289,7 +291,7 @@ export function useServerHealth(autoCheck: boolean = true, checkInterval: number
     lastFetch: null,
   });
 
-  const intervalRef = useRef<NodeJS.Timeout>();
+  const intervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   const checkHealth = useCallback(async () => {
     try {
@@ -363,7 +365,7 @@ export function useTemplates(params?: {
     lastFetch: null,
   });
 
-  const intervalRef = useRef<NodeJS.Timeout>();
+  const intervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const { status, limit, autoRefresh = false, refreshInterval = 60000 } = params || {};
 
   const fetchTemplates = useCallback(async () => {

@@ -8,33 +8,34 @@ export interface ApiEtoRun {
   id: number;
   email_id: number;
   pdf_file_id: number;
-  status: "not_started" | "processing" | "success" | "failure" | "needs_template";
+  status: "not_started" | "processing" | "success" | "failure" | "needs_template" | "skipped";
   processing_step?: "template_matching" | "extracting_data" | "transforming_data";
+
+  // Basic metadata
+  pdf_filename: string;
+  email_subject: string;
+  sender_email: string;
+  file_size: number;
+
+  // Processing info
   matched_template_id?: number;
-  has_extracted_data?: boolean;
-  has_transformation_audit?: boolean;
-  has_target_data?: boolean;
-  error_type?: string;
+  template_name?: string;
+  processing_duration_ms?: number;
   error_message?: string;
-  created_at?: string;
+
+  // Timestamps
+  created_at: string;
   started_at?: string;
   completed_at?: string;
-  pdf_file: {
-    original_filename: string;
-    sha256_hash: string;
-    file_size: number;
-  };
-  email: {
-    subject: string;
-    sender_email: string;
-    received_date: string;
-  };
 }
 
 export interface ApiEtoRunsResponse {
-  eto_runs: ApiEtoRun[];
+  success: boolean;
+  data: ApiEtoRun[];
   total: number;
-  status_filter?: string;
+  page: number;
+  limit: number;
+  total_pages: number;
 }
 
 export interface ApiSystemStats {
@@ -177,7 +178,7 @@ export interface EmailIngestionStatus {
 }
 
 // API Configuration - Updated for unified ETO server
-const API_BASE_URL = 'http://localhost:8080';
+const API_BASE_URL = 'http://localhost:8080/api';
 
 class ApiClient {
   private baseUrl: string;
@@ -233,19 +234,150 @@ class ApiClient {
    */
   async getEtoRuns(params?: {
     status?: string;
+    email_id?: number;
+    template_id?: number;
+    has_errors?: boolean;
+    date_from?: string;
+    date_to?: string;
+    page?: number;
     limit?: number;
+    order_by?: string;
+    desc?: boolean;
   }): Promise<ApiEtoRunsResponse> {
     const searchParams = new URLSearchParams();
-    
+
     if (params?.status) {
       searchParams.append('status', params.status);
+    }
+    if (params?.email_id) {
+      searchParams.append('email_id', params.email_id.toString());
+    }
+    if (params?.template_id) {
+      searchParams.append('template_id', params.template_id.toString());
+    }
+    if (params?.has_errors !== undefined) {
+      searchParams.append('has_errors', params.has_errors.toString());
+    }
+    if (params?.date_from) {
+      searchParams.append('date_from', params.date_from);
+    }
+    if (params?.date_to) {
+      searchParams.append('date_to', params.date_to);
+    }
+    if (params?.page) {
+      searchParams.append('page', params.page.toString());
     }
     if (params?.limit) {
       searchParams.append('limit', params.limit.toString());
     }
+    if (params?.order_by) {
+      searchParams.append('order_by', params.order_by);
+    }
+    if (params?.desc !== undefined) {
+      searchParams.append('desc', params.desc.toString());
+    }
 
-    const endpoint = `/api/processing/runs${searchParams.toString() ? `?${searchParams}` : ''}`;
+    const endpoint = `/api/eto-runs${searchParams.toString() ? `?${searchParams}` : ''}`;
     return this.fetchApi<ApiEtoRunsResponse>(endpoint);
+  }
+
+  /**
+   * Get ETO Run Details
+   */
+  async getEtoRunDetails(runId: string | number): Promise<{
+    success: boolean;
+    data: ApiEtoRun & {
+      error_details?: any;
+      step_execution_log?: any;
+      template_name?: string;
+      template_version?: number;
+      template_match_coverage?: number;
+      failed_step_id?: number;
+      order_id?: number;
+    };
+  }> {
+    return this.fetchApi(`/api/eto-runs/${runId}`);
+  }
+
+  /**
+   * Skip ETO Run
+   */
+  async skipEtoRun(runId: string | number, params: {
+    reason: string;
+    permanent?: boolean;
+  }): Promise<{
+    success: boolean;
+    run_id: number;
+    status: string;
+    reason: string;
+    message: string;
+  }> {
+    return this.fetchApi(`/api/eto-runs/${runId}/skip`, {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  }
+
+  /**
+   * Delete ETO Run
+   */
+  async deleteEtoRun(runId: string | number): Promise<{
+    success: boolean;
+    run_id: number;
+    message: string;
+  }> {
+    return this.fetchApi(`/api/eto-runs/${runId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  /**
+   * Reprocess ETO Run
+   */
+  async reprocessEtoRun(runId: string | number, params?: {
+    force?: boolean;
+    template_id?: number;
+    reset_template?: boolean;
+    reason?: string;
+  }): Promise<{
+    success: boolean;
+    run_id: number;
+    old_status: string;
+    new_status: string;
+    message: string;
+  }> {
+    return this.fetchApi(`/api/eto-runs/${runId}/reprocess`, {
+      method: 'POST',
+      body: JSON.stringify(params || {}),
+    });
+  }
+
+  /**
+   * Get ETO Processing Statistics
+   */
+  async getEtoStatistics(): Promise<{
+    success: boolean;
+    data: {
+      total_runs: number;
+      successful_runs: number;
+      failed_runs: number;
+      skipped_runs: number;
+      processing_runs: number;
+      needs_template_runs: number;
+      success_rate: number;
+      avg_processing_time_ms?: number;
+      median_processing_time_ms?: number;
+      last_24h_runs: number;
+      last_7d_runs: number;
+      last_30d_runs: number;
+      most_common_errors: any[];
+      template_coverage: number;
+      last_successful_run?: string;
+      last_failed_run?: string;
+      last_processed_run?: string;
+    };
+  }> {
+    return this.fetchApi('/api/eto-runs/statistics');
   }
 
   /**
@@ -859,16 +991,4 @@ export class ApiError extends Error {
 // Export singleton instance
 export const apiClient = new ApiClient();
 
-// Export types
-export type { 
-  ApiEtoRun, 
-  ApiEtoRunsResponse, 
-  ApiSystemStats, 
-  ApiEmailStatus, 
-  ApiTemplate, 
-  ApiTemplatesResponse,
-  EmailIngestionConfig,
-  EmailIngestionConfigSummary,
-  ProcessedEmail,
-  EmailIngestionStatus
-};
+// Types are exported as part of the interface definitions above

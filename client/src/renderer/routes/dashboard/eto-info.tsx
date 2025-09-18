@@ -4,6 +4,7 @@ import { TemplateBuilderModal } from "../../components/template/TemplateBuilderM
 import { ConfirmationModal } from "../../components/shared/ConfirmationModal";
 import { ExtractionResultViewerModal } from "../../components/eto/ExtractionResultViewerModal";
 import { useEtoRuns, useServerHealth } from "../../hooks/useApi";
+import { apiClient } from "../../services/api";
 import { useMemo, useState } from "react";
 
 export const Route = createFileRoute("/dashboard/eto-info")({
@@ -69,15 +70,16 @@ function EtoInfoPage() {
 
   const handleSkip = async (runId: string) => {
     try {
-      const response = await fetch(`http://localhost:8080/api/eto-runs/${runId}/skip`, {
-        method: 'POST',
+      const response = await apiClient.skipEtoRun(runId, {
+        reason: "Skipped by user from ETO Info page",
+        permanent: false
       });
-      
-      if (response.ok) {
+
+      if (response.success) {
         // Refresh the data to show updated status
         refetch();
       } else {
-        console.error('Failed to skip run:', await response.text());
+        console.error('Failed to skip run:', response);
       }
     } catch (error) {
       console.error('Error skipping run:', error);
@@ -100,16 +102,13 @@ function EtoInfoPage() {
 
   const confirmDelete = async (runId: string) => {
     try {
-      const response = await fetch(`http://localhost:8080/api/eto-runs/${runId}`, {
-        method: 'DELETE',
-      });
-      
-      if (response.ok) {
+      const response = await apiClient.deleteEtoRun(runId);
+
+      if (response.success) {
         refetch(); // Refresh the data
         setConfirmationModal(null);
       } else {
-        const errorData = await response.json();
-        console.error('Failed to delete run:', errorData.error || 'Unknown error');
+        console.error('Failed to delete run:', response.message || 'Unknown error');
         setConfirmationModal(null);
       }
     } catch (error) {
@@ -120,15 +119,12 @@ function EtoInfoPage() {
 
   const handleReprocess = async (runId: string) => {
     try {
-      const response = await fetch(`http://localhost:8080/api/eto-runs/${runId}/reprocess`, {
-        method: 'POST',
-      });
-      
-      if (response.ok) {
+      const response = await apiClient.reprocessEtoRun(runId);
+
+      if (response.success) {
         refetch(); // Refresh the data to show updated status
       } else {
-        const errorData = await response.json();
-        console.error('Failed to reprocess run:', errorData.error || 'Unknown error');
+        console.error('Failed to reprocess run:', response.message || 'Unknown error');
       }
     } catch (error) {
       console.error('Error reprocessing run:', error);
