@@ -7,9 +7,10 @@ import json
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 from sqlalchemy.exc import SQLAlchemyError
-from .base_repository import BaseRepository, RepositoryError
-from ..models import EmailIngestionConfigModel
-from src.features.email_ingestion.types import EmailIngestionConfig, EmailFilterRule
+
+from shared.database.repositories import BaseRepository, RepositoryError
+from shared.database.models import EmailIngestionConfigModel
+from shared.domain import EmailIngestionConfig, EmailFilterRule
 
 logger = logging.getLogger(__name__)
 

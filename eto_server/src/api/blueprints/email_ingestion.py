@@ -8,14 +8,14 @@ from pydantic import ValidationError
 import logging
 from typing import Dict, Any
 
-from src.api.schemas.email_ingestion import (
+from api.schemas.email_ingestion import (
     EmailConfigCreateRequest,
     EmailConfigSummaryResponse,
     EmailConfigActivateResponse
 )
-from src.api.schemas.common import APIResponse
-from src.features.email_ingestion.service import EmailIngestionService
-from src.features.email_ingestion.types import EmailIngestionConnectionConfig, EmailIngestionConfigCreate, EmailFilterRule
+from api.schemas.common import APIResponse
+from eto_server.src.features.email_ingestion.service import EmailIngestionService
+from features.email_ingestion.types import EmailIngestionConnectionConfig, EmailIngestionConfigCreate, EmailFilterRule
 
 logger = logging.getLogger(__name__)
 

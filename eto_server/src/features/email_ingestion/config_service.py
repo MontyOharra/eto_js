@@ -6,8 +6,8 @@ import json
 import logging
 from typing import Dict, List, Any, Optional
 
-from .types import EmailIngestionConfig, EmailIngestionConfigCreate, EmailFilterRule
-from ...shared.database.repositories import EmailIngestionConfigRepository
+from shared.domain import EmailIngestionConfig, EmailIngestionConfigCreate, EmailFilterRule
+from shared.database.repositories import EmailIngestionConfigRepository
 
 logger = logging.getLogger(__name__)
 

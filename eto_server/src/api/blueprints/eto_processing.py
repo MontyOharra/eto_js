@@ -8,7 +8,7 @@ from pydantic import ValidationError
 import logging
 from typing import Dict, Any
 
-from ..schemas.eto_processing import (
+from api.schemas.eto_processing import (
     EtoRunSummaryResponse,
     EtoRunDetailResponse,
     EtoRunListRequest,
@@ -16,9 +16,9 @@ from ..schemas.eto_processing import (
     SkipEtoRunRequest,
     EtoRunStatsResponse
 )
-from ..schemas.common import PaginatedResponse
-from ...shared.database import get_connection_manager
-from ...shared.database.repositories import EtoRunRepository
+from api.schemas.common import PaginatedResponse
+from shared.database import get_connection_manager
+from shared.database.repositories import EtoRunRepository
 
 logger = logging.getLogger(__name__)
 

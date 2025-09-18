@@ -6,9 +6,9 @@ import logging
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone, timedelta
 from sqlalchemy.exc import SQLAlchemyError
-from .base_repository import BaseRepository, RepositoryError
-from ..models import EmailModel
-from src.features.email_ingestion.types import Email, EmailCreate
+from shared.database.repositories import BaseRepository, RepositoryError
+from shared.database.models import EmailModel
+from shared.domain import Email, EmailCreate
 
 logger = logging.getLogger(__name__)
 
@@ -52,29 +52,6 @@ class EmailRepository(BaseRepository[EmailModel]):
         except SQLAlchemyError as e:
             logger.error(f"Error getting email {id}: {e}")
             raise RepositoryError(f"Failed to get email: {e}") from e
-    
-    def update(self, id: int, data: Dict[str, Any]) -> Optional[Email]:
-        """Override BaseRepository method to return domain object"""
-        try:
-            with self.connection_manager.session_scope() as session:
-                # Get the model from the session using SQLAlchemy 2.x pattern
-                model = session.get(self.model_class, id)
-                
-                if not model:
-                    return None
-                
-                # Update the model attributes using setattr
-                for key, value in data.items():
-                    if hasattr(model, key):
-                        setattr(model, key, value)
-                
-                # Convert to domain object while session is still active
-                logger.debug(f"Updated email: {getattr(model, 'subject')}")
-                return self._convert_to_domain_object(model)
-                
-        except SQLAlchemyError as e:
-            logger.error(f"Error updating email {id}: {e}")
-            raise RepositoryError(f"Failed to update email: {e}") from e
     
     def get_by_message_id(self, message_id: str) -> Optional[Email]:
         """Get email by message ID"""

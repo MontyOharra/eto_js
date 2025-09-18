@@ -12,17 +12,18 @@ from dataclasses import dataclass, field
 
 from .config_service import EmailIngestionConfigService
 from .cursor_service import EmailIngestionCursorService
-from .types import (
+from .integrations.outlook_com_service import OutlookComService
+
+from shared.database import get_connection_manager
+from shared.database.repositories import EmailIngestionConfigRepository, EmailIngestionCursorRepository, EmailRepository, EtoRunRepository
+from shared.utils import get_service, ServiceNames
+from shared.domain import (
     EmailIngestionConfig, EmailIngestionStats, EmailServiceHealth,
     EmailData, EmailIngestionConnectionConfig, EmailCreate, 
-    EtoRunCreate, EmailServiceStartResponse, EmailServiceStopResponse, 
-    EmailServiceStatusResponse, EmailConfigSummary, EmailServiceConnectionStatus
+    EmailServiceStartResponse, EmailServiceStopResponse, 
+    EmailServiceStatusResponse, EmailConfigSummary, EmailServiceConnectionStatus,
+    PdfStoreRequest
 )
-from .integrations.outlook_com_service import OutlookComService
-from ...shared.database import get_connection_manager
-from ...shared.database.repositories import EmailIngestionConfigRepository, EmailIngestionCursorRepository, EmailRepository, EtoRunRepository
-from ..pdf_processing.types import PdfStoreRequest
-from ...shared.utils import get_service, ServiceNames
 
 logger = logging.getLogger(__name__)
 

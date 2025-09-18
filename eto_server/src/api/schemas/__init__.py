@@ -14,18 +14,18 @@ from .common import (
 )
 
 from .email_ingestion import (
-    EmailFilterRuleSchema,
-    EmailConnectionConfigSchema,
-    EmailMonitoringConfigSchema,
-    CreateEmailConfigRequest,
-    UpdateEmailConfigRequest,
+    EmailFilterSchema,
+    EmailConfigConnectionSchema,
+    EmailConfigMonitoringSchema,
+    EmailConfigCreateRequest,
+    EmailConfigUpdateRequest,
     EmailConfigSummaryResponse,
     EmailConfigDetailResponse,
     EmailConfigStatsResponse,
-    ConfigTemplateResponse,
-    ValidateConfigRequest,
-    ActivateConfigRequest,
-    ActivateConfigResponse
+    EmailConfigTemplateResponse,
+    EmailConfigValidateRequest,
+    EmailConfigActivateRequest,
+    EmailConfigActivateResponse
 )
 
 from .eto_processing import (
@@ -61,20 +61,19 @@ __all__ = [
     'HealthCheck',
     'ValidationError',
     'ValidationResponse',
-    
-    # Email configuration schemas
-    'EmailFilterRuleSchema',
-    'EmailConnectionConfigSchema',
-    'EmailMonitoringConfigSchema',
-    'CreateEmailConfigRequest',
-    'UpdateEmailConfigRequest',
+
+    'EmailFilterSchema',
+    'EmailConfigConnectionSchema',
+    'EmailConfigMonitoringSchema',
+    'EmailConfigCreateRequest',
+    'EmailConfigUpdateRequest',
     'EmailConfigSummaryResponse',
     'EmailConfigDetailResponse',
     'EmailConfigStatsResponse',
-    'ConfigTemplateResponse',
-    'ValidateConfigRequest',
-    'ActivateConfigRequest',
-    'ActivateConfigResponse',
+    'EmailConfigTemplateResponse',
+    'EmailConfigValidateRequest',
+    'EmailConfigActivateRequest',
+    'EmailConfigActivateResponse',
     
     # ETO processing schemas
     'EtoRunSummaryResponse',

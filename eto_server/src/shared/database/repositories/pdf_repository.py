@@ -7,10 +7,10 @@ import logging
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 from sqlalchemy.exc import SQLAlchemyError
-from .base_repository import BaseRepository, RepositoryError
-from ..models import PdfFileModel
 
-from src.features.pdf_processing.types import PdfFile
+from shared.database.repositories import BaseRepository, RepositoryError
+from shared.database.models import PdfFileModel
+from shared.domain import PdfFile       
 
 
 logger = logging.getLogger(__name__)

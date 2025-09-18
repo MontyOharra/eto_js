@@ -6,10 +6,11 @@ import logging
 from typing import Optional, List, Dict, Any
 from sqlalchemy.exc import SQLAlchemyError
 
-from .base_repository import BaseRepository, RepositoryError
-from ..models import PdfTemplateModel
-from ...domain.types import PdfTemplate
-from ..connection import DatabaseConnectionManager
+from shared.database.repositories import BaseRepository, RepositoryError
+from shared.database.models import PdfTemplateModel
+from shared.database.connection import DatabaseConnectionManager
+from shared.domain import PdfTemplate
+
 
 logger = logging.getLogger(__name__)
 
@@ -26,8 +27,6 @@ class PdfTemplateRepository(BaseRepository[PdfTemplateModel]):
 
     def _convert_to_domain_object(self, model: PdfTemplateModel) -> PdfTemplate:
         """Convert SQLAlchemy model to domain object"""
-        if not model:
-            return None
 
         return PdfTemplate(
             id=getattr(model, 'id'),
@@ -48,10 +47,6 @@ class PdfTemplateRepository(BaseRepository[PdfTemplateModel]):
             updated_at=getattr(model, 'updated_at'),
             status=getattr(model, 'status')
         )
-
-    def _convert_to_domain_objects(self, models: List[PdfTemplateModel]) -> List[PdfTemplate]:
-        """Convert list of models to domain objects"""
-        return [self._convert_to_domain_object(model) for model in models if model]
 
     # === Core CRUD Operations (returning domain objects) ===
 
@@ -93,7 +88,7 @@ class PdfTemplateRepository(BaseRepository[PdfTemplateModel]):
                     query = query.limit(limit)
 
                 models = query.all()
-                return self._convert_to_domain_objects(models)
+                return [self._convert_to_domain_object(model) for model in models]
 
         except SQLAlchemyError as e:
             logger.error(f"Error getting all PDF templates: {e}")
@@ -206,7 +201,7 @@ class PdfTemplateRepository(BaseRepository[PdfTemplateModel]):
                     self.model_class.is_complete == True
                 ).order_by(self.model_class.last_used_at.desc()).all()
 
-                return self._convert_to_domain_objects(models)
+                return [self._convert_to_domain_object(model) for model in models]
 
         except SQLAlchemyError as e:
             logger.error(f"Error getting active PDF templates: {e}")
@@ -223,7 +218,7 @@ class PdfTemplateRepository(BaseRepository[PdfTemplateModel]):
                     self.model_class.customer_name == customer_name
                 ).order_by(self.model_class.created_at.desc()).all()
 
-                return self._convert_to_domain_objects(models)
+                return [self._convert_to_domain_object(model) for model in models]
 
         except SQLAlchemyError as e:
             logger.error(f"Error getting PDF templates for customer {customer_name}: {e}")
@@ -239,7 +234,7 @@ class PdfTemplateRepository(BaseRepository[PdfTemplateModel]):
                     (self.model_class.parent_template_id == base_template_id)
                 ).order_by(self.model_class.version.desc()).all()
 
-                return self._convert_to_domain_objects(models)
+                return [self._convert_to_domain_object(model) for model in models]
 
         except SQLAlchemyError as e:
             logger.error(f"Error getting versions for PDF template {base_template_id}: {e}")

@@ -5,7 +5,7 @@ Request/response models for PDF processing endpoints
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime
-from .common import APIResponse
+from api.schemas.common import APIResponse
 
 
 class PdfObjectResponse(BaseModel):

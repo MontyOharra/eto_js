@@ -6,8 +6,12 @@ import logging
 from typing import Optional, Dict, Any, List, Tuple
 from datetime import datetime, timedelta, timezone
 
-from .types import EmailIngestionConnectionConfig, EmailIngestionCursor, EmailIngestionCursorCreate, EmailIngestionCursorStatistics, EmailData
-from ...shared.database.repositories import EmailIngestionCursorRepository
+from shared.database.repositories import EmailIngestionCursorRepository
+from shared.domain import ( 
+    EmailIngestionConnectionConfig, EmailIngestionCursor,
+    EmailIngestionCursorCreate, EmailIngestionCursorStatistics, EmailData
+)
+
 
 logger = logging.getLogger(__name__)
 

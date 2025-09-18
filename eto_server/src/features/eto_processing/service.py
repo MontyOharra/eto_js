@@ -9,9 +9,10 @@ import time
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 
-from ...shared.database import get_connection_manager
-from ...shared.database.repositories import EtoRunRepository
-from ...shared.utils import get_service, ServiceNames
+from shared.database import get_connection_manager
+from shared.database.repositories import EtoRunRepository
+from shared.utils import get_service, ServiceNames
+from shared.domain import EtoErrorType
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +95,7 @@ class EtoProcessingService:
         # TODO: Implement
         pass
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> None:
         """Get current processing status and statistics"""
         # TODO: Implement
         pass
@@ -143,7 +144,7 @@ class EtoProcessingService:
             if match_result.template_found:
                 # SUCCESS: Update with template match and move to data extraction
                 self.eto_run_repo.update_status(
-                    run_id=eto_run.id,
+                    id=eto_run.id,
                     status='processing',
                     processing_step='extracting_data',  # Move to next step
                     matched_template_id=match_result.template_id,
@@ -168,6 +169,7 @@ class EtoProcessingService:
                 eto_run.id,
                 f"Template matching failed: {str(e)}",
                 error_type="template_matching_error"
+                error_details=error_details
             )
             return None
 
@@ -183,65 +185,65 @@ class EtoProcessingService:
 
     # === Error & Status Management ===
 
-    def _mark_as_failed(self, run_id: int, error_message: str, error_type: str = None, error_details: dict = None):
+    def _mark_as_failed(self, id: int, error_message: str, error_type: EtoErrorType, error_details: dict):
         """Set status to 'failure' and end processing"""
         try:
             updated_run = self.eto_run_repo.mark_as_failed(
-                run_id=run_id,
+                id=id,
                 error_message=error_message,
                 error_type=error_type,
                 error_details=error_details
             )
 
             if updated_run:
-                logger.info(f"ETO run {run_id} marked as failed: {error_message}")
+                logger.info(f"ETO run {id} marked as failed: {error_message}")
                 return updated_run
             else:
-                logger.error(f"Failed to mark ETO run {run_id} as failed")
+                logger.error(f"Failed to mark ETO run {id} as failed")
                 return None
 
         except Exception as e:
-            logger.error(f"Error marking ETO run {run_id} as failed: {e}")
+            logger.error(f"Error marking ETO run {id} as failed: {e}")
             raise
 
-    def _mark_as_needs_template(self, run_id: int):
+    def _mark_as_needs_template(self, id: int):
         """Set status to 'needs_template' and end processing"""
         try:
             updated_run = self.eto_run_repo.update_status(
-                run_id=run_id,
+                id=id,
                 status='needs_template',
                 processing_step=None  # Clear processing step
             )
 
             if updated_run:
-                logger.info(f"ETO run {run_id} marked as needs template")
+                logger.info(f"ETO run {id} marked as needs template")
                 return updated_run
             else:
-                logger.error(f"Failed to mark ETO run {run_id} as needs template")
+                logger.error(f"Failed to mark ETO run {id} as needs template")
                 return None
 
         except Exception as e:
-            logger.error(f"Error marking ETO run {run_id} as needs template: {e}")
+            logger.error(f"Error marking ETO run {id} as needs template: {e}")
             raise
 
-    def _mark_as_success(self, run_id: int):
+    def _mark_as_success(self, id: int):
         """Set status to 'success', processing_step to null"""
         try:
             updated_run = self.eto_run_repo.update_status(
-                run_id=run_id,
+                id=id,
                 status='success',
                 processing_step=None  # Clear processing step on success
             )
 
             if updated_run:
-                logger.info(f"ETO run {run_id} marked as successful")
+                logger.info(f"ETO run {id} marked as successful")
                 return updated_run
             else:
-                logger.error(f"Failed to mark ETO run {run_id} as successful")
+                logger.error(f"Failed to mark ETO run {id} as successful")
                 return None
 
         except Exception as e:
-            logger.error(f"Error marking ETO run {run_id} as successful: {e}")
+            logger.error(f"Error marking ETO run {id} as successful: {e}")
             raise
 
     # === Utility Methods ===

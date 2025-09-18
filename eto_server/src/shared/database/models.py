@@ -9,10 +9,10 @@ from sqlalchemy.sql import func
 from datetime import datetime
 
 # SQLAlchemy Base
-Base = declarative_base()
+BaseModel = declarative_base()
 
 
-class EmailModel(Base):
+class EmailModel(BaseModel):
     """Email records from Outlook monitoring"""
     __tablename__ = 'emails'
     
@@ -32,7 +32,7 @@ class EmailModel(Base):
     eto_runs = relationship("EtoRunModel", back_populates="email")
 
 
-class EmailIngestionConfigModel(Base):
+class EmailIngestionConfigModel(BaseModel):
     """Email ingestion configuration settings"""
     __tablename__ = 'email_ingestion_configs'
     
@@ -73,7 +73,7 @@ class EmailIngestionConfigModel(Base):
         Index('idx_email_config_running', 'is_running'),
     )
 
-class EmailIngestionCursorModel(Base):
+class EmailIngestionCursorModel(BaseModel):
     """Track email processing cursors for downtime recovery"""
     __tablename__ = 'email_ingestion_cursors'
     
@@ -98,20 +98,20 @@ class EmailIngestionCursorModel(Base):
         UniqueConstraint('email_address', 'folder_name', name='_email_folder_cursor_uc'),
     )
 
-class EtoRunModel(Base):
+class EtoRunModel(BaseModel):
     """ETO processing runs - tracks PDF processing workflow"""
     __tablename__ = 'eto_runs'
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
     email_id = Column(Integer, ForeignKey('emails.id'), nullable=False, index=True)
     pdf_file_id = Column(Integer, ForeignKey('pdf_files.id'), nullable=False, index=True)
-    
+
     # Overall processing status
     status = Column(String(50), nullable=False, index=True)  # 'not_started', 'processing', 'success', 'failure', 'needs_template', 'skipped'
-    
+
     # Current processing step (only populated when status='processing')
     processing_step = Column(String(50))  # 'template_matching', 'extracting_data', 'transforming_data'
-    
+
     # Error tracking (for status='failure')
     error_type = Column(String(50))  # 'template_matching_error', 'data_extraction_error', 'transformation_error'
     error_message = Column(Text)
@@ -156,7 +156,7 @@ class EtoRunModel(Base):
     failed_pipeline_step = relationship("TransformationPipelineStepModel", foreign_keys=[failed_pipeline_step_id])
 
 
-class PdfFileModel(Base):
+class PdfFileModel(BaseModel):
     """PDF files extracted from emails"""
     __tablename__ = 'pdf_files'
     
@@ -178,7 +178,7 @@ class PdfFileModel(Base):
     email = relationship("EmailModel", back_populates="pdf_files")
     eto_runs = relationship("EtoRunModel", back_populates="pdf_file")
 
-class PdfTemplateModel(Base):
+class PdfTemplateModel(BaseModel):
     """PDF templates for pattern matching and field extraction"""
     __tablename__ = 'pdf_templates'
 
@@ -221,7 +221,7 @@ class PdfTemplateModel(Base):
 
 
 
-class TransformationPipelineModel(Base):
+class TransformationPipelineModel(BaseModel):
     """Data transformation pipelines"""
     __tablename__ = 'transformation_pipelines'
 
@@ -256,7 +256,7 @@ class TransformationPipelineModel(Base):
         Index('idx_transformation_pipelines_active', 'is_active'),
     )
     
-class TransformationPipelineModuleModel(Base):
+class TransformationPipelineModuleModel(BaseModel):
     """Base transformation modules defined by developers"""
     __tablename__ = 'transformation_pipeline_modules'
 
@@ -289,7 +289,7 @@ class TransformationPipelineModuleModel(Base):
     )
 
 
-class TransformationPipelineStepModel(Base):
+class TransformationPipelineStepModel(BaseModel):
     """Pre-computed linear execution steps for transformation pipelines"""
     __tablename__ = 'transformation_pipeline_steps'
 
@@ -324,7 +324,7 @@ class TransformationPipelineStepModel(Base):
     )
 
 
-class CustomTransformationModuleModel(Base):
+class CustomTransformationModuleModel(BaseModel):
     """Custom transformation modules created by users"""
     __tablename__ = 'custom_transformation_modules'
 

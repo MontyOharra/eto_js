@@ -9,8 +9,6 @@ from .email_ingestion_cursor_repository import EmailIngestionCursorRepository
 from .eto_run_repository import EtoRunRepository
 from .pdf_repository import PdfRepository
 from .pdf_template_repository import PdfTemplateRepository
-# from .transformation_pipeline_module_repository import TransformationPipelineModuleRepository
-# from .transformation_pipeline_repository import TransformationPipelineRepository
 
 __all__ = [
     'BaseRepository',
@@ -21,6 +19,4 @@ __all__ = [
     'EtoRunRepository',
     'PdfRepository',
     'PdfTemplateRepository',
-    # 'TransformationPipelineModuleRepository',
-    # 'TransformationPipelineRepository',
 ]

@@ -7,8 +7,8 @@ from flask_cors import cross_origin
 import logging
 from datetime import datetime
 
-from ..schemas.common import HealthCheck
-from ...shared.database import get_connection_manager
+from api.schemas.common import HealthCheck
+from shared.database import get_connection_manager
 
 logger = logging.getLogger(__name__)
 

@@ -11,8 +11,10 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, Optional
 
-from ...shared.database.repositories.pdf_repository import PdfRepository
-from .types import PdfStoreRequest, PdfFile
+from shared.database.repositories.pdf_repository import PdfRepository
+
+from shared.domain import PdfStoreRequest, PdfFile
+
 
 logger = logging.getLogger(__name__)
 

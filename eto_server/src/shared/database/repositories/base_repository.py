@@ -7,24 +7,22 @@ from abc import ABC, abstractmethod
 from typing import Optional, List, Dict, Any, Type, TypeVar, Generic, Protocol
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
-from ..connection import DatabaseConnectionManager
+
+from shared.database.connection import DatabaseConnectionManager
+
+
+logger = logging.getLogger(__name__)
 
 
 class HasId(Protocol):
     """Protocol for models that have an id attribute"""
     id: Any
 
-
-# Generic type for model classes - represents SQLAlchemy models with id
 ModelType = TypeVar('ModelType', bound=HasId)
-
-logger = logging.getLogger(__name__)
-
 
 class RepositoryError(Exception):
     """Custom exception for repository operations"""
     pass
-
 
 class BaseRepository(ABC, Generic[ModelType]):
     """

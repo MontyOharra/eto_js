@@ -5,7 +5,7 @@ Request/response models for ETO processing endpoints
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any, List
 from datetime import datetime
-from .common import APIResponse
+from api.schemas.common import APIResponse
 
 
 class EtoRunSummaryResponse(BaseModel):

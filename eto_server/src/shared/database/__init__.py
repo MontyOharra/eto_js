@@ -13,7 +13,7 @@ __all__ = [
     'get_connection_manager',
     
     # Models (imported from models module)
-    'Base',
+    'BaseModel',
     'EmailModel',
     'PdfFileModel',
     'PdfTemplateModel',
@@ -31,8 +31,5 @@ __all__ = [
     'EmailIngestionConfigRepository',
     'EmailIngestionCursorRepository',
     'EtoRunRepository', 
-    'PdfRepository',
-    'TemplateRepository',
-    'TransformationPipelineModuleRepository',
-    'TransformationPipelineRepository',
+    'PdfRepository'
 ]

@@ -6,9 +6,10 @@ import logging
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
-from .base_repository import BaseRepository, RepositoryError
-from ..models import EmailIngestionCursorModel
-from src.features.email_ingestion.types import EmailIngestionCursor
+
+from shared.database.repositories import BaseRepository, RepositoryError
+from shared.database.models import EmailIngestionCursorModel
+from shared.domain import EmailIngestionCursor
 
 
 logger = logging.getLogger(__name__)

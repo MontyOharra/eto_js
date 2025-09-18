@@ -7,11 +7,14 @@ import logging
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 
-from ...shared.database import get_connection_manager
-from ...shared.database.repositories.pdf_repository import PdfRepository
 from .storage_service import PdfStorageService
 from .object_extraction_service import PdfObjectExtractionService
-from .types import PdfFile, PdfStoreRequest, PdfObjectExtractionResult
+
+from shared.database import get_connection_manager
+from shared.database.repositories.pdf_repository import PdfRepository
+from shared.domain import PdfFile, PdfStoreRequest, PdfObjectExtractionResult
+
+
 
 logger = logging.getLogger(__name__)
 

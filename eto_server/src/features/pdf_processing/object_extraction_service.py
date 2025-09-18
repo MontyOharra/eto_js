@@ -11,7 +11,7 @@ import json
 import logging
 from pathlib import Path
 from typing import List, Dict, Any, Optional
-from .types import PdfObject, PdfObjectExtractionResult
+from shared.domain import PdfObject, PdfObjectExtractionResult
 
 logger = logging.getLogger(__name__)
 

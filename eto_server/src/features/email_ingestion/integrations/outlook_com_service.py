@@ -13,7 +13,7 @@ from typing import Optional, Dict, List, Any, Tuple
 from datetime import datetime, timezone, timedelta
 
 
-from ..types import EmailConnectionConfig, ConnectionStatus, EmailData
+from shared.domain import EmailIngestionConnectionConfig, EmailServiceConnectionStatus, EmailData
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ class OutlookComService:
         self.current_folder: Optional[Any] = None
         
         # State management
-        self.connection_config: Optional[EmailConnectionConfig] = None
+        self.connection_config: Optional[EmailIngestionConnectionConfig] = None
         self.is_connected: bool = False
         self.connection_time: Optional[datetime] = None
         self.last_error: Optional[str] = None
@@ -48,7 +48,7 @@ class OutlookComService:
 
     # === High-Level API Methods ===
     
-    def connect(self, connection_config: EmailConnectionConfig) -> Dict[str, Any]:
+    def connect(self, connection_config: EmailIngestionConnectionConfig) -> Dict[str, Any]:
         """Connect to Outlook with specified configuration"""
         try:
             with self._lock:
@@ -163,7 +163,7 @@ class OutlookComService:
                 "message": "Error during Outlook disconnect"
             }
     
-    def get_connection_status(self) -> ConnectionStatus:
+    def get_connection_status(self) -> EmailServiceConnectionStatus:
         """Get current connection status"""
         # Handle connection edge cases
         email_address = None
@@ -185,16 +185,12 @@ class OutlookComService:
         if self.is_connected and not self.current_folder:
             logger.warning("Connection marked as connected but no current folder")
         
-        return ConnectionStatus(
+        return EmailServiceConnectionStatus(
             is_connected=self.is_connected,
-            email_address=email_address,
-            folder_name=folder_name,
-            inbox_count=inbox_count,
-            last_error=self.last_error,
-            connection_time=self.connection_time
+            last_error=self.last_error
         )
     
-    def test_connection(self, connection_config: EmailConnectionConfig) -> Dict[str, Any]:
+    def test_connection(self, connection_config: EmailIngestionConnectionConfig) -> Dict[str, Any]:
         """Test connection without persisting state"""
         test_outlook = None
         test_namespace = None
