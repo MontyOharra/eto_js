@@ -59,12 +59,17 @@ def initialize_pdf_processing(app: Flask) -> None:
     """Initialize PDF processing service"""
     try:
         logger.debug("Initializing PDF Processing Service...")
-        
+
+        # Get connection manager from app config
+        connection_manager = app.config.get('CONNECTION_MANAGER')
+        if not connection_manager:
+            raise RuntimeError("Database connection manager not available")
+
         # Get PDF storage path from app config
         pdf_storage_path = app.config['PDF_STORAGE_ROOT']
         logger.debug(f"PDF storage path configured: {pdf_storage_path}")
-        
-        pdf_service = PdfProcessingService(pdf_storage_path)
+
+        pdf_service = PdfProcessingService(pdf_storage_path, connection_manager)
         
         # Store PDF service in app config for global access
         app.config['PDF_PROCESSING_SERVICE'] = pdf_service
@@ -80,14 +85,19 @@ def initialize_email_ingestion(app: Flask) -> None:
     """Initialize email ingestion service with PDF support and attempt auto-connection"""
     try:
         logger.debug("Initializing Email Ingestion Service...")
-        
+
+        # Get connection manager from app config
+        connection_manager = app.config.get('CONNECTION_MANAGER')
+        if not connection_manager:
+            raise RuntimeError("Database connection manager not available")
+
         pdf_service = app.config.get('PDF_PROCESSING_SERVICE')
         if not pdf_service:
             logger.error("PDF processing service not available for email ingestion")
             return
-        
+
         # Import and create the email ingestion service
-        email_service = EmailIngestionService()
+        email_service = EmailIngestionService(connection_manager)
         
         # Store only the service in app config for global access
         app.config['EMAIL_INGESTION_SERVICE'] = email_service
@@ -137,9 +147,9 @@ def initialize_eto_processing(app: Flask) -> None:
 
         # Initialize ETO processing service with connection manager
         eto_service = EtoProcessingService(
-            connection_manager=connection_manager,
             poll_interval=int(os.getenv('ETO_POLL_INTERVAL', '10')),
-            batch_size=int(os.getenv('ETO_BATCH_SIZE', '5'))
+            batch_size=int(os.getenv('ETO_BATCH_SIZE', '5')),
+            connection_manager=connection_manager
         )
 
         # Store service in app config for global access
@@ -292,7 +302,7 @@ def create_app(config_name: str = 'development') -> Flask:
     # Load configuration
     app.config.from_object(get_config_class())
     
-    initialize_database(app)
+    initialize_database_connection(app)
     initialize_pdf_processing(app)
     initialize_email_ingestion(app)
     initialize_eto_processing(app)

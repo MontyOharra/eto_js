@@ -25,15 +25,16 @@ class PdfProcessingService:
     Can be shared across multiple features for consistent PDF handling.
     """
     
-    def __init__(self, storage_path: str):
+    def __init__(self, storage_path: str, connection_manager=None):
         """
         Initialize PDF processing service with storage configuration
-        
+
         Args:
             storage_path: Path for PDF file storage
+            connection_manager: Optional connection manager (falls back to global if None)
         """
         # Database connection
-        self.connection_manager = get_connection_manager()
+        self.connection_manager = connection_manager or get_connection_manager()
         if not self.connection_manager:
             raise RuntimeError("Database connection manager is required")
         

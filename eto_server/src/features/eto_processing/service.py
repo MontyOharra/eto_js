@@ -21,9 +21,9 @@ logger = logging.getLogger(__name__)
 class EtoProcessingService:
     """Background worker service for processing ETO runs through the complete pipeline"""
 
-    def __init__(self,poll_interval: int = 10, batch_size: int = 5):
-        
-        self.connection_manager = get_connection_manager()
+    def __init__(self, poll_interval: int = 10, batch_size: int = 5, connection_manager=None):
+
+        self.connection_manager = connection_manager or get_connection_manager()
 
         if not self.connection_manager:
             raise RuntimeError("Database connection manager is required")

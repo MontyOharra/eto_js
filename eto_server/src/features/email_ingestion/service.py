@@ -31,9 +31,9 @@ logger = logging.getLogger(__name__)
 class EmailIngestionService:
     """Main orchestrator for email processing with automatic startup and downtime recovery"""
 
-    def __init__(self):
+    def __init__(self, connection_manager=None):
         # Infrastructure layer - single source of truth
-        self.connection_manager = get_connection_manager()
+        self.connection_manager = connection_manager or get_connection_manager()
         assert self.connection_manager is not None
 
         # Repository layer - only email-specific repositories
@@ -640,6 +640,7 @@ class EmailIngestionService:
                 return None
 
             pdf_file = pdf_service.store_pdf(content_bytes, store_request)
+            assert pdf_file.id is not None
             pdf_id = pdf_file.id
 
             # Extract PDF objects for template matching
