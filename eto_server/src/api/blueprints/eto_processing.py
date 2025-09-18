@@ -2,9 +2,30 @@
 ETO Processing API Blueprint
 REST endpoints for ETO processing runs and results
 """
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_cors import cross_origin
+from pydantic import ValidationError
+from datetime import datetime
 import logging
+from typing import Dict, Any, Optional
+
+from api.schemas.eto_processing import (
+    EtoRunListRequest,
+    EtoRunListResponse,
+    EtoRunSummary,
+    EtoRunDetailResponse,
+    EtoRunDetail,
+    ReprocessEtoRunRequest,
+    ReprocessEtoRunResponse,
+    SkipEtoRunRequest,
+    SkipEtoRunResponse,
+    DeleteEtoRunResponse,
+    EtoStatisticsResponse,
+    ProcessingStatistics
+)
+from api.schemas.common import APIResponse
+from shared.domain import EtoRun
+from features.eto_processing import EtoProcessingService
 
 logger = logging.getLogger(__name__)
 
@@ -12,52 +33,457 @@ logger = logging.getLogger(__name__)
 eto_processing_bp = Blueprint('eto_processing', __name__, url_prefix='/api/eto-runs')
 
 
+def get_eto_service() -> EtoProcessingService:
+    """Get ETO processing service from app config"""
+    eto_service = current_app.config.get('ETO_PROCESSING_SERVICE')
+    if not eto_service:
+        raise RuntimeError("ETO processing service not initialized")
+    return eto_service
+
+
+def handle_validation_error(e: ValidationError) -> Dict[str, Any]:
+    """Convert Pydantic validation error to API response"""
+    return {
+        "success": False,
+        "error": "Validation failed",
+        "message": "Request data validation failed",
+        "details": [
+            {
+                "field": ".".join(str(x) for x in error["loc"]),
+                "error": error["msg"],
+                "value": error.get("input")
+            }
+            for error in e.errors()
+        ]
+    }
+
+
+def convert_to_summary(eto_run: EtoRun) -> EtoRunSummary:
+    """Convert EtoRun domain object to EtoRunSummary"""
+    # TODO: Get additional metadata (email subject, sender, PDF filename, template name)
+    # For now, use placeholder values
+    return EtoRunSummary(
+        id=eto_run.id,
+        email_id=eto_run.email_id,
+        pdf_file_id=eto_run.pdf_file_id,
+        status=eto_run.status,
+        processing_step=eto_run.processing_step,
+        pdf_filename="placeholder.pdf",  # TODO: Get from PDF service
+        email_subject="Email Subject",  # TODO: Get from email data
+        sender_email="sender@example.com",  # TODO: Get from email data
+        file_size=0,  # TODO: Get from PDF service
+        matched_template_id=eto_run.matched_template_id,
+        template_name=None,  # TODO: Get template name if template_id exists
+        processing_duration_ms=eto_run.processing_duration_ms,
+        error_message=eto_run.error_message,
+        created_at=eto_run.created_at,
+        started_at=eto_run.started_at,
+        completed_at=eto_run.completed_at
+    )
+
+
 @eto_processing_bp.route('', methods=['GET'])
 @cross_origin()
 def get_eto_runs():
     """Get ETO processing runs with filtering and pagination"""
-    # TODO: Implement ETO runs listing with filtering and pagination
-    pass
+    try:
+        # Parse query parameters using Pydantic
+        # Helper function to safely convert to int
+        def safe_int(value: str | None) -> int | None:
+            if value is None or value.strip() == "":
+                return None
+            try:
+                return int(value)
+            except ValueError:
+                return None
+
+        # Helper function to safely convert to datetime
+        def safe_datetime(value: str | None) -> datetime | None:
+            if value is None or value.strip() == "":
+                return None
+            try:
+                return datetime.fromisoformat(value)
+            except ValueError:
+                return None
+
+        request_data = {
+            "status": request.args.get("status"),
+            "email_id": safe_int(request.args.get("email_id")),
+            "template_id": safe_int(request.args.get("template_id")),
+            "has_errors": request.args.get("has_errors", "").lower() in ("true", "1") if request.args.get("has_errors") else None,
+            "date_from": safe_datetime(request.args.get("date_from")),
+            "date_to": safe_datetime(request.args.get("date_to")),
+            "page": int(request.args.get("page") or "1"),
+            "limit": int(request.args.get("limit") or "20"),
+            "order_by": request.args.get("order_by") or "created_at",
+            "desc": request.args.get("desc", "true").lower() in ("true", "1")
+        }
+
+        # Validate request
+        request_obj = EtoRunListRequest(**request_data)
+
+        # Get service and fetch data
+        service = get_eto_service()
+        result = service.get_runs_with_filters(
+            status=request_obj.status,
+            email_id=request_obj.email_id,
+            template_id=request_obj.template_id,
+            has_errors=request_obj.has_errors,
+            date_from=request_obj.date_from,
+            date_to=request_obj.date_to,
+            page=request_obj.page,
+            limit=request_obj.limit,
+            order_by=request_obj.order_by,
+            desc=request_obj.desc
+        )
+
+        # Convert to response schema
+        run_summaries = [convert_to_summary(run) for run in result["runs"]]
+
+        response = EtoRunListResponse(
+            success=True,
+            data=run_summaries,
+            total=result["total"],
+            page=result["page"],
+            limit=result["limit"],
+            total_pages=result["total_pages"]
+        )
+
+        return jsonify(response.dict()), 200
+
+    except ValidationError as e:
+        logger.warning(f"Validation error in get_eto_runs: {e}")
+        return jsonify(handle_validation_error(e)), 400
+
+    except ValueError as e:
+        logger.warning(f"Value error in get_eto_runs: {e}")
+        return jsonify({
+            "success": False,
+            "error": "Invalid parameter",
+            "message": str(e)
+        }), 400
+
+    except Exception as e:
+        logger.error(f"Error in get_eto_runs: {e}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "error": "Internal server error",
+            "message": "An unexpected error occurred"
+        }), 500
+
+
+def convert_to_detail(eto_run: EtoRun) -> EtoRunDetail:
+    """Convert EtoRun domain object to EtoRunDetail"""
+    import json
+
+    # Parse JSON fields safely
+    error_details = None
+    if eto_run.error_details:
+        try:
+            error_details = json.loads(eto_run.error_details)
+        except (json.JSONDecodeError, TypeError):
+            error_details = {"raw": eto_run.error_details}
+
+    step_execution_log = None
+    if eto_run.step_execution_log:
+        try:
+            step_execution_log = json.loads(eto_run.step_execution_log)
+        except (json.JSONDecodeError, TypeError):
+            step_execution_log = {"raw": eto_run.step_execution_log}
+
+    return EtoRunDetail(
+        id=eto_run.id,
+        email_id=eto_run.email_id,
+        pdf_file_id=eto_run.pdf_file_id,
+        status=eto_run.status,
+        processing_step=eto_run.processing_step,
+        error_type=eto_run.error_type,
+        error_message=eto_run.error_message,
+        error_details=error_details,
+        matched_template_id=eto_run.matched_template_id,
+        template_name=None,  # TODO: Get template name if template_id exists
+        template_version=eto_run.template_version,
+        template_match_coverage=eto_run.template_match_coverage,
+        has_extracted_data=bool(eto_run.extracted_data),
+        has_transformation_audit=bool(eto_run.transformation_audit),
+        has_target_data=bool(eto_run.target_data),
+        failed_step_id=eto_run.failed_step_id,
+        step_execution_log=step_execution_log,
+        created_at=eto_run.created_at,
+        updated_at=eto_run.updated_at,
+        started_at=eto_run.started_at,
+        completed_at=eto_run.completed_at,
+        processing_duration_ms=eto_run.processing_duration_ms,
+        order_id=eto_run.order_id
+    )
 
 
 @eto_processing_bp.route('/<int:run_id>', methods=['GET'])
 @cross_origin()
 def get_eto_run_details(run_id: int):
     """Get detailed information for a specific ETO run"""
-    # TODO: Implement detailed ETO run information retrieval
-    pass
+    try:
+        # Validate run_id
+        if run_id <= 0:
+            return jsonify({
+                "success": False,
+                "error": "Invalid run ID",
+                "message": "Run ID must be a positive integer"
+            }), 400
+
+        # Get service and fetch run
+        service = get_eto_service()
+        eto_run = service.get_run_by_id(run_id)
+
+        if not eto_run:
+            return jsonify({
+                "success": False,
+                "error": "Not found",
+                "message": f"ETO run {run_id} not found"
+            }), 404
+
+        # Convert to response schema
+        run_detail = convert_to_detail(eto_run)
+
+        response = EtoRunDetailResponse(
+            success=True,
+            data=run_detail
+        )
+
+        return jsonify(response.dict()), 200
+
+    except Exception as e:
+        logger.error(f"Error in get_eto_run_details for run {run_id}: {e}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "error": "Internal server error",
+            "message": "An unexpected error occurred"
+        }), 500
 
 
 @eto_processing_bp.route('/<int:run_id>/reprocess', methods=['POST'])
 @cross_origin()
 def reprocess_eto_run(run_id: int):
     """Reprocess an ETO run (reset to not_started status)"""
-    # TODO: Implement ETO run reprocessing
-    pass
+    try:
+        # Validate run_id
+        if run_id <= 0:
+            return jsonify({
+                "success": False,
+                "error": "Invalid run ID",
+                "message": "Run ID must be a positive integer"
+            }), 400
+
+        # Parse request body
+        request_data = request.get_json() or {}
+
+        try:
+            reprocess_request = ReprocessEtoRunRequest(**request_data)
+        except ValidationError as e:
+            logger.warning(f"Validation error in reprocess_eto_run: {e}")
+            return jsonify(handle_validation_error(e)), 400
+
+        # Get service and reprocess run
+        service = get_eto_service()
+
+        # Get current run for old_status
+        eto_run = service.get_run_by_id(run_id)
+        if not eto_run:
+            return jsonify({
+                "success": False,
+                "error": "Not found",
+                "message": f"ETO run {run_id} not found"
+            }), 404
+
+        old_status = eto_run.status
+
+        # Reprocess the run using service
+        updated_run = service.reprocess_run(
+            run_id=run_id,
+            force=reprocess_request.force,
+            template_id=reprocess_request.template_id,
+            reset_template=reprocess_request.reset_template,
+            reason=reprocess_request.reason
+        )
+
+        response = ReprocessEtoRunResponse(
+            success=True,
+            run_id=run_id,
+            old_status=old_status,
+            new_status=updated_run.status,
+            message=f"ETO run {run_id} reset for reprocessing"
+        )
+
+        return jsonify(response.dict()), 200
+
+    except ValueError as e:
+        logger.warning(f"Validation error in reprocess_eto_run for run {run_id}: {e}")
+        return jsonify({
+            "success": False,
+            "error": "Cannot reprocess",
+            "message": str(e)
+        }), 400
+
+    except Exception as e:
+        logger.error(f"Error in reprocess_eto_run for run {run_id}: {e}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "error": "Internal server error",
+            "message": "An unexpected error occurred"
+        }), 500
 
 
 @eto_processing_bp.route('/<int:run_id>/skip', methods=['POST'])
 @cross_origin()
 def skip_eto_run(run_id: int):
     """Skip an ETO run (mark as skipped status)"""
-    # TODO: Implement ETO run skipping
-    pass
+    try:
+        # Validate run_id
+        if run_id <= 0:
+            return jsonify({
+                "success": False,
+                "error": "Invalid run ID",
+                "message": "Run ID must be a positive integer"
+            }), 400
+
+        # Parse request body
+        request_data = request.get_json() or {}
+
+        try:
+            skip_request = SkipEtoRunRequest(**request_data)
+        except ValidationError as e:
+            logger.warning(f"Validation error in skip_eto_run: {e}")
+            return jsonify(handle_validation_error(e)), 400
+
+        # Get service and skip run
+        service = get_eto_service()
+        updated_run = service.skip_run(
+            run_id=run_id,
+            reason=skip_request.reason,
+            permanent=skip_request.permanent
+        )
+
+        response = SkipEtoRunResponse(
+            success=True,
+            run_id=run_id,
+            status=updated_run.status,
+            reason=skip_request.reason,
+            message=f"ETO run {run_id} has been skipped"
+        )
+
+        return jsonify(response.dict()), 200
+
+    except ValueError as e:
+        logger.warning(f"Validation error in skip_eto_run for run {run_id}: {e}")
+        return jsonify({
+            "success": False,
+            "error": "Cannot skip",
+            "message": str(e)
+        }), 400
+
+    except Exception as e:
+        logger.error(f"Error in skip_eto_run for run {run_id}: {e}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "error": "Internal server error",
+            "message": "An unexpected error occurred"
+        }), 500
 
 
 @eto_processing_bp.route('/<int:run_id>', methods=['DELETE'])
 @cross_origin()
 def delete_eto_run(run_id: int):
     """Permanently delete an ETO run and associated data"""
-    # TODO: Implement ETO run deletion
-    pass
+    try:
+        # Validate run_id
+        if run_id <= 0:
+            return jsonify({
+                "success": False,
+                "error": "Invalid run ID",
+                "message": "Run ID must be a positive integer"
+            }), 400
+
+        # Get service and delete run
+        service = get_eto_service()
+        success = service.delete_run(run_id)
+
+        response = DeleteEtoRunResponse(
+            success=True,
+            run_id=run_id,
+            message=f"ETO run {run_id} has been permanently deleted"
+        )
+
+        return jsonify(response.dict()), 200
+
+    except ValueError as e:
+        logger.warning(f"Validation error in delete_eto_run for run {run_id}: {e}")
+        return jsonify({
+            "success": False,
+            "error": "Cannot delete",
+            "message": str(e)
+        }), 400
+
+    except Exception as e:
+        logger.error(f"Error in delete_eto_run for run {run_id}: {e}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "error": "Internal server error",
+            "message": "An unexpected error occurred"
+        }), 500
 
 
 @eto_processing_bp.route('/statistics', methods=['GET'])
 @cross_origin()
 def get_eto_run_statistics():
     """Get ETO processing statistics"""
-    # TODO: Implement ETO processing statistics
-    pass
+    try:
+        # Get service and fetch statistics
+        service = get_eto_service()
+        stats_data = service.get_processing_statistics()
+
+        # Convert to response schema
+        # Map status counts to schema format
+        status_counts = []
+        for status_info in stats_data["status_counts"]:
+            status_counts.append({
+                "status": status_info["status"],
+                "count": status_info["count"]
+            })
+
+        processing_stats = ProcessingStatistics(
+            total_runs=stats_data["total_runs"],
+            successful_runs=sum(sc["count"] for sc in status_counts if sc["status"] == "success"),
+            failed_runs=sum(sc["count"] for sc in status_counts if sc["status"] == "failure"),
+            skipped_runs=sum(sc["count"] for sc in status_counts if sc["status"] == "skipped"),
+            processing_runs=sum(sc["count"] for sc in status_counts if sc["status"] == "processing"),
+            needs_template_runs=sum(sc["count"] for sc in status_counts if sc["status"] == "needs_template"),
+            success_rate=stats_data["success_rate"],
+            avg_processing_time_ms=stats_data["average_processing_time_ms"],
+            median_processing_time_ms=None,  # TODO: Calculate median if needed
+            last_24h_runs=stats_data["last_24h_runs"],
+            last_7d_runs=0,  # TODO: Add 7d and 30d calculations to repository
+            last_30d_runs=0,
+            most_common_errors=[],  # TODO: Add error analysis to repository
+            template_coverage=0.0,  # TODO: Calculate template coverage
+            last_successful_run=stats_data["last_successful_run"],
+            last_failed_run=stats_data["last_failed_run"],
+            last_processed_run=None  # TODO: Add to repository query
+        )
+
+        response = EtoStatisticsResponse(
+            success=True,
+            data=processing_stats
+        )
+
+        return jsonify(response.dict()), 200
+
+    except Exception as e:
+        logger.error(f"Error in get_eto_run_statistics: {e}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "error": "Internal server error",
+            "message": "An unexpected error occurred"
+        }), 500
 
 
 # === Processing Results & Data Endpoints ===

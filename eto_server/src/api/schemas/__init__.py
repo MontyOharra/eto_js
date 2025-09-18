@@ -29,13 +29,22 @@ from .email_ingestion import (
 )
 
 from .eto_processing import (
-    EtoRunSummaryResponse,
+    EtoRunListRequest,
+    EtoRunListResponse,
     EtoRunDetailResponse,
-    ProcessingStepResultResponse,
     ReprocessEtoRunRequest,
+    ReprocessEtoRunResponse,
     SkipEtoRunRequest,
-    EtoRunStatsResponse,
-    EtoRunListRequest
+    SkipEtoRunResponse,
+    DeleteEtoRunResponse,
+    EtoRunResultsResponse,
+    EtoRunPdfDataResponse,
+    EtoRunAuditResponse,
+    TemplateSuggestionsResponse,
+    AssignTemplateResponse,
+    BulkReprocessResponse,
+    EtoRunsSummaryResponse,
+    EtoStatisticsResponse
 )
 
 from .pdf_processing import (
@@ -76,13 +85,22 @@ __all__ = [
     'EmailConfigActivateResponse',
     
     # ETO processing schemas
-    'EtoRunSummaryResponse',
-    'EtoRunDetailResponse',
-    'ProcessingStepResultResponse',
-    'ReprocessEtoRunRequest',
-    'SkipEtoRunRequest',
-    'EtoRunStatsResponse',
     'EtoRunListRequest',
+    'EtoRunListResponse',
+    'EtoRunDetailResponse',
+    'ReprocessEtoRunRequest',
+    'ReprocessEtoRunResponse',
+    'SkipEtoRunRequest',
+    'SkipEtoRunResponse',
+    'DeleteEtoRunResponse',
+    'EtoRunResultsResponse',
+    'EtoRunPdfDataResponse',
+    'EtoRunAuditResponse',
+    'TemplateSuggestionsResponse',
+    'AssignTemplateResponse',
+    'BulkReprocessResponse',
+    'EtoRunsSummaryResponse',
+    'EtoStatisticsResponse',
     
     # PDF processing schemas
     'PdfObjectResponse',

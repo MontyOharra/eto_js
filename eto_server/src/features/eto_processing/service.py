@@ -85,6 +85,165 @@ class EtoProcessingService:
 
         return eto_run
 
+    # === ETO Run Management & Query Operations ===
+
+    def get_runs_with_filters(
+        self,
+        status: Optional[str] = None,
+        email_id: Optional[int] = None,
+        template_id: Optional[int] = None,
+        has_errors: Optional[bool] = None,
+        date_from: Optional[datetime] = None,
+        date_to: Optional[datetime] = None,
+        page: int = 1,
+        limit: int = 20,
+        order_by: str = "created_at",
+        desc: bool = True
+    ) -> Dict[str, Any]:
+        """Get ETO runs with filtering and pagination"""
+        return self.eto_run_repo.get_with_filters(
+            status=status,
+            email_id=email_id,
+            template_id=template_id,
+            has_errors=has_errors,
+            date_from=date_from,
+            date_to=date_to,
+            page=page,
+            limit=limit,
+            order_by=order_by,
+            desc=desc
+        )
+
+    def get_run_by_id(self, run_id: int):
+        """Get detailed information for a specific ETO run"""
+        if run_id is None or run_id <= 0:
+            raise ValueError("Valid run_id is required")
+
+        return self.eto_run_repo.get_by_id(run_id)
+
+    def reprocess_run(
+        self,
+        run_id: int,
+        force: bool = False,
+        template_id: Optional[int] = None,
+        reset_template: bool = False,
+        reason: Optional[str] = None
+    ):
+        """Reprocess an ETO run (reset to not_started status)"""
+        if run_id is None or run_id <= 0:
+            raise ValueError("Valid run_id is required")
+
+        # Get current run
+        eto_run = self.eto_run_repo.get_by_id(run_id)
+        if not eto_run:
+            raise ValueError(f"ETO run {run_id} not found")
+
+        # Validate reprocessing is allowed
+        if eto_run.status == "success" and not force:
+            raise ValueError("Cannot reprocess successful run without force=true")
+
+        if eto_run.status == "processing":
+            raise ValueError("Cannot reprocess run that is currently processing")
+
+        # Build update data
+        update_data = {
+            "processing_step": None,
+            "error_type": None,
+            "error_message": None,
+            "error_details": None,
+            "started_at": None,
+            "completed_at": None,
+            "processing_duration_ms": None
+        }
+
+        # Handle template assignment
+        if reset_template:
+            update_data["matched_template_id"] = None
+            update_data["template_version"] = None
+            update_data["template_match_coverage"] = None
+        elif template_id:
+            update_data["matched_template_id"] = template_id
+
+        # Update run status
+        updated_run = self.eto_run_repo.update_status(run_id, "not_started", **update_data)
+
+        if updated_run:
+            logger.info(f"ETO run {run_id} reset for reprocessing" + (f" (reason: {reason})" if reason else ""))
+
+        return updated_run
+
+    def skip_run(
+        self,
+        run_id: int,
+        reason: str,
+        permanent: bool = False
+    ):
+        """Skip an ETO run (mark as skipped status)"""
+        if run_id is None or run_id <= 0:
+            raise ValueError("Valid run_id is required")
+
+        if not reason or not reason.strip():
+            raise ValueError("Skip reason is required")
+
+        # Get current run
+        eto_run = self.eto_run_repo.get_by_id(run_id)
+        if not eto_run:
+            raise ValueError(f"ETO run {run_id} not found")
+
+        # Validate skipping is allowed
+        if eto_run.status == "processing":
+            raise ValueError("Cannot skip run that is currently processing")
+
+        if eto_run.status == "skipped":
+            raise ValueError(f"ETO run {run_id} is already skipped")
+
+        # Create skip info
+        import json
+        skip_info = {
+            "reason": reason,
+            "permanent": permanent,
+            "skipped_at": datetime.now().isoformat()
+        }
+
+        update_data = {
+            "processing_step": None,
+            "error_message": f"Skipped: {reason}",
+            "error_details": json.dumps(skip_info)
+        }
+
+        updated_run = self.eto_run_repo.update_status(run_id, "skipped", **update_data)
+
+        if updated_run:
+            logger.info(f"ETO run {run_id} skipped: {reason}")
+
+        return updated_run
+
+    def delete_run(self, run_id: int) -> bool:
+        """Permanently delete an ETO run and associated data"""
+        if run_id is None or run_id <= 0:
+            raise ValueError("Valid run_id is required")
+
+        # Get current run
+        eto_run = self.eto_run_repo.get_by_id(run_id)
+        if not eto_run:
+            raise ValueError(f"ETO run {run_id} not found")
+
+        # Validate deletion is allowed
+        if eto_run.status == "processing":
+            raise ValueError("Cannot delete run that is currently processing")
+
+        # Delete the run
+        success = self.eto_run_repo.delete(run_id)
+
+        if success:
+            logger.info(f"ETO run {run_id} permanently deleted")
+
+        return success
+
+    def get_processing_statistics(self) -> Dict[str, Any]:
+        """Get comprehensive processing statistics"""
+        return self.eto_run_repo.get_statistics()
+
     # === Worker Process Management ===
 
     def start(self):

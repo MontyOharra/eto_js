@@ -236,3 +236,145 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
         }
 
         return self.update_status(id, "failure", **update_data)
+
+    def get_with_filters(
+        self,
+        status: Optional[str] = None,
+        email_id: Optional[int] = None,
+        template_id: Optional[int] = None,
+        has_errors: Optional[bool] = None,
+        date_from: Optional[datetime] = None,
+        date_to: Optional[datetime] = None,
+        page: int = 1,
+        limit: int = 20,
+        order_by: str = "created_at",
+        desc: bool = True
+    ) -> Dict[str, Any]:
+        """Get ETO runs with filtering and pagination"""
+        try:
+            with self.connection_manager.session_scope() as session:
+                # Base query
+                query = session.query(self.model_class)
+
+                # Apply filters
+                if status:
+                    query = query.filter(self.model_class.status == status)
+
+                if email_id:
+                    query = query.filter(self.model_class.email_id == email_id)
+
+                if template_id:
+                    query = query.filter(self.model_class.matched_template_id == template_id)
+
+                if has_errors is not None:
+                    if has_errors:
+                        query = query.filter(self.model_class.error_message.isnot(None))
+                    else:
+                        query = query.filter(self.model_class.error_message.is_(None))
+
+                if date_from:
+                    query = query.filter(self.model_class.created_at >= date_from)
+
+                if date_to:
+                    query = query.filter(self.model_class.created_at <= date_to)
+
+                # Get total count before pagination
+                total_count = query.count()
+
+                # Apply sorting
+                if hasattr(self.model_class, order_by):
+                    column = getattr(self.model_class, order_by)
+                    query = query.order_by(column.desc() if desc else column)
+
+                # Apply pagination
+                offset = (page - 1) * limit
+                paginated_query = query.offset(offset).limit(limit)
+
+                # Execute query and convert to domain objects
+                models = paginated_query.all()
+                runs = [self._convert_to_domain_object(model) for model in models]
+
+                # Calculate pagination metadata
+                total_pages = (total_count + limit - 1) // limit
+
+                return {
+                    "runs": runs,
+                    "total": total_count,
+                    "page": page,
+                    "limit": limit,
+                    "total_pages": total_pages
+                }
+
+        except SQLAlchemyError as e:
+            logger.error(f"Error getting ETO runs with filters: {e}")
+            raise RepositoryError(f"Failed to get ETO runs with filters: {e}") from e
+
+    def get_statistics(self) -> Dict[str, Any]:
+        """Get processing statistics for ETO runs"""
+        try:
+            with self.connection_manager.session_scope() as session:
+                # Basic counts by status
+                status_counts = (
+                    session.query(
+                        self.model_class.status,
+                        func.count(self.model_class.id).label('count')
+                    )
+                    .group_by(self.model_class.status)
+                    .all()
+                )
+
+                # Total runs
+                total_runs = session.query(self.model_class).count()
+
+                # Success rate calculation
+                successful_runs = (
+                    session.query(self.model_class)
+                    .filter(self.model_class.status == 'success')
+                    .count()
+                )
+                success_rate = successful_runs / total_runs if total_runs > 0 else 0.0
+
+                # Average processing time for completed runs
+                avg_processing_time = (
+                    session.query(func.avg(self.model_class.processing_duration_ms))
+                    .filter(self.model_class.processing_duration_ms.isnot(None))
+                    .scalar()
+                )
+
+                # Recent activity counts (last 24 hours)
+                from datetime import timedelta
+                last_24h = datetime.now(timezone.utc) - timedelta(hours=24)
+                last_24h_runs = (
+                    session.query(self.model_class)
+                    .filter(self.model_class.created_at >= last_24h)
+                    .count()
+                )
+
+                # Last successful and failed runs
+                last_successful_run = (
+                    session.query(self.model_class.completed_at)
+                    .filter(self.model_class.status == 'success')
+                    .order_by(self.model_class.completed_at.desc())
+                    .first()
+                )
+
+                last_failed_run = (
+                    session.query(self.model_class.completed_at)
+                    .filter(self.model_class.status == 'failure')
+                    .order_by(self.model_class.completed_at.desc())
+                    .first()
+                )
+
+                return {
+                    "total_runs": total_runs,
+                    "status_counts": [{"status": status, "count": count} for status, count in status_counts],
+                    "success_rate": success_rate,
+                    "average_processing_time_ms": int(avg_processing_time) if avg_processing_time else None,
+                    "last_24h_runs": last_24h_runs,
+                    "last_successful_run": last_successful_run[0] if last_successful_run else None,
+                    "last_failed_run": last_failed_run[0] if last_failed_run else None
+                }
+
+        except SQLAlchemyError as e:
+            logger.error(f"Error getting ETO run statistics: {e}")
+            raise RepositoryError(f"Failed to get ETO run statistics: {e}") from e

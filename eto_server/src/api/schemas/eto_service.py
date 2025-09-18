@@ -67,7 +67,7 @@ class EtoServiceStatus(BaseModel):
 
 class EtoServiceStatusResponse(APIResponse):
     """Response for ETO service status"""
-    data: EtoServiceStatus
+    data: Optional[EtoServiceStatus] = None
 
 
 # === Service Metrics Schemas ===
@@ -148,7 +148,7 @@ class EtoServiceMetrics(BaseModel):
 
 class EtoServiceMetricsResponse(APIResponse):
     """Response for ETO service metrics"""
-    data: EtoServiceMetrics
+    data: Optional[EtoServiceMetrics] = None
 
 
 # === Service Control Schemas ===
@@ -162,11 +162,10 @@ class StartServiceRequest(BaseModel):
 
 class StartServiceResponse(APIResponse):
     """Response for starting ETO service"""
-    service_started: bool
-    was_already_running: bool
-    worker_thread_id: str
-    configuration: WorkerConfiguration
-    message: str
+    service_started: bool = False
+    was_already_running: bool = False
+    worker_thread_id: str = ""
+    configuration: Optional[WorkerConfiguration] = None
 
 
 class StopServiceRequest(BaseModel):
@@ -178,12 +177,11 @@ class StopServiceRequest(BaseModel):
 
 class StopServiceResponse(APIResponse):
     """Response for stopping ETO service"""
-    service_stopped: bool
-    was_running: bool
-    graceful_shutdown: bool
+    service_stopped: bool = False
+    was_running: bool = False
+    graceful_shutdown: bool = False
     pending_runs_interrupted: int = 0
-    stop_duration_seconds: float
-    message: str
+    stop_duration_seconds: float = 0.0
 
 
 class RestartServiceRequest(BaseModel):
@@ -197,12 +195,11 @@ class RestartServiceRequest(BaseModel):
 
 class RestartServiceResponse(APIResponse):
     """Response for restarting ETO service"""
-    service_restarted: bool
-    stop_duration_seconds: float
-    start_duration_seconds: float
-    configuration_changed: bool
-    new_worker_thread_id: str
-    message: str
+    service_restarted: bool = False
+    stop_duration_seconds: float = 0.0
+    start_duration_seconds: float = 0.0
+    configuration_changed: bool = False
+    new_worker_thread_id: str = ""
 
 
 # === Worker Information Schemas ===
@@ -263,7 +260,7 @@ class WorkerInfo(BaseModel):
 
 class WorkerInfoResponse(APIResponse):
     """Response for detailed worker information"""
-    data: WorkerInfo
+    data: Optional[WorkerInfo] = None
 
 
 # === Service Configuration Schemas ===
@@ -279,11 +276,11 @@ class UpdateConfigurationRequest(BaseModel):
 
 class UpdateConfigurationResponse(APIResponse):
     """Response for configuration update"""
-    configuration_updated: bool
-    restart_required: bool
-    old_configuration: WorkerConfiguration
-    new_configuration: WorkerConfiguration
-    changes_applied: List[str]
+    configuration_updated: bool = False
+    restart_required: bool = False
+    old_configuration: Optional[WorkerConfiguration] = None
+    new_configuration: Optional[WorkerConfiguration] = None
+    changes_applied: List[str] = Field(default_factory=list)
 
 
 # === Health Check Schemas ===
@@ -317,4 +314,4 @@ class ComprehensiveHealthCheck(BaseModel):
 
 class HealthCheckResponse(APIResponse):
     """Response for comprehensive health check"""
-    data: ComprehensiveHealthCheck
+    data: Optional[ComprehensiveHealthCheck] = None

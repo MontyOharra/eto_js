@@ -57,11 +57,11 @@ class EtoRunSummary(BaseModel):
 
 class EtoRunListResponse(APIResponse):
     """Response for ETO runs listing"""
-    data: List[EtoRunSummary]
-    total: int
-    page: int
-    limit: int
-    total_pages: int
+    data: List[EtoRunSummary] = Field(default_factory=list)
+    total: int = 0
+    page: int = 1
+    limit: int = 20
+    total_pages: int = 0
 
 
 class EtoRunDetail(BaseModel):
@@ -105,7 +105,7 @@ class EtoRunDetail(BaseModel):
 
 class EtoRunDetailResponse(APIResponse):
     """Response for detailed ETO run information"""
-    data: EtoRunDetail
+    data: Optional[EtoRunDetail] = None
 
 
 class ReprocessEtoRunRequest(BaseModel):
@@ -118,10 +118,9 @@ class ReprocessEtoRunRequest(BaseModel):
 
 class ReprocessEtoRunResponse(APIResponse):
     """Response for ETO run reprocessing"""
-    run_id: int
-    old_status: EtoRunStatus
-    new_status: EtoRunStatus
-    message: str
+    run_id: int = 0
+    old_status: EtoRunStatus = "not_started"
+    new_status: EtoRunStatus = "not_started"
 
 
 class SkipEtoRunRequest(BaseModel):
@@ -132,15 +131,14 @@ class SkipEtoRunRequest(BaseModel):
 
 class SkipEtoRunResponse(APIResponse):
     """Response for skipping an ETO run"""
-    run_id: int
-    status: EtoRunStatus
-    reason: str
+    run_id: int = 0
+    status: EtoRunStatus = "skipped"
+    reason: str = ""
 
 
 class DeleteEtoRunResponse(APIResponse):
     """Response for deleting an ETO run"""
-    run_id: int
-    message: str
+    run_id: int = 0
 
 
 # === Processing Results & Data Schemas ===
@@ -179,7 +177,7 @@ class EtoRunResults(BaseModel):
 
 class EtoRunResultsResponse(APIResponse):
     """Response for ETO run processing results"""
-    data: EtoRunResults
+    data: Optional[EtoRunResults] = None
 
 
 class PdfObject(BaseModel):
@@ -218,7 +216,7 @@ class EtoRunPdfData(BaseModel):
 
 class EtoRunPdfDataResponse(APIResponse):
     """Response for ETO run PDF data"""
-    data: EtoRunPdfData
+    data: Optional[EtoRunPdfData] = None
 
 
 class ProcessingAuditStep(BaseModel):
@@ -257,7 +255,7 @@ class EtoRunAudit(BaseModel):
 
 class EtoRunAuditResponse(APIResponse):
     """Response for ETO run audit trail"""
-    data: EtoRunAudit
+    data: Optional[EtoRunAudit] = None
 
 
 # === Template Integration Schemas ===
@@ -275,8 +273,8 @@ class TemplateSuggestion(BaseModel):
 
 class TemplateSuggestionsResponse(APIResponse):
     """Response for template suggestions"""
-    run_id: int
-    suggestions: List[TemplateSuggestion]
+    run_id: int = 0
+    suggestions: List[TemplateSuggestion] = Field(default_factory=list)
 
 
 class AssignTemplateRequest(BaseModel):
@@ -288,11 +286,10 @@ class AssignTemplateRequest(BaseModel):
 
 class AssignTemplateResponse(APIResponse):
     """Response for template assignment"""
-    run_id: int
-    template_id: int
-    template_name: str
-    reprocessing: bool
-    message: str
+    run_id: int = 0
+    template_id: int = 0
+    template_name: str = ""
+    reprocessing: bool = False
 
 
 # === Batch Operations Schemas ===
@@ -316,10 +313,10 @@ class BulkReprocessResult(BaseModel):
 
 class BulkReprocessResponse(APIResponse):
     """Response for bulk reprocessing"""
-    total_requested: int
-    successful: int
-    failed: int
-    results: List[BulkReprocessResult]
+    total_requested: int = 0
+    successful: int = 0
+    failed: int = 0
+    results: List[BulkReprocessResult] = Field(default_factory=list)
 
 
 class StatusCount(BaseModel):
@@ -345,7 +342,7 @@ class EtoRunsSummary(BaseModel):
 
 class EtoRunsSummaryResponse(APIResponse):
     """Response for ETO runs summary"""
-    data: EtoRunsSummary
+    data: Optional[EtoRunsSummary] = None
 
 
 # === Statistics Schemas ===
@@ -381,4 +378,4 @@ class ProcessingStatistics(BaseModel):
 
 class EtoStatisticsResponse(APIResponse):
     """Response for ETO processing statistics"""
-    data: ProcessingStatistics
+    data: Optional[ProcessingStatistics] = None
