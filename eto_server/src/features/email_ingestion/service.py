@@ -772,3 +772,11 @@ class EmailIngestionService:
         except Exception as e:
             self.logger.warning(f"Error validating PDF content: {e}")
             return False
+
+    def get_email_by_id(self, email_id: int):
+        """Get email by ID - helper method for ETO processing"""
+        try:
+            return self.email_repo.get_by_id(email_id)
+        except Exception as e:
+            self.logger.error(f"Error getting email {email_id}: {e}")
+            return None

@@ -178,7 +178,7 @@ export interface EmailIngestionStatus {
 }
 
 // API Configuration - Updated for unified ETO server
-const API_BASE_URL = 'http://localhost:8080/api';
+const API_BASE_URL = 'http://localhost:8080';
 
 class ApiClient {
   private baseUrl: string;
@@ -226,7 +226,7 @@ class ApiClient {
    * Health Check
    */
   async healthCheck(): Promise<{ status: string; timestamp: string }> {
-    return this.fetchApi('/health');
+    return this.fetchApi('/api/health');
   }
 
   /**
@@ -488,7 +488,7 @@ class ApiClient {
       error_message?: string;
     };
   }> {
-    return this.fetchApi(`/api/processing/runs/${runId}`);
+    return this.fetchApi(`/api/eto-runs/${runId}/pdf-data`);
   }
 
   /**
@@ -786,7 +786,7 @@ class ApiClient {
     success: boolean;
     data: EmailIngestionConfigSummary[];
   }> {
-    return this.fetchApi('/email-ingestion/configs');
+    return this.fetchApi('/api/email-ingestion/configs');
   }
 
   /**
@@ -796,7 +796,7 @@ class ApiClient {
     success: boolean;
     data: EmailIngestionConfig;
   }> {
-    return this.fetchApi(`/email-ingestion/configs/${configId}`);
+    return this.fetchApi(`/api/email-ingestion/configs/${configId}`);
   }
 
   /**
@@ -826,7 +826,7 @@ class ApiClient {
     config_id: number;
     message: string;
   }> {
-    return this.fetchApi('/email-ingestion/configs', {
+    return this.fetchApi('/api/email-ingestion/configs', {
       method: 'POST',
       body: JSON.stringify(configData),
     });
@@ -852,7 +852,7 @@ class ApiClient {
     success: boolean;
     message: string;
   }> {
-    return this.fetchApi(`/email-ingestion/configs/${configId}`, {
+    return this.fetchApi(`/api/email-ingestion/configs/${configId}`, {
       method: 'PUT',
       body: JSON.stringify(updateData),
     });
@@ -865,7 +865,7 @@ class ApiClient {
     success: boolean;
     message: string;
   }> {
-    return this.fetchApi(`/email-ingestion/configs/${configId}`, {
+    return this.fetchApi(`/api/email-ingestion/configs/${configId}`, {
       method: 'DELETE',
     });
   }
@@ -882,7 +882,7 @@ class ApiClient {
     auto_started?: boolean;
     start_error?: string;
   }> {
-    return this.fetchApi(`/email-ingestion/configs/${configId}/activate`, {
+    return this.fetchApi(`/api/email-ingestion/configs/${configId}/activate`, {
       method: 'POST',
       body: JSON.stringify({ auto_start: autoStart }),
     });
@@ -898,7 +898,7 @@ class ApiClient {
     folder_name?: string;
     cursor_id?: number;
   }> {
-    return this.fetchApi('/email-ingestion/start', {
+    return this.fetchApi('/api/email-ingestion/start', {
       method: 'POST',
     });
   }
@@ -910,7 +910,7 @@ class ApiClient {
     success: boolean;
     message: string;
   }> {
-    return this.fetchApi('/email-ingestion/stop', {
+    return this.fetchApi('/api/email-ingestion/stop', {
       method: 'POST',
     });
   }
@@ -922,7 +922,7 @@ class ApiClient {
     success: boolean;
     data: EmailIngestionStatus;
   }> {
-    return this.fetchApi('/email-ingestion/status');
+    return this.fetchApi('/api/email-ingestion/status');
   }
 
   /**
@@ -949,7 +949,7 @@ class ApiClient {
       searchParams.append('folder', params.folder);
     }
 
-    const endpoint = `/email-ingestion/emails${searchParams.toString() ? `?${searchParams}` : ''}`;
+    const endpoint = `/api/email-ingestion/emails${searchParams.toString() ? `?${searchParams}` : ''}`;
     return this.fetchApi(endpoint);
   }
 
@@ -972,7 +972,7 @@ class ApiClient {
       total_accounts: number;
     };
   }> {
-    const endpoint = `/email-ingestion/test/folders${emailAddress ? `?email_address=${encodeURIComponent(emailAddress)}` : ''}`;
+    const endpoint = `/api/email-ingestion/test/folders${emailAddress ? `?email_address=${encodeURIComponent(emailAddress)}` : ''}`;
     return this.fetchApi(endpoint);
   }
 
@@ -991,7 +991,7 @@ class ApiClient {
       total_accounts: number;
     };
   }> {
-    return this.fetchApi('/email-ingestion/discover/emails');
+    return this.fetchApi('/api/email-ingestion/discover/emails');
   }
 }
 

@@ -209,10 +209,32 @@ class PdfProcessingService:
             logger.error(f"Error getting PDF {pdf_id}: {e}")
             return None
     
+    def get_pdf_objects(self, pdf_id: int) -> Optional[List[Dict[str, Any]]]:
+        """
+        Get parsed PDF objects for template building
+
+        Args:
+            pdf_id: PDF file ID
+
+        Returns:
+            List of PDF objects or None if not found/extracted
+        """
+        try:
+            pdf_file = self.pdf_repo.get_by_id(pdf_id)
+            if not pdf_file or not pdf_file.objects_json:
+                return None
+
+            import json
+            return json.loads(pdf_file.objects_json)
+
+        except Exception as e:
+            logger.error(f"Error getting PDF objects for {pdf_id}: {e}")
+            return None
+
     def get_storage_info(self) -> Dict[str, Any]:
         """
         Get PDF storage service information
-        
+
         Returns:
             Dict with storage information
         """

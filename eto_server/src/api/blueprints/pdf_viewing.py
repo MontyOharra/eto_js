@@ -31,79 +31,79 @@ def handle_options(path):
 
 
 # Service helper function
-def get_email_ingestion_service():
-    """Get email ingestion service from app config"""
-    from flask import current_app
-    return current_app.config.get('EMAIL_INGESTION_SERVICE')
+def get_pdf_processing_service():
+    """Get PDF processing service from service container"""
+    from shared.services import get_pdf_processing_service as get_service
+    return get_service()
 
 
 @pdf_viewing_bp.route('/<int:pdf_id>', methods=['GET'])
 @cross_origin()
-def get_pdf_metadata(pdf_id: int):
+def get_pdf_content(pdf_id: int):
     """
-    Get PDF metadata by ID
-    
-    Returns:
-        JSON response with PDF metadata
-    """
-    try:
-        email_service = get_email_ingestion_service()
-        if not email_service:
-            return jsonify({"error": "Email ingestion service not available"}), 500
-        
-        pdf_data = email_service.get_pdf_metadata(pdf_id)
-        if not pdf_data:
-            return jsonify({"error": "PDF not found"}), 404
-        
-        logger.info(f"Retrieved PDF metadata for {pdf_id}: {pdf_data.get('filename')}")
-        return jsonify(pdf_data), 200
-        
-    except Exception as e:
-        logger.error(f"Error getting PDF metadata {pdf_id}: {e}")
-        return jsonify({"error": "Internal server error"}), 500
+    Get PDF file content for client viewing
 
-
-@pdf_viewing_bp.route('/<int:pdf_id>/content', methods=['GET'])
-@cross_origin()
-def download_pdf_content(pdf_id: int):
-    """
-    Download PDF file content for client viewing
-    
     Returns:
         PDF file content with proper headers
     """
     try:
-        email_service = get_email_ingestion_service()
-        if not email_service:
-            return jsonify({"error": "Email ingestion service not available"}), 500
-        
+        pdf_service = get_pdf_processing_service()
+        if not pdf_service:
+            return jsonify({"error": "PDF processing service not available"}), 500
+
         # Get PDF metadata first
-        pdf_data = email_service.get_pdf_metadata(pdf_id)
-        if not pdf_data:
+        pdf_metadata = pdf_service.get_pdf_metadata(pdf_id)
+        if not pdf_metadata:
             return jsonify({"error": "PDF not found"}), 404
-        
+
         # Get PDF content
-        pdf_content = email_service.get_pdf_content(pdf_id)
+        pdf_content = pdf_service.get_pdf_content(pdf_id)
         if not pdf_content:
             logger.error(f"PDF content not found for {pdf_id}")
             return jsonify({"error": "PDF file not found on disk"}), 404
-        
+
         # Create response with proper headers for PDF viewing
         response = current_app.response_class(
             pdf_content,
             mimetype='application/pdf',
             headers={
-                'Content-Disposition': f'inline; filename="{pdf_data["original_filename"]}"',
+                'Content-Disposition': f'inline; filename="{pdf_metadata.get("filename", "document.pdf")}"',
                 'Content-Length': str(len(pdf_content)),
                 'Cache-Control': 'public, max-age=3600'  # Cache for 1 hour
             }
         )
-        
-        logger.info(f"Served PDF content for {pdf_id}: {pdf_data['filename']} ({len(pdf_content)} bytes)")
+
+        logger.info(f"Served PDF content for {pdf_id}: {pdf_metadata.get('filename')} ({len(pdf_content)} bytes)")
         return response
-        
+
     except Exception as e:
         logger.error(f"Error serving PDF content {pdf_id}: {e}")
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@pdf_viewing_bp.route('/<int:pdf_id>/metadata', methods=['GET'])
+@cross_origin()
+def get_pdf_metadata(pdf_id: int):
+    """
+    Get PDF metadata by ID
+
+    Returns:
+        JSON response with PDF metadata
+    """
+    try:
+        pdf_service = get_pdf_processing_service()
+        if not pdf_service:
+            return jsonify({"error": "PDF processing service not available"}), 500
+
+        pdf_metadata = pdf_service.get_pdf_metadata(pdf_id)
+        if not pdf_metadata:
+            return jsonify({"error": "PDF not found"}), 404
+
+        logger.info(f"Retrieved PDF metadata for {pdf_id}: {pdf_metadata.get('filename')}")
+        return jsonify(pdf_metadata), 200
+
+    except Exception as e:
+        logger.error(f"Error getting PDF metadata {pdf_id}: {e}")
         return jsonify({"error": "Internal server error"}), 500
 
 

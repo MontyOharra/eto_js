@@ -25,7 +25,7 @@ from api.schemas.eto_processing import (
 )
 from api.schemas.common import APIResponse
 from shared.domain import EtoRun
-from features.eto_processing import EtoProcessingService
+from shared.services import get_eto_processing_service, get_pdf_processing_service, get_email_ingestion_service
 
 logger = logging.getLogger(__name__)
 
@@ -33,12 +33,9 @@ logger = logging.getLogger(__name__)
 eto_processing_bp = Blueprint('eto_processing', __name__, url_prefix='/api/eto-runs')
 
 
-def get_eto_service() -> EtoProcessingService:
-    """Get ETO processing service from app config"""
-    eto_service = current_app.config.get('ETO_PROCESSING_SERVICE')
-    if not eto_service:
-        raise RuntimeError("ETO processing service not initialized")
-    return eto_service
+def get_eto_service():
+    """Get ETO processing service from service container"""
+    return get_eto_processing_service()
 
 
 def handle_validation_error(e: ValidationError) -> Dict[str, Any]:
@@ -59,21 +56,57 @@ def handle_validation_error(e: ValidationError) -> Dict[str, Any]:
 
 
 def convert_to_summary(eto_run: EtoRun) -> EtoRunSummary:
-    """Convert EtoRun domain object to EtoRunSummary"""
-    # TODO: Get additional metadata (email subject, sender, PDF filename, template name)
-    # For now, use placeholder values
+    """Convert EtoRun domain object to EtoRunSummary with real data"""
+
+    # Default values in case services are unavailable
+    pdf_filename = "unknown.pdf"
+    email_subject = "Unknown Subject"
+    sender_email = "unknown@example.com"
+    file_size = 0
+    template_name = None
+
+    try:
+        # Get PDF information
+        pdf_service = get_pdf_processing_service()
+        pdf_metadata = pdf_service.get_pdf_metadata(eto_run.pdf_file_id)
+        if pdf_metadata:
+            pdf_filename = pdf_metadata.get('filename', pdf_filename)
+            file_size = pdf_metadata.get('file_size', file_size)
+    except Exception as e:
+        logger.warning(f"Could not fetch PDF metadata for PDF {eto_run.pdf_file_id}: {e}")
+
+    try:
+        # Get email information
+        email_service = get_email_ingestion_service()
+        email_data = email_service.get_email_by_id(eto_run.email_id)
+        if email_data:
+            email_subject = email_data.subject or email_subject
+            sender_email = email_data.sender_email or sender_email
+    except Exception as e:
+        logger.warning(f"Could not fetch email data for email {eto_run.email_id}: {e}")
+
+    # TODO: Get template name when template service is available
+    # if eto_run.matched_template_id:
+    #     try:
+    #         template_service = get_pdf_template_service()
+    #         template = template_service.get_template_by_id(eto_run.matched_template_id)
+    #         if template:
+    #             template_name = template.name
+    #     except Exception as e:
+    #         logger.warning(f"Could not fetch template name for template {eto_run.matched_template_id}: {e}")
+
     return EtoRunSummary(
         id=eto_run.id,
         email_id=eto_run.email_id,
         pdf_file_id=eto_run.pdf_file_id,
         status=eto_run.status,
         processing_step=eto_run.processing_step,
-        pdf_filename="placeholder.pdf",  # TODO: Get from PDF service
-        email_subject="Email Subject",  # TODO: Get from email data
-        sender_email="sender@example.com",  # TODO: Get from email data
-        file_size=0,  # TODO: Get from PDF service
+        pdf_filename=pdf_filename,
+        email_subject=email_subject,
+        sender_email=sender_email,
+        file_size=file_size,
         matched_template_id=eto_run.matched_template_id,
-        template_name=None,  # TODO: Get template name if template_id exists
+        template_name=template_name,
         processing_duration_ms=eto_run.processing_duration_ms,
         error_message=eto_run.error_message,
         created_at=eto_run.created_at,
@@ -499,9 +532,92 @@ def get_eto_run_results(run_id: int):
 @eto_processing_bp.route('/<int:run_id>/pdf-data', methods=['GET'])
 @cross_origin()
 def get_eto_run_pdf_data(run_id: int):
-    """Get PDF file and objects for this ETO run"""
-    # TODO: Implement PDF data retrieval with objects
-    pass
+    """Get PDF file and objects for this ETO run for template building"""
+    try:
+        service = get_eto_service()
+
+        # Get the ETO run
+        eto_run = service.eto_run_repo.get_by_id(run_id)
+        if not eto_run:
+            return jsonify({
+                "success": False,
+                "error": "ETO run not found",
+                "message": f"ETO run {run_id} does not exist"
+            }), 404
+
+        # Get PDF file information
+        pdf_service = get_pdf_processing_service()
+        pdf_metadata = pdf_service.get_pdf_metadata(eto_run.pdf_file_id)
+        if not pdf_metadata:
+            return jsonify({
+                "success": False,
+                "error": "PDF file not found",
+                "message": f"PDF file {eto_run.pdf_file_id} does not exist"
+            }), 404
+
+        # Get PDF content (bytes) for template building
+        pdf_content = pdf_service.get_pdf_content(eto_run.pdf_file_id)
+        if not pdf_content:
+            return jsonify({
+                "success": False,
+                "error": "PDF content not found",
+                "message": f"PDF content for file {eto_run.pdf_file_id} is not accessible"
+            }), 404
+
+        # Get PDF objects for template building
+        pdf_objects = pdf_service.get_pdf_objects(eto_run.pdf_file_id)
+        if pdf_objects is None:
+            pdf_objects = []
+
+        # Get email information
+        email_service = get_email_ingestion_service()
+        email_data = email_service.get_email_by_id(eto_run.email_id)
+
+        # Encode PDF bytes as base64 for JSON transmission
+        import base64
+        pdf_base64 = base64.b64encode(pdf_content).decode('utf-8')
+
+        # Build response matching frontend expectations for template building
+        response_data = {
+            "eto_run_id": eto_run.id,
+            "pdf_id": eto_run.pdf_file_id,
+            "filename": pdf_metadata.get('filename', 'unknown.pdf'),
+            "page_count": pdf_metadata.get('page_count', 0),
+            "object_count": pdf_metadata.get('object_count', 0),
+            "file_size": pdf_metadata.get('file_size', 0),
+            "pdf_objects": pdf_objects,
+            "pdf_content_base64": pdf_base64,
+            "status": eto_run.status,
+            "processing_step": eto_run.processing_step,
+            "matched_template_id": eto_run.matched_template_id,
+            "extracted_data": eto_run.extracted_data,
+            "transformation_audit": eto_run.transformation_audit,
+            "target_data": eto_run.target_data,
+            "email": {
+                "subject": email_data.subject if email_data else "Unknown Subject",
+                "sender_email": email_data.sender_email if email_data else "unknown@example.com",
+                "received_date": email_data.received_date.isoformat() if email_data and email_data.received_date else None
+            },
+            "timestamps": {
+                "created_at": eto_run.created_at.isoformat() if eto_run.created_at else None,
+                "started_at": eto_run.started_at.isoformat() if eto_run.started_at else None,
+                "completed_at": eto_run.completed_at.isoformat() if eto_run.completed_at else None
+            },
+            "error_info": {
+                "error_type": eto_run.error_type,
+                "error_message": eto_run.error_message
+            }
+        }
+
+        return jsonify(response_data), 200
+
+    except Exception as e:
+        logger.error(f"Error getting PDF data for ETO run {run_id}: {e}")
+        return jsonify({
+            "success": False,
+            "error": "Internal server error",
+            "message": "Failed to retrieve PDF data"
+        }), 500
 
 
 @eto_processing_bp.route('/<int:run_id>/audit', methods=['GET'])

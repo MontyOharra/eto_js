@@ -8,7 +8,7 @@ import logging
 from datetime import datetime
 
 from api.schemas.common import HealthCheck
-from shared.database import get_connection_manager
+from shared.services import ServiceContainer
 
 logger = logging.getLogger(__name__)
 
@@ -21,10 +21,11 @@ health_bp = Blueprint('health', __name__, url_prefix='/api')
 def health_check():
     """Basic health check endpoint"""
     try:
-        # Test database connection
-        connection_manager = get_connection_manager()
+        # Test database connection via ServiceContainer
+        service_container = ServiceContainer()
+        connection_manager = service_container.connection_manager
         db_healthy = True
-        
+
         if connection_manager:
             db_healthy = connection_manager.test_connection()
         else:
@@ -72,7 +73,8 @@ def detailed_health_check():
         
         # Database health
         try:
-            connection_manager = get_connection_manager()
+            service_container = ServiceContainer()
+            connection_manager = service_container.connection_manager
             if connection_manager:
                 db_healthy = connection_manager.test_connection()
                 health_status["components"]["database"] = {
@@ -118,14 +120,15 @@ def readiness_check():
     """Readiness check for container orchestration"""
     try:
         # Check if all required services are ready
-        connection_manager = get_connection_manager()
-        
+        service_container = ServiceContainer()
+        connection_manager = service_container.connection_manager
+
         if not connection_manager:
             return jsonify({
                 "ready": False,
                 "message": "Database connection manager not initialized"
             }), 503
-            
+
         if not connection_manager.test_connection():
             return jsonify({
                 "ready": False,
