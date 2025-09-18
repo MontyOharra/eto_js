@@ -27,7 +27,7 @@ def get_log_level() -> int:
 
 logging.basicConfig(
     level=get_log_level(),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
     handlers=[
         logging.FileHandler('logs/eto_server.log'),
         logging.StreamHandler()

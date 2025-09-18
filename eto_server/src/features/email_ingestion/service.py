@@ -15,8 +15,8 @@ from .cursor_service import EmailIngestionCursorService
 from .integrations.outlook_com_service import OutlookComService
 
 from shared.database import get_connection_manager
-from shared.database.repositories import EmailIngestionConfigRepository, EmailIngestionCursorRepository, EmailRepository, EtoRunRepository
-from shared.utils.service_registry import get_pdf_processing_service
+from shared.database.repositories import EmailIngestionConfigRepository, EmailIngestionCursorRepository, EmailRepository
+from shared.utils.service_registry import get_pdf_processing_service, get_eto_processing_service
 from shared.domain import (
     EmailIngestionConfig, EmailIngestionStats, EmailServiceHealth,
     EmailData, EmailIngestionConnectionConfig, EmailCreate, 
@@ -40,7 +40,6 @@ class EmailIngestionService:
         self.config_repo = EmailIngestionConfigRepository(self.connection_manager)
         self.cursor_repo = EmailIngestionCursorRepository(self.connection_manager)
         self.email_repo = EmailRepository(self.connection_manager)
-        self.eto_run_repo = EtoRunRepository(self.connection_manager)
 
         # Service layer - repositories injected as dependencies
         self.config_service = EmailIngestionConfigService(self.config_repo)
@@ -652,16 +651,15 @@ class EmailIngestionService:
                 # Continue processing even if object extraction fails
             
             # Auto-trigger ETO processing by creating ETO run record
-            eto_run_create = EtoRunCreate(
-                email_id=email_id,
-                pdf_file_id=pdf_id,
-                status='not_started'
-            )
-
+            eto_run_id = None
             try:
-                eto_run = self.eto_run_repo.create(eto_run_create)
-                eto_run_id = eto_run.id if eto_run else None
-                self.logger.debug(f"Created ETO run {eto_run_id} for PDF {pdf_id}")
+                eto_service = get_eto_processing_service()
+                if eto_service:
+                    eto_run = eto_service.create_eto_run(pdf_id)
+                    eto_run_id = eto_run.id if eto_run else None
+                    self.logger.debug(f"Created ETO run {eto_run_id} for PDF {pdf_id}")
+                else:
+                    self.logger.warning("ETO processing service not available - skipping ETO run creation")
             except Exception as eto_error:
                 self.logger.error(f"Failed to create ETO run for PDF {pdf_id}: {eto_error}")
                 # Don't fail the entire PDF processing if ETO run creation fails
