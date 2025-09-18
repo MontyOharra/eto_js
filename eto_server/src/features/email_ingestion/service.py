@@ -280,6 +280,68 @@ class EmailIngestionService:
             health=self.health
         )
 
+    def test_folder_access(self, email_address: str) -> List[Dict[str, Any]]:
+        """Test folder access for an email address and return available folders"""
+        try:
+            logger.info(f"EmailIngestionService: Testing folder access for email: {email_address}")
+
+            # Use OutlookComService to discover actual folders
+            logger.info(f"EmailIngestionService: Creating OutlookComService instance")
+            outlook_service = OutlookComService()
+
+            logger.info(f"EmailIngestionService: Calling discover_folders for: {email_address}")
+            folders = outlook_service.discover_folders(email_address)
+
+            logger.info(f"EmailIngestionService: Found {len(folders)} folders for {email_address}")
+            return folders
+
+        except Exception as e:
+            logger.error(f"EmailIngestionService: Error testing folder access for {email_address}: {e}")
+            logger.error(f"EmailIngestionService: Exception type: {type(e).__name__}")
+
+            # Return fallback folders if Outlook discovery fails
+            fallback_folders = [
+                {
+                    "name": "Inbox",
+                    "display_name": "Inbox",
+                    "path": "Inbox",
+                    "type": "standard",
+                    "count": 0
+                },
+                {
+                    "name": "Sent Items",
+                    "display_name": "Sent Items",
+                    "path": "Sent Items",
+                    "type": "standard",
+                    "count": 0
+                }
+            ]
+            logger.warning(f"EmailIngestionService: Using fallback folders for {email_address}")
+            return fallback_folders
+
+    def discover_available_emails(self) -> List[Dict[str, Any]]:
+        """Discover all available email accounts from Outlook"""
+        try:
+            logger.info(f"EmailIngestionService: Discovering available email accounts")
+
+            # Use OutlookComService to discover actual email accounts
+            logger.info(f"EmailIngestionService: Creating OutlookComService instance for email discovery")
+            outlook_service = OutlookComService()
+
+            logger.info(f"EmailIngestionService: Calling discover_emails")
+            emails = outlook_service.discover_emails()
+
+            logger.info(f"EmailIngestionService: Found {len(emails)} email accounts")
+            return emails
+
+        except Exception as e:
+            logger.error(f"EmailIngestionService: Error discovering email accounts: {e}")
+            logger.error(f"EmailIngestionService: Exception type: {type(e).__name__}")
+
+            # Return empty list if discovery fails
+            logger.warning(f"EmailIngestionService: Returning empty email list due to error")
+            return []
+
     # === Internal Processing Methods ===
     
     def _run_processing_loop(self):

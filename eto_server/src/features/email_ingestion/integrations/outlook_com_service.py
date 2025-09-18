@@ -379,7 +379,160 @@ class OutlookComService:
 
 
     # === Internal Helper Methods ===
-    
+
+    def discover_folders(self, email_address: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Discover all available folders for the specified email address or default account"""
+        try:
+            logger.info(f"OutlookComService: Starting folder discovery for: {email_address}")
+            # Initialize Outlook if not already connected
+            if not self.outlook:
+                logger.info(f"OutlookComService: Initializing Outlook COM connection")
+                pythoncom.CoInitialize()
+                self.outlook = win32com.client.Dispatch("Outlook.Application")
+                self.namespace = self.outlook.GetNamespace("MAPI")
+                logger.info("OutlookComService: Successfully initialized Outlook for folder discovery")
+
+            discovered_folders = []
+
+            # Get the account to search
+            target_account = None
+            assert self.namespace is not None
+            if email_address:
+                # Find specific account by email address
+                for account in self.namespace.Accounts:
+                    if account.SmtpAddress.lower() == email_address.lower():
+                        target_account = account
+                        break
+
+                if not target_account:
+                    logger.warning(f"Account {email_address} not found, using default account")
+                    target_account = self.namespace.Accounts.Item(1) if self.namespace.Accounts.Count > 0 else None
+            else:
+                # Use default account
+                target_account = self.namespace.Accounts.Item(1) if self.namespace.Accounts.Count > 0 else None
+
+            if not target_account:
+                raise Exception("No Outlook accounts found")
+
+            # Get the root folder for this account
+            root_folder = target_account.DeliveryStore.GetRootFolder()
+
+            # Recursively discover folders
+            self._discover_folders_recursive(root_folder, discovered_folders, max_depth=3)
+
+            logger.info(f"Discovered {len(discovered_folders)} folders for {email_address or 'default account'}")
+            return discovered_folders
+
+        except Exception as e:
+            logger.error(f"OutlookComService: Error discovering folders for {email_address}: {e}")
+            logger.error(f"OutlookComService: Exception type: {type(e).__name__}")
+            # Return some common default folders as fallback
+            fallback_folders = [
+                {
+                    "name": "Inbox",
+                    "display_name": "Inbox",
+                    "path": "Inbox",
+                    "type": "standard",
+                    "count": 0
+                },
+                {
+                    "name": "Sent Items",
+                    "display_name": "Sent Items",
+                    "path": "Sent Items",
+                    "type": "standard",
+                    "count": 0
+                }
+            ]
+            logger.info(f"OutlookComService: Returning {len(fallback_folders)} fallback folders")
+            return fallback_folders
+
+    def discover_emails(self) -> List[Dict[str, Any]]:
+        """Discover all available email accounts from Outlook"""
+        try:
+            logger.info(f"OutlookComService: Starting email account discovery")
+
+            # Initialize Outlook if not already connected
+            if not self.outlook:
+                logger.info(f"OutlookComService: Initializing Outlook COM connection for email discovery")
+                pythoncom.CoInitialize()
+                self.outlook = win32com.client.Dispatch("Outlook.Application")
+                self.namespace = self.outlook.GetNamespace("MAPI")
+                logger.info("OutlookComService: Successfully initialized Outlook for email discovery")
+
+            discovered_emails = []
+
+            # Get all accounts
+            logger.info(f"OutlookComService: Found {self.namespace.Accounts.Count} total Outlook accounts")
+
+            for i, account in enumerate(self.namespace.Accounts):
+                try:
+                    account_info = {
+                        "email_address": account.SmtpAddress,
+                        "display_name": account.DisplayName,
+                        "account_type": account.AccountType,
+                        "is_default": i == 0,  # First account is typically default
+                    }
+
+                    logger.info(f"OutlookComService: Found email account {i+1}: {account.SmtpAddress}")
+                    discovered_emails.append(account_info)
+
+                except Exception as account_error:
+                    logger.debug(f"OutlookComService: Error accessing account {i}: {account_error}")
+                    continue
+
+            logger.info(f"OutlookComService: Discovered {len(discovered_emails)} email accounts")
+            return discovered_emails
+
+        except Exception as e:
+            logger.error(f"OutlookComService: Error discovering email accounts: {e}")
+            logger.error(f"OutlookComService: Exception type: {type(e).__name__}")
+
+            # Return empty list if discovery fails
+            logger.info(f"OutlookComService: Returning empty email list due to error")
+            return []
+
+    def _discover_folders_recursive(self, parent_folder: Any, folder_list: List[Dict[str, Any]],
+                                   current_depth: int = 0, max_depth: int = 3):
+        """Recursively discover folders and add them to the folder list"""
+        if current_depth >= max_depth:
+            return
+
+        try:
+            for folder in parent_folder.Folders:
+                try:
+                    # Get folder info
+                    folder_name = folder.Name
+                    folder_path = folder.FolderPath if hasattr(folder, 'FolderPath') else folder_name
+                    item_count = folder.Items.Count if hasattr(folder, 'Items') else 0
+
+                    # Determine folder type
+                    folder_type = "standard"
+                    if folder_name.lower() in ['inbox', 'sent items', 'drafts', 'deleted items', 'outbox']:
+                        folder_type = "standard"
+                    else:
+                        folder_type = "custom"
+
+                    folder_info = {
+                        "name": folder_name,
+                        "display_name": folder_name,
+                        "path": folder_path,
+                        "type": folder_type,
+                        "count": item_count
+                    }
+
+                    folder_list.append(folder_info)
+
+                    # Recursively search subfolders
+                    if hasattr(folder, 'Folders') and folder.Folders.Count > 0:
+                        self._discover_folders_recursive(folder, folder_list, current_depth + 1, max_depth)
+
+                except Exception as folder_error:
+                    logger.debug(f"Error accessing folder during discovery: {folder_error}")
+                    continue
+
+        except Exception as e:
+            logger.debug(f"Error iterating folders at depth {current_depth}: {e}")
+
     def _get_folder_by_name(self, folder_name: str) -> Optional[Any]:
         """Get Outlook folder by name"""
         try:

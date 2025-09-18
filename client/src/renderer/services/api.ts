@@ -786,7 +786,7 @@ class ApiClient {
     success: boolean;
     data: EmailIngestionConfigSummary[];
   }> {
-    return this.fetchApi('/api/email-ingestion/configurations');
+    return this.fetchApi('/email-ingestion/configs');
   }
 
   /**
@@ -796,7 +796,7 @@ class ApiClient {
     success: boolean;
     data: EmailIngestionConfig;
   }> {
-    return this.fetchApi(`/api/email-ingestion/configurations/${configId}`);
+    return this.fetchApi(`/email-ingestion/configs/${configId}`);
   }
 
   /**
@@ -826,7 +826,7 @@ class ApiClient {
     config_id: number;
     message: string;
   }> {
-    return this.fetchApi('/api/email-ingestion/configurations', {
+    return this.fetchApi('/email-ingestion/configs', {
       method: 'POST',
       body: JSON.stringify(configData),
     });
@@ -852,7 +852,7 @@ class ApiClient {
     success: boolean;
     message: string;
   }> {
-    return this.fetchApi(`/api/email-ingestion/configurations/${configId}`, {
+    return this.fetchApi(`/email-ingestion/configs/${configId}`, {
       method: 'PUT',
       body: JSON.stringify(updateData),
     });
@@ -865,7 +865,7 @@ class ApiClient {
     success: boolean;
     message: string;
   }> {
-    return this.fetchApi(`/api/email-ingestion/configurations/${configId}`, {
+    return this.fetchApi(`/email-ingestion/configs/${configId}`, {
       method: 'DELETE',
     });
   }
@@ -882,7 +882,7 @@ class ApiClient {
     auto_started?: boolean;
     start_error?: string;
   }> {
-    return this.fetchApi(`/api/email-ingestion/configurations/${configId}/activate`, {
+    return this.fetchApi(`/email-ingestion/configs/${configId}/activate`, {
       method: 'POST',
       body: JSON.stringify({ auto_start: autoStart }),
     });
@@ -898,7 +898,7 @@ class ApiClient {
     folder_name?: string;
     cursor_id?: number;
   }> {
-    return this.fetchApi('/api/email-ingestion/start', {
+    return this.fetchApi('/email-ingestion/start', {
       method: 'POST',
     });
   }
@@ -910,7 +910,7 @@ class ApiClient {
     success: boolean;
     message: string;
   }> {
-    return this.fetchApi('/api/email-ingestion/stop', {
+    return this.fetchApi('/email-ingestion/stop', {
       method: 'POST',
     });
   }
@@ -922,7 +922,7 @@ class ApiClient {
     success: boolean;
     data: EmailIngestionStatus;
   }> {
-    return this.fetchApi('/api/email-ingestion/status');
+    return this.fetchApi('/email-ingestion/status');
   }
 
   /**
@@ -949,7 +949,7 @@ class ApiClient {
       searchParams.append('folder', params.folder);
     }
 
-    const endpoint = `/api/email-ingestion/emails${searchParams.toString() ? `?${searchParams}` : ''}`;
+    const endpoint = `/email-ingestion/emails${searchParams.toString() ? `?${searchParams}` : ''}`;
     return this.fetchApi(endpoint);
   }
 
@@ -972,8 +972,26 @@ class ApiClient {
       total_accounts: number;
     };
   }> {
-    const endpoint = `/api/email-ingestion/test/folders${emailAddress ? `?email_address=${encodeURIComponent(emailAddress)}` : ''}`;
+    const endpoint = `/email-ingestion/test/folders${emailAddress ? `?email_address=${encodeURIComponent(emailAddress)}` : ''}`;
     return this.fetchApi(endpoint);
+  }
+
+  /**
+   * Discover available email accounts from Outlook
+   */
+  async discoverEmailAccounts(): Promise<{
+    success: boolean;
+    data: {
+      emails: Array<{
+        email_address: string;
+        display_name: string;
+        account_type: number;
+        is_default: boolean;
+      }>;
+      total_accounts: number;
+    };
+  }> {
+    return this.fetchApi('/email-ingestion/discover/emails');
   }
 }
 

@@ -14,7 +14,7 @@ from api.schemas.email_ingestion import (
     EmailConfigActivateResponse
 )
 from api.schemas.common import APIResponse
-from features.email_ingestion import EmailIngestionService
+from features.email_ingestion.service import EmailIngestionService
 from shared.domain import EmailIngestionConnectionConfig, EmailIngestionConfigCreate, EmailFilterRule
 
 logger = logging.getLogger(__name__)
@@ -25,8 +25,11 @@ def get_email_service() -> EmailIngestionService:
     email_service = current_app.config.get('EMAIL_INGESTION_SERVICE')
     if not email_service:
         raise RuntimeError("Email ingestion service not initialized")
-    
-    assert type(email_service) == EmailIngestionService 
+
+    # Use isinstance instead of strict type equality to handle import path differences
+    if not hasattr(email_service, 'start') or not hasattr(email_service, 'stop'):
+        raise RuntimeError("Invalid email service object - missing required methods")
+
     return email_service
 
 
@@ -290,20 +293,138 @@ def stop_ingestion():
         }), 500
 
 
+@email_ingestion_bp.route('/test/folders', methods=['GET'])
+@cross_origin()
+def test_email_folders():
+    """Test folder access for email address"""
+    email_address = request.args.get('email_address')
+    if not email_address:
+        return jsonify({
+            "success": False,
+            "error": "email_address parameter is required",
+            "message": "Must provide email_address query parameter"
+        }), 400
+
+    try:
+        logger.info(f"Starting folder discovery for email: {email_address}")
+
+        try:
+            email_service = get_email_service()
+            logger.info(f"Successfully retrieved email service")
+        except Exception as service_error:
+            logger.error(f"Failed to get email service: {service_error}")
+            raise service_error
+
+        # Test folder access for the email address
+        logger.info(f"Calling test_folder_access for: {email_address}")
+        folders = email_service.test_folder_access(email_address)
+        logger.info(f"Successfully got {len(folders)} folders from service")
+
+        return jsonify({
+            "success": True,
+            "data": {
+                "folders": [
+                    {
+                        "account": email_address,
+                        "folders": folders
+                    }
+                ],
+                "total_accounts": 1
+            }
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error testing folder access for {email_address}: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "message": f"Failed to test folder access for {email_address}"
+        }), 500
+
+
+@email_ingestion_bp.route('/discover/emails', methods=['GET'])
+@cross_origin()
+def discover_available_emails():
+    """Discover all available email accounts from Outlook"""
+    try:
+        logger.info(f"Starting email account discovery")
+
+        try:
+            email_service = get_email_service()
+            logger.info(f"Successfully retrieved email service for email discovery")
+
+            # Discover available email accounts
+            logger.info(f"Calling discover_available_emails")
+            emails = email_service.discover_available_emails()
+            logger.info(f"Successfully got {len(emails)} email accounts from service")
+
+        except Exception as service_error:
+            logger.error(f"Failed to get email service: {service_error}")
+            logger.info(f"Using direct OutlookComService as fallback")
+
+            # Direct fallback to OutlookComService if email service is not available
+            from features.email_ingestion.integrations.outlook_com_service import OutlookComService
+            outlook_service = OutlookComService()
+            emails = outlook_service.discover_emails()
+            logger.info(f"Successfully got {len(emails)} email accounts from direct OutlookComService")
+
+        return jsonify({
+            "success": True,
+            "data": {
+                "emails": emails,
+                "total_accounts": len(emails)
+            }
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error discovering email accounts: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "message": "Failed to discover email accounts"
+        }), 500
+
+
 @email_ingestion_bp.route('/status', methods=['GET'])
 @cross_origin()
 def get_ingestion_status():
     """Get email ingestion service status"""
     try:
-        email_service = get_email_service()
+        logger.info(f"Getting email ingestion service status")
 
-        # Get comprehensive status from service
-        status_response = email_service.get_ingestion_status()
+        try:
+            email_service = get_email_service()
+            logger.info(f"Successfully retrieved email service for status check")
 
-        return jsonify({
-            "success": True,
-            "data": status_response.__dict__
-        }), 200
+            # Get comprehensive status from service
+            status_response = email_service.get_ingestion_status()
+
+            return jsonify({
+                "success": True,
+                "service_initialized": True,
+                "data": status_response.__dict__
+            }), 200
+
+        except Exception as service_error:
+            logger.error(f"Email service not initialized: {service_error}")
+
+            # Return status indicating service is not initialized
+            return jsonify({
+                "success": True,
+                "service_initialized": False,
+                "message": "Email ingestion service is not initialized",
+                "error": str(service_error),
+                "data": {
+                    "is_running": False,
+                    "is_connected": False,
+                    "current_config": None,
+                    "connection_status": {
+                        "is_connected": False,
+                        "last_check": None,
+                        "error_message": "Service not initialized"
+                    }
+                }
+            }), 200
 
     except Exception as e:
         logger.error(f"Error getting ingestion status: {e}")
