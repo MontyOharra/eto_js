@@ -19,7 +19,7 @@ from shared.database.repositories import EmailIngestionConfigRepository, EmailIn
 from shared.services import get_pdf_processing_service, get_eto_processing_service
 from shared.domain import (
     EmailIngestionConfig, EmailIngestionStats, EmailServiceHealth,
-    EmailData, EmailIngestionConnectionConfig, EmailCreate, 
+    EmailData, EmailIngestionConnectionConfig,
     EmailServiceStartResponse, EmailServiceStopResponse, 
     EmailServiceStatusResponse, EmailConfigSummary, EmailServiceConnectionStatus,
     PdfStoreRequest
@@ -605,9 +605,9 @@ class EmailIngestionService:
                 self.logger.debug(f"Email already exists: {email_data.subject}")
                 return True
             
-            # Create domain object for email record
+            # Save email record to database
             assert self.current_config is not None
-            email_record_create = EmailCreate(
+            email_record = self.email_repo.create(
                 message_id=email_data.message_id,
                 subject=email_data.subject,
                 sender_email=email_data.sender_email,
@@ -617,9 +617,6 @@ class EmailIngestionService:
                 has_pdf_attachments=email_data.has_pdf_attachments,
                 attachment_count=email_data.attachment_count
             )
-
-            # Save email record to database
-            email_record = self.email_repo.create_email_record(email_record_create)
             self.logger.info(f"Saved email record: {email_record.subject} (ID: {email_record.id})")
             
             # Process PDF attachments using pre-extracted data

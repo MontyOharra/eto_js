@@ -146,29 +146,37 @@ class EmailRepository(BaseRepository[EmailModel]):
             logger.error(f"Error getting recent emails: {e}")
             raise RepositoryError(f"Failed to get recent emails: {e}") from e
     
-    def create_email_record(self, email_data: EmailCreate) -> Email:
+    def create(self, 
+               message_id: str,
+               subject: str, 
+               sender_email: str,
+               sender_name: Optional[str],
+               received_date: datetime,
+               folder_name: str,
+               has_pdf_attachments: bool,
+               attachment_count: int) -> Email:
         """Create new email record"""
         try:
             with self.connection_manager.session_scope() as session:
                 # Create new email model
                 model = self.model_class()
                 
-                # Set attributes from domain object
-                setattr(model, 'message_id', email_data.message_id)
-                setattr(model, 'subject', email_data.subject)
-                setattr(model, 'sender_email', email_data.sender_email)
-                setattr(model, 'sender_name', email_data.sender_name)
-                setattr(model, 'received_date', email_data.received_date)
-                setattr(model, 'folder_name', email_data.folder_name)
-                setattr(model, 'has_pdf_attachments', email_data.has_pdf_attachments)
-                setattr(model, 'attachment_count', email_data.attachment_count)
+                # Set attributes from parameters
+                setattr(model, 'message_id', message_id)
+                setattr(model, 'subject', subject)
+                setattr(model, 'sender_email', sender_email)
+                setattr(model, 'sender_name', sender_name)
+                setattr(model, 'received_date', received_date)
+                setattr(model, 'folder_name', folder_name)
+                setattr(model, 'has_pdf_attachments', has_pdf_attachments)
+                setattr(model, 'attachment_count', attachment_count)
                 setattr(model, 'created_at', datetime.now(timezone.utc))
                 
                 # Add to session
                 session.add(model)
                 session.flush()  # Get the ID
                 
-                logger.debug(f"Created email record: {getattr(model, 'subject')} from {getattr(model, 'sender_email')}")
+                logger.debug(f"Created email record: {subject} from {sender_email}")
                 
                 # Convert to domain object while session is active
                 return self._convert_to_domain_object(model)

@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from shared.database.repositories import EmailIngestionCursorRepository
 from shared.domain import ( 
     EmailIngestionConnectionConfig, EmailIngestionCursor,
-    EmailIngestionCursorCreate, EmailIngestionCursorStatistics, EmailData
+    EmailIngestionCursorStatistics, EmailData
 )
 
 
@@ -58,35 +58,31 @@ class EmailIngestionCursorService:
         """Initialize cursor for new email/folder combination"""
         try:
             email_address = connection_config.email_address
-            folder = connection_config.folder_name
+            folder_name = connection_config.folder_name
             
             # Check if cursor already exists
-            existing_cursor = self.get_cursor_state(email_address, folder)
+            existing_cursor = self.get_cursor_state(email_address, folder_name)
             if existing_cursor:
-                logger.debug(f"Cursor already exists for {email_address}/{folder}")
+                logger.debug(f"Cursor already exists for {email_address}/{folder_name}")
                 return existing_cursor
             
             # Create new cursor starting from current time
             current_time = datetime.now(timezone.utc)
-            cursor_create = EmailIngestionCursorCreate(
-                email_address=email_address,
-                folder_name=folder,
-                last_processed_message_id=f"init_{int(current_time.timestamp())}",
-                last_processed_received_date=current_time,
-                last_check_time=current_time,
-                total_emails_processed=0,
-                total_pdfs_found=0
-            )
+            last_processed_message_id=f"init_{int(current_time.timestamp())}"
+            last_processed_received_date=current_time
+            last_check_time=current_time
+            total_emails_processed=0
+            total_pdfs_found=0
 
             # Create cursor record and get ID (following config service pattern)
             cursor_id = self.cursor_repository.create_and_get_id({
-                "email_address": cursor_create.email_address,
-                "folder_name": cursor_create.folder_name,
-                "last_processed_message_id": cursor_create.last_processed_message_id,
-                "last_processed_received_date": cursor_create.last_processed_received_date,
-                "last_check_time": cursor_create.last_check_time,
-                "total_emails_processed": cursor_create.total_emails_processed,
-                "total_pdfs_found": cursor_create.total_pdfs_found
+                "email_address": email_address,
+                "folder_name": folder_name,
+                "last_processed_message_id": last_processed_message_id,
+                "last_processed_received_date": last_processed_received_date,
+                "last_check_time": last_check_time,
+                "total_emails_processed": total_emails_processed,
+                "total_pdfs_found": total_pdfs_found
             })
 
             # Return the created cursor from repository
@@ -95,14 +91,14 @@ class EmailIngestionCursorService:
                 raise Exception(f"Failed to retrieve created cursor with ID {cursor_id}")
             self._cache_cursor(cursor)
             
-            logger.info(f"Initialized new cursor for {email_address}/{folder}")
+            logger.info(f"Initialized new cursor for {email_address}/{folder_name}")
             return cursor
             
         except Exception as e:
             logger.error(f"Error initializing cursor for {connection_config.email_address or 'default'}/{connection_config.folder_name}: {e}")
             raise Exception(f"Failed to initialize cursor: {e}")
     
-    def update_cursor(self, email_address: str, folder: str,
+    def update_cursor(self, email_address: str, folder_name: str,
                           last_email: EmailData) -> EmailIngestionCursor:
         """Update cursor with latest processed email information"""
         try:
@@ -114,7 +110,7 @@ class EmailIngestionCursorService:
             }
             
             # Get existing cursor and update it
-            existing_cursor = self.get_cursor_state(email_address, folder)
+            existing_cursor = self.get_cursor_state(email_address, folder_name)
             
             if existing_cursor:
                 # Update existing cursor
@@ -126,25 +122,21 @@ class EmailIngestionCursorService:
                 if not db_cursor:
                     raise Exception(f"Failed to update cursor with ID {existing_cursor.id}")
             else:
-                # Create new cursor if none exists (following config service pattern)
-                cursor_create = EmailIngestionCursorCreate(
-                    email_address=email_address,
-                    folder_name=folder,
-                    last_processed_message_id=last_email.message_id,
-                    last_processed_received_date=last_email.received_time,
-                    last_check_time=datetime.now(timezone.utc),
-                    total_emails_processed=0,
-                    total_pdfs_found=0
-                )
+                last_processed_message_id=last_email.message_id
+                last_processed_received_date=last_email.received_time
+                last_check_time=datetime.now(timezone.utc)
+                total_emails_processed=0
+                total_pdfs_found=0
+                
 
                 cursor_id = self.cursor_repository.create_and_get_id({
-                    "email_address": cursor_create.email_address,
-                    "folder_name": cursor_create.folder_name,
-                    "last_processed_message_id": cursor_create.last_processed_message_id,
-                    "last_processed_received_date": cursor_create.last_processed_received_date,
-                    "last_check_time": cursor_create.last_check_time,
-                    "total_emails_processed": cursor_create.total_emails_processed,
-                    "total_pdfs_found": cursor_create.total_pdfs_found
+                    "email_address": email_address,
+                    "folder_name": folder_name,
+                    "last_processed_message_id": last_processed_message_id,
+                    "last_processed_received_date": last_processed_received_date,
+                    "last_check_time": last_check_time,
+                    "total_emails_processed": total_emails_processed,
+                    "total_pdfs_found": total_pdfs_found
                 })
 
                 db_cursor = self.cursor_repository.get_by_id(cursor_id)
@@ -154,11 +146,11 @@ class EmailIngestionCursorService:
             # Update cache
             self._cache_cursor(db_cursor)
             
-            logger.debug(f"Updated cursor: {email_address}/{folder} with message {last_email.message_id}")
+            logger.debug(f"Updated cursor: {email_address}/{folder_name} with message {last_email.message_id}")
             return db_cursor
             
         except Exception as e:
-            logger.error(f"Error updating cursor for {email_address}/{folder}: {e}")
+            logger.error(f"Error updating cursor for {email_address}/{folder_name}: {e}")
             raise Exception(f"Failed to update cursor: {e}")
 
     def get_backlog_scope(self, email_address: str, folder: str, 
