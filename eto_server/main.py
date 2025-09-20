@@ -8,7 +8,11 @@ import sys
 import logging
 from dotenv import load_dotenv
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+# Add both src and current directory to Python path for proper module resolution
+src_path = os.path.join(os.path.dirname(__file__), 'src')
+sys.path.insert(0, src_path)
+sys.path.insert(0, os.path.dirname(__file__))
+
 from src.app import create_app
 
 load_dotenv()

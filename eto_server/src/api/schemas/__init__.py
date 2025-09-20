@@ -60,6 +60,22 @@ from .pdf_processing import (
     PdfTemplateStatsResponse
 )
 
+from .pdf_templates import (
+    PdfObjectRequest,
+    ExtractionFieldRequest,
+    PdfTemplateCreateRequest,
+    PdfTemplateVersionCreateRequest,
+    PdfTemplateCreateResponse,
+    PdfTemplateVersionCreateResponse,
+    TemplateListRequest,
+    TemplateGetRequest,
+    TemplateVersionGetRequest,
+    TemplateUpdateRequest,
+    TemplateSetCurrentVersionRequest,
+    TemplateListResponse,
+    TemplateDetailResponse
+)
+
 __all__ = [
     # Common schemas
     'APIResponse',
@@ -113,4 +129,19 @@ __all__ = [
     'PdfAnalysisRequest',
     'PdfAnalysisResponse',
     'PdfTemplateStatsResponse',
+
+    # PDF templates schemas
+    'PdfObjectRequest',
+    'ExtractionFieldRequest',
+    'PdfTemplateCreateRequest',
+    'PdfTemplateVersionCreateRequest',
+    'PdfTemplateCreateResponse',
+    'PdfTemplateVersionCreateResponse',
+    'TemplateListRequest',
+    'TemplateGetRequest',
+    'TemplateVersionGetRequest',
+    'TemplateUpdateRequest',
+    'TemplateSetCurrentVersionRequest',
+    'TemplateListResponse',
+    'TemplateDetailResponse',
 ]

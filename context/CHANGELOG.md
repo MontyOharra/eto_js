@@ -5,6 +5,27 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-09-19 11:45] — Fix Datetime Timezone Inconsistency in ETO Processing
+### Spec / Intent
+- Fix "can't subtract offset-naive and offset-aware datetimes" error preventing ETO run completion
+- Standardize datetime usage throughout ETO processing service to use timezone-aware datetimes consistently
+- Resolve processing failures that occur during duration calculation in repository update_status method
+
+### Changes Made
+- Files: `eto_server/src/features/eto_processing/service.py:203`
+- Summary: Updated skip_info creation to use `datetime.now(timezone.utc)` instead of `datetime.now()` to ensure all datetime objects are timezone-aware and compatible with repository duration calculations
+
+### Next Actions
+- Test ETO processing pipeline to ensure timezone errors are resolved
+- Verify ETO runs can complete successfully without datetime subtraction errors
+
+### Notes
+- Error occurred when repository tried to calculate `current_time - existing_run.started_at` where current_time was timezone-naive but started_at was timezone-aware
+- All datetime usage in ETO processing service now consistently uses UTC timezone
+- Fixes processing failures that were preventing completion of ETO runs
+
+---
+
 ## [2025-09-18 10:30] — Email Service PDF Processing Independence
 ### Spec / Intent
 - Complete the independence of email service PDF processing from Flask service registry to avoid "no Flask app available" errors in background threads

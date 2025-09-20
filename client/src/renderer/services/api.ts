@@ -432,7 +432,7 @@ class ApiClient {
       searchParams.append('limit', params.limit.toString());
     }
 
-    const endpoint = `/api/templates${searchParams.toString() ? `?${searchParams}` : ''}`;
+    const endpoint = `/api/templates/${searchParams.toString() ? `?${searchParams}` : ''}`;
     return this.fetchApi<ApiTemplatesResponse>(endpoint);
   }
 
@@ -505,7 +505,7 @@ class ApiClient {
     template_id: number;
     message: string;
   }> {
-    return this.fetchApi('/api/templates', {
+    return this.fetchApi('/api/templates/', {
       method: 'POST',
       body: JSON.stringify(templateData),
     });
@@ -534,7 +534,7 @@ class ApiClient {
   }
 
   /**
-   * Trigger Reprocessing of Failed ETO Runs
+   * Trigger Reprocessing of Failed ETO Runs (legacy endpoint)
    */
   async triggerReprocessing(): Promise<{
     success: boolean;
@@ -547,6 +547,24 @@ class ApiClient {
     };
   }> {
     return this.fetchApi('/api/templates/reprocess', {
+      method: 'POST',
+    });
+  }
+
+  /**
+   * Reprocess All Failed/Needs Template Runs
+   */
+  async reprocessAllFailedRuns(): Promise<{
+    success: boolean;
+    result: {
+      reprocessed: number;
+      message: string;
+      needs_template_count: number;
+      failure_count: number;
+      error?: string;
+    };
+  }> {
+    return this.fetchApi('/api/eto-runs/reprocess-all', {
       method: 'POST',
     });
   }

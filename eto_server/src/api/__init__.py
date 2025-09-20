@@ -6,7 +6,9 @@ from .blueprints import (
     health_bp,
     email_ingestion_bp,
     eto_processing_bp,
-    eto_service_bp
+    eto_service_bp,
+    pdf_viewing_bp,
+    templates_bp
 )
 
 # Export all blueprints for easy registration
@@ -14,7 +16,9 @@ BLUEPRINTS = [
     health_bp,
     email_ingestion_bp,
     eto_processing_bp,
-    eto_service_bp
+    eto_service_bp,
+    pdf_viewing_bp,
+    templates_bp
 ]
 
 __all__ = [
@@ -22,5 +26,7 @@ __all__ = [
     'health_bp',
     'email_ingestion_bp',
     'eto_processing_bp',
-    'eto_service_bp'
+    'eto_service_bp',
+    'pdf_viewing_bp',
+    'templates_bp'
 ]

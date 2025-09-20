@@ -6,7 +6,8 @@ import logging
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone, timedelta
 from sqlalchemy.exc import SQLAlchemyError
-from shared.database.repositories import BaseRepository, RepositoryError
+from shared.database.repositories import BaseRepository
+from shared.exceptions import RepositoryError, ObjectNotFoundError, ValidationError
 from shared.database.models import EmailModel
 from shared.domain import Email, EmailCreate
 

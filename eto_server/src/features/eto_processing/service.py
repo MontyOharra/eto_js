@@ -200,7 +200,7 @@ class EtoProcessingService:
         skip_info = {
             "reason": reason,
             "permanent": permanent,
-            "skipped_at": datetime.now().isoformat()
+            "skipped_at": datetime.now(timezone.utc).isoformat()
         }
 
         update_data = {
@@ -312,7 +312,11 @@ class EtoProcessingService:
             )
 
             # Step 1: Template Matching
-            template_id = self._process_template_matching_step(eto_run)
+            try:
+                template_id = self._process_template_matching_step(eto_run)
+                
+            except Exception as e:
+                
             if template_id is None:
                 # Template matching failed or no template found - already handled
                 return
@@ -333,12 +337,26 @@ class EtoProcessingService:
 
         except Exception as e:
             logger.error(f"Unexpected error in ETO processing for run {eto_run.id}: {e}")
-            self._mark_as_failed(
-                eto_run.id,
-                f"Processing pipeline failed: {str(e)}",
-                error_type="pipeline_error",
-                error_details={"error": str(e), "step": "pipeline_orchestration"}
-            )
+            try:
+                self._mark_as_failed(
+                    eto_run.id,
+                    f"Processing pipeline failed: {str(e)}",
+                    error_type="pipeline_error",
+                    error_details={"error": str(e), "step": "pipeline_orchestration"}
+                )
+            except Exception as mark_failed_error:
+                logger.error(f"Failed to mark ETO run {eto_run.id} as failed due to: {mark_failed_error}")
+                # Try to update status directly with minimal data to avoid timezone issues
+                try:
+                    self.eto_run_repo.update(eto_run.id, {
+                        "status": "failure",
+                        "error_message": f"Processing pipeline failed: {str(e)}",
+                        "error_type": "pipeline_error",
+                        "processing_step": None
+                    })
+                    logger.info(f"Successfully marked ETO run {eto_run.id} as failed using direct update")
+                except Exception as final_error:
+                    logger.error(f"Final attempt to mark ETO run {eto_run.id} as failed also failed: {final_error}")
 
     def _process_template_matching_step(self, eto_run) -> Optional[int]:
         """
@@ -353,11 +371,6 @@ class EtoProcessingService:
         try:
             # 1. Get PDF Template Service
             pdf_template_service = get_pdf_template_service()
-            if not pdf_template_service:
-                # Create PDF template service with our connection manager
-                from features.pdf_templates.service import PdfTemplateService
-                pdf_template_service = PdfTemplateService()
-
             # 2. Get PDF objects from PDF Processing Service
             pdf_processing_service = get_pdf_processing_service()
             if not pdf_processing_service:
@@ -509,12 +522,26 @@ class EtoProcessingService:
 
         except Exception as e:
             logger.error(f"Error in data transformation for ETO run {eto_run.id}: {e}")
-            self._mark_as_failed(
-                eto_run.id,
-                f"Data transformation failed: {str(e)}",
-                error_type="transformation_error",
-                error_details={"error": str(e), "step": "data_transformation"}
-            )
+            try:
+                self._mark_as_failed(
+                    eto_run.id,
+                    f"Data transformation failed: {str(e)}",
+                    error_type="transformation_error",
+                    error_details={"error": str(e), "step": "data_transformation"}
+                )
+            except Exception as mark_failed_error:
+                logger.error(f"Failed to mark ETO run {eto_run.id} as failed due to: {mark_failed_error}")
+                # Try to update status directly with minimal data to avoid timezone issues
+                try:
+                    self.eto_run_repo.update(eto_run.id, {
+                        "status": "failure",
+                        "error_message": f"Data transformation failed: {str(e)}",
+                        "error_type": "transformation_error",
+                        "processing_step": None
+                    })
+                    logger.info(f"Successfully marked ETO run {eto_run.id} as failed using direct update")
+                except Exception as final_error:
+                    logger.error(f"Final attempt to mark ETO run {eto_run.id} as failed also failed: {final_error}")
             raise
 
     # === Error & Status Management ===
@@ -642,3 +669,60 @@ class EtoProcessingService:
                     time.sleep(self.poll_interval)  # Wait before retrying
 
         logger.info("ETO processing worker loop ended")
+
+    def reprocess_all_failed_runs(self) -> Dict[str, Any]:
+        """
+        Service method to coordinate bulk reprocessing of failed and needs_template runs
+
+        Returns:
+            {
+                'success': bool,
+                'reprocessed': int,
+                'breakdown': {...},
+                'message': str
+            }
+        """
+        try:
+            logger.info("Starting bulk reprocessing of failed and needs_template runs")
+
+            # Execute bulk reset operation via repository
+            reset_result = self.eto_run_repo.reset_failed_runs_for_reprocessing()
+
+            total_reset = reset_result['total_reset']
+            failure_count = reset_result['failure_count']
+            needs_template_count = reset_result['needs_template_count']
+
+            if total_reset == 0:
+                message = "No failed or needs_template runs found to reprocess"
+                logger.info(message)
+                return {
+                    'success': True,
+                    'reprocessed': 0,
+                    'breakdown': reset_result,
+                    'message': message
+                }
+
+            # Log successful reprocessing initiation
+            message = f"Successfully reset {total_reset} runs for reprocessing ({failure_count} failed, {needs_template_count} needs template)"
+            logger.info(message)
+
+            # The existing worker loop will automatically pick up these runs
+            # since they now have status='not_started'
+
+            return {
+                'success': True,
+                'reprocessed': total_reset,
+                'breakdown': reset_result,
+                'message': message
+            }
+
+        except Exception as e:
+            error_message = f"Failed to reprocess runs: {str(e)}"
+            logger.error(error_message, exc_info=True)
+            return {
+                'success': False,
+                'reprocessed': 0,
+                'breakdown': {'failure_count': 0, 'needs_template_count': 0, 'total_reset': 0},
+                'message': error_message,
+                'error': str(e)
+            }

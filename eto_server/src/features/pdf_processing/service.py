@@ -11,7 +11,7 @@ from .storage_service import PdfStorageService
 from .object_extraction_service import PdfObjectExtractionService
 
 from shared.database import get_connection_manager
-from shared.database.repositories.pdf_repository import PdfRepository
+from eto_server.src.shared.database.repositories.pdf_file import PdfRepository
 from shared.domain import PdfFile, PdfStoreRequest, PdfObjectExtractionResult
 
 

@@ -6,12 +6,12 @@ import json
 import logging
 from typing import Optional, List, Dict, Any
 
-from shared.database.repositories.pdf_template_repository import PdfTemplateRepository
+from shared.database.repositories.pdf_template import PdfTemplateRepository
+from shared.database.repositories.pdf_template_version import PdfTemplateVersionRepository
 from shared.services import get_pdf_processing_service
 
 from shared.domain import ( 
-    TemplateMatchResult, PdfObject, TemplateCreateRequest,
-    TemplateVersionRequest, PdfTemplate, ExtractionField
+    PdfTemplate, PdfTemplateVersion, PdfObject, ExtractionField
 )
 
 logger = logging.getLogger(__name__)
@@ -28,6 +28,7 @@ class PdfTemplateService:
 
         # Repository layer
         self.pdf_template_repo = PdfTemplateRepository(self.connection_manager)
+        self.pdf_template_version_repo = PdfTemplateVersionRepository(self.connection_manager)
 
         logger.info("PDF Template Service initialized")
 
@@ -214,7 +215,13 @@ class PdfTemplateService:
 
     # === Template Management ===
 
-    def create_template(self, template_request: TemplateCreateRequest) -> PdfTemplate:
+    def create_template(self, 
+        name : str,
+        description : Optional[str],
+        pdf_id : int,
+        signature_objects: List[PdfObject],
+        extraction_fields: List[ExtractionField],
+    ) -> PdfTemplate:
         """
         Create a new PDF template
 
@@ -224,71 +231,43 @@ class PdfTemplateService:
         Returns:
             Created template
         """
+
+        template = self.pdf_template_repo.create(name, description, pdf_id)
+          
+        version = self.pdf_template_version_repo.create(
+              pdf_template_id=template.id,
+              version=1,
+              signature_objects=signature_objects,
+              extraction_fields=extraction_fields
+          )
+
+        template.current_version_id = version.id
+        return self.pdf_template_repo.set_current_version_id(template.id, version.id)
+    
+    def create_template_version(self, 
+        pdf_template_id: int, 
+        signature_objects: List[PdfObject], 
+        extraction_fields: List[ExtractionField]
+    ) -> PdfTemplateVersion:
+        """
+        Create a new version of a PDF template  
+        
+        Args:
+            template_id: ID of the template to create a version for
+            template_version_request: Template version creation request
+            
+        Returns:
+            Created template version
+        """
         # Convert objects and fields to JSON
-        signature_objects_json = json.dumps([
-            {
-                'object_type': obj.type,
-                'content': obj.text,
-                'x': obj.x,
-                'y': obj.y,
-                'width': obj.width,
-                'height': obj.height,
-                'page_number': obj.page,
-                'properties': {
-                    'font_name': obj.font_name,
-                    'font_size': obj.font_size,
-                    'char_count': obj.char_count,
-                    'bbox': obj.bbox
-                }
-            }
-            for obj in template_request.signature_objects
-        ])
-
-        extraction_fields_json = json.dumps([
-            {
-                'label': field.label,
-                'bounding_box': field.bounding_box,
-                'page': field.page,
-                'required': field.required,
-                'validation_regex': field.validation_regex,
-                'description': field.description
-            }
-            for field in template_request.extraction_fields
-        ])
-
-        template_data = {
-            'name': template_request.name,
-            'customer_name': template_request.customer_name,
-            'description': template_request.description,
-            'signature_objects': signature_objects_json,
-            'signature_object_count': len(template_request.signature_objects),
-            'extraction_fields': extraction_fields_json,
-            'coverage_threshold': template_request.coverage_threshold,
-            'is_complete': True,
-            'version': 1,
-            'is_current_version': True,
-            'status': 'active',
-            'usage_count': 0
-        }
-
-        template = self.pdf_template_repo.create(template_data)
-        logger.info(f"Created new template: {template.id} - {template.name}")
-
-        return template
-
-
-    def get_template_by_id(self, template_id: int) -> Optional[PdfTemplate]:
-        """Get a specific template by ID"""
-        return self.pdf_template_repo.get_by_id(template_id)
-
-    def get_active_templates(self) -> List[PdfTemplate]:
-        """Get all active templates for matching"""
-        return self.pdf_template_repo.get_active_templates()
-
-    def get_templates_by_customer(self, customer_name: str) -> List[PdfTemplate]:
-        """Get all templates for a specific customer"""
-        return self.pdf_template_repo.get_by_customer_name(customer_name)
-
-    def get_template_versions(self, base_template_id: int) -> List[PdfTemplate]:
-        """Get all versions of a template"""
-        return self.pdf_template_repo.get_template_versions(base_template_id)
+        next_version_num = self.pdf_template_repo.get_next_version_number(pdf_template_id)
+        version = self.pdf_template_version_repo.create(
+            pdf_template_id=pdf_template_id,
+            version=next_version_num,
+            signature_objects=signature_objects,
+            extraction_fields=extraction_fields
+        )
+        self.pdf_template_repo.set_current_version_id(pdf_template_id, version.id)
+        
+        return version
+    

@@ -475,7 +475,7 @@ class EmailIngestionService:
             if latest_email_date and latest_email_date != cursor.last_processed_received_date:
                 # Create proper EmailData object for cursor update
                 cursor_email_data = EmailData(
-                    message_id=f"cycle_{int(datetime.now().timestamp())}",
+                    message_id=f"cycle_{int(datetime.now(timezone.utc).timestamp())}",
                     subject="",
                     sender_email="system",
                     sender_name=None,

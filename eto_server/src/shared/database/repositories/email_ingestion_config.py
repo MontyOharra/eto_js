@@ -8,7 +8,8 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 from sqlalchemy.exc import SQLAlchemyError
 
-from shared.database.repositories import BaseRepository, RepositoryError
+from shared.database.repositories import BaseRepository
+from shared.exceptions import RepositoryError, ObjectNotFoundError, ValidationError
 from shared.database.models import EmailIngestionConfigModel
 from shared.domain import EmailIngestionConfig, EmailFilterRule
 

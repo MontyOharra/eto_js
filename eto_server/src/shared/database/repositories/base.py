@@ -8,7 +8,8 @@ from typing import Optional, List, Dict, Any, Type, TypeVar, Generic, Protocol
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
-from shared.database.connection import DatabaseConnectionManager
+from ..connection import DatabaseConnectionManager
+from ...exceptions import RepositoryError
 
 
 logger = logging.getLogger(__name__)
@@ -19,10 +20,6 @@ class HasId(Protocol):
     id: Any
 
 ModelType = TypeVar('ModelType', bound=HasId)
-
-class RepositoryError(Exception):
-    """Custom exception for repository operations"""
-    pass
 
 class BaseRepository(ABC, Generic[ModelType]):
     """
@@ -55,9 +52,8 @@ class BaseRepository(ABC, Generic[ModelType]):
             
         try:
             with self.connection_manager.session_scope() as session:
-                return session.query(self.model_class).filter(
-                    self.model_class.id == id_value
-                ).first()
+                model = session.get(self.model_class, id_value)
+                return model                
                 
         except SQLAlchemyError as e:
             logger.error(f"Error getting {self.model_class.__name__} by ID {id_value}: {e}")

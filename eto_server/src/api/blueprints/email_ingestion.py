@@ -8,12 +8,12 @@ from pydantic import ValidationError
 import logging
 from typing import Dict, Any
 
-from api.schemas.email_ingestion import (
+from ..schemas.email_ingestion import (
     EmailConfigCreateRequest,
     EmailConfigSummaryResponse,
     EmailConfigActivateResponse
 )
-from api.schemas.common import APIResponse
+from ..schemas.common import APIResponse
 from shared.services import get_email_ingestion_service
 from shared.domain import EmailIngestionConnectionConfig, EmailIngestionConfigCreate, EmailFilterRule
 

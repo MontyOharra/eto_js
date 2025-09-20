@@ -10,19 +10,23 @@ from datetime import datetime
 @dataclass 
 class PdfFile:
     """PDF file domain object"""
-    id: Optional[int]
+    id: int
     email_id: Optional[int]  # Made optional for manual uploads
     filename: str
-    original_filename: str
     file_path: str
     file_size: int
     sha256_hash: str
     created_at: datetime
     updated_at: datetime
-    mime_type: str = 'application/pdf'
     page_count: Optional[int] = None
     object_count: Optional[int] = None
     objects_json: Optional[str] = None
+    
+@dataclass
+class PdfFileCreate:
+    """Domain object for creating PDF files (no ID)"""
+    email_id: Optional[int]
+    filename: str
 
 
 @dataclass
@@ -58,4 +62,3 @@ class PdfStoreRequest:
     original_filename: str
     email_id: Optional[int] = None  # None for manual/API uploads
     filename: Optional[str] = None  # Auto-generated if None
-    mime_type: str = 'application/pdf'

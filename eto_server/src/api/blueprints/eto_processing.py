@@ -9,7 +9,7 @@ from datetime import datetime
 import logging
 from typing import Dict, Any, Optional
 
-from api.schemas.eto_processing import (
+from ..schemas.eto_processing import (
     EtoRunListRequest,
     EtoRunListResponse,
     EtoRunSummary,
@@ -23,7 +23,7 @@ from api.schemas.eto_processing import (
     EtoStatisticsResponse,
     ProcessingStatistics
 )
-from api.schemas.common import APIResponse
+from ..schemas.common import APIResponse
 from shared.domain import EtoRun
 from shared.services import get_eto_processing_service, get_pdf_processing_service, get_email_ingestion_service
 
@@ -648,12 +648,67 @@ def assign_template_to_run(run_id: int):
 
 # === Batch Operations Endpoints ===
 
-@eto_processing_bp.route('/bulk-reprocess', methods=['POST'])
+@eto_processing_bp.route('/reprocess-all', methods=['POST'])
 @cross_origin()
-def bulk_reprocess_runs():
-    """Reprocess multiple failed ETO runs"""
-    # TODO: Implement bulk reprocessing logic
-    pass
+def reprocess_all_failed_runs():
+    """
+    Reprocess all ETO runs with status 'failure' or 'needs_template'
+
+    Resets them to 'not_started' status and clears processing fields,
+    allowing the continuous processing loop to pick them up again.
+
+    Returns:
+        JSON response with reprocessing results and statistics
+    """
+    try:
+        # Get ETO processing service
+        eto_service = get_eto_processing_service()
+        if not eto_service:
+            return jsonify({
+                "success": False,
+                "error": "ETO processing service not available",
+                "message": "ETO processing service is not available"
+            }), 500
+
+        # Execute bulk reprocessing
+        result = eto_service.reprocess_all_failed_runs()
+
+        if result['success']:
+            # Return success response with statistics
+            return jsonify({
+                "success": True,
+                "result": {
+                    "reprocessed": result['reprocessed'],
+                    "needs_template_count": result['breakdown']['needs_template_count'],
+                    "failure_count": result['breakdown']['failure_count'],
+                    "message": result['message']
+                }
+            }), 200
+        else:
+            # Return error response
+            return jsonify({
+                "success": False,
+                "result": {
+                    "reprocessed": 0,
+                    "needs_template_count": 0,
+                    "failure_count": 0,
+                    "error": result.get('error', 'Unknown error'),
+                    "message": result['message']
+                }
+            }), 500
+
+    except Exception as e:
+        logger.error(f"Error in reprocess_all_failed_runs endpoint: {e}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "result": {
+                "reprocessed": 0,
+                "needs_template_count": 0,
+                "failure_count": 0,
+                "error": str(e),
+                "message": "An unexpected error occurred while reprocessing runs"
+            }
+        }), 500
 
 
 @eto_processing_bp.route('/summary', methods=['GET'])

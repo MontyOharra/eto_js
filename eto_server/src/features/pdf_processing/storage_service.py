@@ -8,10 +8,10 @@ import os
 import re
 import tempfile
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
-from shared.database.repositories.pdf_repository import PdfRepository
+from eto_server.src.shared.database.repositories.pdf_file import PdfRepository
 
 from shared.domain import PdfStoreRequest, PdfFile
 
@@ -228,7 +228,7 @@ class PdfStorageService:
         Returns:
             str: Generated file path
         """
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         year = now.strftime("%Y")
         month = now.strftime("%m")
 

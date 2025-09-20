@@ -8,7 +8,7 @@ PIP = $(VENV_DIR)/Scripts/pip
 # Default target
 .DEFAULT_GOAL := help
 
-.PHONY: help setup dev clean install-deps create-dirs
+.PHONY: help setup dev clean install-deps create-dirs reset-all
 
 help: ## Show this help message
 	@echo "Available targets:"
@@ -56,3 +56,10 @@ test: setup ## Run tests (placeholder for future test implementation)
 
 lint: setup ## Run linting (placeholder for future linting implementation)
 	@echo "Lint target not yet implemented"
+
+reset-all: ## Reset database and clear storage/logs completely
+	@echo "Resetting database and clearing all data..."
+	@./scripts/database/manage-database.sh reset --confirm
+	@rm -rf logs/* storage/* || true
+	@mkdir -p logs storage
+	@echo "Database reset and storage/logs cleared successfully!"

@@ -39,10 +39,9 @@ from .pdf_processing import (
 
 from .pdf_template import (
     PdfTemplate,
-    TemplateMatchResult,
-    ExtractionField,
-    TemplateCreateRequest,
-    TemplateVersionRequest
+    PdfTemplateVersion,
+    PdfTemplateWithVersion,
+    PdfTemplateForProcessing,
 )
 
 __all__ = [
@@ -52,13 +51,6 @@ __all__ = [
     'EtoProcessingStep',
     'EtoErrorType',
 
-    # PDF Template Domain Types
-    'PdfTemplate',
-    'TemplateMatchResult',
-    'PdfObject',
-    'ExtractionField',
-    'TemplateCreateRequest',
-    'TemplateVersionRequest',
 
     # Email Ingestion Domain Types
     'EmailFilterRule',
@@ -87,8 +79,7 @@ __all__ = [
     
     # Pdf Template Domain Types
     'PdfTemplate',
-    'TemplateMatchResult',
-    'ExtractionField',
-    'TemplateCreateRequest',
-    'TemplateVersionRequest',
+    'PdfTemplateVersion',
+    'PdfTemplateWithVersion',
+    'PdfTemplateForProcessing',
 ]

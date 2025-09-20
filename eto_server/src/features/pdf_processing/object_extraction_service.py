@@ -102,42 +102,70 @@ class PdfObjectExtractionService:
             if line_obj:
                 objects.append(line_obj)
         
-        # Rectangles and lines
-        shapes = page.rects + page.lines + page.curves
-        for shape in shapes:
-            shape_obj = self._extract_shape_object(shape, page_num, page_height)
-            if shape_obj:
-                objects.append(shape_obj)
-        
+        # Rectangles
+        for rect in page.rects:
+            rect_obj = self._extract_rect_object(rect, page_num)
+            if rect_obj:
+                objects.append(rect_obj)
+
+        # Lines
+        for line in page.lines:
+            line_obj = self._extract_line_object(line, page_num)
+            if line_obj:
+                objects.append(line_obj)
+
+        # Curves
+        for curve in page.curves:
+            curve_obj = self._extract_curve_object(curve, page_num, page_height)
+            if curve_obj:
+                objects.append(curve_obj)
+
         # Images
-        images = page.images
-        for image in images:
-            image_obj = self._extract_image_object(image, page_num, page_height)
+        for image in page.images:
+            image_obj = self._extract_image_object(image, page_num)
             if image_obj:
                 objects.append(image_obj)
-        
+
+        # Tables - Enhanced with table structure
+        tables = page.extract_tables()
+        for i, table in enumerate(tables):
+            table_obj = self._extract_table_object(table, page, page_num, page_height, i)
+            if table_obj:
+                objects.append(table_obj)
+
         return objects
     
     def _extract_word_object(self, word: Dict, page_num: int, page_height: float) -> Optional[PdfObject]:
         """Extract word object with enhanced font details"""
         try:
+            x0, x1 = word.get('x0'), word.get('x1')
+
+            # Handle different coordinate systems like the working version
+            if 'y0' in word and 'y1' in word:
+                y0, y1 = word['y0'], word['y1']
+            elif 'top' in word and 'bottom' in word:
+                y0 = page_height - word['bottom']
+                y1 = page_height - word['top']
+            else:
+                return None
+
+            content = word.get('text', '').strip()
+            if not content or x0 is None or x1 is None or y0 is None or y1 is None:
+                return None
+
             return PdfObject(
                 type="word",
-                page=page_num + 1,
-                text=word.get('text', ''),
-                x=_round(word.get('x0', 0), self.rounding_precision),
-                y=_round(page_height - word.get('y1', 0), self.rounding_precision),  # Convert to top-down
-                width=_round(word.get('x1', 0) - word.get('x0', 0), self.rounding_precision),
-                height=_round(word.get('y1', 0) - word.get('y0', 0), self.rounding_precision),
+                page=page_num,  # Use 0-based page numbering like working version
+                text=content,
+                x=_round(x0, self.rounding_precision),
+                y=_round(y0, self.rounding_precision),
+                width=_round(x1 - x0, self.rounding_precision),
+                height=_round(y1 - y0, self.rounding_precision),
                 font_name=word.get('fontname', ''),
                 font_size=_round(word.get('size', 0), self.rounding_precision),
-                char_count=len(word.get('text', '')),
-                bbox=[
-                    _round(word.get('x0', 0), self.rounding_precision),
-                    _round(word.get('y0', 0), self.rounding_precision),
-                    _round(word.get('x1', 0), self.rounding_precision),
-                    _round(word.get('y1', 0), self.rounding_precision)
-                ]
+                char_count=len(content),
+                bbox=[_round(x0, self.rounding_precision), _round(y0, self.rounding_precision),
+                      _round(x1, self.rounding_precision), _round(y1, self.rounding_precision)]
             )
         except Exception as e:
             logger.debug(f"Error extracting word object: {e}")
@@ -146,70 +174,174 @@ class PdfObjectExtractionService:
     def _extract_text_line_object(self, line: Dict, page_num: int, page_height: float) -> Optional[PdfObject]:
         """Extract text line object with line characteristics"""
         try:
+            x0, x1 = line.get('x0'), line.get('x1')
+
+            # Handle different coordinate systems like the working version
+            if 'y0' in line and 'y1' in line:
+                y0, y1 = line['y0'], line['y1']
+            elif 'top' in line and 'bottom' in line:
+                y0 = page_height - line['bottom']
+                y1 = page_height - line['top']
+            else:
+                return None
+
+            content = line.get('text', '').strip()
+            if not content or x0 is None or x1 is None or y0 is None or y1 is None:
+                return None
+
             return PdfObject(
                 type="text_line",
-                page=page_num + 1,
-                text=line.get('text', ''),
-                x=_round(line.get('x0', 0), self.rounding_precision),
-                y=_round(page_height - line.get('y1', 0), self.rounding_precision),  # Convert to top-down
-                width=_round(line.get('x1', 0) - line.get('x0', 0), self.rounding_precision),
-                height=_round(line.get('y1', 0) - line.get('y0', 0), self.rounding_precision),
-                char_count=len(line.get('text', '')),
-                bbox=[
-                    _round(line.get('x0', 0), self.rounding_precision),
-                    _round(line.get('y0', 0), self.rounding_precision),
-                    _round(line.get('x1', 0), self.rounding_precision),
-                    _round(line.get('y1', 0), self.rounding_precision)
-                ]
+                page=page_num,  # Use 0-based page numbering like working version
+                text=content,
+                x=_round(x0, self.rounding_precision),
+                y=_round(y0, self.rounding_precision),
+                width=_round(x1 - x0, self.rounding_precision),
+                height=_round(y1 - y0, self.rounding_precision),
+                char_count=len(content),
+                bbox=[_round(x0, self.rounding_precision), _round(y0, self.rounding_precision),
+                      _round(x1, self.rounding_precision), _round(y1, self.rounding_precision)]
             )
         except Exception as e:
             logger.debug(f"Error extracting text line object: {e}")
             return None
     
-    def _extract_shape_object(self, shape: Dict, page_num: int, page_height: float) -> Optional[PdfObject]:
-        """Extract shape object (rectangle, line, curve)"""
-        try:
-            object_type = shape.get('object_type', 'shape')
-            if object_type in ['rect', 'line', 'curve']:
-                return PdfObject(
-                    type=object_type,
-                    page=page_num + 1,
-                    text="",  # Shapes don't have text content
-                    x=_round(shape.get('x0', 0), self.rounding_precision),
-                    y=_round(page_height - shape.get('y1', 0), self.rounding_precision),  # Convert to top-down
-                    width=_round(shape.get('x1', 0) - shape.get('x0', 0), self.rounding_precision),
-                    height=_round(shape.get('y1', 0) - shape.get('y0', 0), self.rounding_precision),
-                    bbox=[
-                        _round(shape.get('x0', 0), self.rounding_precision),
-                        _round(shape.get('y0', 0), self.rounding_precision),
-                        _round(shape.get('x1', 0), self.rounding_precision),
-                        _round(shape.get('y1', 0), self.rounding_precision)
-                    ]
-                )
-        except Exception as e:
-            logger.debug(f"Error extracting shape object: {e}")
-            return None
-    
-    def _extract_image_object(self, image: Dict, page_num: int, page_height: float) -> Optional[PdfObject]:
-        """Extract image object"""
+    def _extract_rect_object(self, rect: Dict, page_num: int) -> Optional[PdfObject]:
+        """Extract rectangle object"""
         try:
             return PdfObject(
+                type='rect',
+                page=page_num,
+                text="",
+                x=_round(rect['x0'], self.rounding_precision),
+                y=_round(rect['y0'], self.rounding_precision),
+                width=_round(rect['x1'] - rect['x0'], self.rounding_precision),
+                height=_round(rect['y1'] - rect['y0'], self.rounding_precision),
+                bbox=[_round(rect['x0'], self.rounding_precision), _round(rect['y0'], self.rounding_precision),
+                      _round(rect['x1'], self.rounding_precision), _round(rect['y1'], self.rounding_precision)]
+            )
+        except Exception as e:
+            logger.debug(f"Error extracting rect object: {e}")
+            return None
+
+    def _extract_line_object(self, line: Dict, page_num: int) -> Optional[PdfObject]:
+        """Extract graphic line object with enhanced properties like working version"""
+        try:
+            x0, y0 = min(line['x0'], line['x1']), min(line['y0'], line['y1'])
+            x1, y1 = max(line['x0'], line['x1']), max(line['y0'], line['y1'])
+
+            # Add padding for better selection like working version
+            padding = 2
+            bbox = [x0 - padding, y0 - padding, x1 + padding, y1 + padding]
+
+            return PdfObject(
+                type='line',  # Keep as 'line' to match domain object
+                page=page_num,
+                text="",
+                x=_round(x0, self.rounding_precision),
+                y=_round(y0, self.rounding_precision),
+                width=_round(x1 - x0, self.rounding_precision),
+                height=_round(y1 - y0, self.rounding_precision),
+                bbox=[_round(coord, self.rounding_precision) for coord in bbox]
+            )
+        except Exception as e:
+            logger.debug(f"Error extracting line object: {e}")
+            return None
+
+    def _extract_curve_object(self, curve: Dict, page_num: int, page_height: float) -> Optional[PdfObject]:
+        """Extract curve object with enhanced geometry like working version"""
+        try:
+            if 'pts' not in curve or not curve['pts']:
+                return None
+
+            # Flip y-coordinates like in working version
+            flipped_pts = [(_round(pt[0], self.rounding_precision), _round(page_height - pt[1], self.rounding_precision)) for pt in curve['pts']]
+            x_coords = [pt[0] for pt in flipped_pts]
+            y_coords = [pt[1] for pt in flipped_pts]
+            x0, x1 = min(x_coords), max(x_coords)
+            y0, y1 = min(y_coords), max(y_coords)
+
+            return PdfObject(
+                type='curve',
+                page=page_num,
+                text="",
+                x=_round(x0, self.rounding_precision),
+                y=_round(y0, self.rounding_precision),
+                width=_round(x1 - x0, self.rounding_precision),
+                height=_round(y1 - y0, self.rounding_precision),
+                bbox=[_round(x0, self.rounding_precision), _round(y0, self.rounding_precision),
+                      _round(x1, self.rounding_precision), _round(y1, self.rounding_precision)]
+            )
+        except Exception as e:
+            logger.debug(f"Error extracting curve object: {e}")
+            return None
+    
+    def _extract_image_object(self, image: Dict, page_num: int) -> Optional[PdfObject]:
+        """Extract image object"""
+        try:
+            x0, x1 = image.get('x0'), image.get('x1')
+            y0, y1 = image.get('y0'), image.get('y1')
+
+            if x0 is None or x1 is None or y0 is None or y1 is None:
+                return None
+
+            return PdfObject(
                 type="image",
-                page=page_num + 1,
-                text="",  # Images don't have text content
-                x=_round(image.get('x0', 0), self.rounding_precision),
-                y=_round(page_height - image.get('y1', 0), self.rounding_precision),  # Convert to top-down
-                width=_round(image.get('x1', 0) - image.get('x0', 0), self.rounding_precision),
-                height=_round(image.get('y1', 0) - image.get('y0', 0), self.rounding_precision),
-                bbox=[
-                    _round(image.get('x0', 0), self.rounding_precision),
-                    _round(image.get('y0', 0), self.rounding_precision),
-                    _round(image.get('x1', 0), self.rounding_precision),
-                    _round(image.get('y1', 0), self.rounding_precision)
-                ]
+                page=page_num,
+                text="",
+                x=_round(x0, self.rounding_precision),
+                y=_round(y0, self.rounding_precision),
+                width=_round(x1 - x0, self.rounding_precision),
+                height=_round(y1 - y0, self.rounding_precision),
+                bbox=[_round(x0, self.rounding_precision), _round(y0, self.rounding_precision),
+                      _round(x1, self.rounding_precision), _round(y1, self.rounding_precision)]
             )
         except Exception as e:
             logger.debug(f"Error extracting image object: {e}")
+            return None
+
+    def _extract_table_object(self, table: list, page, page_num: int, page_height: float, table_index: int) -> Optional[PdfObject]:
+        """Extract table object with enhanced structure analysis like working version"""
+        try:
+            if not table:
+                return None
+
+            # Default bbox
+            table_bbox = [_round(coord, self.rounding_precision) for coord in page.bbox]
+
+            # Try to get actual table bbox like in working version
+            try:
+                table_finder = page.debug_tablefinder()
+                if hasattr(table_finder, 'tables') and table_finder.tables:
+                    if table_index < len(table_finder.tables):
+                        table_obj = table_finder.tables[table_index]
+                        if hasattr(table_obj, 'bbox'):
+                            tb = table_obj.bbox
+                            if tb[1] < tb[3]:
+                                y0_flipped = _round(page_height - tb[3], self.rounding_precision)
+                                y1_flipped = _round(page_height - tb[1], self.rounding_precision)
+                                table_bbox = [_round(tb[0], self.rounding_precision), y0_flipped,
+                                            _round(tb[2], self.rounding_precision), y1_flipped]
+                            else:
+                                table_bbox = [_round(coord, self.rounding_precision) for coord in tb]
+            except Exception:
+                pass
+
+            # Analyze table structure
+            rows = len(table)
+            cols = len(table[0]) if table else 0
+
+            return PdfObject(
+                type='table',
+                page=page_num,
+                text="",  # Tables don't have simple text content
+                x=_round(table_bbox[0], self.rounding_precision),
+                y=_round(table_bbox[1], self.rounding_precision),
+                width=_round(table_bbox[2] - table_bbox[0], self.rounding_precision),
+                height=_round(table_bbox[3] - table_bbox[1], self.rounding_precision),
+                bbox=table_bbox
+            )
+        except Exception as e:
+            logger.debug(f"Error extracting table object: {e}")
             return None
     
     def _generate_signature_hash(self, objects: List[PdfObject]) -> str:

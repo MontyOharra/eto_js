@@ -7,7 +7,7 @@ from flask_cors import cross_origin
 import logging
 from datetime import datetime
 
-from api.schemas.common import HealthCheck
+from ..schemas.common import HealthCheck
 from shared.services import ServiceContainer
 
 logger = logging.getLogger(__name__)
