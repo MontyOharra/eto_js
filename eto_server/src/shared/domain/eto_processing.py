@@ -50,9 +50,3 @@ class EtoRun:
 
     # Order integration
     order_id: Optional[int]
-    
-
-@dataclass
-class EtoRunCreate:
-    """Domain object for creating ETO runs (no ID)"""
-    pdf_file_id: int

@@ -461,7 +461,7 @@ class OutlookComService:
 
             discovered_emails = []
 
-            # Get all accounts
+            assert self.namespace is not None
             logger.info(f"OutlookComService: Found {self.namespace.Accounts.Count} total Outlook accounts")
 
             for i, account in enumerate(self.namespace.Accounts):

@@ -22,12 +22,6 @@ class PdfFile:
     object_count: Optional[int] = None
     objects_json: Optional[str] = None
     
-@dataclass
-class PdfFileCreate:
-    """Domain object for creating PDF files (no ID)"""
-    email_id: Optional[int]
-    filename: str
-
 
 @dataclass
 class PdfObject:
@@ -55,10 +49,3 @@ class PdfObjectExtractionResult:
     object_count: int
     error_message: Optional[str] = None
     
-    
-@dataclass
-class PdfStoreRequest:
-    """Domain object for storing any PDF (email, manual, API)"""
-    original_filename: str
-    email_id: Optional[int] = None  # None for manual/API uploads
-    filename: Optional[str] = None  # Auto-generated if None

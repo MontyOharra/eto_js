@@ -4,13 +4,20 @@ Common utility functions and helpers for the ETO server
 """
 
 from .storage_config import get_storage_configuration, get_fallback_storage
-from .service_registry import get_service, require_service, is_service_available, ServiceNames
+from ..services.service_container import (
+  ServiceContainer, get_pdf_processing_service, get_email_ingestion_service, 
+  get_eto_processing_service, get_pdf_template_service, get_connection_manager, 
+  is_service_container_initialized
+)
 
 __all__ = [
     'get_storage_configuration',
     'get_fallback_storage',
-    'get_service',
-    'require_service',
-    'is_service_available',
-    'ServiceNames'
+    'ServiceContainer',
+    'get_pdf_processing_service',
+    'get_email_ingestion_service',
+    'get_eto_processing_service',
+    'get_pdf_template_service',
+    'get_connection_manager',
+    'is_service_container_initialized'
 ]

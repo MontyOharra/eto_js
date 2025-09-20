@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import func, case
 
-from eto_server.src.shared.database.repositories.base import BaseRepository
+from shared.database.repositories.base import BaseRepository
 from shared.exceptions import RepositoryError, ObjectNotFoundError, ValidationError
 from shared.database.models import EtoRunModel
 from shared.domain import EtoRun, EtoRunStatus, EtoProcessingStep, EtoErrorType
@@ -57,7 +57,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
         }
         return EtoRun(**eto_run_data)
     
-    def create(self, eto_run_data: EtoRunCreate) -> EtoRun:
+    def create(self, eto_run_data: Dict[str, Any]) -> EtoRun:
         """Create a new ETO run record"""
         if not eto_run_data:
             raise ValueError("ETO run data dictionary cannot be empty")
@@ -76,6 +76,11 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                 
                 # Convert to domain object before session closes
                 domain_run = self._convert_to_domain_object(model)
+                return domain_run
+                
+        except SQLAlchemyError as e:  
+            logger.error(f"Error creating ETO run: {e}")
+            raise RepositoryError(f"Failed to create ETO run: {e}") from e
 
     def get_by_id(self, id: int) -> Optional[EtoRun]:
         """Override BaseRepository method to return domain object"""
@@ -237,7 +242,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                 
                 if not model:
                     return None
-                if model.getattr(model, "status") != "processing":
+                if getattr(model, "status") != "processing":
                     raise RepositoryError(f"Cannot update processing_step for eto_run: {id}. Status must be 'processing'")         
 
                 setattr(model, "processing_step", processing_step)
@@ -274,8 +279,8 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                 if not model:
                     return None
 
-                setattr(model, "matched_template_id", template_id)
-                setattr(model, "matched_template_version", template_version_id)
+                setattr(model, "matched_template_id", id)
+                setattr(model, "matched_template_version", id)
                 
                 return self._convert_to_domain_object(model)
             
@@ -494,11 +499,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
 
                     # Template Matching Results
                     self.model_class.matched_template_id: None,
-                    self.model_class.template_version: None,
-                    self.model_class.template_match_coverage: None,
-                    self.model_class.unmatched_object_count: None,
-                    self.model_class.suggested_new_template: None,
-
+                    self.model_class.matched_template_version: None,
                     # Data Processing Results
                     self.model_class.extracted_data: None,
                     self.model_class.transformation_audit: None,

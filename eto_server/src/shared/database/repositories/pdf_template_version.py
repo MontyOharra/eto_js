@@ -49,7 +49,6 @@ class PdfTemplateVersionRepository(BaseRepository[PdfTemplateVersionModel]):
         extraction_fields: List[ExtractionField]
     ) -> PdfTemplateVersion:
         """Create a new PDF template version"""
-
         try:
             with self.connection_manager.session_scope() as session:
                 # Convert domain objects to JSON strings for database storage

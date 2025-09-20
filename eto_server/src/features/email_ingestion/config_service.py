@@ -6,7 +6,7 @@ import json
 import logging
 from typing import Dict, List, Any, Optional
 
-from shared.domain import EmailIngestionConfig, EmailIngestionConfigCreate, EmailFilterRule
+from shared.domain import EmailIngestionConfig, EmailFilterRule
 from shared.database.repositories import EmailIngestionConfigRepository
 
 logger = logging.getLogger(__name__)
@@ -21,6 +21,15 @@ class EmailIngestionConfigService:
 
     # === High-Level API Methods ===
     def create_config(self, config_create: EmailIngestionConfigCreate) -> EmailIngestionConfig:
+      
+    def create_config(self,
+      name: str,
+      description: Optional[str],
+      email_address: str,
+      folder_name: str,
+      filter_rules: List[EmailFilterRule],
+                      
+    ) 
         """Create new email ingestion config from creation domain object"""
         try:
             self.logger.debug(f"Creating new email config: {config_create.name}")
@@ -48,7 +57,6 @@ class EmailIngestionConfigService:
                 "error_retry_attempts": config_create.error_retry_attempts,
                 "is_active": False,  # New configs start inactive
                 "is_running": False,
-                "created_by": config_create.created_by,
                 "emails_processed": 0,
                 "pdfs_found": 0
             })

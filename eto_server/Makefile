@@ -8,7 +8,7 @@ PIP = $(VENV_DIR)/Scripts/pip
 # Default target
 .DEFAULT_GOAL := help
 
-.PHONY: help setup dev clean install-deps create-dirs reset-all
+.PHONY: help setup dev dev-flask clean install-deps create-dirs reset-all
 
 help: ## Show this help message
 	@echo "Available targets:"
@@ -21,20 +21,22 @@ $(VENV_DIR): ## Create virtual environment
 install-deps: $(VENV_DIR) requirements.txt ## Install Python dependencies from requirements.txt
 	$(PYTHON) -m pip install --upgrade pip
 	$(PIP) install -r requirements.txt
-	@touch install-deps
 	@echo "Dependencies installed"
 
 create-dirs: ## Create necessary directories (logs, storage)
 	@mkdir -p logs storage
-	@touch create-dirs
 	@echo "Directories created: logs/, storage/"
 
 setup: install-deps create-dirs ## Complete development setup (install deps + create dirs)
 	@echo "Development environment setup complete!"
 	@echo "Run 'make dev' to start the development server"
 
-dev: $(VENV_DIR) logs storage ## Start development server (setup only if needed)
-	@echo "Starting ETO development server..."
+dev: $(VENV_DIR) logs storage ## Start FastAPI development server (setup only if needed)
+	@echo "Starting ETO FastAPI development server..."
+	set DEBUG=true && set RELOAD=false && $(PYTHON) main.py
+
+dev-flask: $(VENV_DIR) logs storage ## Start Flask development server (legacy)
+	@echo "Starting ETO Flask development server..."
 	set FLASK_ENV=development && set DEBUG=true && $(PYTHON) main.py
 
 logs:
@@ -50,12 +52,6 @@ clean-data: ## Clean up logs and storage data (keep venv)
 clean: ## Clean up virtual environment and generated files
 	@rm -rf $(VENV_DIR) logs storage
 	@echo "Cleaned up virtual environment and directories"
-
-test: setup ## Run tests (placeholder for future test implementation)
-	@echo "Test target not yet implemented"
-
-lint: setup ## Run linting (placeholder for future linting implementation)
-	@echo "Lint target not yet implemented"
 
 reset-all: ## Reset database and clear storage/logs completely
 	@echo "Resetting database and clearing all data..."

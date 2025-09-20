@@ -5,9 +5,7 @@ Central location for all domain objects used across features
 
 from .email_ingestion import (
     EmailFilterRule,
-    EmailIngestionConfigCreate,
     EmailIngestionConfig,
-    EmailIngestionCursorCreate,
     EmailIngestionCursor,
     EmailIngestionCursorStatistics,
     EmailIngestionConnectionConfig,
@@ -16,11 +14,7 @@ from .email_ingestion import (
     EmailData,
     EmailIngestionStats,
     EmailServiceHealth,
-    EmailCreate,
     Email,
-    EmailServiceStartResponse,
-    EmailServiceStopResponse,
-    EmailServiceStatusResponse,
 )
 
 from .eto_processing import (
@@ -34,14 +28,12 @@ from .pdf_processing import (
     PdfFile,
     PdfObject,
     PdfObjectExtractionResult,
-    PdfStoreRequest,
 )
 
 from .pdf_template import (
     PdfTemplate,
     PdfTemplateVersion,
-    PdfTemplateWithVersion,
-    PdfTemplateForProcessing,
+    ExtractionField
 )
 
 __all__ = [
@@ -54,9 +46,7 @@ __all__ = [
 
     # Email Ingestion Domain Types
     'EmailFilterRule',
-    'EmailIngestionConfigCreate',
     'EmailIngestionConfig',
-    'EmailIngestionCursorCreate',
     'EmailIngestionCursor',
     'EmailIngestionCursorStatistics',
     'EmailIngestionConnectionConfig',
@@ -65,21 +55,13 @@ __all__ = [
     'EmailData',
     'EmailIngestionStats',
     'EmailServiceHealth',
-    'EmailCreate',
     'Email',
-    'EmailServiceStartResponse',
-    'EmailServiceStopResponse',
-    'EmailServiceStatusResponse',
-
     # Pdf Processing Domain Types
     'PdfObject',
-    'PdfStoreRequest',
     'PdfObjectExtractionResult',
     'PdfFile',
     
     # Pdf Template Domain Types
     'PdfTemplate',
     'PdfTemplateVersion',
-    'PdfTemplateWithVersion',
-    'PdfTemplateForProcessing',
 ]

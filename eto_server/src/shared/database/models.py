@@ -58,7 +58,6 @@ class EmailIngestionConfigModel(BaseModel):
     is_running: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Audit fields
-    created_by: Mapped[str] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
     last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
@@ -183,7 +182,7 @@ class PdfTemplateModel(BaseModel):
     description: Mapped[Optional[str]] = mapped_column(Text)
     pdf_id: Mapped[int] = mapped_column(ForeignKey('pdf_files.id'), index=True)
     status: Mapped[str] = mapped_column(String(50), default='active')
-    current_version_id: Mapped[Optional[int]] = mapped_column(ForeignKey('pdf_template_versions.id'), Integer, default=None)
+    current_version_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('pdf_template_versions.id'), default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
 

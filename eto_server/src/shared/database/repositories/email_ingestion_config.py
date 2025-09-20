@@ -53,7 +53,6 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
             'error_retry_attempts': getattr(config_model, 'error_retry_attempts'),
             'is_active': getattr(config_model, 'is_active'),
             'is_running': getattr(config_model, 'is_running'),
-            'created_by': getattr(config_model, 'created_by'),
             'created_at': getattr(config_model, 'created_at'),
             'updated_at': getattr(config_model, 'updated_at'),
             'last_used_at': getattr(config_model, 'last_used_at'),

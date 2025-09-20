@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 """
-Unified ETO Server - Main Entry Point
-Starts the Flask application with all services
+Unified ETO Server - FastAPI Main Entry Point
+Starts the FastAPI application with all services using uvicorn
 """
 import os
 import sys
 import logging
 from dotenv import load_dotenv
+import uvicorn
 
 # Add both src and current directory to Python path for proper module resolution
 src_path = os.path.join(os.path.dirname(__file__), 'src')
 sys.path.insert(0, src_path)
 sys.path.insert(0, os.path.dirname(__file__))
 
-from src.app import create_app
-
 load_dotenv()
+
 
 def get_log_level() -> int:
     """Get logging level from environment variable"""
@@ -29,49 +29,76 @@ def get_log_level() -> int:
     }
     return level_mapping.get(log_level, logging.INFO)
 
-logging.basicConfig(
-    level=get_log_level(),
-    format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
-    handlers=[
-        logging.FileHandler('logs/eto_server.log'),
-        logging.StreamHandler()
-    ]
-)
 
-logger = logging.getLogger(__name__)
+def setup_logging():
+    """Setup logging configuration"""
+    # Ensure logs directory exists
+    os.makedirs('logs', exist_ok=True)
+
+    logging.basicConfig(
+        level=get_log_level(),
+        format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
+        handlers=[
+            logging.FileHandler('logs/eto_server_fastapi.log'),
+            logging.StreamHandler()
+        ]
+    )
 
 
 def main():
-    """Main entry point for the ETO Server"""
+    """Main entry point for the FastAPI ETO Server"""
+    setup_logging()
+    logger = logging.getLogger(__name__)
+
     try:
-        logger.info("Starting Unified ETO Server...")
-        
+        logger.info("Starting Unified ETO Server (FastAPI)...")
+
         # Get configuration from environment
-        config_name = os.getenv('FLASK_ENV', 'development')
-        app = create_app(config_name)
-        
-        # Get port from environment or default to 8080
         port = int(os.getenv('PORT', 8080))
         host = os.getenv('HOST', '0.0.0.0')
         debug = os.getenv('DEBUG', 'false').lower() == 'true'
-        
-        logger.info(f"Server starting on {host}:{port} (config: {config_name})")
-        
+        reload = os.getenv('RELOAD', str(debug)).lower() == 'true'
+        workers = int(os.getenv('WORKERS', 1))
+
+        logger.info(f"Server starting on {host}:{port}")
+
         if debug:
             logger.warning("Running in DEBUG mode - not suitable for production!")
-        
-        # Start the Flask application
-        app.run(
-            host=host,
-            port=port,
-            debug=debug,
-            threaded=True,  # Enable threading for concurrent requests
-            use_reloader=False  # Disable reloader in production
-        )
-        
+
+        if workers > 1 and reload:
+            logger.warning("Running with multiple workers and reload enabled - disabling reload")
+            reload = False
+
+        # Configure uvicorn settings
+        uvicorn_config = {
+            "app": "src.app:create_app",
+            "factory": True,
+            "host": host,
+            "port": port,
+            "reload": reload,
+            "log_level": "debug" if debug else "info",
+            "access_log": True,
+            "use_colors": True,
+            "loop": "auto",
+            "reload_delay": 1.0,  # Delay between reload checks
+            "reload_excludes": ["*.log", "*.pyc", "__pycache__", ".git"],  # Exclude files that trigger reload
+        }
+
+        # Add workers only in production (no reload)
+        if not reload and workers > 1:
+            uvicorn_config["workers"] = workers
+            logger.info(f"Starting with {workers} workers")
+
+        # Start the FastAPI application with uvicorn
+        logger.info("Starting uvicorn server...")
+        uvicorn.run(**uvicorn_config)
+
+    except KeyboardInterrupt:
+        logger.info("Server stopped by user")
     except Exception as e:
         logger.error(f"Failed to start ETO Server: {e}")
         sys.exit(1)
+
 
 if __name__ == '__main__':
     main()

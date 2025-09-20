@@ -11,7 +11,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
-from eto_server.src.shared.database.repositories.pdf_file import PdfRepository
+from shared.database.repositories.pdf_file import PdfRepository
 
 from shared.domain import PdfStoreRequest, PdfFile
 

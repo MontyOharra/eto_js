@@ -27,45 +27,6 @@ class PdfTemplateVersion:
     last_used_at: Optional[datetime]
     created_at: Optional[datetime]
 
-
-@dataclass
-class PdfTemplateWithVersion:
-    """PDF template with current version information combined"""
-    id: int
-    name: str
-    description: Optional[str]
-    pdf_id: int
-    status: str
-    current_version_id: Optional[int]
-    created_at: datetime
-    updated_at: datetime
-    # Current version details (None if no current version)
-    current_version: Optional[PdfTemplateVersion] = None
-
-
-@dataclass
-class PdfTemplateForProcessing:
-    """Flattened PDF template data optimized for ETO processing (matching and extraction)"""
-    # Template identification
-    template_id: int
-    template_name: str
-    template_status: str
-    pdf_id: int
-
-    # Version identification
-    version_id: int
-    version_number: int
-
-    # Core processing data (flattened from version)
-    signature_objects: str  # JSON string for matching
-    signature_object_count: int
-    extraction_fields: str  # JSON string for data extraction
-
-    # Usage tracking
-    usage_count: int
-    last_used_at: Optional[datetime]
-
-
 @dataclass
 class ExtractionField:
     """Field definition for data extraction from PDFs"""

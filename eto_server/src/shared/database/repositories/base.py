@@ -8,8 +8,8 @@ from typing import Optional, List, Dict, Any, Type, TypeVar, Generic, Protocol
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
-from ..connection import DatabaseConnectionManager
-from ...exceptions import RepositoryError
+from shared.database.connection import DatabaseConnectionManager
+from shared.exceptions import RepositoryError
 
 
 logger = logging.getLogger(__name__)

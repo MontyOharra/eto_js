@@ -14,22 +14,6 @@ class EmailFilterRule:
     value: str
     case_sensitive: bool = False
 
-
-@dataclass
-class EmailIngestionConfigCreate:
-    """Domain object for creating email configs (no ID)"""
-    name: str
-    description: Optional[str]
-    email_address: Optional[str]  # None = default account
-    folder_name: str
-    filter_rules: List[EmailFilterRule]
-    created_by: str
-    # Optional fields (with defaults)
-    poll_interval_seconds: int = 5
-    max_backlog_hours: int = 24
-    error_retry_attempts: int = 3
-
-
 @dataclass
 class EmailIngestionConfig:
     """Email ingestion config domain object"""
@@ -40,7 +24,6 @@ class EmailIngestionConfig:
     email_address: Optional[str]  # None = default account
     folder_name: str
     filter_rules: List[EmailFilterRule]
-    created_by: str
     created_at: datetime
     updated_at: datetime
     
@@ -57,18 +40,6 @@ class EmailIngestionConfig:
     last_error_at: Optional[datetime]
 
 # === Email Processing Types ===
-
-@dataclass
-class EmailIngestionCursorCreate:
-    """Domain object for creating email cursors (no ID)"""
-    email_address: str
-    folder_name: str
-    last_processed_message_id: Optional[str] = None
-    last_processed_received_date: Optional[datetime] = None
-    last_check_time: Optional[datetime] = None
-    total_emails_processed: int = 0
-    total_pdfs_found: int = 0
-
 
 @dataclass
 class EmailIngestionCursor:
@@ -167,19 +138,6 @@ class EmailServiceHealth:
 
 
 @dataclass
-class EmailCreate:
-    """Domain object for creating email records (no ID)"""
-    message_id: str
-    subject: str
-    sender_email: str
-    sender_name: Optional[str]
-    received_date: datetime
-    folder_name: str
-    has_pdf_attachments: bool
-    attachment_count: int
-
-
-@dataclass
 class Email:
     """Email domain object (with ID and timestamps)"""
     id: int
@@ -192,48 +150,3 @@ class Email:
     has_pdf_attachments: bool
     attachment_count: int
     created_at: datetime
-
-
-@dataclass
-class EtoRunCreate:
-    """Domain object for creating ETO runs (no ID)"""
-    email_id: int
-    pdf_file_id: int
-    status: str = 'not_started'
-
-
-@dataclass
-class EmailServiceStartResponse:
-    """Response for service start operations"""
-    success: bool
-    message: str
-    is_running: bool
-    config_name: Optional[str] = None
-    config_id: Optional[int] = None
-    folder_name: Optional[str] = None
-    cursor_id: Optional[int] = None
-    is_connected: bool = False
-
-
-@dataclass
-class EmailServiceStopResponse:
-    """Response for service stop operations"""
-    success: bool
-    message: str
-    is_running: bool
-    is_connected: bool = False
-    warning: Optional[str] = None
-
-
-@dataclass
-class EmailServiceStatusResponse:
-    """Response for service status queries"""
-    is_running: bool
-    is_connected: bool
-    current_config: Optional[str]
-    current_config_details: Optional[EmailConfigSummary]
-    connection_status: EmailServiceConnectionStatus
-    stats: EmailIngestionStats
-    health: EmailServiceHealth
-
-
