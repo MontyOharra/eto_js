@@ -5,6 +5,38 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-09-20 Session] — Complete PDF Template Versioning System & FastAPI Migration Implementation
+### Spec / Intent
+- Implement comprehensive PDF template versioning functionality with modern SQLAlchemy 2.0 patterns
+- Create complete FastAPI alternative to Flask application for better type safety and automatic validation
+- Modernize exception handling throughout repository layer with specific exception types
+- Solve Flask query parameter type conversion issues with FastAPI's automatic type handling
+- Establish foundation for gradual migration from Flask to FastAPI while maintaining coexistence
+
+### Changes Made
+- **Database Modernization**: Updated all models to SQLAlchemy 2.0 `Mapped`/`mapped_column` notation, implemented circular FK relationships between templates/versions with timezone-aware datetime handling
+- **Repository Refactoring**: Created comprehensive exception hierarchy (`ObjectNotFoundError`, `ValidationError`, etc.) and updated all repositories to use specific exceptions instead of Optional returns
+- **PDF Template System**: Built complete versioning system with `PdfTemplateModel`, `PdfTemplateVersionModel`, domain object conversion using `__dict__` serialization, and optimized `PdfTemplateForProcessing` type
+- **API Development**: Created comprehensive Pydantic v2 request/response schemas, implemented complete CRUD endpoints with automatic validation, established REST conventions with proper error handling
+- **FastAPI Implementation**: Built `app-fastapi.py` with lifespan management and dependency injection, created `main-fastapi.py` with uvicorn configuration, converted PDF templates blueprint to FastAPI router demonstrating automatic validation and type-safe query parameters
+- Files: 35+ modified, 8 new files including complete FastAPI application, router example, and migration documentation
+
+### Next Actions
+- Complete service implementation for PDF template TODO placeholders
+- Convert remaining Flask blueprints to FastAPI routers (health, email_ingestion, eto_processing, pdf_viewing)
+- Test both Flask and FastAPI versions side by side during gradual migration
+- Implement async service layer for FastAPI performance benefits
+
+### Notes
+- **FastAPI Benefits**: Automatic request/response validation, type-safe query parameters solving Flask string conversion issues, auto-generated OpenAPI docs, better async support and performance
+- **Architecture**: Parameter-based service calls, exception-based error handling, SQLAlchemy 2.0 modernization, Pydantic v2 validation patterns
+- **Migration Strategy**: Both Flask and FastAPI can coexist, gradual endpoint conversion, same database models and service layer
+- **Query Parameter Solution**: FastAPI automatically converts query parameters to correct types with validation, eliminating manual string-to-int conversion issues
+- **Documentation**: Comprehensive `FASTAPI_MIGRATION.md` with code comparisons and migration guide
+- **Status**: All changes committed (460c380), ready for service implementation or continued FastAPI migration
+
+---
+
 ## [2025-09-19 11:45] — Fix Datetime Timezone Inconsistency in ETO Processing
 ### Spec / Intent
 - Fix "can't subtract offset-naive and offset-aware datetimes" error preventing ETO run completion

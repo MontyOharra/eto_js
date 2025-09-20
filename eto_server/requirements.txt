@@ -1,6 +1,10 @@
-# Web Framework
+# Web Framework - Flask (original)
 Flask==3.0.3
 Flask-CORS==4.0.1
+
+# Web Framework - FastAPI (alternative)
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
 
 # Database
 sqlalchemy==2.0.36
