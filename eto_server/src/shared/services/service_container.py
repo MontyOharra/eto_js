@@ -26,6 +26,7 @@ class ServiceContainer:
             cls._instance.eto_service = None
             cls._instance.pdf_template_service = None
             cls._instance.email_config_service = None
+            cls._instance.email_ingestion_service = None
             logger.info("ServiceContainer singleton instance created - services not yet initialized")
         return cls._instance
 
@@ -69,11 +70,11 @@ class ServiceContainer:
             self.pdf_template_service = PdfTemplateService(connection_manager)
             logger.debug("PDF template service initialized")
 
-            # Initialize email ingestion service
-            self.email_service = EmailIngestionService(connection_manager)
-            logger.debug("Email ingestion service initialized")
+            # Initialize email ingestion service (with multi-config support)
+            self.email_ingestion_service = EmailIngestionService(connection_manager)
+            logger.debug("Email ingestion service initialized with multi-config support")
             
-            # Initialize email config service
+            # Initialize email config service (separate for clean architecture)
             email_config_repo = EmailIngestionConfigRepository(connection_manager)
             self.email_config_service = EmailIngestionConfigService(email_config_repo)
             logger.debug("Email config service initialized")
@@ -107,12 +108,12 @@ class ServiceContainer:
             raise RuntimeError("PDF processing service not available - application initialization failed")
         return self.pdf_service
 
-    def get_email_service(self):
+    def get_email_ingestion_service(self):
         """Get email ingestion service - guaranteed to return valid service or crash"""
-        if not self.email_service:
-            logger.error("Email service not initialized - ServiceContainer.initialize() was not called")
+        if not self.email_ingestion_service:
+            logger.error("Email ingestion service not initialized - ServiceContainer.initialize() was not called")
             raise RuntimeError("Email ingestion service not available - application initialization failed")
-        return self.email_service
+        return self.email_ingestion_service
 
     def get_eto_service(self):
         """Get ETO processing service - guaranteed to return valid service or crash"""
@@ -168,7 +169,7 @@ def get_pdf_processing_service():
 
 def get_email_ingestion_service():
     """Get email ingestion service - global access function"""
-    return _get_container().get_email_service()
+    return _get_container().get_email_ingestion_service()
 
 
 def get_eto_processing_service():

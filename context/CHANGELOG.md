@@ -5,6 +5,38 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-09-21 21:00] — Multi-Config Email Service Architecture Redesign
+### Spec / Intent
+- Redesign email services to support multiple concurrent email configurations
+- Separate EmailConfigService (CRUD) from EmailIngestionService (runtime orchestration)
+- Implement cursor-per-config model with foreign key relationship
+- Create clean service boundaries with proper dependency injection
+- Enable multiple email listeners running simultaneously in separate threads
+
+### Changes Made
+- **Email Ingestion Service**: Complete rewrite with multi-config support - manages multiple EmailListener instances with per-config threads, cursor lifecycle management, activate/deactivate/restart methods
+- **Cursor Service**: New internal service for cursor management tied to configs, get_or_create pattern, statistics tracking per configuration
+- **API Router Orchestration**: Router coordinates between ConfigService and IngestionService, handles transactional operations (rollback on failure), real-time status from running listeners
+- **Database Schema**: Added config_id foreign key to cursors table, one-to-one relationship between configs and cursors, RESTRICT on delete to prevent orphaned cursors
+- **Domain Models**: Created EmailCursor Pydantic models with from_db_model/model_dump_for_db pattern
+- **Service Container**: Updated to include both email_ingestion_service and email_config_service as separate services
+- Files: Renamed old files to *-old.py, created new service.py, cursor_service.py, email_cursor.py models, updated routers and repositories
+
+### Next Actions
+- Test multi-config listener functionality with concurrent email monitoring
+- Implement actual Outlook integration in processing loop
+- Add PDF extraction logic to email processing
+- Create dashboard for monitoring multiple active listeners
+
+### Notes
+- **Clean Architecture**: Config service handles data, ingestion service handles runtime
+- **Multi-Config**: System can monitor multiple email accounts/folders simultaneously
+- **Thread Safety**: Each config runs in its own thread with proper locking
+- **Cursor Lifecycle**: Cursors created with configs, deleted with configs
+- **Rollback Support**: Failed config creation rolls back cursor creation
+
+---
+
 ## [2025-09-21 20:00] — Complete Email Config Management System with Service Integration
 ### Spec / Intent
 - Implement complete email configuration management API following PDF template architectural patterns

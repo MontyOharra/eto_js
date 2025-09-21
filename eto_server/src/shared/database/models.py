@@ -67,6 +67,9 @@ class EmailIngestionConfigModel(BaseModel):
     pdfs_found: Mapped[int] = mapped_column(Integer, default=0)
     last_error_message: Mapped[Optional[str]] = mapped_column(Text)
     last_error_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    
+    # Relationships
+    cursor = relationship("EmailIngestionCursorModel", back_populates="config", uselist=False)
 
     __table_args__ = (
         Index('idx_email_config_active', 'is_active'),
@@ -78,6 +81,7 @@ class EmailIngestionCursorModel(BaseModel):
     __tablename__ = 'email_ingestion_cursors'
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    config_id: Mapped[int] = mapped_column(ForeignKey('email_ingestion_configs.id', ondelete='RESTRICT'), nullable=False)
     email_address: Mapped[str] = mapped_column(String(255))
     folder_name: Mapped[str] = mapped_column(String(255))
 
@@ -93,9 +97,13 @@ class EmailIngestionCursorModel(BaseModel):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
     
-    # Unique constraint to prevent duplicate cursors for same email/folder combo
+    # Relationship
+    config = relationship("EmailIngestionConfigModel", back_populates="cursor")
+    
+    # Unique constraint - one cursor per config
     __table_args__ = (
-        UniqueConstraint('email_address', 'folder_name', name='_email_folder_cursor_uc'),
+        UniqueConstraint('config_id', name='uix_cursor_config'),
+        Index('ix_cursor_email_folder', 'email_address', 'folder_name')
     )
 
 class EtoRunModel(BaseModel):
