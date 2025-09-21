@@ -5,6 +5,41 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-09-21 22:30] — Simplified No-Deletion Architecture Implementation
+### Spec / Intent
+- Implement simplified no-deletion architecture where configs are never deleted, only deactivated
+- Remove complex foreign key CASCADE/SET NULL logic in favor of permanent configs
+- Deactivation deletes cursor for fresh start, while server downtime preserves cursors
+- Create clear distinction between intentional deactivation (reset) vs unintentional downtime (preserve)
+
+### Changes Made
+- **Database Models**: Removed cascade deletion from EmailModel config_id foreign key, configs are now permanent
+- **Cursor Models**: Simplified to only track last_check_time and statistics, removed ineffective last_processed fields
+- **Cursor Repository**: Simplified with update_check_time_and_stats() and delete_by_config_id() methods
+- **Cursor Service**: Added delete_cursor_by_config() for deactivation, get_statistics() for monitoring
+- **Email Ingestion Service**: Implemented startup_recovery(), activate_config(), deactivate_config() with proper cursor lifecycle
+- **API Router**: Removed DELETE endpoint entirely, enhanced activate/deactivate with cursor management
+- **Email Repository**: Added is_message_processed() for duplicate detection with (config_id, message_id) uniqueness
+- **Email Listener**: Created thread class for monitoring individual configs with IMAP connection management
+- **Service Container**: Updated initialization with proper repository and service dependencies
+- **Main App**: Added startup_recovery() call in app.py, proper shutdown() handling
+- Files: Created 10 new files, renamed 5 old files to *-old.py for code preservation
+
+### Next Actions
+- Test multi-config concurrent email monitoring with different accounts
+- Verify startup recovery resumes all active configs correctly
+- Test deactivation cursor deletion and fresh start on reactivation
+- Monitor thread safety and resource usage with multiple listeners
+
+### Notes
+- **No Deletion**: Configs are permanent database records, only is_active flag changes
+- **Cursor Lifecycle**: Created on activation, deleted on deactivation, preserved through restarts
+- **Duplicate Detection**: Using unique constraint on (config_id, message_id) instead of cursor tracking
+- **Thread Management**: Each config runs in separate thread with proper stop signals
+- **Recovery Logic**: Server restart automatically resumes all active configurations
+
+---
+
 ## [2025-09-21 21:00] — Multi-Config Email Service Architecture Redesign
 ### Spec / Intent
 - Redesign email services to support multiple concurrent email configurations

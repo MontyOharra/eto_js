@@ -4,6 +4,7 @@ Thin orchestration layer for email config management with business validation
 """
 import logging
 from typing import List, Optional
+from datetime import datetime, timezone
 
 from shared.models.email_config import EmailConfig, EmailConfigCreate, EmailConfigUpdate
 from shared.database.repositories import EmailIngestionConfigRepository
@@ -87,11 +88,12 @@ class EmailIngestionConfigService:
         """
         return self.config_repo.get_by_id(config_id)
     
-    def list_configs(self, order_by: str = 'created_at', desc: bool = False) -> List[EmailConfig]:
+    def list_configs(self, is_active: Optional[bool] = None, order_by: str = 'created_at', desc: bool = False) -> List[EmailConfig]:
         """
         List all configurations with sorting
         
         Args:
+            is_active: Filter by active status (None for all configs)
             order_by: Field to sort by (created_at, updated_at, name, is_active, last_used_at, emails_processed)
             desc: Sort in descending order
             
@@ -107,7 +109,14 @@ class EmailIngestionConfigService:
             self.logger.warning(f"Invalid order_by field '{order_by}', using 'created_at'")
             order_by = 'created_at'
         
-        return self.config_repo.get_all(order_by=order_by, desc=desc)
+        # Get all configs with sorting
+        configs = self.config_repo.get_all(order_by=order_by, desc=desc)
+        
+        # Filter by active status if specified
+        if is_active is not None:
+            configs = [c for c in configs if c.is_active == is_active]
+        
+        return configs
     
     def delete_config(self, config_id: int) -> EmailConfig:
         """
@@ -134,12 +143,13 @@ class EmailIngestionConfigService:
     
     # ========== Business Operations ==========
     
-    def activate_config(self, config_id: int) -> EmailConfig:
+    def activate_config(self, config_id: int, activation_time: Optional[datetime] = None) -> EmailConfig:
         """
-        Activate email configuration (deactivates all others)
+        Activate email configuration with progress tracking
         
         Args:
             config_id: Configuration ID to activate
+            activation_time: When the activation occurred (defaults to now)
             
         Returns:
             Activated EmailConfig
@@ -148,10 +158,13 @@ class EmailIngestionConfigService:
             ObjectNotFoundError: If configuration not found
             RepositoryError: If database operation fails
         """
-        self.logger.debug(f"Activating email config ID {config_id}")
+        if activation_time is None:
+            activation_time = datetime.now(timezone.utc)
+            
+        self.logger.debug(f"Activating email config ID {config_id} at {activation_time}")
         
-        # Repository handles atomic activation/deactivation
-        config = self.config_repo.activate(config_id)
+        # Repository handles activation with progress reset
+        config = self.config_repo.activate(config_id, activation_time)
         
         self.logger.info(f"Activated email config '{config.name}'")
         return config
@@ -177,24 +190,37 @@ class EmailIngestionConfigService:
         self.logger.info(f"Deactivated email config '{config.name}'")
         return config
     
-    def get_active_config(self) -> Optional[EmailConfig]:
+    def get_active_configs(self) -> List[EmailConfig]:
         """
-        Get currently active configuration
+        Get all currently active configurations
         
         Returns:
-            Active EmailConfig or None if no active config
+            List of active EmailConfig models
             
         Raises:
             RepositoryError: If database operation fails
         """
-        config = self.config_repo.get_active()
+        configs = self.config_repo.get_active_configs()
         
-        if config:
-            self.logger.debug(f"Retrieved active config '{config.name}'")
+        if configs:
+            self.logger.debug(f"Retrieved {len(configs)} active configs")
         else:
-            self.logger.debug("No active email config found")
+            self.logger.debug("No active email configs found")
         
-        return config
+        return configs
+    
+    def get_active_config(self) -> Optional[EmailConfig]:
+        """
+        Get first active configuration (for backward compatibility)
+        
+        Returns:
+            First active EmailConfig or None if no active config
+            
+        Raises:
+            RepositoryError: If database operation fails
+        """
+        configs = self.get_active_configs()
+        return configs[0] if configs else None
     
     # ========== Convenience Methods ==========
     
@@ -283,4 +309,28 @@ class EmailIngestionConfigService:
         config = self.config_repo.record_error(config_id, error_message)
         
         self.logger.warning(f"Recorded error for config '{config.name}': {error_message[:100]}...")
+        return config
+    
+    def update_progress(self, config_id: int, emails_processed: int = 0, pdfs_found: int = 0) -> EmailConfig:
+        """
+        Update progress tracking after email check
+        
+        Args:
+            config_id: Configuration ID
+            emails_processed: Number of new emails processed
+            pdfs_found: Number of new PDFs found
+            
+        Returns:
+            Updated EmailConfig
+            
+        Raises:
+            ObjectNotFoundError: If configuration not found
+            RepositoryError: If database operation fails
+        """
+        self.logger.debug(f"Updating progress for config {config_id}: +{emails_processed} emails, +{pdfs_found} PDFs")
+        
+        # Repository handles progress tracking update
+        config = self.config_repo.update_progress(config_id, emails_processed, pdfs_found)
+        
+        self.logger.debug(f"Updated progress for config '{config.name}': total {config.total_emails_processed} emails, {config.total_pdfs_found} PDFs")
         return config

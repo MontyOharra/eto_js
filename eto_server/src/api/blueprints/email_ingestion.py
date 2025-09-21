@@ -7,6 +7,7 @@ from flask_cors import cross_origin, CORS
 from pydantic import ValidationError
 import logging
 from typing import Dict, Any
+from datetime import datetime, timezone
 
 from ..schemas.email_ingestion import (
     EmailConfigCreateRequest,
@@ -194,9 +195,10 @@ def activate_config(config_id: int):
         data = request.get_json() or {}
         auto_start = data.get('auto_start', False)
         
-        # Activate the config
+        # Activate the config with current timestamp
         email_service = get_email_service()
-        activated_config = email_service.config_service.activate_config(config_id)
+        activation_time = datetime.now(timezone.utc)
+        activated_config = email_service.config_service.activate_config(config_id, activation_time)
         
         # If auto_start is requested, restart ingestion with new config
         if auto_start:
@@ -266,6 +268,37 @@ def activate_config(config_id: int):
             "error": str(e),
             "message": "Failed to activate config"
         }), 400
+
+
+@email_ingestion_bp.route('/configs/<int:config_id>/deactivate', methods=['POST'])
+@cross_origin()
+def deactivate_config(config_id: int):
+    """Deactivate an email ingestion config"""
+    try:
+        email_service = get_email_service()
+        
+        # Deactivate the config (this will clear progress tracking)
+        deactivated_config = email_service.config_service.deactivate_config(config_id)
+        
+        # Stop the listener if it's running
+        email_service.deactivate_config(config_id)
+        
+        response = {
+            "success": True,
+            "config_id": deactivated_config.id,
+            "config_name": deactivated_config.name,
+            "message": "Configuration deactivated successfully"
+        }
+        return jsonify(response), 200
+    
+    except Exception as e:
+        logger.error(f"Error deactivating config {config_id}: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "message": "Failed to deactivate config"
+        }), 400
+
 
 # === Service Control Endpoints ===
 

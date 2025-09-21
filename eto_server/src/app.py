@@ -99,24 +99,14 @@ async def initialize_services() -> None:
 
         logger.info("All services initialized successfully via ServiceContainer")
 
-        # Auto-start email ingestion if active config exists
+        # Auto-start email ingestion with startup recovery
         try:
-            email_service = _service_container.get_email_service()
-            active_config = email_service.config_service.get_active_config()
-
-            if active_config:
-                logger.info(f"Found active configuration: {active_config.name} (ID: {active_config.id})")
-                result = email_service.start(active_config.id)
-
-                if result.success:
-                    logger.info(f"Email ingestion service started successfully for config: {active_config.name}")
-                else:
-                    logger.warning(f"Failed to start email ingestion: {result.message}")
-            else:
-                logger.info("No active email ingestion configuration found - service ready for configuration")
-
+            email_ingestion_service = _service_container.get_email_ingestion_service()
+            # Startup recovery will resume all active configurations
+            email_ingestion_service.startup_recovery()
+            logger.info("Email ingestion service startup recovery completed")
         except Exception as service_error:
-            logger.warning(f"Email ingestion auto-connect failed: {service_error}")
+            logger.warning(f"Email ingestion startup recovery failed: {service_error}")
 
         # Auto-start ETO processing if enabled
         try:
@@ -154,12 +144,12 @@ async def cleanup_services() -> None:
             
             # Stop email ingestion service if running
             try:
-                email_service = _service_container.get_email_service()
-                if hasattr(email_service, 'stop'):
-                    email_service.stop()
+                email_ingestion_service = _service_container.get_email_ingestion_service()
+                if hasattr(email_ingestion_service, 'shutdown'):
+                    email_ingestion_service.shutdown()
                     logger.info("Email ingestion service stopped")
             except Exception as e:
-                logger.warning(f"Failed to stop email service: {e}")
+                logger.warning(f"Failed to stop email ingestion service: {e}")
 
         if _connection_manager:
             logger.info("Cleaning up database connections...")

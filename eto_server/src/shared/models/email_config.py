@@ -63,6 +63,12 @@ class EmailConfig(EmailConfigBase):
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
     last_used_at: Optional[datetime] = Field(None, description="Last usage timestamp")
+    
+    # Progress tracking fields (replacing cursor)
+    activated_at: Optional[datetime] = Field(None, description="When config was activated")
+    last_check_time: Optional[datetime] = Field(None, description="Last successful email check")
+    total_emails_processed: int = Field(0, ge=0, description="Total emails processed since activation")
+    total_pdfs_found: int = Field(0, ge=0, description="Total PDFs found since activation")
 
     class Config:
         from_attributes = True
@@ -97,7 +103,12 @@ class EmailConfig(EmailConfigBase):
             last_error_at=db_model.last_error_at,
             created_at=db_model.created_at,
             updated_at=db_model.updated_at,
-            last_used_at=db_model.last_used_at
+            last_used_at=db_model.last_used_at,
+            # Progress tracking fields
+            activated_at=db_model.activated_at,
+            last_check_time=db_model.last_check_time,
+            total_emails_processed=db_model.total_emails_processed,
+            total_pdfs_found=db_model.total_pdfs_found
         )
 
 

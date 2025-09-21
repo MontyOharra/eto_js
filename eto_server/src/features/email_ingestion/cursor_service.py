@@ -1,106 +1,115 @@
 """
-Email Cursor Service
-Manages processing cursors with config association
+Email Ingestion Cursor Service
+Simplified cursor management for email configurations
 """
 import logging
-from typing import Optional, Dict, List
+from typing import Optional
 from datetime import datetime, timezone
 
-from shared.database.repositories import EmailIngestionCursorRepository
+from shared.database.repositories.email_ingestion_cursor import EmailIngestionCursorRepository
 from shared.models.email_cursor import EmailCursor, EmailCursorCreate
-from shared.exceptions import ObjectNotFoundError, ValidationError
+from shared.exceptions import ServiceError, ObjectNotFoundError
 
 logger = logging.getLogger(__name__)
 
 
-class EmailIngestionCursorService:
-    """
-    Manages processing cursors for email configurations.
-    Internal service - no direct API access.
-    """
+class CursorService:
+    """Internal service for cursor management"""
     
     def __init__(self, cursor_repository: EmailIngestionCursorRepository):
-        self.cursor_repo = cursor_repository
-        self.logger = logging.getLogger(__name__)
+        self.cursor_repository = cursor_repository
+        logger.info("CursorService initialized")
     
-    # === CRUD Operations ===
-    
-    def create_cursor(self, config_id: int, email_address: str, folder_name: str) -> EmailCursor:
-        """Create a new cursor for a configuration"""
+    def create_cursor(self, config_id: int) -> EmailCursor:
+        """Create new cursor for a configuration"""
         try:
-            # Check if cursor already exists for this config
-            existing = self.cursor_repo.get_by_config_id(config_id)
+            # Check if cursor already exists
+            existing = self.cursor_repository.get_by_config_id(config_id)
             if existing:
-                raise ValidationError(f"Cursor already exists for config {config_id}")
+                logger.debug(f"Cursor already exists for config {config_id}")
+                return existing
             
+            # Create new cursor
             cursor_create = EmailCursorCreate(
                 config_id=config_id,
-                email_address=email_address,
-                folder_name=folder_name,
-                last_processed_message_id=f"init_{int(datetime.now(timezone.utc).timestamp())}",
-                last_processed_received_date=datetime.now(timezone.utc),
-                last_check_time=datetime.now(timezone.utc),
+                last_check_time=None,
                 total_emails_processed=0,
                 total_pdfs_found=0
             )
             
-            cursor = self.cursor_repo.create(cursor_create)
-            logger.info(f"Created cursor for config {config_id}: {email_address}/{folder_name}")
+            cursor = self.cursor_repository.create(cursor_create)
+            logger.info(f"Created cursor for config {config_id}")
             return cursor
             
         except Exception as e:
             logger.error(f"Failed to create cursor for config {config_id}: {e}")
-            raise
+            raise ServiceError(f"Failed to create cursor: {e}") from e
     
-    def get_cursor_by_config(self, config_id: int) -> Optional[EmailCursor]:
-        """Get cursor for a specific configuration"""
-        return self.cursor_repo.get_by_config_id(config_id)
+    def get_cursor(self, config_id: int) -> Optional[EmailCursor]:
+        """Get cursor for a configuration"""
+        try:
+            return self.cursor_repository.get_by_config_id(config_id)
+        except Exception as e:
+            logger.error(f"Failed to get cursor for config {config_id}: {e}")
+            raise ServiceError(f"Failed to get cursor: {e}") from e
     
-    def get_or_create_cursor(self, config_id: int, email_address: str, folder_name: str) -> EmailCursor:
-        """Get existing cursor or create new one"""
-        cursor = self.get_cursor_by_config(config_id)
-        if not cursor:
-            cursor = self.create_cursor(config_id, email_address, folder_name)
-        return cursor
-    
-    def update_cursor(self, config_id: int, last_message_id: str, 
-                     last_received_date: datetime, 
-                     increment_emails: int = 0, 
-                     increment_pdfs: int = 0) -> EmailCursor:
-        """Update cursor position and statistics"""
-        cursor = self.cursor_repo.get_by_config_id(config_id)
-        if not cursor:
-            raise ObjectNotFoundError('EmailCursor', config_id)
-        
-        return self.cursor_repo.update_position(
-            cursor_id=cursor.id,
-            last_message_id=last_message_id,
-            last_received_date=last_received_date,
-            increment_emails=increment_emails,
-            increment_pdfs=increment_pdfs
-        )
+    def update_after_check(self, config_id: int, 
+                          emails_processed: int = 0,
+                          pdfs_found: int = 0) -> EmailCursor:
+        """Update cursor after email check"""
+        try:
+            cursor = self.cursor_repository.update_check_time_and_stats(
+                config_id=config_id,
+                emails_processed=emails_processed,
+                pdfs_found=pdfs_found
+            )
+            
+            logger.debug(f"Updated cursor for config {config_id}: "
+                        f"+{emails_processed} emails, +{pdfs_found} PDFs")
+            return cursor
+            
+        except ObjectNotFoundError:
+            # Create cursor if it doesn't exist
+            logger.warning(f"Cursor not found for config {config_id}, creating new one")
+            self.create_cursor(config_id)
+            # Try update again
+            return self.cursor_repository.update_check_time_and_stats(
+                config_id=config_id,
+                emails_processed=emails_processed,
+                pdfs_found=pdfs_found
+            )
+        except Exception as e:
+            logger.error(f"Failed to update cursor for config {config_id}: {e}")
+            raise ServiceError(f"Failed to update cursor: {e}") from e
     
     def delete_cursor_by_config(self, config_id: int) -> bool:
-        """Delete cursor associated with a configuration"""
-        cursor = self.cursor_repo.get_by_config_id(config_id)
-        if cursor:
-            self.cursor_repo.delete(cursor.id)
-            logger.info(f"Deleted cursor for config {config_id}")
-            return True
-        return False
+        """Delete cursor when config is deactivated"""
+        try:
+            result = self.cursor_repository.delete_by_config_id(config_id)
+            if result:
+                logger.info(f"Deleted cursor for deactivated config {config_id}")
+            else:
+                logger.debug(f"No cursor to delete for config {config_id}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Failed to delete cursor for config {config_id}: {e}")
+            raise ServiceError(f"Failed to delete cursor: {e}") from e
     
-    def get_cursor_stats_by_config(self, config_id: int) -> Optional[Dict]:
-        """Get cursor statistics for a configuration"""
-        cursor = self.cursor_repo.get_by_config_id(config_id)
+    def get_statistics(self, config_id: int) -> dict:
+        """Get processing statistics for a config"""
+        cursor = self.get_cursor(config_id)
         if not cursor:
-            return None
+            return {
+                "last_check_time": None,
+                "total_emails_processed": 0,
+                "total_pdfs_found": 0,
+                "has_cursor": False
+            }
         
         return {
-            "config_id": config_id,
-            "email_address": cursor.email_address,
-            "folder_name": cursor.folder_name,
+            "last_check_time": cursor.last_check_time,
             "total_emails_processed": cursor.total_emails_processed,
             "total_pdfs_found": cursor.total_pdfs_found,
-            "last_processed_date": cursor.last_processed_received_date,
-            "last_check_time": cursor.last_check_time
+            "has_cursor": True
         }

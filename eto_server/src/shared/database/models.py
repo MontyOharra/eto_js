@@ -18,7 +18,8 @@ class EmailModel(BaseModel):
     __tablename__ = 'emails'
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    message_id: Mapped[str] = mapped_column(String(255), index=True)
+    config_id: Mapped[int] = mapped_column(ForeignKey('email_ingestion_configs.id'), nullable=False)
+    message_id: Mapped[str] = mapped_column(String(500), nullable=False)
     subject: Mapped[Optional[str]] = mapped_column(String(500))
     sender_email: Mapped[Optional[str]] = mapped_column(String(255))
     sender_name: Mapped[Optional[str]] = mapped_column(String(255))
@@ -26,11 +27,20 @@ class EmailModel(BaseModel):
     folder_name: Mapped[Optional[str]] = mapped_column(String(100))
     has_pdf_attachments: Mapped[bool] = mapped_column(Boolean, default=False)
     attachment_count: Mapped[int] = mapped_column(Integer, default=0)
+    pdf_count: Mapped[int] = mapped_column(Integer, default=0)
+    processed_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     
     # Relationships
+    config = relationship("EmailIngestionConfigModel", back_populates="emails")
     pdf_files = relationship("PdfFileModel", back_populates="email")
     eto_runs = relationship("EtoRunModel", back_populates="email")
+    
+    __table_args__ = (
+        UniqueConstraint('config_id', 'message_id', name='uix_config_message'),
+        Index('ix_email_config_id', 'config_id'),
+        Index('ix_email_received_date', 'received_date'),
+    )
 
 
 class EmailIngestionConfigModel(BaseModel):
@@ -68,43 +78,20 @@ class EmailIngestionConfigModel(BaseModel):
     last_error_message: Mapped[Optional[str]] = mapped_column(Text)
     last_error_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     
+    # Progress tracking fields (replacing cursor)
+    activated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    last_check_time: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    total_emails_processed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    total_pdfs_found: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    
     # Relationships
-    cursor = relationship("EmailIngestionCursorModel", back_populates="config", uselist=False)
+    emails = relationship("EmailModel", back_populates="config")
 
     __table_args__ = (
         Index('idx_email_config_active', 'is_active'),
         Index('idx_email_config_running', 'is_running'),
     )
 
-class EmailIngestionCursorModel(BaseModel):
-    """Track email processing cursors for downtime recovery"""
-    __tablename__ = 'email_ingestion_cursors'
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    config_id: Mapped[int] = mapped_column(ForeignKey('email_ingestion_configs.id', ondelete='RESTRICT'), nullable=False)
-    email_address: Mapped[str] = mapped_column(String(255))
-    folder_name: Mapped[str] = mapped_column(String(255))
-
-    # Outlook-specific cursor data
-    last_processed_message_id: Mapped[Optional[str]] = mapped_column(String(255))  # EntryID from Outlook
-    last_processed_received_date: Mapped[Optional[datetime]] = mapped_column(DateTime)  # ReceivedTime from last processed email
-    last_check_time: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-
-    # Processing statistics
-    total_emails_processed: Mapped[int] = mapped_column(Integer, default=0)
-    total_pdfs_found: Mapped[int] = mapped_column(Integer, default=0)
-
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
-    
-    # Relationship
-    config = relationship("EmailIngestionConfigModel", back_populates="cursor")
-    
-    # Unique constraint - one cursor per config
-    __table_args__ = (
-        UniqueConstraint('config_id', name='uix_cursor_config'),
-        Index('ix_cursor_email_folder', 'email_address', 'folder_name')
-    )
 
 class EtoRunModel(BaseModel):
     """ETO processing runs - tracks PDF processing workflow"""

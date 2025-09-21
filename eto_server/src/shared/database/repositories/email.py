@@ -154,7 +154,8 @@ class EmailRepository(BaseRepository[EmailModel]):
                received_date: datetime,
                folder_name: str,
                has_pdf_attachments: bool,
-               attachment_count: int) -> Email:
+               attachment_count: int,
+               config_id: Optional[int] = None) -> Email:
         """Create new email record"""
         try:
             with self.connection_manager.session_scope() as session:
@@ -171,6 +172,8 @@ class EmailRepository(BaseRepository[EmailModel]):
                 setattr(model, 'has_pdf_attachments', has_pdf_attachments)
                 setattr(model, 'attachment_count', attachment_count)
                 setattr(model, 'created_at', datetime.now(timezone.utc))
+                if config_id is not None:
+                    setattr(model, 'config_id', config_id)
                 
                 # Add to session
                 session.add(model)
@@ -199,3 +202,19 @@ class EmailRepository(BaseRepository[EmailModel]):
         except SQLAlchemyError as e:
             logger.error(f"Error checking email existence: {e}")
             raise RepositoryError(f"Failed to check email existence: {e}") from e
+    
+    def is_message_processed(self, config_id: int, message_id: str) -> bool:
+        """Check if message has already been processed for a specific config"""
+        try:
+            with self.connection_manager.session_scope() as session:
+                exists = session.query(self.model_class).filter(
+                    self.model_class.config_id == config_id,
+                    self.model_class.message_id == message_id
+                ).first() is not None
+                
+                logger.debug(f"Message processed check for config {config_id}, message_id {message_id}: {exists}")
+                return exists
+                
+        except SQLAlchemyError as e:
+            logger.error(f"Error checking if message processed: {e}")
+            raise RepositoryError(f"Failed to check if message processed: {e}") from e

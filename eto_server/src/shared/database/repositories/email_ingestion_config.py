@@ -22,6 +22,11 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
     def model_class(self):
         return EmailIngestionConfigModel
     
+    def _convert_to_domain_object(self, config: EmailIngestionConfigModel) -> EmailConfig:
+        """Convert SQLAlchemy model to domain object"""
+        return EmailConfig.from_db_model(config)
+        
+    
     # ========== CRUD Operations with Pydantic Types ==========
     
     def create(self, config_create: EmailConfigCreate) -> EmailConfig:
@@ -47,7 +52,7 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
                 logger.debug(f"Created email configuration: {model.name}")
                 
                 # Return domain model
-                return EmailConfig.from_db_model(model)
+                return self._convert_to_domain_object(model)
                 
         except SQLAlchemyError as e:
             logger.error(f"Error creating email configuration: {e}")
@@ -83,7 +88,7 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
                 logger.debug(f"Updated email configuration: {model.name}")
                 
                 # Return updated domain model
-                return EmailConfig.from_db_model(model)
+                return self._convert_to_domain_object(model)
                 
         except SQLAlchemyError as e:
             logger.error(f"Error updating config {config_id}: {e}")
@@ -105,7 +110,7 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
                 
                 if model:
                     logger.debug(f"Retrieved email configuration: {model.name}")
-                    return EmailConfig.from_db_model(model)
+                    return self._convert_to_domain_object(model)
                 return None
                 
         except SQLAlchemyError as e:
@@ -142,7 +147,7 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
                 models = query.all()
                 
                 logger.debug(f"Retrieved {len(models)} email configurations")
-                return [EmailConfig.from_db_model(model) for model in models]
+                return [self._convert_to_domain_object(model) for model in models]
                 
         except SQLAlchemyError as e:
             logger.error(f"Error getting all configurations: {e}")
@@ -174,7 +179,7 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
                     raise ValidationError(f"Cannot delete active configuration {config_id}. Please deactivate it first.")
                 
                 # Convert to domain model before deletion
-                deleted_config = EmailConfig.from_db_model(config)
+                deleted_config = self._convert_to_domain_object(config)
                 
                 config_name = getattr(config, 'name')
                 session.delete(config)
@@ -190,12 +195,13 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
     
     # ========== Business Operations ==========
     
-    def activate(self, config_id: int) -> EmailConfig:
+    def activate(self, config_id: int, activation_time: datetime) -> EmailConfig:
         """
-        Activate specific configuration and deactivate all others
+        Activate specific configuration with progress tracking
         
         Args:
             config_id: Configuration ID to activate
+            activation_time: When the activation occurred
             
         Returns:
             Activated EmailConfig
@@ -205,27 +211,22 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
         """
         try:
             with self.connection_manager.session_scope() as session:
-                current_time = datetime.now(timezone.utc)
-                
                 # Check target exists
                 target_config = session.get(self.model_class, config_id)
                 if not target_config:
                     raise ObjectNotFoundError('EmailConfig', config_id)
                 
-                # Deactivate all configs first
-                session.query(self.model_class).update({
-                    'is_active': False,
-                    'is_running': False,
-                    'updated_at': current_time
-                })
-                
-                # Activate the target config
+                # Activate the config and reset progress tracking
                 setattr(target_config, 'is_active', True)
                 setattr(target_config, 'is_running', False)  # Will be set to True when service starts
+                setattr(target_config, 'activated_at', activation_time)
+                setattr(target_config, 'last_check_time', activation_time)  # Initialize to activation time
+                setattr(target_config, 'total_emails_processed', 0)
+                setattr(target_config, 'total_pdfs_found', 0)
                 
-                logger.debug(f"Activated email configuration: {target_config.name}")
+                logger.debug(f"Activated email configuration: {target_config.name} at {activation_time}")
                 
-                return EmailConfig.from_db_model(target_config)
+                return self._convert_to_domain_object(target_config)
             
         except SQLAlchemyError as e:
             logger.error(f"Error activating config {config_id}: {e}")
@@ -233,7 +234,7 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
     
     def deactivate(self, config_id: int) -> EmailConfig:
         """
-        Deactivate specific configuration
+        Deactivate specific configuration and clear progress tracking
         
         Args:
             config_id: Configuration ID to deactivate
@@ -251,14 +252,18 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
                 if not config:
                     raise ObjectNotFoundError('EmailConfig', config_id)
                 
-                # Deactivate the config
+                # Deactivate the config and clear progress
                 setattr(config, 'is_active', False)
                 setattr(config, 'is_running', False)
+                setattr(config, 'activated_at', None)
+                setattr(config, 'last_check_time', None)
+                setattr(config, 'total_emails_processed', 0)
+                setattr(config, 'total_pdfs_found', 0)
                 # updated_at handled by onupdate=func.now() in model
                 
-                logger.debug(f"Deactivated email configuration: {config.name}")
+                logger.debug(f"Deactivated email configuration: {config.name} and cleared progress")
                 
-                return EmailConfig.from_db_model(config)
+                return self._convert_to_domain_object(config)
             
         except ObjectNotFoundError:
             raise
@@ -266,24 +271,21 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
             logger.error(f"Error deactivating config {config_id}: {e}")
             raise RepositoryError(f"Failed to deactivate configuration: {e}") from e
     
-    def get_active(self) -> Optional[EmailConfig]:
+    def get_active_configs(self) -> List[EmailConfig]:
         """
-        Get the currently active configuration
+        Get all currently active configurations
         
         Returns:
-            Active EmailConfig or None if no active config
+            List of active EmailConfig domain models
         """
         try:
             with self.connection_manager.session_scope() as session:
-                config = session.query(self.model_class).filter(
+                configs = session.query(self.model_class).filter(
                     self.model_class.is_active == True
-                ).first()
+                ).order_by(self.model_class.name).all()
                 
-                if config:
-                    logger.debug(f"Retrieved active email configuration: {config.name}")
-                    return EmailConfig.from_db_model(config)
-                  
-                return None
+                logger.debug(f"Retrieved {len(configs)} active email configurations")
+                return [self._convert_to_domain_object(config) for config in configs]
                 
         except SQLAlchemyError as e:
             logger.error(f"Error getting active configuration: {e}")
@@ -307,7 +309,7 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
                 ).all()
                 
                 logger.debug(f"Retrieved {len(models)} email configurations (active first)")
-                return [EmailConfig.from_db_model(model) for model in models]
+                return [self._convert_to_domain_object(model) for model in models]
                 
         except SQLAlchemyError as e:
             logger.error(f"Error getting configs active first: {e}")
@@ -346,11 +348,59 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
                 status_text = "running" if is_running else "stopped"
                 logger.debug(f"Updated configuration {model.name} runtime status to: {status_text}")
                 
-                return EmailConfig.from_db_model(model)
+                return self._convert_to_domain_object(model)
                 
         except SQLAlchemyError as e:
             logger.error(f"Error updating runtime status for config {config_id}: {e}")
             raise RepositoryError(f"Failed to update runtime status: {e}") from e
+    
+    def update_progress(self, config_id: int, emails_processed: int = 0, pdfs_found: int = 0) -> EmailConfig:
+        """
+        Update progress tracking after email check
+        
+        Args:
+            config_id: Configuration ID
+            emails_processed: Number of new emails processed
+            pdfs_found: Number of new PDFs found
+            
+        Returns:
+            Updated EmailConfig
+            
+        Raises:
+            ObjectNotFoundError: If configuration not found
+        """
+        try:
+            with self.connection_manager.session_scope() as session:
+                model = session.get(self.model_class, config_id)
+                
+                if not model:
+                    raise ObjectNotFoundError('EmailConfig', config_id)
+                
+                # Update progress tracking
+                current_time = datetime.now(timezone.utc)
+                setattr(model, 'last_check_time', current_time)
+                
+                # Increment totals
+                current_emails = getattr(model, 'total_emails_processed', 0) or 0
+                current_pdfs = getattr(model, 'total_pdfs_found', 0) or 0
+                setattr(model, 'total_emails_processed', current_emails + emails_processed)
+                setattr(model, 'total_pdfs_found', current_pdfs + pdfs_found)
+                
+                # Also update the legacy counters for compatibility
+                legacy_emails = getattr(model, 'emails_processed', 0) or 0
+                legacy_pdfs = getattr(model, 'pdfs_found', 0) or 0
+                setattr(model, 'emails_processed', legacy_emails + emails_processed)
+                setattr(model, 'pdfs_found', legacy_pdfs + pdfs_found)
+                
+                setattr(model, 'last_used_at', current_time)
+                
+                logger.debug(f"Updated progress for config {model.name}: +{emails_processed} emails, +{pdfs_found} PDFs")
+                
+                return self._convert_to_domain_object(model)
+                
+        except SQLAlchemyError as e:
+            logger.error(f"Error updating progress for config {config_id}: {e}")
+            raise RepositoryError(f"Failed to update progress: {e}") from e
     
     def increment_stats(self, config_id: int, emails: int, pdfs: int) -> EmailConfig:
         """
@@ -390,7 +440,7 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
                 
                 logger.debug(f"Updated stats for config {model.name}: +{emails} emails, +{pdfs} PDFs")
                 
-                return EmailConfig.from_db_model(model)
+                return self._convert_to_domain_object(model)
                 
         except SQLAlchemyError as e:
             logger.error(f"Error updating stats for config {config_id}: {e}")
@@ -428,7 +478,7 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
                 
                 logger.debug(f"Recorded error for configuration {model.name}: {error_message}")
                 
-                return EmailConfig.from_db_model(model)
+                return self._convert_to_domain_object(model)
                 
         except SQLAlchemyError as e:
             logger.error(f"Error recording error for config {config_id}: {e}")

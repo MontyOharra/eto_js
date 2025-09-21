@@ -1,26 +1,30 @@
 """
 Email Ingestion Cursor Repository
-Enhanced with config association and proper Pydantic typing
+Simplified cursor operations
 """
 import logging
-from typing import Optional, List
+from typing import Optional
 from datetime import datetime, timezone
 from sqlalchemy.exc import SQLAlchemyError
 
 from shared.database.repositories import BaseRepository
 from shared.exceptions import RepositoryError, ObjectNotFoundError
 from shared.database.models import EmailIngestionCursorModel
-from shared.models.email_cursor import EmailCursor, EmailCursorCreate, EmailCursorUpdate
+from shared.models.email_cursor import EmailCursor, EmailCursorCreate
 
 logger = logging.getLogger(__name__)
 
 
 class EmailIngestionCursorRepository(BaseRepository[EmailIngestionCursorModel]):
-    """Repository for cursor operations with config association"""
+    """Simplified cursor repository"""
     
     @property
     def model_class(self):
         return EmailIngestionCursorModel
+    
+    def _convert_to_domain_object(self, cursor: EmailIngestionCursorModel) -> EmailCursor:
+        """Convert SQLAlchemy model to domain object"""
+        return EmailCursor.from_db_model(cursor)
     
     def create(self, cursor_create: EmailCursorCreate) -> EmailCursor:
         """Create new cursor from Pydantic model"""
@@ -32,25 +36,11 @@ class EmailIngestionCursorRepository(BaseRepository[EmailIngestionCursorModel]):
                 session.flush()
                 
                 logger.debug(f"Created cursor for config {model.config_id}")
-                return EmailCursor.from_db_model(model)
+                return self._convert_to_domain_object(model)
                 
         except SQLAlchemyError as e:
             logger.error(f"Error creating cursor: {e}")
             raise RepositoryError(f"Failed to create cursor: {e}") from e
-    
-    def get_by_id(self, cursor_id: int) -> Optional[EmailCursor]:
-        """Get cursor by ID"""
-        try:
-            with self.connection_manager.session_scope() as session:
-                model = session.get(self.model_class, cursor_id)
-                
-                if model:
-                    return EmailCursor.from_db_model(model)
-                return None
-                
-        except SQLAlchemyError as e:
-            logger.error(f"Error getting cursor {cursor_id}: {e}")
-            raise RepositoryError(f"Failed to get cursor: {e}") from e
     
     def get_by_config_id(self, config_id: int) -> Optional[EmailCursor]:
         """Get cursor for a specific configuration"""
@@ -61,93 +51,58 @@ class EmailIngestionCursorRepository(BaseRepository[EmailIngestionCursorModel]):
                 ).first()
                 
                 if model:
-                    return EmailCursor.from_db_model(model)
+                    return self._convert_to_domain_object(model)
                 return None
                 
         except SQLAlchemyError as e:
             logger.error(f"Error getting cursor for config {config_id}: {e}")
             raise RepositoryError(f"Failed to get cursor: {e}") from e
     
-    def update_position(self, cursor_id: int, last_message_id: str,
-                       last_received_date: datetime,
-                       increment_emails: int = 0,
-                       increment_pdfs: int = 0) -> EmailCursor:
-        """Update cursor position and increment statistics"""
-        try:
-            with self.connection_manager.session_scope() as session:
-                model = session.get(self.model_class, cursor_id)
-                
-                if not model:
-                    raise ObjectNotFoundError('EmailCursor', cursor_id)
-                
-                # Update position
-                model.last_processed_message_id = last_message_id
-                model.last_processed_received_date = last_received_date
-                model.last_check_time = datetime.now(timezone.utc)
-                
-                # Increment statistics
-                model.total_emails_processed = (model.total_emails_processed or 0) + increment_emails
-                model.total_pdfs_found = (model.total_pdfs_found or 0) + increment_pdfs
-                
-                session.flush()
-                
-                logger.debug(f"Updated cursor {cursor_id} position")
-                return EmailCursor.from_db_model(model)
-                
-        except ObjectNotFoundError:
-            raise
-        except SQLAlchemyError as e:
-            logger.error(f"Error updating cursor {cursor_id}: {e}")
-            raise RepositoryError(f"Failed to update cursor: {e}") from e
-    
-    def delete(self, cursor_id: int) -> EmailCursor:
-        """Delete cursor by ID"""
-        try:
-            with self.connection_manager.session_scope() as session:
-                model = session.get(self.model_class, cursor_id)
-                
-                if not model:
-                    raise ObjectNotFoundError('EmailCursor', cursor_id)
-                
-                deleted_cursor = EmailCursor.from_db_model(model)
-                session.delete(model)
-                
-                logger.debug(f"Deleted cursor {cursor_id}")
-                return deleted_cursor
-                
-        except ObjectNotFoundError:
-            raise
-        except SQLAlchemyError as e:
-            logger.error(f"Error deleting cursor {cursor_id}: {e}")
-            raise RepositoryError(f"Failed to delete cursor: {e}") from e
-    
-    def get_all_by_email(self, email_address: str) -> List[EmailCursor]:
-        """Get all cursors for an email address"""
-        try:
-            with self.connection_manager.session_scope() as session:
-                models = session.query(self.model_class).filter(
-                    self.model_class.email_address == email_address
-                ).all()
-                
-                return [EmailCursor.from_db_model(model) for model in models]
-                
-        except SQLAlchemyError as e:
-            logger.error(f"Error getting cursors for {email_address}: {e}")
-            raise RepositoryError(f"Failed to get cursors: {e}") from e
-    
-    def get_by_email_and_folder(self, email_address: str, folder_name: str) -> Optional[EmailCursor]:
-        """Get cursor for specific email and folder combination"""
+    def update_check_time_and_stats(self, config_id: int, 
+                                   emails_processed: int = 0,
+                                   pdfs_found: int = 0) -> EmailCursor:
+        """Update last check time and increment statistics"""
         try:
             with self.connection_manager.session_scope() as session:
                 model = session.query(self.model_class).filter(
-                    self.model_class.email_address == email_address,
-                    self.model_class.folder_name == folder_name
+                    self.model_class.config_id == config_id
+                ).first()
+                
+                if not model:
+                    raise ObjectNotFoundError('EmailCursor', config_id)
+                
+                # Update check time
+                model.last_check_time = datetime.now(timezone.utc)
+                
+                # Increment statistics
+                model.total_emails_processed = (model.total_emails_processed or 0) + emails_processed
+                model.total_pdfs_found = (model.total_pdfs_found or 0) + pdfs_found
+                
+                session.flush()
+                
+                logger.debug(f"Updated cursor for config {config_id}: +{emails_processed} emails, +{pdfs_found} PDFs")
+                return self._convert_to_domain_object(model)
+                
+        except ObjectNotFoundError:
+            raise
+        except SQLAlchemyError as e:
+            logger.error(f"Error updating cursor for config {config_id}: {e}")
+            raise RepositoryError(f"Failed to update cursor: {e}") from e
+    
+    def delete_by_config_id(self, config_id: int) -> bool:
+        """Delete cursor by config ID"""
+        try:
+            with self.connection_manager.session_scope() as session:
+                model = session.query(self.model_class).filter(
+                    self.model_class.config_id == config_id
                 ).first()
                 
                 if model:
-                    return EmailCursor.from_db_model(model)
-                return None
+                    session.delete(model)
+                    logger.debug(f"Deleted cursor for config {config_id}")
+                    return True
+                return False
                 
         except SQLAlchemyError as e:
-            logger.error(f"Error getting cursor for {email_address}/{folder_name}: {e}")
-            raise RepositoryError(f"Failed to get cursor: {e}") from e
+            logger.error(f"Error deleting cursor for config {config_id}: {e}")
+            raise RepositoryError(f"Failed to delete cursor: {e}") from e
