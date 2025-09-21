@@ -5,6 +5,39 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-09-21 23:00] — Cursor System Elimination and Progress Tracking Integration
+### Spec / Intent
+- Eliminate separate cursor system entirely and integrate progress tracking directly into EmailIngestionConfigModel
+- Simplify architecture by removing an entire domain concept (cursors) that added unnecessary complexity
+- Support multiple concurrent active email configurations without cursor dependencies
+- Ensure configs track their own monitoring progress without separate cursor objects
+
+### Changes Made
+- **Database Models**: Added progress fields to EmailIngestionConfigModel (activated_at, last_check_time, total_emails_processed, total_pdfs_found), removed EmailIngestionCursorModel class entirely
+- **Domain Models**: Updated EmailConfig with new progress tracking fields and from_db_model method
+- **Repository Layer**: Enhanced EmailIngestionConfigRepository with activate/deactivate/update_progress methods, changed get_active() to get_active_configs() returning list
+- **Service Layer**: Updated EmailIngestionConfigService to accept activation_time, support multiple active configs via get_active_configs(), added update_progress() method
+- **Email Ingestion Service**: Removed all cursor_service dependencies, uses config's progress tracking fields directly
+- **Email Listener Thread**: Updated to use config_service instead of cursor_service for progress updates
+- **API Router**: Updated activate endpoint to pass activation_time, added new deactivate endpoint for proper config deactivation
+- **Service Container**: Removed all cursor service initialization code and dependencies
+- **File Cleanup**: Deleted 7 cursor-related files that are no longer needed
+
+### Next Actions
+- Test multi-config concurrent email monitoring with integrated progress tracking
+- Verify activation/deactivation properly manages progress fields
+- Monitor performance with simplified architecture
+- Update any remaining documentation references to cursor system
+
+### Notes
+- **Architectural Simplification**: Eliminated entire cursor domain concept, reducing complexity significantly
+- **Progress Tracking**: Now integrated directly into config model where it logically belongs
+- **Multi-Config Support**: System properly supports multiple active configs without cursor complications
+- **Activation Flow**: Activation sets activated_at and last_check_time, deactivation clears all progress
+- **Commit**: 2a8469c - refactor: Eliminate cursor system and integrate progress tracking
+
+---
+
 ## [2025-09-21 22:30] — Simplified No-Deletion Architecture Implementation
 ### Spec / Intent
 - Implement simplified no-deletion architecture where configs are never deleted, only deactivated
