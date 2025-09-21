@@ -63,16 +63,13 @@ from .pdf_processing import (
 from .pdf_templates import (
     PdfObjectRequest,
     ExtractionFieldRequest,
-    PdfTemplateCreateRequest,
     PdfTemplateVersionCreateRequest,
     PdfTemplateCreateResponse,
     PdfTemplateVersionCreateResponse,
-    TemplateListRequest,
-    TemplateGetRequest,
-    TemplateVersionGetRequest,
     TemplateUpdateRequest,
     TemplateSetCurrentVersionRequest,
     TemplateListResponse,
+    TemplateVersionSummary,
     TemplateDetailResponse
 )
 
@@ -133,15 +130,12 @@ __all__ = [
     # PDF templates schemas
     'PdfObjectRequest',
     'ExtractionFieldRequest',
-    'PdfTemplateCreateRequest',
     'PdfTemplateVersionCreateRequest',
     'PdfTemplateCreateResponse',
     'PdfTemplateVersionCreateResponse',
-    'TemplateListRequest',
-    'TemplateGetRequest',
-    'TemplateVersionGetRequest',
     'TemplateUpdateRequest',
     'TemplateSetCurrentVersionRequest',
     'TemplateListResponse',
+    'TemplateVersionSummary',
     'TemplateDetailResponse',
 ]

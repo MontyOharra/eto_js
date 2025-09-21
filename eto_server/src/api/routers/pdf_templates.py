@@ -8,17 +8,10 @@ from fastapi import APIRouter, HTTPException, Depends, status, Query
 from fastapi.responses import JSONResponse
 
 from shared.services import get_pdf_template_service
-from shared.domain import ExtractionField, PdfObject
+from shared.models import PdfTemplate, PdfTemplateVersion, PdfTemplateCreate, PdfTemplateUpdate, PdfTemplateVersionCreate
+from shared.exceptions import ObjectNotFoundError
 from api.schemas import (
-    PdfTemplateCreateRequest,
     PdfTemplateVersionCreateRequest,
-    PdfTemplateCreateResponse,
-    PdfTemplateVersionCreateResponse,
-    TemplateListRequest,
-    TemplateGetRequest,
-    TemplateVersionGetRequest,
-    TemplateUpdateRequest,
-    TemplateSetCurrentVersionRequest,
     ErrorResponse
 )
 
@@ -35,46 +28,20 @@ router = APIRouter(
 )
 
 
-def convert_query_params_to_template_list_request(
-    status_filter: Optional[str] = Query(None, regex="^(active|inactive)$", description="Filter by template status"),
-    order_by: Optional[str] = Query("created_at", description="Field to order by"),
-    desc: bool = Query(False, description="Sort in descending order"),
-    page: int = Query(1, ge=1, description="Page number"),
-    limit: int = Query(20, ge=1, le=100, description="Items per page"),
-    include: Optional[str] = Query(None, regex="^(current|all)$", description="Include version data")
-) -> TemplateListRequest:
-    """Convert query parameters to TemplateListRequest model"""
-    return TemplateListRequest(
-        status=status_filter,
-        order_by=order_by,
-        desc=desc,
-        page=page,
-        limit=limit,
-        include=include
-    )
-
-
-def convert_query_params_to_template_get_request(
-    include: Optional[str] = Query(None, regex="^(current|all)$", description="Include version data")
-) -> TemplateGetRequest:
-    """Convert query parameters to TemplateGetRequest model"""
-    return TemplateGetRequest(include=include)
-
-
 @router.post("/",
-             response_model=PdfTemplateCreateResponse,
+             response_model=PdfTemplate,
              status_code=status.HTTP_201_CREATED,
              summary="Create a new PDF template",
              description="Create a new PDF template with signature objects and extraction fields")
-async def create_template(request_data: PdfTemplateCreateRequest) -> PdfTemplateCreateResponse:
+def create_template(template_create: PdfTemplateCreate) -> PdfTemplate:
     """
     Create a new PDF template
 
     - **name**: Template name (required)
     - **description**: Template description (optional)
-    - **source_pdf_id**: ID of the source PDF file (required)
-    - **selected_objects**: PDF objects for template matching (required, min 1)
-    - **extraction_fields**: Fields to extract from matching PDFs (optional)
+    - **pdf_id**: ID of the source PDF file (required)
+    - **initial_signature_objects**: PDF objects for template matching (required, min 1)
+    - **initial_extraction_fields**: Fields to extract from matching PDFs (optional)
     """
     try:
         # Get PDF template service
@@ -85,75 +52,25 @@ async def create_template(request_data: PdfTemplateCreateRequest) -> PdfTemplate
                 detail="PDF template service is not available"
             )
 
-        # Convert selected objects to PdfObject domain objects
-        signature_objects = []
-        for obj_data in request_data.selected_objects:
-            try:
-                pdf_obj = PdfObject(
-                    type=obj_data.type,
-                    page=obj_data.page,
-                    text=obj_data.text,
-                    x=obj_data.x,
-                    y=obj_data.y,
-                    width=obj_data.width,
-                    height=obj_data.height,
-                    bbox=obj_data.bbox,
-                    font_name=obj_data.font_name,
-                    font_size=obj_data.font_size,
-                    char_count=obj_data.char_count
-                )
-                signature_objects.append(pdf_obj)
-            except Exception as e:
-                logger.warning(f"Failed to convert object to PdfObject: {e}")
-                continue
-
-        if not signature_objects:
+        # Validate required fields (Pydantic already handles basic validation)
+        if not template_create.initial_signature_objects:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="At least one valid signature object is required"
+                detail="At least one signature object is required"
             )
 
-        # Convert extraction fields to ExtractionField domain objects
-        extraction_fields = []
-        for field_data in request_data.extraction_fields:
-            try:
-                extraction_field = ExtractionField(
-                    label=field_data.label,
-                    bounding_box=field_data.boundingBox,
-                    page=field_data.page,
-                    required=field_data.required,
-                    validation_regex=field_data.validationRegex,
-                    description=field_data.description
-                )
-                extraction_fields.append(extraction_field)
-            except Exception as e:
-                logger.warning(f"Failed to convert extraction field: {e}")
-                continue
-
-        if not extraction_fields:
+        if not template_create.initial_extraction_fields:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="At least one valid extraction field is required"
+                detail="At least one extraction field is required"
             )
 
-        # Create the template using individual parameters
-        template = template_service.create_template(
-            name=request_data.name,
-            description=request_data.description,
-            pdf_id=request_data.source_pdf_id,
-            signature_objects=signature_objects,
-            extraction_fields=extraction_fields
-        )
+        # Create the template directly using the domain create model
+        template = template_service.create_template(template_create)
 
-        logger.info(f"Created template {template.id}: '{template.name}' with {len(signature_objects)} signature objects and {len(extraction_fields)} extraction fields")
+        logger.info(f"Created template {template.id}: '{template.name}' with {len(template_create.initial_signature_objects)} signature objects and {len(template_create.initial_extraction_fields)} extraction fields")
 
-        return PdfTemplateCreateResponse(
-            success=True,
-            template_id=template.id,
-            message=f"Template '{template.name}' created successfully",
-            signature_object_count=len(signature_objects),
-            extraction_field_count=len(extraction_fields)
-        )
+        return template
 
     except HTTPException:
         # Re-raise HTTPExceptions as-is
@@ -173,14 +90,14 @@ async def create_template(request_data: PdfTemplateCreateRequest) -> PdfTemplate
 
 
 @router.post("/{template_id}/versions",
-             response_model=PdfTemplateVersionCreateResponse,
+             response_model=PdfTemplateVersion,
              status_code=status.HTTP_201_CREATED,
              summary="Create a new version of a PDF template",
              description="Create a new version of an existing PDF template with updated signature objects and extraction fields")
-async def create_template_version(
+def create_template_version(
     template_id: int,
     request_data: PdfTemplateVersionCreateRequest
-) -> PdfTemplateVersionCreateResponse:
+) -> PdfTemplateVersion:
     """
     Create a new version of a PDF template
 
@@ -196,67 +113,30 @@ async def create_template_version(
                 detail="PDF template service is not available"
             )
 
-        # Convert signature objects to PdfObject domain objects
-        signature_objects = []
-        for obj_data in request_data.signature_objects:
-            try:
-                pdf_obj = PdfObject(
-                    type=obj_data.type,
-                    page=obj_data.page,
-                    text=obj_data.text,
-                    x=obj_data.x,
-                    y=obj_data.y,
-                    width=obj_data.width,
-                    height=obj_data.height,
-                    bbox=obj_data.bbox,
-                    font_name=obj_data.font_name,
-                    font_size=obj_data.font_size,
-                    char_count=obj_data.char_count
-                )
-                signature_objects.append(pdf_obj)
-            except Exception as e:
-                logger.warning(f"Failed to convert object to PdfObject: {e}")
-                continue
-
-        # Convert extraction fields to ExtractionField domain objects
-        extraction_fields = []
-        for field_data in request_data.extraction_fields:
-            try:
-                extraction_field = ExtractionField(
-                    label=field_data.label,
-                    bounding_box=field_data.boundingBox,
-                    page=field_data.page,
-                    required=field_data.required,
-                    validation_regex=field_data.validationRegex,
-                    description=field_data.description
-                )
-                extraction_fields.append(extraction_field)
-            except Exception as e:
-                logger.warning(f"Failed to convert extraction field: {e}")
-                continue
-
-        # Create the template version using individual parameters
-        version = template_service.create_template_version(
+        # Create domain model, adding pdf_template_id from URL parameter
+        version_create = PdfTemplateVersionCreate(
             pdf_template_id=template_id,
-            signature_objects=signature_objects,
-            extraction_fields=extraction_fields
+            signature_objects=request_data.signature_objects,
+            extraction_fields=request_data.extraction_fields,
+            signature_object_count=request_data.signature_object_count
         )
 
-        logger.info(f"Created version {version.version} for template {template_id} with {len(signature_objects)} signature objects and {len(extraction_fields)} extraction fields")
+        # Create the template version using the create model
+        version = template_service.create_template_version(version_create)
 
-        return PdfTemplateVersionCreateResponse(
-            success=True,
-            template_id=template_id,
-            version_id=version.id,
-            version_number=version.version,
-            message=f"Template version {version.version} created successfully",
-            signature_object_count=len(signature_objects),
-            extraction_field_count=len(extraction_fields)
-        )
+        logger.info(f"Created version {version.version_num} for template {template_id} with {len(version.signature_objects)} signature objects and {len(version.extraction_fields)} extraction fields")
+
+        return version
 
     except HTTPException:
         # Re-raise HTTPExceptions as-is
         raise
+    except ObjectNotFoundError as e:
+        logger.warning(f"Template not found in create_template_version: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
     except ValueError as e:
         logger.warning(f"Value error in create_template_version: {e}")
         raise HTTPException(
@@ -272,11 +152,16 @@ async def create_template_version(
 
 
 @router.get("/",
+            response_model=List[PdfTemplate],
             summary="List PDF templates",
             description="List PDF templates with filtering and pagination")
-async def list_templates(
-    query_params: TemplateListRequest = Depends(convert_query_params_to_template_list_request)
-):
+def list_templates(
+    template_status: Optional[str] = Query(None, pattern="^(active|inactive)$", description="Filter by template status"),
+    order_by: str = Query("created_at", description="Field to order by"),
+    desc: bool = Query(False, description="Sort in descending order"),
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(20, ge=1, le=100, description="Items per page"),
+) -> List[PdfTemplate]:
     """
     List PDF templates with filtering and pagination
 
@@ -286,14 +171,31 @@ async def list_templates(
     - **desc**: Sort in descending order (default: false)
     - **page**: Page number (default: 1)
     - **limit**: Items per page (default: 20, max: 100)
-    - **include**: Include version data (current/all)
     """
     try:
-        # TODO: Implement template listing service functionality
-        # TODO: Call template_service.list_templates() with validated parameters
-        # TODO: Return appropriate response with templates and pagination data
+        # Get PDF template service
+        template_service = get_pdf_template_service()
+        if not template_service:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="PDF template service is not available"
+            )
 
-        return {"TODO": "Implement list_templates service call", "params": query_params.model_dump()}
+        # Calculate offset from page and limit
+        offset = (page - 1) * limit
+
+        # Get templates with filtering and pagination
+        templates = template_service.get_templates(
+            status=template_status,
+            order_by=order_by,
+            desc=desc,
+            limit=limit,
+            offset=offset
+        )
+
+        logger.info(f"Retrieved {len(templates)} templates with filters: status={template_status}, order_by={order_by}, desc={desc}")
+        
+        return templates
 
     except Exception as e:
         logger.error(f"Error listing templates: {e}", exc_info=True)
@@ -304,25 +206,34 @@ async def list_templates(
 
 
 @router.get("/{template_id}",
+            response_model=PdfTemplate,
             summary="Get single PDF template",
-            description="Get single PDF template by ID with optional version data")
-async def get_template(
-    template_id: int,
-    query_params: TemplateGetRequest = Depends(convert_query_params_to_template_get_request)
-):
+            description="Get single PDF template by ID")
+def get_template(template_id: int) -> PdfTemplate:
     """
     Get single PDF template by ID
 
     - **template_id**: ID of the template to retrieve (from path)
-    - **include**: Include version data (current/all) (from query)
     """
     try:
-        # TODO: Implement get template service functionality
-        # TODO: Call template_service.get_template(template_id, include=query_params.include)
-        # TODO: Handle template not found case
-        # TODO: Return appropriate response with template data
+        # Get PDF template service
+        template_service = get_pdf_template_service()
+        if not template_service:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="PDF template service is not available"
+            )
 
-        return {"TODO": f"Implement get_template service call for template {template_id}", "params": query_params.model_dump()}
+        # Get template by ID
+        template = template_service.get_template_by_id(template_id)
+        if not template:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Template {template_id} not found"
+            )
+
+        logger.info(f"Retrieved template {template_id}: '{template.name}'")
+        return template
 
     except Exception as e:
         logger.error(f"Error getting template {template_id}: {e}", exc_info=True)
@@ -333,13 +244,13 @@ async def get_template(
 
 
 @router.get("/{template_id}/versions/{version_id}",
+            response_model=PdfTemplateVersion,
             summary="Get specific template version",
             description="Get specific template version by template ID and version ID")
-async def get_template_version(
+def get_template_version(
     template_id: int,
-    version_id: int,
-    query_params: TemplateVersionGetRequest = Depends(lambda: TemplateVersionGetRequest())
-):
+    version_id: int
+) -> PdfTemplateVersion:
     """
     Get specific template version
 
@@ -347,13 +258,28 @@ async def get_template_version(
     - **version_id**: ID of the version (from path)
     """
     try:
-        # TODO: Implement get template version service functionality
-        # TODO: Call template_service.get_template_version(template_id, version_id)
-        # TODO: Handle template/version not found cases
-        # TODO: Return appropriate response with version data
+        # Get PDF template service
+        template_service = get_pdf_template_service()
+        if not template_service:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="PDF template service is not available"
+            )
 
-        return {"TODO": f"Implement get_template_version service call for template {template_id}, version {version_id}"}
+        # Get the specific template version
+        version = template_service.get_template_version(template_id, version_id)
+        if not version:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Template {template_id} version {version_id} not found"
+            )
 
+        logger.info(f"Retrieved template {template_id} version {version_id} (version number {version.version_num})")
+        return version
+
+    except HTTPException:
+        # Re-raise HTTPExceptions as-is
+        raise
     except Exception as e:
         logger.error(f"Error getting template version {template_id}/{version_id}: {e}", exc_info=True)
         raise HTTPException(
@@ -363,12 +289,13 @@ async def get_template_version(
 
 
 @router.patch("/{template_id}",
+              response_model=PdfTemplate,
               summary="Update PDF template",
               description="Update PDF template fields (name, description, status)")
-async def update_template(
+def update_template(
     template_id: int,
-    request_data: TemplateUpdateRequest
-):
+    update_data: PdfTemplateUpdate
+) -> PdfTemplate:
     """
     Update PDF template fields
 
@@ -378,46 +305,31 @@ async def update_template(
     - **status**: New template status - active/inactive (optional)
     """
     try:
-        # TODO: Implement template update service functionality
-        # TODO: Call template_service.update_template(template_id, update_data)
-        # TODO: Handle template not found case
-        # TODO: Return appropriate response with updated template data
+        # Get PDF template service
+        template_service = get_pdf_template_service()
+        if not template_service:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="PDF template service is not available"
+            )
 
-        return {"TODO": f"Implement update_template service call for template {template_id}", "data": request_data.model_dump(exclude_none=True)}
+        # Update the template
+        updated_template = template_service.update_template(template_id, update_data)
+        if not updated_template:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Template {template_id} not found"
+            )
 
+        logger.info(f"Updated template {template_id}: '{updated_template.name}'")
+        return updated_template
+
+    except HTTPException:
+        # Re-raise HTTPExceptions as-is
+        raise
     except Exception as e:
         logger.error(f"Error updating template {template_id}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred while updating template"
-        )
-
-
-@router.put("/{template_id}/current-version",
-            summary="Set current template version",
-            description="Set the current active version for a PDF template")
-async def set_current_version(
-    template_id: int,
-    request_data: TemplateSetCurrentVersionRequest
-):
-    """
-    Set current template version
-
-    - **template_id**: ID of the template (from path)
-    - **version_id**: ID of the version to set as current (from body)
-    """
-    try:
-        # TODO: Implement set current version service functionality
-        # TODO: Call template_service.set_current_version(template_id, request_data.version_id)
-        # TODO: Handle template/version not found cases
-        # TODO: Validate that version belongs to template
-        # TODO: Return appropriate response with updated template data
-
-        return {"TODO": f"Implement set_current_version service call for template {template_id}, version {request_data.version_id}"}
-
-    except Exception as e:
-        logger.error(f"Error setting current version for template {template_id}: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An unexpected error occurred while setting current version"
         )

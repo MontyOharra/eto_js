@@ -27,26 +27,6 @@ from api.schemas import (
 logger = logging.getLogger(__name__)
 
 
-def convert_query_params(args_dict: Dict[str, str]) -> Dict[str, Any]:
-    """Convert string query parameters to appropriate types for Pydantic validation"""
-    converted = {}
-    for key, value in args_dict.items():
-        if key in ['page', 'limit']:
-            # Convert to int
-            try:
-                converted[key] = int(value)
-            except ValueError:
-                converted[key] = value  # Let Pydantic handle the validation error
-        elif key == 'desc':
-            # Convert string to boolean
-            converted[key] = value.lower() in ('true', '1', 'yes', 'on')
-        else:
-            # Keep as string
-            converted[key] = value
-    return converted
-
-
-# Create blueprint
 pdf_templates_bp = Blueprint('templates', __name__, url_prefix='/api/pdf_templates')
 
 

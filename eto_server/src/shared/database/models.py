@@ -180,7 +180,7 @@ class PdfTemplateModel(BaseModel):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(255))
     description: Mapped[Optional[str]] = mapped_column(Text)
-    pdf_id: Mapped[int] = mapped_column(ForeignKey('pdf_files.id'), index=True)
+    source_pdf_id: Mapped[int] = mapped_column(ForeignKey('pdf_files.id'), index=True)
     status: Mapped[str] = mapped_column(String(50), default='active')
     current_version_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('pdf_template_versions.id'), default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(timezone.utc))
@@ -196,7 +196,7 @@ class PdfTemplateVersionModel(BaseModel):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     pdf_template_id: Mapped[int] = mapped_column(ForeignKey('pdf_templates.id'), index=True)
-    version: Mapped[int] = mapped_column(Integer, default=1)
+    version_num: Mapped[int] = mapped_column(Integer, default=1)
     signature_objects: Mapped[str] = mapped_column(Text)
     signature_object_count: Mapped[int] = mapped_column(Integer)
     extraction_fields: Mapped[str] = mapped_column(Text)

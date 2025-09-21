@@ -5,6 +5,75 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-09-21 16:00] — Complete PDF Template Management API with Auto-Versioning
+### Spec / Intent
+- Build comprehensive PDF template management system with hierarchical Pydantic type system
+- Implement automatic version number generation within repository layer for data integrity
+- Create complete FastAPI REST endpoints for template CRUD operations and version management
+- Establish architectural patterns for future FastAPI service development with detailed documentation
+- Eliminate manual type conversions through unified domain model approach
+
+### Changes Made
+- **Complete API Implementation**: Built 6 REST endpoints - template creation, version creation, listing with filters, single template retrieval, specific version retrieval, and template updates
+- **Auto-Versioning System**: Repository automatically calculates next version numbers (max + 1) removing user control over version numbers for data consistency
+- **Hierarchical Type System**: Implemented Base/Create/Update/Domain model pattern with `PdfTemplateBase`, `PdfTemplateCreate`, `PdfTemplateUpdate`, `PdfTemplate` for clean separation of concerns
+- **Enhanced Repository Pattern**: Session-scoped operations with `model_dump_for_db()` for JSON serialization of complex objects, automatic SQLAlchemy conversion via `from_attributes=True`
+- **Service Layer Coordination**: Business logic coordination between template and version repositories with early validation and proper error handling
+- **JSON Object Storage**: Complex nested objects (signature_objects, extraction_fields) stored as JSON in database with automatic serialization/deserialization
+- **Security Implementation**: URL parameters override request body values to prevent parameter tampering in version creation
+- **Architecture Documentation**: Created comprehensive `FASTAPI_ARCHITECTURE_PATTERNS.md` as reference guide for future development
+- Files: 16 files modified, 1322 insertions, 694 deletions - new `shared/models/` directory structure
+
+### Next Actions
+- Apply same architectural patterns to other FastAPI services (email ingestion, ETO processing)  
+- Implement enhanced template detail endpoint with optional PDF data and version list loading
+- Test complete template management workflow end-to-end
+- Consider frontend integration requirements for template builder interface
+
+### Notes
+- **Version Number Control**: Users can no longer specify version numbers - repository auto-generates for consistency and prevents conflicts
+- **Template Matching Enhancement**: Updated template matching to use current version data instead of template-level signature objects for better accuracy
+- **Type Safety**: Explicit type annotations in service constructors resolve IDE method resolution issues
+- **Error Handling**: Domain exceptions (ObjectNotFoundError) properly converted to HTTP status codes (404, 400, 500) at API layer
+- **Business Logic Separation**: Templates have immutable source_pdf_id, only name/description/status can be updated post-creation
+- **Repository Encapsulation**: Version number calculation encapsulated within repository using internal `_get_next_version_number()` method
+- **API Documentation**: FastAPI auto-generates clean OpenAPI docs showing only relevant fields (excludes auto-generated or URL-derived fields)
+
+---
+
+## [2025-09-20 14:30] — Unified Pydantic Type System Implementation for PDF Templates
+### Spec / Intent
+- Eliminate manual type conversions between API layer (Pydantic), service layer (dataclasses), and database layer (SQLAlchemy)
+- Implement unified Pydantic models throughout all application layers to solve bi-directional conversion issues
+- Create shared models structure to serve as single source of truth for business logic
+- Streamline data flow from HTTP → Pydantic → SQLAlchemy → Pydantic without intermediate dataclass conversions
+
+### Changes Made
+- **Shared Models Architecture**: Created new `shared/models/` directory with unified Pydantic models replacing dataclasses in `shared/domain/`
+- **Core Models**: Implemented `PdfTemplate`, `PdfTemplateVersion`, `PdfObject`, `ExtractionField` with automatic SQLAlchemy conversion via `from_attributes=True`
+- **JSON Handling**: Added `model_dump_for_db()` and `from_db_model()` methods to handle JSON serialization of nested objects for database storage
+- **API Schema Simplification**: Updated `api/schemas/pdf_templates.py` to use thin wrapper models with conversion methods like `to_core_model()` and `get_signature_objects()`
+- **Repository Modernization**: Replaced manual field-by-field mapping with `PdfTemplate.model_validate(sqlalchemy_model)` for automatic conversion
+- **Service Layer**: Updated `PdfTemplateService` to work directly with Pydantic models, eliminating manual object construction
+- **Router Optimization**: Simplified API router by removing 60+ lines of manual conversion code, now uses single-line conversion methods
+- Files: 8 new files, 5 modified files (repositories, service, router, schemas)
+
+### Next Actions
+- Test new type system with template creation and matching workflows
+- Update `get_active_templates()` to join with current version data for template matching
+- Apply same unified Pydantic approach to other feature areas (email ingestion, ETO processing)
+- Remove deprecated `shared/domain/` dataclass files once migration is complete
+
+### Notes
+- **Type Flow Revolution**: Eliminated problematic bi-directional flow (HTTP → Pydantic → Dataclass → SQLAlchemy → Dataclass → Pydantic) with clean flow (HTTP → Pydantic → SQLAlchemy → Pydantic)
+- **Automatic Conversion**: Pydantic's `from_attributes=True` enables automatic SQLAlchemy model conversion without manual field mapping
+- **Field Alias Support**: API layer handles camelCase ↔ snake_case conversions transparently using Pydantic aliases
+- **JSON Serialization**: Nested objects (signature_objects, extraction_fields) properly serialized as typed objects in service layer, JSON strings only in database
+- **Validation Benefits**: Business rules defined once in core Pydantic models, automatically applied across all layers
+- **Code Reduction**: Eliminated 2 manual conversion layers and ~100 lines of repetitive conversion code
+
+---
+
 ## [2025-09-20 Session] — Complete PDF Template Versioning System & FastAPI Migration Implementation
 ### Spec / Intent
 - Implement comprehensive PDF template versioning functionality with modern SQLAlchemy 2.0 patterns

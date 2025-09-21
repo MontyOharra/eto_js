@@ -275,8 +275,17 @@ def setup_exception_handlers(app: FastAPI) -> None:
 
 
 def register_routers(app: FastAPI) -> None:
-    """Register minimal hello world routes"""
-    # No routers for hello world - just basic endpoints
+    """Register FastAPI routers"""
+    try:
+        # Import and register PDF templates router
+        from .api.routers.pdf_templates import router as pdf_templates_router
+        app.include_router(pdf_templates_router)
+        logger.info("Registered PDF templates router")
+        
+    except ImportError as e:
+        logger.warning(f"Could not import PDF templates router: {e}")
+    except Exception as e:
+        logger.error(f"Error registering routers: {e}")
 
 
 def register_info_endpoint(app: FastAPI) -> None:

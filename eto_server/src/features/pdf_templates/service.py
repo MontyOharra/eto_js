@@ -9,10 +9,13 @@ from typing import Optional, List, Dict, Any
 from shared.database.repositories.pdf_template import PdfTemplateRepository
 from shared.database.repositories.pdf_template_version import PdfTemplateVersionRepository
 from shared.services import get_pdf_processing_service
+from shared.exceptions import ObjectNotFoundError
 
-from shared.domain import ( 
-    PdfTemplate, PdfTemplateVersion, PdfObject, ExtractionField
+from shared.models import (
+    PdfTemplate, PdfTemplateVersion, PdfTemplateCreate, PdfTemplateUpdate, PdfTemplateVersionCreate,
+    PdfObject, ExtractionField
 )
+from shared.models.common import TemplateMatchResult
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +29,9 @@ class PdfTemplateService:
 
         self.connection_manager = connection_manager
 
-        # Repository layer
-        self.pdf_template_repo = PdfTemplateRepository(self.connection_manager)
-        self.pdf_template_version_repo = PdfTemplateVersionRepository(self.connection_manager)
+        # Repository layer - with explicit type annotations for IDE support
+        self.pdf_template_repo: PdfTemplateRepository = PdfTemplateRepository(self.connection_manager)
+        self.pdf_template_version_repo: PdfTemplateVersionRepository = PdfTemplateVersionRepository(self.connection_manager)
 
         logger.info("PDF Template Service initialized")
 
@@ -55,20 +58,29 @@ class PdfTemplateService:
                 logger.info("No active templates found for matching")
                 return TemplateMatchResult(template_found=False)
 
-            best_match = None
+            best_match_template = None
+            best_match_version = None
             most_signature_objects = 0
 
-            # Check each template for complete match
+            # Check each template's current version for complete match
             for template in active_templates:
                 try:
-                    all_objects_found = self._check_all_template_objects_found(pdf_objects, template)
-                    signature_object_count = template.signature_object_count or 0
+                    # Get the current version for this template
+                    current_version = self.get_current_version(template.id)
+                    if not current_version:
+                        logger.debug(f"Template {template.id} has no current version, skipping")
+                        continue
 
-                    logger.debug(f"Template {template.id}: all objects found = {all_objects_found}, signature count = {signature_object_count}")
+                    # Check if all signature objects from current version are found in PDF
+                    all_objects_found = self._check_all_version_objects_found(pdf_objects, current_version)
+                    signature_object_count = current_version.signature_object_count
+
+                    logger.debug(f"Template {template.id} (version {current_version.version_num}): all objects found = {all_objects_found}, signature count = {signature_object_count}")
 
                     # Only consider templates where ALL signature objects are found
                     if all_objects_found and signature_object_count > most_signature_objects:
-                        best_match = template
+                        best_match_template = template
+                        best_match_version = current_version
                         most_signature_objects = signature_object_count
 
                 except Exception as e:
@@ -76,21 +88,21 @@ class PdfTemplateService:
                     continue
 
             # Build result
-            if best_match:
-                # Update template usage statistics
-                self.pdf_template_repo.increment_usage_count(best_match.id)
+            if best_match_template and best_match_version:
+                # Update version usage statistics
+                self.pdf_template_version_repo.increment_usage_count(best_match_version.id)
 
-                logger.info(f"Template match found: {best_match.id} with {most_signature_objects} signature objects (all matched)")
+                logger.info(f"Template match found: {best_match_template.id} (version {best_match_version.version_num}) with {most_signature_objects} signature objects (all matched)")
 
                 return TemplateMatchResult(
                     template_found=True,
-                    template_id=best_match.id,
-                    template_version=best_match.version,
+                    template_id=best_match_template.id,
+                    template_version=best_match_version.version_num,
                     coverage_percentage=100.0,  # Always 100% since all objects must be found
                     unmatched_object_count=None,  # Not needed
                     match_details=json.dumps({
-                        "template_name": best_match.name,
-                        "customer_name": best_match.customer_name,
+                        "template_name": best_match_template.name,
+                        "template_version": best_match_version.version_num,
                         "total_pdf_objects": len(pdf_objects),
                         "matched_signature_objects": most_signature_objects,
                         "match_type": "complete_match"
@@ -104,36 +116,63 @@ class PdfTemplateService:
             logger.error(f"Error in template matching: {e}")
             return TemplateMatchResult(template_found=False)
 
-    def _check_all_template_objects_found(self, pdf_objects: List[PdfObject], template: PdfTemplate) -> bool:
+    def _check_all_version_objects_found(self, pdf_objects: List[PdfObject], version: PdfTemplateVersion) -> bool:
         """
-        Check if ALL template signature objects are found in the PDF
+        Check if ALL version signature objects are found in the PDF
 
         Args:
             pdf_objects: PDF objects to match against
-            template: Template to check
+            version: Template version with typed signature objects
 
         Returns:
             True if ALL signature objects are found, False otherwise
         """
-        if not template.signature_objects:
-            return False
-
-        try:
-            signature_objects = json.loads(template.signature_objects)
-        except (json.JSONDecodeError, TypeError):
-            logger.warning(f"Invalid signature objects JSON for template {template.id}")
-            return False
-
-        if not signature_objects:
+        if not version.signature_objects:
             return False
 
         # Check that every signature object exists in the PDF
-        for sig_obj_data in signature_objects:
-            if not self._object_exists_in_pdf(sig_obj_data, pdf_objects):
+        for signature_obj in version.signature_objects:
+            if not self._object_exists_in_pdf_typed(signature_obj, pdf_objects):
                 return False
 
         # All signature objects were found
         return True
+
+    def _object_exists_in_pdf_typed(self, signature_object: PdfObject, pdf_objects: List[PdfObject]) -> bool:
+        """
+        Check if a typed signature object exists in the PDF objects using fuzzy matching
+
+        Args:
+            signature_object: Template signature object (typed PdfObject)
+            pdf_objects: PDF objects to search in
+
+        Returns:
+            True if object is found with sufficient similarity
+        """
+        # Define matching tolerances
+        position_tolerance = 10.0  # pixels
+        content_similarity_threshold = 0.8  # 80% similarity for text content
+
+        for pdf_obj in pdf_objects:
+            # Basic type and page matching
+            if pdf_obj.type != signature_object.type or pdf_obj.page != signature_object.page:
+                continue
+
+            # Position matching (within tolerance)
+            x_diff = abs(pdf_obj.x - signature_object.x)
+            y_diff = abs(pdf_obj.y - signature_object.y)
+
+            if x_diff <= position_tolerance and y_diff <= position_tolerance:
+                # Content matching for text objects
+                if signature_object.type == 'text' and signature_object.text and pdf_obj.text:
+                    similarity = self._calculate_text_similarity(signature_object.text, pdf_obj.text)
+                    if similarity >= content_similarity_threshold:
+                        return True
+                elif signature_object.type != 'text':
+                    # For non-text objects, position match is sufficient
+                    return True
+
+        return False
 
     def _object_exists_in_pdf(self, signature_object: dict, pdf_objects: List[PdfObject]) -> bool:
         """
@@ -216,58 +255,131 @@ class PdfTemplateService:
     # === Template Management ===
 
     def create_template(self, 
-        name : str,
-        description : Optional[str],
-        pdf_id : int,
-        signature_objects: List[PdfObject],
-        extraction_fields: List[ExtractionField],
+        pdf_template_data: PdfTemplateCreate
     ) -> PdfTemplate:
         """
-        Create a new PDF template
+        Create a new PDF template with its first version
 
         Args:
-            template_request: Template creation request
+            name: Template name
+            description: Template description
+            pdf_id: Source PDF file ID
+            signature_objects: Objects for template matching
+            extraction_fields: Fields to extract from matching PDFs
 
         Returns:
-            Created template
+            Created template (full domain object)
         """
 
-        template = self.pdf_template_repo.create(name, description, pdf_id)
-          
-        version = self.pdf_template_version_repo.create(
-              pdf_template_id=template.id,
-              version=1,
-              signature_objects=signature_objects,
-              extraction_fields=extraction_fields
-          )
+        template = self.pdf_template_repo.create(pdf_template_data)
+        new_template_id = template.id
+  
+        # Create first version using create model
+        version_create = PdfTemplateVersionCreate(
+            pdf_template_id=new_template_id,
+            signature_objects=pdf_template_data.initial_signature_objects,
+            extraction_fields=pdf_template_data.initial_extraction_fields,
+            signature_object_count=len(pdf_template_data.initial_signature_objects)
+        )
+        version = self.pdf_template_version_repo.create(version_create)
 
-        template.current_version_id = version.id
-        return self.pdf_template_repo.set_current_version_id(template.id, version.id)
+        # Set as current version
+        template = self.pdf_template_repo.set_current_version_id(template.id, version.id)
+        
+        if not template:
+            raise ObjectNotFoundError("PdfTemplate", new_template_id)
+          
+        return template
     
-    def create_template_version(self, 
-        pdf_template_id: int, 
-        signature_objects: List[PdfObject], 
-        extraction_fields: List[ExtractionField]
-    ) -> PdfTemplateVersion:
+    def create_template_version(self, version_create: PdfTemplateVersionCreate) -> PdfTemplateVersion:
         """
         Create a new version of a PDF template  
         
         Args:
-            template_id: ID of the template to create a version for
-            template_version_request: Template version creation request
+            version_create: Template version create model with all required data
             
         Returns:
-            Created template version
+            Created template version (full domain object)
+            
+        Raises:
+            ObjectNotFoundError: If the template doesn't exist
         """
-        # Convert objects and fields to JSON
-        next_version_num = self.pdf_template_repo.get_next_version_number(pdf_template_id)
-        version = self.pdf_template_version_repo.create(
-            pdf_template_id=pdf_template_id,
-            version=next_version_num,
-            signature_objects=signature_objects,
-            extraction_fields=extraction_fields
-        )
-        self.pdf_template_repo.set_current_version_id(pdf_template_id, version.id)
+        # First verify the template exists
+        template = self.pdf_template_repo.get_by_id(version_create.pdf_template_id)
+        if not template:
+            raise ObjectNotFoundError("PdfTemplate", version_create.pdf_template_id)
+        
+        # Create the version (repository will auto-calculate version number)
+        version = self.pdf_template_version_repo.create(version_create)
+        
+        # Set as current version
+        updated_template = self.pdf_template_repo.set_current_version_id(version_create.pdf_template_id, version.id)
+        if not updated_template:
+            # This shouldn't happen since we just verified the template exists
+            raise ObjectNotFoundError("PdfTemplate", version_create.pdf_template_id)
         
         return version
     
+    def get_current_version(self, template_id: int) -> Optional[PdfTemplateVersion]:
+        """Get the current active version for a template"""
+        # Get template to find current_version_id
+        template = self.pdf_template_repo.get_by_id(template_id)
+        if not template or not template.current_version_id:
+            return None
+        
+        # Get the specific version
+        return self.pdf_template_version_repo.get_by_id(template.current_version_id)
+    
+    def get_templates(self, 
+        status: Optional[str] = None,
+        order_by: str = "created_at",
+        desc: bool = False,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None
+    ) -> List[PdfTemplate]:
+        """
+        Get PDF templates with filtering and pagination
+        
+        Args:
+            status: Filter by template status (active/inactive)
+            order_by: Field to order by
+            desc: Sort in descending order
+            limit: Maximum number of templates to return
+            offset: Number of templates to skip
+            
+        Returns:
+            List of PDF template domain objects
+        """
+        return self.pdf_template_repo.get_all(
+            status=status,
+            order_by=order_by,
+            desc=desc,
+            limit=limit,
+            offset=offset
+        )
+    
+    def get_template_by_id(self, template_id: int) -> Optional[PdfTemplate]:
+        """Get a single PDF template by ID"""
+        return self.pdf_template_repo.get_by_id(template_id)
+    
+    def get_template_version(self, template_id: int, version_id: int) -> Optional[PdfTemplateVersion]:
+        """Get a specific template version by template ID and version ID"""
+        # First verify the template exists
+        template = self.pdf_template_repo.get_by_id(template_id)
+        if not template:
+            return None
+        
+        # Get the specific version
+        version = self.pdf_template_version_repo.get_by_id(version_id)
+        if not version:
+            return None
+        
+        # Verify the version belongs to the requested template
+        if version.pdf_template_id != template_id:
+            return None
+        
+        return version
+    
+    def update_template(self, template_id: int, update_data: PdfTemplateUpdate) -> Optional[PdfTemplate]:
+        """Update a PDF template with the provided data"""
+        return self.pdf_template_repo.update(template_id, update_data)
