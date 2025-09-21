@@ -7,16 +7,15 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Depends, status, Query
 from fastapi.responses import JSONResponse
 
-from features.email_ingestion.config_service import EmailIngestionConfigService
-from shared.database.repositories import EmailIngestionConfigRepository
-from shared.exceptions import ObjectNotFoundError
+from shared.services import get_email_config_service
+from shared.exceptions import ObjectNotFoundError, ValidationError, RepositoryError
 from shared.models.email_config import (
+    EmailConfigCreate,
+    EmailConfigUpdate,
     EmailConfig,
     EmailConfigSummary
 )
 from api.schemas.email_config import (
-    EmailConfigCreate,
-    EmailConfigUpdate,
     EmailConfigActivateRequest,
     EmailConfigActivateResponse
 )
@@ -77,7 +76,7 @@ def list_email_configs(
             summary = EmailConfigSummary(
                 id=config.id,
                 name=config.name,
-                email_address=config.email_address or "default",
+                email_address=config.email_address,
                 folder_name=config.folder_name,
                 is_active=config.is_active,
                 is_running=config.is_running,
@@ -91,6 +90,12 @@ def list_email_configs(
         
         return summaries
         
+    except RepositoryError as e:
+        logger.exception(f"Repository error listing email configs: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve email configurations"
+        )
     except Exception as e:
         logger.exception(f"Error listing email configs: {e}")
         raise HTTPException(
@@ -119,39 +124,16 @@ def get_email_config(config_id: int) -> EmailConfig:
                 detail=f"Email configuration with ID {config_id} not found"
             )
         
-        # Convert domain object to Pydantic model
-        return EmailConfig(
-            id=config.id,
-            name=config.name,
-            description=config.description,
-            email_address=config.email_address or "default",
-            folder_name=config.folder_name,
-            filter_rules=[
-                {
-                    "field": rule.field,
-                    "operation": rule.operation,
-                    "value": rule.value,
-                    "case_sensitive": rule.case_sensitive
-                }
-                for rule in config.filter_rules
-            ],
-            poll_interval_seconds=config.poll_interval_seconds,
-            max_backlog_hours=config.max_backlog_hours,
-            error_retry_attempts=config.error_retry_attempts,
-            is_active=config.is_active,
-            is_running=config.is_running,
-            emails_processed=config.emails_processed,
-            pdfs_found=config.pdfs_found,
-            last_error_message=config.last_error_message,
-            last_error_at=config.last_error_at,
-            created_by=getattr(config, 'created_by', 'system'),
-            created_at=config.created_at,
-            updated_at=config.updated_at,
-            last_used_at=config.last_used_at
-        )
+        return config
         
     except HTTPException:
         raise
+    except RepositoryError as e:
+        logger.exception(f"Repository error getting email config {config_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve email configuration"
+        )
     except Exception as e:
         logger.exception(f"Error getting email config {config_id}: {e}")
         raise HTTPException(
@@ -177,65 +159,20 @@ def create_email_config(config_create: EmailConfigCreate) -> EmailConfig:
     - **poll_interval_seconds**: Polling interval in seconds (default: 5)
     - **max_backlog_hours**: Maximum backlog hours (default: 24)
     - **error_retry_attempts**: Error retry attempts (default: 3)
-    - **created_by**: User who created the configuration (required)
     """
     try:
         config_service = get_email_config_service()
         
-        # Convert Pydantic models to domain objects
-        from shared.domain.email_ingestion import EmailFilterRule
-        filter_rules = [
-            EmailFilterRule(
-                field=rule.field,
-                operation=rule.operation,
-                value=rule.value,
-                case_sensitive=rule.case_sensitive
-            )
-            for rule in config_create.filter_rules
-        ]
+        # Service now accepts Pydantic model directly
+        created_config = config_service.create_config(config_create)
+        return created_config
         
-        created_config = config_service.create_config(
-            name=config_create.name,
-            description=config_create.description,
-            email_address=config_create.email_address,
-            folder_name=config_create.folder_name,
-            filter_rules=filter_rules,
-            poll_interval_seconds=config_create.poll_interval_seconds,
-            max_backlog_hours=config_create.max_backlog_hours,
-            error_retry_attempts=config_create.error_retry_attempts
+    except RepositoryError as e:
+        logger.exception(f"Repository error creating email config: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create email configuration"
         )
-        
-        # Convert back to Pydantic model
-        return EmailConfig(
-            id=created_config.id,
-            name=created_config.name,
-            description=created_config.description,
-            email_address=created_config.email_address or "default",
-            folder_name=created_config.folder_name,
-            filter_rules=[
-                {
-                    "field": rule.field,
-                    "operation": rule.operation,
-                    "value": rule.value,
-                    "case_sensitive": rule.case_sensitive
-                }
-                for rule in created_config.filter_rules
-            ],
-            poll_interval_seconds=created_config.poll_interval_seconds,
-            max_backlog_hours=created_config.max_backlog_hours,
-            error_retry_attempts=created_config.error_retry_attempts,
-            is_active=created_config.is_active,
-            is_running=created_config.is_running,
-            emails_processed=created_config.emails_processed,
-            pdfs_found=created_config.pdfs_found,
-            last_error_message=created_config.last_error_message,
-            last_error_at=created_config.last_error_at,
-            created_by=config_create.created_by,
-            created_at=created_config.created_at,
-            updated_at=created_config.updated_at,
-            last_used_at=created_config.last_used_at
-        )
-        
     except Exception as e:
         logger.exception(f"Error creating email config: {e}")
         raise HTTPException(
@@ -264,90 +201,21 @@ def update_email_config(config_id: int, config_update: EmailConfigUpdate) -> Ema
     try:
         config_service = get_email_config_service()
         
-        # Get current config
-        current_config = config_service.get_config(config_id)
-        if not current_config:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Email configuration with ID {config_id} not found"
-            )
+        # Service now accepts Pydantic model directly and handles ObjectNotFoundError
+        updated_config = config_service.update_config(config_id, config_update)
+        return updated_config
         
-        # Create updated config object
-        from shared.domain.email_ingestion import EmailFilterRule, EmailIngestionConfig
-        
-        # Use current values as defaults, override with provided updates
-        filter_rules = current_config.filter_rules
-        if config_update.filter_rules is not None:
-            filter_rules = [
-                EmailFilterRule(
-                    field=rule.field,
-                    operation=rule.operation,
-                    value=rule.value,
-                    case_sensitive=rule.case_sensitive
-                )
-                for rule in config_update.filter_rules
-            ]
-        
-        poll_interval_seconds = config_update.poll_interval_seconds if config_update.poll_interval_seconds is not None else current_config.poll_interval_seconds
-        max_backlog_hours = config_update.max_backlog_hours if config_update.max_backlog_hours is not None else current_config.max_backlog_hours
-        error_retry_attempts = config_update.error_retry_attempts if config_update.error_retry_attempts is not None else current_config.error_retry_attempts
-        
-        updated_config_obj = EmailIngestionConfig(
-            id=current_config.id,
-            name=current_config.name,
-            description=config_update.description if config_update.description is not None else current_config.description,
-            email_address=current_config.email_address,
-            folder_name=current_config.folder_name,
-            filter_rules=filter_rules,
-            poll_interval_seconds=poll_interval_seconds,
-            max_backlog_hours=max_backlog_hours,
-            error_retry_attempts=error_retry_attempts,
-            is_active=current_config.is_active,
-            is_running=current_config.is_running,
-            last_used_at=current_config.last_used_at,
-            emails_processed=current_config.emails_processed,
-            pdfs_found=current_config.pdfs_found,
-            last_error_message=current_config.last_error_message,
-            last_error_at=current_config.last_error_at,
-            created_at=current_config.created_at,
-            updated_at=current_config.updated_at
+    except ObjectNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Email configuration with ID {config_id} not found"
         )
-        
-        updated_config = config_service.update_config(config_id, updated_config_obj)
-        
-        # Convert back to Pydantic model
-        return EmailConfig(
-            id=updated_config.id,
-            name=updated_config.name,
-            description=updated_config.description,
-            email_address=updated_config.email_address or "default",
-            folder_name=updated_config.folder_name,
-            filter_rules=[
-                {
-                    "field": rule.field,
-                    "operation": rule.operation,
-                    "value": rule.value,
-                    "case_sensitive": rule.case_sensitive
-                }
-                for rule in updated_config.filter_rules
-            ],
-            poll_interval_seconds=updated_config.poll_interval_seconds,
-            max_backlog_hours=updated_config.max_backlog_hours,
-            error_retry_attempts=updated_config.error_retry_attempts,
-            is_active=updated_config.is_active,
-            is_running=updated_config.is_running,
-            emails_processed=updated_config.emails_processed,
-            pdfs_found=updated_config.pdfs_found,
-            last_error_message=updated_config.last_error_message,
-            last_error_at=updated_config.last_error_at,
-            created_by=getattr(updated_config, 'created_by', 'system'),
-            created_at=updated_config.created_at,
-            updated_at=updated_config.updated_at,
-            last_used_at=updated_config.last_used_at
+    except RepositoryError as e:
+        logger.exception(f"Repository error updating email config {config_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update email configuration"
         )
-        
-    except HTTPException:
-        raise
     except Exception as e:
         logger.exception(f"Error updating email config {config_id}: {e}")
         raise HTTPException(
@@ -377,21 +245,9 @@ def activate_email_config(config_id: int, activate_request: EmailConfigActivateR
             updated_config = config_service.activate_config(config_id)
             message = f"Configuration '{updated_config.name}' has been activated"
         else:
-            # For deactivation, we need to update the config directly
-            # Since there's no deactivate method, we'll use the repository
-            current_config = config_service.get_config(config_id)
-            if not current_config:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Email configuration with ID {config_id} not found"
-                )
-            
-            # Update is_active to False - this would need to be implemented in the service
-            # For now, we'll raise an error indicating this needs implementation
-            raise HTTPException(
-                status_code=status.HTTP_501_NOT_IMPLEMENTED,
-                detail="Deactivation endpoint not yet implemented in service layer"
-            )
+            # Deactivate this specific config
+            updated_config = config_service.deactivate_config(config_id)
+            message = f"Configuration '{updated_config.name}' has been deactivated"
         
         return EmailConfigActivateResponse(
             success=True,
@@ -399,16 +255,25 @@ def activate_email_config(config_id: int, activate_request: EmailConfigActivateR
             config_name=updated_config.name,
             is_active=updated_config.is_active,
             message=message,
-            previous_active_config=None  # Would need service support to track this
+            previous_active_config=None  # Could track this in service if needed
         )
         
-    except HTTPException:
-        raise
+    except ObjectNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Email configuration with ID {config_id} not found"
+        )
+    except RepositoryError as e:
+        logger.exception(f"Repository error activating email config {config_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update email configuration status"
+        )
     except Exception as e:
         logger.exception(f"Error activating email config {config_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to activate email configuration"
+            detail="Failed to update email configuration status"
         )
 
 
@@ -427,33 +292,32 @@ def delete_email_config(config_id: int):
     try:
         config_service = get_email_config_service()
         
-        # This will raise an exception if config is active or doesn't exist
-        success = config_service.delete_config(config_id)
-        
-        if not success:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to delete email configuration"
-            )
+        # Service returns deleted config and raises exceptions for errors
+        deleted_config = config_service.delete_config(config_id)
         
         # Return 204 No Content on successful deletion
         return None
         
+    except ObjectNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Email configuration with ID {config_id} not found"
+        )
+    except ValidationError as e:
+        # Handle active config validation error
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except RepositoryError as e:
+        logger.exception(f"Repository error deleting email config {config_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete email configuration"
+        )
     except Exception as e:
-        # Check if it's a business rule violation (active config)
-        if "active" in str(e).lower():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot delete active email configuration"
-            )
-        elif "not found" in str(e).lower():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Email configuration with ID {config_id} not found"
-            )
-        else:
-            logger.exception(f"Error deleting email config {config_id}: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to delete email configuration"
-            )
+        logger.exception(f"Error deleting email config {config_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete email configuration"
+        )

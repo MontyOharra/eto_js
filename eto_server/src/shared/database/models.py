@@ -26,7 +26,7 @@ class EmailModel(BaseModel):
     folder_name: Mapped[Optional[str]] = mapped_column(String(100))
     has_pdf_attachments: Mapped[bool] = mapped_column(Boolean, default=False)
     attachment_count: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     
     # Relationships
     pdf_files = relationship("PdfFileModel", back_populates="email")
@@ -84,14 +84,14 @@ class EmailIngestionCursorModel(BaseModel):
     # Outlook-specific cursor data
     last_processed_message_id: Mapped[Optional[str]] = mapped_column(String(255))  # EntryID from Outlook
     last_processed_received_date: Mapped[Optional[datetime]] = mapped_column(DateTime)  # ReceivedTime from last processed email
-    last_check_time: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(timezone.utc))
+    last_check_time: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     # Processing statistics
     total_emails_processed: Mapped[int] = mapped_column(Integer, default=0)
     total_pdfs_found: Mapped[int] = mapped_column(Integer, default=0)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(timezone.utc))
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
     
     # Unique constraint to prevent duplicate cursors for same email/folder combo
     __table_args__ = (
@@ -143,8 +143,8 @@ class EtoRunModel(BaseModel):
     order_id: Mapped[Optional[int]] = mapped_column(Integer)  # References orders table (assumed to exist)
 
     # Audit
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(timezone.utc), index=True)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
     
     # Relationships
     email = relationship("EmailModel", back_populates="eto_runs")
@@ -166,8 +166,8 @@ class PdfFileModel(BaseModel):
     page_count: Mapped[Optional[int]] = mapped_column(Integer)
     object_count: Mapped[Optional[int]] = mapped_column(Integer)  # Number of PDF objects extracted
     objects_json: Mapped[Optional[str]] = mapped_column(Text)  # PDF objects for template matching
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(timezone.utc))
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
     
     # Relationships
     email = relationship("EmailModel", back_populates="pdf_files")
@@ -183,8 +183,8 @@ class PdfTemplateModel(BaseModel):
     source_pdf_id: Mapped[int] = mapped_column(ForeignKey('pdf_files.id'), index=True)
     status: Mapped[str] = mapped_column(String(50), default='active')
     current_version_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('pdf_template_versions.id'), default=None)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(timezone.utc))
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
     # Relationships
     eto_runs = relationship("EtoRunModel", back_populates="template")
@@ -202,7 +202,7 @@ class PdfTemplateVersionModel(BaseModel):
     extraction_fields: Mapped[str] = mapped_column(Text)
     usage_count: Mapped[int] = mapped_column(default=0)
     last_used_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(timezone.utc))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     # Relationships
     pdf_templates = relationship("PdfTemplateModel", back_populates="pdf_template_versions")
@@ -228,8 +228,8 @@ class TransformationPipelineModel(BaseModel):
 
     # Status and metadata
     status: Mapped[str] = mapped_column(String(50), default='draft')  # draft, active, archived
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(timezone.utc))
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Relationships
@@ -265,8 +265,8 @@ class TransformationPipelineModuleModel(BaseModel):
     category: Mapped[str] = mapped_column(String(100), default='Processing')
 
     # Metadata
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(timezone.utc))
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     __table_args__ = (
@@ -297,7 +297,7 @@ class TransformationPipelineStepModel(BaseModel):
 
     # Execution metadata
     execution_order_within_step: Mapped[int] = mapped_column(Integer, default=0)  # Order within parallel group
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     # Relationships
     pipeline = relationship("TransformationPipelineModel", back_populates="pipeline_steps")
@@ -332,8 +332,8 @@ class CustomTransformationModuleModel(BaseModel):
     category: Mapped[str] = mapped_column(String(100), default='Custom')
 
     # Metadata
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(timezone.utc))
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     __table_args__ = (

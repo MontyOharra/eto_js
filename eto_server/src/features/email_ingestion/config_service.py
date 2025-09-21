@@ -1,235 +1,286 @@
 """
 Email Config Service
-Manages email ingestion config with validation and admin operations
+Thin orchestration layer for email config management with business validation
 """
-import json
 import logging
-from typing import Dict, List, Any, Optional
+from typing import List, Optional
 
-from shared.domain import EmailIngestionConfig, EmailFilterRule
+from shared.models.email_config import EmailConfig, EmailConfigCreate, EmailConfigUpdate
 from shared.database.repositories import EmailIngestionConfigRepository
+from shared.exceptions import ObjectNotFoundError, ValidationError, RepositoryError
 
 logger = logging.getLogger(__name__)
 
 
 class EmailIngestionConfigService:
-    """Manages email ingestion config with validation and admin operations"""
+    """Thin orchestration layer for email config with business validation"""
     
     def __init__(self, config_repo: EmailIngestionConfigRepository):
         self.config_repo = config_repo
         self.logger = logging.getLogger(__name__)
-
-    def create_config(self,
-                      name: str,
-                      description: Optional[str],
-                      email_address: str,
-                      folder_name: str,
-                      filter_rules: List[EmailFilterRule],
-                      poll_interval_seconds: int,
-                      max_backlog_hours: int,
-                      error_retry_attempts: int,
-                      is_active: bool = True
-    ) -> EmailIngestionConfig:
-      
-        """Create new email ingestion config from creation domain object"""
-        try:
-            self.logger.debug(f"Creating new email config: {name}")
-
-            # Serialize filter rules to JSON for database storage
-            filter_rules_json = json.dumps([
-                {
-                    "field": rule.field,
-                    "operation": rule.operation,
-                    "value": rule.value,
-                    "case_sensitive": rule.case_sensitive
-                }
-                for rule in filter_rules
-            ])
-
-            # Create config record and get ID
-            config_id = self.config_repo.create_and_get_id({
-                "name": name,
-                "description": description,
-                "email_address": email_address,
-                "folder_name": folder_name,
-                "filter_rules": filter_rules_json,
-                "poll_interval_seconds": poll_interval_seconds,
-                "max_backlog_hours": max_backlog_hours,
-                "error_retry_attempts": error_retry_attempts,
-                "is_active": False,  # New configs start inactive
-                "is_running": False,
-                "emails_processed": 0,
-                "pdfs_found": 0
-            })
-            
-            self.logger.info(f"Created email config {name} with ID {config_id}")
-
-            # Return the created config from repository
-            created_config = self.config_repo.get_by_id(config_id)
-            if not created_config:
-                raise Exception(f"Failed to retrieve created config with ID {config_id}")
-
-            return created_config
-
-        except Exception as e:
-            self.logger.exception(f"Error creating config: {e}")
-            raise
     
-    def update_config(self, config_id: int, config_update: EmailIngestionConfig) -> EmailIngestionConfig:
-        """Update existing email ingestion config from domain object"""
-        try:
-            self.logger.debug(f"Updating email config ID {config_id}")
-
-            # Serialize filter rules to JSON for database storage
-            filter_rules_json = json.dumps([
-                {
-                    "field": rule.field,
-                    "operation": rule.operation,
-                    "value": rule.value,
-                    "case_sensitive": rule.case_sensitive
-                }
-                for rule in config_update.filter_rules
-            ])
-
-            # Update config record
-            config = self.config_repo.update(config_id, {
-                "email_address": config_update.email_address,
-                "folder_name": config_update.folder_name,
-                "filter_rules": filter_rules_json,
-                "poll_interval_seconds": config_update.poll_interval_seconds,
-                "max_backlog_hours": config_update.max_backlog_hours,
-                "error_retry_attempts": config_update.error_retry_attempts,
-            })
-            
-            if not config:
-                raise Exception(f"Config with ID {config_id} not found")
-
-            # Extract name to avoid Column type issues
-            config_name = config.name
-            self.logger.info(f"Updated email config {config_name}")
-
-            return config
-
-        except Exception as e:
-            self.logger.exception(f"Error updating config: {e}")
-            raise
+    # ========== CRUD Operations ==========
     
-    def activate_config(self, config_id: int) -> EmailIngestionConfig:
-        """Activate an email ingestion config (deactivates all others)"""
-        try:
-            self.logger.debug(f"Activating email config ID {config_id}")
-            
-            # Set this config as active
-            config = self.config_repo.set_config_active(config_id)
-            
-            if not config:
-                raise Exception(f"Config with ID {config_id} not found")
-
-            # Extract name to avoid Column type issues
-            config_name = config.name
-            self.logger.info(f"Activated email config: {config_name}")
-
-            return config
-
-        except Exception as e:
-            self.logger.exception(f"Error activating config: {e}")
-            raise
-    
-    def get_active_config(self) -> Optional[EmailIngestionConfig]:
-        """Get currently active email ingestion config as domain object"""
-        try:
-            config = self.config_repo.get_active_config()
-            
-            if not config:
-                self.logger.warning("No active email config found")
-                return None
-            
-            return config  # Repository now returns domain object directly
+    def create_config(self, config_create: EmailConfigCreate) -> EmailConfig:
+        """
+        Create new email configuration
         
-        except Exception as e:
-            self.logger.exception(f"Error getting active config: {e}")
-            return None
-    
-    def get_config(self, config_id: int) -> Optional[EmailIngestionConfig]:
-        """Get specific email ingestion config by ID as domain object"""
-        try:
-            return self.config_repo.get_by_id(config_id)
+        Args:
+            config_create: EmailConfigCreate model with configuration data
+            
+        Returns:
+            Created EmailConfig
+            
+        Raises:
+            RepositoryError: If database operation fails
+        """
+        self.logger.debug(f"Creating new email config: {config_create.name}")
         
-        except Exception as e:
-            self.logger.exception(f"Error getting config {config_id}: {e}")
-            return None
-    
-    def list_configs(self, order_by: Optional[str] = None, desc: bool = False) -> List[EmailIngestionConfig]:
-        """List all email ingestion configs with full details"""
-        try:
-            if order_by:
-                # For custom ordering, would need to update repository to support this
-                # For now, just use get_all_configs which returns domain objects
-                configs = self.config_repo.get_all_configs()
-            else:
-                configs = self.config_repo.get_all_configs()
-            
-            # Repository now returns domain objects directly
-            return configs
+        # Repository handles all serialization and database operations
+        config = self.config_repo.create(config_create)
         
-        except Exception as e:
-            self.logger.exception(f"Error listing configs: {e}")
-            return []
+        self.logger.info(f"Created email config '{config.name}' with ID {config.id}")
+        return config
     
-    def delete_config(self, config_id: int) -> bool:
-        """Delete an email ingestion config"""
-        try:
-            self.logger.debug(f"Deleting email config ID {config_id}")
+    def update_config(self, config_id: int, config_update: EmailConfigUpdate) -> EmailConfig:
+        """
+        Update existing email configuration
+        
+        Args:
+            config_id: Configuration ID to update
+            config_update: EmailConfigUpdate model with fields to update
             
-            # Delegate to repository for atomic delete operation
-            result = self.config_repo.delete_if_inactive(config_id)
-
-            if not result["success"]:
-                raise Exception(result["message"])
-
-            self.logger.info(f"Deleted email config: {result['name']}")
-
-            return True
-
-        except Exception as e:
-            self.logger.exception(f"Error deleting config: {e}")
-            raise
-    
-    def update_runtime_status(self, config_id: int, is_running: bool) -> EmailIngestionConfig:
-        """Update runtime status of config"""
-        try:
-            self.logger.debug(f"Updating runtime status for config {config_id} to: {'running' if is_running else 'stopped'}")
+        Returns:
+            Updated EmailConfig
             
-            config = self.config_repo.update_runtime_status(config_id, is_running)
-
-            if not config:
-                raise Exception(f"Config with ID {config_id} not found")
-
-            # Extract name to avoid Column type issues
-            config_name = config.name
-            self.logger.info(f"Updated runtime status for config: {config_name}")
-
+        Raises:
+            ObjectNotFoundError: If configuration not found
+            RepositoryError: If database operation fails
+        
+        Note:
+            email_address and folder_name are immutable and not included in EmailConfigUpdate
+        """
+        self.logger.debug(f"Updating email config ID {config_id}")
+        
+        # Repository handles partial updates and serialization
+        config = self.config_repo.update(config_id, config_update)
+        
+        if config:
+            self.logger.info(f"Updated email config '{config.name}'")
             return config
-
-        except Exception as e:
-            self.logger.exception(f"Error updating runtime status for config {config_id}: {e}")
-            raise
+        else:
+            # Repository returns None for not found in update
+            raise ObjectNotFoundError('EmailConfig', config_id)
     
-    def increment_processing_stats(self, config_id: int, emails: int, pdfs: int) -> Optional[EmailIngestionConfig]:
-        """Increment processing statistics for config"""
-        try:
-            self.logger.debug(f"Incrementing stats for config {config_id}: +{emails} emails, +{pdfs} PDFs")
-            
-            config = self.config_repo.increment_processing_stats(config_id, emails, pdfs)
-            
-            if not config:
-                self.logger.warning(f"Config with ID {config_id} not found for stats update")
-                return None
-            
-            return config
+    def get_config(self, config_id: int) -> Optional[EmailConfig]:
+        """
+        Get single configuration by ID
         
-        except Exception as e:
-            self.logger.exception(f"Error incrementing processing stats for config {config_id}: {e}")
-            return None
-
-    # === Helper Methods ===
+        Args:
+            config_id: Configuration ID
+            
+        Returns:
+            EmailConfig or None if not found
+            
+        Raises:
+            RepositoryError: If database operation fails
+        """
+        return self.config_repo.get_by_id(config_id)
+    
+    def list_configs(self, order_by: str = 'created_at', desc: bool = False) -> List[EmailConfig]:
+        """
+        List all configurations with sorting
+        
+        Args:
+            order_by: Field to sort by (created_at, updated_at, name, is_active, last_used_at, emails_processed)
+            desc: Sort in descending order
+            
+        Returns:
+            List of EmailConfig models
+            
+        Raises:
+            RepositoryError: If database operation fails
+        """
+        # Validate sort field
+        allowed_fields = ['created_at', 'updated_at', 'name', 'is_active', 'last_used_at', 'emails_processed', 'pdfs_found']
+        if order_by not in allowed_fields:
+            self.logger.warning(f"Invalid order_by field '{order_by}', using 'created_at'")
+            order_by = 'created_at'
+        
+        return self.config_repo.get_all(order_by=order_by, desc=desc)
+    
+    def delete_config(self, config_id: int) -> EmailConfig:
+        """
+        Delete email configuration
+        
+        Args:
+            config_id: Configuration ID to delete
+            
+        Returns:
+            Deleted EmailConfig
+            
+        Raises:
+            ObjectNotFoundError: If configuration not found
+            ValidationError: If configuration is active
+            RepositoryError: If database operation fails
+        """
+        self.logger.debug(f"Deleting email config ID {config_id}")
+        
+        # Repository handles validation and raises appropriate exceptions
+        config = self.config_repo.delete(config_id)
+        
+        self.logger.info(f"Deleted email config '{config.name}'")
+        return config
+    
+    # ========== Business Operations ==========
+    
+    def activate_config(self, config_id: int) -> EmailConfig:
+        """
+        Activate email configuration (deactivates all others)
+        
+        Args:
+            config_id: Configuration ID to activate
+            
+        Returns:
+            Activated EmailConfig
+            
+        Raises:
+            ObjectNotFoundError: If configuration not found
+            RepositoryError: If database operation fails
+        """
+        self.logger.debug(f"Activating email config ID {config_id}")
+        
+        # Repository handles atomic activation/deactivation
+        config = self.config_repo.activate(config_id)
+        
+        self.logger.info(f"Activated email config '{config.name}'")
+        return config
+    
+    def deactivate_config(self, config_id: int) -> EmailConfig:
+        """
+        Deactivate email configuration
+        
+        Args:
+            config_id: Configuration ID to deactivate
+            
+        Returns:
+            Deactivated EmailConfig
+            
+        Raises:
+            ObjectNotFoundError: If configuration not found
+            RepositoryError: If database operation fails
+        """
+        self.logger.debug(f"Deactivating email config ID {config_id}")
+        
+        config = self.config_repo.deactivate(config_id)
+        
+        self.logger.info(f"Deactivated email config '{config.name}'")
+        return config
+    
+    def get_active_config(self) -> Optional[EmailConfig]:
+        """
+        Get currently active configuration
+        
+        Returns:
+            Active EmailConfig or None if no active config
+            
+        Raises:
+            RepositoryError: If database operation fails
+        """
+        config = self.config_repo.get_active()
+        
+        if config:
+            self.logger.debug(f"Retrieved active config '{config.name}'")
+        else:
+            self.logger.debug("No active email config found")
+        
+        return config
+    
+    # ========== Convenience Methods ==========
+    
+    def list_configs_active_first(self) -> List[EmailConfig]:
+        """
+        List all configurations with active configs first
+        Useful for UI dropdowns and default listings
+        
+        Returns:
+            List of EmailConfig models
+            
+        Raises:
+            RepositoryError: If database operation fails
+        """
+        return self.config_repo.get_all_active_first()
+    
+    # ========== Runtime Operations ==========
+    
+    def update_runtime_status(self, config_id: int, is_running: bool) -> EmailConfig:
+        """
+        Update runtime status of configuration
+        
+        Args:
+            config_id: Configuration ID
+            is_running: New running status
+            
+        Returns:
+            Updated EmailConfig
+            
+        Raises:
+            ObjectNotFoundError: If configuration not found
+            RepositoryError: If database operation fails
+        """
+        self.logger.debug(f"Updating runtime status for config {config_id} to: {'running' if is_running else 'stopped'}")
+        
+        # Repository raises ObjectNotFoundError if not found
+        config = self.config_repo.update_runtime_status(config_id, is_running)
+        
+        self.logger.info(f"Updated runtime status for config '{config.name}' to: {'running' if is_running else 'stopped'}")
+        return config
+    
+    def increment_stats(self, config_id: int, emails: int, pdfs: int) -> EmailConfig:
+        """
+        Increment processing statistics
+        
+        Args:
+            config_id: Configuration ID
+            emails: Number of emails to add
+            pdfs: Number of PDFs to add
+            
+        Returns:
+            Updated EmailConfig
+            
+        Raises:
+            ObjectNotFoundError: If configuration not found
+            ValidationError: If emails or pdfs are negative
+            RepositoryError: If database operation fails
+        """
+        self.logger.debug(f"Incrementing stats for config {config_id}: +{emails} emails, +{pdfs} PDFs")
+        
+        # Repository validates and raises appropriate exceptions
+        config = self.config_repo.increment_stats(config_id, emails, pdfs)
+        
+        self.logger.debug(f"Updated stats for config '{config.name}': total {config.emails_processed} emails, {config.pdfs_found} PDFs")
+        return config
+    
+    def record_error(self, config_id: int, error_message: str) -> EmailConfig:
+        """
+        Record processing error
+        
+        Args:
+            config_id: Configuration ID
+            error_message: Error message to record
+            
+        Returns:
+            Updated EmailConfig
+            
+        Raises:
+            ObjectNotFoundError: If configuration not found
+            ValidationError: If error_message is empty
+            RepositoryError: If database operation fails
+        """
+        self.logger.debug(f"Recording error for config {config_id}: {error_message[:100]}...")
+        
+        # Repository validates and raises appropriate exceptions
+        config = self.config_repo.record_error(config_id, error_message)
+        
+        self.logger.warning(f"Recorded error for config '{config.name}': {error_message[:100]}...")
+        return config

@@ -5,6 +5,37 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-09-21 20:00] — Complete Email Config Management System with Service Integration
+### Spec / Intent
+- Implement complete email configuration management API following PDF template architectural patterns
+- Build 6 REST endpoints for frontend settings menu with hierarchical Pydantic type system
+- Create thin service layer with Pydantic type pass-through and business validation
+- Fix router deactivation functionality and complete service dependency injection
+- Add email config service to global service container for proper application initialization
+
+### Changes Made
+- **API Router Update**: Rewrote `api/routers/email_configs.py` to properly use service layer with Pydantic models, fixed deactivation functionality using service method, added proper exception handling for ObjectNotFoundError/ValidationError/RepositoryError
+- **Service Container Integration**: Added email config service to `shared/services/service_container.py`, created repository and service during initialization, exported `get_email_config_service()` function
+- **Service Layer**: Created thin orchestration layer accepting Pydantic models directly (EmailConfigCreate, EmailConfigUpdate), proper exception bubbling from repository
+- **Repository Pattern**: Full Pydantic typing with `from_db_model()` and `model_dump_for_db()` methods, added deactivate(config_id) method returning domain object
+- **Domain Models**: Hierarchical type system in `shared/models/email_config.py` with Base/Create/Update/Summary patterns
+- Files: `api/routers/email_configs.py`, `shared/services/service_container.py`, `shared/services/__init__.py`, `features/email_ingestion/config_service.py`, `shared/database/repositories/email_ingestion_config.py`, `shared/models/email_config.py`
+
+### Next Actions
+- Test complete email config management workflow end-to-end
+- Integrate frontend settings menu with new API endpoints
+- Monitor service initialization during application startup
+- Consider adding email config caching for performance
+
+### Notes
+- **Service Integration**: Email config service now part of global service container with proper initialization
+- **Exception Handling**: Consistent error handling with proper HTTP status codes (400 for validation, 404 for not found, 500 for repository)
+- **Deactivation Fixed**: Replaced "not implemented" placeholder with proper service method call
+- **Clean Architecture**: Router → Service → Repository → Database with Pydantic models throughout
+- **Type Safety**: Full type safety from API to database with no manual conversions
+
+---
+
 ## [2025-09-21 16:00] — Complete PDF Template Management API with Auto-Versioning
 ### Spec / Intent
 - Build comprehensive PDF template management system with hierarchical Pydantic type system

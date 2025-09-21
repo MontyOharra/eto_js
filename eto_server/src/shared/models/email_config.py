@@ -123,8 +123,11 @@ class EmailConfigCreate(EmailConfigBase):
     """Request model for creating new email configurations"""
     
     def model_dump_for_db(self) -> dict:
-        data = self.model_dump(exclude={'filter_rules'})
-        data['filter_rules'] = json.dumps(data['filter_rules'])
+        """Convert to database format with JSON serialization"""
+        data = self.model_dump()
+        # Serialize filter_rules to JSON for database storage
+        if 'filter_rules' in data:
+            data['filter_rules'] = json.dumps([rule.model_dump() if hasattr(rule, 'model_dump') else dict(rule) for rule in data['filter_rules']])
         return data
     
     class Config:
@@ -138,6 +141,13 @@ class EmailConfigUpdate(BaseModel):
     poll_interval_seconds: Optional[int] = Field(None, ge=5, description="Polling interval in seconds")
     max_backlog_hours: Optional[int] = Field(None, ge=1, description="Maximum backlog hours")
     error_retry_attempts: Optional[int] = Field(None, ge=1, le=10, description="Error retry attempts")
+
+    def model_dump_for_db(self) -> dict:
+        """Convert to database format, handling optionals and JSON serialization"""
+        data = self.model_dump(exclude_unset=True)
+        if 'filter_rules' in data and data['filter_rules'] is not None:
+            data['filter_rules'] = json.dumps([rule.model_dump() for rule in data['filter_rules']])
+        return data
 
     class Config:
         from_attributes = True
