@@ -11,7 +11,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from shared.database.repositories import BaseRepository
 from shared.exceptions import RepositoryError, ObjectNotFoundError, ValidationError
 from shared.database.models import EmailIngestionConfigModel
-from shared.domain import EmailIngestionConfig, EmailFilterRule
+from shared.models import EmailConfig
 
 logger = logging.getLogger(__name__)
 
@@ -23,64 +23,12 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
     def model_class(self):
         return EmailIngestionConfigModel
     
-    def _convert_to_domain_object(self, config_model: EmailIngestionConfigModel) -> EmailIngestionConfig:
+    def _convert_to_domain_object(self, config_model: EmailIngestionConfigModel) -> EmailConfig:
         """Convert database model to domain object while session is active"""
-        # Parse filter rules from JSON
-        try:
-            filter_rules_data = json.loads(getattr(config_model, "filter_rules") or "[]")
-            filter_rules = [
-                EmailFilterRule(
-                    field=rule["field"],
-                    operation=rule["operation"],
-                    value=rule["value"],
-                    case_sensitive=rule.get("case_sensitive", False)
-                )
-                for rule in filter_rules_data
-            ]
-        except (json.JSONDecodeError, KeyError) as e:
-            logger.warning(f"Invalid filter rules JSON in config {config_model.id}: {e}")
-            filter_rules = []
-
-        config_data = {
-            'id': getattr(config_model, 'id'),
-            'name': getattr(config_model, 'name'),
-            'description': getattr(config_model, 'description'),
-            'email_address': getattr(config_model, 'email_address'),
-            'folder_name': getattr(config_model, 'folder_name'),
-            'filter_rules': filter_rules,
-            'poll_interval_seconds': getattr(config_model, 'poll_interval_seconds'),
-            'max_backlog_hours': getattr(config_model, 'max_backlog_hours'),
-            'error_retry_attempts': getattr(config_model, 'error_retry_attempts'),
-            'is_active': getattr(config_model, 'is_active'),
-            'is_running': getattr(config_model, 'is_running'),
-            'created_at': getattr(config_model, 'created_at'),
-            'updated_at': getattr(config_model, 'updated_at'),
-            'last_used_at': getattr(config_model, 'last_used_at'),
-            'emails_processed': getattr(config_model, 'emails_processed'),
-            'pdfs_found': getattr(config_model, 'pdfs_found'),
-            'last_error_message': getattr(config_model, 'last_error_message'),
-            'last_error_at': getattr(config_model, 'last_error_at')
-        }
-        return EmailIngestionConfig(**config_data)
+        return EmailConfig.from_db_model(config_model)
     
-    def get_by_id(self, id: int) -> Optional[EmailIngestionConfig]:
-        """Override BaseRepository method to return domain object"""
-        try:
-            with self.connection_manager.session_scope() as session:
-                # Get the model from the session
-                model = session.get(self.model_class, id)
-                
-                if model:
-                    # Convert to domain object while session is still active
-                    logger.debug(f"Retrieved email configuration: {model.name}")
-                    return self._convert_to_domain_object(model)
-                else:
-                    return None
-        except SQLAlchemyError as e:
-            logger.error(f"Error getting config {id}: {e}")
-            raise RepositoryError(f"Failed to get config: {e}") from e  
     
-    def get_all_configs(self) -> List[EmailIngestionConfig]:
+    def get_all_configs(self) -> List[EmailConfig]:
         """Get all configurations with business-specific ordering: active first, then by recency"""
         try:
             with self.connection_manager.session_scope() as session:
@@ -97,7 +45,7 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
             logger.error(f"Error getting all configurations: {e}")
             raise RepositoryError(f"Failed to get all configurations: {e}") from e    
     
-    def get_active_config(self) -> Optional[EmailIngestionConfig]:
+    def get_active_config(self) -> Optional[EmailConfig]:
         """Get the currently active configuration"""
         try:
             with self.connection_manager.session_scope() as session:

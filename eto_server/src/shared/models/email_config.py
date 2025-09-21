@@ -6,6 +6,7 @@ Core domain models for email ingestion configuration management
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from datetime import datetime
+import json
 
 
 class EmailFilterRule(BaseModel):
@@ -35,16 +36,6 @@ class EmailFilterRule(BaseModel):
         from_attributes = True
 
 
-class EmailConfigMonitoringSettings(BaseModel):
-    """Email monitoring configuration settings"""
-    poll_interval_seconds: int = Field(5, ge=5, description="Polling interval in seconds")
-    max_backlog_hours: int = Field(24, ge=1, description="Maximum backlog hours")
-    error_retry_attempts: int = Field(3, ge=1, le=10, description="Error retry attempts")
-
-    class Config:
-        from_attributes = True
-
-
 class EmailConfigBase(BaseModel):
     """Core fields required for any email config"""
     name: str = Field(..., min_length=1, max_length=255, description="Configuration name")
@@ -52,7 +43,9 @@ class EmailConfigBase(BaseModel):
     email_address: str = Field(..., description="Email address to monitor")
     folder_name: str = Field(..., description="Email folder name")
     filter_rules: List[EmailFilterRule] = Field(default_factory=list, description="Email filter rules")
-    monitoring: EmailConfigMonitoringSettings = Field(default_factory=EmailConfigMonitoringSettings.model_construct, description="Monitoring settings")
+    poll_interval_seconds: int = Field(5, ge=5, description="Polling interval in seconds")
+    max_backlog_hours: int = Field(24, ge=1, description="Maximum backlog hours")
+    error_retry_attempts: int = Field(3, ge=1, le=10, description="Error retry attempts")
 
     class Config:
         from_attributes = True
@@ -67,13 +60,45 @@ class EmailConfig(EmailConfigBase):
     pdfs_found: int = Field(0, ge=0, description="Total PDFs found")
     last_error_message: Optional[str] = Field(None, description="Last error message")
     last_error_at: Optional[datetime] = Field(None, description="Last error timestamp")
-    created_by: str = Field(..., description="User who created the configuration")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
     last_used_at: Optional[datetime] = Field(None, description="Last usage timestamp")
 
     class Config:
         from_attributes = True
+        
+    @classmethod
+    def from_db_model(cls, db_model) -> 'EmailConfig':
+        """Create from database model with JSON deserialization"""
+        # Parse filter_rules JSON
+        filter_rules = []
+        if db_model.filter_rules:
+            try:
+                rules_data = json.loads(db_model.filter_rules)
+                filter_rules = [EmailFilterRule(**rule) for rule in rules_data]
+            except (json.JSONDecodeError, TypeError):
+                filter_rules = []
+
+        return cls(
+            id=db_model.id,
+            name=db_model.name,
+            description=db_model.description,
+            email_address=db_model.email_address,
+            folder_name=db_model.folder_name,
+            filter_rules=filter_rules,
+            poll_interval_seconds=db_model.poll_interval_seconds,
+            max_backlog_hours=db_model.max_backlog_hours,
+            error_retry_attempts=db_model.error_retry_attempts,
+            is_active=db_model.is_active,
+            is_running=db_model.is_running,
+            emails_processed=db_model.emails_processed,
+            pdfs_found=db_model.pdfs_found,
+            last_error_message=db_model.last_error_message,
+            last_error_at=db_model.last_error_at,
+            created_at=db_model.created_at,
+            updated_at=db_model.updated_at,
+            last_used_at=db_model.last_used_at
+        )
 
 
 class EmailConfigSummary(BaseModel):
@@ -92,20 +117,28 @@ class EmailConfigSummary(BaseModel):
 
     class Config:
         from_attributes = True
+        
+
+class EmailConfigCreate(EmailConfigBase):
+    """Request model for creating new email configurations"""
+    
+    def model_dump_for_db(self) -> dict:
+        data = self.model_dump(exclude={'filter_rules'})
+        data['filter_rules'] = json.dumps(data['filter_rules'])
+        return data
+    
+    class Config:
+        from_attributes = True
 
 
-class EmailConfigStats(BaseModel):
-    """Statistics for email configuration"""
-    config_id: int = Field(..., description="Configuration ID")
-    config_name: str = Field(..., description="Configuration name")
-    total_emails_processed: int = Field(0, ge=0, description="Total emails processed")
-    total_pdfs_found: int = Field(0, ge=0, description="Total PDFs found")
-    success_rate: float = Field(0.0, ge=0.0, le=1.0, description="Success rate (0.0 to 1.0)")
-    avg_processing_time_ms: int = Field(0, ge=0, description="Average processing time in milliseconds")
-    last_24h_emails: int = Field(0, ge=0, description="Emails processed in last 24 hours")
-    last_24h_pdfs: int = Field(0, ge=0, description="PDFs found in last 24 hours")
-    last_error: Optional[str] = Field(None, description="Last error message")
-    last_error_at: Optional[datetime] = Field(None, description="Last error timestamp")
+class EmailConfigUpdate(BaseModel):
+    """Request model for updating existing email configurations"""
+    description: Optional[str] = Field(None, max_length=1000, description="Configuration description")
+    filter_rules: Optional[List[EmailFilterRule]] = Field(None, description="Email filter rules")
+    poll_interval_seconds: Optional[int] = Field(None, ge=5, description="Polling interval in seconds")
+    max_backlog_hours: Optional[int] = Field(None, ge=1, description="Maximum backlog hours")
+    error_retry_attempts: Optional[int] = Field(None, ge=1, le=10, description="Error retry attempts")
 
     class Config:
         from_attributes = True
+

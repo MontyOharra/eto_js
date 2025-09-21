@@ -5,7 +5,7 @@ Hierarchical type system with Base/Create/Domain models
 
 # Base models (core business data)
 from .pdf_template import PdfTemplateBase, PdfTemplateVersionBase, PdfTemplateCreate, PdfTemplateUpdate, PdfTemplateVersionCreate, PdfTemplate, PdfTemplateVersion
-
+from .email_config import EmailConfig, EmailConfigCreate, EmailConfigUpdate, EmailConfigSummary
 # Supporting models
 from .pdf_processing import PdfObject, ExtractionField, PdfFile, PdfObjectExtractionResult
 from .common import TemplateMatchResult
@@ -32,4 +32,10 @@ __all__ = [
     'PdfFile',
     'PdfObjectExtractionResult',
     'TemplateMatchResult',
+    
+    # Email config models
+    'EmailConfig',
+    'EmailConfigCreate',
+    'EmailConfigUpdate',
+    'EmailConfigSummary'  
 ]

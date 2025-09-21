@@ -12,8 +12,7 @@ from shared.database.repositories import EmailIngestionConfigRepository
 from shared.exceptions import ObjectNotFoundError
 from shared.models.email_config import (
     EmailConfig,
-    EmailConfigSummary,
-    EmailConfigStats
+    EmailConfigSummary
 )
 from api.schemas.email_config import (
     EmailConfigCreate,
@@ -136,11 +135,9 @@ def get_email_config(config_id: int) -> EmailConfig:
                 }
                 for rule in config.filter_rules
             ],
-            monitoring={
-                "poll_interval_seconds": config.poll_interval_seconds,
-                "max_backlog_hours": config.max_backlog_hours,
-                "error_retry_attempts": config.error_retry_attempts
-            },
+            poll_interval_seconds=config.poll_interval_seconds,
+            max_backlog_hours=config.max_backlog_hours,
+            error_retry_attempts=config.error_retry_attempts,
             is_active=config.is_active,
             is_running=config.is_running,
             emails_processed=config.emails_processed,
@@ -167,7 +164,7 @@ def get_email_config(config_id: int) -> EmailConfig:
              response_model=EmailConfig,
              status_code=status.HTTP_201_CREATED,
              summary="Create a new email configuration",
-             description="Create a new email configuration with filter rules and monitoring settings")
+             description="Create a new email configuration with filter rules")
 def create_email_config(config_create: EmailConfigCreate) -> EmailConfig:
     """
     Create a new email configuration
@@ -177,7 +174,9 @@ def create_email_config(config_create: EmailConfigCreate) -> EmailConfig:
     - **email_address**: Email address to monitor (required)
     - **folder_name**: Email folder name (required)
     - **filter_rules**: Email filter rules (optional)
-    - **monitoring**: Monitoring settings (optional, uses defaults)
+    - **poll_interval_seconds**: Polling interval in seconds (default: 5)
+    - **max_backlog_hours**: Maximum backlog hours (default: 24)
+    - **error_retry_attempts**: Error retry attempts (default: 3)
     - **created_by**: User who created the configuration (required)
     """
     try:
@@ -201,9 +200,9 @@ def create_email_config(config_create: EmailConfigCreate) -> EmailConfig:
             email_address=config_create.email_address,
             folder_name=config_create.folder_name,
             filter_rules=filter_rules,
-            poll_interval_seconds=config_create.monitoring.poll_interval_seconds,
-            max_backlog_hours=config_create.monitoring.max_backlog_hours,
-            error_retry_attempts=config_create.monitoring.error_retry_attempts
+            poll_interval_seconds=config_create.poll_interval_seconds,
+            max_backlog_hours=config_create.max_backlog_hours,
+            error_retry_attempts=config_create.error_retry_attempts
         )
         
         # Convert back to Pydantic model
@@ -222,11 +221,9 @@ def create_email_config(config_create: EmailConfigCreate) -> EmailConfig:
                 }
                 for rule in created_config.filter_rules
             ],
-            monitoring={
-                "poll_interval_seconds": created_config.poll_interval_seconds,
-                "max_backlog_hours": created_config.max_backlog_hours,
-                "error_retry_attempts": created_config.error_retry_attempts
-            },
+            poll_interval_seconds=created_config.poll_interval_seconds,
+            max_backlog_hours=created_config.max_backlog_hours,
+            error_retry_attempts=created_config.error_retry_attempts,
             is_active=created_config.is_active,
             is_running=created_config.is_running,
             emails_processed=created_config.emails_processed,
@@ -250,7 +247,7 @@ def create_email_config(config_create: EmailConfigCreate) -> EmailConfig:
 @router.patch("/{config_id}",
               response_model=EmailConfig,
               summary="Update email configuration",
-              description="Update filter rules and monitoring settings for an existing email configuration")
+              description="Update email configuration settings")
 def update_email_config(config_id: int, config_update: EmailConfigUpdate) -> EmailConfig:
     """
     Update email configuration
@@ -258,7 +255,9 @@ def update_email_config(config_id: int, config_update: EmailConfigUpdate) -> Ema
     - **config_id**: Configuration ID (required)
     - **description**: Configuration description (optional)
     - **filter_rules**: Email filter rules (optional)
-    - **monitoring**: Monitoring settings (optional)
+    - **poll_interval_seconds**: Polling interval in seconds (optional)
+    - **max_backlog_hours**: Maximum backlog hours (optional)
+    - **error_retry_attempts**: Error retry attempts (optional)
     
     Note: email_address and folder_name cannot be updated after creation
     """
@@ -289,17 +288,9 @@ def update_email_config(config_id: int, config_update: EmailConfigUpdate) -> Ema
                 for rule in config_update.filter_rules
             ]
         
-        monitoring = {
-            "poll_interval_seconds": current_config.poll_interval_seconds,
-            "max_backlog_hours": current_config.max_backlog_hours,
-            "error_retry_attempts": current_config.error_retry_attempts
-        }
-        if config_update.monitoring is not None:
-            monitoring.update({
-                "poll_interval_seconds": config_update.monitoring.poll_interval_seconds,
-                "max_backlog_hours": config_update.monitoring.max_backlog_hours,
-                "error_retry_attempts": config_update.monitoring.error_retry_attempts
-            })
+        poll_interval_seconds = config_update.poll_interval_seconds if config_update.poll_interval_seconds is not None else current_config.poll_interval_seconds
+        max_backlog_hours = config_update.max_backlog_hours if config_update.max_backlog_hours is not None else current_config.max_backlog_hours
+        error_retry_attempts = config_update.error_retry_attempts if config_update.error_retry_attempts is not None else current_config.error_retry_attempts
         
         updated_config_obj = EmailIngestionConfig(
             id=current_config.id,
@@ -308,9 +299,9 @@ def update_email_config(config_id: int, config_update: EmailConfigUpdate) -> Ema
             email_address=current_config.email_address,
             folder_name=current_config.folder_name,
             filter_rules=filter_rules,
-            poll_interval_seconds=monitoring["poll_interval_seconds"],
-            max_backlog_hours=monitoring["max_backlog_hours"],
-            error_retry_attempts=monitoring["error_retry_attempts"],
+            poll_interval_seconds=poll_interval_seconds,
+            max_backlog_hours=max_backlog_hours,
+            error_retry_attempts=error_retry_attempts,
             is_active=current_config.is_active,
             is_running=current_config.is_running,
             last_used_at=current_config.last_used_at,
@@ -340,11 +331,9 @@ def update_email_config(config_id: int, config_update: EmailConfigUpdate) -> Ema
                 }
                 for rule in updated_config.filter_rules
             ],
-            monitoring={
-                "poll_interval_seconds": updated_config.poll_interval_seconds,
-                "max_backlog_hours": updated_config.max_backlog_hours,
-                "error_retry_attempts": updated_config.error_retry_attempts
-            },
+            poll_interval_seconds=updated_config.poll_interval_seconds,
+            max_backlog_hours=updated_config.max_backlog_hours,
+            error_retry_attempts=updated_config.error_retry_attempts,
             is_active=updated_config.is_active,
             is_running=updated_config.is_running,
             emails_processed=updated_config.emails_processed,
@@ -468,49 +457,3 @@ def delete_email_config(config_id: int):
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to delete email configuration"
             )
-
-
-@router.get("/{config_id}/stats",
-            response_model=EmailConfigStats,
-            summary="Get email configuration statistics",
-            description="Get detailed statistics for a specific email configuration")
-def get_email_config_stats(config_id: int) -> EmailConfigStats:
-    """
-    Get email configuration statistics
-    
-    - **config_id**: Configuration ID (required)
-    """
-    try:
-        config_service = get_email_config_service()
-        config = config_service.get_config(config_id)
-        
-        if not config:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Email configuration with ID {config_id} not found"
-            )
-        
-        # Calculate success rate (this would need proper implementation in service)
-        success_rate = 1.0 if config.emails_processed > 0 else 0.0
-        
-        return EmailConfigStats(
-            config_id=config.id,
-            config_name=config.name,
-            total_emails_processed=config.emails_processed,
-            total_pdfs_found=config.pdfs_found,
-            success_rate=success_rate,
-            avg_processing_time_ms=0,  # Would need service implementation
-            last_24h_emails=0,  # Would need service implementation
-            last_24h_pdfs=0,  # Would need service implementation
-            last_error=config.last_error_message,
-            last_error_at=config.last_error_at
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception(f"Error getting email config stats {config_id}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve email configuration statistics"
-        )
