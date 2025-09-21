@@ -57,11 +57,9 @@ class ServiceContainer:
             # Import services here to avoid circular imports
             from features.pdf_processing import PdfProcessingService
             from features.email_ingestion.service import EmailIngestionService
-            from features.email_configs.service import EmailConfigService
+            from features.email_ingestion.config_service import EmailIngestionConfigService
             from features.eto_processing import EtoProcessingService
             from features.pdf_templates.service import PdfTemplateService
-            from shared.database.repositories.email_ingestion_config import EmailIngestionConfigRepository
-            from shared.database.repositories.email import EmailRepository
 
             # Initialize PDF service first (other services may depend on it)
             self.pdf_service = PdfProcessingService(pdf_storage_path, connection_manager)
@@ -70,20 +68,13 @@ class ServiceContainer:
             # Initialize PDF template service
             self.pdf_template_service = PdfTemplateService(connection_manager)
             logger.debug("PDF template service initialized")
-
-            # Initialize repositories
-            email_config_repo = EmailIngestionConfigRepository(connection_manager)
-            email_repo = EmailRepository(connection_manager)
             
             # Initialize email config service (CRUD operations)
-            self.email_config_service = EmailConfigService(email_config_repo)
+            self.email_config_service = EmailIngestionConfigService(connection_manager)
             logger.debug("Email config service initialized")
             
             # Initialize email ingestion service (runtime orchestration)
-            self.email_ingestion_service = EmailIngestionService(
-                config_service=self.email_config_service,
-                email_repository=email_repo
-            )
+            self.email_ingestion_service = EmailIngestionService(connection_manager)
             logger.debug("Email ingestion service initialized with multi-config support")
         
             # Initialize ETO processing service

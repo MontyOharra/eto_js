@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 
 from shared.models.email_config import EmailConfig
 from shared.exceptions import ServiceError
-from features.email_configs.service import EmailConfigService
+from features.email_ingestion.config_service import EmailIngestionConfigService
 from features.email_ingestion.email_listener import EmailListenerThread
 from shared.database.repositories.email import EmailRepository
 
@@ -32,11 +32,15 @@ class EmailListener:
 class EmailIngestionService:
     """Service for managing multiple concurrent email listeners"""
     
-    def __init__(self, 
-                 config_service: EmailConfigService,
-                 email_repository: EmailRepository):
-        self.config_service = config_service
-        self.email_repository = email_repository
+    def __init__(self, connection_manager):
+        if not connection_manager:
+            raise RuntimeError("Database connection manager is required")
+        
+        self.connection_manager = connection_manager
+        
+        # Initialize services and repositories
+        self.config_service = EmailIngestionConfigService(connection_manager)
+        self.email_repository = EmailRepository(connection_manager)
         
         # Thread-safe listener management
         self.listeners: Dict[int, EmailListener] = {}

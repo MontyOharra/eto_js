@@ -7,7 +7,7 @@ from typing import List, Optional
 from datetime import datetime, timezone
 
 from shared.models.email_config import EmailConfig, EmailConfigCreate, EmailConfigUpdate
-from shared.database.repositories import EmailIngestionConfigRepository
+from shared.database.repositories.email_ingestion_config import EmailIngestionConfigRepository
 from shared.exceptions import ObjectNotFoundError, ValidationError, RepositoryError
 
 logger = logging.getLogger(__name__)
@@ -16,8 +16,15 @@ logger = logging.getLogger(__name__)
 class EmailIngestionConfigService:
     """Thin orchestration layer for email config with business validation"""
     
-    def __init__(self, config_repo: EmailIngestionConfigRepository):
-        self.config_repo = config_repo
+    def __init__(self, connection_manager):
+        if not connection_manager:
+            raise RuntimeError("Database connection manager is required")
+        
+        self.connection_manager = connection_manager
+        
+        # Repository layer - with explicit type annotation for IDE support
+        self.config_repo: EmailIngestionConfigRepository = EmailIngestionConfigRepository(self.connection_manager)
+        
         self.logger = logging.getLogger(__name__)
     
     # ========== CRUD Operations ==========
