@@ -10,12 +10,14 @@ from fastapi.responses import JSONResponse
 from features.email_ingestion.config_service import EmailIngestionConfigService
 from shared.database.repositories import EmailIngestionConfigRepository
 from shared.exceptions import ObjectNotFoundError
-from api.schemas.email_config import (
+from shared.models.email_config import (
     EmailConfig,
+    EmailConfigSummary,
+    EmailConfigStats
+)
+from api.schemas.email_config import (
     EmailConfigCreate,
     EmailConfigUpdate,
-    EmailConfigSummary,
-    EmailConfigStats,
     EmailConfigActivateRequest,
     EmailConfigActivateResponse
 )
