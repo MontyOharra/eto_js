@@ -87,10 +87,13 @@ async def service_status() -> Dict[str, Any]:
         # Check PDF processing service
         try:
             pdf_service = container.get_pdf_service()
+            pdf_healthy = pdf_service.is_healthy()
             status_data["services"]["pdf_processing"] = {
-                "status": "healthy",
-                "message": "PDF processing service available"
+                "status": "healthy" if pdf_healthy else "unhealthy",
+                "message": "PDF processing service operational" if pdf_healthy else "PDF processing service not operational"
             }
+            if not pdf_healthy:
+                status_data["overall_status"] = "degraded"
 
             # Get storage info if available
             try:
@@ -116,10 +119,13 @@ async def service_status() -> Dict[str, Any]:
         # Check email ingestion service
         try:
             email_service = container.get_email_ingestion_service()
+            email_healthy = email_service.is_healthy()
             status_data["services"]["email_ingestion"] = {
-                "status": "healthy",
-                "message": "Email ingestion service available"
+                "status": "healthy" if email_healthy else "unhealthy",
+                "message": "Email ingestion service operational" if email_healthy else "Email ingestion service not operational"
             }
+            if not email_healthy:
+                status_data["overall_status"] = "degraded"
         except Exception as e:
             status_data["services"]["email_ingestion"] = {
                 "status": "error",
@@ -130,10 +136,13 @@ async def service_status() -> Dict[str, Any]:
         # Check PDF template service
         try:
             template_service = container.get_pdf_template_service()
+            template_healthy = template_service.is_healthy()
             status_data["services"]["pdf_templates"] = {
-                "status": "healthy",
-                "message": "PDF template service available"
+                "status": "healthy" if template_healthy else "unhealthy",
+                "message": "PDF template service operational" if template_healthy else "PDF template service not operational"
             }
+            if not template_healthy:
+                status_data["overall_status"] = "degraded"
         except Exception as e:
             status_data["services"]["pdf_templates"] = {
                 "status": "error",

@@ -16,10 +16,11 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as Transformation_pipelineModulesRouteImport } from './routes/transformation_pipeline/modules'
 import { Route as Transformation_pipelineGraphRouteImport } from './routes/transformation_pipeline/graph'
 import { Route as DashboardTemplatesRouteImport } from './routes/dashboard/templates'
-import { Route as DashboardSettingsRouteImport } from './routes/dashboard/settings'
 import { Route as DashboardHomeRouteImport } from './routes/dashboard/home'
 import { Route as DashboardEtoInfoRouteImport } from './routes/dashboard/eto-info'
 import { Route as DashboardEmailsRouteImport } from './routes/dashboard/emails'
+import { Route as DashboardSettingsRouteRouteImport } from './routes/dashboard/settings/route'
+import { Route as DashboardSettingsEmailConfigsRouteImport } from './routes/dashboard/settings/email-configs'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -59,11 +60,6 @@ const DashboardTemplatesRoute = DashboardTemplatesRouteImport.update({
   path: '/templates',
   getParentRoute: () => DashboardRouteRoute,
 } as any)
-const DashboardSettingsRoute = DashboardSettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
-  getParentRoute: () => DashboardRouteRoute,
-} as any)
 const DashboardHomeRoute = DashboardHomeRouteImport.update({
   id: '/home',
   path: '/home',
@@ -79,32 +75,45 @@ const DashboardEmailsRoute = DashboardEmailsRouteImport.update({
   path: '/emails',
   getParentRoute: () => DashboardRouteRoute,
 } as any)
+const DashboardSettingsRouteRoute = DashboardSettingsRouteRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => DashboardRouteRoute,
+} as any)
+const DashboardSettingsEmailConfigsRoute =
+  DashboardSettingsEmailConfigsRouteImport.update({
+    id: '/email-configs',
+    path: '/email-configs',
+    getParentRoute: () => DashboardSettingsRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRouteRouteWithChildren
   '/transformation_pipeline': typeof Transformation_pipelineRouteRouteWithChildren
   '/login': typeof LoginRoute
+  '/dashboard/settings': typeof DashboardSettingsRouteRouteWithChildren
   '/dashboard/emails': typeof DashboardEmailsRoute
   '/dashboard/eto-info': typeof DashboardEtoInfoRoute
   '/dashboard/home': typeof DashboardHomeRoute
-  '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/templates': typeof DashboardTemplatesRoute
   '/transformation_pipeline/graph': typeof Transformation_pipelineGraphRoute
   '/transformation_pipeline/modules': typeof Transformation_pipelineModulesRoute
+  '/dashboard/settings/email-configs': typeof DashboardSettingsEmailConfigsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRouteRouteWithChildren
   '/transformation_pipeline': typeof Transformation_pipelineRouteRouteWithChildren
   '/login': typeof LoginRoute
+  '/dashboard/settings': typeof DashboardSettingsRouteRouteWithChildren
   '/dashboard/emails': typeof DashboardEmailsRoute
   '/dashboard/eto-info': typeof DashboardEtoInfoRoute
   '/dashboard/home': typeof DashboardHomeRoute
-  '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/templates': typeof DashboardTemplatesRoute
   '/transformation_pipeline/graph': typeof Transformation_pipelineGraphRoute
   '/transformation_pipeline/modules': typeof Transformation_pipelineModulesRoute
+  '/dashboard/settings/email-configs': typeof DashboardSettingsEmailConfigsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -112,13 +121,14 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRouteRouteWithChildren
   '/transformation_pipeline': typeof Transformation_pipelineRouteRouteWithChildren
   '/login': typeof LoginRoute
+  '/dashboard/settings': typeof DashboardSettingsRouteRouteWithChildren
   '/dashboard/emails': typeof DashboardEmailsRoute
   '/dashboard/eto-info': typeof DashboardEtoInfoRoute
   '/dashboard/home': typeof DashboardHomeRoute
-  '/dashboard/settings': typeof DashboardSettingsRoute
   '/dashboard/templates': typeof DashboardTemplatesRoute
   '/transformation_pipeline/graph': typeof Transformation_pipelineGraphRoute
   '/transformation_pipeline/modules': typeof Transformation_pipelineModulesRoute
+  '/dashboard/settings/email-configs': typeof DashboardSettingsEmailConfigsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -127,39 +137,42 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/transformation_pipeline'
     | '/login'
+    | '/dashboard/settings'
     | '/dashboard/emails'
     | '/dashboard/eto-info'
     | '/dashboard/home'
-    | '/dashboard/settings'
     | '/dashboard/templates'
     | '/transformation_pipeline/graph'
     | '/transformation_pipeline/modules'
+    | '/dashboard/settings/email-configs'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/dashboard'
     | '/transformation_pipeline'
     | '/login'
+    | '/dashboard/settings'
     | '/dashboard/emails'
     | '/dashboard/eto-info'
     | '/dashboard/home'
-    | '/dashboard/settings'
     | '/dashboard/templates'
     | '/transformation_pipeline/graph'
     | '/transformation_pipeline/modules'
+    | '/dashboard/settings/email-configs'
   id:
     | '__root__'
     | '/'
     | '/dashboard'
     | '/transformation_pipeline'
     | '/login'
+    | '/dashboard/settings'
     | '/dashboard/emails'
     | '/dashboard/eto-info'
     | '/dashboard/home'
-    | '/dashboard/settings'
     | '/dashboard/templates'
     | '/transformation_pipeline/graph'
     | '/transformation_pipeline/modules'
+    | '/dashboard/settings/email-configs'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -220,13 +233,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardTemplatesRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
-    '/dashboard/settings': {
-      id: '/dashboard/settings'
-      path: '/settings'
-      fullPath: '/dashboard/settings'
-      preLoaderRoute: typeof DashboardSettingsRouteImport
-      parentRoute: typeof DashboardRouteRoute
-    }
     '/dashboard/home': {
       id: '/dashboard/home'
       path: '/home'
@@ -248,22 +254,50 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardEmailsRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
+    '/dashboard/settings': {
+      id: '/dashboard/settings'
+      path: '/settings'
+      fullPath: '/dashboard/settings'
+      preLoaderRoute: typeof DashboardSettingsRouteRouteImport
+      parentRoute: typeof DashboardRouteRoute
+    }
+    '/dashboard/settings/email-configs': {
+      id: '/dashboard/settings/email-configs'
+      path: '/email-configs'
+      fullPath: '/dashboard/settings/email-configs'
+      preLoaderRoute: typeof DashboardSettingsEmailConfigsRouteImport
+      parentRoute: typeof DashboardSettingsRouteRoute
+    }
   }
 }
 
+interface DashboardSettingsRouteRouteChildren {
+  DashboardSettingsEmailConfigsRoute: typeof DashboardSettingsEmailConfigsRoute
+}
+
+const DashboardSettingsRouteRouteChildren: DashboardSettingsRouteRouteChildren =
+  {
+    DashboardSettingsEmailConfigsRoute: DashboardSettingsEmailConfigsRoute,
+  }
+
+const DashboardSettingsRouteRouteWithChildren =
+  DashboardSettingsRouteRoute._addFileChildren(
+    DashboardSettingsRouteRouteChildren,
+  )
+
 interface DashboardRouteRouteChildren {
+  DashboardSettingsRouteRoute: typeof DashboardSettingsRouteRouteWithChildren
   DashboardEmailsRoute: typeof DashboardEmailsRoute
   DashboardEtoInfoRoute: typeof DashboardEtoInfoRoute
   DashboardHomeRoute: typeof DashboardHomeRoute
-  DashboardSettingsRoute: typeof DashboardSettingsRoute
   DashboardTemplatesRoute: typeof DashboardTemplatesRoute
 }
 
 const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
+  DashboardSettingsRouteRoute: DashboardSettingsRouteRouteWithChildren,
   DashboardEmailsRoute: DashboardEmailsRoute,
   DashboardEtoInfoRoute: DashboardEtoInfoRoute,
   DashboardHomeRoute: DashboardHomeRoute,
-  DashboardSettingsRoute: DashboardSettingsRoute,
   DashboardTemplatesRoute: DashboardTemplatesRoute,
 }
 

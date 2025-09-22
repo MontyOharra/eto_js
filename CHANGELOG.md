@@ -1,3 +1,31 @@
+## [2025-09-22 14:33] — Frontend API Structure Analysis
+### Spec / Intent
+- Analyze the frontend API structure for Electron app
+- Understand current API organization patterns and TypeScript interfaces
+- Identify ETO functionality to be removed
+- Document structure to plan rewrite for new FastAPI backend with domain-based organization
+
+### Changes Made
+- Files: No code changes, analysis only
+- Analyzed `client/src/renderer/services/api.ts` - main API client (1030 lines)
+- Analyzed `client/src/renderer/hooks/useApi.ts` - React hooks for data fetching
+- Analyzed `client/src/renderer/types/eto.ts` - TypeScript type definitions
+- Analyzed `client/src/renderer/services/transformationPipelineApi.ts` - separate pipeline API
+- Reviewed backend router structure: health, email_configs, pdf_templates
+
+### Next Actions
+- Plan and implement complete frontend API rewrite
+- Remove ETO-specific functionality
+- Restructure to match new backend domains (email configs, PDF templates, PDF processing, health)
+- Update TypeScript interfaces to match new FastAPI schemas
+
+### Notes
+- Current API client is heavily ETO-focused with 1000+ lines
+- Backend now has clean domain separation (health, email_configs, pdf_templates)
+- Frontend has separate transformation pipeline API client
+- Multiple ETO-specific components and types need removal
+- React hooks follow good patterns but need domain restructuring
+
 ## [2025-09-18 Current Session] — Email Service Initialization and Frontend Preparation
 ### Spec / Intent
 - Fix email service initialization issues on startup

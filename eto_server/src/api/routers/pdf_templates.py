@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Depends, status, Query
 from fastapi.responses import JSONResponse
 
 from shared.services import get_pdf_template_service
-from shared.models import PdfTemplate, PdfTemplateVersion, PdfTemplateCreate, PdfTemplateUpdate, PdfTemplateVersionCreate
+from shared.models import PdfTemplate, PdfTemplateVersion, PdfTemplateCreate, PdfTemplateUpdate, PdfTemplateVersionCreate, ServiceStatusResponse, ServiceHealth
 from shared.exceptions import ObjectNotFoundError
 from api.schemas import (
     PdfTemplateVersionCreateRequest,
@@ -332,4 +332,40 @@ def update_template(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred while updating template"
+        )
+
+
+@router.get("/status",
+            response_model=ServiceStatusResponse,
+            summary="Get PDF templates service status",
+            description="Check if the PDF templates service is healthy and operational")
+def get_pdf_templates_status() -> ServiceStatusResponse:
+    """
+    Get PDF templates service status
+
+    Returns health status of the PDF templates service including database connectivity
+    """
+    try:
+        template_service = get_pdf_template_service()
+        if not template_service:
+            return ServiceStatusResponse(
+                service="pdf_templates",
+                status=ServiceHealth.DOWN,
+                message="PDF templates service is not available"
+            )
+
+        is_healthy = template_service.is_healthy()
+
+        return ServiceStatusResponse(
+            service="pdf_templates",
+            status=ServiceHealth.UP if is_healthy else ServiceHealth.DOWN,
+            message="Service is operational" if is_healthy else "Service is not operational"
+        )
+
+    except Exception as e:
+        logger.error(f"Error checking PDF templates service status: {e}")
+        return ServiceStatusResponse(
+            service="pdf_templates",
+            status=ServiceHealth.DOWN,
+            message=f"Service health check failed: {str(e)}"
         )

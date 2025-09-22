@@ -340,3 +340,20 @@ class PdfTemplateService:
     def update_template(self, template_id: int, update_data: PdfTemplateUpdate) -> Optional[PdfTemplate]:
         """Update a PDF template with the provided data"""
         return self.pdf_template_repo.update(template_id, update_data)
+
+    def is_healthy(self) -> bool:
+        """
+        Check if the PDF template service is healthy
+
+        Returns:
+            True if service is operational, False otherwise
+        """
+        try:
+            # Check if we can access the repositories
+            self.pdf_template_repo.count()
+            self.pdf_template_version_repo.count()
+
+            return True
+        except Exception as e:
+            logger.error(f"PDF template service health check failed: {e}")
+            return False

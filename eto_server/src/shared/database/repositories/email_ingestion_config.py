@@ -220,11 +220,11 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
                 setattr(target_config, 'is_active', True)
                 setattr(target_config, 'is_running', False)  # Will be set to True when service starts
                 setattr(target_config, 'activated_at', activation_time)
-                setattr(target_config, 'last_check_time', activation_time)  # Initialize to activation time
+                setattr(target_config, 'last_check_time', activation_time)  # Always set to current time for fresh start
                 setattr(target_config, 'total_emails_processed', 0)
                 setattr(target_config, 'total_pdfs_found', 0)
                 
-                logger.debug(f"Activated email configuration: {target_config.name} at {activation_time}")
+                logger.debug(f"Activated email configuration: {target_config.name} at {activation_time} (fresh start)")
                 
                 return self._convert_to_domain_object(target_config)
             
@@ -256,12 +256,12 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
                 setattr(config, 'is_active', False)
                 setattr(config, 'is_running', False)
                 setattr(config, 'activated_at', None)
-                setattr(config, 'last_check_time', None)
+                setattr(config, 'last_check_time', None)  # Clear cursor so service knows it was deactivated
                 setattr(config, 'total_emails_processed', 0)
                 setattr(config, 'total_pdfs_found', 0)
                 # updated_at handled by onupdate=func.now() in model
                 
-                logger.debug(f"Deactivated email configuration: {config.name} and cleared progress")
+                logger.debug(f"Deactivated email configuration: {config.name} (cleared cursor for fresh start on reactivation)")
                 
                 return self._convert_to_domain_object(config)
             

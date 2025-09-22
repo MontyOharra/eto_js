@@ -36,10 +36,14 @@ from .pdf_processing import (
 )
 
 from .pdf_template import (
-    PdfTemplateBase, PdfTemplateVersionBase, 
-    PdfTemplateCreate, PdfTemplateUpdate, 
-    PdfTemplateVersionCreate, PdfTemplate, 
+    PdfTemplateBase, PdfTemplateVersionBase,
+    PdfTemplateCreate, PdfTemplateUpdate,
+    PdfTemplateVersionCreate, PdfTemplate,
     PdfTemplateVersion, PdfTemplateMatchResult
+)
+
+from .status import (
+    ServiceHealth, ServiceStatusResponse
 )
 
 __all__ = [
@@ -96,4 +100,8 @@ __all__ = [
     'PdfTemplate',
     'PdfTemplateVersion',
     'PdfTemplateMatchResult',
+
+    # Status models
+    'ServiceHealth',
+    'ServiceStatusResponse',
 ]

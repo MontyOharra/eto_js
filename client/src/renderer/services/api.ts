@@ -97,36 +97,35 @@ export interface ApiError {
   details?: any;
 }
 
-// Email Ingestion Types
+// Email Ingestion Types - matching backend EmailConfig model
 export interface EmailIngestionConfig {
   id: number;
   name: string;
   description?: string;
-  connection: {
-    email_address: string;
-    folder_name: string;
-  };
-  filter_rules?: Array<{
+  email_address: string;
+  folder_name: string;
+  filter_rules: Array<{
     field: string;
     operation: string;
     value: string;
     case_sensitive: boolean;
   }>;
-  monitoring: {
-    poll_interval_seconds: number;
-    max_backlog_hours: number;
-    error_retry_attempts: number;
-  };
+  poll_interval_seconds: number;
+  max_backlog_hours: number;
+  error_retry_attempts: number;
   is_active: boolean;
   is_running: boolean;
   emails_processed: number;
   pdfs_found: number;
   last_error_message?: string;
   last_error_at?: string;
-  created_by: string;
   created_at: string;
   updated_at: string;
   last_used_at?: string;
+  activated_at?: string;
+  last_check_time?: string;
+  total_emails_processed: number;
+  total_pdfs_found: number;
 }
 
 export interface EmailIngestionConfigSummary {
@@ -802,9 +801,19 @@ class ApiClient {
    */
   async getEmailIngestionConfigs(): Promise<{
     success: boolean;
-    data: EmailIngestionConfigSummary[];
+    data: EmailIngestionConfig[];
   }> {
-    return this.fetchApi('/api/email-ingestion/configs');
+    try {
+      const configs = await this.fetchApi<EmailIngestionConfig[]>('/email-configs/');
+
+      // Backend returns raw array, wrap in expected format
+      return {
+        success: true,
+        data: configs
+      };
+    } catch (error) {
+      throw error; // Let the calling code handle the error
+    }
   }
 
   /**
@@ -814,7 +823,7 @@ class ApiClient {
     success: boolean;
     data: EmailIngestionConfig;
   }> {
-    return this.fetchApi(`/api/email-ingestion/configs/${configId}`);
+    return this.fetchApi(`/email-configs/${configId}`);
   }
 
   /**
@@ -823,31 +832,35 @@ class ApiClient {
   async createEmailIngestionConfig(configData: {
     name: string;
     description?: string;
-    connection: {
-      email_address: string;
-      folder_name: string;
-    };
+    email_address: string;
+    folder_name: string;
     filter_rules?: Array<{
       field: string;
       operation: string;
       value: string;
       case_sensitive: boolean;
     }>;
-    monitoring: {
-      poll_interval_seconds: number;
-      max_backlog_hours: number;
-      error_retry_attempts: number;
-    };
-    created_by: string;
+    poll_interval_seconds: number;
+    max_backlog_hours: number;
+    error_retry_attempts: number;
   }): Promise<{
     success: boolean;
-    config_id: number;
-    message: string;
+    data: any;
   }> {
-    return this.fetchApi('/api/email-ingestion/configs', {
-      method: 'POST',
-      body: JSON.stringify(configData),
-    });
+    try {
+      const result = await this.fetchApi('/email-configs/', {
+        method: 'POST',
+        body: JSON.stringify(configData),
+      });
+
+      // Backend returns the EmailConfig directly
+      return {
+        success: true,
+        data: result
+      };
+    } catch (error) {
+      throw error; // Let the calling code handle the error
+    }
   }
 
   /**
@@ -870,7 +883,7 @@ class ApiClient {
     success: boolean;
     message: string;
   }> {
-    return this.fetchApi(`/api/email-ingestion/configs/${configId}`, {
+    return this.fetchApi(`/email-configs/${configId}`, {
       method: 'PUT',
       body: JSON.stringify(updateData),
     });
@@ -883,7 +896,7 @@ class ApiClient {
     success: boolean;
     message: string;
   }> {
-    return this.fetchApi(`/api/email-ingestion/configs/${configId}`, {
+    return this.fetchApi(`/email-configs/${configId}`, {
       method: 'DELETE',
     });
   }
@@ -900,9 +913,23 @@ class ApiClient {
     auto_started?: boolean;
     start_error?: string;
   }> {
-    return this.fetchApi(`/api/email-ingestion/configs/${configId}/activate`, {
-      method: 'POST',
-      body: JSON.stringify({ auto_start: autoStart }),
+    return this.fetchApi(`/email-configs/${configId}/activate?activate=true`, {
+      method: 'PATCH',
+    });
+  }
+
+  /**
+   * Deactivate email ingestion configuration
+   */
+  async deactivateEmailIngestionConfig(configId: number): Promise<{
+    success: boolean;
+    config_id: number;
+    config_name: string;
+    message: string;
+    activated: boolean;
+  }> {
+    return this.fetchApi(`/email-configs/${configId}/activate?activate=false`, {
+      method: 'PATCH',
     });
   }
 
@@ -978,20 +1005,31 @@ class ApiClient {
     success: boolean;
     data: {
       folders: Array<{
-        account: string;
-        folders: Array<{
-          name: string;
-          display_name?: string;
-          path: string;
-          type: 'standard' | 'custom' | 'folder';
-          count: number;
-        }>;
+        name: string;
+        display_name?: string;
+        folder_id?: string;
+        message_count?: number;
       }>;
-      total_accounts: number;
     };
   }> {
-    const endpoint = `/api/email-ingestion/test/folders${emailAddress ? `?email_address=${encodeURIComponent(emailAddress)}` : ''}`;
-    return this.fetchApi(endpoint);
+    try {
+      const folders = await this.fetchApi<Array<{
+        name: string;
+        display_name?: string;
+        folder_id?: string;
+        message_count?: number;
+      }>>(`/email-configs/discovery/folders${emailAddress ? `?email_address=${encodeURIComponent(emailAddress)}` : ''}`);
+
+      // Wrap the raw array response in the expected format
+      return {
+        success: true,
+        data: {
+          folders: folders
+        }
+      };
+    } catch (error) {
+      throw error; // Let the calling code handle the error
+    }
   }
 
   /**
@@ -1003,13 +1041,32 @@ class ApiClient {
       emails: Array<{
         email_address: string;
         display_name: string;
-        account_type: number;
+        account_type: string;
         is_default: boolean;
       }>;
       total_accounts: number;
     };
   }> {
-    return this.fetchApi('/api/email-ingestion/discover/emails');
+    try {
+      const accounts = await this.fetchApi<Array<{
+        email_address: string;
+        display_name: string;
+        account_type: string;
+        is_default: boolean;
+        provider_specific_id?: string;
+      }>>('/email-configs/discovery/accounts');
+
+      // Wrap the raw array response in the expected format
+      return {
+        success: true,
+        data: {
+          emails: accounts,
+          total_accounts: accounts.length
+        }
+      };
+    } catch (error) {
+      throw error; // Let the calling code handle the error
+    }
   }
 }
 

@@ -573,7 +573,27 @@ class EmailIngestionService:
             
         except Exception as e:
             logger.error(f"Error during startup recovery: {e}")
-    
+
+    def is_healthy(self) -> bool:
+        """
+        Check if the email ingestion service is healthy
+
+        Returns:
+            True if service is operational, False otherwise
+        """
+        try:
+            # Check if we can access the database
+            with self.connection_manager.session_scope() as session:
+                session.execute("SELECT 1")
+
+            # Check if repositories are accessible
+            self.email_repository.count_by_config(1)  # Test query
+
+            return True
+        except Exception as e:
+            logger.error(f"Email ingestion service health check failed: {e}")
+            return False
+
     def shutdown(self):
         """
         Gracefully shutdown all listeners

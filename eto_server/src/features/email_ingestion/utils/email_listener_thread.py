@@ -46,6 +46,10 @@ class EmailListenerThread(threading.Thread):
         
         # Track last check time for incremental retrieval
         self.last_check_time = config.last_check_time or datetime.now(timezone.utc)
+
+        # Store activation time for fresh activation detection
+        # This is the time when this listener thread was created (activation time)
+        self.activation_time = datetime.now(timezone.utc)
         
         logger.info(f"Initialized EmailListenerThread for config {config.id} "
                    f"with {self.check_interval}s interval")
@@ -91,10 +95,17 @@ class EmailListenerThread(threading.Thread):
         try:
             # Calculate time window for retrieval
             since_time = self.last_check_time
-            
-            # Add small overlap to avoid missing emails
+
+            # Add small overlap to avoid missing emails, but NOT for freshly activated configs
+            # Use thread's activation time to detect if this is a fresh start
             if since_time:
-                since_time = since_time - timedelta(seconds=30)
+                # Check if this is a fresh activation (last_check_time close to thread activation time)
+                time_diff = abs((since_time - self.activation_time).total_seconds())
+                if time_diff > 1:  # If more than 1 second difference, it's not a fresh activation
+                    since_time = since_time - timedelta(seconds=30)
+                    logger.debug(f"Config {self.config.id}: Applied 30s overlap (ongoing operation)")
+                else:
+                    logger.info(f"Config {self.config.id}: Fresh activation detected, starting without overlap to skip deactivation-period emails")
             
             logger.debug(f"Checking emails since {since_time} for config {self.config.id}")
             

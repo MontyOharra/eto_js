@@ -314,3 +314,24 @@ class PdfProcessingService:
             "created_at": pdf_file.created_at.isoformat() if pdf_file.created_at else None,
             "updated_at": pdf_file.updated_at.isoformat() if pdf_file.updated_at else None
         }
+
+    def is_healthy(self) -> bool:
+        """
+        Check if the PDF processing service is healthy
+
+        Returns:
+            True if service is operational, False otherwise
+        """
+        try:
+            # Check if storage directory is accessible
+            import os
+            if not os.path.exists(self.storage_path):
+                return False
+
+            # Check if we can access the repository
+            self.pdf_repository.count()
+
+            return True
+        except Exception as e:
+            logger.error(f"PDF processing service health check failed: {e}")
+            return False

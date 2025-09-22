@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from shared.services.service_container import ServiceContainer, get_service_container
 from shared.models.email_config import EmailConfig, EmailConfigCreate, EmailConfigUpdate
+from shared.models.status import ServiceStatusResponse, ServiceHealth
 from shared.exceptions import ObjectNotFoundError, ServiceError
 
 logger = logging.getLogger(__name__)
@@ -210,4 +211,39 @@ def discover_folders(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error"
+        )
+
+
+@router.get("/status", response_model=ServiceStatusResponse)
+def get_email_configs_status(
+    container: ServiceContainer = Depends(get_service_container)
+) -> ServiceStatusResponse:
+    """
+    Get email configurations service status
+
+    Returns health status of the email ingestion service including database connectivity
+    """
+    try:
+        ingestion_service = container.get_email_ingestion_service()
+        if not ingestion_service:
+            return ServiceStatusResponse(
+                service="email_configs",
+                status=ServiceHealth.DOWN,
+                message="Email ingestion service is not available"
+            )
+
+        is_healthy = ingestion_service.is_healthy()
+
+        return ServiceStatusResponse(
+            service="email_configs",
+            status=ServiceHealth.UP if is_healthy else ServiceHealth.DOWN,
+            message="Service is operational" if is_healthy else "Service is not operational"
+        )
+
+    except Exception as e:
+        logger.error(f"Error checking email configs service status: {e}")
+        return ServiceStatusResponse(
+            service="email_configs",
+            status=ServiceHealth.DOWN,
+            message=f"Service health check failed: {str(e)}"
         )
