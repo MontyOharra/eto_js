@@ -8,7 +8,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 from shared.database.connection import DatabaseConnectionManager
-from shared.database.repositories.pdf_repository_new import PdfFileRepository
+from shared.database.repositories.pdf_file import PdfFileRepository
 from shared.models.pdf_file import PdfFile, PdfFileCreate, PdfFileUpdate, PdfFileSummary
 from shared.exceptions import ServiceError
 
@@ -314,43 +314,6 @@ class PdfProcessingService:
             }
         }
     
-    def reprocess_pdf(self, pdf_id: int) -> Optional[PdfFile]:
-        """
-        Re-extract data from an existing PDF
-        
-        Args:
-            pdf_id: PDF file ID to reprocess
-            
-        Returns:
-            Updated PdfFile or None if not found
-        """
-        try:
-            # Get existing PDF
-            pdf_file = self.get_pdf(pdf_id)
-            if not pdf_file:
-                logger.warning(f"PDF {pdf_id} not found for reprocessing")
-                return None
-            
-            # Read file content
-            file_content = self.get_pdf_content(pdf_id)
-            if not file_content:
-                logger.error(f"Could not read PDF {pdf_id} from disk")
-                return None
-            
-            # Re-extract data
-            logger.info(f"Reprocessing PDF {pdf_id}: {pdf_file.original_filename}")
-            
-            extracted_text = extract_pdf_text(file_content)
-            pdf_objects = extract_pdf_objects(file_content)
-            objects_json = json.dumps([obj.model_dump() for obj in pdf_objects]) if pdf_objects else None
-            
-            # Update database
-            return self.update_extracted_data(pdf_id, extracted_text, objects_json)
-            
-        except Exception as e:
-            logger.error(f"Error reprocessing PDF {pdf_id}: {e}")
-            return None
-    
     # === API Helper Methods ===
     
     def get_pdf_metadata(self, pdf_id: int) -> Optional[Dict[str, Any]]:
@@ -379,40 +342,3 @@ class PdfProcessingService:
             "created_at": pdf_file.created_at.isoformat() if pdf_file.created_at else None,
             "updated_at": pdf_file.updated_at.isoformat() if pdf_file.updated_at else None
         }
-    
-    def get_pdfs_by_email_dict(self, email_id: int, limit: Optional[int] = None) -> List[Dict[str, Any]]:
-        """
-        Get all PDFs for a specific email as dictionaries
-        
-        Args:
-            email_id: Email ID
-            limit: Optional limit on number of results
-            
-        Returns:
-            List of PDF metadata dictionaries
-        """
-        pdfs = self.get_pdfs_by_email(email_id)
-        
-        if limit:
-            pdfs = pdfs[:limit]
-        
-        return [self.get_pdf_metadata(pdf.id) for pdf in pdfs]
-
-
-# === Singleton Pattern (Optional) ===
-
-_pdf_service_instance: Optional[PdfProcessingService] = None
-
-
-def init_pdf_processing_service(storage_path: str, connection_manager: DatabaseConnectionManager):
-    """Initialize the global PDF processing service"""
-    global _pdf_service_instance
-    _pdf_service_instance = PdfProcessingService(storage_path, connection_manager)
-    return _pdf_service_instance
-
-
-def get_pdf_processing_service() -> PdfProcessingService:
-    """Get the global PDF processing service instance"""
-    if _pdf_service_instance is None:
-        raise RuntimeError("PDF processing service not initialized")
-    return _pdf_service_instance
