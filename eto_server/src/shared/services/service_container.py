@@ -25,7 +25,6 @@ class ServiceContainer:
             cls._instance.email_service = None
             cls._instance.eto_service = None
             cls._instance.pdf_template_service = None
-            cls._instance.email_config_service = None
             cls._instance.email_ingestion_service = None
             logger.info("ServiceContainer singleton instance created - services not yet initialized")
         return cls._instance
@@ -57,7 +56,6 @@ class ServiceContainer:
             # Import services here to avoid circular imports
             from features.pdf_processing import PdfProcessingService
             from features.email_ingestion.service import EmailIngestionService
-            from features.email_ingestion.config_service import EmailIngestionConfigService
             from features.eto_processing import EtoProcessingService
             from features.pdf_templates.service import PdfTemplateService
 
@@ -69,11 +67,7 @@ class ServiceContainer:
             self.pdf_template_service = PdfTemplateService(connection_manager)
             logger.debug("PDF template service initialized")
             
-            # Initialize email config service (CRUD operations)
-            self.email_config_service = EmailIngestionConfigService(connection_manager)
-            logger.debug("Email config service initialized")
-            
-            # Initialize email ingestion service (runtime orchestration)
+            # Initialize email ingestion service (handles configs and ingestion)
             self.email_ingestion_service = EmailIngestionService(connection_manager)
             logger.debug("Email ingestion service initialized with multi-config support")
         
@@ -134,12 +128,6 @@ class ServiceContainer:
             raise RuntimeError("PDF template service not available - application initialization failed")
         return self.pdf_template_service
     
-    def get_email_config_service(self):
-        """Get email config service - guaranteed to return valid service or crash"""
-        if not self.email_config_service:
-            logger.error("Email config service not initialized - ServiceContainer.initialize() was not called")
-            raise RuntimeError("Email config service not available - application initialization failed")
-        return self.email_config_service
 
 
 # === Global Service Access Functions ===
@@ -185,9 +173,6 @@ def get_pdf_template_service():
     return _get_container().get_pdf_template_service()
 
 
-def get_email_config_service():
-    """Get email config service - global access function"""
-    return _get_container().get_email_config_service()
 
 
 def is_service_container_initialized() -> bool:

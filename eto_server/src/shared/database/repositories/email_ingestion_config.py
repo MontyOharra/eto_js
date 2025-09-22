@@ -10,7 +10,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from shared.database.repositories import BaseRepository
 from shared.exceptions import RepositoryError, ObjectNotFoundError, ValidationError
 from shared.database.models import EmailIngestionConfigModel
-from shared.models.email_config import EmailConfig, EmailConfigCreate, EmailConfigUpdate
+from shared.models.email_config import EmailConfig, EmailConfigCreate, EmailConfigUpdate, EmailConfigSummary
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +58,7 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
             logger.error(f"Error creating email configuration: {e}")
             raise RepositoryError(f"Failed to create configuration: {e}") from e
     
-    def update(self, config_id: int, config_update: EmailConfigUpdate) -> Optional[EmailConfig]:
+    def update(self, config_id: int, config_update: EmailConfigUpdate) -> EmailConfig:
         """
         Update existing configuration from Pydantic update model
         
@@ -74,8 +74,8 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
                 model = session.get(self.model_class, config_id)
                 
                 if not model:
-                    return None
-                
+                    raise ObjectNotFoundError('EmailConfig', config_id)
+                    
                 # Get update dict with JSON serialization for modified fields only
                 updates = config_update.model_dump_for_db()
                 
@@ -354,7 +354,7 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
             logger.error(f"Error updating runtime status for config {config_id}: {e}")
             raise RepositoryError(f"Failed to update runtime status: {e}") from e
     
-    def update_progress(self, config_id: int, emails_processed: int = 0, pdfs_found: int = 0) -> EmailConfig:
+    def update_progress(self, config_id: int, current_time: datetime, emails_processed: int = 0, pdfs_found: int = 0) -> EmailConfig:
         """
         Update progress tracking after email check
         
@@ -377,7 +377,6 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
                     raise ObjectNotFoundError('EmailConfig', config_id)
                 
                 # Update progress tracking
-                current_time = datetime.now(timezone.utc)
                 setattr(model, 'last_check_time', current_time)
                 
                 # Increment totals
@@ -483,3 +482,48 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
         except SQLAlchemyError as e:
             logger.error(f"Error recording error for config {config_id}: {e}")
             raise RepositoryError(f"Failed to record error: {e}") from e
+    
+    def get_all_summaries(self) -> List[EmailConfigSummary]:
+        """
+        Get summary views of all email configurations for list displays
+        
+        Returns:
+            List of EmailConfigSummary objects with essential information
+        """
+        try:
+            with self.connection_manager.session_scope() as session:
+                configs = session.query(self.model_class).all()
+                
+                summaries = []
+                for config in configs:
+                    # Count filter rules if they exist
+                    filter_rule_count = 0
+                    if config.filter_rules:
+                        try:
+                            import json
+                            rules = json.loads(config.filter_rules)
+                            if isinstance(rules, list):
+                                filter_rule_count = len(rules)
+                        except:
+                            pass
+                    
+                    summary = EmailConfigSummary(
+                        id=config.id,
+                        name=config.name,
+                        email_address=config.email_address,
+                        folder_name=config.folder_name,
+                        is_active=config.is_active,
+                        is_running=config.is_running,
+                        emails_processed=config.emails_processed or 0,
+                        pdfs_found=config.pdfs_found or 0,
+                        filter_rule_count=filter_rule_count,
+                        last_used_at=config.last_used_at,
+                        created_at=config.created_at
+                    )
+                    summaries.append(summary)
+                
+                return summaries
+                
+        except SQLAlchemyError as e:
+            logger.error(f"Error fetching configuration summaries: {e}")
+            raise RepositoryError(f"Failed to fetch configuration summaries: {e}") from e

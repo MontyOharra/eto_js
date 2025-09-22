@@ -5,6 +5,107 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-09-22 08:30] — Service Consolidation and API Update
+### Spec / Intent
+- Consolidate email services by removing EmailIngestionConfigService
+- Update service container to use single EmailIngestionService
+- Update API routes to use consolidated service instead of separate config service
+- Add email discovery endpoints to API router
+- Fix all Update models to use exclude_unset=True for partial updates
+
+### Changes Made
+- **Service Container**: Removed email_config_service initialization, uses only email_ingestion_service
+- **API Router Updates**: Changed all endpoints to use ingestion service directly, simplified activation logic
+- **Discovery Endpoints**: Added /discovery/accounts and /discovery/folders endpoints
+- **Update Models**: Fixed PdfTemplateUpdate and verified EmailConfigUpdate use exclude_unset
+- Files: `shared/services/service_container.py`, `api/routers/email_configs.py`, `features/email_ingestion/__init__.py`, `shared/models/pdf_template.py`
+
+### Next Actions
+- Test consolidated service with all endpoints
+- Verify discovery endpoints work with Outlook integration
+- Test partial update functionality
+
+### Notes
+- Service consolidation reduces unnecessary abstraction layers
+- All CRUD and ingestion operations now in single service
+- Discovery endpoints enable dynamic UI for account/folder selection
+
+---
+
+## [2025-09-22 00:15] — Email Repository Refactor to Pydantic Models
+### Spec / Intent
+- Refactor EmailRepository to use Pydantic models instead of dataclasses
+- Implement append-only pattern for email records (no updates or deletes)
+- Align email repository with established patterns from other repositories
+- Ensure type safety and validation with Pydantic models
+
+### Changes Made
+- **Created `shared/models/email.py`**: Pydantic models (EmailBase, EmailCreate, Email, EmailSummary)
+- **Updated EmailRepository**: Complete rewrite using Pydantic models and append-only pattern
+- **Added methods**: `exists_by_message_id()`, `get_by_config()`, `get_summaries_by_config()`, count methods
+- **Updated EmailIngestionService**: Uses EmailCreate model for creating records
+- Files: `shared/models/email.py` (new), `shared/database/repositories/email.py`, `features/email_ingestion/service.py`
+
+### Next Actions
+- Test email ingestion with new models
+- Verify duplicate detection works correctly
+
+### Notes
+- Email records are immutable once created (audit trail)
+- No update/delete methods - emails are historical facts
+- All attachment info known at creation time
+- PDF processing creates separate EtoRun records, not email updates
+
+---
+
+## [2025-09-21 23:45] — Pydantic v2 Field Default Values Fix
+### Spec / Intent
+- Fix Pydantic v2 compatibility issues with Field() definitions in email integration models
+- Replace `const=True` with `Literal` type hints for provider_type fields
+- Explicitly use `default=` keyword for optional fields to ensure proper default values
+- Fix type annotation for OutlookComIntegration config to access provider-specific fields
+
+### Changes Made
+- **Email Integration Models**: Updated all Field() definitions to use `default=` for optional fields
+- **Provider Configs**: Changed `provider_type` fields from `Field(const=True)` to `Literal` type hints
+- **OutlookComIntegration**: Added explicit type annotation `self.config: OutlookComConfig` to access `default_folder`
+- Files: `shared/models/email_integration.py` (all Pydantic models), `outlook_com.py:42`
+
+### Next Actions
+- Test email integration with updated models
+- Verify all Pydantic v2 validation works correctly
+
+### Notes
+- Pydantic v2 requires explicit `default=` keyword for optional fields
+- `const=True` is not supported in Pydantic v2, use `Literal` type hints instead
+- Type annotations in derived classes can override base class types for proper field access
+
+---
+
+## [2025-09-21 23:30] — Email Polling Interval Restoration
+### Spec / Intent
+- Restore polling interval configuration to EmailConfig system after it was accidentally removed
+- Allow users to configure how often email gets polled for new messages
+- Use config.poll_interval_seconds instead of constructor parameter in EmailListenerThread
+
+### Changes Made
+- **Database Model**: Already had poll_interval_seconds field at line 62 in EmailIngestionConfigModel
+- **Domain Models**: Already had field in EmailConfigBase (line 46), EmailConfig.from_db_model (line 95), EmailConfigUpdate (line 152)
+- **EmailListenerThread**: Updated to use config.poll_interval_seconds instead of constructor parameter
+- **EmailIngestionService**: Removed check_interval parameter when creating EmailListenerThread
+- Files: `email_listener.py:29-34`, `service.py:149-153`
+
+### Next Actions
+- Test that polling interval is properly configurable through API
+- Verify email listeners use configured polling intervals
+
+### Notes
+- Polling interval was already present in database and domain models
+- Only needed to update EmailListenerThread to use config field instead of parameter
+- Simplifies thread creation by removing unnecessary parameter passing
+
+---
+
 ## [2025-09-21 23:00] — Cursor System Elimination and Progress Tracking Integration
 ### Spec / Intent
 - Eliminate separate cursor system entirely and integrate progress tracking directly into EmailIngestionConfigModel

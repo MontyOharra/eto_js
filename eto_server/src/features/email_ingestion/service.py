@@ -1,255 +1,624 @@
 """
 Email Ingestion Service
-Runtime orchestration for multiple email configurations
+Complete service for email configuration management, monitoring, and processing
 """
 import logging
 import threading
-import time
-from typing import Dict, Optional, List
-from dataclasses import dataclass, field
+from typing import Dict, Optional, List, Any
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from functools import partial
 
-from shared.models.email_config import EmailConfig
-from shared.exceptions import ServiceError
-from features.email_ingestion.config_service import EmailIngestionConfigService
-from features.email_ingestion.email_listener import EmailListenerThread
+from shared.models.email_config import (
+    EmailConfig, EmailConfigCreate, EmailConfigUpdate, EmailConfigSummary
+)
+from shared.models.email_integration import (
+    EmailMessage, EmailAttachment, EmailAccount, EmailFolder,
+    ConnectionTestResult, EmailProvider, OutlookComConfig
+)
+from shared.models.email import Email, EmailCreate
 from shared.database.repositories.email import EmailRepository
+from shared.database.repositories.email_ingestion_config import EmailIngestionConfigRepository
+from shared.exceptions import ServiceError, ObjectNotFoundError
+
+from features.email_ingestion.integrations.factory import EmailIntegrationFactory
+from features.email_ingestion.integrations.base_integration import BaseEmailIntegration
+from features.email_ingestion.utils.email_listener_thread import EmailListenerThread
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
-class EmailListener:
-    """Container for managing an email listener thread"""
-    config: EmailConfig
-    thread: EmailListenerThread
-    start_time: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    last_check: Optional[datetime] = None
-    error_count: int = 0
-    status: str = "initializing"
+class ListenerStatus:
+    """Status information for an active listener"""
+    config_id: int
+    email_address: str
+    folder_name: str
+    is_active: bool
+    is_running: bool
+    start_time: Optional[datetime]
+    last_check_time: Optional[datetime]
+    error_count: int
+    emails_processed: int
+    pdfs_found: int
 
 
 class EmailIngestionService:
-    """Service for managing multiple concurrent email listeners"""
+    """
+    Unified service for all email ingestion functionality.
+    Manages configurations, listeners, integrations, and email processing.
+    """
     
     def __init__(self, connection_manager):
+        """
+        Initialize service with database connection
+        
+        Args:
+            connection_manager: Database connection manager
+        """
         if not connection_manager:
             raise RuntimeError("Database connection manager is required")
         
         self.connection_manager = connection_manager
         
-        # Initialize services and repositories
-        self.config_service = EmailIngestionConfigService(connection_manager)
+        # Initialize repositories
+        self.config_repository = EmailIngestionConfigRepository(connection_manager)
         self.email_repository = EmailRepository(connection_manager)
         
-        # Thread-safe listener management
-        self.listeners: Dict[int, EmailListener] = {}
-        self.listeners_lock = threading.RLock()
+        # Active integrations and listeners
+        self.active_integrations: Dict[int, BaseEmailIntegration] = {}
+        self.active_listeners: Dict[int, EmailListenerThread] = {}
         
-        # Service state
-        self.is_running = False
-        self.shutdown_event = threading.Event()
+        # Thread safety
+        self.lock = threading.RLock()
         
         logger.info("EmailIngestionService initialized")
     
-    def startup_recovery(self):
-        """Resume monitoring for all active configs on service startup"""
+    # ========== Account/Folder Discovery ==========
+    
+    def discover_email_accounts(self, provider_type: str = "outlook_com") -> List[EmailAccount]:
+        """
+        Discover available email accounts for the specified provider
+        
+        Args:
+            provider_type: Email provider type (outlook_com, gmail_api, etc.)
+            
+        Returns:
+            List of discovered email accounts
+        """
         try:
-            logger.info("Starting email ingestion service recovery...")
-            self.is_running = True
+            logger.info(f"Discovering email accounts for provider: {provider_type}")
+            
+            # Create temporary integration for discovery
+            if provider_type == EmailProvider.OUTLOOK_COM.value:
+                config = OutlookComConfig(
+                    provider_type=EmailProvider.OUTLOOK_COM,
+                    account_identifier=None
+                )
+                integration = EmailIntegrationFactory.create_integration(config)
+                
+                # Discover accounts (doesn't require connection)
+                accounts = integration.discover_accounts()
+                
+                logger.info(f"Discovered {len(accounts)} accounts")
+                return accounts
+            
+            else:
+                logger.warning(f"Provider {provider_type} not yet supported for discovery")
+                return []
+                
+        except Exception as e:
+            logger.error(f"Error discovering email accounts: {e}")
+            raise ServiceError(f"Failed to discover accounts: {str(e)}")
+    
+    def discover_folders(self, email_address: str, provider_type: str = "outlook_com") -> List[EmailFolder]:
+        """
+        Discover folders for a specific email account
+        
+        Args:
+            email_address: Email address to discover folders for
+            provider_type: Email provider type (defaults to outlook_com)
+            
+        Returns:
+            List of discovered folders
+        """
+        try:
+            logger.info(f"Discovering folders for {email_address} on {provider_type}")
+            
+            # Create temporary integration
+            if provider_type == EmailProvider.OUTLOOK_COM.value or provider_type == "outlook_com":
+                config = OutlookComConfig(
+                    provider_type=EmailProvider.OUTLOOK_COM,
+                    account_identifier=email_address
+                )
+                integration = EmailIntegrationFactory.create_integration(config)
+                
+                # Connect temporarily for folder discovery
+                if integration.connect(email_address):
+                    try:
+                        folders = integration.discover_folders(email_address)
+                        logger.info(f"Discovered {len(folders)} folders")
+                        return folders
+                    finally:
+                        integration.disconnect()
+                else:
+                    raise ServiceError("Failed to connect for folder discovery")
+            
+            else:
+                logger.warning(f"Provider {provider_type} not yet supported")
+                return []
+                
+        except Exception as e:
+            logger.error(f"Error discovering folders: {e}")
+            raise ServiceError(f"Failed to discover folders: {str(e)}")
+    
+    def test_connection(self, config: EmailConfigCreate) -> ConnectionTestResult:
+        """
+        Test if a configuration can connect successfully
+        
+        Args:
+            config: Email configuration to test
+            
+        Returns:
+            Connection test result
+        """
+        try:
+            logger.info(f"Testing connection for {config.email_address}")
+            
+            # For now, assume Outlook COM provider
+            # In future, determine provider from config
+            integration_config = OutlookComConfig(
+                provider_type=EmailProvider.OUTLOOK_COM,
+                account_identifier=config.email_address,
+                default_folder=config.folder_name
+            )
+            
+            integration = EmailIntegrationFactory.create_integration(integration_config)
+            result = integration.test_connection()
+            
+            logger.info(f"Connection test {'succeeded' if result.success else 'failed'}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error testing connection: {e}")
+            return ConnectionTestResult(
+                success=False,
+                message="Connection test failed",
+                error=str(e)
+            )
+    
+    def test_connection_for_new_config(self, email_address: str, folder_name: str, provider_type: str = "outlook_com") -> ConnectionTestResult:
+        """
+        Test connection for a new config before creating it
+        
+        Args:
+            email_address: Email account to test
+            folder_name: Folder to test access to
+            provider_type: Email provider type (defaults to outlook_com)
+            
+        Returns:
+            ConnectionTestResult with success status and error message if failed
+        """
+        try:
+            logger.info(f"Testing connection for {email_address}/{folder_name}")
+            
+            # Create temporary integration
+            if provider_type == EmailProvider.OUTLOOK_COM.value or provider_type == "outlook_com":
+                config = OutlookComConfig(
+                    provider_type=EmailProvider.OUTLOOK_COM,
+                    account_identifier=email_address,
+                    default_folder=folder_name
+                )
+                integration = EmailIntegrationFactory.create_integration(config)
+                
+                # Test connection
+                result = integration.test_connection()
+                
+                # Additional check: try to connect and access the folder
+                if result.success:
+                    if integration.connect(email_address):
+                        try:
+                            # Verify folder exists by trying to discover it
+                            folders = integration.discover_folders(email_address)
+                            folder_names = [f.name for f in folders]
+                            
+                            if folder_name not in folder_names:
+                                result = ConnectionTestResult(
+                                    success=False,
+                                    error=f"Folder '{folder_name}' not found. Available folders: {', '.join(folder_names)}"
+                                )
+                            else:
+                                logger.info(f"Successfully verified access to {email_address}/{folder_name}")
+                        finally:
+                            integration.disconnect()
+                    else:
+                        result = ConnectionTestResult(
+                            success=False,
+                            error="Failed to connect to email account"
+                        )
+                
+                return result
+            
+            else:
+                return ConnectionTestResult(
+                    success=False,
+                    error=f"Provider {provider_type} not yet supported"
+                )
+                
+        except Exception as e:
+            logger.error(f"Error testing connection for {email_address}/{folder_name}: {e}")
+            return ConnectionTestResult(
+                success=False,
+                error=str(e)
+            )
+    
+    # ========== Configuration Management ==========
+    
+    def create_config(self, config_create: EmailConfigCreate) -> EmailConfig:
+        """Create new email configuration"""
+        try:
+            # Test connection first
+            test_result = self.test_connection(config_create)
+            if not test_result.success:
+                raise ServiceError(f"Connection test failed: {test_result.error}")
+            
+            # Create config in database
+            config = self.config_repository.create(config_create)
+            logger.info(f"Created email config {config.id}: {config.name}")
+            return config
+            
+        except Exception as e:
+            logger.error(f"Error creating config: {e}")
+            raise
+    
+    def get_config(self, config_id: int) -> Optional[EmailConfig]:
+        """Get specific configuration"""
+        config = self.config_repository.get_by_id(config_id)
+        return config
+    
+    def update_config(self, config_id: int, updates: EmailConfigUpdate) -> EmailConfig:
+        """
+        Update configuration
+        If config is active, restart listener with new settings
+        """
+        try:
+            # Check if listener is active
+            was_active = config_id in self.active_listeners
+            
+            # Stop listener if active
+            if was_active:
+                self.deactivate_config(config_id)
+            
+            # Update config
+            config = self.config_repository.update(config_id, updates)
+            logger.info(f"Updated config {config_id}")
+            
+            # Restart if was active
+            if was_active and config.is_active:
+                self.activate_config(config_id)
+            
+            return config
+            
+        except ObjectNotFoundError:
+            raise
+        except Exception as e:
+            logger.error(f"Error updating config {config_id}: {e}")
+            raise
+    
+    def delete_config(self, config_id: int) -> EmailConfig:
+        """Delete configuration (stops listener first if active)"""
+        try:
+            # Stop listener if active
+            if config_id in self.active_listeners:
+                self.deactivate_config(config_id)
+            
+            # Delete from database
+            result = self.config_repository.delete(config_id)
+            logger.info(f"Deleted config {config_id}")
+            return result
+            
+        except ObjectNotFoundError:
+            raise
+        except Exception as e:
+            logger.error(f"Error deleting config {config_id}: {e}")
+            raise
+    
+    def list_configs(self) -> List[EmailConfig]:
+        """List all configurations"""
+        return self.config_repository.get_all()
+    
+    def list_config_summaries(self) -> List[EmailConfigSummary]:
+        """List configuration summaries for UI"""
+        return self.config_repository.get_all_summaries()
+    
+    # ========== Listener Management ==========
+    
+    def activate_config(self, config_id: int) -> EmailConfig:
+        """
+        Activate email monitoring for a configuration
+        
+        Args:
+            config_id: Configuration to activate
+            
+        Returns:
+            True if successfully activated
+        """
+        with self.lock:
+            try:
+                config = self.config_repository.get_by_id(config_id)
+                if not config:
+                    raise ObjectNotFoundError('EmailConfig', config_id)
+                  
+                # Check if already active
+                if config_id in self.active_listeners:
+                    logger.warning(f"Config {config_id} is already active")
+                    return config
+                
+                logger.info(f"Activating config {config_id}: {config.name}")
+                
+                # Create integration
+                integration_config = OutlookComConfig(
+                    provider_type=EmailProvider.OUTLOOK_COM,
+                    account_identifier=config.email_address,
+                    default_folder=config.folder_name
+                )
+                integration = EmailIntegrationFactory.create_integration(integration_config)
+                
+                # Connect integration
+                if not integration.connect(config.email_address):
+                    raise ServiceError("Failed to connect email integration")
+                
+                # Create process callback bound to this config
+                process_callback = partial(self.process_email, config_id)
+                
+                # Create and start listener thread
+                listener = EmailListenerThread(
+                    config=config,
+                    integration=integration,
+                    process_callback=process_callback
+                )
+                listener.start()
+                
+                # Store references
+                self.active_integrations[config_id] = integration
+                self.active_listeners[config_id] = listener
+                
+                # Update config status
+                config = self.config_repository.activate(
+                    config_id, 
+                    activation_time=datetime.now(timezone.utc)
+                )
+                
+                logger.info(f"Successfully activated config {config_id}")
+                return config
+                
+            except Exception as e:
+                logger.error(f"Error activating config {config_id}: {e}")
+                # Clean up on failure
+                if config_id in self.active_integrations:
+                    self.active_integrations[config_id].disconnect()
+                    del self.active_integrations[config_id]
+                if config_id in self.active_listeners:
+                    del self.active_listeners[config_id]
+                raise ServiceError(f"Failed to activate config: {str(e)}")
+    
+    def deactivate_config(self, config_id: int) -> bool:
+        """
+        Deactivate email monitoring for a configuration
+        
+        Args:
+            config_id: Configuration to deactivate
+            
+        Returns:
+            True if successfully deactivated
+        """
+        with self.lock:
+            try:
+                logger.info(f"Deactivating config {config_id}")
+                
+                # Stop listener thread
+                if config_id in self.active_listeners:
+                    listener = self.active_listeners[config_id]
+                    listener.stop()
+                    listener.join(timeout=5.0)  # Wait up to 5 seconds
+                    del self.active_listeners[config_id]
+                
+                # Disconnect integration
+                if config_id in self.active_integrations:
+                    integration = self.active_integrations[config_id]
+                    integration.disconnect()
+                    del self.active_integrations[config_id]
+                
+                # Update config status
+                self.config_repository.deactivate(config_id)
+                
+                logger.info(f"Successfully deactivated config {config_id}")
+                return True
+                
+            except Exception as e:
+                logger.error(f"Error deactivating config {config_id}: {e}")
+                raise ServiceError(f"Failed to deactivate config: {str(e)}")
+    
+    def get_active_listeners(self) -> Dict[int, ListenerStatus]:
+        """Get status of all active listeners"""
+        with self.lock:
+            statuses = {}
+            
+            for config_id, listener in self.active_listeners.items():
+                config = self.config_repository.get_by_id(config_id)
+                if config:
+                    statuses[config_id] = ListenerStatus(
+                        config_id=config_id,
+                        email_address=config.email_address,
+                        folder_name=config.folder_name,
+                        is_active=config.is_active,
+                        is_running=listener.is_alive(),
+                        start_time=config.activated_at,
+                        last_check_time=config.last_check_time,
+                        error_count=listener.error_count,
+                        emails_processed=config.total_emails_processed,
+                        pdfs_found=config.total_pdfs_found
+                    )
+            
+            return statuses
+    
+    # ========== Email Processing ==========
+    
+    def process_email(self, config_id: int, email_msg: EmailMessage, attachments: List[EmailAttachment]):
+        """
+        Process an email retrieved by a listener
+        
+        Args:
+            config_id: Configuration that retrieved this email
+            email_msg: Email message from integration
+            attachments: List of attachments
+        """
+        try:
+            # Check if already processed
+            if self.email_repository.exists_by_message_id(config_id, email_msg.message_id):
+                logger.debug(f"Email {email_msg.message_id} already processed for config {config_id}")
+                return
+            
+            logger.info(f"Processing email: {email_msg.subject} from {email_msg.sender_email}")
+            
+            # Count PDFs
+            pdf_count = sum(1 for a in attachments 
+                          if a.content_type == "application/pdf" or a.filename.lower().endswith('.pdf'))
+            
+            # Create email record using Pydantic model
+            email_create = EmailCreate(
+                config_id=config_id,
+                message_id=email_msg.message_id,
+                subject=email_msg.subject,
+                sender_email=email_msg.sender_email,
+                sender_name=email_msg.sender_name,
+                received_date=email_msg.received_date,
+                folder_name=email_msg.folder_name,
+                has_pdf_attachments=pdf_count > 0,
+                attachment_count=len(attachments),
+                pdf_count=pdf_count,
+                body_preview=email_msg.body_preview
+            )
+            
+            # Save email to database
+            email_record = self.email_repository.create(email_create)
+            
+            # Process PDF attachments
+            for attachment in attachments:
+                if attachment.content_type == "application/pdf" or attachment.filename.lower().endswith('.pdf'):
+                    try:
+                        self._process_pdf_attachment(email_record.id, attachment)
+                    except Exception as e:
+                        logger.error(f"Error processing PDF {attachment.filename}: {e}")
+            
+            # Update statistics
+            self.config_repository.update_progress(
+                config_id,
+                current_time=datetime.now(timezone.utc),
+                emails_processed=1,
+                pdfs_found=pdf_count
+            )
+            
+            logger.info(f"Successfully processed email with {pdf_count} PDFs")
+            
+        except Exception as e:
+            logger.error(f"Error processing email {email_msg.message_id}: {e}")
+            # Record error but don't stop processing
+            try:
+                self.config_repository.record_error(config_id, str(e))
+            except:
+                pass
+    
+    def _process_pdf_attachment(self, email_id: int, attachment: EmailAttachment):
+        """
+        Process a PDF attachment through the pipeline
+        
+        Args:
+            email_id: Database ID of the email
+            attachment: PDF attachment to process
+        """
+        # TODO: Implement PDF processing pipeline
+        # 1. Save PDF to storage
+        # 2. Run template matching
+        # 3. Extract fields
+        # 4. Create ETO if successful
+        logger.info(f"Processing PDF: {attachment.filename} ({attachment.size_bytes} bytes)")
+    
+    # ========== Query Methods ==========
+    
+    def get_processed_emails(self, config_id: int, limit: int = 100) -> List[Email]:
+        """Get emails processed by a specific configuration"""
+        return self.email_repository.get_by_config(config_id, limit)
+    
+    def get_processing_statistics(self, config_id: int) -> Dict[str, Any]:
+        """Get processing statistics for a configuration"""
+        config = self.config_repository.get_by_id(config_id)
+        if not config:
+            raise ObjectNotFoundError('EmailConfig', config_id)
+        
+        return {
+            "config_id": config_id,
+            "name": config.name,
+            "is_active": config.is_active,
+            "is_running": config_id in self.active_listeners,
+            "total_emails_processed": config.total_emails_processed,
+            "total_pdfs_found": config.total_pdfs_found,
+            "last_check_time": config.last_check_time,
+            "activated_at": config.activated_at,
+            "last_error": config.last_error_message,
+            "last_error_at": config.last_error_at
+        }
+    
+    # ========== Service Lifecycle ==========
+    
+    def startup_recovery(self):
+        """
+        Recover active configurations on service startup
+        Called when the application starts
+        """
+        try:
+            logger.info("Starting email ingestion service recovery")
             
             # Get all active configs
-            active_configs = self.config_service.list_configs(is_active=True)
+            active_configs = self.config_repository.get_active_configs()
             
             if not active_configs:
-                logger.info("No active configurations to recover")
+                logger.info("No active email configurations to recover")
                 return
             
-            # Resume monitoring for each active config
+            logger.info(f"Found {len(active_configs)} active configurations to recover")
+            
+            # Try to restart each one
             for config in active_configs:
                 try:
-                    # Check if config has been activated before (has progress tracking)
-                    if config.last_check_time:
-                        logger.info(f"Resuming monitoring for config {config.id} "
-                                   f"(last check: {config.last_check_time})")
-                    else:
-                        logger.info(f"Starting fresh monitoring for config {config.id}")
-                    
-                    # Start listener
-                    self._start_listener(config)
-                    
+                    logger.info(f"Recovering config {config.id}: {config.name}")
+                    self.activate_config(config.id)
                 except Exception as e:
                     logger.error(f"Failed to recover config {config.id}: {e}")
-                    # Continue with other configs
+                    # Mark as inactive if we can't recover
+                    try:
+                        self.config_repository.deactivate(config.id)
+                    except:
+                        pass
             
-            logger.info(f"Recovery complete: {len(self.listeners)} listeners active")
+            logger.info("Email ingestion service recovery complete")
             
         except Exception as e:
-            logger.error(f"Failed to perform startup recovery: {e}")
-            raise ServiceError(f"Startup recovery failed: {e}") from e
+            logger.error(f"Error during startup recovery: {e}")
     
     def shutdown(self):
-        """Gracefully shutdown all listeners"""
-        logger.info("Shutting down email ingestion service...")
-        self.is_running = False
-        self.shutdown_event.set()
+        """
+        Gracefully shutdown all listeners
+        Called when the application is stopping
+        """
+        logger.info("Shutting down email ingestion service")
         
-        with self.listeners_lock:
+        with self.lock:
             # Stop all listeners
-            for config_id, listener in list(self.listeners.items()):
+            for config_id in list(self.active_listeners.keys()):
                 try:
-                    logger.info(f"Stopping listener for config {config_id}")
-                    listener.thread.stop()
-                    listener.thread.join(timeout=5)
+                    self.deactivate_config(config_id)
                 except Exception as e:
                     logger.error(f"Error stopping listener {config_id}: {e}")
-            
-            self.listeners.clear()
         
         logger.info("Email ingestion service shutdown complete")
-    
-    def activate_config(self, config: EmailConfig):
-        """Activate email monitoring for a configuration"""
-        if not self.is_running:
-            raise ServiceError("Email ingestion service is not running")
-        
-        with self.listeners_lock:
-            # Check if already active
-            if config.id in self.listeners:
-                logger.warning(f"Config {config.id} is already active")
-                return
-            
-            # Start listener (config already has progress tracking from activation)
-            self._start_listener(config)
-            logger.info(f"Activated monitoring for config {config.id}")
-    
-    def deactivate_config(self, config_id: int):
-        """Deactivate email monitoring and delete cursor for fresh start"""
-        with self.listeners_lock:
-            # Stop listener if running
-            if config_id in self.listeners:
-                listener = self.listeners[config_id]
-                try:
-                    logger.info(f"Stopping listener for config {config_id}")
-                    listener.thread.stop()
-                    listener.thread.join(timeout=5)
-                except Exception as e:
-                    logger.error(f"Error stopping listener {config_id}: {e}")
-                finally:
-                    del self.listeners[config_id]
-            
-            # Progress will be cleared when config is deactivated via config_service
-            
-            logger.info(f"Deactivated monitoring for config {config_id}")
-    
-    def _start_listener(self, config: EmailConfig):
-        """Internal method to start a listener thread"""
-        try:
-            # Create listener thread
-            thread = EmailListenerThread(
-                config=config,
-                config_service=self.config_service,
-                email_repository=self.email_repository,
-                check_interval=config.poll_interval_seconds
-            )
-            
-            # Create listener container
-            listener = EmailListener(
-                config=config,
-                thread=thread,
-                status="starting"
-            )
-            
-            # Start thread
-            thread.start()
-            listener.status = "running"
-            
-            # Store listener
-            self.listeners[config.id] = listener
-            
-            logger.info(f"Started listener for config {config.id}")
-            
-        except Exception as e:
-            logger.error(f"Failed to start listener for config {config.id}: {e}")
-            raise ServiceError(f"Failed to start listener: {e}") from e
-    
-    def get_status(self, config_id: int) -> dict:
-        """Get status of a specific configuration's monitoring"""
-        with self.listeners_lock:
-            if config_id not in self.listeners:
-                # Check if config exists and return progress stats
-                config = self.config_service.get_config(config_id)
-                if config:
-                    return {
-                        "is_active": config.is_active,
-                        "status": "inactive" if not config.is_active else "stopped",
-                        "emails_processed": config.total_emails_processed,
-                        "pdfs_found": config.total_pdfs_found,
-                        "last_check_time": config.last_check_time
-                    }
-                return {
-                    "is_active": False,
-                    "status": "not_found"
-                }
-            
-            listener = self.listeners[config_id]
-            config = listener.config
-            
-            return {
-                "is_active": True,
-                "status": listener.status,
-                "start_time": listener.start_time,
-                "last_check": listener.last_check,
-                "error_count": listener.error_count,
-                "thread_alive": listener.thread.is_alive(),
-                "emails_processed": config.total_emails_processed,
-                "pdfs_found": config.total_pdfs_found,
-                "last_check_time": config.last_check_time
-            }
-    
-    def get_all_status(self) -> dict:
-        """Get status of all configurations"""
-        with self.listeners_lock:
-            status = {
-                "service_running": self.is_running,
-                "active_listeners": len(self.listeners),
-                "configs": {}
-            }
-            
-            # Get all configs
-            all_configs = self.config_service.list_configs()
-            
-            for config in all_configs:
-                status["configs"][config.id] = self.get_status(config.id)
-            
-            return status
-    
-    def refresh_config(self, config_id: int):
-        """Refresh a configuration if its settings have changed"""
-        with self.listeners_lock:
-            # Get updated config
-            config = self.config_service.get_config(config_id)
-            if not config:
-                logger.warning(f"Config {config_id} not found")
-                return
-            
-            # If active and running, restart with new settings
-            if config.is_active and config_id in self.listeners:
-                logger.info(f"Refreshing listener for config {config_id}")
-                
-                # Stop current listener
-                listener = self.listeners[config_id]
-                listener.thread.stop()
-                listener.thread.join(timeout=5)
-                del self.listeners[config_id]
-                
-                # Start with new settings
-                self._start_listener(config)
-            elif config.is_active and config_id not in self.listeners:
-                # Config was activated but listener not running
-                logger.info(f"Starting listener for newly activated config {config_id}")
-                self.activate_config(config)
-            elif not config.is_active and config_id in self.listeners:
-                # Config was deactivated but listener still running
-                logger.info(f"Stopping listener for deactivated config {config_id}")
-                self.deactivate_config(config_id)

@@ -25,8 +25,22 @@ def create_config(
 ):
     """Create a new email configuration (permanent - cannot be deleted)"""
     try:
-        config_service = container.get_email_config_service()
-        created = config_service.create_config(config)
+        ingestion_service = container.get_email_ingestion_service()
+        
+        # Test connection before creating config
+        test_result = ingestion_service.test_connection_for_new_config(
+            email_address=config.email_address,
+            folder_name=config.folder_name
+        )
+        
+        if not test_result.success:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Connection test failed: {test_result.error}"
+            )
+        
+        # Create config only if test passes
+        created = ingestion_service.create_config(config)
         
         logger.info(f"Created email config {created.id}")
         return created
@@ -47,13 +61,12 @@ def create_config(
 
 @router.get("/", response_model=List[EmailConfig])
 def list_configs(
-    is_active: Optional[bool] = None,
     container: ServiceContainer = Depends(get_service_container)
 ):
     """List all email configurations"""
     try:
-        config_service = container.get_email_config_service()
-        configs = config_service.list_configs(is_active=is_active)
+        ingestion_service = container.get_email_ingestion_service()
+        configs = ingestion_service.list_configs()
         
         return configs
         
@@ -72,8 +85,8 @@ def get_config(
 ):
     """Get a specific email configuration"""
     try:
-        config_service = container.get_email_config_service()
-        config = config_service.get_config(config_id)
+        ingestion_service = container.get_email_ingestion_service()
+        config = ingestion_service.get_config(config_id)
         
         if not config:
             raise HTTPException(
@@ -101,14 +114,10 @@ def update_config(
 ):
     """Update an email configuration"""
     try:
-        config_service = container.get_email_config_service()
         ingestion_service = container.get_email_ingestion_service()
         
-        # Update configuration
-        updated = config_service.update_config(config_id, update)
-        
-        # Refresh listener if settings changed
-        ingestion_service.refresh_config(config_id)
+        # Update configuration and refresh listener if needed
+        updated = ingestion_service.update_config(config_id, update)
         
         logger.info(f"Updated email config {config_id}")
         return updated
@@ -143,28 +152,15 @@ def toggle_activation(
     Deactivation deletes the cursor for a fresh start on reactivation.
     """
     try:
-        config_service = container.get_email_config_service()
         ingestion_service = container.get_email_ingestion_service()
         
-        # Get current config
-        config = config_service.get_config(config_id)
-        if not config:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Configuration {config_id} not found"
-            )
-        
-        # Update activation status
-        update = EmailConfigUpdate(is_active=activate)
-        updated = config_service.update_config(config_id, update)
-        
-        # Update ingestion service
+        # Toggle activation
         if activate:
-            ingestion_service.activate_config(updated)
+            updated = ingestion_service.activate_config(config_id)
             message = f"Configuration {config_id} activated"
         else:
-            ingestion_service.deactivate_config(config_id)
-            message = f"Configuration {config_id} deactivated (cursor deleted for fresh start)"
+            updated = ingestion_service.deactivate_config(config_id)
+            message = f"Configuration {config_id} deactivated (progress reset for fresh start)"
         
         logger.info(message)
         return {
@@ -182,75 +178,47 @@ def toggle_activation(
         )
 
 
-@router.get("/{config_id}/status")
-def get_config_status(
-    config_id: int,
+
+
+@router.get("/discovery/accounts")
+def discover_email_accounts(
     container: ServiceContainer = Depends(get_service_container)
 ):
-    """Get the monitoring status for a configuration"""
+    """Discover all email accounts available in Outlook"""
     try:
         ingestion_service = container.get_email_ingestion_service()
-        status = ingestion_service.get_status(config_id)
+        accounts = ingestion_service.discover_email_accounts()
         
-        return status
+        return accounts
         
     except Exception as e:
-        logger.error(f"Failed to get status for config {config_id}: {e}")
+        logger.error(f"Failed to discover email accounts: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error"
         )
 
 
-@router.get("/status/all")
-def get_all_status(
+@router.get("/discovery/folders")
+def discover_folders(
+    email_address: str,
     container: ServiceContainer = Depends(get_service_container)
 ):
-    """Get monitoring status for all configurations"""
+    """Discover all folders for a specific email account"""
     try:
         ingestion_service = container.get_email_ingestion_service()
-        status = ingestion_service.get_all_status()
+        folders = ingestion_service.discover_folders(email_address)
         
-        return status
+        return folders
         
-    except Exception as e:
-        logger.error(f"Failed to get all status: {e}")
+    except ValueError as e:
+        logger.error(f"Invalid request: {e}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
         )
-
-
-@router.post("/{config_id}/test")
-def test_config(
-    config_id: int,
-    container: ServiceContainer = Depends(get_service_container)
-):
-    """Test an email configuration connection"""
-    try:
-        config_service = container.get_email_config_service()
-        
-        # Get configuration
-        config = config_service.get_config(config_id)
-        if not config:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Configuration {config_id} not found"
-            )
-        
-        # Test connection (implement in config service)
-        result = config_service.test_connection(config)
-        
-        return {
-            "success": result.get("success", False),
-            "message": result.get("message", "Connection test completed"),
-            "details": result.get("details", {})
-        }
-        
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"Failed to test config {config_id}: {e}")
+        logger.error(f"Failed to discover folders for {email_address}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error"

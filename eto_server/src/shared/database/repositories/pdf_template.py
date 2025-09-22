@@ -134,7 +134,7 @@ class PdfTemplateRepository(BaseRepository[PdfTemplateModel]):
                     return None
 
                 # Update only fields that are provided (not None)
-                update_dict = update_data.model_dump(exclude_unset=True)
+                update_dict = update_data.model_dump_for_db()
                 for field, value in update_dict.items():
                     if hasattr(model, field):
                         setattr(model, field, value)

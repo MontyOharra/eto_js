@@ -38,6 +38,10 @@ class PdfTemplateUpdate(BaseModel):
     description: Optional[str] = Field(None, max_length=1000, description="Template description")
     status: Optional[str] = Field(None, pattern="^(active|inactive)$", description="Template status")
     
+    def model_dump_for_db(self) -> dict:
+        """Convert to database format, only including explicitly set fields"""
+        return self.model_dump(exclude_unset=True)
+    
     class Config:
         from_attributes = True
 
