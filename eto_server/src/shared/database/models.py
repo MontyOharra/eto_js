@@ -98,7 +98,6 @@ class EtoRunModel(BaseModel):
     __tablename__ = 'eto_runs'
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    email_id: Mapped[int] = mapped_column(ForeignKey('emails.id'), index=True)
     pdf_file_id: Mapped[int] = mapped_column(ForeignKey('pdf_files.id'), index=True)
 
     # Overall processing status
@@ -157,7 +156,7 @@ class PdfFileModel(BaseModel):
     original_filename: Mapped[Optional[str]] = mapped_column(String(255))
     file_path: Mapped[str] = mapped_column(String(512))
     file_size: Mapped[Optional[int]] = mapped_column(BigInteger)
-    sha256_hash: Mapped[str] = mapped_column(String(64), index=True)
+    file_hash: Mapped[str] = mapped_column(String(64), index=True)
     page_count: Mapped[Optional[int]] = mapped_column(Integer)
     object_count: Mapped[Optional[int]] = mapped_column(Integer)  # Number of PDF objects extracted
     objects_json: Mapped[Optional[str]] = mapped_column(Text)  # PDF objects for template matching

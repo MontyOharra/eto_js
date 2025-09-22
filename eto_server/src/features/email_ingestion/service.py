@@ -152,41 +152,6 @@ class EmailIngestionService:
             logger.error(f"Error discovering folders: {e}")
             raise ServiceError(f"Failed to discover folders: {str(e)}")
     
-    def test_connection(self, config: EmailConfigCreate) -> ConnectionTestResult:
-        """
-        Test if a configuration can connect successfully
-        
-        Args:
-            config: Email configuration to test
-            
-        Returns:
-            Connection test result
-        """
-        try:
-            logger.info(f"Testing connection for {config.email_address}")
-            
-            # For now, assume Outlook COM provider
-            # In future, determine provider from config
-            integration_config = OutlookComConfig(
-                provider_type=EmailProvider.OUTLOOK_COM,
-                account_identifier=config.email_address,
-                default_folder=config.folder_name
-            )
-            
-            integration = EmailIntegrationFactory.create_integration(integration_config)
-            result = integration.test_connection()
-            
-            logger.info(f"Connection test {'succeeded' if result.success else 'failed'}")
-            return result
-            
-        except Exception as e:
-            logger.error(f"Error testing connection: {e}")
-            return ConnectionTestResult(
-                success=False,
-                message="Connection test failed",
-                error=str(e)
-            )
-    
     def test_connection_for_new_config(self, email_address: str, folder_name: str, provider_type: str = "outlook_com") -> ConnectionTestResult:
         """
         Test connection for a new config before creating it
@@ -257,8 +222,11 @@ class EmailIngestionService:
     def create_config(self, config_create: EmailConfigCreate) -> EmailConfig:
         """Create new email configuration"""
         try:
-            # Test connection first
-            test_result = self.test_connection(config_create)
+            # Test connection and verify folder exists
+            test_result = self.test_connection_for_new_config(
+                email_address=config_create.email_address,
+                folder_name=config_create.folder_name
+            )
             if not test_result.success:
                 raise ServiceError(f"Connection test failed: {test_result.error}")
             

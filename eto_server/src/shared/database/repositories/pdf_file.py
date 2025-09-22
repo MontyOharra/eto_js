@@ -1,187 +1,346 @@
 """
-PDF Repository
-Data access layer for PdfFileModel model operations
+PDF File Repository (New)
+Repository for PDF file operations using Pydantic models
 """
-import json
 import logging
-from typing import Optional, List, Dict, Any
-from datetime import datetime, timezone
+from typing import Optional, List
+from datetime import datetime, timezone, timedelta
 from sqlalchemy.exc import SQLAlchemyError
 
 from shared.database.repositories import BaseRepository
-from shared.exceptions import RepositoryError, ObjectNotFoundError, ValidationError
+from shared.exceptions import RepositoryError, ObjectNotFoundError
 from shared.database.models import PdfFileModel
-from shared.domain import PdfFile       
-
+from shared.database.connection import DatabaseConnectionManager
+from shared.models import PdfFile, PdfFileCreate, PdfFileUpdate, PdfFileSummary
 
 logger = logging.getLogger(__name__)
 
 
-class PdfRepository(BaseRepository[PdfFileModel]):
-    """Repository for PdfFileModel model operations"""
+class PdfFileRepository(BaseRepository[PdfFileModel]):
+    """Repository for PDF file operations with Pydantic models"""
+    
+    def __init__(self, connection_manager: DatabaseConnectionManager):
+        super().__init__(connection_manager)
     
     @property
     def model_class(self):
         return PdfFileModel
     
-    def _convert_to_domain_object(self, pdf_model: PdfFileModel) -> PdfFile:
-        """Convert database model to domain object while session is active"""
-        pdf_data = {
-            'id': getattr(pdf_model, 'id'),
-            'email_id': getattr(pdf_model, 'email_id'),
-            'filename': getattr(pdf_model, 'filename'),
-            'original_filename': getattr(pdf_model, 'original_filename'),
-            'file_path': getattr(pdf_model, 'file_path'),
-            'file_size': getattr(pdf_model, 'file_size'),
-            'sha256_hash': getattr(pdf_model, 'sha256_hash'),
-            'mime_type': getattr(pdf_model, 'mime_type') or 'application/pdf',
-            'page_count': getattr(pdf_model, 'page_count'),
-            'object_count': getattr(pdf_model, 'object_count'),
-            'objects_json': getattr(pdf_model, 'objects_json'),
-            'created_at': getattr(pdf_model, 'created_at'),
-            'updated_at': getattr(pdf_model, 'updated_at')
-        }
-        return PdfFile(**pdf_data)
+    def _convert_to_domain_object(self, model: PdfFileModel) -> PdfFile:
+        """Convert SQLAlchemy model to Pydantic domain object"""
+        return PdfFile.model_validate(model)
     
-    def get_by_id(self, id: int) -> Optional[PdfFile]:
-        """Override BaseRepository method to return domain object"""
+    # === Core CRUD Operations ===
+    
+    def create(self, pdf_create: PdfFileCreate) -> PdfFile:
+        """
+        Create a new PDF file record
+        
+        Args:
+            pdf_create: PdfFileCreate model with file data
+            
+        Returns:
+            Created PdfFile domain model
+        """
         try:
             with self.connection_manager.session_scope() as session:
-                # Get the model from the session using SQLAlchemy 2.x pattern
-                model = session.get(self.model_class, id)
+                # Check for duplicate by hash
+                existing = session.query(self.model_class).filter(
+                    self.model_class.file_hash == pdf_create.file_hash
+                ).first()
                 
-                if model:
-                    # Convert to domain object while session is still active
-                    logger.debug(f"Retrieved PDF: {getattr(model, 'filename')} from email {getattr(model, 'email_id')}")
-                    return self._convert_to_domain_object(model)
-                else:
-                    return None
+                if existing:
+                    logger.info(f"PDF with hash {pdf_create.file_hash} already exists, returning existing record")
+                    return self._convert_to_domain_object(existing)
+                
+                # Create new record
+                model_data = pdf_create.model_dump_for_db()
+                model = self.model_class(**model_data)
+                
+                session.add(model)
+                session.flush()
+                session.refresh(model)
+                
+                logger.debug(f"Created PDF file record with ID: {model.id}")
+                return self._convert_to_domain_object(model)
+                
         except SQLAlchemyError as e:
-            logger.error(f"Error getting PDF {id}: {e}")
-            raise RepositoryError(f"Failed to get PDF: {e}") from e
+            logger.error(f"Error creating PDF file record: {e}")
+            raise RepositoryError(f"Failed to create PDF file: {e}") from e
     
-    def get_by_email_id(self, email_id: int) -> List[PdfFile]:
-        """Get all PDF files for a specific email - returns domain objects"""
-        if email_id is None:
-            return []
+    def get_by_id(self, pdf_id: int) -> Optional[PdfFile]:
+        """
+        Get PDF file by ID
         
+        Args:
+            pdf_id: PDF file ID
+            
+        Returns:
+            PdfFile domain model or None if not found
+        """
+        try:
+            with self.connection_manager.session_scope() as session:
+                model = session.get(self.model_class, pdf_id)
+                
+                if not model:
+                    return None
+                    
+                return self._convert_to_domain_object(model)
+                
+        except SQLAlchemyError as e:
+            logger.error(f"Error getting PDF file {pdf_id}: {e}")
+            raise RepositoryError(f"Failed to get PDF file: {e}") from e
+    
+    def get_by_hash(self, file_hash: str) -> Optional[PdfFile]:
+        """
+        Get PDF file by hash for deduplication checks
+        
+        Args:
+            file_hash: SHA256 hash of the file
+            
+        Returns:
+            PdfFile domain model or None if not found
+        """
+        try:
+            with self.connection_manager.session_scope() as session:
+                model = session.query(self.model_class).filter(
+                    self.model_class.file_hash == file_hash
+                ).first()
+                
+                if not model:
+                    return None
+                    
+                return self._convert_to_domain_object(model)
+                
+        except SQLAlchemyError as e:
+            logger.error(f"Error getting PDF file by hash {file_hash}: {e}")
+            raise RepositoryError(f"Failed to get PDF file by hash: {e}") from e
+    
+    def exists_by_hash(self, file_hash: str) -> bool:
+        """
+        Check if PDF with given hash exists (for quick deduplication)
+        
+        Args:
+            file_hash: SHA256 hash to check
+            
+        Returns:
+            True if PDF with hash exists
+        """
+        try:
+            with self.connection_manager.session_scope() as session:
+                exists = session.query(
+                    session.query(self.model_class).filter(
+                        self.model_class.file_hash == file_hash
+                    ).exists()
+                ).scalar()
+                
+                return exists
+                
+        except SQLAlchemyError as e:
+            logger.error(f"Error checking PDF hash existence: {e}")
+            raise RepositoryError(f"Failed to check PDF hash: {e}") from e
+    
+    def update(self, pdf_id: int, update_data: PdfFileUpdate) -> Optional[PdfFile]:
+        """
+        Update PDF file metadata (mainly extracted text/objects if re-processing)
+        
+        Args:
+            pdf_id: PDF file ID to update
+            update_data: PdfFileUpdate with fields to update
+            
+        Returns:
+            Updated PdfFile or None if not found
+        """
+        try:
+            with self.connection_manager.session_scope() as session:
+                model = session.get(self.model_class, pdf_id)
+                
+                if not model:
+                    return None
+                
+                # Update only provided fields
+                update_dict = update_data.model_dump_for_db()
+                for field, value in update_dict.items():
+                    if hasattr(model, field):
+                        setattr(model, field, value)
+                
+                # Update timestamp
+                model.updated_at = datetime.now(timezone.utc)
+                
+                session.flush()
+                session.refresh(model)
+                
+                logger.debug(f"Updated PDF file with ID: {pdf_id}")
+                return self._convert_to_domain_object(model)
+                
+        except SQLAlchemyError as e:
+            logger.error(f"Error updating PDF file {pdf_id}: {e}")
+            raise RepositoryError(f"Failed to update PDF file: {e}") from e
+    
+    # === Query Methods ===
+    
+    def get_by_email(self, email_id: int) -> List[PdfFile]:
+        """
+        Get all PDF files associated with an email
+        
+        Args:
+            email_id: Email ID to get PDFs for
+            
+        Returns:
+            List of PdfFile domain models
+        """
         try:
             with self.connection_manager.session_scope() as session:
                 models = session.query(self.model_class).filter(
                     self.model_class.email_id == email_id
-                ).all()
+                ).order_by(self.model_class.created_at).all()
                 
-                # Convert all models to domain objects
                 return [self._convert_to_domain_object(model) for model in models]
                 
         except SQLAlchemyError as e:
             logger.error(f"Error getting PDFs for email {email_id}: {e}")
-            raise RepositoryError(f"Failed to get PDFs for email: {e}") from e
-
-    # === Phase 1: Essential PDF Repository Methods ===
+            raise RepositoryError(f"Failed to get PDFs by email: {e}") from e
     
-    def create_pdf_record(self, pdf_data: Dict[str, Any]) -> PdfFile:
+    def get_manual_uploads(self, limit: Optional[int] = None, offset: Optional[int] = None) -> List[PdfFile]:
         """
-        Create PDF record and return the domain object
-
-        Args:
-            pdf_data: Dictionary containing PDF metadata
-
-        Returns:
-            PdfFile: Created PDF domain object
-        """
-        try:
-            # Ensure required fields are present
-            required_fields = ['email_id', 'filename', 'original_filename', 'file_path', 'file_size', 'sha256_hash']
-            for field in required_fields:
-                if field not in pdf_data:
-                    raise ValueError(f"Required field '{field}' missing from pdf_data")
-
-            # Add default values for optional fields
-            pdf_data.setdefault('mime_type', 'application/pdf')
-            pdf_data.setdefault('created_at', datetime.now(timezone.utc))
-            pdf_data.setdefault('updated_at', datetime.now(timezone.utc))
-
-            # Create the record using base repository method
-            pdf_record = self.create(pdf_data)
-
-            logger.debug(f"Created PDF record {pdf_record.id} for email {pdf_data['email_id']}: {pdf_data['filename']}")
-
-            # Convert to domain object before returning
-            with self.connection_manager.session_scope() as session:
-                fresh_model = session.get(self.model_class, pdf_record.id)
-                if fresh_model:
-                    return self._convert_to_domain_object(fresh_model)
-                else:
-                    raise RepositoryError(f"Failed to retrieve created PDF record {pdf_record.id}")
-
-        except Exception as e:
-            logger.error(f"Error creating PDF record: {e}")
-            raise RepositoryError(f"Failed to create PDF record: {e}") from e
-    
-    def get_duplicate_by_hash(self, sha256_hash: str) -> Optional[PdfFile]:
-        """
-        Get existing PDF with same hash for deduplication
+        Get PDF files that were manually uploaded (no email_id)
         
         Args:
-            sha256_hash: SHA256 hash to find duplicate for
+            limit: Maximum number of results
+            offset: Number of results to skip
             
         Returns:
-            Optional[PdfFile]: Existing PDF domain object or None
+            List of PdfFile domain models
         """
-        if not sha256_hash:
-            return None
-            
         try:
             with self.connection_manager.session_scope() as session:
-                model = session.query(self.model_class).filter(
-                    self.model_class.sha256_hash == sha256_hash
-                ).first()
+                query = session.query(self.model_class).filter(
+                    self.model_class.email_id.is_(None)
+                ).order_by(self.model_class.created_at.desc())
                 
-                if model:
-                    logger.debug(f"Found duplicate PDF by hash {sha256_hash[:16]}...: {model.filename}")
-                    return self._convert_to_domain_object(model)
-                else:
-                    return None
+                if offset is not None:
+                    query = query.offset(offset)
                     
+                if limit is not None:
+                    query = query.limit(limit)
+                
+                models = query.all()
+                return [self._convert_to_domain_object(model) for model in models]
+                
         except SQLAlchemyError as e:
-            logger.error(f"Error getting duplicate by hash {sha256_hash}: {e}")
-            raise RepositoryError(f"Failed to get duplicate by hash: {e}") from e
+            logger.error(f"Error getting manual upload PDFs: {e}")
+            raise RepositoryError(f"Failed to get manual uploads: {e}") from e
     
-    def update_objects_json(self, pdf_id: int, objects_json: str) -> Optional[PdfFile]:
-        """Update the objects_json field for a PDF file"""
-        if pdf_id is None:
-            raise ValueError("pdf_id cannot be None")
-
-        if objects_json is None:
-            raise ValueError("objects_json cannot be None")
-
+    def get_all(self, 
+                has_email: Optional[bool] = None,
+                limit: Optional[int] = None, 
+                offset: Optional[int] = None) -> List[PdfFile]:
+        """
+        Get all PDF files with optional filtering
+        
+        Args:
+            has_email: Filter by whether PDF has associated email
+            limit: Maximum number of results
+            offset: Number of results to skip
+            
+        Returns:
+            List of PdfFile domain models
+        """
         try:
-            # Parse objects_json to count objects if it's valid JSON
-            try:
-                parsed_objects = json.loads(objects_json) if objects_json else []
-                object_count = len(parsed_objects) if isinstance(parsed_objects, list) else 0
-            except json.JSONDecodeError:
-                logger.warning(f"Invalid JSON provided for objects_json in PDF {pdf_id}")
-                object_count = 0
-
             with self.connection_manager.session_scope() as session:
-                # Get the model from the session
-                model = session.get(self.model_class, pdf_id)
-
-                if not model:
-                    logger.warning(f"PDF with ID {pdf_id} not found")
-                    return None
-
-                # Update the model attributes directly
-                setattr(model, 'objects_json', objects_json)
-                setattr(model, 'object_count', object_count)
-                setattr(model, 'updated_at', datetime.now(timezone.utc))
-
-                # Convert to domain object within same session
-                logger.debug(f"Updated objects_json for PDF {pdf_id} with {object_count} objects")
-                return self._convert_to_domain_object(model)
-
-        except Exception as e:
-            logger.error(f"Error updating objects_json for PDF {pdf_id}: {e}")
-            raise RepositoryError(f"Failed to update objects_json: {e}") from e
+                query = session.query(self.model_class)
+                
+                # Apply filters
+                if has_email is not None:
+                    if has_email:
+                        query = query.filter(self.model_class.email_id.isnot(None))
+                    else:
+                        query = query.filter(self.model_class.email_id.is_(None))
+                
+                # Order by creation date (newest first)
+                query = query.order_by(self.model_class.created_at.desc())
+                
+                if offset is not None:
+                    query = query.offset(offset)
+                    
+                if limit is not None:
+                    query = query.limit(limit)
+                
+                models = query.all()
+                return [self._convert_to_domain_object(model) for model in models]
+                
+        except SQLAlchemyError as e:
+            logger.error(f"Error getting all PDF files: {e}")
+            raise RepositoryError(f"Failed to get PDF files: {e}") from e
+    
+    def get_summaries(self, 
+                      has_email: Optional[bool] = None,
+                      limit: Optional[int] = None, 
+                      offset: Optional[int] = None) -> List[PdfFileSummary]:
+        """
+        Get PDF file summaries for list views
+        
+        Args:
+            has_email: Filter by whether PDF has associated email
+            limit: Maximum number of results
+            offset: Number of results to skip
+            
+        Returns:
+            List of PdfFileSummary models
+        """
+        # Get full models and convert to summaries
+        pdfs = self.get_all(has_email=has_email, limit=limit, offset=offset)
+        return [PdfFileSummary.from_pdf_file(pdf) for pdf in pdfs]
+    
+    def count(self, has_email: Optional[bool] = None) -> int:
+        """
+        Count PDF files with optional filtering
+        
+        Args:
+            has_email: Filter by whether PDF has associated email
+            
+        Returns:
+            Count of PDF files
+        """
+        try:
+            with self.connection_manager.session_scope() as session:
+                query = session.query(self.model_class)
+                
+                if has_email is not None:
+                    if has_email:
+                        query = query.filter(self.model_class.email_id.isnot(None))
+                    else:
+                        query = query.filter(self.model_class.email_id.is_(None))
+                
+                return query.count()
+                
+        except SQLAlchemyError as e:
+            logger.error(f"Error counting PDF files: {e}")
+            raise RepositoryError(f"Failed to count PDF files: {e}") from e
+    
+    def get_recent(self, days: int = 7, limit: int = 100) -> List[PdfFile]:
+        """
+        Get recently added PDF files
+        
+        Args:
+            days: Number of days to look back
+            limit: Maximum number of results
+            
+        Returns:
+            List of recent PdfFile domain models
+        """
+        try:
+            with self.connection_manager.session_scope() as session:
+                cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
+                
+                models = session.query(self.model_class).filter(
+                    self.model_class.created_at >= cutoff_date
+                ).order_by(
+                    self.model_class.created_at.desc()
+                ).limit(limit).all()
+                
+                return [self._convert_to_domain_object(model) for model in models]
+                
+        except SQLAlchemyError as e:
+            logger.error(f"Error getting recent PDF files: {e}")
+            raise RepositoryError(f"Failed to get recent PDFs: {e}") from e

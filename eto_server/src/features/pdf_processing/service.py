@@ -1,132 +1,357 @@
 """
 PDF Processing Service
-Standalone service for all PDF-related operations including storage, extraction, and management.
-This service can be shared across multiple features (email ingestion, manual upload, ETO processing).
+Consolidated service for all PDF operations including storage, extraction, and retrieval
 """
+import json
 import logging
 from typing import Optional, List, Dict, Any
-from datetime import datetime, timezone
+from datetime import datetime
 
-from .storage_service import PdfStorageService
-from .object_extraction_service import PdfObjectExtractionService
+from shared.database.connection import DatabaseConnectionManager
+from shared.database.repositories.pdf_repository_new import PdfFileRepository
+from shared.models.pdf_file import PdfFile, PdfFileCreate, PdfFileUpdate, PdfFileSummary
+from shared.exceptions import ServiceError
 
-from shared.database import get_connection_manager
-from shared.database.repositories.pdf_file import PdfRepository
-from shared.domain import PdfFile, PdfStoreRequest, PdfObjectExtractionResult
-
-
+from .utils import (
+    calculate_file_hash,
+    extract_pdf_metadata,
+    extract_pdf_text,
+    extract_pdf_objects,
+    validate_pdf,
+    save_pdf_to_disk,
+    read_pdf_from_disk,
+    ensure_storage_directory,
+    get_storage_info
+)
 
 logger = logging.getLogger(__name__)
 
 
 class PdfProcessingService:
     """
-    Standalone PDF processing service that handles all PDF-related operations.
-    Can be shared across multiple features for consistent PDF handling.
+    Consolidated service for all PDF processing operations
+    Handles storage, extraction, and retrieval of PDF files
     """
     
-    def __init__(self, storage_path: str, connection_manager=None):
+    def __init__(self, storage_path: str, connection_manager: DatabaseConnectionManager):
         """
-        Initialize PDF processing service with storage configuration
-
-        Args:
-            storage_path: Path for PDF file storage
-            connection_manager: Optional connection manager (falls back to global if None)
-        """
-        # Database connection
-        self.connection_manager = connection_manager or get_connection_manager()
-        if not self.connection_manager:
-            raise RuntimeError("Database connection manager is required")
-        
-        # Repository layer
-        self.pdf_repo = PdfRepository(self.connection_manager)
-        
-        # Service dependencies
-        self.storage_service = PdfStorageService(storage_path, self.pdf_repo)
-        self.extraction_service = PdfObjectExtractionService()
-        
-        logger.info(f"PDF Processing Service initialized with storage path: {storage_path}")
-    
-    # === Core PDF Management Methods ===
-    
-    def store_pdf(self, content_bytes: bytes, store_request: PdfStoreRequest) -> PdfFile:
-        """
-        Store PDF file and create database record using domain objects
+        Initialize PDF processing service
         
         Args:
-            content_bytes: PDF file content
-            store_request: Domain object with storage request details
+            storage_path: Base path for PDF file storage
+            connection_manager: Database connection manager
+        """
+        self.storage_path = storage_path
+        self.pdf_repository = PdfFileRepository(connection_manager)
+        
+        # Ensure storage directory exists
+        if not ensure_storage_directory(storage_path):
+            logger.error(f"Failed to create storage directory at {storage_path}")
+            raise ServiceError(f"Cannot initialize PDF storage at {storage_path}")
+        
+        logger.info(f"PDF Processing Service initialized with storage at {storage_path}")
+    
+    # === Core PDF Operations ===
+    
+    def store_pdf(self, 
+                  file_content: bytes, 
+                  original_filename: str,
+                  email_id: Optional[int] = None) -> PdfFile:
+        """
+        Main entry point for storing any PDF
+        - Validates PDF
+        - Calculates hash for deduplication
+        - Extracts objects and text upfront
+        - Stores file on disk
+        - Creates DB record with all extracted data
+        
+        Args:
+            file_content: PDF file content as bytes
+            original_filename: Original name of the PDF file
+            email_id: Optional ID of associated email (None for manual uploads)
             
         Returns:
-            PdfFile: Created PDF domain object
-        """
-        try:
-            # Delegate complete storage workflow to storage service
-            return self.storage_service.store_pdf(content_bytes, store_request)
+            PdfFile domain object with all metadata
             
-        except Exception as e:
-            logger.error(f"Error storing PDF: {e}")
-            raise
-    
-    def extract_pdf_objects(self, pdf_id: int) -> PdfObjectExtractionResult:
-        """
-        Extract objects from stored PDF and update database record
-
-        Args:
-            pdf_id: PDF ID to extract objects from
-
-        Returns:
-            PdfObjectExtractionResult: Extraction result with objects and metadata
+        Raises:
+            ServiceError: If PDF is invalid or storage fails
         """
         try:
-            # Get PDF file record
-            pdf_file = self.pdf_repo.get_by_id(pdf_id)
-            if not pdf_file:
-                raise ValueError(f"PDF {pdf_id} not found")
-
-            # Get PDF content using storage service
-            pdf_content = self.storage_service.retrieve_pdf_content(pdf_file.file_path)
-            if not pdf_content:
-                raise ValueError(f"PDF content not found for {pdf_id}")
-
-            # Extract objects using extraction service
-            extraction_result = self.extraction_service.extract_objects_from_bytes(pdf_content)
-
-            if extraction_result.success:
-                # Convert objects to JSON for database storage
-                import json
-                objects_json = json.dumps([obj.__dict__ for obj in extraction_result.objects])
-                self.pdf_repo.update_objects_json(pdf_id, objects_json)
-
-                logger.info(f"Extracted {extraction_result.object_count} objects from PDF {pdf_id}")
-            else:
-                logger.warning(f"Object extraction failed for PDF {pdf_id}: {extraction_result.error_message}")
-
-            return extraction_result
-
-        except Exception as e:
-            logger.error(f"Error extracting objects from PDF {pdf_id}: {e}")
+            # Step 1: Validate PDF
+            is_valid, error_msg = validate_pdf(file_content)
+            if not is_valid:
+                raise ServiceError(f"Invalid PDF: {error_msg}")
+            
+            # Step 2: Calculate hash for deduplication
+            file_hash = calculate_file_hash(file_content)
+            
+            # Step 3: Check for duplicate
+            existing = self.pdf_repository.get_by_hash(file_hash)
+            if existing:
+                logger.info(f"PDF with hash {file_hash} already exists (ID: {existing.id})")
+                return existing
+            
+            # Step 4: Extract all data upfront
+            logger.info(f"Processing new PDF: {original_filename}")
+            
+            # Extract metadata
+            metadata = extract_pdf_metadata(file_content)
+            page_count = metadata.get('page_count', 1)
+            file_size = metadata.get('file_size', len(file_content))
+            
+            # Extract text content
+            extracted_text = extract_pdf_text(file_content)
+            
+            # Extract objects with positions
+            pdf_objects = extract_pdf_objects(file_content)
+            objects_json = json.dumps([obj.model_dump() for obj in pdf_objects]) if pdf_objects else None
+            
+            # Step 5: Store file on disk
+            relative_path = save_pdf_to_disk(
+                file_content=file_content,
+                storage_base=self.storage_path,
+                file_hash=file_hash,
+                original_filename=original_filename
+            )
+            
+            # Step 6: Create database record with all extracted data
+            pdf_create = PdfFileCreate(
+                filename=file_hash + '.pdf',  # Storage filename
+                original_filename=original_filename,
+                file_hash=file_hash,
+                file_size=file_size,
+                page_count=page_count,
+                storage_path=relative_path,
+                email_id=email_id,
+                extracted_text=extracted_text,
+                objects_json=objects_json
+            )
+            
+            pdf_file = self.pdf_repository.create(pdf_create)
+            
+            logger.info(f"Successfully stored PDF {pdf_file.id}: {original_filename}")
+            return pdf_file
+            
+        except ServiceError:
             raise
+        except Exception as e:
+            logger.error(f"Error storing PDF {original_filename}: {e}")
+            raise ServiceError(f"Failed to store PDF: {str(e)}")
     
-    # === Helper Methods ===
-
-    def _pdf_to_dict(self, pdf_file: PdfFile) -> Dict[str, Any]:
-        """Convert PdfFile domain object to dictionary for API responses"""
+    # === Retrieval Operations ===
+    
+    def get_pdf(self, pdf_id: int) -> Optional[PdfFile]:
+        """
+        Get PDF metadata from database
+        
+        Args:
+            pdf_id: PDF file ID
+            
+        Returns:
+            PdfFile domain object or None if not found
+        """
+        return self.pdf_repository.get_by_id(pdf_id)
+    
+    def get_pdf_content(self, pdf_id: int) -> Optional[bytes]:
+        """
+        Read PDF file content from disk
+        
+        Args:
+            pdf_id: PDF file ID
+            
+        Returns:
+            PDF file content as bytes, or None if not found
+        """
+        pdf_file = self.get_pdf(pdf_id)
+        if not pdf_file:
+            return None
+        
+        return read_pdf_from_disk(self.storage_path, pdf_file.storage_path)
+    
+    def get_pdfs_by_email(self, email_id: int) -> List[PdfFile]:
+        """
+        Get all PDFs associated with an email
+        
+        Args:
+            email_id: Email ID
+            
+        Returns:
+            List of PdfFile domain objects
+        """
+        return self.pdf_repository.get_by_email(email_id)
+    
+    def get_manual_uploads(self, limit: Optional[int] = None, offset: Optional[int] = None) -> List[PdfFile]:
+        """
+        Get user-uploaded PDFs (no email association)
+        
+        Args:
+            limit: Maximum number of results
+            offset: Number of results to skip
+            
+        Returns:
+            List of PdfFile domain objects
+        """
+        return self.pdf_repository.get_manual_uploads(limit=limit, offset=offset)
+    
+    def get_all_pdfs(self, 
+                     has_email: Optional[bool] = None,
+                     limit: Optional[int] = None,
+                     offset: Optional[int] = None) -> List[PdfFile]:
+        """
+        Get all PDFs with optional filtering
+        
+        Args:
+            has_email: Filter by email association
+            limit: Maximum number of results
+            offset: Number of results to skip
+            
+        Returns:
+            List of PdfFile domain objects
+        """
+        return self.pdf_repository.get_all(
+            has_email=has_email,
+            limit=limit,
+            offset=offset
+        )
+    
+    def get_pdf_summaries(self,
+                          has_email: Optional[bool] = None,
+                          limit: Optional[int] = None,
+                          offset: Optional[int] = None) -> List[PdfFileSummary]:
+        """
+        Get PDF summaries for list views
+        
+        Args:
+            has_email: Filter by email association
+            limit: Maximum number of results
+            offset: Number of results to skip
+            
+        Returns:
+            List of PdfFileSummary objects
+        """
+        return self.pdf_repository.get_summaries(
+            has_email=has_email,
+            limit=limit,
+            offset=offset
+        )
+    
+    def get_pdf_objects(self, pdf_id: int) -> Optional[List[Dict[str, Any]]]:
+        """
+        Get extracted PDF objects for a specific PDF
+        
+        Args:
+            pdf_id: PDF file ID
+            
+        Returns:
+            List of PDF objects as dictionaries, or None if not found
+        """
+        pdf_file = self.get_pdf(pdf_id)
+        if not pdf_file or not pdf_file.objects_json:
+            return None
+        
+        try:
+            return json.loads(pdf_file.objects_json)
+        except json.JSONDecodeError:
+            logger.error(f"Failed to decode objects JSON for PDF {pdf_id}")
+            return None
+    
+    # === Update Operations ===
+    
+    def update_extracted_data(self, pdf_id: int, extracted_text: str, objects_json: str) -> Optional[PdfFile]:
+        """
+        Update extracted data for a PDF (if re-processing)
+        
+        Args:
+            pdf_id: PDF file ID
+            extracted_text: New extracted text
+            objects_json: New extracted objects as JSON
+            
+        Returns:
+            Updated PdfFile or None if not found
+        """
+        update_data = PdfFileUpdate(
+            extracted_text=extracted_text,
+            objects_json=objects_json
+        )
+        
+        return self.pdf_repository.update(pdf_id, update_data)
+    
+    # === Utility Operations ===
+    
+    def check_duplicate(self, file_content: bytes) -> Optional[PdfFile]:
+        """
+        Check if a PDF already exists by hash
+        
+        Args:
+            file_content: PDF content to check
+            
+        Returns:
+            Existing PdfFile if duplicate found, None otherwise
+        """
+        file_hash = calculate_file_hash(file_content)
+        return self.pdf_repository.get_by_hash(file_hash)
+    
+    def get_storage_info(self) -> Dict[str, Any]:
+        """
+        Get storage statistics
+        
+        Returns:
+            Dictionary with storage information
+        """
+        storage_stats = get_storage_info(self.storage_path)
+        
+        # Add database statistics
+        total_pdfs = self.pdf_repository.count()
+        email_pdfs = self.pdf_repository.count(has_email=True)
+        manual_pdfs = self.pdf_repository.count(has_email=False)
+        
         return {
-            "id": pdf_file.id,
-            "email_id": pdf_file.email_id,
-            "filename": pdf_file.filename,
-            "original_filename": pdf_file.original_filename,
-            "file_size": pdf_file.file_size,
-            "sha256_hash": pdf_file.sha256_hash,
-            "mime_type": pdf_file.mime_type,
-            "page_count": pdf_file.page_count,
-            "object_count": pdf_file.object_count,
-            "created_at": pdf_file.created_at.isoformat() if pdf_file.created_at else None,
-            "updated_at": pdf_file.updated_at.isoformat() if pdf_file.updated_at else None
+            **storage_stats,
+            'database': {
+                'total_pdfs': total_pdfs,
+                'email_pdfs': email_pdfs,
+                'manual_uploads': manual_pdfs
+            }
         }
-
-    # === API Access Methods ===
+    
+    def reprocess_pdf(self, pdf_id: int) -> Optional[PdfFile]:
+        """
+        Re-extract data from an existing PDF
+        
+        Args:
+            pdf_id: PDF file ID to reprocess
+            
+        Returns:
+            Updated PdfFile or None if not found
+        """
+        try:
+            # Get existing PDF
+            pdf_file = self.get_pdf(pdf_id)
+            if not pdf_file:
+                logger.warning(f"PDF {pdf_id} not found for reprocessing")
+                return None
+            
+            # Read file content
+            file_content = self.get_pdf_content(pdf_id)
+            if not file_content:
+                logger.error(f"Could not read PDF {pdf_id} from disk")
+                return None
+            
+            # Re-extract data
+            logger.info(f"Reprocessing PDF {pdf_id}: {pdf_file.original_filename}")
+            
+            extracted_text = extract_pdf_text(file_content)
+            pdf_objects = extract_pdf_objects(file_content)
+            objects_json = json.dumps([obj.model_dump() for obj in pdf_objects]) if pdf_objects else None
+            
+            # Update database
+            return self.update_extracted_data(pdf_id, extracted_text, objects_json)
+            
+        except Exception as e:
+            logger.error(f"Error reprocessing PDF {pdf_id}: {e}")
+            return None
+    
+    # === API Helper Methods ===
     
     def get_pdf_metadata(self, pdf_id: int) -> Optional[Dict[str, Any]]:
         """
@@ -138,41 +363,26 @@ class PdfProcessingService:
         Returns:
             Dict with PDF metadata or None if not found
         """
-        try:
-            pdf_file = self.pdf_repo.get_by_id(pdf_id)
-            if not pdf_file:
-                return None
-
-            return self._pdf_to_dict(pdf_file)
-
-        except Exception as e:
-            logger.error(f"Error getting PDF metadata for {pdf_id}: {e}")
+        pdf_file = self.get_pdf(pdf_id)
+        if not pdf_file:
             return None
-    
-    def get_pdf_content(self, pdf_id: int) -> Optional[bytes]:
-        """
-        Get PDF file content for download
         
-        Args:
-            pdf_id: PDF file ID
-            
-        Returns:
-            PDF content bytes or None if not found
-        """
-        try:
-            pdf_file = self.pdf_repo.get_by_id(pdf_id)
-            if not pdf_file or not pdf_file.file_path:
-                return None
-            
-            return self.storage_service.retrieve_pdf_content(pdf_file.file_path)
-            
-        except Exception as e:
-            logger.error(f"Error getting PDF content for {pdf_id}: {e}")
-            return None
+        return {
+            "id": pdf_file.id,
+            "original_filename": pdf_file.original_filename,
+            "file_hash": pdf_file.file_hash,
+            "file_size": pdf_file.file_size,
+            "page_count": pdf_file.page_count,
+            "email_id": pdf_file.email_id,
+            "has_extracted_text": bool(pdf_file.extracted_text),
+            "has_extracted_objects": bool(pdf_file.objects_json),
+            "created_at": pdf_file.created_at.isoformat() if pdf_file.created_at else None,
+            "updated_at": pdf_file.updated_at.isoformat() if pdf_file.updated_at else None
+        }
     
-    def get_pdfs_by_email(self, email_id: int, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    def get_pdfs_by_email_dict(self, email_id: int, limit: Optional[int] = None) -> List[Dict[str, Any]]:
         """
-        Get all PDFs for a specific email
+        Get all PDFs for a specific email as dictionaries
         
         Args:
             email_id: Email ID
@@ -181,66 +391,28 @@ class PdfProcessingService:
         Returns:
             List of PDF metadata dictionaries
         """
-        try:
-            pdf_files = self.pdf_repo.get_by_email_id(email_id)
-            
-            if limit:
-                pdf_files = pdf_files[:limit]
-            
-            return [self._pdf_to_dict(pdf) for pdf in pdf_files]
-            
-        except Exception as e:
-            logger.error(f"Error getting PDFs for email {email_id}: {e}")
-            return []
-    
-    def get_pdf_by_id(self, pdf_id: int) -> Optional[PdfFile]:
-        """
-        Get PDF domain object by ID
+        pdfs = self.get_pdfs_by_email(email_id)
         
-        Args:
-            pdf_id: PDF file ID
-            
-        Returns:
-            PdfFile domain object or None if not found
-        """
-        try:
-            return self.pdf_repo.get_by_id(pdf_id)
-        except Exception as e:
-            logger.error(f"Error getting PDF {pdf_id}: {e}")
-            return None
-    
-    def get_pdf_objects(self, pdf_id: int) -> Optional[List[Dict[str, Any]]]:
-        """
-        Get parsed PDF objects for template building
+        if limit:
+            pdfs = pdfs[:limit]
+        
+        return [self.get_pdf_metadata(pdf.id) for pdf in pdfs]
 
-        Args:
-            pdf_id: PDF file ID
 
-        Returns:
-            List of PDF objects or None if not found/extracted
-        """
-        try:
-            pdf_file = self.pdf_repo.get_by_id(pdf_id)
-            if not pdf_file or not pdf_file.objects_json:
-                return None
+# === Singleton Pattern (Optional) ===
 
-            import json
-            return json.loads(pdf_file.objects_json)
+_pdf_service_instance: Optional[PdfProcessingService] = None
 
-        except Exception as e:
-            logger.error(f"Error getting PDF objects for {pdf_id}: {e}")
-            return None
 
-    def get_storage_info(self) -> Dict[str, Any]:
-        """
-        Get PDF storage service information
+def init_pdf_processing_service(storage_path: str, connection_manager: DatabaseConnectionManager):
+    """Initialize the global PDF processing service"""
+    global _pdf_service_instance
+    _pdf_service_instance = PdfProcessingService(storage_path, connection_manager)
+    return _pdf_service_instance
 
-        Returns:
-            Dict with storage information
-        """
-        try:
-            return self.storage_service.get_storage_info()
-        except Exception as e:
-            logger.error(f"Error getting PDF storage info: {e}")
-            return {}
-    
+
+def get_pdf_processing_service() -> PdfProcessingService:
+    """Get the global PDF processing service instance"""
+    if _pdf_service_instance is None:
+        raise RuntimeError("PDF processing service not initialized")
+    return _pdf_service_instance

@@ -12,8 +12,7 @@ from sqlalchemy import func, case
 
 from shared.database.repositories.base import BaseRepository
 from shared.exceptions import RepositoryError, ObjectNotFoundError, ValidationError
-from shared.database.models import EtoRunModel
-from shared.domain import EtoRun, EtoRunStatus, EtoProcessingStep, EtoErrorType
+from shared.models import EtoRun
 
 
 logger = logging.getLogger(__name__)
@@ -24,7 +23,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
 
     @property
     def model_class(self):
-        return EtoRunModel
+        return EtoRunMod
 
     def _convert_to_domain_object(self, eto_run_model: EtoRunModel) -> EtoRun:
         """Convert database model to domain object while session is active"""

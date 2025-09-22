@@ -27,19 +27,7 @@ def create_config(
     try:
         ingestion_service = container.get_email_ingestion_service()
         
-        # Test connection before creating config
-        test_result = ingestion_service.test_connection_for_new_config(
-            email_address=config.email_address,
-            folder_name=config.folder_name
-        )
-        
-        if not test_result.success:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Connection test failed: {test_result.error}"
-            )
-        
-        # Create config only if test passes
+        # Create config (service will test connection internally)
         created = ingestion_service.create_config(config)
         
         logger.info(f"Created email config {created.id}")

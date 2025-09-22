@@ -57,7 +57,7 @@ class ServiceContainer:
             from features.pdf_processing import PdfProcessingService
             from features.email_ingestion.service import EmailIngestionService
             from features.eto_processing import EtoProcessingService
-            from features.pdf_templates.service import PdfTemplateService
+            from eto_server.src.features.pdf_templates.pdf_templates import PdfTemplateService
 
             # Initialize PDF service first (other services may depend on it)
             self.pdf_service = PdfProcessingService(pdf_storage_path, connection_manager)

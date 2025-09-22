@@ -7,8 +7,7 @@ import threading
 from typing import Optional, Callable, Any
 from datetime import datetime, timezone, timedelta
 
-from shared.models.email_config import EmailConfig
-from shared.models.email_integration import EmailMessage, EmailAttachment
+from shared.models import EmailConfig, EmailMessage, EmailAttachment
 from features.email_ingestion.integrations.base_integration import BaseEmailIntegration
 
 logger = logging.getLogger(__name__)

@@ -157,7 +157,7 @@ class ImapConfig(EmailIntegrationConfig):
 class ConnectionTestResult(BaseModel):
     """Result of connection test"""
     success: bool = Field(..., description="Whether connection test succeeded")
-    message: str = Field(..., description="Test result message")
+    message: Optional[str] = Field(default=None, description="Test result message")
     error: Optional[str] = Field(default=None, description="Error message if failed")
     details: Optional[Dict[str, Any]] = Field(default=None, description="Additional test details")
     

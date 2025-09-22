@@ -10,7 +10,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from shared.database.repositories import BaseRepository
 from shared.exceptions import RepositoryError, ObjectNotFoundError, ValidationError
 from shared.database.models import EmailIngestionConfigModel
-from shared.models.email_config import EmailConfig, EmailConfigCreate, EmailConfigUpdate, EmailConfigSummary
+from shared.models import EmailConfig, EmailConfigCreate, EmailConfigUpdate, EmailConfigSummary
 
 logger = logging.getLogger(__name__)
 
