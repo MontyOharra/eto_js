@@ -10,7 +10,52 @@ from shared.models import PdfTemplate, PdfTemplateVersion, PdfObject, Extraction
 
 
 
-# Query parameter schemas removed - FastAPI handles query params automatically!  # All data comes from URL path parameters
+# Request/Response schemas for PDF template operations
+
+class PdfObjectRequest(BaseModel):
+    """Request schema for PDF object data"""
+    object_type: str = Field(..., description="Type of PDF object")
+    bbox: List[float] = Field(..., description="Bounding box coordinates [x1, y1, x2, y2]")
+    page_number: int = Field(..., ge=1, description="Page number (1-indexed)")
+    text_content: Optional[str] = Field(None, description="Text content if applicable")
+
+
+class ExtractionFieldRequest(BaseModel):
+    """Request schema for extraction field definition"""
+    field_name: str = Field(..., description="Name of the field to extract")
+    field_type: str = Field(..., description="Type of data to extract")
+    bbox: List[float] = Field(..., description="Bounding box for extraction area")
+    page_number: int = Field(..., ge=1, description="Page number for extraction")
+
+
+class PdfTemplateCreateResponse(BaseModel):
+    """Response after creating a PDF template"""
+    template_id: int = Field(..., description="ID of the created template")
+    message: str = Field(..., description="Success message")
+
+
+class PdfTemplateVersionCreateResponse(BaseModel):
+    """Response after creating a template version"""
+    version_id: int = Field(..., description="ID of the created version")
+    version_num: int = Field(..., description="Version number")
+    message: str = Field(..., description="Success message")
+
+
+class TemplateUpdateRequest(BaseModel):
+    """Request to update template basic information"""
+    name: Optional[str] = Field(None, description="Template name")
+    description: Optional[str] = Field(None, description="Template description")
+
+
+class TemplateSetCurrentVersionRequest(BaseModel):
+    """Request to set current active version"""
+    version_id: int = Field(..., description="Version ID to make current")
+
+
+class TemplateListResponse(BaseModel):
+    """Response with list of templates"""
+    templates: List[Dict[str, Any]] = Field(..., description="List of template summaries")
+    total_count: int = Field(..., description="Total number of templates")
 
 
 class PdfTemplateVersionCreateRequest(BaseModel):

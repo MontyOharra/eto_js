@@ -13,9 +13,8 @@ from shared.exceptions import ObjectNotFoundError
 
 from shared.models import (
     PdfTemplate, PdfTemplateVersion, PdfTemplateCreate, PdfTemplateUpdate, PdfTemplateVersionCreate,
-    PdfObject, ExtractionField
+    PdfObject, ExtractionField, PdfTemplateMatchResult
 )
-from shared.models.common import TemplateMatchResult
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +36,7 @@ class PdfTemplateService:
 
     # === Template Matching ===
 
-    def find_best_template_match(self, pdf_objects: List[PdfObject]) -> TemplateMatchResult:
+    def find_best_template_match(self, pdf_objects: List[PdfObject]) -> PdfTemplateMatchResult:
         """
         Find the best matching template for a PDF document
 
@@ -48,7 +47,7 @@ class PdfTemplateService:
             pdf_objects: List of PDF objects extracted from the document
 
         Returns:
-            TemplateMatchResult with match details
+            PdfTemplateMatchResult with match details
         """
         try:
             # Get all active templates
@@ -56,7 +55,7 @@ class PdfTemplateService:
 
             if not active_templates:
                 logger.info("No active templates found for matching")
-                return TemplateMatchResult(template_found=False)
+                return PdfTemplateMatchResult(template_found=False)
 
             best_match_template = None
             best_match_version = None
@@ -94,7 +93,7 @@ class PdfTemplateService:
 
                 logger.info(f"Template match found: {best_match_template.id} (version {best_match_version.version_num}) with {most_signature_objects} signature objects (all matched)")
 
-                return TemplateMatchResult(
+                return PdfTemplateMatchResult(
                     template_found=True,
                     template_id=best_match_template.id,
                     template_version=best_match_version.version_num,
@@ -110,11 +109,11 @@ class PdfTemplateService:
                 )
             else:
                 logger.info("No template match found - no templates had all signature objects present")
-                return TemplateMatchResult(template_found=False)
+                return PdfTemplateMatchResult(template_found=False)
 
         except Exception as e:
             logger.error(f"Error in template matching: {e}")
-            return TemplateMatchResult(template_found=False)
+            return PdfTemplateMatchResult(template_found=False)
 
     def _check_all_version_objects_found(self, pdf_objects: List[PdfObject], version: PdfTemplateVersion) -> bool:
         """
@@ -132,13 +131,13 @@ class PdfTemplateService:
 
         # Check that every signature object exists in the PDF
         for signature_obj in version.signature_objects:
-            if not self._object_exists_in_pdf_typed(signature_obj, pdf_objects):
+            if not self._object_exists_in_pdf(signature_obj, pdf_objects):
                 return False
 
         # All signature objects were found
         return True
 
-    def _object_exists_in_pdf_typed(self, signature_object: PdfObject, pdf_objects: List[PdfObject]) -> bool:
+    def _object_exists_in_pdf(self, signature_object: PdfObject, pdf_objects: List[PdfObject]) -> bool:
         """
         Check if a typed signature object exists in the PDF objects using fuzzy matching
 
@@ -169,48 +168,6 @@ class PdfTemplateService:
                     if similarity >= content_similarity_threshold:
                         return True
                 elif signature_object.type != 'text':
-                    # For non-text objects, position match is sufficient
-                    return True
-
-        return False
-
-    def _object_exists_in_pdf(self, signature_object: dict, pdf_objects: List[PdfObject]) -> bool:
-        """
-        Check if a signature object exists in the PDF objects using fuzzy matching
-
-        Args:
-            signature_object: Template signature object to find
-            pdf_objects: PDF objects to search in
-
-        Returns:
-            True if object is found with sufficient similarity
-        """
-        sig_type = signature_object.get('object_type', '')
-        sig_content = signature_object.get('content', '')
-        sig_x = signature_object.get('x', 0)
-        sig_y = signature_object.get('y', 0)
-        sig_page = signature_object.get('page_number', 1)
-
-        # Define matching tolerances
-        position_tolerance = 10.0  # pixels
-        content_similarity_threshold = 0.8  # 80% similarity for text content
-
-        for pdf_obj in pdf_objects:
-            # Basic type and page matching - use correct attribute names
-            if pdf_obj.type != sig_type or pdf_obj.page != sig_page:
-                continue
-
-            # Position matching (within tolerance)
-            x_diff = abs(pdf_obj.x - sig_x)
-            y_diff = abs(pdf_obj.y - sig_y)
-
-            if x_diff <= position_tolerance and y_diff <= position_tolerance:
-                # Content matching for text objects - use 'text' attribute
-                if sig_type == 'text' and sig_content and pdf_obj.text:
-                    similarity = self._calculate_text_similarity(sig_content, pdf_obj.text)
-                    if similarity >= content_similarity_threshold:
-                        return True
-                elif sig_type != 'text':
                     # For non-text objects, position match is sufficient
                     return True
 

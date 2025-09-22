@@ -34,7 +34,6 @@ class EmailModel(BaseModel):
     # Relationships
     config = relationship("EmailIngestionConfigModel", back_populates="emails")
     pdf_files = relationship("PdfFileModel", back_populates="email")
-    eto_runs = relationship("EtoRunModel", back_populates="email")
     
     __table_args__ = (
         UniqueConstraint('config_id', 'message_id', name='uix_config_message'),
@@ -141,7 +140,6 @@ class EtoRunModel(BaseModel):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
     
     # Relationships
-    email = relationship("EmailModel", back_populates="eto_runs")
     pdf_file = relationship("PdfFileModel", back_populates="eto_runs")
     template = relationship("PdfTemplateModel", back_populates="eto_runs")
     failed_pipeline_step = relationship("TransformationPipelineStepModel", foreign_keys=[failed_pipeline_step_id])
@@ -154,7 +152,7 @@ class PdfFileModel(BaseModel):
     email_id: Mapped[int] = mapped_column(ForeignKey('emails.id'), index=True)
     filename: Mapped[str] = mapped_column(String(255))
     original_filename: Mapped[Optional[str]] = mapped_column(String(255))
-    file_path: Mapped[str] = mapped_column(String(512))
+    relative_path: Mapped[str] = mapped_column(String(512))
     file_size: Mapped[Optional[int]] = mapped_column(BigInteger)
     file_hash: Mapped[str] = mapped_column(String(64), index=True)
     page_count: Mapped[Optional[int]] = mapped_column(Integer)
@@ -182,7 +180,7 @@ class PdfTemplateModel(BaseModel):
 
     # Relationships
     eto_runs = relationship("EtoRunModel", back_populates="template")
-    pdf_template_versions = relationship("PdfTemplateVersionModel", back_populates="pdf_template")
+    pdf_template_versions = relationship("PdfTemplateVersionModel", back_populates="pdf_template", foreign_keys="PdfTemplateVersionModel.pdf_template_id")
 
 class PdfTemplateVersionModel(BaseModel):
     """PDF template versions"""
@@ -199,7 +197,7 @@ class PdfTemplateVersionModel(BaseModel):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     # Relationships
-    pdf_templates = relationship("PdfTemplateModel", back_populates="pdf_template_versions")
+    pdf_template = relationship("PdfTemplateModel", back_populates="pdf_template_versions", foreign_keys=[pdf_template_id])
 
 class TransformationPipelineModel(BaseModel):
     """Data transformation pipelines"""

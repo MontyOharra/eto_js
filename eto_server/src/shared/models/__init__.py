@@ -4,25 +4,53 @@ Hierarchical type system with Base/Create/Domain models
 """
 
 # Base models (core business data)
-from .email_config import EmailConfig, EmailConfigCreate, EmailConfigUpdate, EmailConfigSummary
-from .email_integration import EmailMessage, EmailAttachment, EmailAccount, EmailFolder, ConnectionTestResult, EmailProvider, OutlookComConfig
-from .email import Email, EmailCreate, EmailSummary, EmailBase
-from .eto import EtoRunBase, EtoRunCreate, EtoRun, EtoRunSummary
-from .pdf_file import PdfFileBase, PdfFileCreate, PdfFileUpdate, PdfFileSummary, PdfFile
-from .pdf_processing import PdfObject, ExtractionField, PdfObjectExtractionResult
-from .pdf_template import PdfTemplateBase, PdfTemplateVersionBase, PdfTemplateCreate, PdfTemplateUpdate, PdfTemplateVersionCreate, PdfTemplate, PdfTemplateVersion
+from .email_config import (
+    EmailConfigBase, EmailConfig, EmailConfigCreate,
+    EmailConfigUpdate, EmailConfigSummary, EmailFilterRule
+)
 
+from .email_integration import (
+    EmailMessage, EmailAttachment, EmailAccount, 
+    EmailFolder, ConnectionTestResult, EmailProvider, 
+    OutlookComConfig, EmailSearchCriteria,
+    EmailIntegrationConfig, GmailApiConfig, ImapConfig,
+    ProviderInfo
+)
 
+from .email import (
+    Email, EmailCreate, EmailSummary, EmailBase
+)
 
-from .common import TemplateMatchResult
+from .eto import (
+    EtoRunBase, EtoRunCreate, EtoRun, EtoRunSummary
+)
+
+from .pdf_file import (
+    PdfFileBase, PdfFileCreate,
+    PdfFileSummary, PdfFile
+)
+
+from .pdf_processing import (
+    PdfObject, ExtractionField, 
+    PdfObjectExtractionResult
+)
+
+from .pdf_template import (
+    PdfTemplateBase, PdfTemplateVersionBase, 
+    PdfTemplateCreate, PdfTemplateUpdate, 
+    PdfTemplateVersionCreate, PdfTemplate, 
+    PdfTemplateVersion, PdfTemplateMatchResult
+)
 
 __all__ = [
   
     # Email config models
+    'EmailConfigBase',
     'EmailConfig',
     'EmailConfigCreate',
     'EmailConfigUpdate',
     'EmailConfigSummary',
+    'EmailFilterRule',
     
     # Email integration models
     'EmailMessage',
@@ -32,6 +60,11 @@ __all__ = [
     'ConnectionTestResult',
     'EmailProvider',
     'OutlookComConfig', 
+    'EmailSearchCriteria',
+    'EmailIntegrationConfig',
+    'GmailApiConfig',
+    'ImapConfig',
+    'ProviderInfo',
     
     # Email models
     'Email',
@@ -48,7 +81,6 @@ __all__ = [
     # PDF file models
     'PdfFileBase',
     'PdfFileCreate',
-    'PdfFileUpdate',
     'PdfFileSummary',
     'PdfFile',
     'PdfObject',
@@ -62,5 +94,6 @@ __all__ = [
     'PdfTemplateUpdate',
     'PdfTemplateVersionCreate',
     'PdfTemplate',
-    'PdfTemplateVersion',     
+    'PdfTemplateVersion',
+    'PdfTemplateMatchResult',
 ]

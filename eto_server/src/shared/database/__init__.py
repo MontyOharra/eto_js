@@ -4,7 +4,8 @@ Database models, connection management, and repositories
 """
 from .connection import DatabaseConnectionManager, init_database_connection, get_connection_manager
 from .models import *
-from .repositories import *
+# Import repositories individually to avoid circular imports
+# Repositories can be imported directly when needed: from shared.database.repositories import SpecificRepository
 
 __all__ = [
     # Connection management
@@ -17,19 +18,19 @@ __all__ = [
     'EmailModel',
     'PdfFileModel',
     'PdfTemplateModel',
-    'EtoRunModel',
-    'EmailIngestionCursorModel',
+    'PdfTemplateVersionModel',
+    'EtoRunModel',  # Keep model for DB table creation - only repository/service layer is disabled
     'TransformationPipelineModuleModel',
     'TransformationPipelineModel',
     'TransformationPipelineStepModel',
     'CustomTransformationModuleModel',
     'EmailIngestionConfigModel',
     
-    # Repositories (imported from repositories module)
-    'BaseRepository',
-    'RepositoryError',
-    'EmailIngestionConfigRepository',
-    'EmailIngestionCursorRepository',
-    'EtoRunRepository', 
-    'PdfRepository'
+    # Repositories (import directly when needed to avoid circular imports)
+    # 'BaseRepository',
+    # 'RepositoryError',
+    # 'EmailIngestionConfigRepository',
+    # 'EmailIngestionCursorRepository',
+    # 'EtoRunRepository',
+    # 'PdfFileRepository'
 ]

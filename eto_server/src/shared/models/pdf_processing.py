@@ -39,24 +39,6 @@ class ExtractionField(BaseModel):
         from_attributes = True
 
 
-class PdfFile(BaseModel):
-    """PDF file domain object"""
-    id: Optional[int] = None
-    email_id: Optional[int] = Field(None, description="Associated email ID")
-    filename: str = Field(..., description="Original filename")
-    file_path: str = Field(..., description="Storage file path")
-    file_size: int = Field(..., ge=0, description="File size in bytes")
-    sha256_hash: str = Field(..., description="SHA256 hash for deduplication")
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-    page_count: Optional[int] = Field(None, ge=0, description="Number of pages")
-    object_count: Optional[int] = Field(None, ge=0, description="Number of extracted objects")
-    objects_json: Optional[str] = Field(None, description="Serialized PDF objects")
-    
-    class Config:
-        from_attributes = True
-
-
 class PdfObjectExtractionResult(BaseModel):
     """Service-level result for PDF object extraction"""
     success: bool

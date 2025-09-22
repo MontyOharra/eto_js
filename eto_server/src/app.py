@@ -20,7 +20,7 @@ from .shared.utils.storage_config import get_storage_configuration
 
 # Add the src directory to Python path to enable absolute imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from shared.utils import ServiceContainer
+from shared.services.service_container import ServiceContainer
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +37,42 @@ class DatabaseConnectionError(Exception):
 class ServiceInitializationError(Exception):
     """Raised when services cannot be initialized"""
     pass
+
+
+def configure_logging():
+    """Configure logging to work alongside Uvicorn"""
+    # Get the root logger
+    root_logger = logging.getLogger()
+
+    # Create console handler with custom format
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)
+
+    # Create formatter
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    console_handler.setFormatter(formatter)
+
+    # Add handler to root logger if not already present
+    if not any(isinstance(handler, logging.StreamHandler) for handler in root_logger.handlers):
+        root_logger.addHandler(console_handler)
+
+    root_logger.setLevel(logging.INFO)
+
+    # Set specific loggers for our application
+    logging.getLogger('shared.services').setLevel(logging.INFO)
+    logging.getLogger('features').setLevel(logging.INFO)
+    logging.getLogger('api').setLevel(logging.INFO)
+    logging.getLogger('__main__').setLevel(logging.INFO)
+
+    # Ensure our app loggers propagate
+    logging.getLogger("shared").propagate = True
+    logging.getLogger("features").propagate = True
+    logging.getLogger("api").propagate = True
+
+    # Optionally reduce uvicorn access log noise
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
 
 async def initialize_database_connection() -> None:
@@ -112,9 +148,9 @@ async def initialize_services() -> None:
         try:
             worker_enabled = os.getenv('ETO_WORKER_ENABLED', 'true').lower() == 'true'
             if worker_enabled:
-                eto_service = _service_container.get_eto_service()
-                eto_service.start()
-                logger.info("ETO processing background worker started")
+                # eto_service = _service_container.get_eto_service()  # ETO service not implemented yet
+                # eto_service.start()
+                logger.info("ETO processing disabled - service not implemented yet")
             else:
                 logger.info("ETO processing service initialized but worker not started (ETO_WORKER_ENABLED=false)")
         except Exception as eto_error:
@@ -135,10 +171,10 @@ async def cleanup_services() -> None:
             logger.info("Stopping services...")
             # Stop ETO processing service if running
             try:
-                eto_service = _service_container.get_eto_service()
-                if hasattr(eto_service, 'stop'):
-                    eto_service.stop()
-                    logger.info("ETO processing service stopped")
+                # eto_service = _service_container.get_eto_service()  # ETO service not implemented yet
+                # if hasattr(eto_service, 'stop'):
+                #     eto_service.stop()
+                logger.info("ETO processing service not running (not implemented yet)")
             except Exception as e:
                 logger.warning(f"Failed to stop ETO service: {e}")
             
@@ -163,6 +199,8 @@ async def cleanup_services() -> None:
 async def lifespan(app: FastAPI):
     """FastAPI lifespan context manager for startup and shutdown"""
     # Startup
+    # Configure logging first so we can see startup logs
+    configure_logging()
     logger.info("Starting Unified ETO Server (FastAPI)...")
     try:
         await initialize_database_connection()
@@ -266,16 +304,35 @@ def setup_exception_handlers(app: FastAPI) -> None:
 
 def register_routers(app: FastAPI) -> None:
     """Register FastAPI routers"""
+    # Register health router first
     try:
-        # Import and register PDF templates router
+        from .api.routers.health import router as health_router
+        app.include_router(health_router)
+        logger.info("Registered health router")
+    except ImportError as e:
+        logger.warning(f"Could not import health router: {e}")
+    except Exception as e:
+        logger.error(f"Error registering health router: {e}")
+
+    # Register PDF templates router
+    try:
         from .api.routers.pdf_templates import router as pdf_templates_router
         app.include_router(pdf_templates_router)
         logger.info("Registered PDF templates router")
-        
     except ImportError as e:
         logger.warning(f"Could not import PDF templates router: {e}")
     except Exception as e:
-        logger.error(f"Error registering routers: {e}")
+        logger.error(f"Error registering PDF templates router: {e}")
+
+    # Register email configs router
+    try:
+        from .api.routers.email_configs import router as email_configs_router
+        app.include_router(email_configs_router)
+        logger.info("Registered email configs router")
+    except ImportError as e:
+        logger.warning(f"Could not import email configs router: {e}")
+    except Exception as e:
+        logger.error(f"Error registering email configs router: {e}")
 
 
 def register_info_endpoint(app: FastAPI) -> None:

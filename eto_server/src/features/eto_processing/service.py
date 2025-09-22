@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 from shared.database.repositories import EtoRunRepository
 from shared.services import get_pdf_processing_service, get_pdf_template_service
-from shared.domain import EtoErrorType, EtoRunStatus, EtoProcessingStep, PdfObject
+from shared.models import EtoErrorType, EtoRunStatus, EtoProcessingStep, PdfObject
 
 logger = logging.getLogger(__name__)
 

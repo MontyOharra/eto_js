@@ -28,24 +28,24 @@ from .email_ingestion import (
     EmailConfigActivateResponse
 )
 
-from .eto_processing import (
-    EtoRunListRequest,
-    EtoRunListResponse,
-    EtoRunDetailResponse,
-    ReprocessEtoRunRequest,
-    ReprocessEtoRunResponse,
-    SkipEtoRunRequest,
-    SkipEtoRunResponse,
-    DeleteEtoRunResponse,
-    EtoRunResultsResponse,
-    EtoRunPdfDataResponse,
-    EtoRunAuditResponse,
-    TemplateSuggestionsResponse,
-    AssignTemplateResponse,
-    BulkReprocessResponse,
-    EtoRunsSummaryResponse,
-    EtoStatisticsResponse
-)
+# from .eto_processing import (  # Commented out - ETO not implemented yet
+#     EtoRunListRequest,
+#     EtoRunListResponse,
+#     EtoRunDetailResponse,
+#     ReprocessEtoRunRequest,
+#     ReprocessEtoRunResponse,
+#     SkipEtoRunRequest,
+#     SkipEtoRunResponse,
+#     DeleteEtoRunResponse,
+#     EtoRunResultsResponse,
+#     EtoRunPdfDataResponse,
+#     EtoRunAuditResponse,
+#     TemplateSuggestionsResponse,
+#     AssignTemplateResponse,
+#     BulkReprocessResponse,
+#     EtoRunsSummaryResponse,
+#     EtoStatisticsResponse
+# )
 
 from .pdf_processing import (
     PdfObjectResponse,
@@ -96,24 +96,24 @@ __all__ = [
     'EmailConfigValidateRequest',
     'EmailConfigActivateRequest',
     'EmailConfigActivateResponse',
-    
-    # ETO processing schemas
-    'EtoRunListRequest',
-    'EtoRunListResponse',
-    'EtoRunDetailResponse',
-    'ReprocessEtoRunRequest',
-    'ReprocessEtoRunResponse',
-    'SkipEtoRunRequest',
-    'SkipEtoRunResponse',
-    'DeleteEtoRunResponse',
-    'EtoRunResultsResponse',
-    'EtoRunPdfDataResponse',
-    'EtoRunAuditResponse',
-    'TemplateSuggestionsResponse',
-    'AssignTemplateResponse',
-    'BulkReprocessResponse',
-    'EtoRunsSummaryResponse',
-    'EtoStatisticsResponse',
+
+    # ETO processing schemas (commented out - ETO not implemented yet)
+    # 'EtoRunListRequest',
+    # 'EtoRunListResponse',
+    # 'EtoRunDetailResponse',
+    # 'ReprocessEtoRunRequest',
+    # 'ReprocessEtoRunResponse',
+    # 'SkipEtoRunRequest',
+    # 'SkipEtoRunResponse',
+    # 'DeleteEtoRunResponse',
+    # 'EtoRunResultsResponse',
+    # 'EtoRunPdfDataResponse',
+    # 'EtoRunAuditResponse',
+    # 'TemplateSuggestionsResponse',
+    # 'AssignTemplateResponse',
+    # 'BulkReprocessResponse',
+    # 'EtoRunsSummaryResponse',
+    # 'EtoStatisticsResponse',
     
     # PDF processing schemas
     'PdfObjectResponse',

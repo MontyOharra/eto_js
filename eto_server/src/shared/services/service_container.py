@@ -22,8 +22,7 @@ class ServiceContainer:
             # Initialize all service references to None
             cls._instance.connection_manager = None
             cls._instance.pdf_service = None
-            cls._instance.email_service = None
-            cls._instance.eto_service = None
+            # cls._instance.eto_service = None  # Commented out - not yet implemented
             cls._instance.pdf_template_service = None
             cls._instance.email_ingestion_service = None
             logger.info("ServiceContainer singleton instance created - services not yet initialized")
@@ -56,8 +55,8 @@ class ServiceContainer:
             # Import services here to avoid circular imports
             from features.pdf_processing import PdfProcessingService
             from features.email_ingestion.service import EmailIngestionService
-            from features.eto_processing import EtoProcessingService
-            from eto_server.src.features.pdf_templates.pdf_templates import PdfTemplateService
+            # from features.eto_processing import EtoProcessingService  # Commented out - not yet implemented
+            from features.pdf_templates.service import PdfTemplateService
 
             # Initialize PDF service first (other services may depend on it)
             self.pdf_service = PdfProcessingService(pdf_storage_path, connection_manager)
@@ -66,14 +65,14 @@ class ServiceContainer:
             # Initialize PDF template service
             self.pdf_template_service = PdfTemplateService(connection_manager)
             logger.debug("PDF template service initialized")
-            
+
             # Initialize email ingestion service (handles configs and ingestion)
             self.email_ingestion_service = EmailIngestionService(connection_manager)
             logger.debug("Email ingestion service initialized with multi-config support")
-        
+
             # Initialize ETO processing service
-            self.eto_service = EtoProcessingService(connection_manager)
-            logger.debug("ETO processing service initialized")
+            # self.eto_service = EtoProcessingService(connection_manager)  # Commented out - not yet implemented
+            # logger.debug("ETO processing service initialized")
 
             logger.info("ServiceContainer initialization completed successfully")
             ServiceContainer._services_initialized = True
@@ -107,12 +106,12 @@ class ServiceContainer:
             raise RuntimeError("Email ingestion service not available - application initialization failed")
         return self.email_ingestion_service
 
-    def get_eto_service(self):
-        """Get ETO processing service - guaranteed to return valid service or crash"""
-        if not self.eto_service:
-            logger.error("ETO service not initialized - ServiceContainer.initialize() was not called")
-            raise RuntimeError("ETO processing service not available - application initialization failed")
-        return self.eto_service
+    # def get_eto_service(self):  # Commented out - not yet implemented
+    #     """Get ETO processing service - guaranteed to return valid service or crash"""
+    #     if not self.eto_service:
+    #         logger.error("ETO service not initialized - ServiceContainer.initialize() was not called")
+    #         raise RuntimeError("ETO processing service not available - application initialization failed")
+    #     return self.eto_service
 
     def get_connection_manager(self):
         """Get database connection manager - guaranteed to return valid manager or crash"""
@@ -158,9 +157,9 @@ def get_email_ingestion_service():
     return _get_container().get_email_ingestion_service()
 
 
-def get_eto_processing_service():
-    """Get ETO processing service - global access function"""
-    return _get_container().get_eto_service()
+# def get_eto_processing_service():  # Commented out - not yet implemented
+#     """Get ETO processing service - global access function"""
+#     return _get_container().get_eto_service()
 
 
 def get_connection_manager():

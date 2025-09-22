@@ -11,7 +11,7 @@ from shared.database.repositories import BaseRepository
 from shared.exceptions import RepositoryError, ObjectNotFoundError
 from shared.database.models import PdfFileModel
 from shared.database.connection import DatabaseConnectionManager
-from shared.models import PdfFile, PdfFileCreate, PdfFileUpdate, PdfFileSummary
+from shared.models import PdfFile, PdfFileCreate, PdfFileSummary
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +27,8 @@ class PdfFileRepository(BaseRepository[PdfFileModel]):
         return PdfFileModel
     
     def _convert_to_domain_object(self, model: PdfFileModel) -> PdfFile:
-        """Convert SQLAlchemy model to Pydantic domain object"""
-        return PdfFile.model_validate(model)
+        """Convert SQLAlchemy model to Pydantic domain object with JSON deserialization"""
+        return PdfFile.from_db_model(model)
     
     # === Core CRUD Operations ===
     
@@ -139,43 +139,6 @@ class PdfFileRepository(BaseRepository[PdfFileModel]):
         except SQLAlchemyError as e:
             logger.error(f"Error checking PDF hash existence: {e}")
             raise RepositoryError(f"Failed to check PDF hash: {e}") from e
-    
-    def update(self, pdf_id: int, update_data: PdfFileUpdate) -> Optional[PdfFile]:
-        """
-        Update PDF file metadata (mainly extracted text/objects if re-processing)
-        
-        Args:
-            pdf_id: PDF file ID to update
-            update_data: PdfFileUpdate with fields to update
-            
-        Returns:
-            Updated PdfFile or None if not found
-        """
-        try:
-            with self.connection_manager.session_scope() as session:
-                model = session.get(self.model_class, pdf_id)
-                
-                if not model:
-                    return None
-                
-                # Update only provided fields
-                update_dict = update_data.model_dump_for_db()
-                for field, value in update_dict.items():
-                    if hasattr(model, field):
-                        setattr(model, field, value)
-                
-                # Update timestamp
-                model.updated_at = datetime.now(timezone.utc)
-                
-                session.flush()
-                session.refresh(model)
-                
-                logger.debug(f"Updated PDF file with ID: {pdf_id}")
-                return self._convert_to_domain_object(model)
-                
-        except SQLAlchemyError as e:
-            logger.error(f"Error updating PDF file {pdf_id}: {e}")
-            raise RepositoryError(f"Failed to update PDF file: {e}") from e
     
     # === Query Methods ===
     
@@ -344,3 +307,4 @@ class PdfFileRepository(BaseRepository[PdfFileModel]):
         except SQLAlchemyError as e:
             logger.error(f"Error getting recent PDF files: {e}")
             raise RepositoryError(f"Failed to get recent PDFs: {e}") from e
+

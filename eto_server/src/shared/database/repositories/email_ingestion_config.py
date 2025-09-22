@@ -3,7 +3,7 @@ Email Ingestion Config Repository
 Data access layer for EmailIngestionConfig model operations with Pydantic typing
 """
 import logging
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
 from datetime import datetime, timezone
 from sqlalchemy.exc import SQLAlchemyError
 

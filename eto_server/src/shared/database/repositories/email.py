@@ -3,12 +3,12 @@ Email Repository
 Data access layer for Email model operations (append-only pattern)
 """
 import logging
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
 from datetime import datetime, timezone, timedelta
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 
 from shared.database.repositories import BaseRepository
-from shared.exceptions import RepositoryError, ObjectNotFoundError, ValidationError
+from shared.exceptions import RepositoryError, ValidationError
 from shared.database.models import EmailModel
 from shared.models import Email, EmailCreate, EmailSummary
 

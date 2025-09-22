@@ -9,7 +9,7 @@ from datetime import datetime
 
 from shared.database.connection import DatabaseConnectionManager
 from shared.database.repositories.pdf_file import PdfFileRepository
-from shared.models.pdf_file import PdfFile, PdfFileCreate, PdfFileUpdate, PdfFileSummary
+from shared.models.pdf_file import PdfFile, PdfFileCreate, PdfFileSummary
 from shared.exceptions import ServiceError
 
 from .utils import (
@@ -99,13 +99,9 @@ class PdfProcessingService:
             page_count = metadata.get('page_count', 1)
             file_size = metadata.get('file_size', len(file_content))
             
-            # Extract text content
-            extracted_text = extract_pdf_text(file_content)
-            
             # Extract objects with positions
             pdf_objects = extract_pdf_objects(file_content)
-            objects_json = json.dumps([obj.model_dump() for obj in pdf_objects]) if pdf_objects else None
-            
+
             # Step 5: Store file on disk
             relative_path = save_pdf_to_disk(
                 file_content=file_content,
@@ -113,18 +109,18 @@ class PdfProcessingService:
                 file_hash=file_hash,
                 original_filename=original_filename
             )
-            
+
             # Step 6: Create database record with all extracted data
             pdf_create = PdfFileCreate(
                 filename=file_hash + '.pdf',  # Storage filename
                 original_filename=original_filename,
+                relative_path=relative_path,
                 file_hash=file_hash,
                 file_size=file_size,
                 page_count=page_count,
-                storage_path=relative_path,
+                object_count=len(pdf_objects) if pdf_objects else 0,
                 email_id=email_id,
-                extracted_text=extracted_text,
-                objects_json=objects_json
+                objects_json=pdf_objects or []
             )
             
             pdf_file = self.pdf_repository.create(pdf_create)
@@ -166,7 +162,7 @@ class PdfProcessingService:
         if not pdf_file:
             return None
         
-        return read_pdf_from_disk(self.storage_path, pdf_file.storage_path)
+        return read_pdf_from_disk(self.storage_path, pdf_file.relative_path)
     
     def get_pdfs_by_email(self, email_id: int) -> List[PdfFile]:
         """
@@ -238,43 +234,20 @@ class PdfProcessingService:
     def get_pdf_objects(self, pdf_id: int) -> Optional[List[Dict[str, Any]]]:
         """
         Get extracted PDF objects for a specific PDF
-        
+
         Args:
             pdf_id: PDF file ID
-            
+
         Returns:
             List of PDF objects as dictionaries, or None if not found
         """
         pdf_file = self.get_pdf(pdf_id)
         if not pdf_file or not pdf_file.objects_json:
             return None
-        
-        try:
-            return json.loads(pdf_file.objects_json)
-        except json.JSONDecodeError:
-            logger.error(f"Failed to decode objects JSON for PDF {pdf_id}")
-            return None
+
+        # Convert PdfObject instances to dictionaries
+        return [obj.model_dump() for obj in pdf_file.objects_json]
     
-    # === Update Operations ===
-    
-    def update_extracted_data(self, pdf_id: int, extracted_text: str, objects_json: str) -> Optional[PdfFile]:
-        """
-        Update extracted data for a PDF (if re-processing)
-        
-        Args:
-            pdf_id: PDF file ID
-            extracted_text: New extracted text
-            objects_json: New extracted objects as JSON
-            
-        Returns:
-            Updated PdfFile or None if not found
-        """
-        update_data = PdfFileUpdate(
-            extracted_text=extracted_text,
-            objects_json=objects_json
-        )
-        
-        return self.pdf_repository.update(pdf_id, update_data)
     
     # === Utility Operations ===
     
@@ -337,7 +310,6 @@ class PdfProcessingService:
             "file_size": pdf_file.file_size,
             "page_count": pdf_file.page_count,
             "email_id": pdf_file.email_id,
-            "has_extracted_text": bool(pdf_file.extracted_text),
             "has_extracted_objects": bool(pdf_file.objects_json),
             "created_at": pdf_file.created_at.isoformat() if pdf_file.created_at else None,
             "updated_at": pdf_file.updated_at.isoformat() if pdf_file.updated_at else None

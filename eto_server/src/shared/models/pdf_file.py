@@ -3,22 +3,27 @@ PDF File Pydantic Models
 Domain models for PDF file storage and management
 """
 
+import json
+import logging
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 
+from .pdf_processing import PdfObject
+
+logger = logging.getLogger(__name__)
 
 class PdfFileBase(BaseModel):
     """Core fields for any PDF file"""
+    email_id: Optional[int] = Field(None, description="Associated email ID (null for manual uploads)")
     filename: str = Field(..., description="Stored filename (usually hash-based)")
     original_filename: str = Field(..., description="Original filename from source")
+    relative_path: str = Field(..., description="Relative path in storage system")
     file_hash: str = Field(..., description="SHA256 hash for deduplication")
     file_size: int = Field(..., gt=0, description="File size in bytes")
     page_count: int = Field(..., gt=0, description="Number of pages")
-    storage_path: str = Field(..., description="Relative path in storage system")
-    email_id: Optional[int] = Field(None, description="Associated email ID (null for manual uploads)")
-    extracted_text: Optional[str] = Field(None, description="Extracted text content")
-    objects_json: Optional[str] = Field(None, description="Extracted PDF objects as JSON")
+    object_count: int = Field(..., ge=0, description="Number of extracted objects")
+    objects_json: List[PdfObject] = Field(default_factory=list, description="Extracted PDF objects as JSON")
     
     class Config:
         from_attributes = True
@@ -28,24 +33,21 @@ class PdfFileCreate(PdfFileBase):
     """Model for creating new PDF files - all data provided at creation"""
     # All fields inherited from base
     # PDF is already processed with objects extracted before storage
-    
-    def model_dump_for_db(self) -> dict:
-        """Convert to database format"""
-        return self.model_dump()
 
+    def model_dump_for_db(self) -> Dict[str, Any]:
+        """Convert to database format with JSON serialization"""
+        data = self.model_dump(exclude={'objects_json'})
 
-class PdfFileUpdate(BaseModel):
-    """Model for updating PDF files - only metadata can be updated"""
-    # PDFs are mostly immutable, but we might update extracted data if re-processing
-    extracted_text: Optional[str] = Field(None, description="Updated extracted text")
-    objects_json: Optional[str] = Field(None, description="Updated extracted objects")
-    
-    def model_dump_for_db(self) -> dict:
-        """Convert to database format, only including explicitly set fields"""
-        return self.model_dump(exclude_unset=True)
-    
-    class Config:
-        from_attributes = True
+        # Serialize objects to JSON string for database storage
+        if self.objects_json:
+            # Convert PdfObject instances to dictionaries then serialize to JSON
+            objects_dicts = [obj.model_dump() for obj in self.objects_json]
+            data['objects_json'] = json.dumps(objects_dicts)
+        else:
+            data['objects_json'] = None
+
+        return data
+
 
 
 class PdfFile(PdfFileBase):
@@ -53,9 +55,42 @@ class PdfFile(PdfFileBase):
     id: int = Field(..., description="Database ID")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
-    
+
     class Config:
         from_attributes = True
+
+    @classmethod
+    def from_db_model(cls, db_model) -> 'PdfFile':
+        """Convert from SQLAlchemy database model with JSON deserialization"""
+        # Get all fields from the database model
+        data = {
+            'id': db_model.id,
+            'email_id': db_model.email_id,
+            'filename': db_model.filename,
+            'original_filename': db_model.original_filename,
+            'relative_path': db_model.relative_path, 
+            'file_hash': db_model.file_hash,
+            'file_size': db_model.file_size,
+            'page_count': db_model.page_count,
+            'object_count': db_model.object_count,
+            'created_at': db_model.created_at,
+            'updated_at': db_model.updated_at,
+        }
+
+        # Deserialize objects_json from JSON string to PdfObject list
+        if db_model.objects_json:
+            try:
+                objects_dicts = json.loads(db_model.objects_json)
+                # Convert dictionaries back to PdfObject instances
+                data['objects_json'] = [PdfObject(**obj_dict) for obj_dict in objects_dicts]
+            except (json.JSONDecodeError, TypeError, ValueError) as e:
+                # If JSON is invalid, use empty list and log warning
+                logger.warning(f"Failed to deserialize objects_json for PDF {db_model.id}: {e}")
+                data['objects_json'] = []
+        else:
+            data['objects_json'] = []
+
+        return cls(**data)
 
 
 class PdfFileSummary(BaseModel):
