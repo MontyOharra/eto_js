@@ -5,6 +5,36 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-09-22 14:00] — PDF Processing Service Consolidation
+### Spec / Intent
+- Consolidate PDF processing into single unified service with utilities
+- Create Pydantic models for PDF files matching established patterns
+- Implement PDF repository with append-only pattern and deduplication
+- Extract all PDF data upfront (no processing pipeline or status tracking)
+- Clean up singleton patterns - services only registered in service_container
+
+### Changes Made
+- **PDF Domain Models** (`shared/models/pdf_file.py`): PdfFileBase, PdfFileCreate, PdfFileUpdate, PdfFile, PdfFileSummary
+- **PDF Repository** (`pdf_repository_new.py`): Full Pydantic support, hash deduplication, query methods for email vs manual PDFs
+- **Consolidated Service** (`features/pdf_processing/service.py`): Single entry point `store_pdf()`, extracts all data upfront, clean architecture
+- **Utility Modules**: `pdf_extractor.py` (text/object extraction, validation), `file_storage.py` (organized disk storage)
+- **API Improvements**: Removed redundant test endpoint, connection testing during config creation
+- **Cleanup**: Removed old domain files, Flask-specific files, singleton patterns from services
+- Files: 28 files changed, major refactoring across PDF and email services
+
+### Next Actions
+- Migrate to use new PDF repository instead of old one
+- Update email ingestion to use new PDF service methods
+- Test PDF storage and extraction with new architecture
+
+### Notes
+- PDFs are fully processed before DB insertion (text and objects extracted)
+- No pending/processing states - simpler architecture
+- Hash-based deduplication prevents duplicate storage
+- Services only registered in service_container, no individual singletons
+
+---
+
 ## [2025-09-22 08:30] — Service Consolidation and API Update
 ### Spec / Intent
 - Consolidate email services by removing EmailIngestionConfigService
