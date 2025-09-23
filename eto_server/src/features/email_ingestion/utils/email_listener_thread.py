@@ -94,11 +94,105 @@ class EmailListenerThread(threading.Thread):
                 self.stop_event.wait(wait_time)
         
         logger.info(f"Stopped email listener for config {self.config.id}")
-    
+
     def stop(self):
         """Signal thread to stop"""
         logger.info(f"Stopping listener for config {self.config.id}")
         self.stop_event.set()
+
+    def _apply_filter_rules(self, emails):
+        """Apply filter rules to emails - FINALLY SOME REAL FILTER CHECKIN! 🔥💯"""
+        if not self.config.filter_rules or len(self.config.filter_rules) == 0:
+            logger.debug(f"No filter rules set for config {self.config.id} - processin all emails 📧")
+            return emails
+
+        filtered_emails = []
+        logger.debug(f"🎯 Applyin {len(self.config.filter_rules)} filter rules to {len(emails)} emails")
+
+        for email in emails:
+            email_passes = True
+
+            for rule in self.config.filter_rules:
+                try:
+                    if not self._check_filter_rule(email, rule):
+                        email_passes = False
+                        logger.debug(f"❌ Email {email.message_id[:20]}... failed filter: {rule.field} {rule.operation} '{rule.value}'")
+                        break
+                except Exception as e:
+                    logger.warning(f"⚠️ Error applyin filter rule {rule.field} {rule.operation} '{rule.value}': {e}")
+                    continue
+
+            if email_passes:
+                filtered_emails.append(email)
+                logger.debug(f"✅ Email {email.message_id[:20]}... from {email.sender_email} passed all filters!")
+            else:
+                logger.debug(f"🚫 Email {email.message_id[:20]}... from {email.sender_email} filtered out")
+
+        return filtered_emails
+
+    def _check_filter_rule(self, email, rule):
+        """Check if an email passes a single filter rule - DIS WHERE DA MAGIC HAPPENS! ✨"""
+        field_value = None
+
+        # Get da field value from da email
+        if rule.field == 'sender_email':
+            field_value = email.sender_email
+        elif rule.field == 'subject':
+            field_value = email.subject
+        elif rule.field == 'has_attachments':
+            field_value = email.has_attachments
+        elif rule.field == 'received_date':
+            field_value = email.received_date
+        else:
+            logger.warning(f"Unknown filter field: {rule.field}")
+            return True  # Unknown fields pass by default
+
+        # Apply da operation
+        if rule.operation == 'equals':
+            if rule.field in ['sender_email', 'subject']:
+                if rule.case_sensitive:
+                    return field_value == rule.value
+                else:
+                    return field_value.lower() == rule.value.lower()
+            else:
+                return str(field_value) == rule.value
+
+        elif rule.operation == 'contains':
+            if rule.case_sensitive:
+                return rule.value in field_value
+            else:
+                return rule.value.lower() in field_value.lower()
+
+        elif rule.operation == 'starts_with':
+            if rule.case_sensitive:
+                return field_value.startswith(rule.value)
+            else:
+                return field_value.lower().startswith(rule.value.lower())
+
+        elif rule.operation == 'ends_with':
+            if rule.case_sensitive:
+                return field_value.endswith(rule.value)
+            else:
+                return field_value.lower().endswith(rule.value.lower())
+
+        elif rule.operation == 'before':
+            if rule.field == 'received_date':
+                try:
+                    compare_date = datetime.fromisoformat(rule.value.replace('Z', '+00:00'))
+                    return field_value < compare_date
+                except:
+                    return True
+
+        elif rule.operation == 'after':
+            if rule.field == 'received_date':
+                try:
+                    compare_date = datetime.fromisoformat(rule.value.replace('Z', '+00:00'))
+                    return field_value > compare_date
+                except:
+                    return True
+
+        logger.warning(f"Unknown filter operation: {rule.operation}")
+        return True  # Unknown operations pass by default
     
     def _check_and_process_emails(self):
         """Check for new emails and process them"""
@@ -128,9 +222,13 @@ class EmailListenerThread(threading.Thread):
             )
             
             logger.info(f"Found {len(emails)} emails for config {self.config.id}")
-            
-            # Process each email
-            for email_msg in emails:
+
+            # 🔥 APPLY FILTER RULES TO STOP PROCESSIN ERRYTHANG! 💯
+            filtered_emails = self._apply_filter_rules(emails)
+            logger.info(f"🎯 After filters: {len(filtered_emails)}/{len(emails)} emails passed (filtered out {len(emails) - len(filtered_emails)}) 💪")
+
+            # Process each filtered email
+            for email_msg in filtered_emails:
                 try:
                     email_start_time = time.time()
                     logger.info(f"🚀 Starting to process email {email_msg.message_id[:20]}... from {email_msg.sender_email}")
