@@ -4,6 +4,7 @@ Complete service for email configuration management, monitoring, and processing
 """
 import logging
 import threading
+import time
 from typing import Dict, Optional, List, Any
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -478,25 +479,35 @@ class EmailIngestionService:
     def process_email(self, config_id: int, email_msg: EmailMessage, attachments: List[EmailAttachment]):
         """
         Process an email retrieved by a listener
-        
+
         Args:
             config_id: Configuration that retrieved this email
             email_msg: Email message from integration
             attachments: List of attachments
         """
+        processing_start_time = time.time()
         try:
+            logger.info(f"🔄 EmailIngestionService.process_email() STARTED for {email_msg.message_id[:20]}...")
+
             # Check if already processed
+            duplicate_check_start = time.time()
             if self.email_repository.exists_by_message_id(config_id, email_msg.message_id):
-                logger.debug(f"Email {email_msg.message_id} already processed for config {config_id}")
+                duplicate_duration = time.time() - duplicate_check_start
+                logger.debug(f"Email {email_msg.message_id[:20]}... already processed for config {config_id} "
+                           f"(duplicate check: {duplicate_duration:.3f}s)")
                 return
-            
+            duplicate_duration = time.time() - duplicate_check_start
+            logger.debug(f"Duplicate check completed in {duplicate_duration:.3f}s")
+
             logger.info(f"Processing email: {email_msg.subject} from {email_msg.sender_email}")
-            
+
             # Count PDFs
-            pdf_count = sum(1 for a in attachments 
+            pdf_count = sum(1 for a in attachments
                           if a.content_type == "application/pdf" or a.filename.lower().endswith('.pdf'))
-            
+            logger.debug(f"Found {pdf_count} PDF attachments out of {len(attachments)} total attachments")
+
             # Create email record using Pydantic model
+            email_create_start = time.time()
             email_create = EmailCreate(
                 config_id=config_id,
                 message_id=email_msg.message_id,
@@ -510,30 +521,45 @@ class EmailIngestionService:
                 pdf_count=pdf_count,
                 body_preview=email_msg.body_preview
             )
-            
+
             # Save email to database
             email_record = self.email_repository.create(email_create)
-            
+            email_create_duration = time.time() - email_create_start
+            logger.debug(f"Created email record in {email_create_duration:.3f}s")
+
             # Process PDF attachments
-            for attachment in attachments:
+            pdf_processing_start = time.time()
+            for i, attachment in enumerate(attachments):
                 if attachment.content_type == "application/pdf" or attachment.filename.lower().endswith('.pdf'):
                     try:
+                        pdf_start = time.time()
+                        logger.info(f"📄 Processing PDF attachment {i+1}/{len(attachments)}: {attachment.filename}")
                         self._process_pdf_attachment(email_record.id, attachment)
+                        pdf_duration = time.time() - pdf_start
+                        logger.info(f"📄 Completed PDF {attachment.filename} in {pdf_duration:.2f}s")
                     except Exception as e:
-                        logger.error(f"Error processing PDF {attachment.filename}: {e}")
-            
+                        pdf_duration = time.time() - pdf_start
+                        logger.error(f"Error processing PDF {attachment.filename} after {pdf_duration:.2f}s: {e}")
+            pdf_processing_duration = time.time() - pdf_processing_start
+
             # Update statistics
+            stats_start = time.time()
             self.config_repository.update_progress(
                 config_id,
                 current_time=DateTimeUtils.utc_now(),
                 emails_processed=1,
                 pdfs_found=pdf_count
             )
-            
-            logger.info(f"Successfully processed email with {pdf_count} PDFs")
-            
+            stats_duration = time.time() - stats_start
+
+            total_duration = time.time() - processing_start_time
+            logger.info(f"✅ EmailIngestionService.process_email() COMPLETED for {email_msg.message_id[:20]}... "
+                       f"Total: {total_duration:.2f}s (PDFs: {pdf_processing_duration:.2f}s, "
+                       f"Stats: {stats_duration:.3f}s)")
+
         except Exception as e:
-            logger.error(f"Error processing email {email_msg.message_id}: {e}")
+            total_duration = time.time() - processing_start_time
+            logger.error(f"❌ Error processing email {email_msg.message_id[:20]}... after {total_duration:.2f}s: {e}")
             # Record error but don't stop processing
             try:
                 self.config_repository.record_error(config_id, str(e))
@@ -548,31 +574,44 @@ class EmailIngestionService:
             email_id: Database ID of the email
             attachment: PDF attachment to process
         """
+        pdf_start_time = time.time()
         try:
-            logger.info(f"Processing PDF: {attachment.filename} ({attachment.size_bytes} bytes)")
+            logger.info(f"📄 _process_pdf_attachment() STARTED: {attachment.filename} ({attachment.size_bytes} bytes)")
 
             # Step 1: Store PDF using PDF processing service
+            service_load_start = time.time()
             pdf_service = self.pdf_service
             if not pdf_service:
                 # Lazy load if not provided via constructor
                 from shared.services import get_pdf_processing_service
                 pdf_service = get_pdf_processing_service()
+            service_load_duration = time.time() - service_load_start
+            logger.debug(f"PDF service load time: {service_load_duration:.3f}s")
 
             # Store PDF and get file record
+            storage_start = time.time()
             pdf_file = pdf_service.store_pdf(
                 file_content=attachment.content,
                 original_filename=attachment.filename,
                 email_id=email_id
             )
-
-            logger.info(f"PDF stored successfully: {pdf_file.id}")
+            storage_duration = time.time() - storage_start
+            logger.info(f"📄 PDF stored successfully: {pdf_file.id} in {storage_duration:.2f}s")
 
             # Step 2: Trigger ETO processing pipeline (lazy load to avoid circular dependency)
+            eto_load_start = time.time()
             from shared.services import get_eto_processing_service
             eto_service = get_eto_processing_service()
+            eto_load_duration = time.time() - eto_load_start
 
             # Start ETO processing for the stored PDF
+            eto_start = time.time()
             eto_run = eto_service.process_pdf(pdf_file.id)
+            eto_duration = time.time() - eto_start
+
+            total_duration = time.time() - pdf_start_time
+            logger.info(f"📄 _process_pdf_attachment() COMPLETED: {attachment.filename} in {total_duration:.2f}s "
+                       f"(storage: {storage_duration:.2f}s, ETO: {eto_duration:.2f}s)")
 
             logger.info(f"ETO processing initiated for PDF {pdf_file.id}, ETO run: {eto_run.id}, status: {eto_run.status}")
 
@@ -585,7 +624,8 @@ class EmailIngestionService:
                 logger.error(f"PDF processing failed: {attachment.filename}, error: {eto_run.error_message}")
 
         except Exception as e:
-            logger.error(f"Failed to process PDF attachment {attachment.filename}: {e}")
+            total_duration = time.time() - pdf_start_time
+            logger.error(f"❌ Failed to process PDF attachment {attachment.filename} after {total_duration:.2f}s: {e}")
             # Don't re-raise - email processing should continue even if PDF processing fails
     
     # ========== Query Methods ==========
@@ -659,11 +699,7 @@ class EmailIngestionService:
         """
         try:
             # Check if we can access the database
-            with self.connection_manager.session_scope() as session:
-                session.execute("SELECT 1")
-
-            # Check if repositories are accessible
-            self.email_repository.count_by_config(1)  # Test query
+            test_run = self.email_repository.get_by_id(1)  # Just test DB access
 
             return True
         except Exception as e:

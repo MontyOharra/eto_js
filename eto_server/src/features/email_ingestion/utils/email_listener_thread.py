@@ -4,6 +4,7 @@ Worker thread that polls email provider and calls back to service for processing
 """
 import logging
 import threading
+import time
 from typing import Optional, Callable, Any
 from datetime import datetime, timezone, timedelta
 
@@ -131,22 +132,41 @@ class EmailListenerThread(threading.Thread):
             # Process each email
             for email_msg in emails:
                 try:
+                    email_start_time = time.time()
+                    logger.info(f"Starting to process email {email_msg.message_id[:20]}... from {email_msg.sender_email}")
+
                     # Get attachments if the email has them
                     attachments = []
                     if email_msg.has_attachments:
                         try:
+                            attachment_start_time = time.time()
+                            logger.info(f"📎 Starting attachment retrieval for email {email_msg.message_id[:20]}...")
+
                             attachments = self.integration.get_attachments(
                                 email_msg.message_id,
                                 self.config.folder_name
                             )
-                            logger.debug(f"Retrieved {len(attachments)} attachments "
-                                       f"for email {email_msg.message_id}")
+
+                            attachment_duration = time.time() - attachment_start_time
+                            logger.info(f"📎 Retrieved {len(attachments)} attachments for email {email_msg.message_id[:20]}... "
+                                       f"in {attachment_duration:.2f} seconds")
                         except Exception as e:
-                            logger.warning(f"Failed to get attachments for "
-                                         f"{email_msg.message_id}: {e}")
-                    
+                            attachment_duration = time.time() - attachment_start_time
+                            logger.warning(f"Failed to get attachments for {email_msg.message_id[:20]}... "
+                                         f"after {attachment_duration:.2f} seconds: {e}")
+                    else:
+                        logger.debug(f"Email {email_msg.message_id[:20]}... has no attachments")
+
                     # Call back to service for processing
+                    callback_start_time = time.time()
+                    logger.info(f"🔄 Starting email processing callback for {email_msg.message_id[:20]}...")
+
                     self.process_callback(email_msg, attachments)
+
+                    callback_duration = time.time() - callback_start_time
+                    total_duration = time.time() - email_start_time
+                    logger.info(f"✅ Completed email {email_msg.message_id[:20]}... processing: "
+                               f"callback={callback_duration:.2f}s, total={total_duration:.2f}s")
                     
                     # Update last check time to email's received date if newer
                     if email_msg.received_date > self.last_check_time:

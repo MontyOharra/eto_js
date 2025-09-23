@@ -138,7 +138,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                     for model in models
                 ]
 
-                logger.debug(f"Retrieved {len(summaries)} ETO runs with status {status.value}")
+                logger.monitor(f"Retrieved {len(summaries)} ETO runs with status {status.value}")
                 return summaries
 
         except SQLAlchemyError as e:

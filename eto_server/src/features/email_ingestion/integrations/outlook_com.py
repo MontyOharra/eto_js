@@ -6,6 +6,7 @@ import logging
 import threading
 import tempfile
 import os
+import time
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 import win32com.client
@@ -408,48 +409,96 @@ class OutlookComIntegration(BaseEmailIntegration):
     
     def get_attachments(self, message_id: str, folder_name: str = "Inbox") -> List[EmailAttachment]:
         """Get all attachments from a specific email"""
+        method_start_time = time.time()
         attachments = []
-        
+
         try:
+            self.logger.info(f"📎 OutlookComIntegration.get_attachments() STARTED for {message_id[:20]}...")
+
             if not self.is_connected:
+                self.logger.warning("Not connected to Outlook - returning empty attachments")
                 return attachments
-            
+
+            # COM initialization timing
+            com_start = time.time()
             pythoncom.CoInitialize()
-            
+            com_init_duration = time.time() - com_start
+            self.logger.debug(f"COM initialization: {com_init_duration:.3f}s")
+
             try:
+                # Outlook connection timing
+                outlook_start = time.time()
                 outlook = win32com.client.Dispatch("Outlook.Application")
                 namespace = outlook.GetNamespace("MAPI")
-                
+                outlook_duration = time.time() - outlook_start
+                self.logger.debug(f"Outlook dispatch and namespace: {outlook_duration:.3f}s")
+
+                # Folder access timing
+                folder_start = time.time()
                 folder = self._get_folder_by_name_threadsafe(namespace, folder_name)
                 if not folder:
+                    folder_duration = time.time() - folder_start
+                    self.logger.warning(f"Folder '{folder_name}' not found after {folder_duration:.3f}s")
                     return attachments
-                
-                # Find the email
+                folder_duration = time.time() - folder_start
+                self.logger.debug(f"Folder access: {folder_duration:.3f}s")
+
+                # Email search timing
+                search_start = time.time()
                 mail_item = None
+                item_count = 0
                 for item in folder.Items:
+                    item_count += 1
                     if item.EntryID == message_id:
                         mail_item = item
                         break
-                
+                search_duration = time.time() - search_start
+                self.logger.info(f"📧 Email search: found after checking {item_count} items in {search_duration:.2f}s")
+
                 if not mail_item or not hasattr(mail_item, 'Attachments'):
+                    total_duration = time.time() - method_start_time
+                    self.logger.warning(f"Email or attachments not found after {total_duration:.2f}s")
                     return attachments
-                
-                # Extract attachments
-                for attachment in mail_item.Attachments:
+
+                # Attachment extraction timing
+                extraction_start = time.time()
+                attachment_count = mail_item.Attachments.Count
+                self.logger.info(f"📎 Found {attachment_count} attachments, starting extraction...")
+
+                for i, attachment in enumerate(mail_item.Attachments):
                     try:
+                        att_start = time.time()
                         att_model = self._extract_attachment(attachment)
+                        att_duration = time.time() - att_start
                         if att_model:
                             attachments.append(att_model)
+                            self.logger.debug(f"Extracted attachment {i+1}/{attachment_count}: {att_model.filename} "
+                                           f"({att_model.size_bytes} bytes) in {att_duration:.3f}s")
+                        else:
+                            self.logger.debug(f"Skipped attachment {i+1}/{attachment_count} in {att_duration:.3f}s")
                     except Exception as e:
-                        self.logger.warning(f"Failed to extract attachment: {e}")
+                        att_duration = time.time() - att_start
+                        self.logger.warning(f"Failed to extract attachment {i+1}/{attachment_count} "
+                                         f"after {att_duration:.3f}s: {e}")
                         continue
-                
+
+                extraction_duration = time.time() - extraction_start
+                total_duration = time.time() - method_start_time
+                self.logger.info(f"📎 OutlookComIntegration.get_attachments() COMPLETED: {len(attachments)} attachments "
+                               f"in {total_duration:.2f}s (extraction: {extraction_duration:.2f}s, "
+                               f"search: {search_duration:.2f}s)")
+
             finally:
+                # COM cleanup timing
+                cleanup_start = time.time()
                 pythoncom.CoUninitialize()
-                
+                cleanup_duration = time.time() - cleanup_start
+                self.logger.debug(f"COM cleanup: {cleanup_duration:.3f}s")
+
         except Exception as e:
-            self.logger.error(f"Error getting attachments: {e}")
-        
+            total_duration = time.time() - method_start_time
+            self.logger.error(f"❌ Error getting attachments after {total_duration:.2f}s: {e}")
+
         return attachments
     
     # ========== Email State Management ==========

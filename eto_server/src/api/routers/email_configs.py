@@ -105,6 +105,9 @@ def update_config(
     try:
         ingestion_service = container.get_email_ingestion_service()
         
+        logger.info(f"Update body: {update}")
+        logger.info(f"Update filter_rules: {update.filter_rules}")
+
         # Update configuration and refresh listener if needed
         updated = ingestion_service.update_config(config_id, update)
         

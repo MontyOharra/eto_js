@@ -649,3 +649,80 @@ def bulk_reprocess_runs(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error"
         )
+
+
+@router.post("/reprocess-failed", response_model=Dict[str, Any])
+def reprocess_all_failed_runs(
+    container: ServiceContainer = Depends(get_service_container)
+):
+    """
+    Reprocess all failed and needs_template runs
+
+    Automatically finds all runs with 'failure' or 'needs_template' status
+    and resets them to 'not_started' for reprocessing.
+    """
+    try:
+        eto_service = container.get_eto_service()
+
+        # Get all failed and needs_template runs
+        failed_runs = eto_service.get_runs(
+            status="failure",
+            limit=1000
+        )
+        needs_template_runs = eto_service.get_runs(
+            status="needs_template",
+            limit=1000
+        )
+
+        all_runs = failed_runs + needs_template_runs
+        total_found = len(all_runs)
+
+        if total_found == 0:
+            return {
+                "operation": "reprocess_all_failed",
+                "total_found": 0,
+                "total_reprocessed": 0,
+                "failed_count": 0,
+                "needs_template_count": 0,
+                "message": "No failed or needs_template runs found",
+                "timestamp": DateTimeUtils.utc_now().isoformat()
+            }
+
+        # Reprocess each run
+        results = []
+        errors = []
+
+        for run in all_runs:
+            try:
+                reset_run = eto_service.reprocess_run(run.id)
+                results.append({
+                    "run_id": run.id,
+                    "original_status": run.status.value,
+                    "new_status": reset_run.status.value
+                })
+            except Exception as e:
+                logger.error(f"Error reprocessing run {run.id}: {e}")
+                errors.append({
+                    "run_id": run.id,
+                    "original_status": run.status.value,
+                    "error": str(e)
+                })
+
+        return {
+            "operation": "reprocess_all_failed",
+            "total_found": total_found,
+            "total_reprocessed": len(results),
+            "failed_count": len([r for r in failed_runs]),
+            "needs_template_count": len([r for r in needs_template_runs]),
+            "successful_reprocessed": results,
+            "errors": errors,
+            "message": f"Reprocessed {len(results)} runs, {len(errors)} failed",
+            "timestamp": DateTimeUtils.utc_now().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"Error in reprocess all failed runs: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to reprocess runs: {str(e)}"
+        )

@@ -6,6 +6,7 @@ import { Link } from "@tanstack/react-router";
 import { apiClient } from "../../../services/api";
 import type { EmailIngestionConfig } from "../../../services/api";
 import { EmailConfigWizard } from "../../../components/email/EmailConfigWizard";
+import { EmailConfigEditModal } from "../../../components/email/EmailConfigEditModal";
 
 export const Route = createFileRoute("/dashboard/settings/email-configs")({
   component: EmailConfigsPage,
@@ -17,6 +18,7 @@ function EmailConfigsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingConfig, setEditingConfig] = useState<EmailIngestionConfig | null>(null);
 
   const fetchServiceStatus = async () => {
     try {
@@ -64,6 +66,26 @@ function EmailConfigsPage() {
 
   const handleCreateSuccess = () => {
     setShowCreateModal(false);
+    fetchConfigs(); // Refresh the configs list
+  };
+
+  const handleEditConfig = async (config: EmailIngestionConfig) => {
+    try {
+      // Fetch the full config details since the list view might not have all fields
+      const response = await apiClient.getEmailIngestionConfig(config.id);
+      if (response.success) {
+        setEditingConfig(response.data);
+      } else {
+        setError('Failed to load configuration details');
+      }
+    } catch (err) {
+      console.error('Error fetching config details:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load configuration details');
+    }
+  };
+
+  const handleEditSuccess = () => {
+    setEditingConfig(null);
     fetchConfigs(); // Refresh the configs list
   };
 
@@ -205,7 +227,7 @@ function EmailConfigsPage() {
 
                     <div className="flex items-center space-x-2 ml-4">
                       <button
-                        onClick={() => alert('Edit functionality coming soon!')}
+                        onClick={() => handleEditConfig(config)}
                         className="inline-flex items-center px-3 py-1.5 bg-gray-600 hover:bg-gray-500 text-white text-sm rounded transition-colors"
                       >
                         <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -252,6 +274,14 @@ function EmailConfigsPage() {
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         onSuccess={handleCreateSuccess}
+      />
+
+      {/* Edit Config Modal */}
+      <EmailConfigEditModal
+        isOpen={!!editingConfig}
+        config={editingConfig}
+        onClose={() => setEditingConfig(null)}
+        onSuccess={handleEditSuccess}
       />
     </>
   );

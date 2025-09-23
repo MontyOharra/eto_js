@@ -5,6 +5,31 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-09-23 14:30] — Colored Terminal Logging Implementation
+### Spec / Intent
+- Add colored terminal logging output with level-based colors for better log visibility
+- Color only the log header (timestamp, level, logger name) while keeping message content uncolored
+- Make colors environment-configurable for development vs production usage
+
+### Changes Made
+- **ColoredFormatter Class**: Created custom logging formatter with ANSI color codes - red for errors/critical, yellow for warnings, blue for info, gray for debug
+- **Header-Only Coloring**: Split log format at `:\n    ` boundary to color only header portion, keeping message content in normal terminal color
+- **Environment Control**: Added `LOG_COLORS` environment variable (default: true) to enable/disable colors
+- **Integration**: Updated configure_logging() to use ColoredFormatter with existing LOG_FORMAT and LOG_LEVEL environment variables
+- File: `src/app.py:55-91,99-100,124`
+
+### Next Actions
+- Test colored logging across different log levels during application usage
+- Monitor color display in different terminal environments
+
+### Notes
+- **Visual Distinction**: Log levels now clearly distinguishable at a glance with colored headers
+- **Message Readability**: Actual log content remains uncolored for maximum readability
+- **Production Ready**: Colors can be disabled via LOG_COLORS=false for production environments
+- **Consistent Format**: Works seamlessly with existing environment-configurable logging setup
+
+---
+
 ## [2025-09-22 19:00] — Email Config Persistence Fix: Separate Runtime vs Database State
 ### Spec / Intent
 - Fix email config deactivation bug where app shutdown incorrectly changes database config status

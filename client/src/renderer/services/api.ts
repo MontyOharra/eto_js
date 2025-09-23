@@ -552,8 +552,19 @@ class ApiClient {
     });
   }
 
+
   /**
-   * Bulk Reprocess ETO Runs
+   * Queue PDF for ETO Processing
+   */
+  async queuePdfProcessing(pdfFileId: number): Promise<{ data: ApiEtoRun }> {
+    const data = await this.fetchApi<ApiEtoRun>(`/api/eto-runs/process-pdf/${pdfFileId}`, {
+      method: 'POST',
+    });
+    return { data };
+  }
+
+  /**
+   * Bulk reprocess specific runs by IDs
    */
   async bulkReprocessRuns(runIds: number[]): Promise<{
     operation: string;
@@ -571,58 +582,37 @@ class ApiClient {
   }
 
   /**
-   * Queue PDF for ETO Processing
+   * Reprocess single run (convenience method using bulk endpoint)
    */
-  async queuePdfProcessing(pdfFileId: number): Promise<{ data: ApiEtoRun }> {
-    const data = await this.fetchApi<ApiEtoRun>(`/api/eto-runs/process-pdf/${pdfFileId}`, {
-      method: 'POST',
-    });
-    return { data };
+  async reprocessSingleRun(runId: number): Promise<{
+    operation: string;
+    total_requested: number;
+    successful: number;
+    failed: number;
+    results: Array<{ run_id: number; status: string; new_status?: string }>;
+    errors: Array<{ run_id: number; status: string; error: string }>;
+    timestamp: string;
+  }> {
+    return this.bulkReprocessRuns([runId]);
   }
 
   /**
-   * Reprocess All Failed/Needs Template Runs (Legacy method - using bulk reprocess)
+   * Reprocess all failed and needs_template runs
    */
   async reprocessAllFailedRuns(): Promise<{
-    success: boolean;
-    result: {
-      reprocessed: number;
-      message: string;
-      needs_template_count: number;
-      failure_count: number;
-      error?: string;
-    };
+    operation: string;
+    total_found: number;
+    total_reprocessed: number;
+    failed_count: number;
+    needs_template_count: number;
+    successful_reprocessed: Array<{ run_id: number; original_status: string; new_status: string }>;
+    errors: Array<{ run_id: number; original_status: string; error: string }>;
+    message: string;
+    timestamp: string;
   }> {
-    // Get all failed and needs_template runs first
-    const failedRuns = await this.getEtoRuns({ eto_run_status: 'failure', limit: 1000 });
-    const needsTemplateRuns = await this.getEtoRuns({ eto_run_status: 'needs_template', limit: 1000 });
-
-    const allRunIds = [...failedRuns.data, ...needsTemplateRuns.data].map(run => run.id);
-
-    if (allRunIds.length === 0) {
-      return {
-        success: true,
-        result: {
-          reprocessed: 0,
-          message: 'No failed or needs_template runs found',
-          needs_template_count: 0,
-          failure_count: 0,
-        }
-      };
-    }
-
-    const bulkResult = await this.bulkReprocessRuns(allRunIds);
-
-    return {
-      success: true,
-      result: {
-        reprocessed: bulkResult.successful,
-        message: `Reprocessed ${bulkResult.successful} runs, ${bulkResult.failed} failed`,
-        needs_template_count: needsTemplateRuns.data.length,
-        failure_count: failedRuns.data.length,
-        error: bulkResult.failed > 0 ? `${bulkResult.failed} runs failed to reprocess` : undefined,
-      }
-    };
+    return this.fetchApi('/api/eto-runs/reprocess-failed', {
+      method: 'POST',
+    });
   }
 
   /**
@@ -861,7 +851,7 @@ class ApiClient {
     data: EmailIngestionConfig[];
   }> {
     try {
-      const configs = await this.fetchApi<EmailIngestionConfig[]>('/email-configs/');
+      const configs = await this.fetchApi<EmailIngestionConfig[]>('/api/email-configs/');
 
       // Backend returns raw array, wrap in expected format
       return {
@@ -880,7 +870,17 @@ class ApiClient {
     success: boolean;
     data: EmailIngestionConfig;
   }> {
-    return this.fetchApi(`/email-configs/${configId}`);
+    try {
+      const config = await this.fetchApi<EmailIngestionConfig>(`/api/email-configs/${configId}`);
+
+      // Backend returns raw config object, wrap in expected format
+      return {
+        success: true,
+        data: config
+      };
+    } catch (error) {
+      throw error; // Let the calling code handle the error
+    }
   }
 
   /**
@@ -905,7 +905,7 @@ class ApiClient {
     data: any;
   }> {
     try {
-      const result = await this.fetchApi('/email-configs/', {
+      const result = await this.fetchApi('/api/email-configs/', {
         method: 'POST',
         body: JSON.stringify(configData),
       });
@@ -931,19 +931,27 @@ class ApiClient {
       value: string;
       case_sensitive: boolean;
     }>;
-    monitoring?: {
-      poll_interval_seconds: number;
-      max_backlog_hours: number;
-      error_retry_attempts: number;
-    };
+    poll_interval_seconds?: number;
+    max_backlog_hours?: number;
+    error_retry_attempts?: number;
   }): Promise<{
     success: boolean;
     message: string;
   }> {
-    return this.fetchApi(`/email-configs/${configId}`, {
-      method: 'PUT',
-      body: JSON.stringify(updateData),
-    });
+    try {
+      const updatedConfig = await this.fetchApi<EmailIngestionConfig>(`/api/email-configs/${configId}`, {
+        method: 'PUT',
+        body: JSON.stringify(updateData),
+      });
+
+      // Backend returns updated config object, wrap in expected format
+      return {
+        success: true,
+        message: 'Configuration updated successfully'
+      };
+    } catch (error) {
+      throw error; // Let the calling code handle the error
+    }
   }
 
   /**
@@ -953,7 +961,7 @@ class ApiClient {
     success: boolean;
     message: string;
   }> {
-    return this.fetchApi(`/email-configs/${configId}`, {
+    return this.fetchApi(`/api/email-configs/${configId}`, {
       method: 'DELETE',
     });
   }
@@ -970,7 +978,7 @@ class ApiClient {
     auto_started?: boolean;
     start_error?: string;
   }> {
-    return this.fetchApi(`/email-configs/${configId}/activate?activate=true`, {
+    return this.fetchApi(`/api/email-configs/${configId}/activate?activate=true`, {
       method: 'PATCH',
     });
   }
@@ -985,7 +993,7 @@ class ApiClient {
     message: string;
     activated: boolean;
   }> {
-    return this.fetchApi(`/email-configs/${configId}/activate?activate=false`, {
+    return this.fetchApi(`/api/email-configs/${configId}/activate?activate=false`, {
       method: 'PATCH',
     });
   }
@@ -1012,7 +1020,7 @@ class ApiClient {
         display_name?: string;
         folder_id?: string;
         message_count?: number;
-      }>>(`/email-configs/discovery/folders${emailAddress ? `?email_address=${encodeURIComponent(emailAddress)}` : ''}`);
+      }>>(`/api/email-configs/discovery/folders${emailAddress ? `?email_address=${encodeURIComponent(emailAddress)}` : ''}`)
 
       // Wrap the raw array response in the expected format
       return {
@@ -1048,7 +1056,7 @@ class ApiClient {
         account_type: string;
         is_default: boolean;
         provider_specific_id?: string;
-      }>>('/email-configs/discovery/accounts');
+      }>>('/api/email-configs/discovery/accounts');
 
       // Wrap the raw array response in the expected format
       return {

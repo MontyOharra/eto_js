@@ -35,10 +35,6 @@ dev: $(VENV_DIR) logs storage ## Start FastAPI development server (setup only if
 	@echo "Starting ETO FastAPI development server..."
 	set DEBUG=true && set RELOAD=false && $(PYTHON) main.py
 
-dev-flask: $(VENV_DIR) logs storage ## Start Flask development server (legacy)
-	@echo "Starting ETO Flask development server..."
-	set FLASK_ENV=development && set DEBUG=true && $(PYTHON) main.py
-
 logs:
 	@mkdir -p logs
 
@@ -48,6 +44,7 @@ storage:
 clean-data: ## Clean up logs and storage data (keep venv)
 	@rm -rf logs/* storage/*
 	@echo "Cleaned up logs and storage data (virtual environment preserved)"
+	@./scripts/database/manage-database.sh reset --confirm
 
 clean: ## Clean up virtual environment and generated files
 	@rm -rf $(VENV_DIR) logs storage
@@ -55,7 +52,6 @@ clean: ## Clean up virtual environment and generated files
 
 reset-all: ## Reset database and clear storage/logs completely
 	@echo "Resetting database and clearing all data..."
-	@./scripts/database/manage-database.sh reset --confirm
 	@rm -rf logs/* storage/* || true
 	@mkdir -p logs storage
 	@echo "Database reset and storage/logs cleared successfully!"

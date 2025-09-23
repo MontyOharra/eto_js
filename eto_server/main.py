@@ -17,41 +17,16 @@ sys.path.insert(0, os.path.dirname(__file__))
 load_dotenv()
 
 
-def get_log_level() -> int:
-    """Get logging level from environment variable"""
-    log_level = os.getenv('LOG_LEVEL', 'DEBUG').upper()
-    level_mapping = {
-        'DEBUG': logging.DEBUG,
-        'INFO': logging.INFO,
-        'WARNING': logging.WARNING,
-        'ERROR': logging.ERROR,
-        'CRITICAL': logging.CRITICAL
-    }
-    return level_mapping.get(log_level, logging.INFO)
-
-
-def setup_logging():
-    """Setup logging configuration"""
-    # Ensure logs directory exists
-    os.makedirs('logs', exist_ok=True)
-
-    logging.basicConfig(
-        level=get_log_level(),
-        format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
-        handlers=[
-            logging.FileHandler('logs/eto_server_fastapi.log'),
-            logging.StreamHandler()
-        ]
-    )
+# Logging configuration is now handled by app.py configure_logging()
 
 
 def main():
     """Main entry point for the FastAPI ETO Server"""
-    setup_logging()
+    # Basic logger for startup messages (detailed logging configured in app.py)
     logger = logging.getLogger(__name__)
 
     try:
-        logger.info("Starting Unified ETO Server (FastAPI)...")
+        print("Starting Unified ETO Server (FastAPI)...")  # Use print for initial startup
 
         # Get configuration from environment
         port = int(os.getenv('PORT', 8080))
@@ -60,13 +35,13 @@ def main():
         reload = os.getenv('RELOAD', str(debug)).lower() == 'true'
         workers = int(os.getenv('WORKERS', 1))
 
-        logger.info(f"Server starting on {host}:{port}")
+        print(f"Server starting on {host}:{port}")
 
         if debug:
-            logger.warning("Running in DEBUG mode - not suitable for production!")
+            print("Running in DEBUG mode - not suitable for production!")
 
         if workers > 1 and reload:
-            logger.warning("Running with multiple workers and reload enabled - disabling reload")
+            print("Running with multiple workers and reload enabled - disabling reload")
             reload = False
 
         # Configure uvicorn settings
@@ -81,22 +56,29 @@ def main():
             "use_colors": True,
             "loop": "auto",
             "reload_delay": 1.0,  # Delay between reload checks
-            "reload_excludes": ["*.log", "*.pyc", "__pycache__", ".git"],  # Exclude files that trigger reload
+            "reload_excludes": [
+                "*.log", "*.pyc", "__pycache__", ".git",
+                "storage/*", "logs/*", "data/*", "*.pdf", "*.csv", "*.json"
+            ],  # Exclude files that trigger reload
         }
+
+        # Add specific directory watching in reload mode
+        if reload:
+            uvicorn_config["reload_dirs"] = ["./src"]  # Only watch src directory
 
         # Add workers only in production (no reload)
         if not reload and workers > 1:
             uvicorn_config["workers"] = workers
-            logger.info(f"Starting with {workers} workers")
+            print(f"Starting with {workers} workers")
 
         # Start the FastAPI application with uvicorn
-        logger.info("Starting uvicorn server...")
+        print("Starting uvicorn server...")
         uvicorn.run(**uvicorn_config)
 
     except KeyboardInterrupt:
-        logger.info("Server stopped by user")
+        print("Server stopped by user")
     except Exception as e:
-        logger.error(f"Failed to start ETO Server: {e}")
+        print(f"Failed to start ETO Server: {e}")
         sys.exit(1)
 
 

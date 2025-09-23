@@ -33,6 +33,8 @@ function EtoInfoPage() {
     title: string;
     message: string;
     onConfirm: () => void;
+    variant?: "danger" | "warning" | "info";
+    confirmText?: string;
   } | null>(null);
 
   // Group runs by status
@@ -99,6 +101,8 @@ function EtoInfoPage() {
       isOpen: true,
       title: "Delete ETO Run",
       message: "Are you sure you want to permanently delete this ETO run? This action cannot be undone.",
+      variant: "danger",
+      confirmText: "Delete",
       onConfirm: () => confirmDelete(runId)
     });
   };
@@ -122,12 +126,13 @@ function EtoInfoPage() {
 
   const handleReprocess = async (runId: string) => {
     try {
-      const response = await apiClient.reprocessEtoRun(runId);
+      const response = await apiClient.reprocessSingleRun(parseInt(runId));
 
-      if (response.success) {
+      if (response.successful > 0) {
+        console.log(`Run ${runId} reprocessed successfully`);
         refetch(); // Refresh the data to show updated status
       } else {
-        console.error('Failed to reprocess run:', response.message || 'Unknown error');
+        console.error('Failed to reprocess run:', response.errors[0]?.error || 'Unknown error');
       }
     } catch (error) {
       console.error('Error reprocessing run:', error);
@@ -141,6 +146,8 @@ function EtoInfoPage() {
       isOpen: true,
       title: "Reprocess All Failed/Needs Template Runs",
       message: `This will reprocess ${totalToReprocess} runs (${failureRuns.length} failed, ${needsTemplateRuns.length} needs template). All selected runs will be reset to "not_started" status and reprocessed through the complete ETO pipeline. Continue?`,
+      variant: "warning",
+      confirmText: "Reprocess All",
       onConfirm: async () => {
         setConfirmationModal(null);
         setReprocessing(true);
@@ -148,13 +155,12 @@ function EtoInfoPage() {
         try {
           const response = await apiClient.reprocessAllFailedRuns();
 
-          if (response.success) {
-            console.log(`Reprocessing initiated for ${response.result.reprocessed} runs`);
-            // Refresh the data to show updated status
-            refetch();
-          } else {
-            console.error('Failed to reprocess runs:', response.result.error);
+          console.log(`Reprocessing initiated for ${response.total_reprocessed} runs`);
+          if (response.errors.length > 0) {
+            console.warn(`${response.errors.length} runs failed to reprocess:`, response.errors);
           }
+          // Refresh the data to show updated status
+          refetch();
         } catch (error) {
           console.error('Error reprocessing all runs:', error);
         } finally {
@@ -343,8 +349,8 @@ function EtoInfoPage() {
           isOpen={confirmationModal.isOpen}
           title={confirmationModal.title}
           message={confirmationModal.message}
-          variant="danger"
-          confirmText="Delete"
+          variant={confirmationModal.variant || "warning"}
+          confirmText={confirmationModal.confirmText || "Confirm"}
           onConfirm={confirmationModal.onConfirm}
           onCancel={closeConfirmationModal}
         />

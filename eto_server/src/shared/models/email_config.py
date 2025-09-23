@@ -169,9 +169,13 @@ class EmailConfigUpdate(BaseModel):
 
     def model_dump_for_db(self) -> dict:
         """Convert to database format, handling optionals and JSON serialization"""
-        data = self.model_dump(exclude_unset=True)
-        if 'filter_rules' in data and data['filter_rules'] is not None:
-            data['filter_rules'] = json.dumps([rule.model_dump() for rule in data['filter_rules']])
+        # Exclude filter_rules from automatic conversion to prevent dict conversion
+        data = self.model_dump(exclude_unset=True, exclude={'filter_rules'})
+
+        # Handle filter_rules separately to maintain Pydantic object access
+        if self.filter_rules is not None:
+            data['filter_rules'] = json.dumps([rule.model_dump() for rule in self.filter_rules])
+
         return data
 
     class Config:
