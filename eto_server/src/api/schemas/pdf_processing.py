@@ -12,22 +12,19 @@ class PdfObjectResponse(BaseModel):
     """PDF object response"""
     object_type: str = Field(description="Type of PDF object (text, image, line, etc.)")
     content: str = Field(description="Object content")
-    x: float = Field(description="X coordinate")
-    y: float = Field(description="Y coordinate")
-    width: float = Field(description="Object width")
-    height: float = Field(description="Object height")
-    font_size: Optional[float] = Field(None, description="Font size (for text objects)")
-    font_name: Optional[str] = Field(None, description="Font name (for text objects)")
+    page: int = Field(..., ge=1, description="Page number (1-based)")
+    bbox: List[float] = Field(..., min_length=4, max_length=4, description="Bounding box coordinates [x0, y0, x1, y1]")
+    confidence: float = Field(1.0, ge=0, le=1, description="Extraction confidence score")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="Additional object metadata (font, size, etc.)")
 
 
 class PdfExtractionBoundsResponse(BaseModel):
     """PDF extraction bounds response"""
     field_name: str = Field(description="Name of the field to extract")
-    x: float = Field(description="X coordinate of extraction area")
-    y: float = Field(description="Y coordinate of extraction area")
-    width: float = Field(description="Width of extraction area")
-    height: float = Field(description="Height of extraction area")
+    bounding_box: List[float] = Field(..., min_length=4, max_length=4, description="Bounding box [x0, y0, x1, y1]")
     page_number: int = Field(1, ge=1, description="Page number")
+    required: bool = Field(False, description="Whether this field is required")
+    validation_regex: Optional[str] = Field(None, description="Regex pattern for validation")
 
 
 class PdfFileResponse(BaseModel):

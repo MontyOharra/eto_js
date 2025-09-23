@@ -185,13 +185,9 @@ class PdfObject(BaseModel):
     type: str
     page: int
     text: str
-    x: float
-    y: float
-    width: float
-    height: float
-    font_name: Optional[str] = None
-    font_size: Optional[float] = None
-    bbox: Optional[List[float]] = None
+    bbox: List[float] = Field(..., min_length=4, max_length=4, description="Bounding box coordinates [x0, y0, x1, y1]")
+    confidence: float = Field(1.0, ge=0, le=1, description="Extraction confidence score")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="Additional object metadata (font, size, etc.)")
 
 
 class EtoRunPdfData(BaseModel):

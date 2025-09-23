@@ -100,40 +100,40 @@ class EtoRunModel(BaseModel):
     pdf_file_id: Mapped[int] = mapped_column(ForeignKey('pdf_files.id'), index=True)
 
     # Overall processing status
-    status: Mapped[str] = mapped_column(String(50), index=True)  # 'not_started', 'processing', 'success', 'failure', 'needs_template', 'skipped'
+    status: Mapped[str] = mapped_column(String(50), index=True, default="not_started")  # 'not_started', 'processing', 'success', 'failure', 'needs_template', 'skipped'
 
     # Current processing step (only populated when status='processing')
-    processing_step: Mapped[Optional[str]] = mapped_column(String(50))  # 'template_matching', 'extracting_data', 'transforming_data'
+    processing_step: Mapped[Optional[str]] = mapped_column(String(50), default=None)  # 'template_matching', 'extracting_data', 'transforming_data'
 
     # Error tracking (for status='failure')
-    error_type: Mapped[Optional[str]] = mapped_column(String(50))  # 'template_matching_error', 'data_extraction_error', 'transformation_error'
-    error_message: Mapped[Optional[str]] = mapped_column(Text)
-    error_details: Mapped[Optional[str]] = mapped_column(Text)  # JSON: detailed error info including which step failed
+    error_type: Mapped[Optional[str]] = mapped_column(String(50), default=None)  # 'template_matching_error', 'data_extraction_error', 'transformation_error'
+    error_message: Mapped[Optional[str]] = mapped_column(Text, default=None)
+    error_details: Mapped[Optional[str]] = mapped_column(Text, default=None)  # JSON: detailed error info including which step failed
 
     # Template matching results
-    matched_template_id: Mapped[Optional[int]] = mapped_column(ForeignKey('pdf_templates.id'))
-    matched_template_version: Mapped[Optional[int]] = mapped_column(Integer)  # Which version was used
+    matched_template_id: Mapped[Optional[int]] = mapped_column(ForeignKey('pdf_templates.id'), default=None)
+    matched_template_version: Mapped[Optional[int]] = mapped_column(Integer, default=None)  # Which version was used
 
     # Data extraction results (populated during 'extracting_data' step)
-    extracted_data: Mapped[Optional[str]] = mapped_column(Text)  # JSON: base extracted field values from bounding boxes
+    extracted_data: Mapped[Optional[str]] = mapped_column(Text, default=None)  # JSON: base extracted field values from bounding boxes
 
     # Data transformation audit trail (populated during 'transforming_data' step)
-    transformation_audit: Mapped[Optional[str]] = mapped_column(Text)  # JSON: step-by-step transformation inputs/outputs with rule IDs
+    transformation_audit: Mapped[Optional[str]] = mapped_column(Text, default=None)  # JSON: step-by-step transformation inputs/outputs with rule IDs
 
     # Final transformed data (populated after successful transformation)
-    target_data: Mapped[Optional[str]] = mapped_column(Text)  # JSON: final transformed data ready for order creation
+    target_data: Mapped[Optional[str]] = mapped_column(Text, default=None)  # JSON: final transformed data ready for order creation
 
     # Pipeline execution tracking
-    failed_pipeline_step_id: Mapped[Optional[int]] = mapped_column(ForeignKey('transformation_pipeline_steps.id'))
-    step_execution_log: Mapped[Optional[str]] = mapped_column(Text)  # JSON: step-by-step execution details
+    failed_pipeline_step_id: Mapped[Optional[int]] = mapped_column(ForeignKey('transformation_pipeline_steps.id'), default=None)
+    step_execution_log: Mapped[Optional[str]] = mapped_column(Text, default=None)  # JSON: step-by-step execution details
 
     # Processing timeline
-    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
-    processing_duration_ms: Mapped[Optional[int]] = mapped_column(Integer)
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=None)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=None)
+    processing_duration_ms: Mapped[Optional[int]] = mapped_column(Integer, default=None)
 
     # Order integration
-    order_id: Mapped[Optional[int]] = mapped_column(Integer)  # References orders table (assumed to exist)
+    order_id: Mapped[Optional[int]] = mapped_column(Integer, default=None)  # References orders table (assumed to exist)
 
     # Audit
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)

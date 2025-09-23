@@ -4,7 +4,7 @@ Core models for PDF file processing and object extraction
 """
 
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 
@@ -13,15 +13,10 @@ class PdfObject(BaseModel):
     type: str = Field(..., description="Type of PDF object (text, image, line, etc.)")
     page: int = Field(..., ge=1, description="Page number (1-based)")
     text: str = Field("", description="Object text content")
-    x: float = Field(0, description="X coordinate")
-    y: float = Field(0, description="Y coordinate")
-    width: float = Field(0, description="Object width")
-    height: float = Field(0, description="Object height")
-    bbox: Optional[List[float]] = Field(None, description="Bounding box coordinates")
-    font_name: Optional[str] = Field(None, description="Font name (for text objects)")
-    font_size: Optional[float] = Field(None, description="Font size (for text objects)")
-    char_count: Optional[int] = Field(None, description="Character count (for text objects)")
-    
+    bbox: List[float] = Field(..., min_length=4, max_length=4, description="Bounding box coordinates [x0, y0, x1, y1]")
+    confidence: float = Field(1.0, ge=0, le=1, description="Extraction confidence score")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="Additional object metadata (font, size, etc.)")
+
     class Config:
         from_attributes = True
 

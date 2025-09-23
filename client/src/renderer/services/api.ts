@@ -58,14 +58,6 @@ export interface ApiSystemStats {
   };
 }
 
-export interface ApiEmailStatus {
-  monitoring: boolean;
-  current_email?: string;
-  current_folder?: string;
-  connected: boolean;
-  last_check?: string;
-  error?: string;
-}
 
 export interface ApiTemplate {
   id: number;
@@ -141,40 +133,7 @@ export interface EmailIngestionConfigSummary {
   updated_at: string;
 }
 
-export interface ProcessedEmail {
-  id: number;
-  message_id: string;
-  subject: string;
-  sender_email: string;
-  sender_name?: string;
-  received_date: string;
-  folder_name: string;
-  has_attachments: boolean;
-  attachment_count: number;
-  created_at: string;
-}
 
-export interface EmailIngestionStatus {
-  is_running: boolean;
-  current_config?: {
-    id: number;
-    name: string;
-    email_address: string;
-    folder_name: string;
-  };
-  connection_status: {
-    is_connected: boolean;
-    last_error?: string;
-  };
-  stats: {
-    emails_processed: number;
-    pdfs_found: number;
-    processing_errors: number;
-    last_processed_at?: string;
-    uptime_seconds: number;
-    reconnections: number;
-  };
-}
 
 // API Configuration - Updated for unified ETO server
 const API_BASE_URL = 'http://localhost:8080';
@@ -386,34 +345,6 @@ class ApiClient {
     return this.fetchApi('/api/health/metrics');
   }
 
-  /**
-   * Get Email Status
-   */
-  async getEmailStatus(): Promise<ApiEmailStatus> {
-    return this.fetchApi('/api/emails');
-  }
-
-  /**
-   * Start Email Monitoring
-   */
-  async startEmailMonitoring(params?: {
-    email_address?: string;
-    folder_name?: string;
-  }): Promise<{ success: boolean; message: string }> {
-    return this.fetchApi('/api/emails/process', {
-      method: 'POST',
-      body: JSON.stringify(params || {}),
-    });
-  }
-
-  /**
-   * Stop Email Monitoring
-   */
-  async stopEmailMonitoring(): Promise<{ success: boolean; message: string }> {
-    return this.fetchApi('/api/emails/process', {
-      method: 'DELETE',
-    });
-  }
 
   /**
    * Get Templates
@@ -933,70 +864,7 @@ class ApiClient {
     });
   }
 
-  /**
-   * Start email ingestion service
-   */
-  async startEmailIngestionService(): Promise<{
-    success: boolean;
-    message: string;
-    config_id?: number;
-    folder_name?: string;
-    cursor_id?: number;
-  }> {
-    return this.fetchApi('/api/email-ingestion/start', {
-      method: 'POST',
-    });
-  }
 
-  /**
-   * Stop email ingestion service
-   */
-  async stopEmailIngestionService(): Promise<{
-    success: boolean;
-    message: string;
-  }> {
-    return this.fetchApi('/api/email-ingestion/stop', {
-      method: 'POST',
-    });
-  }
-
-  /**
-   * Get email ingestion service status
-   */
-  async getEmailIngestionStatus(): Promise<{
-    success: boolean;
-    data: EmailIngestionStatus;
-  }> {
-    return this.fetchApi('/api/email-ingestion/status');
-  }
-
-  /**
-   * Get processed emails
-   */
-  async getProcessedEmails(params?: {
-    page?: number;
-    limit?: number;
-    folder?: string;
-  }): Promise<{
-    success: boolean;
-    data: ProcessedEmail[];
-    total: number;
-  }> {
-    const searchParams = new URLSearchParams();
-    
-    if (params?.page) {
-      searchParams.append('page', params.page.toString());
-    }
-    if (params?.limit) {
-      searchParams.append('limit', params.limit.toString());
-    }
-    if (params?.folder) {
-      searchParams.append('folder', params.folder);
-    }
-
-    const endpoint = `/api/email-ingestion/emails${searchParams.toString() ? `?${searchParams}` : ''}`;
-    return this.fetchApi(endpoint);
-  }
 
   /**
    * Test Outlook folder connection

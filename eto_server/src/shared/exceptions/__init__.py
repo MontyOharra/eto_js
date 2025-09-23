@@ -17,6 +17,13 @@ from .domain import (
     InvalidStateError,
     DomainValidationError
 )
+from .eto_processing import (
+    EtoProcessingError,
+    EtoStatusValidationError,
+    EtoTemplateMatchingError,
+    EtoDataExtractionError,
+    EtoTransformationError
+)
 
 __all__ = [
     # Repository
@@ -25,5 +32,8 @@ __all__ = [
     # Service
     'ServiceError', 'BusinessLogicError', 'ExternalServiceError',
     # Domain
-    'DomainError', 'InvalidStateError', 'DomainValidationError'
+    'DomainError', 'InvalidStateError', 'DomainValidationError',
+    # ETO Processing
+    'EtoProcessingError', 'EtoStatusValidationError',
+    'EtoTemplateMatchingError', 'EtoDataExtractionError', 'EtoTransformationError'
 ]

@@ -21,8 +21,14 @@ from .email import (
     Email, EmailCreate, EmailSummary, EmailBase
 )
 
-from .eto import (
-    EtoRunBase, EtoRunCreate, EtoRun, EtoRunSummary
+from .eto_processing import (
+    EtoRunStatus, EtoProcessingStep, EtoErrorType,
+    EtoRunBase, EtoRunCreate, EtoRun, EtoRunSummary,
+    EtoProcessingState, EtoErrorInfo, EtoTemplateMatchingResult,
+    EtoDataExtractionResult, EtoTransformationResult, EtoOrderIntegration,
+    EtoRunStatusUpdate, EtoRunTemplateMatchUpdate, EtoRunDataExtractionUpdate,
+    EtoRunTransformationUpdate, EtoRunOrderUpdate, EtoProcessingStatistics,
+    EtoRunResetResult
 )
 
 from .pdf_file import (
@@ -77,10 +83,26 @@ __all__ = [
     'EmailBase',
   
     # ETO models
+    'EtoRunStatus',
+    'EtoProcessingStep',
+    'EtoErrorType',
     'EtoRunBase',
     'EtoRunCreate',
     'EtoRun',
-    'EtoRunSummary',
+    'EtoRunSummary',    
+    'EtoProcessingState',
+    'EtoErrorInfo',
+    'EtoTemplateMatchingResult',
+    'EtoDataExtractionResult',
+    'EtoTransformationResult',
+    'EtoOrderIntegration',
+    'EtoRunStatusUpdate',
+    'EtoRunTemplateMatchUpdate',
+    'EtoRunDataExtractionUpdate',
+    'EtoRunTransformationUpdate',
+    'EtoRunOrderUpdate',
+    'EtoProcessingStatistics',
+    'EtoRunResetResult',
     
     # PDF file models
     'PdfFileBase',

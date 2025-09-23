@@ -105,16 +105,6 @@ export interface SystemStats {
   };
 }
 
-// Email service status
-export interface EmailServiceStatus {
-  monitoring: boolean;
-  current_email?: string;
-  current_folder?: string;
-  connected: boolean;
-  last_check?: string;
-  error?: string;
-}
-
 // Utility functions for data transformation
 export class EtoDataTransforms {
   /**

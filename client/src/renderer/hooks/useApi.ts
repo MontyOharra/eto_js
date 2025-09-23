@@ -9,7 +9,6 @@ import type {
   EtoRun,
   EtoRunSummary,
   SystemStats,
-  EmailServiceStatus,
   TemplateSummary
 } from '../types/eto';
 import { EtoDataTransforms } from '../types/eto';
@@ -167,120 +166,6 @@ export function useSystemStats(autoRefresh: boolean = false, refreshInterval: nu
   };
 }
 
-// Hook for email service status
-export function useEmailStatus(autoRefresh: boolean = true, refreshInterval: number = 10000) {
-  const [state, setState] = useState<ApiState<EmailServiceStatus>>({
-    data: null,
-    loading: true,
-    error: null,
-    lastFetch: null,
-  });
-
-  const intervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
-
-  const fetchStatus = useCallback(async () => {
-    try {
-      setState(prev => ({ ...prev, loading: prev.data === null, error: null }));
-      
-      const status = await apiClient.getEmailStatus();
-      
-      setState({
-        data: status,
-        loading: false,
-        error: null,
-        lastFetch: new Date(),
-      });
-    } catch (error) {
-      const errorMessage = error instanceof ApiError ? error.message : 'Unknown error occurred';
-      setState(prev => ({
-        ...prev,
-        loading: false,
-        error: errorMessage,
-      }));
-    }
-  }, []);
-
-  // Initial fetch
-  useEffect(() => {
-    fetchStatus();
-  }, [fetchStatus]);
-
-  // Auto refresh setup
-  useEffect(() => {
-    if (autoRefresh && refreshInterval > 0) {
-      intervalRef.current = setInterval(fetchStatus, refreshInterval);
-      
-      return () => {
-        if (intervalRef.current) {
-          clearInterval(intervalRef.current);
-        }
-      };
-    }
-  }, [autoRefresh, refreshInterval, fetchStatus]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-    };
-  }, []);
-
-  return {
-    ...state,
-    refetch: fetchStatus,
-  };
-}
-
-// Hook for email service control actions
-export function useEmailServiceActions() {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const startMonitoring = useCallback(async (params?: {
-    email_address?: string;
-    folder_name?: string;
-  }) => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      await apiClient.startEmailMonitoring(params);
-      return true;
-    } catch (error) {
-      const errorMessage = error instanceof ApiError ? error.message : 'Unknown error occurred';
-      setError(errorMessage);
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const stopMonitoring = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      await apiClient.stopEmailMonitoring();
-      return true;
-    } catch (error) {
-      const errorMessage = error instanceof ApiError ? error.message : 'Unknown error occurred';
-      setError(errorMessage);
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  return {
-    startMonitoring,
-    stopMonitoring,
-    loading,
-    error,
-    clearError: () => setError(null),
-  };
-}
 
 // Hook for server health check
 export function useServerHealth(autoCheck: boolean = true, checkInterval: number = 30000) {

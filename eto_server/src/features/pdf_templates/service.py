@@ -157,9 +157,14 @@ class PdfTemplateService:
             if pdf_obj.type != signature_object.type or pdf_obj.page != signature_object.page:
                 continue
 
-            # Position matching (within tolerance)
-            x_diff = abs(pdf_obj.x - signature_object.x)
-            y_diff = abs(pdf_obj.y - signature_object.y)
+            # Position matching (within tolerance) using bounding box centers
+            pdf_obj_center_x = (pdf_obj.bbox[0] + pdf_obj.bbox[2]) / 2
+            pdf_obj_center_y = (pdf_obj.bbox[1] + pdf_obj.bbox[3]) / 2
+            signature_center_x = (signature_object.bbox[0] + signature_object.bbox[2]) / 2
+            signature_center_y = (signature_object.bbox[1] + signature_object.bbox[3]) / 2
+
+            x_diff = abs(pdf_obj_center_x - signature_center_x)
+            y_diff = abs(pdf_obj_center_y - signature_center_y)
 
             if x_diff <= position_tolerance and y_diff <= position_tolerance:
                 # Content matching for text objects
@@ -340,6 +345,146 @@ class PdfTemplateService:
     def update_template(self, template_id: int, update_data: PdfTemplateUpdate) -> Optional[PdfTemplate]:
         """Update a PDF template with the provided data"""
         return self.pdf_template_repo.update(template_id, update_data)
+
+    def extract_data_from_template(self, template_id: int, pdf_objects: List[PdfObject]) -> Dict[str, Any]:
+        """
+        Extract data from PDF objects using a specific template
+
+        Args:
+            template_id: ID of the template to use for extraction
+            pdf_objects: List of PDF objects to extract data from
+
+        Returns:
+            Dictionary with extracted field data {field_label: extracted_value}
+
+        Raises:
+            ObjectNotFoundError: If template doesn't exist
+            ValueError: If template has no extraction fields
+        """
+        try:
+            # Get current template version
+            current_version = self.get_current_version(template_id)
+            if not current_version:
+                raise ObjectNotFoundError("PdfTemplate", template_id)
+
+            if not current_version.extraction_fields:
+                logger.warning(f"Template {template_id} has no extraction fields")
+                return {}
+
+            extracted_data = {}
+
+            # Extract data for each field defined in the template
+            for field in current_version.extraction_fields:
+                try:
+                    extracted_value = self._extract_field_value(field, pdf_objects)
+                    extracted_data[field.label] = extracted_value
+
+                    logger.debug(f"Extracted field '{field.label}': '{extracted_value}'")
+
+                except Exception as e:
+                    logger.warning(f"Failed to extract field '{field.label}': {e}")
+                    # Handle required fields
+                    if field.required:
+                        extracted_data[field.label] = None
+                        logger.error(f"Required field '{field.label}' extraction failed")
+                    else:
+                        extracted_data[field.label] = ""
+
+            logger.info(f"Data extraction completed for template {template_id}: {len(extracted_data)} fields")
+            return extracted_data
+
+        except ObjectNotFoundError:
+            raise
+        except Exception as e:
+            logger.error(f"Error extracting data with template {template_id}: {e}")
+            raise ValueError(f"Data extraction failed: {str(e)}")
+
+    def _extract_field_value(self, field: ExtractionField, pdf_objects: List[PdfObject]) -> str:
+        """
+        Extract value for a specific field from PDF objects
+
+        Args:
+            field: Extraction field definition with bounding box and validation rules
+            pdf_objects: List of PDF objects to search
+
+        Returns:
+            Extracted text value for the field
+        """
+        # Find objects that fall within the extraction field's bounding box
+        matching_objects = self._find_objects_in_bounding_box(field, pdf_objects)
+
+        if not matching_objects:
+            logger.debug(f"No objects found in bounding box for field '{field.label}'")
+            return ""
+
+        # Extract and aggregate text from matching objects
+        text_values = []
+        for obj in matching_objects:
+            if obj.text and obj.text.strip():
+                text_values.append(obj.text.strip())
+
+        # Combine text values (sorted by position for reading order)
+        if text_values:
+            # Sort by position (top to bottom, left to right)
+            matching_objects_with_text = [
+                obj for obj in matching_objects
+                if obj.text and obj.text.strip()
+            ]
+            matching_objects_with_text.sort(key=lambda obj: (obj.bbox[1], obj.bbox[0]))  # y, then x
+
+            combined_text = " ".join([obj.text.strip() for obj in matching_objects_with_text])
+
+            # Apply validation if specified
+            if field.validation_regex:
+                import re
+                if not re.match(field.validation_regex, combined_text):
+                    logger.warning(f"Field '{field.label}' value '{combined_text}' failed regex validation")
+
+            return combined_text
+
+        return ""
+
+    def _find_objects_in_bounding_box(self, field: ExtractionField, pdf_objects: List[PdfObject]) -> List[PdfObject]:
+        """
+        Find PDF objects that fall within the extraction field's bounding box
+
+        Args:
+            field: Extraction field with bounding box coordinates
+            pdf_objects: List of PDF objects to check
+
+        Returns:
+            List of PDF objects that intersect with the bounding box
+        """
+        matching_objects = []
+        field_bbox = field.bounding_box  # [x0, y0, x1, y1]
+
+        for obj in pdf_objects:
+            # Only check objects on the correct page
+            if obj.page != field.page:
+                continue
+
+            # Check if object's bounding box intersects with field's bounding box
+            if self._bounding_boxes_intersect(obj.bbox, field_bbox):
+                matching_objects.append(obj)
+
+        return matching_objects
+
+    def _bounding_boxes_intersect(self, bbox1: List[float], bbox2: List[float]) -> bool:
+        """
+        Check if two bounding boxes intersect
+
+        Args:
+            bbox1: First bounding box [x0, y0, x1, y1]
+            bbox2: Second bounding box [x0, y0, x1, y1]
+
+        Returns:
+            True if bounding boxes intersect, False otherwise
+        """
+        # Bounding boxes intersect if they overlap in both x and y dimensions
+        x_overlap = bbox1[0] < bbox2[2] and bbox2[0] < bbox1[2]  # x0 < x1' and x0' < x1
+        y_overlap = bbox1[1] < bbox2[3] and bbox2[1] < bbox1[3]  # y0 < y1' and y0' < y1
+
+        return x_overlap and y_overlap
 
     def is_healthy(self) -> bool:
         """

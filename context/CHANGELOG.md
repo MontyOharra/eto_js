@@ -5,6 +5,139 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-09-22 19:00] — Email Config Persistence Fix: Separate Runtime vs Database State
+### Spec / Intent
+- Fix email config deactivation bug where app shutdown incorrectly changes database config status
+- Separate runtime listener management from persistent configuration state
+- Ensure email configs remain active in database during app restarts for proper startup recovery
+- Distinguish between user-initiated deactivation vs system shutdown operations
+
+### Changes Made
+- **New Method `stop_config_listeners()`**: Stops runtime listeners and integrations WITHOUT changing database config status. Used during app shutdown to preserve config state for startup recovery.
+- **Enhanced `deactivate_config()`**: Now clearly documented as user-initiated action that changes both runtime state AND database status. Added comprehensive logging to distinguish from system shutdown.
+- **New Method `stop_all_listeners()`**: Bulk operation to stop all active listeners while preserving database config statuses. Includes proper error handling and detailed logging.
+- **Updated `shutdown()` Method**: Now calls `stop_all_listeners()` instead of `deactivate_config()` to preserve config database status during app shutdown.
+- **Enhanced Logging**: Clear distinction between "stopping listeners" (runtime cleanup) vs "deactivating config" (persistent state change) with detailed context logging.
+- File: `features/email_ingestion/service.py`
+
+### Next Actions
+- Test app shutdown and startup cycle to verify config persistence
+- Verify startup recovery properly restarts all previously active configs
+- Confirm user-initiated deactivation still works correctly
+
+### Notes
+- **Runtime vs Persistent State**: Clean separation between stopping listeners/threads (runtime) and changing config activation status (database)
+- **Startup Recovery**: Configs now remain active in database during app restarts, enabling proper automatic recovery
+- **User Experience**: User-initiated deactivations continue to work as expected, but system shutdowns no longer affect config states
+- **Error Resilience**: Individual listener stop failures don't prevent other listeners from stopping gracefully
+
+---
+
+## [2025-09-22 18:00] — ETO Service Fixes and Timezone Handling
+### Spec / Intent
+- Remove "New" suffix from ETO service class name for clean production naming
+- Fix timezone-aware vs timezone-naive datetime comparison errors in duration calculations
+- Resolve import errors and method signature mismatches in email processing pipeline
+
+### Changes Made
+- **Service Naming**: Renamed `EtoProcessingServiceNew` to `EtoProcessingService` across all references including class definition, imports, service container, and module exports for clean production naming.
+- **PDF Service Integration**: Fixed `store_pdf()` method call in email ingestion to use correct parameter names (`original_filename` instead of `filename`, removed invalid `metadata` parameter).
+- **Timezone Handling**: Added `_calculate_duration_ms()` helper function to handle timezone-aware vs timezone-naive datetime comparisons that were causing "can't subtract offset-naive and offset-aware datetimes" errors during ETO run duration calculations.
+- Files: `features/eto_processing/service.py`, `features/eto_processing/__init__.py`, `shared/services/service_container.py`, `features/email_ingestion/service.py`, `shared/database/repositories/eto_run.py`
+
+### Next Actions
+- Test complete email-to-ETO pipeline with timezone fixes
+- Verify ETO processing duration calculations work correctly
+- Monitor for any remaining datetime-related issues
+
+### Notes
+- **Production Ready**: Service now has clean naming without temporary suffixes
+- **Timezone Safety**: Duration calculations now handle database datetime round-trips that lose timezone information
+- **Method Compatibility**: Email ingestion now correctly calls PDF processing service methods
+- **Error Resolution**: Fixed import errors and parameter mismatches preventing ETO processing from running
+
+---
+
+## [2025-09-22 17:00] — ETO Service Integration and Email Processing Pipeline
+### Spec / Intent
+- Register new ETO processing service in global service container for dependency injection
+- Integrate ETO processing into email ingestion pipeline for automatic PDF processing
+- Complete end-to-end email-to-order workflow from email attachment to ETO processing
+- Implement comprehensive PDF storage and ETO pipeline triggering after email ingestion
+
+### Changes Made
+- **Service Container Registration**: Uncommented and enabled ETO processing service in service container with proper initialization using `EtoProcessingServiceNew`. Added service to global exports and getter functions for dependency injection.
+- **Email Ingestion Integration**: Implemented complete `_process_pdf_attachment()` method that stores PDFs using PDF processing service and triggers ETO processing pipeline. Added proper error handling and comprehensive logging for PDF processing workflow.
+- **End-to-End Pipeline**: Email ingestion now automatically stores PDF attachments and initiates ETO processing, creating complete workflow from email attachment to potential order creation with proper status tracking and error handling.
+- Files: `shared/services/service_container.py`, `shared/services/__init__.py`, `features/email_ingestion/service.py`
+
+### Next Actions
+- Test complete email-to-ETO pipeline end-to-end
+- Monitor ETO processing performance and error rates
+- Verify service container initialization during application startup
+
+### Notes
+- **Automatic Processing**: Email attachments now automatically trigger complete ETO pipeline without manual intervention
+- **Service Integration**: ETO service properly registered and accessible throughout application via dependency injection
+- **Error Resilience**: PDF processing failures don't break email ingestion - errors logged but processing continues
+- **Rich Metadata**: PDF storage includes email context (sender, received date, original filename) for traceability
+- **Status Awareness**: Different ETO processing outcomes (success, needs_template, failure) properly logged with appropriate log levels
+
+---
+
+## [2025-09-22 16:00] — ETO Processing Service Error Handling Refactoring
+### Spec / Intent
+- Implement fail-fast error handling with immediate pipeline termination on failures
+- Add comprehensive status validation to prevent invalid state transitions
+- Create ETO-specific exception hierarchy for better error categorization
+- Centralize error handling in main processing method with detailed error context
+- Remove internal try/catch blocks from individual step methods to allow proper error bubbling
+
+### Changes Made
+- **Exception Architecture**: Created `EtoProcessingError` hierarchy with specific exceptions for template matching, data extraction, and transformation errors. Added `EtoStatusValidationError` for state validation failures.
+- **Status Validation Framework**: Added comprehensive validation methods that check prerequisites before each step - template matching requires PROCESSING status, data extraction requires matched template, transformation requires extracted data.
+- **Individual Step Methods**: Removed all internal try/catch blocks, added status validation at start of each method, replaced error returns with exception throwing for immediate failure detection.
+- **Main Processing Method**: Completely refactored with single try/catch block, step tracking for error context, immediate processing termination on any failure, centralized error handling with rich error details.
+- **Centralized Error Handler**: New `_handle_centralized_processing_error` method that builds comprehensive error context including failed step, processing step, validation details, and original exception chains.
+- **Reprocessing Logic**: Updated `_continue_processing` with same error handling patterns for consistent failure management during reprocessing operations.
+- Files: `shared/exceptions/eto_processing.py` (new), `shared/exceptions/__init__.py`, `features/eto_processing/service_new.py`
+
+### Next Actions
+- Test complete ETO processing pipeline with new error handling
+- Verify status validation prevents invalid state transitions
+- Test reprocessing functionality with improved error handling
+
+### Notes
+- **Fail Fast Philosophy**: Processing stops immediately when any error occurs, preventing data corruption from partial processing
+- **Rich Error Context**: Error details include failed step, processing step, validation failures, and complete exception chains for debugging
+- **Status Machine Enforcement**: Strict validation ensures ETO runs can only transition through valid states with proper prerequisites
+- **Centralized Error Management**: Single point of error handling with consistent error recording and logging patterns
+- **Exception Hierarchy**: Type-safe error handling with specific exception types for different failure categories
+
+---
+
+## [2025-09-22 15:00] — ETO Database Model Defaults Fix
+### Spec / Intent
+- Fix EtoRunModel to have proper default values for all fields to enable successful record creation
+- Ensure status initializes to "not_started" and all nullable fields default to None
+- Resolve creation failures where only pdf_file_id is passed with exclude_unset=True
+
+### Changes Made
+- Files: `eto_server/src/shared/database/models.py`
+- Summary: Added default values to all EtoRunModel fields - status defaults to "not_started", all nullable fields (processing_step, error_type, error_message, extracted_data, etc.) default to None. This enables successful ETO run creation with minimal required data.
+
+### Next Actions
+- Test ETO run creation to verify database record creation works correctly
+- Test complete ETO processing pipeline from PDF file to order creation
+
+### Notes
+- Database model now supports creation with only pdf_file_id parameter
+- All nullable fields properly initialized with None defaults
+- Status field automatically starts at "not_started" for proper state management
+- Fixes critical database creation issue identified in ETO processing service
+
+---
+
 ## [2025-09-22 14:00] — PDF Processing Service Consolidation
 ### Spec / Intent
 - Consolidate PDF processing into single unified service with utilities

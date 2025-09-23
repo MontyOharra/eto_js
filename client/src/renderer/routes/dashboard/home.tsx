@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useSystemStats, useEmailStatus, useEtoRuns, useServerHealth } from "../../hooks/useApi";
+import { useSystemStats, useEtoRuns, useServerHealth } from "../../hooks/useApi";
 
 export const Route = createFileRoute("/dashboard/home")({
   component: Home,
@@ -7,7 +7,6 @@ export const Route = createFileRoute("/dashboard/home")({
 
 function Home() {
   const { data: stats, loading: statsLoading, error: statsError } = useSystemStats(true, 30000);
-  const { data: emailStatus, loading: emailLoading } = useEmailStatus(true, 10000);
   const { data: recentRuns } = useEtoRuns({ limit: 5 });
   const { isServerOnline } = useServerHealth();
 
@@ -44,21 +43,6 @@ function Home() {
           </div>
         </div>
 
-        {/* Email Monitoring */}
-        <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-400 mb-1">Email Monitoring</p>
-              <p className={`text-lg font-semibold ${emailStatus?.monitoring ? 'text-green-400' : 'text-yellow-400'}`}>
-                {emailLoading ? 'Loading...' : emailStatus?.monitoring ? 'Active' : 'Stopped'}
-              </p>
-              {emailStatus?.current_email && (
-                <p className="text-xs text-gray-500 mt-1">{emailStatus.current_email}</p>
-              )}
-            </div>
-            <div className={`w-4 h-4 rounded-full ${emailStatus?.monitoring ? 'bg-green-400' : 'bg-yellow-400'}`}></div>
-          </div>
-        </div>
 
         {/* Processing Success Rate */}
         <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">

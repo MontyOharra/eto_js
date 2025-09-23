@@ -153,6 +153,21 @@ class PdfTemplateMatchResult(BaseModel):
     coverage_percentage: Optional[float] = None
     unmatched_object_count: Optional[int] = None
     match_details: Optional[str] = None
-    
+
+    def get_match_data(self) -> tuple[int, int]:
+        """
+        Get matched template data with type safety
+
+        Returns:
+            Tuple of (template_id, template_version)
+
+        Raises:
+            ValueError: If no template was found
+        """
+        if not self.template_found or self.template_id is None or self.template_version is None:
+            raise ValueError("No template match found - cannot get match data")
+
+        return self.template_id, self.template_version
+
     class Config:
         from_attributes = True

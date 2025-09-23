@@ -1,6 +1,6 @@
 """
-ETO Run Repository
-Data access layer for EtoRunModel model operations
+ETO Run Repository - New Implementation
+Data access layer for EtoRunModel operations based on eto_processing models
 """
 
 import json
@@ -8,527 +8,596 @@ import logging
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy import func, case
+from sqlalchemy import func, case, update, delete
 
 from shared.database.repositories.base import BaseRepository
+from shared.database.models import EtoRunModel
 from shared.exceptions import RepositoryError, ObjectNotFoundError, ValidationError
-from shared.models import EtoRun
+from shared.models import (
+    EtoRun, EtoRunCreate, EtoRunSummary, EtoRunStatus, EtoProcessingStep, EtoErrorType,
+    EtoRunTemplateMatchUpdate, EtoRunDataExtractionUpdate, EtoRunTransformationUpdate,
+    EtoRunOrderUpdate, EtoRunResetResult
+)
 
 
 logger = logging.getLogger(__name__)
 
 
+def _calculate_duration_ms(current_time: datetime, started_at: datetime) -> int:
+    """
+    Calculate duration in milliseconds, handling timezone-aware vs timezone-naive datetime objects
+
+    Args:
+        current_time: Current time (typically timezone-aware)
+        started_at: Start time (may be timezone-naive after DB round-trip)
+
+    Returns:
+        Duration in milliseconds as integer
+    """
+    # Ensure both datetimes are timezone-aware for comparison
+    if started_at.tzinfo is None:
+        # Assume UTC if no timezone info (common after DB retrieval)
+        started_at = started_at.replace(tzinfo=timezone.utc)
+
+    if current_time.tzinfo is None:
+        current_time = current_time.replace(tzinfo=timezone.utc)
+
+    duration_seconds = (current_time - started_at).total_seconds()
+    return int(duration_seconds * 1000)
+
+
 class EtoRunRepository(BaseRepository[EtoRunModel]):
-    """Repository for EtoRunModel model operations"""
+    """Repository for EtoRunModel operations using eto_processing models"""
 
     @property
     def model_class(self):
-        return EtoRunMod
+        return EtoRunModel
 
     def _convert_to_domain_object(self, eto_run_model: EtoRunModel) -> EtoRun:
-        """Convert database model to domain object while session is active"""
-        eto_run_data = {
-            "id": getattr(eto_run_model, "id"),
-            "email_id": getattr(eto_run_model, "email_id"),
-            "pdf_file_id": getattr(eto_run_model, "pdf_file_id"),
-            "status": getattr(eto_run_model, "status"),
-            "created_at": getattr(eto_run_model, "created_at"),
-            "updated_at": getattr(eto_run_model, "updated_at"),
-            "processing_step": getattr(eto_run_model, "processing_step"),
-            "error_type": getattr(eto_run_model, "error_type"),
-            "error_message": getattr(eto_run_model, "error_message"),
-            "error_details": getattr(eto_run_model, "error_details"),
-            "matched_template_id": getattr(eto_run_model, "matched_template_id"),
-            "template_version": getattr(eto_run_model, "template_version"),
-            "template_match_coverage": getattr(
-                eto_run_model, "template_match_coverage"
-            ),
-            "unmatched_object_count": getattr(eto_run_model, "unmatched_object_count"),
-            "extracted_data": getattr(eto_run_model, "extracted_data"),
-            "transformation_audit": getattr(eto_run_model, "transformation_audit"),
-            "target_data": getattr(eto_run_model, "target_data"),
-            "failed_step_id": getattr(eto_run_model, "failed_pipeline_step_id"),
-            "step_execution_log": getattr(eto_run_model, "step_execution_log"),
-            "started_at": getattr(eto_run_model, "started_at"),
-            "completed_at": getattr(eto_run_model, "completed_at"),
-            "processing_duration_ms": getattr(eto_run_model, "processing_duration_ms"),
-            "order_id": getattr(eto_run_model, "order_id"),
-        }
-        return EtoRun(**eto_run_data)
-    
-    def create(self, eto_run_data: Dict[str, Any]) -> EtoRun:
-        """Create a new ETO run record"""
-        if not eto_run_data:
-            raise ValueError("ETO run data dictionary cannot be empty")
-            
+        """Convert database model to domain object"""
+        return EtoRun.from_db_model(eto_run_model)
+
+    # ========== Basic CRUD Operations ==========
+
+    def create(self, eto_run_create: EtoRunCreate) -> EtoRun:
+        """
+        Create a new ETO run with default values
+        Only pdf_file_id is required - all other fields have defaults
+        """
         try:
             with self.connection_manager.session_scope() as session:
-                # Create new model
-                model = self.model_class(**eto_run_data)
-                
-                # Add to session and flush to get ID
+                # Create model with defaults
+                model_data = eto_run_create.model_dump_for_db()
+
+                # Ensure default status is set
+                model_data['status'] = EtoRunStatus.NOT_STARTED.value
+
+                # Create and save model
+                model = self.model_class(**model_data)
                 session.add(model)
-                session.flush()
-                
-                # Refresh to get updated fields
-                session.refresh(model)
-                
-                # Convert to domain object before session closes
-                domain_run = self._convert_to_domain_object(model)
-                return domain_run
-                
-        except SQLAlchemyError as e:  
-            logger.error(f"Error creating ETO run: {e}")
+                session.flush()  # Get ID
+
+                logger.debug(f"Created ETO run {model.id} for PDF {eto_run_create.pdf_file_id}")
+
+                return self._convert_to_domain_object(model)
+
+        except SQLAlchemyError as e:
+            logger.error(f"Error creating ETO run for PDF {eto_run_create.pdf_file_id}: {e}")
             raise RepositoryError(f"Failed to create ETO run: {e}") from e
 
-    def get_by_id(self, id: int) -> Optional[EtoRun]:
-        """Override BaseRepository method to return domain object"""
+    def get_by_id(self, eto_run_id: int) -> Optional[EtoRun]:
+        """Get ETO run by ID"""
         try:
             with self.connection_manager.session_scope() as session:
-                # Get the model from the session using SQLAlchemy 2.x pattern
-                model = session.get(self.model_class, id)
+                model = session.get(self.model_class, eto_run_id)
 
                 if model:
-                    # Convert to domain object while session is still active
-                    logger.debug(
-                        f"Retrieved ETO run: {getattr(model, 'id')} for email {getattr(model, 'email_id')}"
-                    )
+                    logger.debug(f"Retrieved ETO run {eto_run_id}")
                     return self._convert_to_domain_object(model)
-                else:
-                    return None
-                
+                return None
+
         except SQLAlchemyError as e:
-            logger.error(f"Error getting ETO run {id}: {e}")
+            logger.error(f"Error getting ETO run {eto_run_id}: {e}")
             raise RepositoryError(f"Failed to get ETO run: {e}") from e
 
-    def get_by_status(self, status: str, limit: Optional[int] = None) -> List[EtoRun]:
-        """Get ETO runs by status"""
-        if not status:
-            return []
-
-        try:
-            with self.connection_manager.session_scope() as session:
-                query = (
-                    session.query(self.model_class)
-                    .filter(self.model_class.status == status)
-                    .order_by(self.model_class.created_at.desc())
-                )
-
-                if limit is not None:
-                    query = query.limit(limit)
-
-                models = query.all()
-
-                # Convert all models to domain objects
-                return [self._convert_to_domain_object(model) for model in models]
-
-        except SQLAlchemyError as e:
-            logger.error(f"Error getting ETO runs by status {status}: {e}")
-            raise RepositoryError(f"Failed to get ETO runs by status: {e}") from e
-
-    def get_by_email_id(self, email_id: int) -> List[EtoRun]:
-        """Get all ETO runs for a specific email"""
-        if email_id is None:
-            return []
-
-        try:
-            with self.connection_manager.session_scope() as session:
-                models = (
-                    session.query(self.model_class)
-                    .filter(self.model_class.email_id == email_id)
-                    .all()
-                )
-
-                # Convert all models to domain objects
-                return [self._convert_to_domain_object(model) for model in models]
-
-        except SQLAlchemyError as e:
-            logger.error(f"Error getting ETO runs for email {email_id}: {e}")
-            raise RepositoryError(f"Failed to get ETO runs for email: {e}") from e
-
-    def get_by_pdf_id(self, pdf_file_id: int) -> List[EtoRun]: 
+    def get_by_pdf_file_id(self, pdf_file_id: int) -> List[EtoRun]:
         """Get all ETO runs for a specific PDF file"""
-        if pdf_file_id is None:
-            return []
-
         try:
             with self.connection_manager.session_scope() as session:
                 models = (
                     session.query(self.model_class)
                     .filter(self.model_class.pdf_file_id == pdf_file_id)
+                    .order_by(self.model_class.created_at.desc())
                     .all()
                 )
 
-                # Convert all models to domain objects
+                logger.debug(f"Retrieved {len(models)} ETO runs for PDF {pdf_file_id}")
                 return [self._convert_to_domain_object(model) for model in models]
 
         except SQLAlchemyError as e:
             logger.error(f"Error getting ETO runs for PDF {pdf_file_id}: {e}")
             raise RepositoryError(f"Failed to get ETO runs for PDF: {e}") from e
 
-    def get_by_template_id(self, template_id: int) -> List[EtoRun]:
-        """Get all ETO runs that used a specific template"""
-        if template_id is None:
-            return []
+    # ========== User Dashboard Functionality ==========
 
+    def get_runs_by_status(self, status: EtoRunStatus, limit: Optional[int] = None) -> List[EtoRunSummary]:
+        """Get ETO runs by status for dashboard display"""
+        try:
+            with self.connection_manager.session_scope() as session:
+                query = (
+                    session.query(self.model_class)
+                    .filter(self.model_class.status == status.value)
+                    .order_by(self.model_class.created_at.desc())
+                )
+
+                if limit:
+                    query = query.limit(limit)
+
+                models = query.all()
+
+                # Convert to summaries for efficient dashboard display
+                summaries = [
+                    EtoRunSummary.from_eto_run(self._convert_to_domain_object(model))
+                    for model in models
+                ]
+
+                logger.debug(f"Retrieved {len(summaries)} ETO runs with status {status.value}")
+                return summaries
+
+        except SQLAlchemyError as e:
+            logger.error(f"Error getting ETO runs by status {status.value}: {e}")
+            raise RepositoryError(f"Failed to get ETO runs by status: {e}") from e
+
+    def get_all_runs_grouped_by_status(self) -> Dict[str, List[EtoRunSummary]]:
+        """Get all runs grouped by status for dashboard"""
         try:
             with self.connection_manager.session_scope() as session:
                 models = (
                     session.query(self.model_class)
-                    .filter(self.model_class.matched_template_id == template_id)
+                    .order_by(self.model_class.status, self.model_class.created_at.desc())
                     .all()
                 )
 
-                # Convert all models to domain objects
-                return [self._convert_to_domain_object(model) for model in models]
+                # Group by status
+                grouped_runs = {}
+                for model in models:
+                    domain_obj = self._convert_to_domain_object(model)
+                    summary = EtoRunSummary.from_eto_run(domain_obj)
+
+                    status_key = model.status
+                    if status_key not in grouped_runs:
+                        grouped_runs[status_key] = []
+                    grouped_runs[status_key].append(summary)
+
+                logger.debug(f"Retrieved {len(models)} ETO runs grouped by status")
+                return grouped_runs
 
         except SQLAlchemyError as e:
-            logger.error(f"Error getting ETO runs for template {template_id}: {e}")
-            raise RepositoryError(f"Failed to get ETO runs for template: {e}") from e
+            logger.error(f"Error getting ETO runs grouped by status: {e}")
+            raise RepositoryError(f"Failed to get ETO runs grouped by status: {e}") from e
 
-    def update_status(self, id: int, status: EtoRunStatus) -> Optional[EtoRun]:
-        """Update run status and related fields"""
-        if id is None or not status:
-            raise ValueError("run_id and status are required")
+    # ========== User Reprocessing Functionality ==========
 
+    def reset_single_run_for_reprocessing(self, eto_run_id: int) -> EtoRun:
+        """Reset individual run to not_started status for reprocessing"""
         try:
             with self.connection_manager.session_scope() as session:
-                model = session.get(self.model_class, id)
-                
-                if not model:
-                    return None
-                
-                current_time = datetime.now(timezone.utc)
-                
-                setattr(model, "status", status)
-                setattr(model, "updated_at", current_time)
-                
-                if status == "processing":
-                    setattr(model, "started_at", current_time)
-                    setattr(model, "processing_step", "template_matching")
-                elif status in ["needs_template", "failed", "success"]:
-                    processing_time = 1000 * (getattr(model, "started_at") - current_time)
-                    setattr(model, "completed_at", current_time)
-                    setattr(model, "processing_duration_ms", processing_time)
-                    setattr(model, "processing_step", None)
-                elif status == "not_started":
-                    setattr(model, "processing_step", None)
-                    setattr(model, "error_type", None)
-                    setattr(model, "error_message", None)
-                    setattr(model, "error_details", None)
-                    setattr(model, "matched_template_id", None)
-                    setattr(model, "matched_template_version", None)
-                    setattr(model, "extracted_data", None)
-                    setattr(model, "transformation_audit", None)
-                    setattr(model, "target_data", None)
-                    setattr(model, "failed_pipeline_step_id", None)
-                    setattr(model, "step_execution_log", None)
-                    setattr(model, "started_at", None)
-                    setattr(model, "completed_at", None)
-                    setattr(model, "processing_duration_ms", None)
-                    setattr(model, "order_id", None)
-        
-                return self._convert_to_domain_object(model)
-            
-        except SQLAlchemyError as e:
-            logger.error(f"Error setting status for eto_run {id}: {e}")
-            raise RepositoryError(f"Failed to set status: {e}") from e        
-
-    def update_processing_step(self, id: int, processing_step: EtoProcessingStep) -> Optional[EtoRun]:
-        try:
-            with self.connection_manager.session_scope() as session:
-                model = session.get(self.model_class, id)
-                
-                if not model:
-                    return None
-                if getattr(model, "status") != "processing":
-                    raise RepositoryError(f"Cannot update processing_step for eto_run: {id}. Status must be 'processing'")         
-
-                setattr(model, "processing_step", processing_step)
-                
-                return self._convert_to_domain_object(model)
-            
-        except SQLAlchemyError as e:
-            logger.error(f"Erorr setting processing step for eto_run {id}: {e}")
-            raise RepositoryError(f"Failed to set processing step: {e}") from e
-
-    def set_template_match(self, id: int, template_id : int, template_version: int) -> Optional[EtoRun]:
-        try:
-            with self.connection_manager.session_scope() as session:
-                model = session.get(self.model_class, id)
+                model = session.get(self.model_class, eto_run_id)
 
                 if not model:
-                    return None
+                    raise ObjectNotFoundError("EtoRun", eto_run_id)
 
-                setattr(model, "matched_template_id", template_id)
-                setattr(model, "matched_template_version", template_version)
-                setattr(model, "processing_step", "extracting_data")
-                
+                # Check if run can be reprocessed
+                current_status = EtoRunStatus(model.status)
+                if not current_status in [EtoRunStatus.FAILURE, EtoRunStatus.NEEDS_TEMPLATE]:
+                    raise ValidationError(f"Cannot reprocess ETO run {eto_run_id}: status is {current_status.value}")
+
+                # Reset all processing fields to defaults
+                self._reset_processing_fields(model)
+
+                logger.info(f"Reset ETO run {eto_run_id} for reprocessing")
                 return self._convert_to_domain_object(model)
-            
-        except SQLAlchemyError as e:
-            logger.error(f"Error setting template match for eto_run {id}: {e}")
-            raise RepositoryError(f"Failed to set template match: {e}") from e     
-            
-    def set_extracted_data(self, id: int, data_extracted: Dict[str, Any]) -> Optional[EtoRun]:
-        try:
-            with self.connection_manager.session_scope() as session:
-                model = session.get(self.model_class, id)
-
-                if not model:
-                    return None
-
-                setattr(model, "matched_template_id", id)
-                setattr(model, "matched_template_version", id)
-                
-                return self._convert_to_domain_object(model)
-            
-        except SQLAlchemyError as e:
-            logger.error(f"Error setting template match for eto_run {id}: {e}")
-            raise RepositoryError(f"Failed to set template match: {e}") from e     
-
-    def mark_as_failed(
-        self,
-        id: int,
-        error_message: str,
-        error_type: EtoErrorType,
-        error_details: Dict[str, Any],
-    ) -> Optional[EtoRun]:
-        """Mark run as failed with error details"""
-        if id is None or not error_message:
-            raise ValueError("run_id and error_message are required")
-
-        # Convert error_details dict to JSON string for database storage
-        error_details_json = json.dumps(error_details) if error_details else None
-
-        update_data = {
-            "error_message": error_message,
-            "error_type": error_type,
-            "error_details": error_details_json,
-            "processing_step": None,  # Clear processing step on failure
-        }
-
-        return self.update_status(id, "failure", **update_data)
-
-    def get_with_filters(
-        self,
-        status: Optional[str] = None,
-        email_id: Optional[int] = None,
-        template_id: Optional[int] = None,
-        has_errors: Optional[bool] = None,
-        date_from: Optional[datetime] = None,
-        date_to: Optional[datetime] = None,
-        page: int = 1,
-        limit: int = 20,
-        order_by: str = "created_at",
-        desc: bool = True
-    ) -> Dict[str, Any]:
-        """Get ETO runs with filtering and pagination"""
-        try:
-            with self.connection_manager.session_scope() as session:
-                # Base query
-                query = session.query(self.model_class)
-
-                # Apply filters
-                if status:
-                    query = query.filter(self.model_class.status == status)
-
-                if email_id:
-                    query = query.filter(self.model_class.email_id == email_id)
-
-                if template_id:
-                    query = query.filter(self.model_class.matched_template_id == template_id)
-
-                if has_errors is not None:
-                    if has_errors:
-                        query = query.filter(self.model_class.error_message.isnot(None))
-                    else:
-                        query = query.filter(self.model_class.error_message.is_(None))
-
-                if date_from:
-                    query = query.filter(self.model_class.created_at >= date_from)
-
-                if date_to:
-                    query = query.filter(self.model_class.created_at <= date_to)
-
-                # Get total count before pagination
-                total_count = query.count()
-
-                # Apply sorting
-                if hasattr(self.model_class, order_by):
-                    column = getattr(self.model_class, order_by)
-                    query = query.order_by(column.desc() if desc else column)
-
-                # Apply pagination
-                offset = (page - 1) * limit
-                paginated_query = query.offset(offset).limit(limit)
-
-                # Execute query and convert to domain objects
-                models = paginated_query.all()
-                runs = [self._convert_to_domain_object(model) for model in models]
-
-                # Calculate pagination metadata
-                total_pages = (total_count + limit - 1) // limit
-
-                return {
-                    "runs": runs,
-                    "total": total_count,
-                    "page": page,
-                    "limit": limit,
-                    "total_pages": total_pages
-                }
 
         except SQLAlchemyError as e:
-            logger.error(f"Error getting ETO runs with filters: {e}")
-            raise RepositoryError(f"Failed to get ETO runs with filters: {e}") from e
+            logger.error(f"Error resetting ETO run {eto_run_id} for reprocessing: {e}")
+            raise RepositoryError(f"Failed to reset ETO run for reprocessing: {e}") from e
 
-    def get_statistics(self) -> Dict[str, Any]:
-        """Get processing statistics for ETO runs"""
+    def reset_failed_runs_for_reprocessing(self) -> EtoRunResetResult:
+        """Reset all failed runs to not_started status"""
+        return self._bulk_reset_runs([EtoRunStatus.FAILURE])
+
+    def reset_needs_template_runs_for_reprocessing(self) -> EtoRunResetResult:
+        """Reset all needs_template runs to not_started status"""
+        return self._bulk_reset_runs([EtoRunStatus.NEEDS_TEMPLATE])
+
+    def reset_failed_and_needs_template_runs_for_reprocessing(self) -> EtoRunResetResult:
+        """Reset all failed and needs_template runs to not_started status"""
+        return self._bulk_reset_runs([EtoRunStatus.FAILURE, EtoRunStatus.NEEDS_TEMPLATE])
+
+    def reset_selected_runs_for_reprocessing(self, eto_run_ids: List[int]) -> EtoRunResetResult:
+        """Reset selected runs to not_started status"""
+        if not eto_run_ids:
+            return EtoRunResetResult(
+                failure_count=0,
+                needs_template_count=0,
+                total_reset=0
+            )
+
         try:
             with self.connection_manager.session_scope() as session:
-                # Basic counts by status
-                status_counts = (
-                    session.query(
-                        self.model_class.status,
-                        func.count(self.model_class.id).label('count')
+                # Get current status counts
+                eligible_runs = (
+                    session.query(self.model_class)
+                    .filter(
+                        self.model_class.id.in_(eto_run_ids),
+                        self.model_class.status.in_([EtoRunStatus.FAILURE.value, EtoRunStatus.NEEDS_TEMPLATE.value])
                     )
-                    .group_by(self.model_class.status)
                     .all()
                 )
 
-                # Total runs
-                total_runs = session.query(self.model_class).count()
+                failure_count = sum(1 for run in eligible_runs if run.status == EtoRunStatus.FAILURE.value)
+                needs_template_count = sum(1 for run in eligible_runs if run.status == EtoRunStatus.NEEDS_TEMPLATE.value)
 
-                # Success rate calculation
-                successful_runs = (
-                    session.query(self.model_class)
-                    .filter(self.model_class.status == 'success')
-                    .count()
+                # Reset the runs
+                for model in eligible_runs:
+                    self._reset_processing_fields(model)
+
+                total_reset = len(eligible_runs)
+
+                logger.info(f"Reset {total_reset} selected ETO runs for reprocessing")
+
+                return EtoRunResetResult(
+                    failure_count=failure_count,
+                    needs_template_count=needs_template_count,
+                    total_reset=total_reset
                 )
-                success_rate = successful_runs / total_runs if total_runs > 0 else 0.0
-
-                # Average processing time for completed runs
-                avg_processing_time = (
-                    session.query(func.avg(self.model_class.processing_duration_ms))
-                    .filter(self.model_class.processing_duration_ms.isnot(None))
-                    .scalar()
-                )
-
-                # Recent activity counts (last 24 hours)
-                from datetime import timedelta
-                last_24h = datetime.now(timezone.utc) - timedelta(hours=24)
-                last_24h_runs = (
-                    session.query(self.model_class)
-                    .filter(self.model_class.created_at >= last_24h)
-                    .count()
-                )
-
-                # Last successful and failed runs
-                last_successful_run = (
-                    session.query(self.model_class.completed_at)
-                    .filter(self.model_class.status == 'success')
-                    .order_by(self.model_class.completed_at.desc())
-                    .first()
-                )
-
-                last_failed_run = (
-                    session.query(self.model_class.completed_at)
-                    .filter(self.model_class.status == 'failure')
-                    .order_by(self.model_class.completed_at.desc())
-                    .first()
-                )
-
-                return {
-                    "total_runs": total_runs,
-                    "status_counts": [{"status": status, "count": count} for status, count in status_counts],
-                    "success_rate": success_rate,
-                    "average_processing_time_ms": int(avg_processing_time) if avg_processing_time else None,
-                    "last_24h_runs": last_24h_runs,
-                    "last_successful_run": last_successful_run[0] if last_successful_run else None,
-                    "last_failed_run": last_failed_run[0] if last_failed_run else None
-                }
 
         except SQLAlchemyError as e:
-            logger.error(f"Error getting ETO run statistics: {e}")
-            raise RepositoryError(f"Failed to get ETO run statistics: {e}") from e
+            logger.error(f"Error resetting selected ETO runs for reprocessing: {e}")
+            raise RepositoryError(f"Failed to reset selected ETO runs for reprocessing: {e}") from e
 
-    def reset_failed_runs_for_reprocessing(self) -> Dict[str, int]:
-        """
-        Bulk reset failed and needs_template runs to not_started status
+    # ========== User Skip/Delete Functionality ==========
 
-        Returns:
-            Dictionary with counts: {
-                'failure_count': int,
-                'needs_template_count': int,
-                'total_reset': int
-            }
-        """
+    def mark_as_skipped(self, eto_run_id: int) -> EtoRun:
+        """Mark run as skipped (only from failure or needs_template status)"""
         try:
-            with self.connection_manager.get_session() as session:
-                # Get counts first for reporting
-                failure_count = session.query(self.model_class).filter(
-                    self.model_class.status == 'failure'
-                ).count()
+            with self.connection_manager.session_scope() as session:
+                model = session.get(self.model_class, eto_run_id)
 
-                needs_template_count = session.query(self.model_class).filter(
-                    self.model_class.status == 'needs_template'
-                ).count()
+                if not model:
+                    raise ObjectNotFoundError("EtoRun", eto_run_id)
 
-                total_eligible = failure_count + needs_template_count
+                # Check if run can be skipped
+                current_status = EtoRunStatus(model.status)
+                if current_status not in [EtoRunStatus.FAILURE, EtoRunStatus.NEEDS_TEMPLATE]:
+                    raise ValidationError(f"Cannot skip ETO run {eto_run_id}: status must be failure or needs_template, current status is {current_status.value}")
 
-                if total_eligible == 0:
-                    return {
-                        'failure_count': 0,
-                        'needs_template_count': 0,
-                        'total_reset': 0
-                    }
+                # Update status and clear processing fields
+                model.status = EtoRunStatus.SKIPPED.value
+                model.processing_step = None
+                model.completed_at = datetime.now(timezone.utc)
 
-                # Bulk update - reset all processing-related fields
+                logger.info(f"Marked ETO run {eto_run_id} as skipped")
+                return self._convert_to_domain_object(model)
+
+        except SQLAlchemyError as e:
+            logger.error(f"Error marking ETO run {eto_run_id} as skipped: {e}")
+            raise RepositoryError(f"Failed to mark ETO run as skipped: {e}") from e
+
+    def delete_skipped_run(self, eto_run_id: int) -> EtoRun:
+        """Permanently delete run (only if status is skipped)"""
+        try:
+            with self.connection_manager.session_scope() as session:
+                model = session.get(self.model_class, eto_run_id)
+
+                if not model:
+                    raise ObjectNotFoundError("EtoRun", eto_run_id)
+
+                # Check if run can be deleted
+                current_status = EtoRunStatus(model.status)
+                if current_status != EtoRunStatus.SKIPPED:
+                    raise ValidationError(f"Cannot delete ETO run {eto_run_id}: status must be skipped, current status is {current_status.value}")
+
+                # Convert to domain object before deletion
+                deleted_run = self._convert_to_domain_object(model)
+
+                session.delete(model)
+
+                logger.info(f"Permanently deleted ETO run {eto_run_id}")
+                return deleted_run
+
+        except SQLAlchemyError as e:
+            logger.error(f"Error deleting ETO run {eto_run_id}: {e}")
+            raise RepositoryError(f"Failed to delete ETO run: {e}") from e
+
+    # ========== System Processing Functionality ==========
+
+    def start_processing(self, eto_run_id: int) -> EtoRun:
+        """Start processing: set status to processing and step to template_matching"""
+        try:
+            with self.connection_manager.session_scope() as session:
+                model = session.get(self.model_class, eto_run_id)
+
+                if not model:
+                    raise ObjectNotFoundError("EtoRun", eto_run_id)
+
+                # Validate current status
+                current_status = EtoRunStatus(model.status)
+                if current_status != EtoRunStatus.NOT_STARTED:
+                    raise ValidationError(f"Cannot start processing ETO run {eto_run_id}: status must be not_started, current status is {current_status.value}")
+
+                # Update to processing state
+                current_time = datetime.now(timezone.utc)
+                model.status = EtoRunStatus.PROCESSING.value
+                model.processing_step = EtoProcessingStep.TEMPLATE_MATCHING.value
+                model.started_at = current_time
+
+                logger.debug(f"Started processing ETO run {eto_run_id}")
+                return self._convert_to_domain_object(model)
+
+        except SQLAlchemyError as e:
+            logger.error(f"Error starting processing for ETO run {eto_run_id}: {e}")
+            raise RepositoryError(f"Failed to start processing ETO run: {e}") from e
+
+    def set_template_match_and_advance(self, eto_run_id: int, template_match: EtoRunTemplateMatchUpdate) -> EtoRun:
+        """Set template match results and advance to extracting_data step"""
+        try:
+            with self.connection_manager.session_scope() as session:
+                model = session.get(self.model_class, eto_run_id)
+
+                if not model:
+                    raise ObjectNotFoundError("EtoRun", eto_run_id)
+
+                # Validate current state
+                self._validate_processing_state(model, EtoProcessingStep.TEMPLATE_MATCHING)
+
+                # Update template match and advance processing step
+                model.matched_template_id = template_match.matched_template_id
+                model.matched_template_version = template_match.matched_template_version
+                model.processing_step = EtoProcessingStep.EXTRACTING_DATA.value
+
+                logger.debug(f"Set template match for ETO run {eto_run_id}: template {template_match.matched_template_id} v{template_match.matched_template_version}")
+                return self._convert_to_domain_object(model)
+
+        except SQLAlchemyError as e:
+            logger.error(f"Error setting template match for ETO run {eto_run_id}: {e}")
+            raise RepositoryError(f"Failed to set template match: {e}") from e
+
+    def set_extracted_data_and_advance(self, eto_run_id: int, extraction_data: EtoRunDataExtractionUpdate) -> EtoRun:
+        """Set extracted data and advance to transforming_data step"""
+        try:
+            with self.connection_manager.session_scope() as session:
+                model = session.get(self.model_class, eto_run_id)
+
+                if not model:
+                    raise ObjectNotFoundError("EtoRun", eto_run_id)
+
+                # Validate current state
+                self._validate_processing_state(model, EtoProcessingStep.EXTRACTING_DATA)
+
+                # Update extracted data and advance processing step
+                model.extracted_data = json.dumps(extraction_data.extracted_data)
+                model.processing_step = EtoProcessingStep.TRANSFORMING_DATA.value
+
+                logger.debug(f"Set extracted data for ETO run {eto_run_id}")
+                return self._convert_to_domain_object(model)
+
+        except SQLAlchemyError as e:
+            logger.error(f"Error setting extracted data for ETO run {eto_run_id}: {e}")
+            raise RepositoryError(f"Failed to set extracted data: {e}") from e
+
+    def set_transformed_data_and_complete(self, eto_run_id: int, transformation_data: EtoRunTransformationUpdate) -> EtoRun:
+        """Set transformed data and mark as completed successfully"""
+        try:
+            with self.connection_manager.session_scope() as session:
+                model = session.get(self.model_class, eto_run_id)
+
+                if not model:
+                    raise ObjectNotFoundError("EtoRun", eto_run_id)
+
+                # Validate current state
+                self._validate_processing_state(model, EtoProcessingStep.TRANSFORMING_DATA)
+
+                # Update transformation results and complete processing
+                current_time = datetime.now(timezone.utc)
+
+                model.target_data = json.dumps(transformation_data.target_data)
+                if transformation_data.transformation_audit:
+                    model.transformation_audit = json.dumps(transformation_data.transformation_audit)
+                if transformation_data.step_execution_log:
+                    model.step_execution_log = json.dumps(transformation_data.step_execution_log)
+
+                # Complete processing
+                model.status = EtoRunStatus.SUCCESS.value
+                model.processing_step = None
+                model.completed_at = current_time
+
+                # Calculate processing duration
+                if model.started_at:
+                    model.processing_duration_ms = _calculate_duration_ms(current_time, model.started_at)
+
+                logger.info(f"Completed ETO run {eto_run_id} successfully")
+                return self._convert_to_domain_object(model)
+
+        except SQLAlchemyError as e:
+            logger.error(f"Error setting transformed data for ETO run {eto_run_id}: {e}")
+            raise RepositoryError(f"Failed to set transformed data: {e}") from e
+
+    def set_order_integration(self, eto_run_id: int, order_data: EtoRunOrderUpdate) -> EtoRun:
+        """Set order ID after successful order creation"""
+        try:
+            with self.connection_manager.session_scope() as session:
+                model = session.get(self.model_class, eto_run_id)
+
+                if not model:
+                    raise ObjectNotFoundError("EtoRun", eto_run_id)
+
+                # Validate status
+                current_status = EtoRunStatus(model.status)
+                if current_status != EtoRunStatus.SUCCESS:
+                    raise ValidationError(f"Cannot set order integration for ETO run {eto_run_id}: status must be success, current status is {current_status.value}")
+
+                model.order_id = order_data.order_id
+
+                logger.debug(f"Set order integration for ETO run {eto_run_id}: order {order_data.order_id}")
+                return self._convert_to_domain_object(model)
+
+        except SQLAlchemyError as e:
+            logger.error(f"Error setting order integration for ETO run {eto_run_id}: {e}")
+            raise RepositoryError(f"Failed to set order integration: {e}") from e
+
+    def set_failure_with_error(self, eto_run_id: int, error_type: EtoErrorType, error_message: str, error_details: Optional[Dict[str, Any]] = None, failed_pipeline_step_id: Optional[int] = None) -> EtoRun:
+        """Set run as failed with error information"""
+        try:
+            with self.connection_manager.session_scope() as session:
+                model = session.get(self.model_class, eto_run_id)
+
+                if not model:
+                    raise ObjectNotFoundError("EtoRun", eto_run_id)
+
+                # Validate current status (must be processing)
+                current_status = EtoRunStatus(model.status)
+                if current_status != EtoRunStatus.PROCESSING:
+                    raise ValidationError(f"Cannot set failure for ETO run {eto_run_id}: status must be processing, current status is {current_status.value}")
+
+                # Set error information and failure status
+                current_time = datetime.now(timezone.utc)
+
+                model.status = EtoRunStatus.FAILURE.value
+                model.processing_step = None
+                model.error_type = error_type.value
+                model.error_message = error_message
+                if error_details:
+                    model.error_details = json.dumps(error_details)
+                if failed_pipeline_step_id:
+                    model.failed_pipeline_step_id = failed_pipeline_step_id
+
+                model.completed_at = current_time
+
+                # Calculate processing duration
+                if model.started_at:
+                    model.processing_duration_ms = _calculate_duration_ms(current_time, model.started_at)
+
+                logger.warning(f"Set ETO run {eto_run_id} as failed: {error_type.value} - {error_message}")
+                return self._convert_to_domain_object(model)
+
+        except SQLAlchemyError as e:
+            logger.error(f"Error setting failure for ETO run {eto_run_id}: {e}")
+            raise RepositoryError(f"Failed to set failure: {e}") from e
+
+    def set_needs_template(self, eto_run_id: int, error_message: str = "No matching template found") -> EtoRun:
+        """Set run as needs_template when template matching fails"""
+        try:
+            with self.connection_manager.session_scope() as session:
+                model = session.get(self.model_class, eto_run_id)
+
+                if not model:
+                    raise ObjectNotFoundError("EtoRun", eto_run_id)
+
+                # Validate current state (must be processing with template_matching step)
+                self._validate_processing_state(model, EtoProcessingStep.TEMPLATE_MATCHING)
+
+                # Set needs_template status
+                current_time = datetime.now(timezone.utc)
+
+                model.status = EtoRunStatus.NEEDS_TEMPLATE.value
+                model.processing_step = None
+                model.error_type = EtoErrorType.TEMPLATE_MATCHING_ERROR.value
+                model.error_message = error_message
+                model.completed_at = current_time
+
+                # Calculate processing duration
+                if model.started_at:
+                    model.processing_duration_ms = _calculate_duration_ms(current_time, model.started_at)
+
+                logger.info(f"Set ETO run {eto_run_id} as needs_template: {error_message}")
+                return self._convert_to_domain_object(model)
+
+        except SQLAlchemyError as e:
+            logger.error(f"Error setting needs_template for ETO run {eto_run_id}: {e}")
+            raise RepositoryError(f"Failed to set needs_template: {e}") from e
+
+    # ========== Helper Methods ==========
+
+    def _bulk_reset_runs(self, statuses: List[EtoRunStatus]) -> EtoRunResetResult:
+        """Helper method for bulk resetting runs by status"""
+        try:
+            with self.connection_manager.session_scope() as session:
+                status_values = [status.value for status in statuses]
+
+                # Get counts first
+                failure_count = 0
+                needs_template_count = 0
+
+                if EtoRunStatus.FAILURE in statuses:
+                    failure_count = session.query(self.model_class).filter(
+                        self.model_class.status == EtoRunStatus.FAILURE.value
+                    ).count()
+
+                if EtoRunStatus.NEEDS_TEMPLATE in statuses:
+                    needs_template_count = session.query(self.model_class).filter(
+                        self.model_class.status == EtoRunStatus.NEEDS_TEMPLATE.value
+                    ).count()
+
+                # Bulk update
                 update_count = session.query(self.model_class).filter(
-                    self.model_class.status.in_(['failure', 'needs_template'])
+                    self.model_class.status.in_(status_values)
                 ).update({
-                    # Status & Processing State
-                    self.model_class.status: 'not_started',
+                    self.model_class.status: EtoRunStatus.NOT_STARTED.value,
                     self.model_class.processing_step: None,
-
-                    # Error Tracking
                     self.model_class.error_type: None,
                     self.model_class.error_message: None,
                     self.model_class.error_details: None,
-
-                    # Template Matching Results
                     self.model_class.matched_template_id: None,
                     self.model_class.matched_template_version: None,
-                    # Data Processing Results
                     self.model_class.extracted_data: None,
                     self.model_class.transformation_audit: None,
                     self.model_class.target_data: None,
-
-                    # Pipeline Execution Tracking
                     self.model_class.failed_pipeline_step_id: None,
                     self.model_class.step_execution_log: None,
-
-                    # Processing Timeline
                     self.model_class.started_at: None,
                     self.model_class.completed_at: None,
                     self.model_class.processing_duration_ms: None,
-
-                    # Order Integration
                     self.model_class.order_id: None,
-
-                    # Updated timestamp will be set automatically by the model
                 }, synchronize_session=False)
 
-                session.commit()
+                logger.info(f"Bulk reset {update_count} ETO runs for reprocessing")
 
-                logger.info(f"Reset {update_count} ETO runs for reprocessing (failure: {failure_count}, needs_template: {needs_template_count})")
-
-                return {
-                    'failure_count': failure_count,
-                    'needs_template_count': needs_template_count,
-                    'total_reset': update_count
-                }
+                return EtoRunResetResult(
+                    failure_count=failure_count,
+                    needs_template_count=needs_template_count,
+                    total_reset=update_count
+                )
 
         except SQLAlchemyError as e:
-            logger.error(f"Error resetting ETO runs for reprocessing: {e}")
-            raise RepositoryError(f"Failed to reset ETO runs for reprocessing: {e}") from e
+            logger.error(f"Error bulk resetting ETO runs: {e}")
+            raise RepositoryError(f"Failed to bulk reset ETO runs: {e}") from e
+
+    def _reset_processing_fields(self, model: EtoRunModel) -> None:
+        """Helper method to reset all processing fields to defaults"""
+        model.status = EtoRunStatus.NOT_STARTED.value
+        model.processing_step = None
+        model.error_type = None
+        model.error_message = None
+        model.error_details = None
+        model.matched_template_id = None
+        model.matched_template_version = None
+        model.extracted_data = None
+        model.transformation_audit = None
+        model.target_data = None
+        model.failed_pipeline_step_id = None
+        model.step_execution_log = None
+        model.started_at = None
+        model.completed_at = None
+        model.processing_duration_ms = None
+        model.order_id = None
+
+    def _validate_processing_state(self, model: EtoRunModel, expected_step: EtoProcessingStep) -> None:
+        """Helper method to validate current processing state"""
+        current_status = EtoRunStatus(model.status)
+        if current_status != EtoRunStatus.PROCESSING:
+            raise ValidationError(f"ETO run {model.id} is not in processing status: {current_status.value}")
+
+        current_step = model.processing_step
+        if current_step != expected_step.value:
+            raise ValidationError(f"ETO run {model.id} is not in expected processing step. Expected: {expected_step.value}, Current: {current_step}")

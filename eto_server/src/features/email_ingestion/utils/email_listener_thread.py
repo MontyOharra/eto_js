@@ -45,7 +45,15 @@ class EmailListenerThread(threading.Thread):
         self.max_errors = 5
         
         # Track last check time for incremental retrieval
-        self.last_check_time = config.last_check_time or datetime.now(timezone.utc)
+        # Ensure timezone consistency: convert DB time to UTC-aware
+        if config.last_check_time:
+            if config.last_check_time.tzinfo is None:
+                # Assume naive datetimes from DB are UTC
+                self.last_check_time = config.last_check_time.replace(tzinfo=timezone.utc)
+            else:
+                self.last_check_time = config.last_check_time.astimezone(timezone.utc)
+        else:
+            self.last_check_time = datetime.now(timezone.utc)
 
         # Store activation time for fresh activation detection
         # This is the time when this listener thread was created (activation time)

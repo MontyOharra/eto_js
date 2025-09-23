@@ -370,39 +370,79 @@ class EmailIngestionService:
                     del self.active_listeners[config_id]
                 raise ServiceError(f"Failed to activate config: {str(e)}")
     
-    def deactivate_config(self, config_id: int) -> bool:
+    def stop_config_listeners(self, config_id: int) -> bool:
         """
-        Deactivate email monitoring for a configuration
-        
+        Stop listeners and integrations for a config WITHOUT changing database status
+        Used during app shutdown to preserve config state for startup recovery
+
         Args:
-            config_id: Configuration to deactivate
-            
+            config_id: Configuration to stop listeners for
+
         Returns:
-            True if successfully deactivated
+            True if successfully stopped
         """
         with self.lock:
             try:
-                logger.info(f"Deactivating config {config_id}")
-                
+                logger.info(f"Stopping listeners for config {config_id} (preserving config status)")
+
                 # Stop listener thread
                 if config_id in self.active_listeners:
                     listener = self.active_listeners[config_id]
                     listener.stop()
                     listener.join(timeout=5.0)  # Wait up to 5 seconds
                     del self.active_listeners[config_id]
-                
+                    logger.debug(f"Stopped listener thread for config {config_id}")
+
                 # Disconnect integration
                 if config_id in self.active_integrations:
                     integration = self.active_integrations[config_id]
                     integration.disconnect()
                     del self.active_integrations[config_id]
-                
-                # Update config status
-                self.config_repository.deactivate(config_id)
-                
-                logger.info(f"Successfully deactivated config {config_id}")
+                    logger.debug(f"Disconnected integration for config {config_id}")
+
+                # DO NOT call self.config_repository.deactivate() - preserve DB status
+
+                logger.info(f"Successfully stopped listeners for config {config_id} (config remains active in DB)")
                 return True
-                
+
+            except Exception as e:
+                logger.error(f"Error stopping listeners for config {config_id}: {e}")
+                raise ServiceError(f"Failed to stop config listeners: {str(e)}")
+
+    def deactivate_config(self, config_id: int) -> bool:
+        """
+        Deactivate email monitoring for a configuration (user-initiated)
+        Stops runtime resources AND changes database status to inactive
+
+        Args:
+            config_id: Configuration to deactivate
+
+        Returns:
+            True if successfully deactivated
+        """
+        with self.lock:
+            try:
+                logger.info(f"Deactivating config {config_id} (user-initiated - will change DB status)")
+
+                # Stop listener thread
+                if config_id in self.active_listeners:
+                    listener = self.active_listeners[config_id]
+                    listener.stop()
+                    listener.join(timeout=5.0)  # Wait up to 5 seconds
+                    del self.active_listeners[config_id]
+
+                # Disconnect integration
+                if config_id in self.active_integrations:
+                    integration = self.active_integrations[config_id]
+                    integration.disconnect()
+                    del self.active_integrations[config_id]
+
+                # Update config status in database (user-initiated deactivation)
+                self.config_repository.deactivate(config_id)
+
+                logger.info(f"Successfully deactivated config {config_id} (config marked inactive in DB)")
+                return True
+
             except Exception as e:
                 logger.error(f"Error deactivating config {config_id}: {e}")
                 raise ServiceError(f"Failed to deactivate config: {str(e)}")
@@ -499,18 +539,48 @@ class EmailIngestionService:
     
     def _process_pdf_attachment(self, email_id: int, attachment: EmailAttachment):
         """
-        Process a PDF attachment through the pipeline
-        
+        Process a PDF attachment through the complete pipeline
+
         Args:
             email_id: Database ID of the email
             attachment: PDF attachment to process
         """
-        # TODO: Implement PDF processing pipeline
-        # 1. Save PDF to storage
-        # 2. Run template matching
-        # 3. Extract fields
-        # 4. Create ETO if successful
-        logger.info(f"Processing PDF: {attachment.filename} ({attachment.size_bytes} bytes)")
+        try:
+            logger.info(f"Processing PDF: {attachment.filename} ({attachment.size_bytes} bytes)")
+
+            # Step 1: Store PDF using PDF processing service
+            from shared.services import get_pdf_processing_service
+            pdf_service = get_pdf_processing_service()
+
+            # Store PDF and get file record
+            pdf_file = pdf_service.store_pdf(
+                file_content=attachment.content,
+                original_filename=attachment.filename,
+                email_id=email_id
+            )
+
+            logger.info(f"PDF stored successfully: {pdf_file.id}")
+
+            # Step 2: Trigger ETO processing pipeline
+            from shared.services import get_eto_processing_service
+            eto_service = get_eto_processing_service()
+
+            # Start ETO processing for the stored PDF
+            eto_run = eto_service.process_pdf(pdf_file.id)
+
+            logger.info(f"ETO processing initiated for PDF {pdf_file.id}, ETO run: {eto_run.id}, status: {eto_run.status}")
+
+            # Log success metrics
+            if eto_run.status == "success":
+                logger.info(f"PDF attachment successfully processed end-to-end: {attachment.filename}")
+            elif eto_run.status == "needs_template":
+                logger.warning(f"PDF requires manual template assignment: {attachment.filename}")
+            elif eto_run.status == "failure":
+                logger.error(f"PDF processing failed: {attachment.filename}, error: {eto_run.error_message}")
+
+        except Exception as e:
+            logger.error(f"Failed to process PDF attachment {attachment.filename}: {e}")
+            # Don't re-raise - email processing should continue even if PDF processing fails
     
     # ========== Query Methods ==========
     
@@ -594,19 +664,41 @@ class EmailIngestionService:
             logger.error(f"Email ingestion service health check failed: {e}")
             return False
 
+    def stop_all_listeners(self):
+        """
+        Stop all active listeners without changing config database status
+        Used during app shutdown to preserve config states for startup recovery
+        """
+        logger.info("Stopping all email ingestion listeners (preserving config states)")
+
+        with self.lock:
+            # Get list of active config IDs to avoid modifying dict during iteration
+            active_config_ids = list(self.active_listeners.keys())
+
+            if not active_config_ids:
+                logger.info("No active listeners to stop")
+                return
+
+            logger.info(f"Stopping listeners for {len(active_config_ids)} configurations")
+
+            # Stop listeners for each config without changing DB status
+            for config_id in active_config_ids:
+                try:
+                    self.stop_config_listeners(config_id)
+                except Exception as e:
+                    logger.error(f"Error stopping listeners for config {config_id}: {e}")
+                    # Continue stopping other listeners even if one fails
+
+        logger.info("All email ingestion listeners stopped (configs remain active in database)")
+
     def shutdown(self):
         """
-        Gracefully shutdown all listeners
+        Gracefully shutdown all listeners while preserving config database status
         Called when the application is stopping
         """
         logger.info("Shutting down email ingestion service")
-        
-        with self.lock:
-            # Stop all listeners
-            for config_id in list(self.active_listeners.keys()):
-                try:
-                    self.deactivate_config(config_id)
-                except Exception as e:
-                    logger.error(f"Error stopping listener {config_id}: {e}")
-        
+
+        # Stop all listeners without changing database config status
+        self.stop_all_listeners()
+
         logger.info("Email ingestion service shutdown complete")
