@@ -42,6 +42,9 @@ class EmailMessage(BaseModel):
     raw_headers: Optional[Dict[str, str]] = Field(default=None, description="Raw email headers")
     provider_specific_data: Optional[Dict[str, Any]] = Field(default=None, description="Provider-specific metadata")
 
+    # 🚀 PERFORMANCE OPTIMIZATION: Cache attachments to eliminate 50+ second search delay
+    cached_attachments: List['EmailAttachment'] = Field(default_factory=list, description="Pre-extracted attachments for performance")
+
     @field_validator('received_date', mode='before')
     @classmethod
     def ensure_timezone_aware(cls, v):

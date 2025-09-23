@@ -133,29 +133,11 @@ class EmailListenerThread(threading.Thread):
             for email_msg in emails:
                 try:
                     email_start_time = time.time()
-                    logger.info(f"Starting to process email {email_msg.message_id[:20]}... from {email_msg.sender_email}")
+                    logger.info(f"🚀 Starting to process email {email_msg.message_id[:20]}... from {email_msg.sender_email}")
 
-                    # Get attachments if the email has them
-                    attachments = []
-                    if email_msg.has_attachments:
-                        try:
-                            attachment_start_time = time.time()
-                            logger.info(f"📎 Starting attachment retrieval for email {email_msg.message_id[:20]}...")
-
-                            attachments = self.integration.get_attachments(
-                                email_msg.message_id,
-                                self.config.folder_name
-                            )
-
-                            attachment_duration = time.time() - attachment_start_time
-                            logger.info(f"📎 Retrieved {len(attachments)} attachments for email {email_msg.message_id[:20]}... "
-                                       f"in {attachment_duration:.2f} seconds")
-                        except Exception as e:
-                            attachment_duration = time.time() - attachment_start_time
-                            logger.warning(f"Failed to get attachments for {email_msg.message_id[:20]}... "
-                                         f"after {attachment_duration:.2f} seconds: {e}")
-                    else:
-                        logger.debug(f"Email {email_msg.message_id[:20]}... has no attachments")
+                    # 🔥 PERFORMANCE BOOST: Use cached attachments instead of slow search! 💪⚡
+                    attachments = email_msg.cached_attachments
+                    logger.info(f"⚡ Using {len(attachments)} pre-cached attachments (NO SEARCH NEEDED!) 🎯")
 
                     # Call back to service for processing
                     callback_start_time = time.time()
