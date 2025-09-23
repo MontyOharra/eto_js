@@ -9,6 +9,7 @@ from datetime import datetime
 import json
 
 from .pdf_processing import PdfObject, ExtractionField
+from shared.utils import DateTimeUtils
 
 
 """ PDF Template Models """
@@ -54,7 +55,13 @@ class PdfTemplate(PdfTemplateBase):
     current_version_id: Optional[int] = Field(None, description="ID of current active version")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
-    
+
+    @field_validator('created_at', 'updated_at', mode='before')
+    @classmethod
+    def ensure_timezone_aware(cls, v):
+        """Ensure datetime fields are timezone-aware"""
+        return DateTimeUtils.ensure_utc_aware(v)
+
     class Config:
         from_attributes = True
         
@@ -91,7 +98,13 @@ class PdfTemplateVersion(PdfTemplateVersionBase):
     usage_count: int = Field(0, ge=0, description="Number of times used")
     last_used_at: Optional[datetime] = Field(None, description="Last usage timestamp")
     created_at: datetime = Field(..., description="Creation timestamp")
-    
+
+    @field_validator('last_used_at', 'created_at', mode='before')
+    @classmethod
+    def ensure_timezone_aware_version(cls, v):
+        """Ensure datetime fields are timezone-aware"""
+        return DateTimeUtils.ensure_utc_aware(v)
+
     class Config:
         from_attributes = True
 

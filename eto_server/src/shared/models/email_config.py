@@ -8,6 +8,8 @@ from typing import Optional, List
 from datetime import datetime
 import json
 
+from shared.utils import DateTimeUtils
+
 
 class EmailFilterRule(BaseModel):
     """Individual email filter rule"""
@@ -70,9 +72,15 @@ class EmailConfig(EmailConfigBase):
     total_emails_processed: int = Field(0, ge=0, description="Total emails processed since activation")
     total_pdfs_found: int = Field(0, ge=0, description="Total PDFs found since activation")
 
+    @field_validator('last_error_at', 'created_at', 'updated_at', 'last_used_at', 'activated_at', 'last_check_time', mode='before')
+    @classmethod
+    def ensure_timezone_aware(cls, v):
+        """Ensure all datetime fields are timezone-aware"""
+        return DateTimeUtils.ensure_utc_aware(v)
+
     class Config:
         from_attributes = True
-        
+
     @classmethod
     def from_db_model(cls, db_model) -> 'EmailConfig':
         """Create from database model with JSON deserialization"""
@@ -125,6 +133,12 @@ class EmailConfigSummary(BaseModel):
     filter_rule_count: int = Field(0, ge=0, description="Number of filter rules")
     last_used_at: Optional[datetime] = Field(None, description="Last usage timestamp")
     created_at: datetime = Field(..., description="Creation timestamp")
+
+    @field_validator('last_used_at', 'created_at', mode='before')
+    @classmethod
+    def ensure_timezone_aware(cls, v):
+        """Ensure all datetime fields are timezone-aware"""
+        return DateTimeUtils.ensure_utc_aware(v)
 
     class Config:
         from_attributes = True

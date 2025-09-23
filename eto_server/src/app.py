@@ -334,6 +334,16 @@ def register_routers(app: FastAPI) -> None:
     except Exception as e:
         logger.error(f"Error registering email configs router: {e}")
 
+    # Register ETO processing router
+    try:
+        from .api.routers.eto import router as eto_router
+        app.include_router(eto_router)
+        logger.info("Registered ETO processing router")
+    except ImportError as e:
+        logger.warning(f"Could not import ETO processing router: {e}")
+    except Exception as e:
+        logger.error(f"Error registering ETO processing router: {e}")
+
 
 def register_info_endpoint(app: FastAPI) -> None:
     """Register application info endpoint"""
@@ -350,8 +360,8 @@ def register_info_endpoint(app: FastAPI) -> None:
             "api_prefix": "/api",
             "endpoints": {
                 "health": "/api/health",
-                "email_configuration": "/api/email-configuration",
-                "eto_processing": "/api/eto-runs",
+                "email_configuration": "/api/email-configs",
+                "eto_processing": "/api/eto",
                 "pdf_templates": "/api/pdf_templates"
             },
             "documentation": {

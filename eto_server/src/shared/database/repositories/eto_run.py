@@ -18,6 +18,7 @@ from shared.models import (
     EtoRunTemplateMatchUpdate, EtoRunDataExtractionUpdate, EtoRunTransformationUpdate,
     EtoRunOrderUpdate, EtoRunResetResult
 )
+from shared.utils import DateTimeUtils
 
 
 logger = logging.getLogger(__name__)
@@ -34,13 +35,9 @@ def _calculate_duration_ms(current_time: datetime, started_at: datetime) -> int:
     Returns:
         Duration in milliseconds as integer
     """
-    # Ensure both datetimes are timezone-aware for comparison
-    if started_at.tzinfo is None:
-        # Assume UTC if no timezone info (common after DB retrieval)
-        started_at = started_at.replace(tzinfo=timezone.utc)
-
-    if current_time.tzinfo is None:
-        current_time = current_time.replace(tzinfo=timezone.utc)
+    # Ensure both datetimes are timezone-aware for comparison using DateTimeUtils
+    started_at = DateTimeUtils.ensure_utc_aware(started_at)
+    current_time = DateTimeUtils.ensure_utc_aware(current_time)
 
     duration_seconds = (current_time - started_at).total_seconds()
     return int(duration_seconds * 1000)
@@ -275,7 +272,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                 # Update status and clear processing fields
                 model.status = EtoRunStatus.SKIPPED.value
                 model.processing_step = None
-                model.completed_at = datetime.now(timezone.utc)
+                model.completed_at = DateTimeUtils.utc_now()
 
                 logger.info(f"Marked ETO run {eto_run_id} as skipped")
                 return self._convert_to_domain_object(model)
@@ -327,7 +324,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                     raise ValidationError(f"Cannot start processing ETO run {eto_run_id}: status must be not_started, current status is {current_status.value}")
 
                 # Update to processing state
-                current_time = datetime.now(timezone.utc)
+                current_time = DateTimeUtils.utc_now()
                 model.status = EtoRunStatus.PROCESSING.value
                 model.processing_step = EtoProcessingStep.TEMPLATE_MATCHING.value
                 model.started_at = current_time
@@ -399,7 +396,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                 self._validate_processing_state(model, EtoProcessingStep.TRANSFORMING_DATA)
 
                 # Update transformation results and complete processing
-                current_time = datetime.now(timezone.utc)
+                current_time = DateTimeUtils.utc_now()
 
                 model.target_data = json.dumps(transformation_data.target_data)
                 if transformation_data.transformation_audit:
@@ -461,7 +458,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                     raise ValidationError(f"Cannot set failure for ETO run {eto_run_id}: status must be processing, current status is {current_status.value}")
 
                 # Set error information and failure status
-                current_time = datetime.now(timezone.utc)
+                current_time = DateTimeUtils.utc_now()
 
                 model.status = EtoRunStatus.FAILURE.value
                 model.processing_step = None
@@ -485,8 +482,8 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
             logger.error(f"Error setting failure for ETO run {eto_run_id}: {e}")
             raise RepositoryError(f"Failed to set failure: {e}") from e
 
-    def set_needs_template(self, eto_run_id: int, error_message: str = "No matching template found") -> EtoRun:
-        """Set run as needs_template when template matching fails"""
+    def set_needs_template(self, eto_run_id: int, message: str = "No matching template found") -> EtoRun:
+        """Set run as needs_template when no matching template is found (not an error condition)"""
         try:
             with self.connection_manager.session_scope() as session:
                 model = session.get(self.model_class, eto_run_id)
@@ -497,20 +494,22 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                 # Validate current state (must be processing with template_matching step)
                 self._validate_processing_state(model, EtoProcessingStep.TEMPLATE_MATCHING)
 
-                # Set needs_template status
-                current_time = datetime.now(timezone.utc)
+                # Set needs_template status (not an error - system correctly identified it needs a template)
+                current_time = DateTimeUtils.utc_now()
 
                 model.status = EtoRunStatus.NEEDS_TEMPLATE.value
                 model.processing_step = None
-                model.error_type = EtoErrorType.TEMPLATE_MATCHING_ERROR.value
-                model.error_message = error_message
+                # Don't set error fields - needs_template is a normal workflow outcome, not an error
+                model.error_type = None
+                model.error_message = None
+                model.error_details = None
                 model.completed_at = current_time
 
                 # Calculate processing duration
                 if model.started_at:
                     model.processing_duration_ms = _calculate_duration_ms(current_time, model.started_at)
 
-                logger.info(f"Set ETO run {eto_run_id} as needs_template: {error_message}")
+                logger.info(f"Set ETO run {eto_run_id} as needs_template: {message}")
                 return self._convert_to_domain_object(model)
 
         except SQLAlchemyError as e:

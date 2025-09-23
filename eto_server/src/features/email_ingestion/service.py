@@ -18,6 +18,7 @@ from shared.models.email_integration import (
 )
 from shared.models.email import Email, EmailCreate
 from shared.database.repositories.email import EmailRepository
+from shared.utils import DateTimeUtils
 from shared.database.repositories.email_ingestion_config import EmailIngestionConfigRepository
 from shared.exceptions import ServiceError, ObjectNotFoundError
 
@@ -354,7 +355,7 @@ class EmailIngestionService:
                 # Update config status
                 config = self.config_repository.activate(
                     config_id, 
-                    activation_time=datetime.now(timezone.utc)
+                    activation_time=DateTimeUtils.utc_now()
                 )
                 
                 logger.info(f"Successfully activated config {config_id}")
@@ -522,7 +523,7 @@ class EmailIngestionService:
             # Update statistics
             self.config_repository.update_progress(
                 config_id,
-                current_time=datetime.now(timezone.utc),
+                current_time=DateTimeUtils.utc_now(),
                 emails_processed=1,
                 pdfs_found=pdf_count
             )

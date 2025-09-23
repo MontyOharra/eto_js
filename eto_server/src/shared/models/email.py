@@ -4,7 +4,9 @@ Pydantic models for email records (append-only pattern)
 """
 from typing import Optional, List, Dict, Any
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from shared.utils import DateTimeUtils
 
 
 class EmailBase(BaseModel):
@@ -20,7 +22,13 @@ class EmailBase(BaseModel):
     attachment_count: int = Field(default=0, ge=0, description="Total number of attachments")
     pdf_count: int = Field(default=0, ge=0, description="Number of PDF attachments")
     body_preview: Optional[str] = Field(default=None, max_length=500, description="Email body preview text")
-    
+
+    @field_validator('received_date', mode='before')
+    @classmethod
+    def ensure_timezone_aware(cls, v):
+        """Ensure received_date is timezone-aware"""
+        return DateTimeUtils.ensure_utc_aware(v)
+
     def model_dump_for_db(self) -> Dict[str, Any]:
         """
         Convert model to dict for database insertion.
@@ -39,7 +47,13 @@ class Email(EmailBase):
     id: int = Field(..., description="Database ID")
     processed_at: datetime = Field(..., description="When email was processed and saved")
     created_at: datetime = Field(..., description="When record was created in database")
-    
+
+    @field_validator('processed_at', 'created_at', mode='before')
+    @classmethod
+    def ensure_timezone_aware_email(cls, v):
+        """Ensure datetime fields are timezone-aware"""
+        return DateTimeUtils.ensure_utc_aware(v)
+
     class Config:
         from_attributes = True
         
@@ -77,6 +91,12 @@ class EmailSummary(BaseModel):
     has_pdf_attachments: bool = Field(default=False, description="Has PDFs")
     pdf_count: int = Field(default=0, description="Number of PDFs")
     created_at: datetime = Field(..., description="When processed")
-    
+
+    @field_validator('received_date', 'created_at', mode='before')
+    @classmethod
+    def ensure_timezone_aware_summary(cls, v):
+        """Ensure datetime fields are timezone-aware"""
+        return DateTimeUtils.ensure_utc_aware(v)
+
     class Config:
         from_attributes = True

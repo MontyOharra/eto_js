@@ -12,6 +12,7 @@ from shared.exceptions import RepositoryError, ObjectNotFoundError, ValidationEr
 from shared.database.models import PdfTemplateModel
 from shared.database.connection import DatabaseConnectionManager
 from shared.models import PdfTemplate, PdfTemplateCreate, PdfTemplateUpdate
+from shared.utils import DateTimeUtils
 
 
 logger = logging.getLogger(__name__)
@@ -140,7 +141,7 @@ class PdfTemplateRepository(BaseRepository[PdfTemplateModel]):
                         setattr(model, field, value)
 
                 # Update the updated_at timestamp
-                model.updated_at = datetime.now(timezone.utc)
+                model.updated_at = DateTimeUtils.utc_now()
                 
                 session.flush()
                 session.refresh(model)

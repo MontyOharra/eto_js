@@ -12,6 +12,7 @@ from shared.exceptions import RepositoryError, ObjectNotFoundError
 from shared.database.models import PdfFileModel
 from shared.database.connection import DatabaseConnectionManager
 from shared.models import PdfFile, PdfFileCreate, PdfFileSummary
+from shared.utils import DateTimeUtils
 
 logger = logging.getLogger(__name__)
 
@@ -294,7 +295,7 @@ class PdfFileRepository(BaseRepository[PdfFileModel]):
         """
         try:
             with self.connection_manager.session_scope() as session:
-                cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
+                cutoff_date = DateTimeUtils.utc_now() - timedelta(days=days)
                 
                 models = session.query(self.model_class).filter(
                     self.model_class.created_at >= cutoff_date

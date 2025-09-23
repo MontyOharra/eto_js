@@ -11,6 +11,7 @@ from shared.database.repositories import BaseRepository
 from shared.exceptions import RepositoryError, ObjectNotFoundError, ValidationError
 from shared.database.models import EmailIngestionConfigModel
 from shared.models import EmailConfig, EmailConfigCreate, EmailConfigUpdate, EmailConfigSummary
+from shared.utils import DateTimeUtils
 
 logger = logging.getLogger(__name__)
 
@@ -338,7 +339,7 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
                 if not model:
                     raise ObjectNotFoundError('EmailConfig', config_id)
                 
-                current_time = datetime.now(timezone.utc)
+                current_time = DateTimeUtils.utc_now()
                 setattr(model, 'is_running', is_running)
                 # updated_at handled by onupdate=func.now() in model
                 
@@ -431,7 +432,7 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
                 current_emails = getattr(model, 'emails_processed', 0) or 0
                 current_pdfs = getattr(model, 'pdfs_found', 0) or 0
                 
-                current_time = datetime.now(timezone.utc)
+                current_time = DateTimeUtils.utc_now()
                 setattr(model, 'emails_processed', current_emails + emails)
                 setattr(model, 'pdfs_found', current_pdfs + pdfs)
                 setattr(model, 'last_used_at', current_time)
@@ -470,7 +471,7 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
                 if not model:
                     raise ObjectNotFoundError('EmailConfig', config_id)
                 
-                current_time = datetime.now(timezone.utc)
+                current_time = DateTimeUtils.utc_now()
                 setattr(model, 'last_error_message', error_message[:500])  # Truncate if too long
                 setattr(model, 'last_error_at', current_time)
                 # updated_at handled by onupdate=func.now() in model

@@ -4,8 +4,10 @@ Pydantic models for standardized email integration across all providers
 """
 from typing import List, Dict, Any, Optional, Literal
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from enum import Enum
+
+from shared.utils import DateTimeUtils
 
 
 class EmailProvider(str, Enum):
@@ -39,7 +41,13 @@ class EmailMessage(BaseModel):
     importance: str = Field(default="normal", description="Email importance level")
     raw_headers: Optional[Dict[str, str]] = Field(default=None, description="Raw email headers")
     provider_specific_data: Optional[Dict[str, Any]] = Field(default=None, description="Provider-specific metadata")
-    
+
+    @field_validator('received_date', mode='before')
+    @classmethod
+    def ensure_timezone_aware(cls, v):
+        """Ensure received_date is timezone-aware"""
+        return DateTimeUtils.ensure_utc_aware(v)
+
     class Config:
         from_attributes = True
         json_encoders = {
@@ -99,7 +107,13 @@ class EmailSearchCriteria(BaseModel):
     is_unread: Optional[bool] = Field(default=None, description="Filter by read status")
     folder_name: str = Field(default="Inbox", description="Folder to search in")
     limit: int = Field(default=100, ge=1, le=1000, description="Maximum results to return")
-    
+
+    @field_validator('date_from', 'date_to', mode='before')
+    @classmethod
+    def ensure_timezone_aware_search(cls, v):
+        """Ensure datetime fields are timezone-aware"""
+        return DateTimeUtils.ensure_utc_aware(v)
+
     class Config:
         from_attributes = True
 

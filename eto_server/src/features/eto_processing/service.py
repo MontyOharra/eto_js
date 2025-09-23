@@ -18,6 +18,7 @@ from shared.models.eto_processing import (
     EtoRunTransformationUpdate, EtoRunOrderUpdate
 )
 from shared.models.pdf_processing import PdfObject
+from shared.utils import DateTimeUtils
 
 logger = logging.getLogger(__name__)
 
@@ -347,7 +348,7 @@ class EtoProcessingService:
         # This would typically involve applying business rules, validations, and data mapping
         transformed_data = {
             "order_data": raw_data,
-            "processed_at": datetime.now(timezone.utc).isoformat(),
+            "processed_at": DateTimeUtils.utc_now().isoformat(),
             "transformation_version": "1.0"
         }
 
@@ -531,7 +532,7 @@ class EtoProcessingService:
         """
         # Build comprehensive error details
         error_details = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": DateTimeUtils.utc_now().isoformat(),
             "error_context": "eto_processing_pipeline",
             "failed_step": current_step,
             "processing_step": error.processing_step.value,
@@ -560,7 +561,7 @@ class EtoProcessingService:
     def _handle_processing_error(self, eto_run: EtoRun, error_type: EtoErrorType, error_message: str) -> EtoRun:
         """Legacy error handler - deprecated, use _handle_centralized_processing_error instead"""
         error_details = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": DateTimeUtils.utc_now().isoformat(),
             "error_context": "eto_processing_pipeline_legacy"
         }
 

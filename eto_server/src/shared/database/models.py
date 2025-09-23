@@ -4,9 +4,11 @@ Unified database models combining email processing and transformation pipelines
 """
 from typing import Optional
 from sqlalchemy import String, Integer, DateTime, Boolean, Text, ForeignKey, Index, UniqueConstraint, BigInteger
+from sqlalchemy.dialects.mssql import DATETIME2
 from sqlalchemy.orm import DeclarativeBase, relationship, Mapped, mapped_column
 from sqlalchemy.sql import func
 from datetime import datetime, timezone
+from shared.utils import DateTimeUtils
 
 # SQLAlchemy 2.0 Base
 class BaseModel(DeclarativeBase):
@@ -23,13 +25,13 @@ class EmailModel(BaseModel):
     subject: Mapped[Optional[str]] = mapped_column(String(500))
     sender_email: Mapped[Optional[str]] = mapped_column(String(255))
     sender_name: Mapped[Optional[str]] = mapped_column(String(255))
-    received_date: Mapped[datetime] = mapped_column(DateTime, index=True)
+    received_date: Mapped[datetime] = mapped_column(DATETIME2, index=True)
     folder_name: Mapped[Optional[str]] = mapped_column(String(100))
     has_pdf_attachments: Mapped[bool] = mapped_column(Boolean, default=False)
     attachment_count: Mapped[int] = mapped_column(Integer, default=0)
     pdf_count: Mapped[int] = mapped_column(Integer, default=0)
-    processed_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    processed_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate())
+    created_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate())
     
     # Relationships
     config = relationship("EmailIngestionConfigModel", back_populates="emails")
@@ -63,23 +65,23 @@ class EmailIngestionConfigModel(BaseModel):
     error_retry_attempts: Mapped[int] = mapped_column(Integer, default=3)
 
     # Status and control
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False)
     is_running: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Audit fields
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
-    last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate())
+    updated_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate())
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
 
     # Statistics
     emails_processed: Mapped[int] = mapped_column(Integer, default=0)
     pdfs_found: Mapped[int] = mapped_column(Integer, default=0)
     last_error_message: Mapped[Optional[str]] = mapped_column(Text)
-    last_error_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    last_error_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
     
     # Progress tracking fields (replacing cursor)
-    activated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    last_check_time: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    activated_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2, nullable=True)
+    last_check_time: Mapped[Optional[datetime]] = mapped_column(DATETIME2, nullable=True)
     total_emails_processed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     total_pdfs_found: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     
@@ -128,16 +130,16 @@ class EtoRunModel(BaseModel):
     step_execution_log: Mapped[Optional[str]] = mapped_column(Text, default=None)  # JSON: step-by-step execution details
 
     # Processing timeline
-    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=None)
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=None)
+    started_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2, default=None)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2, default=None)
     processing_duration_ms: Mapped[Optional[int]] = mapped_column(Integer, default=None)
 
     # Order integration
     order_id: Mapped[Optional[int]] = mapped_column(Integer, default=None)  # References orders table (assumed to exist)
 
     # Audit
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate(), index=True)
+    updated_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate())
     
     # Relationships
     pdf_file = relationship("PdfFileModel", back_populates="eto_runs")
@@ -158,8 +160,8 @@ class PdfFileModel(BaseModel):
     page_count: Mapped[Optional[int]] = mapped_column(Integer)
     object_count: Mapped[Optional[int]] = mapped_column(Integer)  # Number of PDF objects extracted
     objects_json: Mapped[Optional[str]] = mapped_column(Text)  # PDF objects for template matching
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate())
+    updated_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate())
     
     # Relationships
     email = relationship("EmailModel", back_populates="pdf_files")
@@ -175,8 +177,8 @@ class PdfTemplateModel(BaseModel):
     source_pdf_id: Mapped[int] = mapped_column(ForeignKey('pdf_files.id'), index=True)
     status: Mapped[str] = mapped_column(String(50), default='active')
     current_version_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('pdf_template_versions.id'), default=None)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate())
+    updated_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate())
 
     # Relationships
     eto_runs = relationship("EtoRunModel", back_populates="template")
@@ -193,8 +195,8 @@ class PdfTemplateVersionModel(BaseModel):
     signature_object_count: Mapped[int] = mapped_column(Integer)
     extraction_fields: Mapped[str] = mapped_column(Text)
     usage_count: Mapped[int] = mapped_column(default=0)
-    last_used_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now(timezone.utc))
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    last_used_at: Mapped[datetime] = mapped_column(DATETIME2, default=DateTimeUtils.utc_now)
+    created_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate())
 
     # Relationships
     pdf_template = relationship("PdfTemplateModel", back_populates="pdf_template_versions", foreign_keys=[pdf_template_id])
@@ -220,8 +222,8 @@ class TransformationPipelineModel(BaseModel):
 
     # Status and metadata
     status: Mapped[str] = mapped_column(String(50), default='draft')  # draft, active, archived
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate())
+    updated_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate())
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Relationships
@@ -257,8 +259,8 @@ class TransformationPipelineModuleModel(BaseModel):
     category: Mapped[str] = mapped_column(String(100), default='Processing')
 
     # Metadata
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate())
+    updated_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate())
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     __table_args__ = (
@@ -289,7 +291,7 @@ class TransformationPipelineStepModel(BaseModel):
 
     # Execution metadata
     execution_order_within_step: Mapped[int] = mapped_column(Integer, default=0)  # Order within parallel group
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate())
 
     # Relationships
     pipeline = relationship("TransformationPipelineModel", back_populates="pipeline_steps")
@@ -324,8 +326,8 @@ class CustomTransformationModuleModel(BaseModel):
     category: Mapped[str] = mapped_column(String(100), default='Custom')
 
     # Metadata
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate())
+    updated_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate())
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     __table_args__ = (

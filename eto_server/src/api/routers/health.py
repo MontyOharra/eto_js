@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import JSONResponse
 
 from shared.services.service_container import get_service_container, is_service_container_initialized
+from shared.utils import DateTimeUtils
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,7 @@ async def health_check() -> Dict[str, Any]:
     """
     return {
         "status": "healthy",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": DateTimeUtils.utc_now().isoformat(),
         "service": "ETO Server"
     }
 
@@ -41,7 +42,7 @@ async def service_status() -> Dict[str, Any]:
     """
     status_data = {
         "overall_status": "healthy",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": DateTimeUtils.utc_now().isoformat(),
         "services": {},
         "database": {"status": "unknown"},
         "storage": {"status": "unknown"}
@@ -163,7 +164,7 @@ async def service_status() -> Dict[str, Any]:
         logger.error(f"Status check failed: {e}")
         error_status = {
             "overall_status": "error",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": DateTimeUtils.utc_now().isoformat(),
             "error": str(e),
             "message": "Failed to check service status"
         }
@@ -188,7 +189,7 @@ async def readiness_check() -> Dict[str, Any]:
                 content={
                     "ready": False,
                     "message": "Services not initialized",
-                    "timestamp": datetime.now(timezone.utc).isoformat()
+                    "timestamp": DateTimeUtils.utc_now().isoformat()
                 }
             )
 
@@ -203,7 +204,7 @@ async def readiness_check() -> Dict[str, Any]:
                 content={
                     "ready": False,
                     "message": "Database not ready",
-                    "timestamp": datetime.now(timezone.utc).isoformat()
+                    "timestamp": DateTimeUtils.utc_now().isoformat()
                 }
             )
 
@@ -215,7 +216,7 @@ async def readiness_check() -> Dict[str, Any]:
         return {
             "ready": True,
             "message": "All critical services ready",
-            "timestamp": datetime.now(timezone.utc).isoformat()
+            "timestamp": DateTimeUtils.utc_now().isoformat()
         }
 
     except Exception as e:
@@ -225,6 +226,6 @@ async def readiness_check() -> Dict[str, Any]:
             content={
                 "ready": False,
                 "message": f"Service readiness check failed: {str(e)}",
-                "timestamp": datetime.now(timezone.utc).isoformat()
+                "timestamp": DateTimeUtils.utc_now().isoformat()
             }
         )

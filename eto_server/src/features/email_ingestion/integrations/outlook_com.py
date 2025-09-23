@@ -20,6 +20,7 @@ from shared.models.email_integration import (
     ConnectionTestResult
 )
 from .base_integration import BaseEmailIntegration
+from shared.utils import DateTimeUtils
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +125,7 @@ class OutlookComIntegration(BaseEmailIntegration):
                     raise ConnectionError(f"Cannot access folder '{self.config.default_folder}': {e}")
                 
                 self.is_connected = True
-                self.connection_time = datetime.now(timezone.utc)
+                self.connection_time = DateTimeUtils.utc_now()
                 self.last_error = None
                 
                 self.logger.info("Successfully connected to Outlook")
@@ -774,7 +775,7 @@ class OutlookComIntegration(BaseEmailIntegration):
             self.logger.warning(f"Error converting time, using as-is: {e}")
             if isinstance(outlook_time, datetime):
                 return outlook_time
-            return datetime.now(timezone.utc)
+            return DateTimeUtils.utc_now()
     
     def _extract_attachment(self, attachment: Any) -> Optional[EmailAttachment]:
         """Extract attachment and convert to EmailAttachment model"""

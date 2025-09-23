@@ -5,11 +5,12 @@ Domain models for PDF file storage and management
 
 import json
 import logging
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 from .pdf_processing import PdfObject
+from shared.utils import DateTimeUtils
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,12 @@ class PdfFile(PdfFileBase):
     id: int = Field(..., description="Database ID")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
+
+    @field_validator('created_at', 'updated_at', mode='before')
+    @classmethod
+    def ensure_timezone_aware(cls, v):
+        """Ensure datetime fields are timezone-aware"""
+        return DateTimeUtils.ensure_utc_aware(v)
 
     class Config:
         from_attributes = True
@@ -103,7 +110,13 @@ class PdfFileSummary(BaseModel):
     email_id: Optional[int] = Field(None, description="Associated email ID")
     created_at: datetime = Field(..., description="Creation timestamp")
     has_extracted_objects: bool = Field(..., description="Whether objects have been extracted")
-    
+
+    @field_validator('created_at', mode='before')
+    @classmethod
+    def ensure_timezone_aware_summary(cls, v):
+        """Ensure datetime fields are timezone-aware"""
+        return DateTimeUtils.ensure_utc_aware(v)
+
     class Config:
         from_attributes = True
     

@@ -5,8 +5,10 @@ Comprehensive models for the ETO (Extract, Transform, Order) processing pipeline
 from typing import Optional, List, Dict, Any, Union
 from datetime import datetime
 from enum import Enum
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 import json
+
+from shared.utils import DateTimeUtils
 
 
 # ========== Enums for Type Safety ==========
@@ -65,6 +67,12 @@ class EtoProcessingState(BaseModel):
     started_at: Optional[datetime] = Field(None, description="When processing started")
     completed_at: Optional[datetime] = Field(None, description="When processing completed")
     processing_duration_ms: Optional[int] = Field(None, description="Total processing duration in milliseconds")
+
+    @field_validator('started_at', 'completed_at', mode='before')
+    @classmethod
+    def ensure_timezone_aware(cls, v):
+        """Ensure datetime fields are timezone-aware"""
+        return DateTimeUtils.ensure_utc_aware(v)
 
 
 class EtoErrorInfo(BaseModel):
@@ -165,6 +173,12 @@ class EtoRun(EtoRunBase):
     # ========== Audit ==========
     created_at: datetime = Field(..., description="Record creation timestamp")
     updated_at: datetime = Field(..., description="Record last update timestamp")
+
+    @field_validator('started_at', 'completed_at', 'created_at', 'updated_at', mode='before')
+    @classmethod
+    def ensure_timezone_aware_eto_run(cls, v):
+        """Ensure datetime fields are timezone-aware"""
+        return DateTimeUtils.ensure_utc_aware(v)
 
     class Config:
         from_attributes = True
@@ -317,6 +331,12 @@ class EtoRunSummary(BaseModel):
     processing_duration_ms: Optional[int] = Field(None, description="Processing duration")
     created_at: datetime = Field(..., description="Record creation timestamp")
 
+    @field_validator('started_at', 'completed_at', 'created_at', mode='before')
+    @classmethod
+    def ensure_timezone_aware_summary(cls, v):
+        """Ensure datetime fields are timezone-aware"""
+        return DateTimeUtils.ensure_utc_aware(v)
+
     # Error summary
     has_error: bool = Field(False, description="Whether run has error information")
     error_type: Optional[EtoErrorType] = Field(None, description="Error category")
@@ -409,6 +429,12 @@ class EtoProcessingStatistics(BaseModel):
     last_24h_runs: int = Field(0, description="Runs in last 24 hours")
     last_successful_run: Optional[datetime] = Field(None, description="Last successful run timestamp")
     last_failed_run: Optional[datetime] = Field(None, description="Last failed run timestamp")
+
+    @field_validator('last_successful_run', 'last_failed_run', mode='before')
+    @classmethod
+    def ensure_timezone_aware_stats(cls, v):
+        """Ensure datetime fields are timezone-aware"""
+        return DateTimeUtils.ensure_utc_aware(v)
 
     class Config:
         arbitrary_types_allowed = True

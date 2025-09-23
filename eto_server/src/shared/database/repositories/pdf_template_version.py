@@ -14,6 +14,7 @@ from shared.exceptions import RepositoryError, ObjectNotFoundError
 from shared.database.models import PdfTemplateVersionModel
 from shared.database.connection import DatabaseConnectionManager
 from shared.models import PdfTemplateVersion, PdfTemplateVersionCreate
+from shared.utils import DateTimeUtils
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +124,7 @@ class PdfTemplateVersionRepository(BaseRepository[PdfTemplateVersionModel]):
                 model = session.get(self.model_class, version_id)
                 if model:
                     model.usage_count += 1
-                    model.last_used_at = datetime.now(timezone.utc)
+                    model.last_used_at = DateTimeUtils.utc_now()
 
         except SQLAlchemyError as e:
             logger.error(f"Error incrementing usage count for version {version_id}: {e}")

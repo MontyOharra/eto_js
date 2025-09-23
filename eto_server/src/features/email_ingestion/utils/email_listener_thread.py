@@ -9,6 +9,7 @@ from datetime import datetime, timezone, timedelta
 
 from shared.models import EmailConfig, EmailMessage, EmailAttachment
 from features.email_ingestion.integrations.base_integration import BaseEmailIntegration
+from shared.utils import DateTimeUtils
 
 logger = logging.getLogger(__name__)
 
@@ -53,11 +54,11 @@ class EmailListenerThread(threading.Thread):
             else:
                 self.last_check_time = config.last_check_time.astimezone(timezone.utc)
         else:
-            self.last_check_time = datetime.now(timezone.utc)
+            self.last_check_time = DateTimeUtils.utc_now()
 
         # Store activation time for fresh activation detection
         # This is the time when this listener thread was created (activation time)
-        self.activation_time = datetime.now(timezone.utc)
+        self.activation_time = DateTimeUtils.utc_now()
         
         logger.info(f"Initialized EmailListenerThread for config {config.id} "
                    f"with {self.check_interval}s interval")
@@ -156,7 +157,7 @@ class EmailListenerThread(threading.Thread):
                     continue
             
             # Update last check time to now
-            self.last_check_time = datetime.now(timezone.utc)
+            self.last_check_time = DateTimeUtils.utc_now()
             
         except Exception as e:
             logger.error(f"Error checking emails for config {self.config.id}: {e}")

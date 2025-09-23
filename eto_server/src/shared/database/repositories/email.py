@@ -11,6 +11,7 @@ from shared.database.repositories import BaseRepository
 from shared.exceptions import RepositoryError, ValidationError
 from shared.database.models import EmailModel
 from shared.models import Email, EmailCreate, EmailSummary
+from shared.utils import DateTimeUtils
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +76,7 @@ class EmailRepository(BaseRepository[EmailModel]):
                         setattr(model, field, value)
                 
                 # Set timestamps
-                current_time = datetime.now(timezone.utc)
+                current_time = DateTimeUtils.utc_now()
                 setattr(model, 'processed_at', current_time)
                 setattr(model, 'created_at', current_time)
                 
@@ -258,7 +259,7 @@ class EmailRepository(BaseRepository[EmailModel]):
         """
         try:
             with self.connection_manager.session_scope() as session:
-                cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours)
+                cutoff_time = DateTimeUtils.utc_now() - timedelta(hours=hours)
                 
                 query = session.query(self.model_class).filter(
                     self.model_class.received_date >= cutoff_time
