@@ -60,3 +60,32 @@ class DateTimeUtils:
 
         # Convert to UTC and remove timezone info for database storage
         return dt.astimezone(timezone.utc).replace(tzinfo=None)
+
+    @staticmethod
+    def parse_iso_datetime(dt_string: str) -> datetime:
+        """
+        Parse ISO 8601 datetime string to timezone-aware UTC datetime
+
+        Args:
+            dt_string: ISO 8601 datetime string (e.g., "2024-01-15T10:30:00Z" or "2024-01-15T10:30:00+00:00")
+
+        Returns:
+            Timezone-aware UTC datetime
+
+        Raises:
+            ValueError: If the datetime string is invalid
+        """
+        try:
+            # Handle common ISO formats
+            if dt_string.endswith('Z'):
+                # Remove Z and add +00:00 for consistent parsing
+                dt_string = dt_string[:-1] + '+00:00'
+
+            # Parse with timezone info
+            dt = datetime.fromisoformat(dt_string)
+
+            # Ensure UTC
+            return DateTimeUtils.ensure_utc_aware(dt)
+
+        except ValueError as e:
+            raise ValueError(f"Invalid ISO datetime format: {e}")

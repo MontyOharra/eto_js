@@ -22,55 +22,76 @@ class BulkRunRequest(BaseModel):
     run_ids: List[int]
 
 router = APIRouter(
-    prefix="/eto",
+    prefix="/eto-runs",
     tags=["ETO Processing"]
 )
 
 
-@router.get("/dashboard", response_model=Dict[str, Any])
-def get_dashboard(
+@router.get("/", response_model=List[EtoRunSummary])
+def get_runs(
+    eto_run_status: Optional[str] = Query(None, description="Filter by processing status"),
+    limit: Optional[int] = Query(50, ge=1, le=1000, description="Maximum number of results"),
+    offset: Optional[int] = Query(0, ge=0, description="Number of results to skip"),
+    order_by: str = Query("created_at", description="Field to order by"),
+    order_direction: str = Query("desc", description="Sort direction (asc, desc)"),
+    since_date: Optional[str] = Query(None, description="Only include runs created after this date (ISO format)"),
     container: ServiceContainer = Depends(get_service_container)
 ):
     """
-    Get ETO dashboard data with runs segmented by status
+    Get ETO runs with filtering, pagination, and ordering
 
-    Returns runs grouped by status with summary data including email information
-    when the PDF file is associated with an email.
+    Query parameters:
+    - **status**: Filter by processing status (not_started, processing, success, failure, needs_template, skipped)
+    - **limit**: Maximum number of results (1-1000, default: 50)
+    - **offset**: Number of results to skip (default: 0)
+    - **order_by**: Field to order by (created_at, started_at, completed_at, default: created_at)
+    - **order_direction**: Sort direction (asc, desc, default: desc)
+    - **since_date**: Only include runs created after this date (ISO 8601 format)
+
+    Returns runs with email information when the PDF originated from email ingestion.
     """
     try:
-        eto_service = container.get_eto_processing_service()
+        eto_service = container.get_eto_service()
 
-        # Get all runs grouped by status
-        runs_by_status = eto_service.get_all_runs_grouped_by_status()
+        # Parse since_date if provided
+        since_date_parsed = None
+        if since_date:
+            try:
+                since_date_parsed = DateTimeUtils.parse_iso_datetime(since_date)
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid since_date format. Use ISO 8601 format: {e}"
+                )
 
-        # Get processing statistics
-        stats = eto_service.get_processing_statistics()
+        # Get runs with filters
+        runs = eto_service.get_runs(
+            status=eto_run_status,
+            limit=limit,
+            offset=offset,
+            order_by=order_by,
+            order_direction=order_direction,
+            since_date=since_date_parsed
+        )
 
-        # Format response
-        dashboard_data = {
-            "runs_by_status": runs_by_status,
-            "statistics": stats,
-            "last_updated": DateTimeUtils.utc_now().isoformat()
-        }
-
-        logger.debug(f"Retrieved ETO dashboard data with {sum(len(runs) for runs in runs_by_status.values())} total runs")
-        return dashboard_data
+        logger.debug(f"Retrieved {len(runs)} ETO runs with filters")
+        return runs
 
     except ServiceError as e:
-        logger.error(f"Failed to get ETO dashboard data: {e}")
+        logger.error(f"Failed to get ETO runs: {e}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
     except Exception as e:
-        logger.error(f"Unexpected error getting ETO dashboard: {e}")
+        logger.error(f"Unexpected error getting ETO runs: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error"
         )
 
 
-@router.get("/runs/{run_id}", response_model=EtoRun)
+@router.get("/{run_id}", response_model=EtoRun)
 def get_run_details(
     run_id: int,
     container: ServiceContainer = Depends(get_service_container)
@@ -83,7 +104,7 @@ def get_run_details(
     For all runs: includes processing timeline and status history
     """
     try:
-        eto_service = container.get_eto_processing_service()
+        eto_service = container.get_eto_service()
 
         run = eto_service.get_run_by_id(run_id)
         if not run:
@@ -109,7 +130,7 @@ def get_run_details(
         )
 
 
-@router.patch("/runs/{run_id}/skip", response_model=EtoRun)
+@router.patch("/{run_id}/skip", response_model=EtoRun)
 def skip_run(
     run_id: int,
     container: ServiceContainer = Depends(get_service_container)
@@ -120,11 +141,9 @@ def skip_run(
     Only runs with status 'failure' or 'needs_template' can be skipped.
     """
     try:
-        eto_service = container.get_eto_processing_service()
+        eto_service = container.get_eto_service()
 
-        updated_run = eto_service.mark_run_as_skipped(run_id)
-
-        logger.info(f"Marked ETO run {run_id} as skipped")
+        updated_run = eto_service.skip_run(run_id)
         return updated_run
 
     except ObjectNotFoundError:
@@ -151,7 +170,7 @@ def skip_run(
         )
 
 
-@router.delete("/runs/{run_id}", response_model=EtoRun)
+@router.delete("/{run_id}", response_model=EtoRun)
 def delete_run(
     run_id: int,
     container: ServiceContainer = Depends(get_service_container)
@@ -162,9 +181,9 @@ def delete_run(
     Only runs with status 'skipped' can be permanently deleted.
     """
     try:
-        eto_service = container.get_eto_processing_service()
+        eto_service = container.get_eto_service()
 
-        deleted_run = eto_service.delete_skipped_run(run_id)
+        deleted_run = eto_service.delete_run(run_id)
 
         logger.info(f"Permanently deleted ETO run {run_id}")
         return deleted_run
@@ -193,22 +212,24 @@ def delete_run(
         )
 
 
-@router.patch("/runs/{run_id}/reprocess", response_model=EtoRun)
+@router.patch("/{run_id}/reprocess", response_model=EtoRun)
 def reprocess_run(
     run_id: int,
+    force: bool = Query(False, description="Force reprocessing even if already successful"),
     container: ServiceContainer = Depends(get_service_container)
 ):
     """
-    Reset a skipped run back to not_started status for reprocessing
+    Reset a run back to not_started status for background reprocessing
 
-    Only runs with status 'skipped' can be reset for reprocessing.
+    Only runs with status 'skipped', 'failure', or 'needs_template' can be reset.
+    Use force=true to reprocess successful runs.
     """
     try:
-        eto_service = container.get_eto_processing_service()
+        eto_service = container.get_eto_service()
 
-        reset_run = eto_service.reset_run_for_reprocessing(run_id)
+        reset_run = eto_service.reprocess_run(run_id, force=force)
 
-        logger.info(f"Reset ETO run {run_id} for reprocessing")
+        logger.info(f"Queued ETO run {run_id} for background reprocessing")
         return reset_run
 
     except ObjectNotFoundError:
@@ -222,13 +243,13 @@ def reprocess_run(
             detail=str(e)
         )
     except ServiceError as e:
-        logger.error(f"Failed to reset ETO run {run_id}: {e}")
+        logger.error(f"Failed to queue ETO run {run_id} for reprocessing: {e}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
     except Exception as e:
-        logger.error(f"Unexpected error resetting ETO run {run_id}: {e}")
+        logger.error(f"Unexpected error queueing ETO run {run_id} for reprocessing: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error"
@@ -243,26 +264,27 @@ def get_eto_health(
     Get ETO service health and status information
 
     Returns detailed health information about the ETO processing service
-    including processing capacity, recent activity, and service status.
+    including worker status, processing capacity, and service health.
     """
     try:
-        eto_service = container.get_eto_processing_service()
+        eto_service = container.get_eto_service()
 
         # Check if service is healthy
         is_healthy = eto_service.is_healthy()
 
-        # Get recent processing statistics
-        stats = eto_service.get_processing_statistics()
+        # Get worker status
+        worker_status = eto_service.get_worker_status()
 
         health_data = {
             "status": "healthy" if is_healthy else "unhealthy",
             "service_name": "ETO Processing Service",
             "timestamp": DateTimeUtils.utc_now().isoformat(),
-            "statistics": stats,
+            "worker": worker_status,
             "details": {
                 "processing_enabled": is_healthy,
-                "database_connected": True,  # If we got stats, DB is connected
-                "template_service_available": True  # Implied if service is working
+                "database_connected": True,  # If we got worker status, DB is connected
+                "template_service_available": True,  # Implied if service is working
+                "background_processing": worker_status.get("worker_running", False)
             }
         }
 
@@ -303,9 +325,197 @@ def get_eto_health(
         )
 
 
+# ========== PDF Processing Entry Point ==========
+
+@router.post("/process-pdf/{pdf_file_id}", response_model=EtoRun)
+def queue_pdf_processing(
+    pdf_file_id: int,
+    container: ServiceContainer = Depends(get_service_container)
+):
+    """
+    Queue a PDF file for background ETO processing
+
+    Creates an ETO run with 'not_started' status that will be picked up
+    by the background worker for automatic processing.
+
+    Args:
+        pdf_file_id: ID of the PDF file to process
+
+    Returns:
+        EtoRun with 'not_started' status - processing will happen in background
+    """
+    try:
+        eto_service = container.get_eto_service()
+
+        eto_run = eto_service.process_pdf(pdf_file_id)
+
+        logger.info(f"Queued PDF {pdf_file_id} for background processing as ETO run {eto_run.id}")
+        return eto_run
+
+    except ServiceError as e:
+        logger.error(f"Failed to queue PDF {pdf_file_id} for processing: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error queueing PDF {pdf_file_id} for processing: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
+
+
+# ========== Worker Management ==========
+
+@router.post("/worker/start", response_model=Dict[str, Any])
+async def start_worker(
+    container: ServiceContainer = Depends(get_service_container)
+):
+    """
+    Start the background ETO processing worker
+
+    The worker will continuously process runs with 'not_started' status.
+    """
+    try:
+        eto_service = container.get_eto_service()
+
+        success = await eto_service.start_worker()
+
+        return {
+            "action": "start_worker",
+            "success": success,
+            "message": "Worker started successfully" if success else "Worker was already running or disabled",
+            "timestamp": DateTimeUtils.utc_now().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"Error starting ETO worker: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to start worker: {str(e)}"
+        )
+
+
+@router.post("/worker/stop", response_model=Dict[str, Any])
+async def stop_worker(
+    graceful: bool = Query(True, description="Whether to allow current batch to complete"),
+    container: ServiceContainer = Depends(get_service_container)
+):
+    """
+    Stop the background ETO processing worker
+
+    Args:
+        graceful: If true, allows current batch to complete before stopping
+    """
+    try:
+        eto_service = container.get_eto_service()
+
+        success = await eto_service.stop_worker(graceful=graceful)
+
+        return {
+            "action": "stop_worker",
+            "success": success,
+            "graceful": graceful,
+            "message": "Worker stopped successfully" if success else "Worker was not running",
+            "timestamp": DateTimeUtils.utc_now().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"Error stopping ETO worker: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to stop worker: {str(e)}"
+        )
+
+
+@router.post("/worker/pause", response_model=Dict[str, Any])
+def pause_worker(
+    container: ServiceContainer = Depends(get_service_container)
+):
+    """
+    Emergency pause the background worker (stops processing new runs)
+
+    Current runs will continue but no new runs will be started.
+    """
+    try:
+        eto_service = container.get_eto_service()
+
+        success = eto_service.pause_worker()
+
+        return {
+            "action": "pause_worker",
+            "success": success,
+            "message": "Worker paused successfully" if success else "Worker was not running",
+            "timestamp": DateTimeUtils.utc_now().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"Error pausing ETO worker: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to pause worker: {str(e)}"
+        )
+
+
+@router.post("/worker/resume", response_model=Dict[str, Any])
+def resume_worker(
+    container: ServiceContainer = Depends(get_service_container)
+):
+    """
+    Resume the background worker from paused state
+    """
+    try:
+        eto_service = container.get_eto_service()
+
+        success = eto_service.resume_worker()
+
+        return {
+            "action": "resume_worker",
+            "success": success,
+            "message": "Worker resumed successfully" if success else "Worker was not running or not paused",
+            "timestamp": DateTimeUtils.utc_now().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"Error resuming ETO worker: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to resume worker: {str(e)}"
+        )
+
+
+@router.get("/worker/status", response_model=Dict[str, Any])
+def get_worker_status(
+    container: ServiceContainer = Depends(get_service_container)
+):
+    """
+    Get detailed worker status and statistics
+
+    Returns information about worker state, processing capacity,
+    and current workload.
+    """
+    try:
+        eto_service = container.get_eto_service()
+
+        worker_status = eto_service.get_worker_status()
+
+        return {
+            **worker_status,
+            "timestamp": DateTimeUtils.utc_now().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting ETO worker status: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get worker status: {str(e)}"
+        )
+
+
 # ========== Bulk Operations ==========
 
-@router.patch("/runs/bulk/skip", response_model=Dict[str, Any])
+@router.patch("/bulk/skip", response_model=Dict[str, Any])
 def bulk_skip_runs(
     request: BulkRunRequest,
     container: ServiceContainer = Depends(get_service_container)
@@ -323,14 +533,14 @@ def bulk_skip_runs(
                 detail="No run IDs provided"
             )
 
-        eto_service = container.get_eto_processing_service()
+        eto_service = container.get_eto_service()
 
         results = []
         errors = []
 
         for run_id in request.run_ids:
             try:
-                updated_run = eto_service.mark_run_as_skipped(run_id)
+                updated_run = eto_service.skip_run(run_id)
                 results.append({
                     "run_id": run_id,
                     "status": "success",
@@ -373,7 +583,7 @@ def bulk_skip_runs(
         )
 
 
-@router.patch("/runs/bulk/reprocess", response_model=Dict[str, Any])
+@router.patch("/bulk/reprocess", response_model=Dict[str, Any])
 def bulk_reprocess_runs(
     request: BulkRunRequest,
     container: ServiceContainer = Depends(get_service_container)
@@ -391,14 +601,14 @@ def bulk_reprocess_runs(
                 detail="No run IDs provided"
             )
 
-        eto_service = container.get_eto_processing_service()
+        eto_service = container.get_eto_service()
 
         results = []
         errors = []
 
         for run_id in request.run_ids:
             try:
-                reset_run = eto_service.reset_run_for_reprocessing(run_id)
+                reset_run = eto_service.reprocess_run(run_id)
                 results.append({
                     "run_id": run_id,
                     "status": "success",

@@ -151,6 +151,32 @@ async def service_status() -> Dict[str, Any]:
             }
             status_data["overall_status"] = "degraded"
 
+        # Check ETO processing service
+        try:
+            eto_service = container.get_eto_service()
+            eto_healthy = eto_service.is_healthy()
+            worker_status = eto_service.get_worker_status()
+
+            status_data["services"]["eto_processing"] = {
+                "status": "healthy" if eto_healthy else "unhealthy",
+                "message": "ETO processing service operational" if eto_healthy else "ETO processing service not operational",
+                "worker": {
+                    "enabled": worker_status.get("worker_enabled", False),
+                    "running": worker_status.get("worker_running", False),
+                    "paused": worker_status.get("worker_paused", False),
+                    "pending_runs": worker_status.get("pending_runs_count", 0),
+                    "processing_runs": worker_status.get("currently_processing_count", 0)
+                }
+            }
+            if not eto_healthy:
+                status_data["overall_status"] = "degraded"
+        except Exception as e:
+            status_data["services"]["eto_processing"] = {
+                "status": "error",
+                "message": f"ETO processing service error: {str(e)}"
+            }
+            status_data["overall_status"] = "degraded"
+
         # Return appropriate HTTP status based on overall health
         if status_data["overall_status"] == "healthy":
             return status_data

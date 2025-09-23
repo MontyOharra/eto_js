@@ -8,7 +8,7 @@ from typing import Optional, List, Dict, Any
 
 from shared.database.repositories.pdf_template import PdfTemplateRepository
 from shared.database.repositories.pdf_template_version import PdfTemplateVersionRepository
-from shared.services import get_pdf_processing_service
+# PDF processing service will be injected through constructor
 from shared.exceptions import ObjectNotFoundError
 
 from shared.models import (
@@ -22,11 +22,12 @@ logger = logging.getLogger(__name__)
 class PdfTemplateService:
     """Service for PDF template matching and management"""
 
-    def __init__(self, connection_manager):
+    def __init__(self, connection_manager, pdf_service):
         if not connection_manager:
             raise RuntimeError("Database connection manager is required")
 
         self.connection_manager = connection_manager
+        self.pdf_service = pdf_service
 
         # Repository layer - with explicit type annotations for IDE support
         self.pdf_template_repo: PdfTemplateRepository = PdfTemplateRepository(self.connection_manager)

@@ -7,7 +7,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Depends, status, Query
 from fastapi.responses import JSONResponse
 
-from shared.services import get_pdf_template_service
+from shared.services.service_container import ServiceContainer, get_service_container
 from shared.models import PdfTemplate, PdfTemplateVersion, PdfTemplateCreate, PdfTemplateUpdate, PdfTemplateVersionCreate, ServiceStatusResponse, ServiceHealth
 from shared.exceptions import ObjectNotFoundError
 from api.schemas import (
@@ -33,7 +33,10 @@ router = APIRouter(
              status_code=status.HTTP_201_CREATED,
              summary="Create a new PDF template",
              description="Create a new PDF template with signature objects and extraction fields")
-def create_template(template_create: PdfTemplateCreate) -> PdfTemplate:
+def create_template(
+    template_create: PdfTemplateCreate,
+    container: ServiceContainer = Depends(get_service_container)
+) -> PdfTemplate:
     """
     Create a new PDF template
 
@@ -45,7 +48,7 @@ def create_template(template_create: PdfTemplateCreate) -> PdfTemplate:
     """
     try:
         # Get PDF template service
-        template_service = get_pdf_template_service()
+        template_service = container.get_pdf_template_service()
         if not template_service:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -96,7 +99,8 @@ def create_template(template_create: PdfTemplateCreate) -> PdfTemplate:
              description="Create a new version of an existing PDF template with updated signature objects and extraction fields")
 def create_template_version(
     template_id: int,
-    request_data: PdfTemplateVersionCreateRequest
+    request_data: PdfTemplateVersionCreateRequest,
+    container: ServiceContainer = Depends(get_service_container)
 ) -> PdfTemplateVersion:
     """
     Create a new version of a PDF template
@@ -106,7 +110,7 @@ def create_template_version(
     - **extraction_fields**: Fields to extract from matching PDFs (optional)
     """
     try:
-        template_service = get_pdf_template_service()
+        template_service = container.get_pdf_template_service()
         if not template_service:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -174,7 +178,7 @@ def list_templates(
     """
     try:
         # Get PDF template service
-        template_service = get_pdf_template_service()
+        template_service = container.get_pdf_template_service()
         if not template_service:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -217,7 +221,7 @@ def get_template(template_id: int) -> PdfTemplate:
     """
     try:
         # Get PDF template service
-        template_service = get_pdf_template_service()
+        template_service = container.get_pdf_template_service()
         if not template_service:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -259,7 +263,7 @@ def get_template_version(
     """
     try:
         # Get PDF template service
-        template_service = get_pdf_template_service()
+        template_service = container.get_pdf_template_service()
         if not template_service:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -306,7 +310,7 @@ def update_template(
     """
     try:
         # Get PDF template service
-        template_service = get_pdf_template_service()
+        template_service = container.get_pdf_template_service()
         if not template_service:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -346,7 +350,7 @@ def get_pdf_templates_status() -> ServiceStatusResponse:
     Returns health status of the PDF templates service including database connectivity
     """
     try:
-        template_service = get_pdf_template_service()
+        template_service = container.get_pdf_template_service()
         if not template_service:
             return ServiceStatusResponse(
                 service="pdf_templates",

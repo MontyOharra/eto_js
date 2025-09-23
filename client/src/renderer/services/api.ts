@@ -3,23 +3,20 @@
  * Handles all HTTP communication with the Flask backend
  */
 
-// Backend API Response Types
-export interface ApiEtoRun {
+// Backend API Response Types - Updated for new unified server
+export interface ApiEtoRunSummary {
   id: number;
-  email_id: number;
   pdf_file_id: number;
   status: "not_started" | "processing" | "success" | "failure" | "needs_template" | "skipped";
   processing_step?: "template_matching" | "extracting_data" | "transforming_data";
 
   // Basic metadata
   pdf_filename: string;
-  email_subject: string;
-  sender_email: string;
   file_size: number;
 
   // Processing info
   matched_template_id?: number;
-  template_name?: string;
+  matched_template_name?: string;
   processing_duration_ms?: number;
   error_message?: string;
 
@@ -27,15 +24,31 @@ export interface ApiEtoRun {
   created_at: string;
   started_at?: string;
   completed_at?: string;
+
+  // Email information (when PDF originated from email ingestion)
+  email?: {
+    email_id: number;
+    subject?: string;
+    sender_email?: string;
+    sender_name?: string;
+    received_at?: string;
+  };
 }
 
+// Full ETO run details (for individual run endpoint)
+export interface ApiEtoRun extends ApiEtoRunSummary {
+  // Additional detailed fields for full run object
+  extracted_data?: any;
+  transformation_audit?: any;
+  target_data?: any;
+  error_details?: any;
+  step_execution_log?: any;
+}
+
+// Response is direct array from FastAPI
 export interface ApiEtoRunsResponse {
-  success: boolean;
-  data: ApiEtoRun[];
-  total: number;
-  page: number;
-  limit: number;
-  total_pages: number;
+  // New server returns array directly, not wrapped in response object
+  data: ApiEtoRunSummary[];
 }
 
 export interface ApiSystemStats {
@@ -188,105 +201,99 @@ class ApiClient {
   }
 
   /**
-   * Get ETO Runs
+   * Get ETO Service Health
+   */
+  async getEtoHealth(): Promise<{
+    status: string;
+    service_name: string;
+    timestamp: string;
+    worker: {
+      worker_enabled: boolean;
+      worker_running: boolean;
+      worker_paused: boolean;
+      max_concurrent_runs: number;
+      polling_interval: number;
+      pending_runs_count: number;
+      currently_processing_count: number;
+      worker_task_active: boolean;
+    };
+    details: {
+      processing_enabled: boolean;
+      database_connected: boolean;
+      template_service_available: boolean;
+      background_processing: boolean;
+    };
+  }> {
+    return this.fetchApi('/api/eto-runs/health');
+  }
+
+  /**
+   * Get ETO Runs - Updated for new unified server
    */
   async getEtoRuns(params?: {
-    status?: string;
-    email_id?: number;
-    template_id?: number;
-    has_errors?: boolean;
-    date_from?: string;
-    date_to?: string;
-    page?: number;
+    eto_run_status?: string; // Updated parameter name
     limit?: number;
+    offset?: number;
     order_by?: string;
-    desc?: boolean;
-  }): Promise<ApiEtoRunsResponse> {
+    order_direction?: string;
+    since_date?: string;
+  }): Promise<{ data: ApiEtoRunSummary[] }> {
     const searchParams = new URLSearchParams();
 
-    if (params?.status) {
-      searchParams.append('status', params.status);
-    }
-    if (params?.email_id) {
-      searchParams.append('email_id', params.email_id.toString());
-    }
-    if (params?.template_id) {
-      searchParams.append('template_id', params.template_id.toString());
-    }
-    if (params?.has_errors !== undefined) {
-      searchParams.append('has_errors', params.has_errors.toString());
-    }
-    if (params?.date_from) {
-      searchParams.append('date_from', params.date_from);
-    }
-    if (params?.date_to) {
-      searchParams.append('date_to', params.date_to);
-    }
-    if (params?.page) {
-      searchParams.append('page', params.page.toString());
+    if (params?.eto_run_status) {
+      searchParams.append('eto_run_status', params.eto_run_status);
     }
     if (params?.limit) {
       searchParams.append('limit', params.limit.toString());
     }
+    if (params?.offset) {
+      searchParams.append('offset', params.offset.toString());
+    }
     if (params?.order_by) {
       searchParams.append('order_by', params.order_by);
     }
-    if (params?.desc !== undefined) {
-      searchParams.append('desc', params.desc.toString());
+    if (params?.order_direction) {
+      searchParams.append('order_direction', params.order_direction);
+    }
+    if (params?.since_date) {
+      searchParams.append('since_date', params.since_date);
     }
 
     const endpoint = `/api/eto-runs${searchParams.toString() ? `?${searchParams}` : ''}`;
-    return this.fetchApi<ApiEtoRunsResponse>(endpoint);
+    const data = await this.fetchApi<ApiEtoRunSummary[]>(endpoint);
+    return { data };
   }
 
   /**
    * Get ETO Run Details
    */
-  async getEtoRunDetails(runId: string | number): Promise<{
-    success: boolean;
-    data: ApiEtoRun & {
-      error_details?: any;
-      step_execution_log?: any;
-      template_name?: string;
-      template_version?: number;
-      template_match_coverage?: number;
-      failed_step_id?: number;
-      order_id?: number;
-    };
-  }> {
-    return this.fetchApi(`/api/eto-runs/${runId}`);
+  async getEtoRunDetails(runId: string | number): Promise<{ data: ApiEtoRun }> {
+    const data = await this.fetchApi<ApiEtoRun>(`/api/eto-runs/${runId}`);
+    return { data };
   }
 
   /**
    * Skip ETO Run
    */
-  async skipEtoRun(runId: string | number, params: {
-    reason: string;
+  async skipEtoRun(runId: string | number, params?: {
+    reason?: string;
     permanent?: boolean;
-  }): Promise<{
-    success: boolean;
-    run_id: number;
-    status: string;
-    reason: string;
-    message: string;
-  }> {
-    return this.fetchApi(`/api/eto-runs/${runId}/skip`, {
-      method: 'POST',
-      body: JSON.stringify(params),
+  }): Promise<{ success: boolean; data: ApiEtoRun }> {
+    const data = await this.fetchApi<ApiEtoRun>(`/api/eto-runs/${runId}/skip`, {
+      method: 'PATCH',
+      body: params ? JSON.stringify(params) : undefined,
     });
+    return { success: true, data };
   }
 
   /**
    * Delete ETO Run
    */
-  async deleteEtoRun(runId: string | number): Promise<{
-    success: boolean;
-    run_id: number;
-    message: string;
-  }> {
-    return this.fetchApi(`/api/eto-runs/${runId}`, {
+  async deleteEtoRun(runId: string | number): Promise<{ success: boolean; data: ApiEtoRun }> {
+    const data = await this.fetchApi<ApiEtoRun>(`/api/eto-runs/${runId}`, {
       method: 'DELETE',
     });
+    return { success: true, data };
   }
 
   /**
@@ -294,48 +301,94 @@ class ApiClient {
    */
   async reprocessEtoRun(runId: string | number, params?: {
     force?: boolean;
-    template_id?: number;
-    reset_template?: boolean;
-    reason?: string;
-  }): Promise<{
-    success: boolean;
-    run_id: number;
-    old_status: string;
-    new_status: string;
-    message: string;
+  }): Promise<{ success: boolean; data: ApiEtoRun }> {
+    const searchParams = new URLSearchParams();
+    if (params?.force) {
+      searchParams.append('force', params.force.toString());
+    }
+
+    const endpoint = `/api/eto-runs/${runId}/reprocess${searchParams.toString() ? `?${searchParams}` : ''}`;
+    const data = await this.fetchApi<ApiEtoRun>(endpoint, {
+      method: 'PATCH',
+    });
+    return { success: true, data };
+  }
+
+  /**
+   * Get ETO Worker Status
+   */
+  async getEtoWorkerStatus(): Promise<{
+    worker_enabled: boolean;
+    worker_running: boolean;
+    worker_paused: boolean;
+    max_concurrent_runs: number;
+    polling_interval: number;
+    pending_runs_count: number;
+    currently_processing_count: number;
+    worker_task_active: boolean;
+    timestamp: string;
   }> {
-    return this.fetchApi(`/api/eto-runs/${runId}/reprocess`, {
+    return this.fetchApi('/api/eto-runs/worker/status');
+  }
+
+  /**
+   * Start ETO Worker
+   */
+  async startEtoWorker(): Promise<{
+    action: string;
+    success: boolean;
+    message: string;
+    timestamp: string;
+  }> {
+    return this.fetchApi('/api/eto-runs/worker/start', {
       method: 'POST',
-      body: JSON.stringify(params || {}),
     });
   }
 
   /**
-   * Get ETO Processing Statistics
+   * Stop ETO Worker
    */
-  async getEtoStatistics(): Promise<{
+  async stopEtoWorker(graceful: boolean = true): Promise<{
+    action: string;
     success: boolean;
-    data: {
-      total_runs: number;
-      successful_runs: number;
-      failed_runs: number;
-      skipped_runs: number;
-      processing_runs: number;
-      needs_template_runs: number;
-      success_rate: number;
-      avg_processing_time_ms?: number;
-      median_processing_time_ms?: number;
-      last_24h_runs: number;
-      last_7d_runs: number;
-      last_30d_runs: number;
-      most_common_errors: any[];
-      template_coverage: number;
-      last_successful_run?: string;
-      last_failed_run?: string;
-      last_processed_run?: string;
-    };
+    graceful: boolean;
+    message: string;
+    timestamp: string;
   }> {
-    return this.fetchApi('/api/eto-runs/statistics');
+    const searchParams = new URLSearchParams();
+    searchParams.append('graceful', graceful.toString());
+
+    return this.fetchApi(`/api/eto-runs/worker/stop?${searchParams}`, {
+      method: 'POST',
+    });
+  }
+
+  /**
+   * Pause ETO Worker
+   */
+  async pauseEtoWorker(): Promise<{
+    action: string;
+    success: boolean;
+    message: string;
+    timestamp: string;
+  }> {
+    return this.fetchApi('/api/eto-runs/worker/pause', {
+      method: 'POST',
+    });
+  }
+
+  /**
+   * Resume ETO Worker
+   */
+  async resumeEtoWorker(): Promise<{
+    action: string;
+    success: boolean;
+    message: string;
+    timestamp: string;
+  }> {
+    return this.fetchApi('/api/eto-runs/worker/resume', {
+      method: 'POST',
+    });
   }
 
   /**
@@ -482,7 +535,53 @@ class ApiClient {
   }
 
   /**
-   * Reprocess All Failed/Needs Template Runs
+   * Bulk Skip ETO Runs
+   */
+  async bulkSkipRuns(runIds: number[]): Promise<{
+    operation: string;
+    total_requested: number;
+    successful: number;
+    failed: number;
+    results: Array<{ run_id: number; status: string; new_status?: string }>;
+    errors: Array<{ run_id: number; status: string; error: string }>;
+    timestamp: string;
+  }> {
+    return this.fetchApi('/api/eto-runs/bulk/skip', {
+      method: 'PATCH',
+      body: JSON.stringify({ run_ids: runIds }),
+    });
+  }
+
+  /**
+   * Bulk Reprocess ETO Runs
+   */
+  async bulkReprocessRuns(runIds: number[]): Promise<{
+    operation: string;
+    total_requested: number;
+    successful: number;
+    failed: number;
+    results: Array<{ run_id: number; status: string; new_status?: string }>;
+    errors: Array<{ run_id: number; status: string; error: string }>;
+    timestamp: string;
+  }> {
+    return this.fetchApi('/api/eto-runs/bulk/reprocess', {
+      method: 'PATCH',
+      body: JSON.stringify({ run_ids: runIds }),
+    });
+  }
+
+  /**
+   * Queue PDF for ETO Processing
+   */
+  async queuePdfProcessing(pdfFileId: number): Promise<{ data: ApiEtoRun }> {
+    const data = await this.fetchApi<ApiEtoRun>(`/api/eto-runs/process-pdf/${pdfFileId}`, {
+      method: 'POST',
+    });
+    return { data };
+  }
+
+  /**
+   * Reprocess All Failed/Needs Template Runs (Legacy method - using bulk reprocess)
    */
   async reprocessAllFailedRuns(): Promise<{
     success: boolean;
@@ -494,9 +593,36 @@ class ApiClient {
       error?: string;
     };
   }> {
-    return this.fetchApi('/api/eto-runs/reprocess-all', {
-      method: 'POST',
-    });
+    // Get all failed and needs_template runs first
+    const failedRuns = await this.getEtoRuns({ eto_run_status: 'failure', limit: 1000 });
+    const needsTemplateRuns = await this.getEtoRuns({ eto_run_status: 'needs_template', limit: 1000 });
+
+    const allRunIds = [...failedRuns.data, ...needsTemplateRuns.data].map(run => run.id);
+
+    if (allRunIds.length === 0) {
+      return {
+        success: true,
+        result: {
+          reprocessed: 0,
+          message: 'No failed or needs_template runs found',
+          needs_template_count: 0,
+          failure_count: 0,
+        }
+      };
+    }
+
+    const bulkResult = await this.bulkReprocessRuns(allRunIds);
+
+    return {
+      success: true,
+      result: {
+        reprocessed: bulkResult.successful,
+        message: `Reprocessed ${bulkResult.successful} runs, ${bulkResult.failed} failed`,
+        needs_template_count: needsTemplateRuns.data.length,
+        failure_count: failedRuns.data.length,
+        error: bulkResult.failed > 0 ? `${bulkResult.failed} runs failed to reprocess` : undefined,
+      }
+    };
   }
 
   /**

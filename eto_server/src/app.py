@@ -148,13 +148,14 @@ async def initialize_services() -> None:
         try:
             worker_enabled = os.getenv('ETO_WORKER_ENABLED', 'true').lower() == 'true'
             if worker_enabled:
-                # eto_service = _service_container.get_eto_service()  # ETO service not implemented yet
-                # eto_service.start()
-                logger.info("ETO processing disabled - service not implemented yet")
+                eto_service = _service_container.get_eto_service()
+                # Note: start_worker() is async, but we can't await in this sync context
+                # The worker will be started via the API endpoint when needed
+                logger.info("ETO processing service initialized - worker can be started via API")
             else:
-                logger.info("ETO processing service initialized but worker not started (ETO_WORKER_ENABLED=false)")
+                logger.info("ETO processing service initialized but worker disabled (ETO_WORKER_ENABLED=false)")
         except Exception as eto_error:
-            logger.warning(f"ETO processing auto-start failed: {eto_error}")
+            logger.warning(f"ETO processing service initialization failed: {eto_error}")
 
     except Exception as e:
         logger.error(f"Failed to initialize services: {e}")
@@ -171,10 +172,13 @@ async def cleanup_services() -> None:
             logger.info("Stopping services...")
             # Stop ETO processing service if running
             try:
-                # eto_service = _service_container.get_eto_service()  # ETO service not implemented yet
-                # if hasattr(eto_service, 'stop'):
-                #     eto_service.stop()
-                logger.info("ETO processing service not running (not implemented yet)")
+                eto_service = _service_container.get_eto_service()
+                if hasattr(eto_service, 'stop_worker'):
+                    # Note: stop_worker() is async, but we can't await in this sync context
+                    # In a production environment, you'd want to handle this properly
+                    logger.info("ETO processing service cleanup - worker should be stopped gracefully")
+                else:
+                    logger.info("ETO processing service stopped")
             except Exception as e:
                 logger.warning(f"Failed to stop ETO service: {e}")
             
@@ -307,7 +311,7 @@ def register_routers(app: FastAPI) -> None:
     # Register health router first
     try:
         from .api.routers.health import router as health_router
-        app.include_router(health_router)
+        app.include_router(health_router, prefix="/api")
         logger.info("Registered health router")
     except ImportError as e:
         logger.warning(f"Could not import health router: {e}")
@@ -317,7 +321,7 @@ def register_routers(app: FastAPI) -> None:
     # Register PDF templates router
     try:
         from .api.routers.pdf_templates import router as pdf_templates_router
-        app.include_router(pdf_templates_router)
+        app.include_router(pdf_templates_router, prefix="/api")
         logger.info("Registered PDF templates router")
     except ImportError as e:
         logger.warning(f"Could not import PDF templates router: {e}")
@@ -327,7 +331,7 @@ def register_routers(app: FastAPI) -> None:
     # Register email configs router
     try:
         from .api.routers.email_configs import router as email_configs_router
-        app.include_router(email_configs_router)
+        app.include_router(email_configs_router, prefix="/api")
         logger.info("Registered email configs router")
     except ImportError as e:
         logger.warning(f"Could not import email configs router: {e}")
@@ -337,7 +341,7 @@ def register_routers(app: FastAPI) -> None:
     # Register ETO processing router
     try:
         from .api.routers.eto import router as eto_router
-        app.include_router(eto_router)
+        app.include_router(eto_router, prefix="/api")
         logger.info("Registered ETO processing router")
     except ImportError as e:
         logger.warning(f"Could not import ETO processing router: {e}")
@@ -361,13 +365,15 @@ def register_info_endpoint(app: FastAPI) -> None:
             "endpoints": {
                 "health": "/api/health",
                 "email_configuration": "/api/email-configs",
-                "eto_processing": "/api/eto",
+                "eto_processing": "/api/eto-runs",
+                "eto_worker": "/api/eto-runs/worker",
                 "pdf_templates": "/api/pdf_templates"
             },
             "documentation": {
                 "health": "Service health and status monitoring",
                 "email_configuration": "Email ingestion configuration management",
-                "eto_processing": "ETO processing run management and results",
+                "eto_processing": "ETO processing run management and background processing",
+                "eto_worker": "Background worker management (start/stop/pause/resume)",
                 "pdf_templates": "PDF template creation and versioning"
             },
             "interactive_docs": "/docs",

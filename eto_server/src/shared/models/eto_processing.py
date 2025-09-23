@@ -318,6 +318,25 @@ class EtoRun(EtoRunBase):
 
 # ========== Summary Models ==========
 
+class EtoEmailInfo(BaseModel):
+    """Email information when PDF originated from email ingestion"""
+    email_id: int = Field(..., description="Email record ID")
+    subject: Optional[str] = Field(None, description="Email subject")
+    sender_email: Optional[str] = Field(None, description="Sender email address")
+    sender_name: Optional[str] = Field(None, description="Sender display name")
+    received_date: datetime = Field(..., description="When email was received")
+    config_name: Optional[str] = Field(None, description="Email config name that ingested this email")
+
+    @field_validator('received_date', mode='before')
+    @classmethod
+    def ensure_timezone_aware_email_info(cls, v):
+        """Ensure datetime fields are timezone-aware"""
+        return DateTimeUtils.ensure_utc_aware(v)
+
+    class Config:
+        from_attributes = True
+
+
 class EtoRunSummary(BaseModel):
     """Lightweight ETO run summary for list views and API responses"""
     id: int = Field(..., description="Database ID")
@@ -347,6 +366,9 @@ class EtoRunSummary(BaseModel):
     has_transformed_data: bool = Field(False, description="Whether data was transformed")
     has_order: bool = Field(False, description="Whether order was created")
 
+    # Email information (when PDF originated from email)
+    email: Optional[EtoEmailInfo] = Field(None, description="Email information if PDF came from email ingestion")
+
     class Config:
         from_attributes = True
         use_enum_values = True
@@ -368,7 +390,8 @@ class EtoRunSummary(BaseModel):
             has_template_match=eto_run.get_template_matching_result().has_match(),
             has_extracted_data=eto_run.get_data_extraction_result().has_extracted_data(),
             has_transformed_data=eto_run.get_transformation_result().has_transformed_data(),
-            has_order=eto_run.get_order_integration().has_order()
+            has_order=eto_run.get_order_integration().has_order(),
+            email=None  # Will be populated by repository when available
         )
 
 

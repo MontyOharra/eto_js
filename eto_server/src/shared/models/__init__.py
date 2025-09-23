@@ -23,7 +23,7 @@ from .email import (
 
 from .eto_processing import (
     EtoRunStatus, EtoProcessingStep, EtoErrorType,
-    EtoRunBase, EtoRunCreate, EtoRun, EtoRunSummary,
+    EtoRunBase, EtoRunCreate, EtoRun, EtoRunSummary, EtoEmailInfo,
     EtoProcessingState, EtoErrorInfo, EtoTemplateMatchingResult,
     EtoDataExtractionResult, EtoTransformationResult, EtoOrderIntegration,
     EtoRunStatusUpdate, EtoRunTemplateMatchUpdate, EtoRunDataExtractionUpdate,
@@ -89,7 +89,8 @@ __all__ = [
     'EtoRunBase',
     'EtoRunCreate',
     'EtoRun',
-    'EtoRunSummary',    
+    'EtoRunSummary',
+    'EtoEmailInfo',
     'EtoProcessingState',
     'EtoErrorInfo',
     'EtoTemplateMatchingResult',

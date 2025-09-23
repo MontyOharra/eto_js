@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { apiClient, ApiError } from '../services/api';
+import { apiClient, ApiError, type ApiEtoRunSummary } from '../services/api';
 import type {
   EtoRun,
   EtoRunSummary,
@@ -42,12 +42,34 @@ export function useEtoRuns(params?: {
     try {
       setState(prev => ({ ...prev, loading: true, error: null }));
 
-      const response = await apiClient.getEtoRuns({ status, limit });
+      const response = await apiClient.getEtoRuns({
+        eto_run_status: status,
+        limit,
+        order_by: 'created_at',
+        order_direction: 'desc'
+      });
 
       // Transform API data to frontend summary format
-      const summaries = response.data.map(apiRun => {
-        // Convert ApiEtoRun to EtoRun (they have the same structure)
-        const etoRun: EtoRun = apiRun as EtoRun;
+      const summaries = response.data.map((apiRunSummary: ApiEtoRunSummary) => {
+        // Convert ApiEtoRunSummary to EtoRun format for transform function
+        const etoRun: EtoRun = {
+          id: apiRunSummary.id,
+          email_id: apiRunSummary.email?.email_id || 0,
+          pdf_file_id: apiRunSummary.pdf_file_id,
+          status: apiRunSummary.status,
+          processing_step: apiRunSummary.processing_step,
+          pdf_filename: apiRunSummary.pdf_filename,
+          email_subject: apiRunSummary.email?.subject || 'No Email Subject',
+          sender_email: apiRunSummary.email?.sender_email || 'Unknown Sender',
+          file_size: apiRunSummary.file_size,
+          matched_template_id: apiRunSummary.matched_template_id,
+          template_name: apiRunSummary.matched_template_name,
+          processing_duration_ms: apiRunSummary.processing_duration_ms,
+          error_message: apiRunSummary.error_message,
+          created_at: apiRunSummary.created_at,
+          started_at: apiRunSummary.started_at,
+          completed_at: apiRunSummary.completed_at,
+        };
         return EtoDataTransforms.toSummary(etoRun);
       });
 
@@ -76,7 +98,7 @@ export function useEtoRuns(params?: {
   useEffect(() => {
     if (autoRefresh && refreshInterval > 0) {
       intervalRef.current = setInterval(fetchEtoRuns, refreshInterval);
-      
+
       return () => {
         if (intervalRef.current) {
           clearInterval(intervalRef.current);
@@ -114,9 +136,9 @@ export function useSystemStats(autoRefresh: boolean = false, refreshInterval: nu
   const fetchStats = useCallback(async () => {
     try {
       setState(prev => ({ ...prev, loading: true, error: null }));
-      
+
       const stats = await apiClient.getSystemStats();
-      
+
       setState({
         data: stats,
         loading: false,
@@ -142,7 +164,7 @@ export function useSystemStats(autoRefresh: boolean = false, refreshInterval: nu
   useEffect(() => {
     if (autoRefresh && refreshInterval > 0) {
       intervalRef.current = setInterval(fetchStats, refreshInterval);
-      
+
       return () => {
         if (intervalRef.current) {
           clearInterval(intervalRef.current);
@@ -181,9 +203,9 @@ export function useServerHealth(autoCheck: boolean = true, checkInterval: number
   const checkHealth = useCallback(async () => {
     try {
       setState(prev => ({ ...prev, loading: prev.data === null, error: null }));
-      
+
       const health = await apiClient.healthCheck();
-      
+
       setState({
         data: health,
         loading: false,
@@ -209,7 +231,7 @@ export function useServerHealth(autoCheck: boolean = true, checkInterval: number
   useEffect(() => {
     if (autoCheck && checkInterval > 0) {
       intervalRef.current = setInterval(checkHealth, checkInterval);
-      
+
       return () => {
         if (intervalRef.current) {
           clearInterval(intervalRef.current);
@@ -256,15 +278,15 @@ export function useTemplates(params?: {
   const fetchTemplates = useCallback(async () => {
     try {
       setState(prev => ({ ...prev, loading: true, error: null }));
-      
+
       const response = await apiClient.getTemplates({ status, limit });
-      
+
       // Transform API data to frontend format
       const templates = response.templates.map(template => {
         const fullTemplate = EtoDataTransforms.templateApiToFrontend(template);
         return EtoDataTransforms.templateToSummary(fullTemplate);
       });
-      
+
       setState({
         data: templates,
         loading: false,
@@ -290,7 +312,7 @@ export function useTemplates(params?: {
   useEffect(() => {
     if (autoRefresh && refreshInterval > 0) {
       intervalRef.current = setInterval(fetchTemplates, refreshInterval);
-      
+
       return () => {
         if (intervalRef.current) {
           clearInterval(intervalRef.current);

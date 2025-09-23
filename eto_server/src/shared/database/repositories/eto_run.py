@@ -11,12 +11,12 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import func, case, update, delete
 
 from shared.database.repositories.base import BaseRepository
-from shared.database.models import EtoRunModel
+from shared.database.models import EtoRunModel, PdfFileModel, EmailModel, EmailIngestionConfigModel
 from shared.exceptions import RepositoryError, ObjectNotFoundError, ValidationError
 from shared.models import (
     EtoRun, EtoRunCreate, EtoRunSummary, EtoRunStatus, EtoProcessingStep, EtoErrorType,
     EtoRunTemplateMatchUpdate, EtoRunDataExtractionUpdate, EtoRunTransformationUpdate,
-    EtoRunOrderUpdate, EtoRunResetResult
+    EtoRunOrderUpdate, EtoRunResetResult, EtoEmailInfo
 )
 from shared.utils import DateTimeUtils
 
@@ -172,6 +172,109 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
         except SQLAlchemyError as e:
             logger.error(f"Error getting ETO runs grouped by status: {e}")
             raise RepositoryError(f"Failed to get ETO runs grouped by status: {e}") from e
+
+    def get_runs_with_filters(self,
+                             status: Optional[EtoRunStatus] = None,
+                             limit: Optional[int] = None,
+                             offset: Optional[int] = None,
+                             order_by: str = "created_at",
+                             order_direction: str = "desc",
+                             since_date: Optional[datetime] = None) -> List[EtoRunSummary]:
+        """
+        Get ETO runs with filtering, pagination, and ordering.
+        Includes email information when PDF originated from email ingestion.
+
+        Args:
+            status: Filter by processing status
+            limit: Maximum number of results
+            offset: Number of results to skip
+            order_by: Field to order by (created_at, started_at, completed_at)
+            order_direction: Sort direction (asc, desc)
+            since_date: Only include runs created after this date
+
+        Returns:
+            List of EtoRunSummary objects with email information when available
+        """
+        try:
+            with self.connection_manager.session_scope() as session:
+                # Build query with LEFT JOINs to get email information
+                query = (
+                    session.query(
+                        EtoRunModel,
+                        EmailModel.id.label('email_id'),
+                        EmailModel.subject.label('email_subject'),
+                        EmailModel.sender_email.label('email_sender_email'),
+                        EmailModel.sender_name.label('email_sender_name'),
+                        EmailModel.received_date.label('email_received_date'),
+                        EmailIngestionConfigModel.name.label('config_name')
+                    )
+                    .outerjoin(PdfFileModel, EtoRunModel.pdf_file_id == PdfFileModel.id)
+                    .outerjoin(EmailModel, PdfFileModel.email_id == EmailModel.id)
+                    .outerjoin(EmailIngestionConfigModel, EmailModel.config_id == EmailIngestionConfigModel.id)
+                )
+
+                # Apply filters
+                if status:
+                    query = query.filter(EtoRunModel.status == status.value)
+
+                if since_date:
+                    since_date = DateTimeUtils.ensure_utc_aware(since_date)
+                    query = query.filter(EtoRunModel.created_at >= since_date)
+
+                # Apply ordering
+                order_field = None
+                if order_by == "created_at":
+                    order_field = EtoRunModel.created_at
+                elif order_by == "started_at":
+                    order_field = EtoRunModel.started_at
+                elif order_by == "completed_at":
+                    order_field = EtoRunModel.completed_at
+                else:
+                    # Default to created_at for unknown fields
+                    order_field = EtoRunModel.created_at
+
+                if order_direction.lower() == "asc":
+                    query = query.order_by(order_field.asc())
+                else:
+                    query = query.order_by(order_field.desc())
+
+                # Apply pagination
+                if offset:
+                    query = query.offset(offset)
+                if limit:
+                    query = query.limit(limit)
+
+                results = query.all()
+
+                # Convert to EtoRunSummary objects with email information
+                summaries = []
+                for result in results:
+                    eto_run_model = result[0]  # The EtoRunModel object
+
+                    # Convert to domain object first
+                    domain_obj = self._convert_to_domain_object(eto_run_model)
+                    summary = EtoRunSummary.from_eto_run(domain_obj)
+
+                    # Add email information if available
+                    if result.email_id:  # Check if email data exists
+                        email_info = EtoEmailInfo(
+                            email_id=result.email_id,
+                            subject=result.email_subject,
+                            sender_email=result.email_sender_email,
+                            sender_name=result.email_sender_name,
+                            received_date=result.email_received_date,
+                            config_name=result.config_name
+                        )
+                        summary.email = email_info
+
+                    summaries.append(summary)
+
+                logger.debug(f"Retrieved {len(summaries)} ETO runs with filters: status={status}, order_by={order_by}, order_direction={order_direction}")
+                return summaries
+
+        except SQLAlchemyError as e:
+            logger.error(f"Error getting ETO runs with filters: {e}")
+            raise RepositoryError(f"Failed to get ETO runs with filters: {e}") from e
 
     # ========== User Reprocessing Functionality ==========
 

@@ -50,18 +50,20 @@ class EmailIngestionService:
     Manages configurations, listeners, integrations, and email processing.
     """
     
-    def __init__(self, connection_manager):
+    def __init__(self, connection_manager, pdf_service=None):
         """
-        Initialize service with database connection
-        
+        Initialize service with database connection and dependencies
+
         Args:
             connection_manager: Database connection manager
+            pdf_service: PDF processing service (optional for lazy initialization)
         """
         if not connection_manager:
             raise RuntimeError("Database connection manager is required")
         
         self.connection_manager = connection_manager
-        
+        self.pdf_service = pdf_service
+
         # Initialize repositories
         self.config_repository = EmailIngestionConfigRepository(connection_manager)
         self.email_repository = EmailRepository(connection_manager)
@@ -550,8 +552,11 @@ class EmailIngestionService:
             logger.info(f"Processing PDF: {attachment.filename} ({attachment.size_bytes} bytes)")
 
             # Step 1: Store PDF using PDF processing service
-            from shared.services import get_pdf_processing_service
-            pdf_service = get_pdf_processing_service()
+            pdf_service = self.pdf_service
+            if not pdf_service:
+                # Lazy load if not provided via constructor
+                from shared.services import get_pdf_processing_service
+                pdf_service = get_pdf_processing_service()
 
             # Store PDF and get file record
             pdf_file = pdf_service.store_pdf(
@@ -562,7 +567,7 @@ class EmailIngestionService:
 
             logger.info(f"PDF stored successfully: {pdf_file.id}")
 
-            # Step 2: Trigger ETO processing pipeline
+            # Step 2: Trigger ETO processing pipeline (lazy load to avoid circular dependency)
             from shared.services import get_eto_processing_service
             eto_service = get_eto_processing_service()
 
