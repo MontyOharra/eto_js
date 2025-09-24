@@ -3,8 +3,10 @@ ETO Processing API Router
 API endpoints for managing ETO (Extract, Transform, Order) processing workflows
 """
 import logging
+import os
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from shared.services.service_container import ServiceContainer, get_service_container
@@ -13,6 +15,7 @@ from shared.models.eto_processing import (
 )
 from shared.exceptions import ObjectNotFoundError, ServiceError, ValidationError
 from shared.utils import DateTimeUtils
+from api.schemas.eto_processing import EtoRunPdfData, EtoRunPdfDataResponse
 
 logger = logging.getLogger(__name__)
 
@@ -544,7 +547,7 @@ def bulk_skip_runs(
                 results.append({
                     "run_id": run_id,
                     "status": "success",
-                    "new_status": updated_run.status.value
+                    "new_status": updated_run.status if isinstance(updated_run.status, str) else updated_run.status.value
                 })
             except (ObjectNotFoundError, ValidationError) as e:
                 errors.append({
@@ -583,15 +586,16 @@ def bulk_skip_runs(
         )
 
 
-@router.patch("/bulk/reprocess", response_model=Dict[str, Any])
-def bulk_reprocess_runs(
+@router.patch("/reprocess-selected", response_model=Dict[str, Any])
+def reprocess_selected_runs(
     request: BulkRunRequest,
     container: ServiceContainer = Depends(get_service_container)
 ):
     """
-    Bulk reprocess multiple ETO runs
+    Reprocess specific selected ETO runs
 
-    Resets multiple skipped runs back to not_started status for reprocessing.
+    Resets specified runs back to not_started status for reprocessing.
+    Allows failed, needs_template, AND skipped runs to be reprocessed.
     Returns summary of the operation including which runs were successfully reset.
     """
     try:
@@ -612,7 +616,7 @@ def bulk_reprocess_runs(
                 results.append({
                     "run_id": run_id,
                     "status": "success",
-                    "new_status": reset_run.status.value
+                    "new_status": reset_run.status if isinstance(reset_run.status, str) else reset_run.status.value
                 })
             except (ObjectNotFoundError, ValidationError) as e:
                 errors.append({
@@ -629,7 +633,7 @@ def bulk_reprocess_runs(
                 })
 
         response = {
-            "operation": "bulk_reprocess",
+            "operation": "reprocess_selected",
             "total_requested": len(request.run_ids),
             "successful": len(results),
             "failed": len(errors),
@@ -648,6 +652,44 @@ def bulk_reprocess_runs(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error"
+        )
+
+
+@router.patch("/reprocess-bulk", response_model=Dict[str, Any])
+def reprocess_bulk_failed_and_needs_template(
+    container: ServiceContainer = Depends(get_service_container)
+):
+    """
+    Bulk reprocess all failed and needs_template runs
+
+    Uses repository method to efficiently reset all failed and needs_template runs
+    to not_started status for reprocessing. Does NOT include skipped runs.
+    """
+    try:
+        eto_service = container.get_eto_service()
+
+        # Use the repository method for efficient bulk reset
+        reset_result = eto_service.eto_run_repository.reset_failed_and_needs_template_runs_for_reprocessing()
+
+        response = {
+            "operation": "reprocess_bulk",
+            "total_found": reset_result.total_reset,
+            "total_reprocessed": reset_result.total_reset,
+            "failed_count": reset_result.failure_count,
+            "needs_template_count": reset_result.needs_template_count,
+            "skipped_count": reset_result.skipped_count,  # Should be 0 for bulk
+            "message": reset_result.get_summary_message(),
+            "timestamp": DateTimeUtils.utc_now().isoformat()
+        }
+
+        logger.info(f"Bulk reprocess operation: {reset_result.total_reset} runs reset for reprocessing")
+        return response
+
+    except Exception as e:
+        logger.error(f"Error in bulk reprocess: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to bulk reprocess runs: {str(e)}"
         )
 
 
@@ -697,14 +739,14 @@ def reprocess_all_failed_runs(
                 reset_run = eto_service.reprocess_run(run.id)
                 results.append({
                     "run_id": run.id,
-                    "original_status": run.status.value,
-                    "new_status": reset_run.status.value
+                    "original_status": run.status if isinstance(run.status, str) else run.status.value,
+                    "new_status": reset_run.status if isinstance(reset_run.status, str) else reset_run.status.value
                 })
             except Exception as e:
                 logger.error(f"Error reprocessing run {run.id}: {e}")
                 errors.append({
                     "run_id": run.id,
-                    "original_status": run.status.value,
+                    "original_status": run.status if isinstance(run.status, str) else run.status.value,
                     "error": str(e)
                 })
 
@@ -725,4 +767,177 @@ def reprocess_all_failed_runs(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to reprocess runs: {str(e)}"
+        )
+
+
+# ========== PDF Data Endpoints for Template Building ==========
+
+@router.get("/{run_id}/pdf-data", response_model=EtoRunPdfDataResponse)
+def get_eto_run_pdf_data(
+    run_id: int,
+    container: ServiceContainer = Depends(get_service_container)
+):
+    """
+    Get PDF file data and objects for an ETO run
+
+    Used by the template builder modal to display PDF content and extracted objects.
+    Returns PDF metadata, objects, email context, and processing status.
+    """
+    try:
+        eto_service = container.get_eto_service()
+
+        # Get the ETO run first
+        eto_run = eto_service.get_run_by_id(run_id)
+        if not eto_run:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"ETO run {run_id} not found"
+            )
+
+        # Get PDF service to get file and objects data
+        pdf_service = container.get_pdf_service()
+        pdf_file_data = pdf_service.get_pdf_metadata(eto_run.pdf_file_id)
+        pdf_objects_raw = pdf_service.get_pdf_objects(eto_run.pdf_file_id)
+
+        # Transform PDF objects to match frontend expectations
+        pdf_objects = []
+        for obj in pdf_objects_raw:
+            # Calculate width and height from bounding box
+            bbox = obj.get('bbox', [0, 0, 0, 0])
+            width = bbox[2] - bbox[0] if len(bbox) >= 4 else 0
+            height = bbox[3] - bbox[1] if len(bbox) >= 4 else 0
+
+            # Transform object type and adjust page indexing
+            transformed_obj = {
+                **obj,
+                'type': 'word' if obj.get('type') == 'text' else obj.get('type'),  # Map 'text' -> 'word'
+                'page': obj.get('page', 1) - 1,  # Convert from 1-based to 0-based page indexing
+                'width': width,
+                'height': height
+            }
+            pdf_objects.append(transformed_obj)
+
+        # Get email context if available
+        email_service = container.get_email_ingestion_service()
+        email_context = None
+        if pdf_file_data.get('email_id'):
+            # Get email details for context
+            emails = email_service.get_processed_emails(config_id=None, limit=1)
+            email_context = next((e for e in emails if e.id == pdf_file_data['email_id']), None)
+
+        # Build the response data
+        pdf_data = EtoRunPdfData(
+            run_id=eto_run.id,
+            pdf_id=eto_run.pdf_file_id,
+            filename=pdf_file_data.get('filename', 'unknown.pdf'),
+            original_filename=pdf_file_data.get('original_filename', pdf_file_data.get('filename', 'unknown.pdf')),
+            file_size=pdf_file_data.get('file_size', 0),
+            page_count=pdf_file_data.get('page_count', 0),
+            object_count=len(pdf_objects),
+            sha256_hash=pdf_file_data.get('sha256_hash', ''),
+            pdf_objects=pdf_objects,
+            # Email context (flat)
+            email_subject=email_context.subject if email_context else 'Manual Upload',
+            sender_email=email_context.sender_email if email_context else 'system@localhost',
+            received_date=email_context.received_date if email_context else eto_run.created_at,
+            # ETO run info
+            status=eto_run.status.value if hasattr(eto_run.status, 'value') else str(eto_run.status),
+            processing_step=eto_run.processing_step.value if eto_run.processing_step and hasattr(eto_run.processing_step, 'value') else str(eto_run.processing_step) if eto_run.processing_step else None,
+            matched_template_id=eto_run.matched_template_id,
+            # Processing data
+            extracted_data=eto_run.extracted_data,
+            transformation_audit=eto_run.transformation_audit,
+            target_data=eto_run.target_data,
+            # Timestamps
+            created_at=eto_run.created_at,
+            started_at=eto_run.started_at,
+            completed_at=eto_run.completed_at,
+            # Error info
+            error_type=eto_run.error_type.value if eto_run.error_type and hasattr(eto_run.error_type, 'value') else str(eto_run.error_type) if eto_run.error_type else None,
+            error_message=eto_run.error_message
+        )
+
+        logger.info(f"Retrieved PDF data for ETO run {run_id}")
+        return EtoRunPdfDataResponse(
+            success=True,
+            message="PDF data retrieved successfully",
+            data=pdf_data
+        )
+
+    except HTTPException:
+        raise
+    except ObjectNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"ETO run {run_id} not found"
+        )
+    except Exception as e:
+        logger.error(f"Error getting PDF data for ETO run {run_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve PDF data"
+        )
+
+
+
+@router.get("/{run_id}/pdf-content")
+def get_eto_run_pdf_content(
+    run_id: int,
+    container: ServiceContainer = Depends(get_service_container)
+):
+    """
+    Serve the raw PDF file bytes for an ETO run
+
+    Used by the template builder modal PDF viewer to display the actual PDF content.
+    Returns a streaming response with the PDF file bytes.
+    """
+    try:
+        eto_service = container.get_eto_service()
+        eto_run = eto_service.get_run_by_id(run_id)
+
+        if not eto_run:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"ETO run {run_id} not found"
+            )
+
+        # Get PDF service and content
+        pdf_service = container.get_pdf_service()
+        pdf_content = pdf_service.get_pdf_content(eto_run.pdf_file_id)
+
+        if not pdf_content:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"PDF file not found for ETO run {run_id}"
+            )
+
+        # Get metadata for filename
+        pdf_metadata = pdf_service.get_pdf_metadata(eto_run.pdf_file_id)
+        filename = pdf_metadata.get('original_filename', f'eto_run_{run_id}.pdf') if pdf_metadata else f'eto_run_{run_id}.pdf'
+
+        logger.info(f"Serving PDF content for ETO run {run_id}: {filename}")
+
+        # Return the PDF content as bytes
+        from io import BytesIO
+        return StreamingResponse(
+            BytesIO(pdf_content),
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"inline; filename={filename}",
+                "Cache-Control": "public, max-age=3600"  # Cache for 1 hour
+            }
+        )
+
+    except HTTPException:
+        raise
+    except ObjectNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"ETO run {run_id} not found"
+        )
+    except Exception as e:
+        logger.error(f"Error serving PDF content for ETO run {run_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to serve PDF content"
         )

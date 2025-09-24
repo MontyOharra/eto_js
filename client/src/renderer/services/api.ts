@@ -427,6 +427,13 @@ class ApiClient {
   }
 
   /**
+   * Get PDF content URL for an ETO run
+   */
+  getEtoRunPdfContentUrl(runId: string | number): string {
+    return `${this.baseUrl}/api/eto-runs/${runId}/pdf-content`;
+  }
+
+  /**
    * Get PDF Objects
    */
   async getPdfObjects(pdfId: number): Promise<{
@@ -443,35 +450,36 @@ class ApiClient {
    * Get ETO Run PDF Data (complete PDF data including objects)
    */
   async getEtoRunPdfData(runId: string | number): Promise<{
-    eto_run_id: number;
+    run_id: number;
     pdf_id: number;
     filename: string;
+    original_filename: string;
     page_count: number;
     object_count: number;
     file_size: number;
+    sha256_hash: string;
     pdf_objects: any[];  // PDF objects from pdf_files table
-    status: "not_started" | "processing" | "success" | "failure" | "needs_template";
+    status: "not_started" | "processing" | "success" | "failure" | "needs_template" | "skipped";
     processing_step?: "template_matching" | "extracting_data" | "transforming_data";
     matched_template_id?: number;
-    extracted_data?: any;  // Structured extracted field data
-    transformation_audit?: any;  // Transformation audit trail
-    target_data?: any;  // Final transformed data
-    email: {
-      subject: string;
-      sender_email: string;
-      received_date: string;
-    };
-    timestamps: {
-      created_at?: string;
-      started_at?: string;
-      completed_at?: string;
-    };
-    error_info: {
-      error_type?: string;
-      error_message?: string;
-    };
+    // Email context (flat structure)
+    email_subject: string;
+    sender_email: string;
+    received_date: string;
+    // Processing data
+    extracted_data?: any;
+    transformation_audit?: any;
+    target_data?: any;
+    // Timestamps
+    created_at?: string;
+    started_at?: string;
+    completed_at?: string;
+    // Error info
+    error_type?: string;
+    error_message?: string;
   }> {
-    return this.fetchApi(`/api/eto-runs/${runId}/pdf-data`);
+    const response = await this.fetchApi<{success: boolean, data: any}>(`/api/eto-runs/${runId}/pdf-data`);
+    return response.data;
   }
 
   /**
@@ -566,7 +574,7 @@ class ApiClient {
   /**
    * Bulk reprocess specific runs by IDs
    */
-  async bulkReprocessRuns(runIds: number[]): Promise<{
+  async reprocessSelectedRuns(runIds: number[]): Promise<{
     operation: string;
     total_requested: number;
     successful: number;
@@ -575,9 +583,24 @@ class ApiClient {
     errors: Array<{ run_id: number; status: string; error: string }>;
     timestamp: string;
   }> {
-    return this.fetchApi('/api/eto-runs/bulk/reprocess', {
+    return this.fetchApi('/api/eto-runs/reprocess-selected', {
       method: 'PATCH',
       body: JSON.stringify({ run_ids: runIds }),
+    });
+  }
+
+  async reprocessBulkFailedRuns(): Promise<{
+    operation: string;
+    total_found: number;
+    total_reprocessed: number;
+    failed_count: number;
+    needs_template_count: number;
+    skipped_count: number;
+    message: string;
+    timestamp: string;
+  }> {
+    return this.fetchApi('/api/eto-runs/reprocess-bulk', {
+      method: 'PATCH',
     });
   }
 
@@ -593,7 +616,7 @@ class ApiClient {
     errors: Array<{ run_id: number; status: string; error: string }>;
     timestamp: string;
   }> {
-    return this.bulkReprocessRuns([runId]);
+    return this.reprocessSelectedRuns([runId]);
   }
 
   /**

@@ -43,12 +43,12 @@ class SimplePipelineExecutor:
             Dictionary with final output field values
         """
         
-        self.logger.info(f"🚀 Executing pipeline with {len(transformation_steps)} steps")
-        self.logger.info(f"📥 Input data: {input_data}")
+        self.logger.info(f"Executing pipeline with {len(transformation_steps)} steps")
+        self.logger.info(f"Input data: {input_data}")
         
         # Use input data directly as our data store
         data_store = input_data.copy()
-        self.logger.info(f"📊 Data store: {data_store}")
+        self.logger.info(f"Data store: {data_store}")
         
         try:
             # Execute each transformation step using field names directly
@@ -59,14 +59,14 @@ class SimplePipelineExecutor:
                 output_field_name = step['output_field_name']
                 config = step.get('config', {})
                 
-                self.logger.info(f"🔧 Step {step_number}: {input_field_name} → [{template_id}] → {output_field_name}")
+                self.logger.info(f"Step {step_number}: {input_field_name} -> [{template_id}] -> {output_field_name}")
                 
                 # Get input value using field name directly
                 if input_field_name not in data_store:
                     raise ValueError(f"Input field '{input_field_name}' not found in data store. Available: {list(data_store.keys())}")
                 
                 input_value = data_store[input_field_name]
-                self.logger.info(f"  📥 Input: {input_field_name} = '{input_value}'")
+                self.logger.info(f"  Input: {input_field_name} = '{input_value}'")
                 
                 # Prepare module inputs
                 module_inputs = self._prepare_module_inputs(template_id, input_field_name, input_value)
@@ -79,7 +79,7 @@ class SimplePipelineExecutor:
                 
                 # Store the result using field name directly
                 data_store[output_field_name] = output_value
-                self.logger.info(f"  📤 Output: {output_field_name} = '{output_value}'")
+                self.logger.info(f"  Output: {output_field_name} = '{output_value}'")
             
             # Extract final outputs based on output field mapping
             output_field_mapping = field_mappings.get('output_fields', {})
@@ -89,13 +89,13 @@ class SimplePipelineExecutor:
                 if field_name in data_store:
                     final_outputs[field_name] = data_store[field_name]
             
-            self.logger.info(f"✅ Pipeline execution completed successfully")
-            self.logger.info(f"🎯 Final outputs: {final_outputs}")
+            self.logger.info(f"Pipeline execution completed successfully")
+            self.logger.info(f"Final outputs: {final_outputs}")
             
             return final_outputs
             
         except Exception as e:
-            self.logger.error(f"❌ Pipeline execution failed: {e}")
+            self.logger.error(f"Pipeline execution failed: {e}")
             raise
     
     def _prepare_module_inputs(

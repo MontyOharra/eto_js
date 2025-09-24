@@ -278,7 +278,7 @@ def execute_pipeline():
             }), 400
         
         # Step 1: Analyze pipeline to get transformation steps
-        logger.info("🔍 Step 1: Analyzing pipeline...")
+        logger.info("Step 1: Analyzing pipeline...")
         analyzer = get_pipeline_analyzer()
         analysis_result = analyzer.analyze_pipeline(modules, connections)
         
@@ -292,11 +292,11 @@ def execute_pipeline():
         transformation_steps = analysis_result['transformation_steps']
         field_mappings = analysis_result['field_mappings']
         
-        logger.info(f"📋 Analysis complete: {len(transformation_steps)} transformation steps")
-        logger.info(f"🗺️ Field mappings: {field_mappings}")
+        logger.info(f"Analysis complete: {len(transformation_steps)} transformation steps")
+        logger.info(f"Field mappings: {field_mappings}")
         
         # Step 2: Execute pipeline with clean separation
-        logger.info("⚙️ Step 2: Executing transformations...")
+        logger.info("Step 2: Executing transformations...")
         executor = get_simple_pipeline_executor()
         
         final_outputs = executor.execute_pipeline(
@@ -305,7 +305,7 @@ def execute_pipeline():
             field_mappings=field_mappings
         )
         
-        logger.info("✅ Pipeline execution completed successfully")
+        logger.info("Pipeline execution completed successfully")
         return jsonify({
             "success": True,
             "analysis": {
@@ -397,7 +397,7 @@ def execute_pipeline_with_steps():
             }), 400
         
         # Step 1: Analyze pipeline to get step-based execution plan
-        logger.info("🔍 Step 1: Analyzing pipeline with steps...")
+        logger.info("Step 1: Analyzing pipeline with steps...")
         analyzer = get_pipeline_analyzer()
         analysis_result = analyzer.analyze_pipeline_with_steps(
             modules, connections, input_definitions, output_definitions
@@ -413,10 +413,10 @@ def execute_pipeline_with_steps():
         steps = analysis_result['steps']
         output_endpoints = analysis_result['output_endpoints']
         
-        logger.info(f"📋 Analysis complete: {len(steps)} steps, {len(output_endpoints)} output endpoints")
+        logger.info(f"Analysis complete: {len(steps)} steps, {len(output_endpoints)} output endpoints")
         
         # Step 2: Execute pipeline using step-based executor
-        logger.info("⚙️ Step 2: Executing pipeline with steps...")
+        logger.info("Step 2: Executing pipeline with steps...")
         import asyncio
         executor = get_step_based_pipeline_executor()
         
@@ -435,7 +435,7 @@ def execute_pipeline_with_steps():
         finally:
             loop.close()
         
-        logger.info("✅ Step-based pipeline execution completed successfully")
+        logger.info("Step-based pipeline execution completed successfully")
         return jsonify({
             "success": True,
             "analysis": {

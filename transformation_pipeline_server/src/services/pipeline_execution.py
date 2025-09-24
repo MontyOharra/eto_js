@@ -109,7 +109,7 @@ class DataFlowManager:
                                                 if to_input_idx < len(input_schema):
                                                     input_field_name = input_schema[to_input_idx]['name']
                                                     inputs[input_field_name] = output_data
-                                                    logger.info(f"✅ Mapped connection data to input field '{input_field_name}' for module {module_id}")
+                                                    logger.info(f"Mapped connection data to input field '{input_field_name}' for module {module_id}")
                                                 else:
                                                     logger.warning(f"Input index {to_input_idx} out of range for schema length {len(input_schema)}")
                                                     inputs[f"input_{to_input_idx}"] = output_data
@@ -338,8 +338,8 @@ class PipelineExecutor:
                     }
                     
                     # Log the order data for debugging
-                    self.logger.info(f"🎯 ORDER GENERATION COMPLETE:")
-                    self.logger.info(f"📋 Order Field Names: {list(inputs.keys())}")
+                    self.logger.info(f"ORDER GENERATION COMPLETE:")
+                    self.logger.info(f"Order Field Names: {list(inputs.keys())}")
                     self.logger.info(f"💰 Calculated Values: {inputs}")
                     
                 elif template_id.startswith('mock_extracted_'):

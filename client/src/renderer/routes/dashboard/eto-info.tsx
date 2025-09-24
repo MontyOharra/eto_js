@@ -153,12 +153,11 @@ function EtoInfoPage() {
         setReprocessing(true);
 
         try {
-          const response = await apiClient.reprocessAllFailedRuns();
+          const response = await apiClient.reprocessBulkFailedRuns();
 
-          console.log(`Reprocessing initiated for ${response.total_reprocessed} runs`);
-          if (response.errors.length > 0) {
-            console.warn(`${response.errors.length} runs failed to reprocess:`, response.errors);
-          }
+          console.log(`Bulk reprocessing completed: ${response.message}`);
+          console.log(`Total reprocessed: ${response.total_reprocessed} runs (${response.failed_count} failed, ${response.needs_template_count} needs template)`);
+
           // Refresh the data to show updated status
           refetch();
         } catch (error) {

@@ -105,6 +105,10 @@ def extract_pdf_objects(file_content: bytes) -> List[PdfObject]:
     try:
         with pdfplumber.open(BytesIO(file_content)) as pdf:
             for page_num, page in enumerate(pdf.pages, start=1):
+                # Get page dimensions
+                page_width = float(page.width)
+                page_height = float(page.height)
+
                 # Extract words with positions
                 words = page.extract_words(
                     keep_blank_chars=False,
@@ -113,7 +117,7 @@ def extract_pdf_objects(file_content: bytes) -> List[PdfObject]:
                 )
                 
                 for word in words:
-                    # Create PdfObject for each word
+                    # Create PdfObject for each word with native PDF coordinates
                     pdf_object = PdfObject(
                         type="text",
                         text=word.get('text', ''),
@@ -128,7 +132,9 @@ def extract_pdf_objects(file_content: bytes) -> List[PdfObject]:
                         metadata={
                             'fontname': word.get('fontname', 'unknown'),
                             'size': word.get('size', 0),
-                            'direction': word.get('direction', 0)
+                            'direction': word.get('direction', 0),
+                            'page_width': page_width,
+                            'page_height': page_height
                         }
                     )
                     objects.append(pdf_object)
@@ -137,9 +143,9 @@ def extract_pdf_objects(file_content: bytes) -> List[PdfObject]:
                 tables = page.extract_tables()
                 for table_idx, table in enumerate(tables):
                     if table:
-                        # Get table bounding box if available
+                        # Get table bounding box if available (keep native PDF coordinates)
                         table_bbox = page.find_tables()[table_idx].bbox if page.find_tables() else [0, 0, 0, 0]
-                        
+
                         table_object = PdfObject(
                             type="table",
                             text=str(table),  # Store table as string representation
@@ -149,7 +155,9 @@ def extract_pdf_objects(file_content: bytes) -> List[PdfObject]:
                             metadata={
                                 'rows': len(table),
                                 'cols': len(table[0]) if table else 0,
-                                'data': table  # Store actual table data
+                                'data': table,  # Store actual table data
+                                'page_width': page_width,
+                                'page_height': page_height
                             }
                         )
                         objects.append(table_object)

@@ -287,7 +287,7 @@ class EtoRun(EtoRunBase):
 
     def can_be_reprocessed(self) -> bool:
         """Check if run can be reset for reprocessing"""
-        return self.status in [EtoRunStatus.FAILURE, EtoRunStatus.NEEDS_TEMPLATE]
+        return self.status in [EtoRunStatus.FAILURE, EtoRunStatus.NEEDS_TEMPLATE, EtoRunStatus.SKIPPED]
 
     @classmethod
     def from_db_model(cls, model: Any) -> 'EtoRun':
@@ -365,6 +365,10 @@ class EtoRunSummary(BaseModel):
     has_extracted_data: bool = Field(False, description="Whether data was extracted")
     has_transformed_data: bool = Field(False, description="Whether data was transformed")
     has_order: bool = Field(False, description="Whether order was created")
+
+    # PDF file information
+    file_size: Optional[int] = Field(None, description="PDF file size in bytes")
+    filename: Optional[str] = Field(None, description="PDF filename")
 
     # Email information (when PDF originated from email)
     email: Optional[EtoEmailInfo] = Field(None, description="Email information if PDF came from email ingestion")
@@ -467,6 +471,7 @@ class EtoRunResetResult(BaseModel):
     """Result of resetting failed runs for reprocessing"""
     failure_count: int = Field(0, description="Number of failure status runs reset")
     needs_template_count: int = Field(0, description="Number of needs_template status runs reset")
+    skipped_count: int = Field(0, description="Number of skipped status runs reset")
     total_reset: int = Field(0, description="Total number of runs reset")
 
     def get_summary_message(self) -> str:
@@ -479,5 +484,7 @@ class EtoRunResetResult(BaseModel):
             details.append(f"{self.failure_count} failed runs")
         if self.needs_template_count > 0:
             details.append(f"{self.needs_template_count} needs-template runs")
+        if self.skipped_count > 0:
+            details.append(f"{self.skipped_count} skipped runs")
 
         return f"Reset {self.total_reset} runs for reprocessing ({', '.join(details)})"

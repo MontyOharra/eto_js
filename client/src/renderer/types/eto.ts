@@ -125,7 +125,7 @@ export class EtoDataTransforms {
       errorMessage: apiRun.error_message,
       emailSubject: apiRun.email_subject,
       senderEmail: apiRun.sender_email,
-      fileSize: apiRun.file_size,
+      fileSize: apiRun.file_size || 0,
       fileSizeFormatted: this.formatFileSize(apiRun.file_size),
     };
   }
@@ -133,13 +133,14 @@ export class EtoDataTransforms {
   /**
    * Format file size in human-readable format
    */
-  static formatFileSize(bytes: number): string {
-    if (bytes === 0) return '0 B';
-    
+  static formatFileSize(bytes: number | null | undefined): string {
+    if (bytes == null || bytes === 0) return '0 B';
+    if (typeof bytes !== 'number' || isNaN(bytes)) return 'Unknown';
+
     const k = 1024;
     const sizes = ['B', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    
+
     return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
   }
 

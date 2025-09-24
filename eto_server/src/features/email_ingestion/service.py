@@ -265,8 +265,8 @@ class EmailIngestionService:
             config = self.config_repository.update(config_id, updates)
             logger.info(f"Updated config {config_id}")
             
-            # Restart if was active
-            if was_active and config.is_active:
+            # Restart if was active (regardless of current DB status since we just deactivated it)
+            if was_active:
                 self.activate_config(config_id)
             
             return config
@@ -553,13 +553,13 @@ class EmailIngestionService:
             stats_duration = time.time() - stats_start
 
             total_duration = time.time() - processing_start_time
-            logger.info(f"✅ EmailIngestionService.process_email() COMPLETED for {email_msg.message_id[:20]}... "
+            logger.info(f"EmailIngestionService.process_email() COMPLETED for {email_msg.message_id[:20]}... "
                        f"Total: {total_duration:.2f}s (PDFs: {pdf_processing_duration:.2f}s, "
                        f"Stats: {stats_duration:.3f}s)")
 
         except Exception as e:
             total_duration = time.time() - processing_start_time
-            logger.error(f"❌ Error processing email {email_msg.message_id[:20]}... after {total_duration:.2f}s: {e}")
+            logger.error(f"Error processing email {email_msg.message_id[:20]}... after {total_duration:.2f}s: {e}")
             # Record error but don't stop processing
             try:
                 self.config_repository.record_error(config_id, str(e))
@@ -625,7 +625,7 @@ class EmailIngestionService:
 
         except Exception as e:
             total_duration = time.time() - pdf_start_time
-            logger.error(f"❌ Failed to process PDF attachment {attachment.filename} after {total_duration:.2f}s: {e}")
+            logger.error(f"Failed to process PDF attachment {attachment.filename} after {total_duration:.2f}s: {e}")
             # Don't re-raise - email processing should continue even if PDF processing fails
     
     # ========== Query Methods ==========

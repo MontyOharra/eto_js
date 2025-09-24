@@ -11,33 +11,39 @@ interface TemplateBuilderModalProps {
 }
 
 interface EtoRunPdfData {
-  eto_run_id: number;
+  run_id: number;
   pdf_id: number;
   filename: string;
+  original_filename: string;
   page_count: number;
   object_count: number;
   file_size: number;
+  sha256_hash: string;
   pdf_objects: any[];  // PDF objects from pdf_files table (new workflow)
-  status: "not_started" | "processing" | "success" | "failure" | "needs_template";
+
+  // Email context (flat)
+  email_subject: string;
+  sender_email: string;
+  received_date: string;
+
+  // ETO run status and processing info
+  status: "not_started" | "processing" | "success" | "failure" | "needs_template" | "skipped";
   processing_step?: "template_matching" | "extracting_data" | "transforming_data";
   matched_template_id?: number;
+
+  // Processing data
   extracted_data?: any;  // Structured extracted field data
   transformation_audit?: any;  // Transformation audit trail
   target_data?: any;  // Final transformed data
-  email: {
-    subject: string;
-    sender_email: string;
-    received_date: string;
-  };
-  timestamps: {
-    created_at?: string;
-    started_at?: string;
-    completed_at?: string;
-  };
-  error_info: {
-    error_type?: string;
-    error_message?: string;
-  };
+
+  // Timestamps (flat)
+  created_at?: string;
+  started_at?: string;
+  completed_at?: string;
+
+  // Error info (flat)
+  error_type?: string;
+  error_message?: string;
 }
 
 const OBJECT_TYPE_NAMES = {
@@ -819,7 +825,7 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
   };
 
   const objectCounts = getObjectTypeCounts();
-  const pdfUrl = pdfData ? apiClient.getPdfFileUrl(pdfData.pdf_id) : '';
+  const pdfUrl = runId ? apiClient.getEtoRunPdfContentUrl(runId) : '';
 
   if (!runId) return null;
 
@@ -850,9 +856,9 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
             </div>
             {pdfData && (
               <div className="text-xs text-gray-400 grid grid-cols-1 lg:grid-cols-2 gap-x-6">
-                <div>From: <span className="text-gray-300">{pdfData.email.sender_email}</span></div>
+                <div>From: <span className="text-gray-300">{pdfData.sender_email}</span></div>
                 <div>Size: <span className="text-gray-300">{formatFileSize(pdfData.file_size)}</span></div>
-                <div className="truncate" title={pdfData.email.subject}>Subject: <span className="text-gray-300">{pdfData.email.subject}</span></div>
+                <div className="truncate" title={pdfData.email_subject}>Subject: <span className="text-gray-300">{pdfData.email_subject}</span></div>
                 <div>{pdfData.page_count} pages • {pdfData.object_count} objects</div>
               </div>
             )}
@@ -977,12 +983,12 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
                   })}
                 </div>
 
-                {pdfData?.error_info?.error_message && (
+                {pdfData?.error_message && (
                   <div className="mt-4 p-3 bg-red-900 border border-red-700 rounded">
                     <h4 className="text-sm font-semibold text-red-300 mb-1">
-                      {pdfData.error_info.error_type || 'Error Details'}
+                      {pdfData.error_type || 'Error Details'}
                     </h4>
-                    <p className="text-xs text-red-200">{pdfData.error_info.error_message}</p>
+                    <p className="text-xs text-red-200">{pdfData.error_message}</p>
                   </div>
                 )}
               </div>

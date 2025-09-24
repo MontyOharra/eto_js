@@ -101,40 +101,40 @@ class EmailListenerThread(threading.Thread):
         self.stop_event.set()
 
     def _apply_filter_rules(self, emails):
-        """Apply filter rules to emails - FINALLY SOME REAL FILTER CHECKIN! 🔥💯"""
+        """Apply filter rules to emails"""
         if not self.config.filter_rules or len(self.config.filter_rules) == 0:
-            logger.debug(f"No filter rules set for config {self.config.id} - processin all emails 📧")
+            logger.debug(f"No filter rules set for config {self.config.id} - processing all emails")
             return emails
 
         filtered_emails = []
-        logger.debug(f"🎯 Applyin {len(self.config.filter_rules)} filter rules to {len(emails)} emails")
+        logger.debug(f"Applying {len(self.config.filter_rules)} filter rules to {len(emails)} emails")
 
         for email in emails:
-            email_passes = True
+            email_passes = False
 
             for rule in self.config.filter_rules:
                 try:
-                    if not self._check_filter_rule(email, rule):
-                        email_passes = False
-                        logger.debug(f"❌ Email {email.message_id[:20]}... failed filter: {rule.field} {rule.operation} '{rule.value}'")
+                    if self._check_filter_rule(email, rule):
+                        email_passes = True
+                        logger.debug(f"Email {email.message_id[:20]}... passed filter: {rule.field} {rule.operation} '{rule.value}'")
                         break
                 except Exception as e:
-                    logger.warning(f"⚠️ Error applyin filter rule {rule.field} {rule.operation} '{rule.value}': {e}")
+                    logger.warning(f"Error applying filter rule {rule.field} {rule.operation} '{rule.value}': {e}")
                     continue
 
             if email_passes:
                 filtered_emails.append(email)
-                logger.debug(f"✅ Email {email.message_id[:20]}... from {email.sender_email} passed all filters!")
+                logger.debug(f"Email {email.message_id[:20]}... from {email.sender_email} passed filters")
             else:
-                logger.debug(f"🚫 Email {email.message_id[:20]}... from {email.sender_email} filtered out")
+                logger.debug(f"Email {email.message_id[:20]}... from {email.sender_email} filtered out")
 
         return filtered_emails
 
     def _check_filter_rule(self, email, rule):
-        """Check if an email passes a single filter rule - DIS WHERE DA MAGIC HAPPENS! ✨"""
+        """Check if an email passes a single filter rule"""
         field_value = None
 
-        # Get da field value from da email
+        # Get the field value from the email
         if rule.field == 'sender_email':
             field_value = email.sender_email
         elif rule.field == 'subject':
@@ -147,7 +147,7 @@ class EmailListenerThread(threading.Thread):
             logger.warning(f"Unknown filter field: {rule.field}")
             return True  # Unknown fields pass by default
 
-        # Apply da operation
+        # Apply the operation
         if rule.operation == 'equals':
             if rule.field in ['sender_email', 'subject']:
                 if rule.case_sensitive:
@@ -223,29 +223,29 @@ class EmailListenerThread(threading.Thread):
             
             logger.info(f"Found {len(emails)} emails for config {self.config.id}")
 
-            # 🔥 APPLY FILTER RULES TO STOP PROCESSIN ERRYTHANG! 💯
+            # Apply filter rules
             filtered_emails = self._apply_filter_rules(emails)
-            logger.info(f"🎯 After filters: {len(filtered_emails)}/{len(emails)} emails passed (filtered out {len(emails) - len(filtered_emails)}) 💪")
+            logger.info(f"After filters: {len(filtered_emails)}/{len(emails)} emails passed (filtered out {len(emails) - len(filtered_emails)})")
 
             # Process each filtered email
             for email_msg in filtered_emails:
                 try:
                     email_start_time = time.time()
-                    logger.info(f"🚀 Starting to process email {email_msg.message_id[:20]}... from {email_msg.sender_email}")
+                    logger.info(f"Starting to process email {email_msg.message_id[:20]}... from {email_msg.sender_email}")
 
-                    # 🔥 PERFORMANCE BOOST: Use cached attachments instead of slow search! 💪⚡
+                    # Use cached attachments for better performance
                     attachments = email_msg.cached_attachments
-                    logger.info(f"⚡ Using {len(attachments)} pre-cached attachments (NO SEARCH NEEDED!) 🎯")
+                    logger.info(f"Using {len(attachments)} pre-cached attachments")
 
                     # Call back to service for processing
                     callback_start_time = time.time()
-                    logger.info(f"🔄 Starting email processing callback for {email_msg.message_id[:20]}...")
+                    logger.info(f"Starting email processing callback for {email_msg.message_id[:20]}...")
 
                     self.process_callback(email_msg, attachments)
 
                     callback_duration = time.time() - callback_start_time
                     total_duration = time.time() - email_start_time
-                    logger.info(f"✅ Completed email {email_msg.message_id[:20]}... processing: "
+                    logger.info(f"Completed email {email_msg.message_id[:20]}... processing: "
                                f"callback={callback_duration:.2f}s, total={total_duration:.2f}s")
                     
                     # Update last check time to email's received date if newer

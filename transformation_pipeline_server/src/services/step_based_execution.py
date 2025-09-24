@@ -47,12 +47,12 @@ class StepBasedPipelineExecutor:
             Dictionary with final output values by field names
         """
         
-        self.logger.info(f"🚀 Starting step-based pipeline execution with {len(steps)} steps")
-        self.logger.info(f"📥 Input data keys: {list(input_data.keys())}")
+        self.logger.info(f"Starting step-based pipeline execution with {len(steps)} steps")
+        self.logger.info(f"Input data keys: {list(input_data.keys())}")
         
         # Global data store using node IDs
         node_data_store: Dict[str, Any] = input_data.copy()
-        self.logger.info(f"📊 Initial data store: {list(node_data_store.keys())}")
+        self.logger.info(f"Initial data store: {list(node_data_store.keys())}")
         
         # Build connection mapping for efficient data routing
         connection_map = self._build_connection_map(connections)
@@ -69,30 +69,30 @@ class StepBasedPipelineExecutor:
                 ]
                 
                 if not processing_modules:
-                    self.logger.info(f"⏭️ Step {step_number}: No processing modules to execute")
+                    self.logger.info(f"Step {step_number}: No processing modules to execute")
                     continue
                 
-                self.logger.info(f"⚙️ Step {step_number}: Executing {len(processing_modules)} modules in parallel")
+                self.logger.info(f"Step {step_number}: Executing {len(processing_modules)} modules in parallel")
                 
                 # Execute all modules in this step in parallel
                 await self._execute_step_modules(
                     step_number, processing_modules, connection_map, node_data_store
                 )
                 
-                self.logger.info(f"✅ Step {step_number} completed")
+                self.logger.info(f"Step {step_number} completed")
             
             # Extract final outputs based on output endpoints
             final_outputs = self._extract_final_outputs(
                 output_endpoints, connection_map, node_data_store
             )
             
-            self.logger.info(f"🎯 Pipeline execution completed successfully")
-            self.logger.info(f"📤 Final outputs: {final_outputs}")
+            self.logger.info(f"Pipeline execution completed successfully")
+            self.logger.info(f"Final outputs: {final_outputs}")
             
             return final_outputs
             
         except Exception as e:
-            self.logger.error(f"❌ Step-based pipeline execution failed: {e}")
+            self.logger.error(f"Step-based pipeline execution failed: {e}")
             raise
     
     async def _execute_step_modules(
@@ -158,7 +158,7 @@ class StepBasedPipelineExecutor:
         template_id = module['template_id']
         config = module['entity'].get('config', {})
         
-        self.logger.info(f"  🔧 Executing module {module_id} (template: {template_id})")
+        self.logger.info(f"  Executing module {module_id} (template: {template_id})")
         
         # Gather inputs for this module from connected sources
         module_inputs = self._gather_module_inputs(
@@ -287,7 +287,7 @@ class StepBasedPipelineExecutor:
                 
                 if source_node_id in node_data_store:
                     final_outputs[field_name] = node_data_store[source_node_id]
-                    self.logger.info(f"    🎯 Output {field_name} = {node_data_store[source_node_id]}")
+                    self.logger.info(f"    Output {field_name} = {node_data_store[source_node_id]}")
                 else:
                     self.logger.warning(f"Output data not found for {field_name}: {source_node_id}")
             else:

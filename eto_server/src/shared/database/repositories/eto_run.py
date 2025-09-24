@@ -206,7 +206,9 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                         EmailModel.sender_email.label('email_sender_email'),
                         EmailModel.sender_name.label('email_sender_name'),
                         EmailModel.received_date.label('email_received_date'),
-                        EmailIngestionConfigModel.name.label('config_name')
+                        EmailIngestionConfigModel.name.label('config_name'),
+                        PdfFileModel.file_size.label('pdf_file_size'),
+                        PdfFileModel.filename.label('pdf_filename')
                     )
                     .outerjoin(PdfFileModel, EtoRunModel.pdf_file_id == PdfFileModel.id)
                     .outerjoin(EmailModel, PdfFileModel.email_id == EmailModel.id)
@@ -255,6 +257,10 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                     domain_obj = self._convert_to_domain_object(eto_run_model)
                     summary = EtoRunSummary.from_eto_run(domain_obj)
 
+                    # Add PDF file information if available
+                    summary.file_size = result.pdf_file_size
+                    summary.filename = result.pdf_filename
+
                     # Add email information if available
                     if result.email_id:  # Check if email data exists
                         email_info = EtoEmailInfo(
@@ -289,7 +295,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
 
                 # Check if run can be reprocessed
                 current_status = EtoRunStatus(model.status)
-                if not current_status in [EtoRunStatus.FAILURE, EtoRunStatus.NEEDS_TEMPLATE]:
+                if not current_status in [EtoRunStatus.FAILURE, EtoRunStatus.NEEDS_TEMPLATE, EtoRunStatus.SKIPPED]:
                     raise ValidationError(f"Cannot reprocess ETO run {eto_run_id}: status is {current_status.value}")
 
                 # Reset all processing fields to defaults
@@ -330,13 +336,14 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                     session.query(self.model_class)
                     .filter(
                         self.model_class.id.in_(eto_run_ids),
-                        self.model_class.status.in_([EtoRunStatus.FAILURE.value, EtoRunStatus.NEEDS_TEMPLATE.value])
+                        self.model_class.status.in_([EtoRunStatus.FAILURE.value, EtoRunStatus.NEEDS_TEMPLATE.value, EtoRunStatus.SKIPPED.value])
                     )
                     .all()
                 )
 
                 failure_count = sum(1 for run in eligible_runs if run.status == EtoRunStatus.FAILURE.value)
                 needs_template_count = sum(1 for run in eligible_runs if run.status == EtoRunStatus.NEEDS_TEMPLATE.value)
+                skipped_count = sum(1 for run in eligible_runs if run.status == EtoRunStatus.SKIPPED.value)
 
                 # Reset the runs
                 for model in eligible_runs:
@@ -349,6 +356,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                 return EtoRunResetResult(
                     failure_count=failure_count,
                     needs_template_count=needs_template_count,
+                    skipped_count=skipped_count,
                     total_reset=total_reset
                 )
 
@@ -630,6 +638,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                 # Get counts first
                 failure_count = 0
                 needs_template_count = 0
+                skipped_count = 0
 
                 if EtoRunStatus.FAILURE in statuses:
                     failure_count = session.query(self.model_class).filter(
@@ -639,6 +648,11 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                 if EtoRunStatus.NEEDS_TEMPLATE in statuses:
                     needs_template_count = session.query(self.model_class).filter(
                         self.model_class.status == EtoRunStatus.NEEDS_TEMPLATE.value
+                    ).count()
+
+                if EtoRunStatus.SKIPPED in statuses:
+                    skipped_count = session.query(self.model_class).filter(
+                        self.model_class.status == EtoRunStatus.SKIPPED.value
                     ).count()
 
                 # Bulk update
@@ -668,6 +682,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                 return EtoRunResetResult(
                     failure_count=failure_count,
                     needs_template_count=needs_template_count,
+                    skipped_count=skipped_count,
                     total_reset=update_count
                 )
 

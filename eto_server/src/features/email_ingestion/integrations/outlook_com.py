@@ -359,26 +359,26 @@ class OutlookComIntegration(BaseEmailIntegration):
                     try:
                         email_msg = self._convert_to_email_message(mail_item, folder_name)
 
-                        # 🔥 PERFORMANCE OPTIMIZATION: Extract attachments NOW while we have the mail_item!
-                        # This eliminates the 50+ second linear search later! 💪⚡
+                        # PERFORMANCE OPTIMIZATION: Extract attachments NOW while we have the mail_item!
+                        # This eliminates the 50+ second linear search later!
                         if hasattr(mail_item, 'Attachments') and mail_item.Attachments.Count > 0:
                             attachment_start = time.time()
-                            self.logger.debug(f"🚀 Extracting {mail_item.Attachments.Count} attachments for email {email_msg.message_id[:20]}...")
+                            self.logger.debug(f"Extracting {mail_item.Attachments.Count} attachments for email {email_msg.message_id[:20]}...")
 
                             for i, attachment in enumerate(mail_item.Attachments):
                                 try:
                                     att_model = self._extract_attachment(attachment)
                                     if att_model:
                                         email_msg.cached_attachments.append(att_model)
-                                        self.logger.debug(f"📎 Cached attachment {i+1}: {att_model.filename}")
+                                        self.logger.debug(f"Cached attachment {i+1}: {att_model.filename}")
                                 except Exception as e:
-                                    self.logger.warning(f"❌ Failed to extract attachment {i+1}: {e}")
+                                    self.logger.warning(f"Failed to extract attachment {i+1}: {e}")
                                     continue
 
                             attachment_duration = time.time() - attachment_start
-                            self.logger.info(f"✅ Cached {len(email_msg.cached_attachments)} attachments in {attachment_duration:.3f}s")
+                            self.logger.info(f"Cached {len(email_msg.cached_attachments)} attachments in {attachment_duration:.3f}s")
                         else:
-                            self.logger.debug(f"📧 Email {email_msg.message_id[:20]}... has no attachments")
+                            self.logger.debug(f"Email {email_msg.message_id[:20]}... has no attachments")
 
                         emails.append(email_msg)
                         count += 1
@@ -438,12 +438,12 @@ class OutlookComIntegration(BaseEmailIntegration):
             # 🔥 NEW: Check if we got an EmailMessage with cached attachments first! ⚡
             if hasattr(message_id_or_email, 'cached_attachments'):
                 cached_count = len(message_id_or_email.cached_attachments)
-                self.logger.info(f"🎯 Using cached attachments: {cached_count} attachments (INSTANT!) ⚡✨")
+                self.logger.info(f"Using cached attachments: {cached_count} attachments (INSTANT!)")
                 return message_id_or_email.cached_attachments
 
             # Fallback to old method for backward compatibility 🔄
             message_id = str(message_id_or_email)
-            self.logger.info(f"📎 OutlookComIntegration.get_attachments() STARTED for {message_id[:20]}... (FALLBACK MODE)")
+            self.logger.info(f"OutlookComIntegration.get_attachments() STARTED for {message_id[:20]}... (FALLBACK MODE)")
 
             if not self.is_connected:
                 self.logger.warning("Not connected to Outlook - returning empty attachments")
@@ -493,7 +493,7 @@ class OutlookComIntegration(BaseEmailIntegration):
                 # Attachment extraction timing
                 extraction_start = time.time()
                 attachment_count = mail_item.Attachments.Count
-                self.logger.info(f"📎 Found {attachment_count} attachments, starting extraction...")
+                self.logger.info(f"Found {attachment_count} attachments, starting extraction...")
 
                 for i, attachment in enumerate(mail_item.Attachments):
                     try:
@@ -514,7 +514,7 @@ class OutlookComIntegration(BaseEmailIntegration):
 
                 extraction_duration = time.time() - extraction_start
                 total_duration = time.time() - method_start_time
-                self.logger.info(f"📎 OutlookComIntegration.get_attachments() COMPLETED: {len(attachments)} attachments "
+                self.logger.info(f"OutlookComIntegration.get_attachments() COMPLETED: {len(attachments)} attachments "
                                f"in {total_duration:.2f}s (extraction: {extraction_duration:.2f}s, "
                                f"search: {search_duration:.2f}s)")
 
@@ -527,7 +527,7 @@ class OutlookComIntegration(BaseEmailIntegration):
 
         except Exception as e:
             total_duration = time.time() - method_start_time
-            self.logger.error(f"❌ Error getting attachments after {total_duration:.2f}s: {e}")
+            self.logger.error(f"Error getting attachments after {total_duration:.2f}s: {e}")
 
         return attachments
     
