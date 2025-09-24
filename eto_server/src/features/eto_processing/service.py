@@ -21,6 +21,7 @@ from shared.models.eto_processing import (
     EtoRunTransformationUpdate, EtoRunOrderUpdate
 )
 from shared.models.pdf_processing import PdfObject
+from shared.models.pdf_processing_new import EtoRunWithPdfData
 from shared.utils import DateTimeUtils
 
 logger = logging.getLogger(__name__)
@@ -826,6 +827,20 @@ class EtoProcessingService:
     def get_run_by_id(self, eto_run_id: int) -> Optional[EtoRun]:
         """Get ETO run by ID"""
         return self.eto_run_repository.get_by_id(eto_run_id)
+
+    def get_run_with_pdf_data(self, eto_run_id: int) -> Optional['EtoRunWithPdfData']:
+        """Get ETO run with joined PDF file and email data for API response"""
+        try:
+            eto_run_data = self.eto_run_repository.get_eto_run_with_pdf_data(eto_run_id)
+            if not eto_run_data:
+                return None
+
+            logger.debug(f"Retrieved ETO run {eto_run_id} with PDF and email data")
+            return eto_run_data
+
+        except Exception as e:
+            logger.error(f"Error getting ETO run with PDF data {eto_run_id}: {e}")
+            raise ServiceError(f"Failed to get ETO run with PDF data: {e}") from e
 
     def get_runs(self,
                  status: Optional[str] = None,

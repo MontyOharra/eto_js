@@ -784,77 +784,78 @@ def get_eto_run_pdf_data(
     Returns PDF metadata, objects, email context, and processing status.
     """
     try:
+        # Get ETO service to retrieve the combined data
         eto_service = container.get_eto_service()
+        eto_run_data = eto_service.get_run_with_pdf_data(run_id)
 
-        # Get the ETO run first
-        eto_run = eto_service.get_run_by_id(run_id)
-        if not eto_run:
+        if not eto_run_data:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"ETO run {run_id} not found"
             )
 
-        # Get PDF service to get file and objects data
-        pdf_service = container.get_pdf_service()
-        pdf_file_data = pdf_service.get_pdf_metadata(eto_run.pdf_file_id)
-        pdf_objects_raw = pdf_service.get_pdf_objects(eto_run.pdf_file_id)
-
         # Transform PDF objects to match frontend expectations
         pdf_objects = []
-        for obj in pdf_objects_raw:
+        for obj in eto_run_data.pdf_objects:
             # Calculate width and height from bounding box
-            bbox = obj.get('bbox', [0, 0, 0, 0])
+            bbox = obj.bbox
             width = bbox[2] - bbox[0] if len(bbox) >= 4 else 0
             height = bbox[3] - bbox[1] if len(bbox) >= 4 else 0
 
             # Transform object type and adjust page indexing
             transformed_obj = {
-                **obj,
-                'type': 'word' if obj.get('type') == 'text' else obj.get('type'),  # Map 'text' -> 'word'
-                'page': obj.get('page', 1) - 1,  # Convert from 1-based to 0-based page indexing
+                'type': 'word' if obj.type == 'text' else obj.type,  # Map 'text' -> 'word'
+                'page': obj.page - 1,  # Convert from 1-based to 0-based page indexing
+                'text': obj.text or '',
+                'bbox': bbox,
                 'width': width,
-                'height': height
+                'height': height,
+                'confidence': 1.0,  # Default confidence
+                'metadata': {
+                    'fontname': obj.fontname,
+                    'fontsize': obj.fontsize,
+                    'linewidth': obj.linewidth,
+                    'points': obj.points,
+                    'format': obj.format,
+                    'colorspace': obj.colorspace,
+                    'bits': obj.bits,
+                    'rows': obj.rows,
+                    'cols': obj.cols
+                }
             }
             pdf_objects.append(transformed_obj)
 
-        # Get email context if available
-        email_service = container.get_email_ingestion_service()
-        email_context = None
-        if pdf_file_data.get('email_id'):
-            # Get email details for context
-            emails = email_service.get_processed_emails(config_id=None, limit=1)
-            email_context = next((e for e in emails if e.id == pdf_file_data['email_id']), None)
-
-        # Build the response data
+        # Build the response data using strongly-typed domain model
         pdf_data = EtoRunPdfData(
-            run_id=eto_run.id,
-            pdf_id=eto_run.pdf_file_id,
-            filename=pdf_file_data.get('filename', 'unknown.pdf'),
-            original_filename=pdf_file_data.get('original_filename', pdf_file_data.get('filename', 'unknown.pdf')),
-            file_size=pdf_file_data.get('file_size', 0),
-            page_count=pdf_file_data.get('page_count', 0),
+            # All data now comes from the domain model
+            run_id=eto_run_data.run_id,
+            pdf_id=eto_run_data.pdf_id,
+            filename=eto_run_data.filename,
+            original_filename=eto_run_data.original_filename,
+            file_size=eto_run_data.file_size,
+            page_count=eto_run_data.page_count,
             object_count=len(pdf_objects),
-            sha256_hash=pdf_file_data.get('sha256_hash', ''),
+            sha256_hash=eto_run_data.sha256_hash,
             pdf_objects=pdf_objects,
-            # Email context (flat)
-            email_subject=email_context.subject if email_context else 'Manual Upload',
-            sender_email=email_context.sender_email if email_context else 'system@localhost',
-            received_date=email_context.received_date if email_context else eto_run.created_at,
+            # Email context (with fallbacks for manual uploads)
+            email_subject=eto_run_data.email_subject or 'Manual Upload',
+            sender_email=eto_run_data.sender_email or 'system@localhost',
+            received_date=eto_run_data.received_date or eto_run_data.created_at,
             # ETO run info
-            status=eto_run.status.value if hasattr(eto_run.status, 'value') else str(eto_run.status),
-            processing_step=eto_run.processing_step.value if eto_run.processing_step and hasattr(eto_run.processing_step, 'value') else str(eto_run.processing_step) if eto_run.processing_step else None,
-            matched_template_id=eto_run.matched_template_id,
+            status=eto_run_data.status,
+            processing_step=eto_run_data.processing_step,
+            matched_template_id=eto_run_data.matched_template_id,
             # Processing data
-            extracted_data=eto_run.extracted_data,
-            transformation_audit=eto_run.transformation_audit,
-            target_data=eto_run.target_data,
+            extracted_data=eto_run_data.extracted_data,
+            transformation_audit=eto_run_data.transformation_audit,
+            target_data=eto_run_data.target_data,
             # Timestamps
-            created_at=eto_run.created_at,
-            started_at=eto_run.started_at,
-            completed_at=eto_run.completed_at,
+            created_at=eto_run_data.created_at,
+            started_at=eto_run_data.started_at,
+            completed_at=eto_run_data.completed_at,
             # Error info
-            error_type=eto_run.error_type.value if eto_run.error_type and hasattr(eto_run.error_type, 'value') else str(eto_run.error_type) if eto_run.error_type else None,
-            error_message=eto_run.error_message
+            error_type=eto_run_data.error_type,
+            error_message=eto_run_data.error_message
         )
 
         logger.info(f"Retrieved PDF data for ETO run {run_id}")

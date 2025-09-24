@@ -165,6 +165,7 @@ def list_templates(
     desc: bool = Query(False, description="Sort in descending order"),
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(20, ge=1, le=100, description="Items per page"),
+    container: ServiceContainer = Depends(get_service_container)
 ) -> List[PdfTemplate]:
     """
     List PDF templates with filtering and pagination
@@ -213,7 +214,10 @@ def list_templates(
             response_model=PdfTemplate,
             summary="Get single PDF template",
             description="Get single PDF template by ID")
-def get_template(template_id: int) -> PdfTemplate:
+def get_template(
+    template_id: int,
+    container: ServiceContainer = Depends(get_service_container)
+) -> PdfTemplate:
     """
     Get single PDF template by ID
 
@@ -253,7 +257,8 @@ def get_template(template_id: int) -> PdfTemplate:
             description="Get specific template version by template ID and version ID")
 def get_template_version(
     template_id: int,
-    version_id: int
+    version_id: int,
+    container: ServiceContainer = Depends(get_service_container)
 ) -> PdfTemplateVersion:
     """
     Get specific template version
@@ -298,7 +303,8 @@ def get_template_version(
               description="Update PDF template fields (name, description, status)")
 def update_template(
     template_id: int,
-    update_data: PdfTemplateUpdate
+    update_data: PdfTemplateUpdate,
+    container: ServiceContainer = Depends(get_service_container)
 ) -> PdfTemplate:
     """
     Update PDF template fields
@@ -342,8 +348,11 @@ def update_template(
 @router.get("/status",
             response_model=ServiceStatusResponse,
             summary="Get PDF templates service status",
-            description="Check if the PDF templates service is healthy and operational")
-def get_pdf_templates_status() -> ServiceStatusResponse:
+            description="Check if the PDF templates service is healthy and operational"
+)
+def get_pdf_templates_status(
+    container: ServiceContainer = Depends(get_service_container)
+) -> ServiceStatusResponse:
     """
     Get PDF templates service status
 

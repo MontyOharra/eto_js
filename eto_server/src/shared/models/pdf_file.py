@@ -6,7 +6,7 @@ Domain models for PDF file storage and management
 import json
 import logging
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 from datetime import datetime
 
 from .pdf_processing import PdfObject
@@ -32,8 +32,8 @@ class PdfFileBase(BaseModel):
 
 class PdfFileCreate(PdfFileBase):
     """Model for creating new PDF files - all data provided at creation"""
-    # All fields inherited from base
-    # PDF is already processed with objects extracted before storage
+    # Override objects_json to accept both Dict and PdfObject for performance
+    objects_json: Union[List[PdfObject], List[Dict[str, Any]]] = Field(default_factory=list, description="Extracted PDF objects as JSON")
 
     def model_dump_for_db(self) -> Dict[str, Any]:
         """Convert to database format with JSON serialization"""
@@ -41,8 +41,14 @@ class PdfFileCreate(PdfFileBase):
 
         # Serialize objects to JSON string for database storage
         if self.objects_json:
-            # Convert PdfObject instances to dictionaries then serialize to JSON
-            objects_dicts = [obj.model_dump() for obj in self.objects_json]
+            # Handle both Dict and PdfObject types (for PdfFileCreate performance)
+            objects_dicts = []
+            for obj in self.objects_json:
+                if isinstance(obj, dict):
+                    objects_dicts.append(obj)
+                else:
+                    # PdfObject instance - convert to dict
+                    objects_dicts.append(obj.model_dump())
             data['objects_json'] = json.dumps(objects_dicts)
         else:
             data['objects_json'] = None

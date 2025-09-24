@@ -37,8 +37,12 @@ from .pdf_file import (
 )
 
 from .pdf_processing import (
-    PdfObject, ExtractionField, 
+    PdfObject, ExtractionField,
     PdfObjectExtractionResult
+)
+
+from .pdf_processing_new import (
+    EtoRunWithPdfData
 )
 
 from .pdf_template import (
@@ -113,6 +117,7 @@ __all__ = [
     'PdfObject',
     'ExtractionField',
     'PdfObjectExtractionResult',
+    'EtoRunWithPdfData',
     
     # PDF template models
     'PdfTemplateBase',

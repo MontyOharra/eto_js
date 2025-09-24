@@ -16,7 +16,7 @@ from shared.exceptions import RepositoryError, ObjectNotFoundError, ValidationEr
 from shared.models import (
     EtoRun, EtoRunCreate, EtoRunSummary, EtoRunStatus, EtoProcessingStep, EtoErrorType,
     EtoRunTemplateMatchUpdate, EtoRunDataExtractionUpdate, EtoRunTransformationUpdate,
-    EtoRunOrderUpdate, EtoRunResetResult, EtoEmailInfo
+    EtoRunOrderUpdate, EtoRunResetResult, EtoEmailInfo, EtoRunWithPdfData
 )
 from shared.utils import DateTimeUtils
 
@@ -326,6 +326,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
             return EtoRunResetResult(
                 failure_count=0,
                 needs_template_count=0,
+                skipped_count=0,
                 total_reset=0
             )
 
@@ -626,6 +627,85 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
         except SQLAlchemyError as e:
             logger.error(f"Error setting needs_template for ETO run {eto_run_id}: {e}")
             raise RepositoryError(f"Failed to set needs_template: {e}") from e
+
+    # ========== Specialized Query Methods ==========
+
+    def get_eto_run_with_pdf_data(self, eto_run_id: int) -> Optional['EtoRunWithPdfData']:
+        """
+        Get ETO run with joined PDF file and email data for API response
+
+        Args:
+            eto_run_id: ETO run ID
+
+        Returns:
+            EtoRunWithPdfData domain model or None if not found
+        """
+        try:
+            with self.connection_manager.session_scope() as session:
+                # Query with joins to get all required data in one query
+                query = session.query(
+                    self.model_class,
+                    PdfFileModel,
+                    EmailModel
+                ).join(
+                    PdfFileModel, self.model_class.pdf_file_id == PdfFileModel.id
+                ).outerjoin(
+                    EmailModel, PdfFileModel.email_id == EmailModel.id
+                ).filter(
+                    self.model_class.id == eto_run_id
+                )
+
+                result = query.first()
+
+                if not result:
+                    return None
+
+                eto_run_model, pdf_model, email_model = result
+
+                # Convert ETO run to domain object for consistency
+                eto_run = self._convert_to_domain_object(eto_run_model)
+
+                # Build combined data dictionary
+                combined_data = {
+                    # ETO run data
+                    'run_id': eto_run.id,
+                    'status': eto_run.status.value if hasattr(eto_run.status, 'value') else str(eto_run.status),
+                    'processing_step': eto_run.processing_step.value if eto_run.processing_step and hasattr(eto_run.processing_step, 'value') else str(eto_run.processing_step) if eto_run.processing_step else None,
+                    'matched_template_id': eto_run.matched_template_id,
+                    'extracted_data': eto_run.extracted_data,
+                    'transformation_audit': eto_run.transformation_audit,
+                    'target_data': eto_run.target_data,
+                    'created_at': eto_run.created_at,
+                    'started_at': eto_run.started_at,
+                    'completed_at': eto_run.completed_at,
+                    'error_type': eto_run.error_type.value if eto_run.error_type and hasattr(eto_run.error_type, 'value') else str(eto_run.error_type) if eto_run.error_type else None,
+                    'error_message': eto_run.error_message,
+
+                    # PDF file data
+                    'pdf_id': pdf_model.id,
+                    'filename': pdf_model.filename,
+                    'original_filename': pdf_model.original_filename,
+                    'file_size': pdf_model.file_size,
+                    'page_count': pdf_model.page_count,
+                    'object_count': pdf_model.object_count or 0,
+                    'sha256_hash': pdf_model.file_hash,
+                    'pdf_objects': pdf_model.objects_json or None,  # JSON string from database
+
+                    # Email context (nullable)
+                    'email_subject': email_model.subject if email_model else None,
+                    'sender_email': email_model.sender_email if email_model else None,
+                    'received_date': email_model.received_date if email_model else None,
+                }
+
+                logger.debug(f"Retrieved ETO run {eto_run_id} with PDF and email data")
+
+                # Convert to domain model
+                from shared.models.pdf_processing_new import EtoRunWithPdfData
+                return EtoRunWithPdfData.from_repository_data(combined_data)
+
+        except SQLAlchemyError as e:
+            logger.error(f"Error getting ETO run with PDF data {eto_run_id}: {e}")
+            raise RepositoryError(f"Failed to get ETO run with PDF data: {e}") from e
 
     # ========== Helper Methods ==========
 

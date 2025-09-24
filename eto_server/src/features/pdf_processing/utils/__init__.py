@@ -1,12 +1,11 @@
 """
 PDF Processing Utilities
 """
+
 from .pdf_extractor import (
-    calculate_file_hash,
     extract_pdf_metadata,
-    extract_pdf_text,
     extract_pdf_objects,
-    extract_signature_objects,
+    calculate_file_hash,
     validate_pdf
 )
 
@@ -24,10 +23,8 @@ __all__ = [
     # PDF Extraction
     'calculate_file_hash',
     'extract_pdf_metadata',
-    'extract_pdf_text',
-    'extract_pdf_objects',
-    'extract_signature_objects',
     'validate_pdf',
+    'extract_pdf_objects',
     
     # File Storage
     'sanitize_filename',

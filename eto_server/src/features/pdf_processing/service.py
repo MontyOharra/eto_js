@@ -4,18 +4,18 @@ Consolidated service for all PDF operations including storage, extraction, and r
 """
 import json
 import logging
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, cast
 from datetime import datetime
 
 from shared.database.connection import DatabaseConnectionManager
 from shared.database.repositories.pdf_file import PdfFileRepository
 from shared.models.pdf_file import PdfFile, PdfFileCreate, PdfFileSummary
+from shared.models.pdf_processing_new import PdfDetailData
 from shared.exceptions import ServiceError
 
 from .utils import (
     calculate_file_hash,
     extract_pdf_metadata,
-    extract_pdf_text,
     extract_pdf_objects,
     validate_pdf,
     save_pdf_to_disk,
@@ -96,11 +96,20 @@ class PdfProcessingService:
             
             # Extract metadata
             metadata = extract_pdf_metadata(file_content)
-            page_count = metadata.get('page_count', 1)
             file_size = metadata.get('file_size', len(file_content))
-            
-            # Extract objects with positions
-            pdf_objects = extract_pdf_objects(file_content)
+
+            # Extract objects using new enhanced extractor
+            extraction_result = extract_pdf_objects(file_content)
+
+            if not extraction_result['success']:
+                logger.warning(f"PDF extraction partially failed: {extraction_result.get('error_message', 'Unknown error')}")
+
+            # Get data from extraction result (more reliable than metadata)
+            pdf_objects = extraction_result['objects']
+            page_count = extraction_result['page_count']  # Use page count from extractor
+
+            # Log extraction results
+            logger.info(f"Extracted {extraction_result['object_count']} objects from {page_count} pages")
 
             # Step 5: Store file on disk
             relative_path = save_pdf_to_disk(
@@ -120,7 +129,7 @@ class PdfProcessingService:
                 page_count=page_count,
                 object_count=len(pdf_objects) if pdf_objects else 0,
                 email_id=email_id,
-                objects_json=pdf_objects or []
+                objects_json=cast(List[Dict[str, Any]], pdf_objects or [])
             )
             
             pdf_file = self.pdf_repository.create(pdf_create)
@@ -247,8 +256,31 @@ class PdfProcessingService:
 
         # Convert PdfObject instances to dictionaries
         return [obj.model_dump() for obj in pdf_file.objects_json]
-    
-    
+
+    def get_pdf_detail_data(self, pdf_id: int) -> Optional[PdfDetailData]:
+        """
+        Get detailed PDF data with objects grouped by type for template builder
+
+        Args:
+            pdf_id: PDF file ID
+
+        Returns:
+            PdfDetailData with file info, email context, and objects grouped by type
+        """
+        try:
+            detail_data = self.pdf_repository.get_pdf_from_id_detail(pdf_id)
+            if not detail_data:
+                logger.debug(f"PDF detail data not found for ID {pdf_id}")
+                return None
+
+            logger.info(f"Retrieved PDF detail data for ID {pdf_id}: {detail_data.total_object_count} objects")
+            return detail_data
+
+        except Exception as e:
+            logger.error(f"Error getting PDF detail data for {pdf_id}: {e}")
+            raise ServiceError(f"Failed to get PDF detail data: {e}") from e
+
+
     # === Utility Operations ===
     
     def check_duplicate(self, file_content: bytes) -> Optional[PdfFile]:
