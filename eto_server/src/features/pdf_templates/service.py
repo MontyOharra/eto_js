@@ -538,6 +538,16 @@ class PdfTemplateService:
             limit=limit,
             offset=offset
         )
+        
+    def is_healthy(self) -> bool:
+        """Check if the service is healthy"""
+        try:
+            self.pdf_template_repo.get_by_id(1) 
+            return True
+          
+        except Exception as e:
+            logger.error(f"PDF template service health check failed: {e}")
+            return False
     
     def get_template_by_id(self, template_id: int) -> Optional[PdfTemplate]:
         """Get a single PDF template by ID"""

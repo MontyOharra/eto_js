@@ -1,9 +1,10 @@
 """
-Service Container - Singleton Pattern
-Global service access without Flask dependency
+Service Container - Singleton Pattern with Dependency Injection
+Global service access without Flask dependency using advanced DI container
 """
 import logging
 from typing import Optional
+from .dependency_injection import DependencyInjectionContainer, initialize_container, get_container
 
 logger = logging.getLogger(__name__)
 
@@ -11,20 +12,16 @@ logger = logging.getLogger(__name__)
 class ServiceContainer:
     """
     Singleton service container providing global access to all services.
-    Services are initialized once and can be accessed from anywhere without Flask context.
+    Now uses advanced DI container for dependency resolution and lazy initialization.
     """
     _instance: Optional['ServiceContainer'] = None
     _services_initialized: bool = False
+    _di_container: Optional[DependencyInjectionContainer] = None
 
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            # Initialize all service references to None
-            cls._instance.connection_manager = None
-            cls._instance.pdf_service = None
-            cls._instance.eto_service = None
-            cls._instance.pdf_template_service = None
-            cls._instance.email_ingestion_service = None
+            cls._instance._di_container = None
             logger.info("ServiceContainer singleton instance created - services not yet initialized")
         return cls._instance
 
@@ -34,7 +31,7 @@ class ServiceContainer:
 
     def initialize(self, connection_manager, pdf_storage_path: str):
         """
-        Initialize all services with their dependencies.
+        Initialize all services with their dependencies using DI container.
         Should be called once during application startup.
 
         Args:
@@ -46,36 +43,24 @@ class ServiceContainer:
             return
 
         try:
-            logger.info("Starting ServiceContainer.initialize() - initializing all services...")
+            logger.info("Starting ServiceContainer.initialize() with DI container...")
 
-            # Store connection manager
+            # Initialize the DI container with all services
+            self._di_container = initialize_container(connection_manager, pdf_storage_path)
+
+            # Store references for backward compatibility
             self.connection_manager = connection_manager
-            logger.info(f"Connection manager stored: {type(connection_manager)}")
 
-            # Import services here to avoid circular imports
-            from features.pdf_processing import PdfProcessingService
-            from features.email_ingestion.service import EmailIngestionService
-            from features.eto_processing import EtoProcessingService
-            from features.pdf_templates.service import PdfTemplateService
-
-            # Initialize PDF service first (other services may depend on it)
-            self.pdf_service = PdfProcessingService(pdf_storage_path, connection_manager)
-            logger.debug("PDF processing service initialized")
-
-            # Initialize PDF template service
-            self.pdf_template_service = PdfTemplateService(connection_manager)
-            logger.debug("PDF template service initialized")
-
-            # Initialize email ingestion service (handles configs and ingestion)
-            self.email_ingestion_service = EmailIngestionService(connection_manager)
-            logger.debug("Email ingestion service initialized with multi-config support")
-
-            # Initialize ETO processing service with its dependencies
-            self.eto_service = EtoProcessingService(connection_manager)
-            logger.debug("ETO processing service initialized")
-
-            logger.info("ServiceContainer initialization completed successfully")
+            logger.info("ServiceContainer initialization with DI completed successfully")
             ServiceContainer._services_initialized = True
+
+            # Perform health checks on all services
+            health_status = self._di_container.health_check()
+            for service_name, is_healthy in health_status.items():
+                if is_healthy:
+                    logger.debug(f"Service '{service_name}' health check: OK")
+                else:
+                    logger.warning(f"Service '{service_name}' health check: FAILED")
 
         except Exception as e:
             import traceback
@@ -87,30 +72,46 @@ class ServiceContainer:
         """Check if the container has been initialized with services"""
         return ServiceContainer._services_initialized
 
-    # === Service Getters ===
+    # === Service Getters (using DI container) ===
+
+    @property
+    def pdf_service(self):
+        """Get PDF processing service via lazy loading from DI container"""
+        if not self._di_container:
+            raise RuntimeError("ServiceContainer not initialized - call initialize() first")
+        return self._di_container.resolve('pdf_processing')
+
+    @property
+    def email_ingestion_service(self):
+        """Get email ingestion service via lazy loading from DI container"""
+        if not self._di_container:
+            raise RuntimeError("ServiceContainer not initialized - call initialize() first")
+        return self._di_container.resolve('email_ingestion')
+
+    @property
+    def eto_service(self):
+        """Get ETO processing service via lazy loading from DI container"""
+        if not self._di_container:
+            raise RuntimeError("ServiceContainer not initialized - call initialize() first")
+        return self._di_container.resolve('eto_processing')
+
+    @property
+    def pdf_template_service(self):
+        """Get PDF template service via lazy loading from DI container"""
+        if not self._di_container:
+            raise RuntimeError("ServiceContainer not initialized - call initialize() first")
+        return self._di_container.resolve('pdf_template')
 
     def get_pdf_service(self):
         """Get PDF processing service - guaranteed to return valid service or crash"""
-        if not self.pdf_service:
-            logger.error(f"PDF service not initialized - ServiceContainer.initialize() was not called")
-            logger.error(f"ServiceContainer state: pdf_service={self.pdf_service}, connection_manager={self.connection_manager}")
-            logger.error(f"ServiceContainer._services_initialized={ServiceContainer._services_initialized}")
-            logger.error(f"ServiceContainer instance ID: {id(self)}")
-            raise RuntimeError("PDF processing service not available - application initialization failed")
         return self.pdf_service
 
     def get_email_ingestion_service(self):
         """Get email ingestion service - guaranteed to return valid service or crash"""
-        if not self.email_ingestion_service:
-            logger.error("Email ingestion service not initialized - ServiceContainer.initialize() was not called")
-            raise RuntimeError("Email ingestion service not available - application initialization failed")
         return self.email_ingestion_service
 
     def get_eto_service(self):
         """Get ETO processing service - guaranteed to return valid service or crash"""
-        if not self.eto_service:
-            logger.error("ETO service not initialized - ServiceContainer.initialize() was not called")
-            raise RuntimeError("ETO processing service not available - application initialization failed")
         return self.eto_service
 
     def get_connection_manager(self):
@@ -122,9 +123,6 @@ class ServiceContainer:
 
     def get_pdf_template_service(self):
         """Get PDF template service - guaranteed to return valid service or crash"""
-        if not self.pdf_template_service:
-            logger.error("PDF template service not initialized - ServiceContainer.initialize() was not called")
-            raise RuntimeError("PDF template service not available - application initialization failed")
         return self.pdf_template_service
     
 

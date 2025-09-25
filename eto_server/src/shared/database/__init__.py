@@ -24,13 +24,5 @@ __all__ = [
     'TransformationPipelineModel',
     'TransformationPipelineStepModel',
     'CustomTransformationModuleModel',
-    'EmailIngestionConfigModel',
-    
-    # Repositories (import directly when needed to avoid circular imports)
-    # 'BaseRepository',
-    # 'RepositoryError',
-    # 'EmailIngestionConfigRepository',
-    # 'EmailIngestionCursorRepository',
-    # 'EtoRunRepository',
-    # 'PdfFileRepository'
+    'EmailConfigModel',
 ]

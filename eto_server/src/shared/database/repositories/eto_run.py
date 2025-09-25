@@ -11,7 +11,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import func, case, update, delete
 
 from shared.database.repositories.base import BaseRepository
-from shared.database.models import EtoRunModel, PdfFileModel, EmailModel, EmailIngestionConfigModel
+from shared.database.models import EtoRunModel, PdfFileModel, EmailModel, EmailConfigModel
 from shared.exceptions import RepositoryError, ObjectNotFoundError, ValidationError
 from shared.models import (
     EtoRun, EtoRunCreate, EtoRunSummary, EtoRunStatus, EtoProcessingStep, EtoErrorType,

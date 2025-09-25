@@ -20,7 +20,7 @@ class EmailModel(BaseModel):
     __tablename__ = 'emails'
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    config_id: Mapped[int] = mapped_column(ForeignKey('email_ingestion_configs.id'), nullable=False)
+    config_id: Mapped[int] = mapped_column(ForeignKey('email_configs.id'), nullable=False)
     message_id: Mapped[str] = mapped_column(String(500), nullable=False)
     subject: Mapped[Optional[str]] = mapped_column(String(500))
     sender_email: Mapped[Optional[str]] = mapped_column(String(255))
@@ -34,7 +34,7 @@ class EmailModel(BaseModel):
     created_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate())
     
     # Relationships
-    config = relationship("EmailIngestionConfigModel", back_populates="emails")
+    config = relationship("EmailConfigModel", back_populates="emails")
     pdf_files = relationship("PdfFileModel", back_populates="email")
     
     __table_args__ = (
@@ -44,9 +44,9 @@ class EmailModel(BaseModel):
     )
 
 
-class EmailIngestionConfigModel(BaseModel):
+class EmailConfigModel(BaseModel):
     """Email ingestion configuration settings"""
-    __tablename__ = 'email_ingestion_configs'
+    __tablename__ = 'email_configs'
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(255))

@@ -8,7 +8,7 @@ from datetime import datetime
 from api.schemas.common import APIResponse
 
 # Import the nested PDF object structure
-from shared.models import PdfObjectsByType
+from shared.models import PdfObjects
 
 
 class EtoRunPdfData(BaseModel):
@@ -23,7 +23,7 @@ class EtoRunPdfData(BaseModel):
     sha256_hash: str
 
     # PDF objects organized by type
-    pdf_objects: PdfObjectsByType = Field(default_factory=PdfObjectsByType)
+    pdf_objects: PdfObjects = Field(default_factory=PdfObjects)
 
     # Email context (flat structure)
     email_subject: str

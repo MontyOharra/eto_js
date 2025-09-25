@@ -1,6 +1,6 @@
 """
 Email Ingestion Config Repository
-Data access layer for EmailIngestionConfig model operations with Pydantic typing
+Data access layer for EmailConfig model operations with Pydantic typing
 """
 import logging
 from typing import Optional, List
@@ -9,21 +9,21 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from shared.database.repositories import BaseRepository
 from shared.exceptions import RepositoryError, ObjectNotFoundError, ValidationError
-from shared.database.models import EmailIngestionConfigModel
+from shared.database.models import EmailConfigModel
 from shared.models import EmailConfig, EmailConfigCreate, EmailConfigUpdate, EmailConfigSummary
 from shared.utils import DateTimeUtils
 
 logger = logging.getLogger(__name__)
 
 
-class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
+class EmailConfigRepository(BaseRepository[EmailConfigModel]):
     """Repository for email ingestion configuration operations with Pydantic models"""
     
     @property
     def model_class(self):
-        return EmailIngestionConfigModel
+        return EmailConfigModel
     
-    def _convert_to_domain_object(self, config: EmailIngestionConfigModel) -> EmailConfig:
+    def _convert_to_domain_object(self, config: EmailConfigModel) -> EmailConfig:
         """Convert SQLAlchemy model to domain object"""
         return EmailConfig.from_db_model(config)
         

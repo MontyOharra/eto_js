@@ -18,7 +18,7 @@ from shared.models import (
 )
 from shared.database.repositories.email import EmailRepository
 from shared.utils import DateTimeUtils
-from shared.database.repositories.email_ingestion_config import EmailIngestionConfigRepository
+from shared.database.repositories.email_config import EmailConfigRepository
 from shared.exceptions import ServiceError, ObjectNotFoundError
 
 from features.email_ingestion.integrations.factory import EmailIntegrationFactory
@@ -68,7 +68,7 @@ class EmailIngestionService:
         self.pdf_service = get_pdf_processing_service()
 
         # Initialize repositories
-        self.config_repository = EmailIngestionConfigRepository(connection_manager)
+        self.config_repository = EmailConfigRepository(connection_manager)
         self.email_repository = EmailRepository(connection_manager)
         
         # Active integrations and listeners

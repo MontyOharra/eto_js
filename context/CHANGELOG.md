@@ -5,6 +5,34 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-09-25 16:00] — Advanced Dependency Injection Container Implementation
+### Spec / Intent
+- Solve service initialization ordering and circular dependency issues
+- Implement industry-standard dependency injection pattern for service management
+- Enable lazy initialization and proper dependency resolution
+- Add service health checks and lifetime management
+
+### Changes Made
+- **DI Container Implementation**: Created `dependency_injection.py` with full DI container supporting singleton/scoped/transient lifetimes
+- **Circular Dependency Detection**: Automatic detection and error reporting of circular dependencies
+- **Lazy Loading**: Services created only when first requested, solving initialization order issues
+- **Service Container Update**: Integrated DI container into existing ServiceContainer for backward compatibility
+- **Health Checks**: Added health check support for all registered services
+- Files: `shared/services/dependency_injection.py` (new), `shared/services/service_container.py` (updated)
+
+### Next Actions
+- Update services to remove direct service fetching in constructors
+- Add more sophisticated health checks to individual services
+- Consider adding service middleware/interceptors
+
+### Notes
+- **Industry Standard**: Follows patterns used in Spring, .NET Core, and other enterprise frameworks
+- **Backward Compatible**: Existing code continues to work with new DI system
+- **Extensible**: Easy to add new services and dependencies
+- **Type Safe**: Full type hints and error handling throughout
+
+---
+
 ## [2025-09-25 14:45] — ETO Service Integration of Template-Based Extraction
 ### Spec / Intent
 - Integrate template-based extraction into ETO processing pipeline

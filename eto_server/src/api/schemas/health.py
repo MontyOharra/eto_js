@@ -65,8 +65,3 @@ class ReadinessCheckData(BaseModel):
     ready: bool
     message: str
     timestamp: datetime = Field(default_factory=datetime.utcnow)
-
-
-class ReadinessCheckResponse(APIResponse):
-    """Readiness check response"""
-    data: ReadinessCheckData

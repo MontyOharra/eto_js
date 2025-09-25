@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, Depends, status
 from shared.services.service_container import ServiceContainer, get_service_container, is_service_container_initialized
 from shared.utils import DateTimeUtils
 from api.schemas.health import (
-    HealthCheckResponse, DetailedStatusResponse, ReadinessCheckResponse,
+    HealthCheckResponse, DetailedStatusResponse,
     DetailedStatusData, ServiceStatus, EtoServiceStatus, WorkerStatus,
     DatabaseStatus, StorageStatus, ReadinessCheckData
 )
@@ -123,10 +123,10 @@ async def service_status(
         )
 
 
-@router.get("/ready", response_model=ReadinessCheckResponse)
+@router.get("/ready", response_model=ReadinessCheckData)
 async def readiness_check(
     container: ServiceContainer = Depends(get_service_container)
-) -> ReadinessCheckResponse:
+) -> ReadinessCheckData:
     """
     Readiness check - returns OK only if all critical services are ready
 
@@ -154,14 +154,10 @@ async def readiness_check(
         container.get_pdf_template_service()
         container.get_eto_service()
 
-        return ReadinessCheckResponse(
-            success=True,
+        return ReadinessCheckData(
+            ready=True,
             message="All critical services ready",
-            data=ReadinessCheckData(
-                ready=True,
-                message="All critical services ready",
-                timestamp=DateTimeUtils.utc_now()
-            )
+            timestamp=DateTimeUtils.utc_now()
         )
 
     except HTTPException:

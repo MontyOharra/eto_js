@@ -71,7 +71,7 @@ def create_template(
         # Create the template directly using the domain create model
         template = template_service.create_template(template_create)
 
-        logger.info(f"Created template {template.id}: '{template.name}' with {len(template_create.initial_signature_objects)} signature objects and {len(template_create.initial_extraction_fields)} extraction fields")
+        logger.info(f"Created template {template.id}: '{template.name}' with {template_create.initial_signature_objects.get_counts_by_type()} signature objects and {len(template_create.initial_extraction_fields)} extraction fields")
 
         return template
 
@@ -121,14 +121,13 @@ def create_template_version(
         version_create = PdfTemplateVersionCreate(
             pdf_template_id=template_id,
             signature_objects=request_data.signature_objects,
-            extraction_fields=request_data.extraction_fields,
-            signature_object_count=request_data.signature_object_count
+            extraction_fields=request_data.extraction_fields
         )
 
         # Create the template version using the create model
         version = template_service.create_template_version(version_create)
 
-        logger.info(f"Created version {version.version_num} for template {template_id} with {len(version.signature_objects)} signature objects and {len(version.extraction_fields)} extraction fields")
+        logger.info(f"Created version {version.version_num} for template {template_id} with {len(version.signature_objects.get_counts_by_type())} signature objects and {len(version.extraction_fields)} extraction fields")
 
         return version
 
