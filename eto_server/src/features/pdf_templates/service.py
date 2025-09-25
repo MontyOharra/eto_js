@@ -4,16 +4,17 @@ Service for template matching and management operations
 """
 import json
 import logging
+import re
 from typing import Optional, List, Dict, Any, Tuple
 
 from shared.database.repositories.pdf_template import PdfTemplateRepository
 from shared.database.repositories.pdf_template_version import PdfTemplateVersionRepository
-# PDF processing service will be injected through constructor
 from shared.exceptions import ObjectNotFoundError
+from shared.services import get_pdf_template_service
 
 from shared.models import (
     PdfTemplate, PdfTemplateVersion, PdfTemplateCreate, PdfTemplateUpdate, PdfTemplateVersionCreate,
-    PdfObjects, ExtractionField, PdfTemplateMatchResult
+    PdfObjects, ExtractionField, PdfTemplateMatchResult, TextWordPdfObject
 )
 
 logger = logging.getLogger(__name__)
@@ -25,12 +26,12 @@ TemplateMatch = Tuple[PdfTemplate, PdfTemplateVersion, int]
 class PdfTemplateService:
     """Service for PDF template matching and management"""
 
-    def __init__(self, connection_manager, pdf_service):
+    def __init__(self, connection_manager):
         if not connection_manager:
             raise RuntimeError("Database connection manager is required")
 
         self.connection_manager = connection_manager
-        self.pdf_service = pdf_service
+        self.pdf_service = get_pdf_template_service()
 
         # Repository layer - with explicit type annotations for IDE support
         self.pdf_template_repo: PdfTemplateRepository = PdfTemplateRepository(self.connection_manager)
@@ -460,7 +461,6 @@ class PdfTemplateService:
             pdf_template_id=new_template_id,
             signature_objects=pdf_template_data.initial_signature_objects,
             extraction_fields=pdf_template_data.initial_extraction_fields,
-            signature_object_count=len(pdf_template_data.initial_signature_objects)
         )
         version = self.pdf_template_version_repo.create(version_create)
 
@@ -564,3 +564,208 @@ class PdfTemplateService:
     def update_template(self, template_id: int, update_data: PdfTemplateUpdate) -> Optional[PdfTemplate]:
         """Update a PDF template with the provided data"""
         return self.pdf_template_repo.update(template_id, update_data)
+
+    # === Data Extraction ===
+
+    def extract_data_using_template(self, template_id: int, pdf_objects: PdfObjects) -> Dict[str, str]:
+        """
+        Extract data from PDF using template's extraction fields
+
+        Args:
+            template_id: ID of the template to use for extraction
+            pdf_objects: Nested PDF objects from the target document
+
+        Returns:
+            Dictionary mapping field labels to extracted text values
+
+        Raises:
+            ObjectNotFoundError: If template or current version not found
+            ValueError: If extraction fails or validation errors occur
+        """
+        logger.info(f"Starting data extraction using template {template_id}")
+
+        # Get the current version for this template
+        template = self.pdf_template_repo.get_by_id(template_id)
+        if not template:
+            raise ObjectNotFoundError("PdfTemplate", template_id)
+
+        if not template.current_version_id:
+            raise ValueError(f"Template {template_id} has no current version")
+
+        current_version = self.pdf_template_version_repo.get_by_id(template.current_version_id)
+        if not current_version:
+            raise ValueError(f"Current version {template.current_version_id} not found for template {template_id}")
+
+        # Extract data for each field
+        extracted_data: Dict[str, str] = {}
+
+        for field in current_version.extraction_fields:
+            try:
+                # Extract text from the bounding box
+                extracted_text = self._extract_text_from_bounding_box(
+                    pdf_objects.text_words,
+                    field.bounding_box,
+                    field.page
+                )
+
+                # Apply validation if specified
+                if field.validation_regex and extracted_text:
+                    if not self._validate_extracted_text(extracted_text, field.validation_regex):
+                        logger.warning(f"Field '{field.label}' failed validation: {extracted_text}")
+                        # Still include the text even if validation fails, let downstream handle it
+
+                # Check required fields
+                if field.required and not extracted_text:
+                    logger.warning(f"Required field '{field.label}' is empty")
+                    # Still continue extraction, let downstream handle missing required fields
+
+                extracted_data[field.label] = extracted_text
+                logger.debug(f"Extracted field '{field.label}': {extracted_text[:50]}..." if len(extracted_text) > 50 else f"Extracted field '{field.label}': {extracted_text}")
+
+            except Exception as e:
+                logger.error(f"Error extracting field '{field.label}': {e}")
+                extracted_data[field.label] = ""  # Set empty string for failed extractions
+
+        logger.info(f"Data extraction complete - extracted {len(extracted_data)} fields")
+        return extracted_data
+
+    def _extract_text_from_bounding_box(
+        self,
+        text_words: List[TextWordPdfObject],
+        bounding_box: List[float],
+        page: int
+    ) -> str:
+        """
+        Extract and concatenate text from words within a bounding box
+
+        Args:
+            text_words: List of text word objects from the PDF
+            bounding_box: [x0, y0, x1, y1] coordinates of extraction area
+            page: Page number (1-based)
+
+        Returns:
+            Concatenated text from all words within the bounding box
+        """
+        # Filter words by page
+        page_words = [word for word in text_words if word.page == page]
+
+        # Find words within bounding box
+        words_in_box = []
+        for word in page_words:
+            if self._is_word_in_bounding_box(word, bounding_box):
+                words_in_box.append(word)
+
+        if not words_in_box:
+            return ""
+
+        # Sort words by position (top to bottom, left to right)
+        words_in_box.sort(key=lambda w: (-w.bbox[1], w.bbox[0]))  # -y for top-to-bottom, x for left-to-right
+
+        # Group words into lines based on y-coordinate proximity
+        lines = []
+        current_line = []
+        current_y = None
+        y_tolerance = 5.0  # Tolerance for considering words on the same line
+
+        for word in words_in_box:
+            word_y = (word.bbox[1] + word.bbox[3]) / 2  # Use center y-coordinate
+
+            if current_y is None or abs(word_y - current_y) <= y_tolerance:
+                current_line.append(word)
+                if current_y is None:
+                    current_y = word_y
+            else:
+                # New line detected
+                if current_line:
+                    lines.append(current_line)
+                current_line = [word]
+                current_y = word_y
+
+        # Add the last line
+        if current_line:
+            lines.append(current_line)
+
+        # Build the final text
+        result_lines = []
+        for line in lines:
+            # Sort words in line by x-coordinate
+            line.sort(key=lambda w: w.bbox[0])
+            # Join words with spaces
+            line_text = " ".join(word.text for word in line)
+            result_lines.append(line_text)
+
+        # Join lines with newlines and clean up
+        result = "\n".join(result_lines)
+        return result.strip()
+
+    def _is_word_in_bounding_box(
+        self,
+        word: TextWordPdfObject,
+        bounding_box: List[float],
+        tolerance: float = 2.0
+    ) -> bool:
+        """
+        Check if a text word falls within an extraction field's bounding box
+
+        Uses overlap-based checking: word is considered inside if it has
+        significant overlap with the extraction field.
+
+        Args:
+            word: Text word object with bbox
+            bounding_box: [x0, y0, x1, y1] extraction field coordinates
+            tolerance: Pixel tolerance for boundary checking
+
+        Returns:
+            True if word is within the bounding box, False otherwise
+        """
+        # Extract coordinates with tolerance
+        field_x0, field_y0, field_x1, field_y1 = bounding_box
+        field_x0 -= tolerance
+        field_y0 -= tolerance
+        field_x1 += tolerance
+        field_y1 += tolerance
+
+        word_x0, word_y0, word_x1, word_y1 = word.bbox
+
+        # Check if there's no overlap at all (early exit)
+        if (word_x1 < field_x0 or word_x0 > field_x1 or
+            word_y1 < field_y0 or word_y0 > field_y1):
+            return False
+
+        # Calculate overlap area
+        overlap_x0 = max(word_x0, field_x0)
+        overlap_y0 = max(word_y0, field_y0)
+        overlap_x1 = min(word_x1, field_x1)
+        overlap_y1 = min(word_y1, field_y1)
+
+        overlap_area = (overlap_x1 - overlap_x0) * (overlap_y1 - overlap_y0)
+        word_area = (word_x1 - word_x0) * (word_y1 - word_y0)
+
+        # Consider word inside if >50% overlap OR if center point is inside
+        overlap_ratio = overlap_area / word_area if word_area > 0 else 0
+
+        # Also check if word center is within field
+        word_center_x = (word_x0 + word_x1) / 2
+        word_center_y = (word_y0 + word_y1) / 2
+        center_inside = (field_x0 <= word_center_x <= field_x1 and
+                        field_y0 <= word_center_y <= field_y1)
+
+        return overlap_ratio > 0.5 or center_inside
+
+    def _validate_extracted_text(self, text: str, validation_regex: str) -> bool:
+        """
+        Validate extracted text against regex pattern
+
+        Args:
+            text: Extracted text to validate
+            validation_regex: Regular expression pattern for validation
+
+        Returns:
+            True if text matches pattern, False otherwise
+        """
+        try:
+            pattern = re.compile(validation_regex)
+            return bool(pattern.match(text))
+        except re.error as e:
+            logger.error(f"Invalid regex pattern '{validation_regex}': {e}")
+            return True  # Don't fail on invalid regex, just skip validation

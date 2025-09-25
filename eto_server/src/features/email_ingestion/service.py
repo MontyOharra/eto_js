@@ -25,6 +25,10 @@ from features.email_ingestion.integrations.factory import EmailIntegrationFactor
 from features.email_ingestion.integrations.base_integration import BaseEmailIntegration
 from features.email_ingestion.utils.email_listener_thread import EmailListenerThread
 
+from shared.services import get_pdf_processing_service
+
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -49,7 +53,7 @@ class EmailIngestionService:
     Manages configurations, listeners, integrations, and email processing.
     """
     
-    def __init__(self, connection_manager, pdf_service=None):
+    def __init__(self, connection_manager):
         """
         Initialize service with database connection and dependencies
 
@@ -61,7 +65,7 @@ class EmailIngestionService:
             raise RuntimeError("Database connection manager is required")
         
         self.connection_manager = connection_manager
-        self.pdf_service = pdf_service
+        self.pdf_service = get_pdf_processing_service()
 
         # Initialize repositories
         self.config_repository = EmailIngestionConfigRepository(connection_manager)

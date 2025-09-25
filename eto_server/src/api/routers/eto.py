@@ -25,7 +25,7 @@ class BulkRunRequest(BaseModel):
     run_ids: List[int]
 
 router = APIRouter(
-    prefix="/eto-runs"
+    prefix="/eto-runs",
     tags=["ETO Processing"]
 )
 

@@ -128,7 +128,7 @@ def configure_logging():
     console_handler.setLevel(log_level)
 
     # Create formatter - configurable format and colors
-    log_format = os.getenv('LOG_FORMAT', '\n%(asctime)s - %(levelname)s - %(name)s:\n    %(message)s\n')
+    log_format = os.getenv('LOG_FORMAT', '\n%(asctime)s | %(levelname)s | %(name)s - line %(lineno)s:\n    %(message)s\n')
     use_colors = os.getenv('LOG_COLORS', 'true').lower() == 'true'
     formatter = ColoredFormatter(log_format, use_colors=use_colors)
     console_handler.setFormatter(formatter)

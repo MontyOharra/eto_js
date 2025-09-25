@@ -63,15 +63,15 @@ class ServiceContainer:
             logger.debug("PDF processing service initialized")
 
             # Initialize PDF template service
-            self.pdf_template_service = PdfTemplateService(connection_manager, self.pdf_service)
+            self.pdf_template_service = PdfTemplateService(connection_manager)
             logger.debug("PDF template service initialized")
 
             # Initialize email ingestion service (handles configs and ingestion)
-            self.email_ingestion_service = EmailIngestionService(connection_manager, self.pdf_service)
+            self.email_ingestion_service = EmailIngestionService(connection_manager)
             logger.debug("Email ingestion service initialized with multi-config support")
 
             # Initialize ETO processing service with its dependencies
-            self.eto_service = EtoProcessingService(connection_manager, self.pdf_service, self.pdf_template_service)
+            self.eto_service = EtoProcessingService(connection_manager)
             logger.debug("ETO processing service initialized")
 
             logger.info("ServiceContainer initialization completed successfully")

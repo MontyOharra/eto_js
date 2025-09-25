@@ -5,6 +5,35 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-09-25 14:30] — Template-Based Data Extraction Implementation
+### Spec / Intent
+- Implement template-based data extraction using bounding boxes and text word objects
+- Create extraction function that maps field labels to extracted text values
+- Support multi-line text extraction with proper word ordering and line grouping
+- Add validation regex support and required field checking
+
+### Changes Made
+- **Main Extraction Function**: `extract_data_using_template()` method that takes template ID and PDF objects, returns Dict[str, str] mapping field labels to extracted text
+- **Bounding Box Intersection**: `_is_word_in_bounding_box()` helper using 50% overlap OR center point checking with 2px tolerance
+- **Text Assembly**: `_extract_text_from_bounding_box()` groups words into lines based on y-coordinate proximity, sorts by position, joins with spaces/newlines
+- **Validation Support**: `_validate_extracted_text()` applies optional regex patterns to validate extracted content
+- **Error Handling**: Comprehensive error handling for missing templates, versions, and extraction failures
+- Files: `features/pdf_templates/service.py`
+
+### Next Actions
+- Create unit tests for extraction functionality
+- Integrate extraction into ETO processing service after template matching
+- Test with real PDF documents and templates
+
+### Notes
+- **Extraction Algorithm**: Words are considered inside bounding box if >50% overlap OR center point is inside
+- **Text Ordering**: Words sorted top-to-bottom then left-to-right, grouped into lines with 5px y-tolerance
+- **Validation Philosophy**: Failed validation still returns text (logged warning), letting downstream handle
+- **Required Fields**: Missing required fields logged but don't stop extraction, downstream decides handling
+- **Return Format**: Simple Dict[str, str] ready for JSON serialization to database
+
+---
+
 ## [2025-09-24 Session] — PDF Template Service Restructuring with Boolean Subset Matching
 ### Spec / Intent
 - Complete restructuring of PDF template matching service from flat PDF objects to nested PdfObjects structure

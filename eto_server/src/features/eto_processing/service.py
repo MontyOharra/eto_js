@@ -14,12 +14,11 @@ from datetime import datetime, timezone
 from shared.database.connection import DatabaseConnectionManager
 from shared.database.repositories.eto_run import EtoRunRepository
 from shared.exceptions import ServiceError, ObjectNotFoundError, EtoProcessingError, EtoStatusValidationError, EtoTemplateMatchingError, EtoDataExtractionError, EtoTransformationError
-# Services will be injected through constructor
+from shared.services import get_pdf_processing_service, get_pdf_template_service
 from shared.models import (
     EtoRun, EtoRunCreate, EtoRunStatus, EtoProcessingStep, EtoErrorType,
     EtoRunStatusUpdate, EtoRunTemplateMatchUpdate, EtoRunDataExtractionUpdate,
-    EtoRunTransformationUpdate, EtoRunOrderUpdate, PdfObjectsByType, EtoRunWithPdfData,
-    flatten_pdf_objects
+    EtoRunTransformationUpdate, EtoRunOrderUpdate, PdfObjects, EtoRunWithPdfData,
 )
 from shared.utils import DateTimeUtils
 
@@ -38,7 +37,7 @@ class EtoProcessingService:
     - Provide user-facing operations (reprocessing, skipping, etc.)
     """
 
-    def __init__(self, connection_manager: DatabaseConnectionManager, pdf_service, template_service):
+    def __init__(self, connection_manager: DatabaseConnectionManager):
         """
         Initialize ETO processing service with integrated worker
 
@@ -51,8 +50,8 @@ class EtoProcessingService:
             raise RuntimeError("Database connection manager is required")
 
         self.connection_manager = connection_manager
-        self.pdf_service = pdf_service
-        self.template_service = template_service
+        self.pdf_service = get_pdf_processing_service()
+        self.template_service = get_pdf_template_service()
         self.eto_run_repository = EtoRunRepository(connection_manager)
 
         # Worker configuration and state
@@ -146,7 +145,7 @@ class EtoProcessingService:
         processing_count = len(self.currently_processing_runs)
 
         try:
-            pending_runs = self.eto_run_repository.get_runs_by_status(EtoRunStatus.NOT_STARTED, limit=100)
+            pending_runs = self.get_runs_by_status(EtoRunStatus.NOT_STARTED, limit=100)
             pending_count = len(pending_runs)
         except Exception as e:
             logger.error(f"Error getting pending count: {e}")
@@ -165,7 +164,7 @@ class EtoProcessingService:
     async def _reset_processing_runs(self):
         """Reset any runs stuck in 'processing' status back to 'not_started'"""
         try:
-            processing_runs = self.eto_run_repository.get_runs_by_status(EtoRunStatus.PROCESSING)
+            processing_runs = self.get_runs_by_status(EtoRunStatus.PROCESSING)
             if processing_runs:
                 logger.warning(f"Resetting {len(processing_runs)} stuck processing runs to not_started")
 
@@ -216,9 +215,9 @@ class EtoProcessingService:
         """Process a batch of pending not_started runs concurrently"""
         try:
             # Get pending runs
-            pending_runs = self.eto_run_repository.get_runs_by_status(
+            pending_runs = self.get_runs_by_status(
                 EtoRunStatus.NOT_STARTED,
-                limit=self.max_concurrent_runs
+                self.max_concurrent_runs
             )
 
             if not pending_runs:
@@ -827,7 +826,7 @@ class EtoProcessingService:
 
     def get_runs_by_status(self, status: EtoRunStatus, limit: Optional[int] = None):
         """Get ETO runs by status"""
-        return self.eto_run_repository.get_runs_by_status(status, limit)
+        return self.eto_run_repository.get_runs_with_filters(status=status, limit=limit)
 
     def get_run_by_id(self, eto_run_id: int) -> Optional[EtoRun]:
         """Get ETO run by ID"""
@@ -924,7 +923,7 @@ class EtoProcessingService:
 
     # ========== Helper Methods ==========
 
-    def _get_pdf_objects(self, pdf_file_id: int) -> PdfObjectsByType:
+    def _get_pdf_objects(self, pdf_file_id: int) -> PdfObjects:
         """
         Get PDF objects for template matching and data extraction
 
