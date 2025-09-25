@@ -5,6 +5,31 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-09-25 14:45] — ETO Service Integration of Template-Based Extraction
+### Spec / Intent
+- Integrate template-based extraction into ETO processing pipeline
+- Fix method calls to use correct function name and PdfObjects structure
+- Ensure extraction happens after successful template matching
+- Enable end-to-end data extraction from PDFs to database storage
+
+### Changes Made
+- **Method Call Updates**: Changed `extract_data_from_template()` to `extract_data_using_template()` in both sync and async versions
+- **PdfObjects Usage**: Removed flattening step, now passes nested PdfObjects directly as designed
+- **Data Flow**: Template matching → extraction → storage as JSON in extracted_data field
+- Files: `features/eto_processing/service.py`
+
+### Next Actions
+- Test complete ETO pipeline with extraction
+- Monitor extraction performance with real PDFs
+- Consider adding extraction result validation
+
+### Notes
+- **Integration Complete**: ETO service now properly calls extraction after template matching
+- **Data Format**: Extracted Dict[str, str] stored directly in EtoRunDataExtractionUpdate
+- **Error Handling**: Extraction errors properly caught and logged within ETO pipeline
+
+---
+
 ## [2025-09-25 14:30] — Template-Based Data Extraction Implementation
 ### Spec / Intent
 - Implement template-based data extraction using bounding boxes and text word objects
@@ -21,8 +46,8 @@ This document tracks major development milestones and features implemented in th
 - Files: `features/pdf_templates/service.py`
 
 ### Next Actions
+- ~~Integrate extraction into ETO processing service after template matching~~ ✅
 - Create unit tests for extraction functionality
-- Integrate extraction into ETO processing service after template matching
 - Test with real PDF documents and templates
 
 ### Notes

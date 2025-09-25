@@ -345,21 +345,18 @@ class EtoProcessingService:
             self._validate_status_for_step(eto_run, EtoProcessingStep.EXTRACTING_DATA)
             self._validate_prerequisites_for_extraction(eto_run)
 
-            # Get PDF objects
-            pdf_objects_by_type = self._get_pdf_objects(eto_run.pdf_file_id)
-            if not pdf_objects_by_type:
+            # Get PDF objects (already in nested PdfObjects format)
+            pdf_objects = self._get_pdf_objects(eto_run.pdf_file_id)
+            if not pdf_objects:
                 raise EtoDataExtractionError(
                     eto_run.id, "No PDF objects found for data extraction"
                 )
 
-            # Flatten for template operations
-            pdf_objects = flatten_pdf_objects(pdf_objects_by_type)
-
-            # Extract data using template
+            # Extract data using template with nested PdfObjects structure
             if eto_run.matched_template_id is None:
                 raise EtoDataExtractionError(eto_run.id, "No matched template ID available for data extraction")
 
-            extracted_data = self.template_service.extract_data_from_template(
+            extracted_data = self.template_service.extract_data_using_template(
                 eto_run.matched_template_id, pdf_objects
             )
 
@@ -654,24 +651,21 @@ class EtoProcessingService:
         self._validate_status_for_step(eto_run, EtoProcessingStep.EXTRACTING_DATA)
         self._validate_prerequisites_for_extraction(eto_run)
 
-        # Get PDF objects
-        pdf_objects_by_type = self._get_pdf_objects(eto_run.pdf_file_id)
-        if not pdf_objects_by_type:
+        # Get PDF objects (already in nested PdfObjects format)
+        pdf_objects = self._get_pdf_objects(eto_run.pdf_file_id)
+        if not pdf_objects:
             raise EtoDataExtractionError(
                 eto_run.id, "No PDF objects found for data extraction"
             )
 
-        # Flatten for template operations
-        pdf_objects = flatten_pdf_objects(pdf_objects_by_type)
-
-        # Extract data using template
+        # Extract data using template with nested PdfObjects structure
         pdf_template_service = self.template_service
 
         # Ensure we have a matched template ID (validated in prerequisites, but type safety)
         if eto_run.matched_template_id is None:
             raise EtoDataExtractionError(eto_run.id, "No matched template ID available for data extraction")
 
-        extracted_data = pdf_template_service.extract_data_from_template(
+        extracted_data = pdf_template_service.extract_data_using_template(
             eto_run.matched_template_id, pdf_objects
         )
 
