@@ -7,55 +7,25 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url
 ).toString();
 
-// ===== NESTED PDF OBJECT INTERFACES =====
-
-interface BasePdfObject {
+interface PdfObject {
+  type: 'word' | 'text_line' | 'rect' | 'graphic_line' | 'curve' | 'image' | 'table' | 'extraction-field';
   page: number;
   bbox: [number, number, number, number]; // [x0, y0, x1, y1]
-}
-
-interface TextWordPdfObject extends BasePdfObject {
-  text: string;
-  fontname: string;
-  fontsize: number;
-}
-
-interface TextLinePdfObject extends BasePdfObject {
-  // Only has base fields
-}
-
-interface GraphicRectPdfObject extends BasePdfObject {
-  linewidth: number;
-}
-
-interface GraphicLinePdfObject extends BasePdfObject {
-  linewidth: number;
-}
-
-interface GraphicCurvePdfObject extends BasePdfObject {
-  points: number[][];
-  linewidth: number;
-}
-
-interface ImagePdfObject extends BasePdfObject {
-  format: string;
-  colorspace: string;
-  bits: number;
-}
-
-interface TablePdfObject extends BasePdfObject {
-  rows: number;
-  cols: number;
-}
-
-interface PdfObjectsByType {
-  text_words: TextWordPdfObject[];
-  text_lines: TextLinePdfObject[];
-  graphic_rects: GraphicRectPdfObject[];
-  graphic_lines: GraphicLinePdfObject[];
-  graphic_curves: GraphicCurvePdfObject[];
-  images: ImagePdfObject[];
-  tables: TablePdfObject[];
+  width: number;
+  height: number;
+  text?: string;
+  metadata?: {
+    fontname?: string;
+    fontsize?: number;
+    linewidth?: number;
+    points?: number[][];
+    format?: string;
+    colorspace?: string;
+    bits?: number;
+    rows?: number;
+    cols?: number;
+  };
+  [key: string]: any;
 }
 
 interface ExtractionField {
@@ -65,41 +35,19 @@ interface ExtractionField {
   label: string;
 }
 
-// ===== FLAT OBJECT TYPE FOR RENDERING =====
-
-type FlatObjectType = 'word' | 'text_line' | 'rect' | 'graphic_line' | 'curve' | 'image' | 'table';
-
-interface FlatPdfObject {
-  type: FlatObjectType;
-  page: number;
-  bbox: [number, number, number, number];
-  text?: string;
-  fontname?: string;
-  fontsize?: number;
-  linewidth?: number;
-  points?: number[][];
-  format?: string;
-  colorspace?: string;
-  bits?: number;
-  rows?: number;
-  cols?: number;
-}
-
-// ===== COMPONENT PROPS =====
-
 interface PdfViewerProps {
   pdfUrl?: string;
-  pdfId?: number;
-  pdfObjects?: PdfObjectsByType;
+  pdfId?: number; // Alternative to pdfUrl - will construct URL from ID
+  objects?: PdfObject[];
   className?: string;
   showObjectOverlays?: boolean;
-  onObjectClick?: (object: FlatPdfObject) => void;
-  onObjectDoubleClick?: (object: FlatPdfObject) => void;
+  onObjectClick?: (object: PdfObject) => void;
+  onObjectDoubleClick?: (object: PdfObject) => void;
   selectedObjectTypes?: Set<string>;
   selectedObjects?: Set<string>;
   extractionFields?: ExtractionField[];
-  selectedExtractionField?: string | null;
-  isReadOnly?: boolean;
+  selectedExtractionField?: string | null; // Highlight a specific extraction field
+  isReadOnly?: boolean; // Disable interactions when true
   // Box drawing props
   isDrawingMode?: boolean;
   drawingBox?: {x: number, y: number, width: number, height: number} | null;
@@ -109,9 +57,7 @@ interface PdfViewerProps {
   onMouseUp?: (e: React.MouseEvent, pageElement: HTMLElement, currentPage: number, scale: number, pageHeight: number) => void;
 }
 
-// ===== STYLING CONSTANTS =====
-
-const OBJECT_COLORS: Record<FlatObjectType, string> = {
+const OBJECT_COLORS = {
   word: 'rgba(255, 0, 0, 0.2)',
   text_line: 'rgba(0, 255, 0, 0.2)',
   rect: 'rgba(0, 0, 255, 0.2)',
@@ -121,7 +67,7 @@ const OBJECT_COLORS: Record<FlatObjectType, string> = {
   table: 'rgba(255, 165, 0, 0.3)'
 };
 
-const OBJECT_BORDER_COLORS: Record<FlatObjectType, string> = {
+const OBJECT_BORDER_COLORS = {
   word: 'rgba(255, 0, 0, 0.6)',
   text_line: 'rgba(0, 255, 0, 0.6)',
   rect: 'rgba(0, 0, 255, 0.6)',
@@ -134,7 +80,7 @@ const OBJECT_BORDER_COLORS: Record<FlatObjectType, string> = {
 export function PdfViewer({
   pdfUrl,
   pdfId,
-  pdfObjects,
+  objects = [],
   className = '',
   showObjectOverlays = true,
   onObjectClick,
@@ -157,107 +103,21 @@ export function PdfViewer({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pageHeight, setPageHeight] = useState<number>(792); // Default Letter height
-  const [pageWidth, setPageWidth] = useState<number>(612); // Default Letter width
+  const [pageWidth, setPageWidth] = useState<number>(612); // Default Letter width (many PDFs use this)
   const containerRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef<{ [key: number]: HTMLDivElement }>({});
 
   // Determine the PDF URL to use
   const effectivePdfUrl = pdfUrl || (pdfId ? `http://localhost:8080/api/pdf-files/${pdfId}/download` : null);
 
-  // ===== OBJECT FLATTENING =====
-
-  const flattenObjects = (objects: PdfObjectsByType | undefined): FlatPdfObject[] => {
-    if (!objects) return [];
-
-    const flattened: FlatPdfObject[] = [];
-
-    // Text words -> word
-    objects.text_words?.forEach(obj => {
-      flattened.push({
-        type: 'word',
-        page: obj.page - 1, // Convert to 0-based for frontend
-        bbox: obj.bbox,
-        text: obj.text,
-        fontname: obj.fontname,
-        fontsize: obj.fontsize
-      });
-    });
-
-    // Text lines -> text_line
-    objects.text_lines?.forEach(obj => {
-      flattened.push({
-        type: 'text_line',
-        page: obj.page - 1, // Convert to 0-based
-        bbox: obj.bbox
-      });
-    });
-
-    // Graphic rects -> rect
-    objects.graphic_rects?.forEach(obj => {
-      flattened.push({
-        type: 'rect',
-        page: obj.page - 1, // Convert to 0-based
-        bbox: obj.bbox,
-        linewidth: obj.linewidth
-      });
-    });
-
-    // Graphic lines -> graphic_line
-    objects.graphic_lines?.forEach(obj => {
-      flattened.push({
-        type: 'graphic_line',
-        page: obj.page - 1, // Convert to 0-based
-        bbox: obj.bbox,
-        linewidth: obj.linewidth
-      });
-    });
-
-    // Graphic curves -> curve
-    objects.graphic_curves?.forEach(obj => {
-      flattened.push({
-        type: 'curve',
-        page: obj.page - 1, // Convert to 0-based
-        bbox: obj.bbox,
-        points: obj.points,
-        linewidth: obj.linewidth
-      });
-    });
-
-    // Images -> image
-    objects.images?.forEach(obj => {
-      flattened.push({
-        type: 'image',
-        page: obj.page - 1, // Convert to 0-based
-        bbox: obj.bbox,
-        format: obj.format,
-        colorspace: obj.colorspace,
-        bits: obj.bits
-      });
-    });
-
-    // Tables -> table
-    objects.tables?.forEach(obj => {
-      flattened.push({
-        type: 'table',
-        page: obj.page - 1, // Convert to 0-based
-        bbox: obj.bbox,
-        rows: obj.rows,
-        cols: obj.cols
-      });
-    });
-
-    return flattened;
-  };
-
-  const flatObjects = flattenObjects(pdfObjects);
-
-  // ===== PAGE CALCULATION =====
-
+  // Calculate scale to fit container
   const calculateScale = () => {
-    if (!containerRef.current) return 1.0;
-    const containerWidth = containerRef.current.clientWidth - 40; // Account for padding
-    const targetScale = containerWidth / pageWidth;
-    return Math.max(0.5, Math.min(2.0, targetScale));
+    if (containerRef.current) {
+      const containerWidth = containerRef.current.clientWidth;
+      const pdfWidth = 595; // Standard PDF width in points (A4)
+      return Math.min(containerWidth / pdfWidth, 1.5); // Max scale 1.5x
+    }
+    return 1.0;
   };
 
   useEffect(() => {
@@ -267,9 +127,7 @@ export function PdfViewer({
 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [pageWidth]);
-
-  // ===== PDF DOCUMENT HANDLERS =====
+  }, []);
 
   const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
     setNumPages(numPages);
@@ -277,6 +135,9 @@ export function PdfViewer({
     setError(null);
     setTimeout(() => {
       setScale(calculateScale());
+      // Try to get actual page dimensions (this is a rough approach)
+      // Most PDFs will be either A4 (842) or Letter (792)
+      // We might need to get this from the actual page rendering
     }, 100);
   };
 
@@ -288,14 +149,42 @@ export function PdfViewer({
 
   const onPageLoadError = (error: Error) => {
     console.error('PDF page load error:', error);
-    setError(`Failed to load page: ${error.message}`);
+    // Don't set the main error state for page load errors, just log them
+    // The page component will handle its own error display
   };
 
-  // ===== OBJECT FILTERING =====
+  const goToPreviousPage = () => {
+    setCurrentPage((prev) => Math.max(prev - 1, 1));
+  };
 
-  // Filter objects for current page
-  const currentPageObjects = flatObjects.filter((obj) => {
-    return obj.page === currentPage - 1; // currentPage is 1-based, obj.page is 0-based after flattening
+  const goToNextPage = () => {
+    setCurrentPage((prev) => Math.min(prev + 1, numPages || 1));
+  };
+
+  const zoomIn = () => {
+    setScale((prev) => Math.min(prev * 1.2, 3.0));
+  };
+
+  const zoomOut = () => {
+    setScale((prev) => Math.max(prev / 1.2, 0.5));
+  };
+
+  const resetZoom = () => {
+    setScale(calculateScale());
+  };
+
+  // Filter objects for current page and selected types
+  // Also include objects that are selected even if their type is not shown
+  const currentPageObjects = objects.filter((obj) => {
+    const isCurrentPage = obj.page === currentPage - 1; // Objects use 0-based page indexing
+    const isSelectedType = !selectedObjectTypes || selectedObjectTypes.has(obj.type);
+    
+    // Generate object ID to check if this object is selected
+    const objectId = `${obj.type}-${obj.page}-${obj.bbox.join('-')}`;
+    const isObjectSelected = selectedObjects?.has(objectId) || false;
+    
+    // Show object if it's on current page AND (its type is selected OR the object itself is selected)
+    return isCurrentPage && (isSelectedType || isObjectSelected);
   });
 
   // Filter extraction fields for current page
@@ -304,17 +193,15 @@ export function PdfViewer({
   });
 
   // Debug: Log when objects change
-  if (flatObjects.length > 0) {
-    console.log(`PdfViewer: ${flatObjects.length} total objects, ${currentPageObjects.length} on page ${currentPage}`);
+  if (objects.length > 0) {
+    console.log(`PdfViewer: ${objects.length} total objects, ${currentPageObjects.length} on page ${currentPage}`);
   }
 
-  // ===== RENDERING FUNCTIONS =====
-
-  const renderObjectOverlay = (obj: FlatPdfObject, index: number) => {
+  const renderObjectOverlay = (obj: PdfObject, index: number) => {
     const [x0, y0, x1, y1] = obj.bbox;
 
     // Convert PDF coordinates to screen coordinates
-    // ONLY flip Y coordinates for objects that are NOT table or curve
+    // Flip Y coordinates for all objects EXCEPT table and curve objects
     const actualPdfHeight = pageHeight;
     let screenY0, screenY1;
 
@@ -327,14 +214,15 @@ export function PdfViewer({
       screenY0 = actualPdfHeight - y1;
       screenY1 = actualPdfHeight - y0;
     }
-
+    
     // Generate object ID for selection tracking
     const objectId = `${obj.type}-${obj.page}-${obj.bbox.join('-')}`;
     const isSelected = selectedObjects?.has(objectId) || false;
-
-    // Check if this object type is currently visible
-    const isTypeVisible = !selectedObjectTypes || selectedObjectTypes.has(obj.type);
-
+    
+    // Objects should not be highlighted based on extraction fields
+    // The extraction field boxes themselves are the visual indicators
+    const hasExtractionField = false;
+    
     // Debug text objects to check coordinate system
     if ((obj.type === 'word' || obj.type === 'text_line') && index < 5) {
       console.log(`Object ${index} (${obj.type}):`, {
@@ -354,10 +242,13 @@ export function PdfViewer({
         }
       });
     }
-
+    
     // Determine styling based on state
     let backgroundColor, border, boxShadow, transform, zIndex;
-
+    
+    // Check if this object type is currently visible
+    const isTypeVisible = !selectedObjectTypes || selectedObjectTypes.has(obj.type);
+    
     if (isSelected && !isTypeVisible) {
       // Selected objects whose type is not shown (gray with distinct styling)
       backgroundColor = 'rgba(156, 163, 175, 0.6)';
@@ -372,6 +263,13 @@ export function PdfViewer({
       boxShadow = '0 0 8px rgba(34, 197, 94, 0.6), inset 0 0 0 1px rgba(34, 197, 94, 0.8)';
       transform = 'scale(1.02)';
       zIndex = 25;
+    } else if (hasExtractionField) {
+      // Objects with extraction fields defined (purple)
+      backgroundColor = 'rgba(168, 85, 247, 0.5)';
+      border = '2px solid #a855f7';
+      boxShadow = '0 0 6px rgba(168, 85, 247, 0.6)';
+      transform = 'scale(1.01)';
+      zIndex = 20;
     } else {
       // Default objects
       backgroundColor = OBJECT_COLORS[obj.type];
@@ -403,25 +301,28 @@ export function PdfViewer({
         style={style}
         onClick={() => onObjectClick?.(obj)}
         onDoubleClick={() => onObjectDoubleClick?.(obj)}
-        title={isSelected && !isTypeVisible
+        title={isSelected && !isTypeVisible 
           ? `${obj.text || obj.type} - Selected (type hidden, cannot deselect)`
-          : obj.text || `${obj.type} object`
+          : hasExtractionField 
+            ? `${obj.text || obj.type} - Has extraction field` 
+            : obj.text || `${obj.type} object`
         }
-        className={`transition-all ${isSelected ? 'animate-pulse' : 'hover:opacity-80 hover:scale-105'}`}
+        className={`transition-all ${isSelected ? 'animate-pulse' : hasExtractionField ? 'animate-pulse' : 'hover:opacity-80 hover:scale-105'}`}
       />
     );
   };
 
   const renderExtractionFieldOverlay = (field: ExtractionField) => {
     const [x0, y0, x1, y1] = field.boundingBox;
-
-    // Convert PDF coordinates to screen coordinates (flip Y)
+    
+    // Convert PDF coordinates to screen coordinates
     const actualPdfHeight = pageHeight;
     const screenY0 = actualPdfHeight - y1; // Flip Y coordinate
     const screenY1 = actualPdfHeight - y0;
-
+    
+    // Check if this field is selected
     const isSelected = selectedExtractionField === field.id;
-
+    
     const style: React.CSSProperties = {
       position: 'absolute',
       left: `${x0 * scale}px`,
@@ -445,11 +346,13 @@ export function PdfViewer({
         onClick={() => {
           if (!isReadOnly) {
             // Create a fake object for the click handler
-            const fakeObj: FlatPdfObject = {
-              type: 'word', // Use word type as default
+            const fakeObj: PdfObject = {
+              type: 'extraction-field',
               page: field.page,
               bbox: field.boundingBox,
-              text: field.label
+              text: field.label,
+              width: field.boundingBox[2] - field.boundingBox[0],
+              height: field.boundingBox[3] - field.boundingBox[1]
             };
             onObjectClick?.(fakeObj);
           }
@@ -483,12 +386,12 @@ export function PdfViewer({
 
   const renderTempFieldOverlay = (field: {id: string, boundingBox: [number, number, number, number], page: number}) => {
     const [x0, y0, x1, y1] = field.boundingBox;
-
-    // Convert PDF coordinates to screen coordinates (flip Y)
+    
+    // Convert PDF coordinates to screen coordinates
     const actualPdfHeight = pageHeight;
     const screenY0 = actualPdfHeight - y1; // Flip Y coordinate
     const screenY1 = actualPdfHeight - y0;
-
+    
     const style: React.CSSProperties = {
       position: 'absolute',
       left: `${x0 * scale}px`,
@@ -518,20 +421,20 @@ export function PdfViewer({
           className="opacity-0 group-hover:opacity-100 transition-opacity duration-200"
           style={{
             position: 'absolute',
-            top: '-25px',
+            top: '-32px',
             left: '0px',
             backgroundColor: '#22c55e',
             color: 'white',
-            padding: '2px 8px',
+            padding: '4px 8px',
             borderRadius: '4px',
-            fontSize: '11px',
-            fontWeight: 'bold',
+            fontSize: '12px',
+            fontWeight: 500,
             whiteSpace: 'nowrap',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-            zIndex: 1
+            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+            zIndex: 40
           }}
         >
-          New Field
+          New Field (unsaved)
         </div>
       </div>
     );
@@ -539,13 +442,13 @@ export function PdfViewer({
 
   const renderDrawingBox = () => {
     if (!drawingBox) return null;
-
-    // Normalize coordinates (handle negative width/height)
+    
+    // Handle negative width/height by normalizing the box position and size
     const x = drawingBox.width >= 0 ? drawingBox.x : drawingBox.x + drawingBox.width;
     const y = drawingBox.height >= 0 ? drawingBox.y : drawingBox.y + drawingBox.height;
     const width = Math.abs(drawingBox.width);
     const height = Math.abs(drawingBox.height);
-
+    
     const style: React.CSSProperties = {
       position: 'absolute',
       left: `${x * scale}px`,
@@ -555,92 +458,107 @@ export function PdfViewer({
       backgroundColor: 'rgba(59, 130, 246, 0.2)',
       border: '2px dashed #3b82f6',
       borderRadius: '4px',
-      pointerEvents: 'none',
-      zIndex: 40
+      zIndex: 40,
+      pointerEvents: 'none'
     };
 
-    return <div style={style} />;
+    return (
+      <div
+        key="drawing-box"
+        style={style}
+        className="animate-pulse"
+      />
+    );
   };
 
-  // ===== RENDER COMPONENT =====
-
-  if (!effectivePdfUrl) {
+  if (error) {
     return (
-      <div className={`flex items-center justify-center h-full ${className}`}>
-        <div className="text-gray-500">No PDF URL provided</div>
+      <div className={`flex items-center justify-center bg-gray-800 text-red-400 p-8 ${className}`}>
+        <div className="text-center">
+          <div className="text-xl mb-2">❌ PDF Load Error</div>
+          <div className="text-sm">{error}</div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div ref={containerRef} className={`flex flex-col h-full ${className}`}>
-      {/* PDF Controls */}
-      <div className="flex items-center justify-between p-3 bg-gray-800 border-b border-gray-700">
+    <div className={`flex flex-col bg-gray-900 text-white ${className}`}>
+      {/* PDF Viewer Controls */}
+      <div className="flex items-center justify-between p-4 bg-gray-800 border-b border-gray-700">
         <div className="flex items-center space-x-4">
-          <button
-            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-            disabled={currentPage <= 1}
-            className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-500 text-white rounded"
-          >
-            ← Previous
-          </button>
-          <span className="text-sm text-gray-300">
-            Page {currentPage} of {numPages || '?'}
-          </span>
-          <button
-            onClick={() => setCurrentPage(prev => Math.min(numPages || prev, prev + 1))}
-            disabled={currentPage >= (numPages || 0)}
-            className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-500 text-white rounded"
-          >
-            Next →
-          </button>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={goToPreviousPage}
+              disabled={currentPage <= 1}
+              className="px-3 py-1 text-sm bg-gray-600 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed rounded"
+            >
+              ← Previous
+            </button>
+            <span className="text-sm">
+              Page {currentPage} of {numPages || 0}
+            </span>
+            <button
+              onClick={goToNextPage}
+              disabled={currentPage >= (numPages || 1)}
+              className="px-3 py-1 text-sm bg-gray-600 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed rounded"
+            >
+              Next →
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-2">
           <button
-            onClick={() => setScale(prev => Math.max(0.5, prev - 0.1))}
-            className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 text-white rounded"
+            onClick={zoomOut}
+            className="px-2 py-1 text-sm bg-gray-600 hover:bg-gray-700 rounded"
           >
-            Zoom Out
+            −
           </button>
-          <span className="text-sm text-gray-300">
+          <span className="text-sm w-16 text-center">
             {Math.round(scale * 100)}%
           </span>
           <button
-            onClick={() => setScale(prev => Math.min(2.0, prev + 0.1))}
-            className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 text-white rounded"
+            onClick={zoomIn}
+            className="px-2 py-1 text-sm bg-gray-600 hover:bg-gray-700 rounded"
           >
-            Zoom In
+            +
+          </button>
+          <button
+            onClick={resetZoom}
+            className="px-2 py-1 text-sm bg-gray-600 hover:bg-gray-700 rounded"
+          >
+            Fit
           </button>
         </div>
       </div>
 
-      {/* PDF Document */}
-      <div className="flex-1 overflow-auto bg-gray-900 p-4">
-        <div className="flex justify-center">
-          <Document
-            file={effectivePdfUrl}
-            onLoadSuccess={onDocumentLoadSuccess}
-            onLoadError={onDocumentLoadError}
-            loading={<div className="text-white">Loading PDF...</div>}
-            error={<div className="text-red-400">Failed to load PDF</div>}
-          >
+      {/* PDF Document Container */}
+      <div
+        ref={containerRef}
+        className="flex-1 bg-gray-700 p-4 pdf-scroll-container"
+        style={{ 
+          minHeight: '400px', 
+          maxHeight: 'calc(100vh - 120px)',
+          width: '100%',
+          overflow: 'auto'
+        }}
+      >
+        <div className="flex justify-center" style={{ minWidth: 'fit-content', minHeight: '100%' }}>
+          <div className="relative bg-white shadow-lg" style={{ display: 'inline-block' }}>
             {loading && (
-              <div className="flex items-center justify-center h-96">
-                <div className="text-white">Loading PDF document...</div>
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
+                <div className="text-gray-600">Loading PDF...</div>
               </div>
             )}
-
-            {error && (
-              <div className="flex items-center justify-center h-96">
-                <div className="text-center text-red-400">
-                  <div className="text-xl mb-2">❌ Error</div>
-                  <div>{error}</div>
-                </div>
-              </div>
-            )}
-
-            {!loading && !error && (
+            
+            <Document
+              file={effectivePdfUrl}
+              onLoadSuccess={onDocumentLoadSuccess}
+              onLoadError={onDocumentLoadError}
+              loading=""
+              error=""
+            >
               <div
                 ref={(el) => {
                   if (el) pageRefs.current[currentPage] = el;
@@ -689,29 +607,47 @@ export function PdfViewer({
                   }}
                   onLoadError={onPageLoadError}
                 />
-
+                
                 {/* Object Overlays */}
                 {showObjectOverlays && (
-                  <>
+                  <div className="absolute inset-0 pointer-events-none">
                     {currentPageObjects.map((obj, index) => renderObjectOverlay(obj, index))}
-                  </>
+                  </div>
                 )}
-
+                
                 {/* Extraction Field Overlays */}
-                {currentPageExtractionFields.map((field) => renderExtractionFieldOverlay(field))}
-
-                {/* Temporary Field Overlay */}
+                <div className="absolute inset-0 pointer-events-none">
+                  {currentPageExtractionFields.map((field) => renderExtractionFieldOverlay(field))}
+                </div>
+                
+                {/* Temporary Field Overlay (unsaved field being edited) */}
                 {tempFieldData && tempFieldData.page === currentPage - 1 && (
-                  renderTempFieldOverlay(tempFieldData)
+                  <div className="absolute inset-0 pointer-events-none">
+                    {renderTempFieldOverlay(tempFieldData)}
+                  </div>
                 )}
-
-                {/* Drawing Box */}
-                {renderDrawingBox()}
+                
+                {/* Drawing Box Overlay */}
+                {isDrawingMode && (
+                  <div className="absolute inset-0 pointer-events-none">
+                    {renderDrawingBox()}
+                  </div>
+                )}
               </div>
-            )}
-          </Document>
+            </Document>
+          </div>
         </div>
       </div>
+
+      {/* Object Stats */}
+      {showObjectOverlays && objects.length > 0 && (
+        <div className="p-2 bg-gray-800 border-t border-gray-700 text-xs text-gray-400">
+          Page {currentPage}: {currentPageObjects.length} objects visible
+          {selectedObjectTypes && selectedObjectTypes.size > 0 && (
+            <span> | Showing: {Array.from(selectedObjectTypes).join(', ')}</span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

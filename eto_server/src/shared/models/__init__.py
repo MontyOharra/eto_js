@@ -21,32 +21,29 @@ from .email import (
     Email, EmailCreate, EmailSummary, EmailBase
 )
 
-from .eto_processing import (
+from .eto_run import (
     EtoRunStatus, EtoProcessingStep, EtoErrorType,
     EtoRunBase, EtoRunCreate, EtoRun, EtoRunSummary, EtoEmailInfo,
     EtoProcessingState, EtoErrorInfo, EtoTemplateMatchingResult,
     EtoDataExtractionResult, EtoTransformationResult, EtoOrderIntegration,
     EtoRunStatusUpdate, EtoRunTemplateMatchUpdate, EtoRunDataExtractionUpdate,
-    EtoRunTransformationUpdate, EtoRunOrderUpdate, EtoProcessingStatistics,
-    EtoRunResetResult
+    EtoRunTransformationUpdate, EtoRunOrderUpdate,
+    EtoRunResetResult, EtoRunWithPdfData
 )
 
 from .pdf_file import (
     PdfFileBase, PdfFileCreate,
-    PdfFileSummary, PdfFile
+    PdfFile, PdfDetailData
 )
 
 from .pdf_processing import (
-    PdfObject, ExtractionField,
-    PdfObjectExtractionResult
-)
-
-from .pdf_processing_new import (
-    EtoRunWithPdfData
+    BasePdfObject, TextWordPdfObject, TextLinePdfObject, GraphicRectPdfObject,
+    GraphicLinePdfObject, GraphicCurvePdfObject, ImagePdfObject, TablePdfObject,
+    PdfObjects
 )
 
 from .pdf_template import (
-    PdfTemplateBase, PdfTemplateVersionBase,
+    PdfTemplateBase, PdfTemplateVersionBase, ExtractionField,
     PdfTemplateCreate, PdfTemplateUpdate,
     PdfTemplateVersionCreate, PdfTemplate,
     PdfTemplateVersion, PdfTemplateMatchResult
@@ -106,22 +103,30 @@ __all__ = [
     'EtoRunDataExtractionUpdate',
     'EtoRunTransformationUpdate',
     'EtoRunOrderUpdate',
-    'EtoProcessingStatistics',
     'EtoRunResetResult',
     
     # PDF file models
     'PdfFileBase',
     'PdfFileCreate',
-    'PdfFileSummary',
     'PdfFile',
-    'PdfObject',
-    'ExtractionField',
-    'PdfObjectExtractionResult',
+    'PdfDetailData',
+
+    # PDF object models
+    'BasePdfObject',
+    'TextWordPdfObject',
+    'TextLinePdfObject',
+    'GraphicRectPdfObject',
+    'GraphicLinePdfObject',
+    'GraphicCurvePdfObject',
+    'ImagePdfObject',
+    'TablePdfObject',
+    'PdfObjects',
     'EtoRunWithPdfData',
-    
+
     # PDF template models
     'PdfTemplateBase',
     'PdfTemplateVersionBase',
+    'ExtractionField',
     'PdfTemplateCreate',
     'PdfTemplateUpdate',
     'PdfTemplateVersionCreate',

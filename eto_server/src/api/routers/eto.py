@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from shared.services.service_container import ServiceContainer, get_service_container
-from shared.models.eto_processing import (
+from shared.models import (
     EtoRun, EtoRunSummary, EtoRunStatus, EtoRunResetResult
 )
 from shared.exceptions import ObjectNotFoundError, ServiceError, ValidationError
@@ -25,7 +25,7 @@ class BulkRunRequest(BaseModel):
     run_ids: List[int]
 
 router = APIRouter(
-    prefix="/eto-runs",
+    prefix="/eto-runs"
     tags=["ETO Processing"]
 )
 
@@ -794,38 +794,8 @@ def get_eto_run_pdf_data(
                 detail=f"ETO run {run_id} not found"
             )
 
-        # Transform PDF objects to match frontend expectations
-        pdf_objects = []
-        for obj in eto_run_data.pdf_objects:
-            # Calculate width and height from bounding box
-            bbox = obj.bbox
-            width = bbox[2] - bbox[0] if len(bbox) >= 4 else 0
-            height = bbox[3] - bbox[1] if len(bbox) >= 4 else 0
-
-            # Transform object type and adjust page indexing
-            transformed_obj = {
-                'type': 'word' if obj.type == 'text' else obj.type,  # Map 'text' -> 'word'
-                'page': obj.page - 1,  # Convert from 1-based to 0-based page indexing
-                'text': obj.text or '',
-                'bbox': bbox,
-                'width': width,
-                'height': height,
-                'confidence': 1.0,  # Default confidence
-                'metadata': {
-                    'fontname': obj.fontname,
-                    'fontsize': obj.fontsize,
-                    'linewidth': obj.linewidth,
-                    'points': obj.points,
-                    'format': obj.format,
-                    'colorspace': obj.colorspace,
-                    'bits': obj.bits,
-                    'rows': obj.rows,
-                    'cols': obj.cols
-                }
-            }
-            pdf_objects.append(transformed_obj)
-
         # Build the response data using strongly-typed domain model
+        # No transformation needed - objects are already in the correct nested structure
         pdf_data = EtoRunPdfData(
             # All data now comes from the domain model
             run_id=eto_run_data.run_id,
@@ -834,9 +804,9 @@ def get_eto_run_pdf_data(
             original_filename=eto_run_data.original_filename,
             file_size=eto_run_data.file_size,
             page_count=eto_run_data.page_count,
-            object_count=len(pdf_objects),
+            object_count=eto_run_data.object_count,
             sha256_hash=eto_run_data.sha256_hash,
-            pdf_objects=pdf_objects,
+            pdf_objects=eto_run_data.pdf_objects,
             # Email context (with fallbacks for manual uploads)
             email_subject=eto_run_data.email_subject or 'Manual Upload',
             sender_email=eto_run_data.sender_email or 'system@localhost',

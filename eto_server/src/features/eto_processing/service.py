@@ -15,13 +15,12 @@ from shared.database.connection import DatabaseConnectionManager
 from shared.database.repositories.eto_run import EtoRunRepository
 from shared.exceptions import ServiceError, ObjectNotFoundError, EtoProcessingError, EtoStatusValidationError, EtoTemplateMatchingError, EtoDataExtractionError, EtoTransformationError
 # Services will be injected through constructor
-from shared.models.eto_processing import (
+from shared.models import (
     EtoRun, EtoRunCreate, EtoRunStatus, EtoProcessingStep, EtoErrorType,
     EtoRunStatusUpdate, EtoRunTemplateMatchUpdate, EtoRunDataExtractionUpdate,
-    EtoRunTransformationUpdate, EtoRunOrderUpdate
+    EtoRunTransformationUpdate, EtoRunOrderUpdate, PdfObjectsByType, EtoRunWithPdfData,
+    flatten_pdf_objects
 )
-from shared.models.pdf_processing import PdfObject
-from shared.models.pdf_processing_new import EtoRunWithPdfData
 from shared.utils import DateTimeUtils
 
 logger = logging.getLogger(__name__)
@@ -317,7 +316,7 @@ class EtoProcessingService:
                     eto_run.id, "No PDF objects found for template matching"
                 )
 
-            # Find best template match
+            # Find best template match using nested structure
             match_result = self.template_service.find_best_template_match(pdf_objects)
 
             if not match_result.template_found:
@@ -348,11 +347,14 @@ class EtoProcessingService:
             self._validate_prerequisites_for_extraction(eto_run)
 
             # Get PDF objects
-            pdf_objects = self._get_pdf_objects(eto_run.pdf_file_id)
-            if not pdf_objects:
+            pdf_objects_by_type = self._get_pdf_objects(eto_run.pdf_file_id)
+            if not pdf_objects_by_type:
                 raise EtoDataExtractionError(
                     eto_run.id, "No PDF objects found for data extraction"
                 )
+
+            # Flatten for template operations
+            pdf_objects = flatten_pdf_objects(pdf_objects_by_type)
 
             # Extract data using template
             if eto_run.matched_template_id is None:
@@ -627,7 +629,7 @@ class EtoProcessingService:
                 eto_run.id, "No PDF objects found for template matching"
             )
 
-        # Find best template match
+        # Find best template match using nested structure
         pdf_template_service = self.template_service
         match_result = pdf_template_service.find_best_template_match(pdf_objects)
 
@@ -654,11 +656,14 @@ class EtoProcessingService:
         self._validate_prerequisites_for_extraction(eto_run)
 
         # Get PDF objects
-        pdf_objects = self._get_pdf_objects(eto_run.pdf_file_id)
-        if not pdf_objects:
+        pdf_objects_by_type = self._get_pdf_objects(eto_run.pdf_file_id)
+        if not pdf_objects_by_type:
             raise EtoDataExtractionError(
                 eto_run.id, "No PDF objects found for data extraction"
             )
+
+        # Flatten for template operations
+        pdf_objects = flatten_pdf_objects(pdf_objects_by_type)
 
         # Extract data using template
         pdf_template_service = self.template_service
@@ -919,7 +924,7 @@ class EtoProcessingService:
 
     # ========== Helper Methods ==========
 
-    def _get_pdf_objects(self, pdf_file_id: int) -> List[PdfObject]:
+    def _get_pdf_objects(self, pdf_file_id: int) -> PdfObjectsByType:
         """
         Get PDF objects for template matching and data extraction
 
@@ -927,7 +932,7 @@ class EtoProcessingService:
             pdf_file_id: PDF file ID to get objects for
 
         Returns:
-            List of PDF objects
+            PDF objects organized by type
 
         Raises:
             ServiceError: If PDF file not found or no objects extracted
@@ -938,10 +943,10 @@ class EtoProcessingService:
             if not pdf_file:
                 raise ServiceError(f"PDF file {pdf_file_id} not found")
 
-            if not pdf_file.objects_json:
+            if not pdf_file.pdf_objects or pdf_file.pdf_objects.get_total_count() == 0:
                 raise ServiceError(f"No objects extracted for PDF {pdf_file_id}")
 
-            return pdf_file.objects_json
+            return pdf_file.pdf_objects
 
         except Exception as e:
             # Re-raise as ServiceError to be caught by main processing method

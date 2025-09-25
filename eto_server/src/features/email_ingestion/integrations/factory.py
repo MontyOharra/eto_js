@@ -5,7 +5,7 @@ Factory for creating email integration instances based on provider type
 import logging
 from typing import Dict, Any
 
-from shared.models.email_integration import (
+from shared.models import (
     EmailProvider,
     EmailIntegrationConfig,
     OutlookComConfig,

@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 import win32com.client
 import pythoncom
 
-from shared.models.email_integration import (
+from shared.models import (
     EmailMessage,
     EmailAttachment,
     EmailFolder,

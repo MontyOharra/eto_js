@@ -7,7 +7,7 @@ from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 import logging
 
-from shared.models.email_integration import (
+from shared.models import (
     EmailMessage,
     EmailAttachment,
     EmailFolder,

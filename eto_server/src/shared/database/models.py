@@ -158,7 +158,6 @@ class PdfFileModel(BaseModel):
     file_size: Mapped[Optional[int]] = mapped_column(BigInteger)
     file_hash: Mapped[str] = mapped_column(String(64), index=True)
     page_count: Mapped[Optional[int]] = mapped_column(Integer)
-    object_count: Mapped[Optional[int]] = mapped_column(Integer)  # Number of PDF objects extracted
     objects_json: Mapped[Optional[str]] = mapped_column(Text)  # PDF objects for template matching
     created_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate())
     updated_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate())

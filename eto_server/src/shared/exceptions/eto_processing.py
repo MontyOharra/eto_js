@@ -1,7 +1,7 @@
 """ETO Processing specific exceptions"""
 from typing import Optional
 from .service import ServiceError
-from ..models.eto_processing import EtoErrorType, EtoProcessingStep
+from ..models.eto_run import EtoErrorType, EtoProcessingStep
 
 
 class EtoProcessingError(ServiceError):

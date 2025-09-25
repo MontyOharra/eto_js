@@ -8,18 +8,32 @@ from typing import Optional, List
 from datetime import datetime
 import json
 
-from .pdf_processing import PdfObject, ExtractionField
+from .pdf_processing import PdfObjects
 from shared.utils import DateTimeUtils
+from shared.database.models import PdfTemplateModel, PdfTemplateVersionModel
 
 
 """ PDF Template Models """
+
+
+class ExtractionField(BaseModel):
+    """Field definition for data extraction from PDFs"""
+    label: str = Field(..., min_length=1, description="Field label/name")
+    bounding_box: List[float] = Field(..., min_length=4, max_length=4, description="Bounding box [x0, y0, x1, y1]")
+    page: int = Field(..., ge=1, description="Page number (1-based)")
+    required: bool = Field(False, description="Whether this field is required")
+    validation_regex: Optional[str] = Field(None, description="Regex pattern for validation")
+    description: Optional[str] = Field(None, description="Field description")
+    
+    class Config:
+        from_attributes = True
+
 
 class PdfTemplateBase(BaseModel):
     """Core fields required for any PDF template"""
     name: str = Field(..., min_length=1, max_length=255, description="Template name")
     description: Optional[str] = Field(None, max_length=1000, description="Template description")
     source_pdf_id: int = Field(..., description="ID of the source PDF file")
-    status: str = Field("active", pattern="^(active|inactive)$", description="Template status")
     
     class Config:
         from_attributes = True
@@ -27,9 +41,9 @@ class PdfTemplateBase(BaseModel):
 class PdfTemplateCreate(PdfTemplateBase):
     """Model for creating new PDF templates"""
 
-    initial_signature_objects: List[PdfObject]
+    initial_signature_objects: PdfObjects
     initial_extraction_fields: List[ExtractionField]
-    
+
     def model_dump_for_db(self) -> dict:
       return self.model_dump(exclude={'initial_signature_objects', 'initial_extraction_fields'})
 
@@ -53,6 +67,7 @@ class PdfTemplate(PdfTemplateBase):
     # DB-generated fields
     id: int = Field(..., description="Template ID (DB-generated)")
     current_version_id: Optional[int] = Field(None, description="ID of current active version")
+    status: str = Field("active", pattern="^(active|inactive)$", description="Template status")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
 
@@ -65,30 +80,32 @@ class PdfTemplate(PdfTemplateBase):
     class Config:
         from_attributes = True
         
+    @classmethod
+    def from_db_model(cls, db_model : PdfTemplateModel) -> 'PdfTemplate':
+        """Create from database model with JSON deserialization"""
+        return cls(
+            id=db_model.id,
+            name=db_model.name,
+            description=db_model.description,
+            source_pdf_id=db_model.source_pdf_id,
+            status=db_model.status,
+            created_at=db_model.created_at,
+            updated_at=db_model.updated_at,
+            current_version_id=db_model.current_version_id
+        )
+        
 
 """ PDF Template Version Models """
         
 class PdfTemplateVersionBase(BaseModel):
     """Core fields required for any template version"""
     pdf_template_id: int = Field(..., description="ID of parent template")
-    signature_objects: List[PdfObject] = Field(..., min_length=1, description="Objects for template matching")
+    signature_objects: PdfObjects = Field(..., description="Objects for template matching")
     extraction_fields: List[ExtractionField] = Field(..., min_length=1, description="Fields to extract")
-    
-    # Computed/derived fields
-    signature_object_count: int = Field(..., ge=1, description="Count of signature objects")
     
     class Config:
         from_attributes = True
     
-    @field_validator('signature_object_count')
-    @classmethod
-    def validate_signature_object_count(cls, v, info):
-        """Ensure signature_object_count matches signature_objects length"""
-        if 'signature_objects' in info.data:
-            actual_count = len(info.data['signature_objects'])
-            if v != actual_count:
-                return actual_count
-        return v
              
 class PdfTemplateVersion(PdfTemplateVersionBase):
     """Complete template version with DB-generated fields"""
@@ -109,16 +126,11 @@ class PdfTemplateVersion(PdfTemplateVersionBase):
         from_attributes = True
 
     @classmethod
-    def from_db_model(cls, db_model) -> 'PdfTemplateVersion':
+    def from_db_model(cls, db_model : PdfTemplateVersionModel) -> 'PdfTemplateVersion':
         """Create from database model with JSON deserialization"""
         # Parse JSON fields back to objects
-        signature_objects = []
         if db_model.signature_objects:
-            try:
-                objects_data = json.loads(db_model.signature_objects)
-                signature_objects = [PdfObject(**obj_data) for obj_data in objects_data]
-            except (json.JSONDecodeError, TypeError):
-                pass
+            signature_objects = PdfObjects.from_json(db_model.signature_objects)
         
         extraction_fields = []
         if db_model.extraction_fields:
@@ -133,7 +145,6 @@ class PdfTemplateVersion(PdfTemplateVersionBase):
             pdf_template_id=db_model.pdf_template_id,
             version_num=db_model.version_num,
             signature_objects=signature_objects,
-            signature_object_count=len(signature_objects),
             extraction_fields=extraction_fields,
             usage_count=db_model.usage_count,
             last_used_at=db_model.last_used_at,
@@ -153,7 +164,7 @@ class PdfTemplateVersionCreate(PdfTemplateVersionBase):
         data = self.model_dump(exclude={'signature_objects', 'extraction_fields'})
         
         # Serialize objects and fields to JSON for database storage
-        data['signature_objects'] = json.dumps([obj.model_dump() for obj in self.signature_objects])
+        data['signature_objects'] = self.signature_objects.to_json()
         data['extraction_fields'] = json.dumps([field.model_dump() for field in self.extraction_fields])
         
         return data
@@ -163,9 +174,6 @@ class PdfTemplateMatchResult(BaseModel):
     template_found: bool
     template_id: Optional[int] = None
     template_version: Optional[int] = None
-    coverage_percentage: Optional[float] = None
-    unmatched_object_count: Optional[int] = None
-    match_details: Optional[str] = None
 
     def get_match_data(self) -> tuple[int, int]:
         """
@@ -184,3 +192,4 @@ class PdfTemplateMatchResult(BaseModel):
 
     class Config:
         from_attributes = True
+        

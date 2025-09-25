@@ -7,8 +7,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from shared.services.service_container import ServiceContainer, get_service_container
-from shared.models.email_config import EmailConfig, EmailConfigCreate, EmailConfigUpdate
-from shared.models.status import ServiceStatusResponse, ServiceHealth
+from shared.models import EmailConfig, EmailConfigCreate, EmailConfigUpdate, ServiceStatusResponse, ServiceHealth
 from shared.exceptions import ObjectNotFoundError, ServiceError
 
 logger = logging.getLogger(__name__)

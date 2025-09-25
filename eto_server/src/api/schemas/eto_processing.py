@@ -7,17 +7,8 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 from api.schemas.common import APIResponse
 
-
-class PdfObject(BaseModel):
-    """PDF object information for template builder"""
-    type: str
-    page: int
-    text: str
-    bbox: List[float] = Field(..., min_length=4, max_length=4, description="Bounding box coordinates [x0, y0, x1, y1]")
-    width: float = Field(0.0, ge=0, description="Object width calculated from bounding box")
-    height: float = Field(0.0, ge=0, description="Object height calculated from bounding box")
-    confidence: float = Field(1.0, ge=0, le=1, description="Extraction confidence score")
-    metadata: Optional[Dict[str, Any]] = Field(None, description="Additional object metadata (font, size, etc.)")
+# Import the nested PDF object structure
+from shared.models import PdfObjectsByType
 
 
 class EtoRunPdfData(BaseModel):
@@ -31,8 +22,8 @@ class EtoRunPdfData(BaseModel):
     object_count: int
     sha256_hash: str
 
-    # PDF objects
-    pdf_objects: List[PdfObject] = []
+    # PDF objects organized by type
+    pdf_objects: PdfObjectsByType = Field(default_factory=PdfObjectsByType)
 
     # Email context (flat structure)
     email_subject: str

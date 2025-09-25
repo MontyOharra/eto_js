@@ -36,10 +36,13 @@ def _calculate_duration_ms(current_time: datetime, started_at: datetime) -> int:
         Duration in milliseconds as integer
     """
     # Ensure both datetimes are timezone-aware for comparison using DateTimeUtils
-    started_at = DateTimeUtils.ensure_utc_aware(started_at)
-    current_time = DateTimeUtils.ensure_utc_aware(current_time)
+    started_at_new = DateTimeUtils.ensure_utc_aware(started_at)
+    current_time_new = DateTimeUtils.ensure_utc_aware(current_time)
 
-    duration_seconds = (current_time - started_at).total_seconds()
+    if not started_at_new or not current_time_new:
+        return 0
+
+    duration_seconds = (current_time_new - started_at_new).total_seconds()
     return int(duration_seconds * 1000)
 
 
@@ -117,62 +120,6 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
 
     # ========== User Dashboard Functionality ==========
 
-    def get_runs_by_status(self, status: EtoRunStatus, limit: Optional[int] = None) -> List[EtoRunSummary]:
-        """Get ETO runs by status for dashboard display"""
-        try:
-            with self.connection_manager.session_scope() as session:
-                query = (
-                    session.query(self.model_class)
-                    .filter(self.model_class.status == status.value)
-                    .order_by(self.model_class.created_at.desc())
-                )
-
-                if limit:
-                    query = query.limit(limit)
-
-                models = query.all()
-
-                # Convert to summaries for efficient dashboard display
-                summaries = [
-                    EtoRunSummary.from_eto_run(self._convert_to_domain_object(model))
-                    for model in models
-                ]
-
-                logger.monitor(f"Retrieved {len(summaries)} ETO runs with status {status.value}")
-                return summaries
-
-        except SQLAlchemyError as e:
-            logger.error(f"Error getting ETO runs by status {status.value}: {e}")
-            raise RepositoryError(f"Failed to get ETO runs by status: {e}") from e
-
-    def get_all_runs_grouped_by_status(self) -> Dict[str, List[EtoRunSummary]]:
-        """Get all runs grouped by status for dashboard"""
-        try:
-            with self.connection_manager.session_scope() as session:
-                models = (
-                    session.query(self.model_class)
-                    .order_by(self.model_class.status, self.model_class.created_at.desc())
-                    .all()
-                )
-
-                # Group by status
-                grouped_runs = {}
-                for model in models:
-                    domain_obj = self._convert_to_domain_object(model)
-                    summary = EtoRunSummary.from_eto_run(domain_obj)
-
-                    status_key = model.status
-                    if status_key not in grouped_runs:
-                        grouped_runs[status_key] = []
-                    grouped_runs[status_key].append(summary)
-
-                logger.debug(f"Retrieved {len(models)} ETO runs grouped by status")
-                return grouped_runs
-
-        except SQLAlchemyError as e:
-            logger.error(f"Error getting ETO runs grouped by status: {e}")
-            raise RepositoryError(f"Failed to get ETO runs grouped by status: {e}") from e
-
     def get_runs_with_filters(self,
                              status: Optional[EtoRunStatus] = None,
                              limit: Optional[int] = None,
@@ -206,13 +153,11 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                         EmailModel.sender_email.label('email_sender_email'),
                         EmailModel.sender_name.label('email_sender_name'),
                         EmailModel.received_date.label('email_received_date'),
-                        EmailIngestionConfigModel.name.label('config_name'),
                         PdfFileModel.file_size.label('pdf_file_size'),
                         PdfFileModel.filename.label('pdf_filename')
                     )
                     .outerjoin(PdfFileModel, EtoRunModel.pdf_file_id == PdfFileModel.id)
                     .outerjoin(EmailModel, PdfFileModel.email_id == EmailModel.id)
-                    .outerjoin(EmailIngestionConfigModel, EmailModel.config_id == EmailIngestionConfigModel.id)
                 )
 
                 # Apply filters
@@ -248,31 +193,12 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
 
                 results = query.all()
 
-                # Convert to EtoRunSummary objects with email information
+                # Convert to EtoRunSummary objects directly from SQL results
                 summaries = []
                 for result in results:
-                    eto_run_model = result[0]  # The EtoRunModel object
-
-                    # Convert to domain object first
-                    domain_obj = self._convert_to_domain_object(eto_run_model)
-                    summary = EtoRunSummary.from_eto_run(domain_obj)
-
-                    # Add PDF file information if available
-                    summary.file_size = result.pdf_file_size
-                    summary.filename = result.pdf_filename
-
-                    # Add email information if available
-                    if result.email_id:  # Check if email data exists
-                        email_info = EtoEmailInfo(
-                            email_id=result.email_id,
-                            subject=result.email_subject,
-                            sender_email=result.email_sender_email,
-                            sender_name=result.email_sender_name,
-                            received_date=result.email_received_date,
-                            config_name=result.config_name
-                        )
-                        summary.email = email_info
-
+                    
+                    # Use direct conversion method for better performance
+                    summary = EtoRunSummary.from_get_runs_with_filters(result)
                     summaries.append(summary)
 
                 logger.debug(f"Retrieved {len(summaries)} ETO runs with filters: status={status}, order_by={order_by}, order_direction={order_direction}")
@@ -629,30 +555,32 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
             raise RepositoryError(f"Failed to set needs_template: {e}") from e
 
     # ========== Specialized Query Methods ==========
-
-    def get_eto_run_with_pdf_data(self, eto_run_id: int) -> Optional['EtoRunWithPdfData']:
+    def get_eto_run_with_pdf_data(self, eto_run_id: int) -> Optional[EtoRunWithPdfData]:
         """
         Get ETO run with joined PDF file and email data for API response
-
-        Args:
-            eto_run_id: ETO run ID
-
-        Returns:
-            EtoRunWithPdfData domain model or None if not found
+        Returns SQL result tuple instead of domain model
         """
         try:
             with self.connection_manager.session_scope() as session:
-                # Query with joins to get all required data in one query
+                # Query with joins and labeled columns like get_runs_with_filters
                 query = session.query(
-                    self.model_class,
-                    PdfFileModel,
-                    EmailModel
+                    EtoRunModel,
+                    PdfFileModel.id.label('pdf_id'),
+                    PdfFileModel.filename.label('pdf_filename'),
+                    PdfFileModel.original_filename.label('pdf_original_filename'),
+                    PdfFileModel.file_size.label('pdf_file_size'),
+                    PdfFileModel.page_count.label('pdf_page_count'),
+                    PdfFileModel.file_hash.label('pdf_file_hash'),
+                    PdfFileModel.objects_json.label('pdf_objects_json'),
+                    EmailModel.subject.label('email_subject'),
+                    EmailModel.sender_email.label('email_sender_email'),
+                    EmailModel.received_date.label('email_received_date')
                 ).join(
-                    PdfFileModel, self.model_class.pdf_file_id == PdfFileModel.id
+                    PdfFileModel, EtoRunModel.pdf_file_id == PdfFileModel.id
                 ).outerjoin(
                     EmailModel, PdfFileModel.email_id == EmailModel.id
                 ).filter(
-                    self.model_class.id == eto_run_id
+                    EtoRunModel.id == eto_run_id
                 )
 
                 result = query.first()
@@ -660,52 +588,13 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                 if not result:
                     return None
 
-                eto_run_model, pdf_model, email_model = result
-
-                # Convert ETO run to domain object for consistency
-                eto_run = self._convert_to_domain_object(eto_run_model)
-
-                # Build combined data dictionary
-                combined_data = {
-                    # ETO run data
-                    'run_id': eto_run.id,
-                    'status': eto_run.status.value if hasattr(eto_run.status, 'value') else str(eto_run.status),
-                    'processing_step': eto_run.processing_step.value if eto_run.processing_step and hasattr(eto_run.processing_step, 'value') else str(eto_run.processing_step) if eto_run.processing_step else None,
-                    'matched_template_id': eto_run.matched_template_id,
-                    'extracted_data': eto_run.extracted_data,
-                    'transformation_audit': eto_run.transformation_audit,
-                    'target_data': eto_run.target_data,
-                    'created_at': eto_run.created_at,
-                    'started_at': eto_run.started_at,
-                    'completed_at': eto_run.completed_at,
-                    'error_type': eto_run.error_type.value if eto_run.error_type and hasattr(eto_run.error_type, 'value') else str(eto_run.error_type) if eto_run.error_type else None,
-                    'error_message': eto_run.error_message,
-
-                    # PDF file data
-                    'pdf_id': pdf_model.id,
-                    'filename': pdf_model.filename,
-                    'original_filename': pdf_model.original_filename,
-                    'file_size': pdf_model.file_size,
-                    'page_count': pdf_model.page_count,
-                    'object_count': pdf_model.object_count or 0,
-                    'sha256_hash': pdf_model.file_hash,
-                    'pdf_objects': pdf_model.objects_json or None,  # JSON string from database
-
-                    # Email context (nullable)
-                    'email_subject': email_model.subject if email_model else None,
-                    'sender_email': email_model.sender_email if email_model else None,
-                    'received_date': email_model.received_date if email_model else None,
-                }
-
                 logger.debug(f"Retrieved ETO run {eto_run_id} with PDF and email data")
-
-                # Convert to domain model
-                from shared.models.pdf_processing_new import EtoRunWithPdfData
-                return EtoRunWithPdfData.from_repository_data(combined_data)
+                return EtoRunWithPdfData.from_get_eto_run_with_pdf_data(result)
 
         except SQLAlchemyError as e:
             logger.error(f"Error getting ETO run with PDF data {eto_run_id}: {e}")
             raise RepositoryError(f"Failed to get ETO run with PDF data: {e}") from e
+
 
     # ========== Helper Methods ==========
 

@@ -9,6 +9,9 @@ from pydantic import BaseModel, Field, field_validator
 import json
 
 from shared.utils import DateTimeUtils
+from .pdf_processing import PdfObjects
+
+from shared.database.models import EtoRunModel
 
 
 # ========== Enums for Type Safety ==========
@@ -290,7 +293,7 @@ class EtoRun(EtoRunBase):
         return self.status in [EtoRunStatus.FAILURE, EtoRunStatus.NEEDS_TEMPLATE, EtoRunStatus.SKIPPED]
 
     @classmethod
-    def from_db_model(cls, model: Any) -> 'EtoRun':
+    def from_db_model(cls, model: EtoRunModel) -> 'EtoRun':
         """Create domain object from database model"""
         return cls(
             id=model.id,
@@ -378,26 +381,143 @@ class EtoRunSummary(BaseModel):
         use_enum_values = True
 
     @classmethod
-    def from_eto_run(cls, eto_run: EtoRun) -> 'EtoRunSummary':
-        """Create summary from full EtoRun object"""
+    def from_get_runs_with_filters(cls, result) -> 'EtoRunSummary':
+        """
+        Create summary directly from repository SQL result for better performance.
+        Avoids creating full EtoRun domain object.
+
+        Args:
+            result: SQLAlchemy result row with EtoRunModel and joined data
+
+        Returns:
+            EtoRunSummary with all fields populated from SQL result
+        """
+        # Extract the EtoRunModel (first item in result tuple)
+        eto_run_model: EtoRunModel = result[0]
+
+        # Create email info if available from JOIN
+        email_info = None
+        if len(result) > 1 and result.email_id:
+            email_info = EtoEmailInfo(
+                email_id=result.email_id,
+                subject=result.email_subject,
+                sender_email=result.email_sender_email,
+                sender_name=result.email_sender_name,
+                received_date=result.email_received_date,
+                config_name=result.config_name
+            )
+
+        # Create summary with all required fields
         return cls(
-            id=eto_run.id,
-            pdf_file_id=eto_run.pdf_file_id,
-            status=eto_run.status,
-            processing_step=eto_run.processing_step,
-            started_at=eto_run.started_at,
-            completed_at=eto_run.completed_at,
-            processing_duration_ms=eto_run.processing_duration_ms,
-            created_at=eto_run.created_at,
-            has_error=eto_run.has_error(),
-            error_type=eto_run.error_type,
-            has_template_match=eto_run.get_template_matching_result().has_match(),
-            has_extracted_data=eto_run.get_data_extraction_result().has_extracted_data(),
-            has_transformed_data=eto_run.get_transformation_result().has_transformed_data(),
-            has_order=eto_run.get_order_integration().has_order(),
-            email=None  # Will be populated by repository when available
+            id=eto_run_model.id,
+            pdf_file_id=eto_run_model.pdf_file_id,
+            status=EtoRunStatus(eto_run_model.status),
+            processing_step=EtoProcessingStep(eto_run_model.processing_step) if eto_run_model.processing_step else None,
+            started_at=eto_run_model.started_at,
+            completed_at=eto_run_model.completed_at,
+            processing_duration_ms=eto_run_model.processing_duration_ms,
+            created_at=eto_run_model.created_at,
+            has_error=eto_run_model.error_message is not None or eto_run_model.error_type is not None,
+            error_type=EtoErrorType(eto_run_model.error_type) if eto_run_model.error_type else None,
+            has_template_match=eto_run_model.matched_template_id is not None,
+            has_extracted_data=eto_run_model.extracted_data is not None,
+            has_transformed_data=eto_run_model.target_data is not None,
+            has_order=eto_run_model.order_id is not None,
+            file_size=getattr(result, 'file_size', None),
+            filename=getattr(result, 'filename', None),
+            email=email_info
         )
 
+
+class EtoRunWithPdfData(BaseModel):
+    """ETO run with complete PDF and email data"""
+
+    # ETO run data
+    run_id: int
+    status: str
+    processing_step: Optional[str] = None
+    matched_template_id: Optional[int] = None
+    extracted_data: Optional[Dict[str, Any]] = None
+    transformation_audit: Optional[Dict[str, Any]] = None
+    target_data: Optional[Dict[str, Any]] = None
+    error_type: Optional[str] = None
+    error_message: Optional[str] = None
+    created_at: datetime
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+
+    # PDF file data
+    pdf_id: int
+    filename: str
+    original_filename: str
+    file_size: int
+    page_count: int
+    object_count: int
+    sha256_hash: str
+    pdf_objects: PdfObjects = Field(default_factory=PdfObjects)
+
+    # Email context (nullable for manual uploads)
+    email_subject: Optional[str] = None
+    sender_email: Optional[str] = None
+    received_date: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+    @classmethod
+    def from_get_eto_run_with_pdf_data(cls, result) -> 'EtoRunWithPdfData':
+        """
+        Create EtoRunWithPdfData from repository SQL result
+
+        Args:
+            result: SQLAlchemy result row with EtoRunModel and joined data
+
+        Returns:
+            EtoRunWithPdfData with all fields populated from SQL result
+        """
+        # Extract the EtoRunModel (first item in result tuple)
+        eto_run_model: EtoRunModel = result[0]
+
+        # Parse PDF objects to nested structure
+        pdf_objects = PdfObjects()
+        if result.pdf_objects_json:
+            try:
+                pdf_objects = PdfObjects.from_json(result.pdf_objects_json)
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Failed to parse PDF objects for ETO run {eto_run_model.id}: {e}")
+
+        return cls(
+            # ETO run data
+            run_id=eto_run_model.id,
+            status=eto_run_model.status,
+            processing_step=eto_run_model.processing_step,
+            matched_template_id=eto_run_model.matched_template_id,
+            extracted_data=json.loads(eto_run_model.extracted_data) if eto_run_model.extracted_data else None,
+            transformation_audit=json.loads(eto_run_model.transformation_audit) if eto_run_model.transformation_audit else None,
+            target_data=json.loads(eto_run_model.target_data) if eto_run_model.target_data else None,
+            error_type=eto_run_model.error_type,
+            error_message=eto_run_model.error_message,
+            created_at=eto_run_model.created_at,
+            started_at=eto_run_model.started_at,
+            completed_at=eto_run_model.completed_at,
+
+            # PDF file data
+            pdf_id=result.pdf_id,
+            filename=result.pdf_filename,
+            original_filename=result.pdf_original_filename,
+            file_size=result.pdf_file_size,
+            page_count=result.pdf_page_count,
+            object_count=pdf_objects.get_total_count(),
+            sha256_hash=result.pdf_file_hash,
+            pdf_objects=pdf_objects,
+
+            # Email context (nullable)
+            email_subject=result.email_subject,
+            sender_email=result.email_sender_email,
+            received_date=result.email_received_date
+        )
 
 # ========== Update Models ==========
 
@@ -446,25 +566,6 @@ class EtoRunOrderUpdate(BaseModel):
 
 
 # ========== Statistics and Reporting Models ==========
-
-class EtoProcessingStatistics(BaseModel):
-    """ETO processing statistics for monitoring and reporting"""
-    total_runs: int = Field(0, description="Total number of ETO runs")
-    status_counts: List[Dict[str, Union[str, int]]] = Field(default_factory=list, description="Counts by status")
-    success_rate: float = Field(0.0, description="Success rate (0.0 to 1.0)")
-    average_processing_time_ms: Optional[int] = Field(None, description="Average processing time")
-    last_24h_runs: int = Field(0, description="Runs in last 24 hours")
-    last_successful_run: Optional[datetime] = Field(None, description="Last successful run timestamp")
-    last_failed_run: Optional[datetime] = Field(None, description="Last failed run timestamp")
-
-    @field_validator('last_successful_run', 'last_failed_run', mode='before')
-    @classmethod
-    def ensure_timezone_aware_stats(cls, v):
-        """Ensure datetime fields are timezone-aware"""
-        return DateTimeUtils.ensure_utc_aware(v)
-
-    class Config:
-        arbitrary_types_allowed = True
 
 
 class EtoRunResetResult(BaseModel):

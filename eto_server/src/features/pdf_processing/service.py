@@ -9,8 +9,7 @@ from datetime import datetime
 
 from shared.database.connection import DatabaseConnectionManager
 from shared.database.repositories.pdf_file import PdfFileRepository
-from shared.models.pdf_file import PdfFile, PdfFileCreate, PdfFileSummary
-from shared.models.pdf_processing_new import PdfDetailData
+from shared.models import PdfFile, PdfFileCreate
 from shared.exceptions import ServiceError
 
 from .utils import (
@@ -127,9 +126,8 @@ class PdfProcessingService:
                 file_hash=file_hash,
                 file_size=file_size,
                 page_count=page_count,
-                object_count=len(pdf_objects) if pdf_objects else 0,
                 email_id=email_id,
-                objects_json=cast(List[Dict[str, Any]], pdf_objects or [])
+                pdf_objects=cast(List[Dict[str, Any]], pdf_objects or [])
             )
             
             pdf_file = self.pdf_repository.create(pdf_create)
@@ -218,68 +216,6 @@ class PdfProcessingService:
             limit=limit,
             offset=offset
         )
-    
-    def get_pdf_summaries(self,
-                          has_email: Optional[bool] = None,
-                          limit: Optional[int] = None,
-                          offset: Optional[int] = None) -> List[PdfFileSummary]:
-        """
-        Get PDF summaries for list views
-        
-        Args:
-            has_email: Filter by email association
-            limit: Maximum number of results
-            offset: Number of results to skip
-            
-        Returns:
-            List of PdfFileSummary objects
-        """
-        return self.pdf_repository.get_summaries(
-            has_email=has_email,
-            limit=limit,
-            offset=offset
-        )
-    
-    def get_pdf_objects(self, pdf_id: int) -> Optional[List[Dict[str, Any]]]:
-        """
-        Get extracted PDF objects for a specific PDF
-
-        Args:
-            pdf_id: PDF file ID
-
-        Returns:
-            List of PDF objects as dictionaries, or None if not found
-        """
-        pdf_file = self.get_pdf(pdf_id)
-        if not pdf_file or not pdf_file.objects_json:
-            return None
-
-        # Convert PdfObject instances to dictionaries
-        return [obj.model_dump() for obj in pdf_file.objects_json]
-
-    def get_pdf_detail_data(self, pdf_id: int) -> Optional[PdfDetailData]:
-        """
-        Get detailed PDF data with objects grouped by type for template builder
-
-        Args:
-            pdf_id: PDF file ID
-
-        Returns:
-            PdfDetailData with file info, email context, and objects grouped by type
-        """
-        try:
-            detail_data = self.pdf_repository.get_pdf_from_id_detail(pdf_id)
-            if not detail_data:
-                logger.debug(f"PDF detail data not found for ID {pdf_id}")
-                return None
-
-            logger.info(f"Retrieved PDF detail data for ID {pdf_id}: {detail_data.total_object_count} objects")
-            return detail_data
-
-        except Exception as e:
-            logger.error(f"Error getting PDF detail data for {pdf_id}: {e}")
-            raise ServiceError(f"Failed to get PDF detail data: {e}") from e
-
 
     # === Utility Operations ===
     
@@ -342,7 +278,7 @@ class PdfProcessingService:
             "file_size": pdf_file.file_size,
             "page_count": pdf_file.page_count,
             "email_id": pdf_file.email_id,
-            "has_extracted_objects": bool(pdf_file.objects_json),
+            "has_extracted_objects": bool(pdf_file.pdf_objects),
             "created_at": pdf_file.created_at.isoformat() if pdf_file.created_at else None,
             "updated_at": pdf_file.updated_at.isoformat() if pdf_file.updated_at else None
         }

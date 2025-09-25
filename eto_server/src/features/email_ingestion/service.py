@@ -10,14 +10,12 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import partial
 
-from shared.models.email_config import (
-    EmailConfig, EmailConfigCreate, EmailConfigUpdate, EmailConfigSummary
-)
-from shared.models.email_integration import (
+from shared.models import (
+    EmailConfig, EmailConfigCreate, EmailConfigUpdate, EmailConfigSummary,
     EmailMessage, EmailAttachment, EmailAccount, EmailFolder,
-    ConnectionTestResult, EmailProvider, OutlookComConfig
+    ConnectionTestResult, EmailProvider, OutlookComConfig,
+    Email, EmailCreate
 )
-from shared.models.email import Email, EmailCreate
 from shared.database.repositories.email import EmailRepository
 from shared.utils import DateTimeUtils
 from shared.database.repositories.email_ingestion_config import EmailIngestionConfigRepository

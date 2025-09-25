@@ -5,6 +5,38 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-09-24 Session] — PDF Template Service Restructuring with Boolean Subset Matching
+### Spec / Intent
+- Complete restructuring of PDF template matching service from flat PDF objects to nested PdfObjects structure
+- Implement boolean subset matching where templates are valid only if ALL signature objects exist in target PDF
+- Replace scoring-based matching with deterministic ranking: total object count first, then weighted tie-breaking
+- Strengthen type safety with explicit type annotations and proper error handling
+- Simplify PdfTemplateMatchResult to only return essential fields (template_id, template_version)
+
+### Changes Made
+- **Template Matching Algorithm**: Complete rewrite of `find_best_template_match()` method to use nested `PdfObjects` structure with boolean subset matching - templates only match if ALL signature objects are found
+- **Ranking System**: Implemented corrected ranking algorithm - first by total object count (more objects = better), then weighted scoring for ties using object type priorities (tables=4.0, images=3.0, text_lines=2.0, etc.)
+- **Type-Specific Matching**: Created individual matching methods for each object type (`_match_text_words`, `_match_graphic_rects`, etc.) with appropriate position tolerances and content similarity thresholds
+- **Model Simplification**: Updated `PdfTemplateMatchResult` to only include `template_found`, `template_id`, and `template_version` fields, removing unnecessary `coverage_percentage`, `unmatched_object_count`, and `match_details`
+- **Type Safety Enhancement**: Added `TemplateMatch = Tuple[PdfTemplate, PdfTemplateVersion, int]` type alias, explicit type annotations throughout, proper error handling with ValueError exceptions
+- **ETO Service Integration**: Updated ETO processing service calls to pass nested `PdfObjects` directly instead of flattened structure to `find_best_template_match()`
+- **Template Creation Fix**: Updated `PdfTemplateCreate` model to use `initial_signature_objects` and `initial_extraction_fields` for proper template version creation workflow
+- Files: `shared/models/pdf_template.py`, `features/pdf_templates/service.py`, `features/eto_processing/service.py`
+
+### Next Actions
+- Test complete template matching pipeline with new boolean subset matching algorithm
+- Delete `_old` files after testing validation
+- Test template creation workflow with new initial object structure
+
+### Notes
+- **Boolean Subset Logic**: Templates now have deterministic matching - either ALL objects are found (valid template) or not (invalid template)
+- **No Partial Matches**: Eliminated scoring and percentage matching in favor of complete subset requirement for data accuracy
+- **Type Safety**: Strong typing with TemplateMatch alias, proper error handling, and explicit type annotations throughout service layer
+- **Performance**: Ranking algorithm optimized - check total count first (fast), only use weighted scoring for actual ties
+- **ETO Integration**: Template matching calls updated to use nested structure, maintaining backward compatibility for data extraction operations that still use flattened structure
+
+---
+
 ## [2025-09-23 14:30] — Colored Terminal Logging Implementation
 ### Spec / Intent
 - Add colored terminal logging output with level-based colors for better log visibility
