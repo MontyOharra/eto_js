@@ -5,6 +5,45 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-09-26 14:00] — Transformation Pipeline Architecture Analysis and Proposal
+### Spec / Intent
+- Analyze proposed transformation pipeline design against current implementation
+- Evaluate node-based JSON schema with module/node separation
+- Assess Dask-based DAG execution approach with parallel groups
+- Provide comprehensive gap analysis and migration plan
+
+### Analysis Conducted
+- **Current State Review**: Examined existing database models (TransformationPipelineModel, TransformationPipelineStepModel, etc.)
+- **Proposal Evaluation**: Analyzed node-based pipeline JSON, type system, dynamic I/O, compilation process
+- **Gap Identification**: Found major gaps in pipeline-template integration, JSON schema, type system, execution engine
+- **Migration Planning**: Outlined phased approach for database changes, compiler implementation, Dask integration
+
+### Key Findings
+- **Architecture Gap**: Pipelines currently separate from template versions, need integration for immutability
+- **Type System Missing**: No scalar type enforcement, need type_convert module and validation
+- **No Compiler**: Missing validation → expansion → topological sort → step generation pipeline
+- **No Executor**: Need Dask integration for DAG execution with parallelization
+- **Dynamic I/O Needed**: Current static configs don't support variable node counts
+
+### Changes Made
+- Files: `context/transformation_pipeline.md` (new proposal document)
+- Summary: Added comprehensive 420-line proposal defining node-based pipeline architecture with Dask execution
+
+### Next Actions
+- Implement JSON schema with Pydantic models for pipeline definition
+- Build compiler with validation, custom module expansion, topological sorting
+- Create core modules (text_clean, type_convert) with base scalar types
+- Integrate Dask for parallel DAG execution
+- Add pipeline fields to PdfTemplateVersionModel
+
+### Notes
+- **Well-Architected**: Proposal addresses real needs with good separation of concerns
+- **Type Safety**: Base scalar types only prevents complexity while maintaining flexibility
+- **Immutability**: Template-version scoped pipelines ensure reproducibility
+- **Scalability**: Dask provides efficient parallel execution for complex pipelines
+
+---
+
 ## [2025-09-25 21:45] — Transformation Pipeline Module System Foundation
 ### Spec / Intent
 - Create proper monolithic transformation pipeline architecture within main ETO server
