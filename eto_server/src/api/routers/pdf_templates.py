@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 # Create router with prefix and tags
 router = APIRouter(
-    prefix="/api/pdf_templates",
+    prefix="/pdf_templates",
     tags=["PDF Templates"],
     responses={
         404: {"description": "Not found"},

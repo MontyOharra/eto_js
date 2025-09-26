@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { PdfViewer } from '../pdf/PdfViewer';
+import { PdfViewer_new } from '../pdf/PdfViewer_new';
 import { apiClient } from '../../services/api';
-import { EtoDataTransforms } from '../../types/eto';
 
 interface TemplateBuilderModalProps {
   runId: string | null;
@@ -51,7 +50,7 @@ interface TablePdfObject extends BasePdfObject {
   cols: number;
 }
 
-interface PdfObjectsByType {
+interface PdfObjects {
   text_words: TextWordPdfObject[];
   text_lines: TextLinePdfObject[];
   graphic_rects: GraphicRectPdfObject[];
@@ -70,7 +69,7 @@ interface EtoRunPdfData {
   object_count: number;
   file_size: number;
   sha256_hash: string;
-  pdf_objects: PdfObjectsByType;  // New nested structure
+  pdf_objects: PdfObjects;  // New nested structure
 
   // Email context (flat)
   email_subject: string;
@@ -99,63 +98,102 @@ interface EtoRunPdfData {
 
 // ===== OBJECT TYPE CONFIGURATIONS =====
 
-const OBJECT_TYPE_NAMES = {
-  word: 'Words',
-  text_line: 'Text Lines',
-  rect: 'Rectangles',
-  graphic_line: 'Lines',
-  curve: 'Curves',
-  image: 'Images',
-  table: 'Tables'
-};
+type ObjectType = 'text_words' | 'text_lines' | 'graphic_rects' | 'graphic_lines' | 'graphic_curves' | 'images' | 'tables';
 
-const OBJECT_TYPE_COLORS = {
-  word: '#ff0000',
-  text_line: '#00ff00',
-  rect: '#0000ff',
-  graphic_line: '#ffff00',
-  curve: '#ff00ff',
-  image: '#00ffff',
-  table: '#ffa500'
-};
+const OBJECT_TYPE_CONFIGS = {
+  text_words: {
+    label: 'Text Words',
+    color: '#dc2626', // Red-600 - good contrast on white
+    needsCoordinateFlip: true, // Text objects need Y coordinate flipping
+    displayType: 'text_word' // For backwards compatibility with existing templates
+  },
+  text_lines: {
+    label: 'Text Lines',
+    color: '#059669', // Emerald-600 - darker green, much more visible
+    needsCoordinateFlip: true,
+    displayType: 'text_line'
+  },
+  graphic_rects: {
+    label: 'Rectangles',
+    color: '#2563eb', // Blue-600 - good contrast
+    needsCoordinateFlip: false, // Graphics use direct coordinates
+    displayType: 'graphic_rect'
+  },
+  graphic_lines: {
+    label: 'Lines',
+    color: '#d97706', // Amber-600 - much more visible than bright yellow
+    needsCoordinateFlip: false,
+    displayType: 'graphic_line'
+  },
+  graphic_curves: {
+    label: 'Curves',
+    color: '#c026d3', // Fuchsia-600 - good contrast
+    needsCoordinateFlip: false,
+    displayType: 'graphic_curve'
+  },
+  images: {
+    label: 'Images',
+    color: '#0891b2', // Cyan-600 - better than bright cyan
+    needsCoordinateFlip: false, // Images use direct coordinates
+    displayType: 'image'
+  },
+  tables: {
+    label: 'Tables',
+    color: '#ea580c', // Orange-600 - good contrast
+    needsCoordinateFlip: false,
+    displayType: 'table'
+  }
+} as const;
 
 type TemplateBuilderStep = 'object-selection' | 'field-labels';
 
-export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilderModalProps) {
+export function TemplateBuilderModal_new({ runId, onClose, onSave }: TemplateBuilderModalProps) {
   const [pdfData, setPdfData] = useState<EtoRunPdfData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState<TemplateBuilderStep>('object-selection');
-  const [selectedObjectTypes, setSelectedObjectTypes] = useState<Set<string>>(new Set());
+  const [selectedObjectTypes, setSelectedObjectTypes] = useState<Set<ObjectType>>(new Set());
   const [selectedObjects, setSelectedObjects] = useState<Set<string>>(new Set());
+  const [selectedSignatureObjects, setSelectedSignatureObjects] = useState<PdfObjects>({
+    text_words: [],
+    text_lines: [],
+    graphic_rects: [],
+    graphic_lines: [],
+    graphic_curves: [],
+    images: [],
+    tables: []
+  });
   const [templateName, setTemplateName] = useState<string>('');
   const [templateDescription, setTemplateDescription] = useState<string>('');
   const [fieldLabels, setFieldLabels] = useState<Record<string, string>>({});
+  const [showSignatureObjects, setShowSignatureObjects] = useState<boolean>(false);
   const [extractionFields, setExtractionFields] = useState<Array<{
     id: string;
-    boundingBox: [number, number, number, number]; // [x0, y0, x1, y1] in PDF coordinates
+    boundingBox: [number, number, number, number]; // [x0, y0, x1, y1] in PDF coordinates (Y-flipped)
     page: number;
     label: string;
     description: string;
     required: boolean;
-    validationRegex?: string;
   }>>([]);
   const [selectedExtractionField, setSelectedExtractionField] = useState<string | null>(null);
-  const [editingField, setEditingField] = useState<string | null>(null); // For editing/creating extraction fields
+  const [editingField, setEditingField] = useState<string | null>(null);
+
   // Box drawing state
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [isDrawing, setIsDrawing] = useState(false);
   const [drawingBox, setDrawingBox] = useState<{x: number, y: number, width: number, height: number} | null>(null);
   const [tempFieldData, setTempFieldData] = useState<{id: string, boundingBox: [number, number, number, number], page: number} | null>(null);
   const [saving, setSaving] = useState(false);
-  // Field editor form state - must be at component level to follow Rules of Hooks
+
+  // Field editor form state
   const [fieldLabel, setFieldLabel] = useState('');
   const [fieldDescription, setFieldDescription] = useState('');
   const [fieldRequired, setFieldRequired] = useState(false);
-  const [fieldValidationRegex, setFieldValidationRegex] = useState('');
 
-  // Ref for auto-focusing field label input
   const fieldLabelInputRef = useRef<HTMLInputElement>(null);
+
+  // Confirmation dialog state
+  const [showCloseConfirmation, setShowCloseConfirmation] = useState(false);
 
   // Auto-focus field label input when editing starts
   useEffect(() => {
@@ -165,80 +203,52 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
     }
   }, [editingField]);
 
-  // Confirmation dialog state
-  const [showCloseConfirmation, setShowCloseConfirmation] = useState(false);
-
   // Check if there's unsaved work that should trigger confirmation
   const hasUnsavedWork = () => {
     return (
-      selectedObjects.size > 0 || // Has selected static objects
-      extractionFields.length > 0 || // Has created extraction fields
-      templateName.trim() !== '' || // Has template name
-      templateDescription.trim() !== '' // Has template description
+      selectedObjects.size > 0 ||
+      extractionFields.length > 0 ||
+      templateName.trim() !== '' ||
+      templateDescription.trim() !== ''
     );
   };
 
   useEffect(() => {
     if (runId) {
-      // Clear all drawing/field state when switching to a new PDF document
       clearAllModalState();
-
       const timeoutId = setTimeout(() => {
         fetchPdfData();
       }, 100);
-
-      return () => {
-        clearTimeout(timeoutId);
-      };
+      return () => clearTimeout(timeoutId);
     }
   }, [runId]);
 
   useEffect(() => {
     return () => {
       if (pdfData) {
-        console.log('TemplateBuilderModal unmounting, cleaning up PDF data');
-        // Clear all drawing/field state when modal unmounts
         clearAllModalState();
       }
     };
   }, [pdfData]);
 
-  // Clear drawing state when switching steps (but preserve selected objects)
   useEffect(() => {
     clearStepTransitionState();
   }, [currentStep]);
 
   const clearStepTransitionState = () => {
-    console.log('Clearing step transition state');
-
-    // Clear drawing mode and drawing state
     setIsDrawingMode(false);
     setIsDrawing(false);
     setDrawingBox(null);
-
-    // Clear temporary field data
     setTempFieldData(null);
     setEditingField(null);
-
-    // Clear field form state
     setFieldLabel('');
     setFieldDescription('');
     setFieldRequired(false);
-    setFieldValidationRegex('');
-
-    // Clear selection state
     setSelectedExtractionField(null);
-
-    // NOTE: Do NOT clear selectedObjects - they should persist across steps
   };
 
   const clearAllModalState = () => {
-    console.log('Clearing all modal state');
-
-    // Clear all step transition state
     clearStepTransitionState();
-
-    // Also clear selected objects, extraction fields, template info, reset step, and hide all object types
     setSelectedObjects(new Set());
     setExtractionFields([]);
     setTemplateName('');
@@ -248,20 +258,15 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
   };
 
   const handleModalClose = () => {
-    // Check if there's unsaved work before closing
     if (hasUnsavedWork()) {
       setShowCloseConfirmation(true);
       return;
     }
-
-    // No unsaved work, close immediately
-    console.log('Modal closing - clearing all state');
     clearAllModalState();
     onClose();
   };
 
   const handleConfirmClose = () => {
-    console.log('Modal closing confirmed - clearing all state');
     setShowCloseConfirmation(false);
     clearAllModalState();
     onClose();
@@ -276,31 +281,21 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
 
     setLoading(true);
     setError(null);
-
-    // Clear drawing state when loading new PDF data
     clearAllModalState();
 
     try {
-      console.log('Fetching PDF data for run:', runId);
       const rawData = await apiClient.getEtoRunPdfData(runId);
-      console.log('Raw PDF data loaded:', rawData);
 
-      // PDF objects are now in nested structure
+      // Calculate total object count from nested structure
       const objectCount = getTotalObjectCount(rawData.pdf_objects);
 
-      console.log('PDF objects loaded:', objectCount, 'objects found');
-      console.log('Processing status:', rawData.status, rawData.processing_step);
-
-      // Create the expected data structure (rawData already matches our interface)
       const pdfData: EtoRunPdfData = {
         ...rawData,
-        object_count: objectCount  // Ensure object_count matches actual count
+        object_count: objectCount
       };
 
-      console.log('Processed PDF data:', pdfData);
       setPdfData(pdfData);
     } catch (err: any) {
-      console.error('Error loading PDF data:', err);
       setError(err.message || 'Failed to load PDF data');
     } finally {
       setLoading(false);
@@ -309,33 +304,48 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
 
   // ===== HELPER FUNCTIONS FOR NESTED STRUCTURE =====
 
-  const getTotalObjectCount = (objects: PdfObjectsByType): number => {
+  const getTotalObjectCount = (objects: PdfObjects): number => {
     return (
-      objects.text_words?.length || 0 +
-      objects.text_lines?.length || 0 +
-      objects.graphic_rects?.length || 0 +
-      objects.graphic_lines?.length || 0 +
-      objects.graphic_curves?.length || 0 +
-      objects.images?.length || 0 +
-      objects.tables?.length || 0
+      (objects.text_words?.length || 0) +
+      (objects.text_lines?.length || 0) +
+      (objects.graphic_rects?.length || 0) +
+      (objects.graphic_lines?.length || 0) +
+      (objects.graphic_curves?.length || 0) +
+      (objects.images?.length || 0) +
+      (objects.tables?.length || 0)
     );
   };
 
-  const getObjectTypeCounts = () => {
-    if (!pdfData?.pdf_objects) return {};
+  const getObjectTypeCounts = (): Record<ObjectType, number> => {
+    if (!pdfData?.pdf_objects) {
+      return {
+        text_words: 0,
+        text_lines: 0,
+        graphic_rects: 0,
+        graphic_lines: 0,
+        graphic_curves: 0,
+        images: 0,
+        tables: 0
+      };
+    }
 
     return {
-      word: pdfData.pdf_objects.text_words?.length || 0,
-      text_line: pdfData.pdf_objects.text_lines?.length || 0,
-      rect: pdfData.pdf_objects.graphic_rects?.length || 0,
-      graphic_line: pdfData.pdf_objects.graphic_lines?.length || 0,
-      curve: pdfData.pdf_objects.graphic_curves?.length || 0,
-      image: pdfData.pdf_objects.images?.length || 0,
-      table: pdfData.pdf_objects.tables?.length || 0
+      text_words: pdfData.pdf_objects.text_words?.length || 0,
+      text_lines: pdfData.pdf_objects.text_lines?.length || 0,
+      graphic_rects: pdfData.pdf_objects.graphic_rects?.length || 0,
+      graphic_lines: pdfData.pdf_objects.graphic_lines?.length || 0,
+      graphic_curves: pdfData.pdf_objects.graphic_curves?.length || 0,
+      images: pdfData.pdf_objects.images?.length || 0,
+      tables: pdfData.pdf_objects.tables?.length || 0
     };
   };
 
-  const handleObjectTypeToggle = (type: string) => {
+  // Generate unique ID for any object based on type, page, and bbox
+  const generateObjectId = (type: string, page: number, bbox: [number, number, number, number]): string => {
+    return `${type}-${page}-${bbox.join('-')}`;
+  };
+
+  const handleObjectTypeToggle = (type: ObjectType) => {
     const newSelected = new Set(selectedObjectTypes);
     if (newSelected.has(type)) {
       newSelected.delete(type);
@@ -347,8 +357,9 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
 
   const handleShowAllTypes = () => {
     if (!pdfData) return;
-    const allTypes = new Set(Object.keys(getObjectTypeCounts()));
-    setSelectedObjectTypes(allTypes);
+    const counts = getObjectTypeCounts();
+    const typesWithObjects = (Object.keys(counts) as ObjectType[]).filter(type => counts[type] > 0);
+    setSelectedObjectTypes(new Set(typesWithObjects));
   };
 
   const handleHideAllTypes = () => {
@@ -357,25 +368,50 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
 
   const handleObjectClick = (obj: any) => {
     if (currentStep === 'object-selection') {
-      // Handle object selection for template building
-      const objectId = `${obj.type}-${obj.page}-${obj.bbox.join('-')}`;
-      console.log('Object clicked:', objectId, obj);
+      const objectId = generateObjectId(obj.type, obj.page, obj.bbox);
       const newSelected = new Set(selectedObjects);
 
+      // Find the actual object from pdfData to get full object data
+      let actualObject = null;
+      const objectTypeKey = obj.objectType as ObjectType; // obj.objectType is the key like 'text_words'
+
+      if (pdfData && pdfData.pdf_objects[objectTypeKey]) {
+        actualObject = pdfData.pdf_objects[objectTypeKey].find((pdfObj: any) => {
+          const pdfObjId = generateObjectId(OBJECT_TYPE_CONFIGS[objectTypeKey].displayType, pdfObj.page, pdfObj.bbox);
+          return pdfObjId === objectId;
+        });
+      }
+
       if (newSelected.has(objectId)) {
+        // Remove object
         newSelected.delete(objectId);
+
+        // Remove from selectedSignatureObjects
+        if (actualObject) {
+          setSelectedSignatureObjects(prev => ({
+            ...prev,
+            [objectTypeKey]: prev[objectTypeKey].filter((sigObj: any) => {
+              const sigObjId = generateObjectId(OBJECT_TYPE_CONFIGS[objectTypeKey].displayType, sigObj.page, sigObj.bbox);
+              return sigObjId !== objectId;
+            })
+          }));
+        }
       } else {
+        // Add object
         newSelected.add(objectId);
+
+        // Add to selectedSignatureObjects
+        if (actualObject) {
+          setSelectedSignatureObjects(prev => ({
+            ...prev,
+            [objectTypeKey]: [...prev[objectTypeKey], actualObject]
+          }));
+        }
       }
 
       setSelectedObjects(newSelected);
-      console.log('Selected objects updated:', {
-        objectId,
-        wasSelected: selectedObjects.has(objectId),
-        totalSelected: newSelected.size
-      });
     } else if (currentStep === 'field-labels') {
-      // In field-labels step, check if clicking on an existing extraction field
+      // Handle extraction field interaction
       const clickX = obj.bbox[0];
       const clickY = obj.bbox[1];
       const clickPage = obj.page;
@@ -390,31 +426,61 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
         setSelectedExtractionField(existingField.id);
         setEditingField(null);
         setIsDrawingMode(false);
-        console.log('Showing extraction field:', existingField);
       }
     }
   };
 
   const handleStartDrawing = () => {
-    if (currentStep === 'field-labels' && !editingField && !selectedExtractionField) {
+    if (currentStep === 'field-labels') {
+      // If currently editing a field, cancel the edit (equivalent to clicking cancel)
+      if (editingField) {
+        handleCancelFieldEdit();
+      }
+
       setIsDrawingMode(true);
-      setSelectedExtractionField(null);
+      setSelectedExtractionField(null); // Clear any selected field when starting to draw
       setEditingField(null);
     }
   };
 
   const handleObjectDoubleClick = () => {
-    // Double-click now just starts drawing mode instead of creating fields directly
     if (currentStep === 'field-labels') {
       handleStartDrawing();
     }
   };
 
+  const handleExtractionFieldClick = (field: {
+    id: string;
+    boundingBox: [number, number, number, number];
+    page: number;
+    label: string;
+    description: string;
+    required: boolean;
+  }) => {
+    if (currentStep === 'field-labels') {
+      setSelectedExtractionField(field.id);
+      setEditingField(field.id);
+
+      // Populate form fields with existing data
+      setFieldLabel(field.label);
+      setFieldDescription(field.description);
+      setFieldRequired(field.required);
+    }
+  };
+
   // Box drawing handlers
   const handleMouseDown = (e: React.MouseEvent, pageElement: HTMLElement, currentPage: number, scale: number, pageHeight: number) => {
-    // Enable drawing in field-labels step when not viewing/editing fields
-    const canDraw = currentStep === 'field-labels' && !editingField && !selectedExtractionField;
-    if (!canDraw) return;
+    if (currentStep !== 'field-labels') return;
+
+    // If currently editing a field, cancel the edit (equivalent to clicking cancel)
+    if (editingField) {
+      handleCancelFieldEdit();
+    }
+
+    // Clear any selected field when starting to draw
+    if (selectedExtractionField) {
+      setSelectedExtractionField(null);
+    }
 
     e.preventDefault();
     const rect = pageElement.getBoundingClientRect();
@@ -422,7 +488,6 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
     const anchorY = (e.clientY - rect.top) / scale;
 
     setIsDrawing(true);
-    // Store the anchor point and start with zero width/height
     setDrawingBox({ x: anchorX, y: anchorY, width: 0, height: 0 });
   };
 
@@ -434,16 +499,14 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
     const currentX = (e.clientX - rect.left) / scale;
     const currentY = (e.clientY - rect.top) / scale;
 
-    // Keep the original anchor point fixed and calculate width/height from there
-    // The anchor point is stored in drawingBox.x and drawingBox.y
     const anchorX = drawingBox.x;
     const anchorY = drawingBox.y;
 
     setDrawingBox({
-      x: anchorX, // Keep anchor X fixed
-      y: anchorY, // Keep anchor Y fixed
-      width: currentX - anchorX,  // Width can be positive or negative
-      height: currentY - anchorY  // Height can be positive or negative
+      x: anchorX,
+      y: anchorY,
+      width: currentX - anchorX,
+      height: currentY - anchorY
     });
   };
 
@@ -452,30 +515,22 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
 
     e.preventDefault();
 
-    // Only create field if the drawn box has meaningful size (check absolute values since width/height can be negative)
     if (Math.abs(drawingBox.width) > 10 && Math.abs(drawingBox.height) > 10) {
-      // Calculate actual box coordinates handling negative width/height
       const screenX0 = drawingBox.x;
       const screenY0 = drawingBox.y;
       const screenX1 = drawingBox.x + drawingBox.width;
       const screenY1 = drawingBox.y + drawingBox.height;
 
-      // Normalize coordinates so x0,y0 is always top-left
       const normalizedX0 = Math.min(screenX0, screenX1);
       const normalizedY0 = Math.min(screenY0, screenY1);
       const normalizedX1 = Math.max(screenX0, screenX1);
       const normalizedY1 = Math.max(screenY0, screenY1);
 
-      // Convert screen coordinates to PDF coordinates (flip Y axis)
-      const pdfX0 = normalizedX0;
-      const pdfY0 = pageHeight - normalizedY1; // Flip Y coordinate
-      const pdfX1 = normalizedX1;
-      const pdfY1 = pageHeight - normalizedY0;
-
+      // Keep screen coordinates as-is (no Y-flipping needed since PDF text_words use same coordinate system)
       const newFieldId = `field_${Date.now()}`;
       setTempFieldData({
         id: newFieldId,
-        boundingBox: [pdfX0, pdfY0, pdfX1, pdfY1],
+        boundingBox: [normalizedX0, normalizedY0, normalizedX1, normalizedY1],
         page: currentPage - 1 // Convert to 0-based
       });
 
@@ -486,12 +541,6 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
       setFieldLabel('');
       setFieldDescription('');
       setFieldRequired(false);
-      setFieldValidationRegex('');
-
-      console.log('Created extraction field with bounding box:', {
-        boundingBox: [pdfX0, pdfY0, pdfX1, pdfY1],
-        page: currentPage - 1
-      });
     }
 
     setIsDrawing(false);
@@ -510,20 +559,46 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
         return;
       }
 
-      // Initialize field labels for word objects (from the flattened structure that PdfViewer uses)
-      // We'll need to reconstruct the object IDs that would be generated by PdfViewer's flattening
-      const initialLabels: Record<string, string> = {};
+      // Log selected signature objects in PdfObjects format
+      console.log('=== SELECTED SIGNATURE OBJECTS ===');
+      console.log('PdfObjects format (native metadata preserved):', selectedSignatureObjects);
+      console.log('Selected Object Types:', Array.from(selectedObjectTypes));
+      console.log('Selected Object IDs:', Array.from(selectedObjects));
+      console.log('Object counts by type:', {
+        text_words: selectedSignatureObjects.text_words.length,
+        text_lines: selectedSignatureObjects.text_lines.length,
+        graphic_rects: selectedSignatureObjects.graphic_rects.length,
+        graphic_lines: selectedSignatureObjects.graphic_lines.length,
+        graphic_curves: selectedSignatureObjects.graphic_curves.length,
+        images: selectedSignatureObjects.images.length,
+        tables: selectedSignatureObjects.tables.length
+      });
 
-      // Process text_words (become "word" type in frontend)
-      pdfData?.pdf_objects.text_words?.forEach(obj => {
-        const flattenedPage = obj.page - 1; // Convert to 0-based like PdfViewer does
-        const objectId = `word-${flattenedPage}-${obj.bbox.join('-')}`;
-        if (selectedObjects.has(objectId) && !fieldLabels[objectId]) {
-          initialLabels[objectId] = '';
+      // Verify native metadata preservation - log first object of each type that has selections
+      Object.entries(selectedSignatureObjects).forEach(([key, objects]) => {
+        if (objects.length > 0) {
+          console.log(`Sample ${key} object with native metadata:`, objects[0]);
         }
       });
 
+      // Initialize field labels for selected text objects
+      const initialLabels: Record<string, string> = {};
+
+      if (pdfData?.pdf_objects.text_words) {
+        pdfData.pdf_objects.text_words.forEach(obj => {
+          const objectId = generateObjectId('text_word', obj.page, obj.bbox);
+          if (selectedObjects.has(objectId) && !fieldLabels[objectId]) {
+            initialLabels[objectId] = '';
+          }
+        });
+      }
+
       setFieldLabels(prev => ({ ...prev, ...initialLabels }));
+
+      // Hide all object types when moving to extraction definitions
+      setSelectedObjectTypes(new Set());
+      setShowSignatureObjects(false);
+
       setCurrentStep('field-labels');
       setError(null);
     }
@@ -543,156 +618,106 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
     setError(null);
 
     try {
-      // Reconstruct selected object data from the nested structure
-      const selectedObjectData: any[] = [];
+      // Create the nested PdfObjects structure expected by backend
+      const initial_signature_objects = {
+        text_words: [] as any[],
+        text_lines: [] as any[],
+        graphic_rects: [] as any[],
+        graphic_lines: [] as any[],
+        graphic_curves: [] as any[],
+        images: [] as any[],
+        tables: [] as any[]
+      };
 
-      // Process each object type and check if its flattened ID is selected
-      pdfData.pdf_objects.text_words?.forEach(obj => {
-        const flattenedPage = obj.page - 1;
-        const objectId = `word-${flattenedPage}-${obj.bbox.join('-')}`;
-        if (selectedObjects.has(objectId)) {
-          selectedObjectData.push({
-            type: 'word',
-            page: flattenedPage,
-            bbox: obj.bbox,
-            text: obj.text,
-            fontname: obj.fontname,
-            fontsize: obj.fontsize,
-            field_label: fieldLabels[objectId] || null
-          });
-        }
+      // Process each object type and transform selected objects
+      Object.entries(pdfData.pdf_objects).forEach(([objectType, objects]) => {
+        if (!objects || !Array.isArray(objects)) return;
+
+        const config = OBJECT_TYPE_CONFIGS[objectType as ObjectType];
+        if (!config) return;
+
+        objects.forEach(obj => {
+          const objectId = generateObjectId(config.displayType, obj.page, obj.bbox);
+          if (selectedObjects.has(objectId)) {
+            // Create object in backend format (note: page is already 1-based in pdfData)
+            const backendObj: any = {
+              page: obj.page, // Keep 1-based indexing for backend
+              bbox: obj.bbox
+            };
+
+            // Add type-specific properties
+            switch (objectType as ObjectType) {
+              case 'text_words':
+                const textWord = obj as TextWordPdfObject;
+                backendObj.text = textWord.text;
+                backendObj.fontname = textWord.fontname;
+                backendObj.fontsize = textWord.fontsize;
+                initial_signature_objects.text_words.push(backendObj);
+                break;
+              case 'text_lines':
+                initial_signature_objects.text_lines.push(backendObj);
+                break;
+              case 'graphic_rects':
+                const rect = obj as GraphicRectPdfObject;
+                backendObj.linewidth = rect.linewidth;
+                initial_signature_objects.graphic_rects.push(backendObj);
+                break;
+              case 'graphic_lines':
+                const line = obj as GraphicLinePdfObject;
+                backendObj.linewidth = line.linewidth;
+                initial_signature_objects.graphic_lines.push(backendObj);
+                break;
+              case 'graphic_curves':
+                const curve = obj as GraphicCurvePdfObject;
+                backendObj.points = curve.points;
+                backendObj.linewidth = curve.linewidth;
+                initial_signature_objects.graphic_curves.push(backendObj);
+                break;
+              case 'images':
+                const image = obj as ImagePdfObject;
+                backendObj.format = image.format;
+                backendObj.colorspace = image.colorspace;
+                backendObj.bits = image.bits;
+                initial_signature_objects.images.push(backendObj);
+                break;
+              case 'tables':
+                const table = obj as TablePdfObject;
+                backendObj.rows = table.rows;
+                backendObj.cols = table.cols;
+                initial_signature_objects.tables.push(backendObj);
+                break;
+            }
+          }
+        });
       });
 
-      pdfData.pdf_objects.text_lines?.forEach(obj => {
-        const flattenedPage = obj.page - 1;
-        const objectId = `text_line-${flattenedPage}-${obj.bbox.join('-')}`;
-        if (selectedObjects.has(objectId)) {
-          selectedObjectData.push({
-            type: 'text_line',
-            page: flattenedPage,
-            bbox: obj.bbox,
-            field_label: fieldLabels[objectId] || null
-          });
-        }
-      });
-
-      pdfData.pdf_objects.graphic_rects?.forEach(obj => {
-        const flattenedPage = obj.page - 1;
-        const objectId = `rect-${flattenedPage}-${obj.bbox.join('-')}`;
-        if (selectedObjects.has(objectId)) {
-          selectedObjectData.push({
-            type: 'rect',
-            page: flattenedPage,
-            bbox: obj.bbox,
-            linewidth: obj.linewidth,
-            field_label: fieldLabels[objectId] || null
-          });
-        }
-      });
-
-      pdfData.pdf_objects.graphic_lines?.forEach(obj => {
-        const flattenedPage = obj.page - 1;
-        const objectId = `graphic_line-${flattenedPage}-${obj.bbox.join('-')}`;
-        if (selectedObjects.has(objectId)) {
-          selectedObjectData.push({
-            type: 'graphic_line',
-            page: flattenedPage,
-            bbox: obj.bbox,
-            linewidth: obj.linewidth,
-            field_label: fieldLabels[objectId] || null
-          });
-        }
-      });
-
-      pdfData.pdf_objects.graphic_curves?.forEach(obj => {
-        const flattenedPage = obj.page - 1;
-        const objectId = `curve-${flattenedPage}-${obj.bbox.join('-')}`;
-        if (selectedObjects.has(objectId)) {
-          selectedObjectData.push({
-            type: 'curve',
-            page: flattenedPage,
-            bbox: obj.bbox,
-            points: obj.points,
-            linewidth: obj.linewidth,
-            field_label: fieldLabels[objectId] || null
-          });
-        }
-      });
-
-      pdfData.pdf_objects.images?.forEach(obj => {
-        const flattenedPage = obj.page - 1;
-        const objectId = `image-${flattenedPage}-${obj.bbox.join('-')}`;
-        if (selectedObjects.has(objectId)) {
-          selectedObjectData.push({
-            type: 'image',
-            page: flattenedPage,
-            bbox: obj.bbox,
-            format: obj.format,
-            colorspace: obj.colorspace,
-            bits: obj.bits,
-            field_label: fieldLabels[objectId] || null
-          });
-        }
-      });
-
-      pdfData.pdf_objects.tables?.forEach(obj => {
-        const flattenedPage = obj.page - 1;
-        const objectId = `table-${flattenedPage}-${obj.bbox.join('-')}`;
-        if (selectedObjects.has(objectId)) {
-          selectedObjectData.push({
-            type: 'table',
-            page: flattenedPage,
-            bbox: obj.bbox,
-            rows: obj.rows,
-            cols: obj.cols,
-            field_label: fieldLabels[objectId] || null
-          });
-        }
-      });
+      // Transform extraction fields to backend format
+      // Note: Keep coordinates as-is since PDF text_words use the same coordinate system
+      const initial_extraction_fields = extractionFields.map(field => ({
+        label: field.label,
+        bounding_box: field.boundingBox, // Change from boundingBox to bounding_box, keep coordinates as-is
+        page: field.page + 1, // Convert from 0-based to 1-based for backend
+        required: field.required,
+        description: field.description || undefined,
+        validation_regex: undefined // We removed this from frontend, set as undefined
+      }));
 
       const templateData = {
         name: templateName,
         description: templateDescription,
         source_pdf_id: pdfData.pdf_id,
-        source_eto_run_id: pdfData.run_id,
-        filename: pdfData.original_filename,
-        selected_objects: selectedObjectData,
-        extraction_fields: extractionFields.map(field => ({
-          id: field.id,
-          label: field.label,
-          description: field.description,
-          required: field.required,
-          validationRegex: field.validationRegex,
-          boundingBox: field.boundingBox,
-          page: field.page
-        }))
+        initial_signature_objects,
+        initial_extraction_fields
       };
-
-      console.log('Template Builder - Saving template:', {
-        selectedCount: selectedObjectData.length,
-        labeledFields: Object.keys(fieldLabels).filter(k => fieldLabels[k]).length,
-        extractionFields: extractionFields.length
-      });
 
       const result = await apiClient.createTemplate(templateData);
 
-      console.log('Template created successfully:', result);
-
-      if (result.reprocessing) {
-        console.log('Reprocessing triggered:', result.reprocessing);
-        if (result.reprocessing.reprocessed > 0) {
-          alert(`Template created successfully!\\n\\nReprocessing ${result.reprocessing.reprocessed} previously unrecognized PDFs...`);
-        }
-      } else if (result.reprocessing_error) {
-        console.warn('Reprocessing failed:', result.reprocessing_error);
-        alert(`Template created successfully!\\n\\nWarning: Automatic reprocessing failed: ${result.reprocessing_error}`);
-      }
-
-      onSave(templateData);
+      alert(`Template "${result.name}" created successfully with ID: ${result.id}`);
+      onSave(result);
 
     } catch (err: any) {
-      console.error('Error saving template:', err);
-      setError(err.response?.data?.error || err.message || 'Failed to save template');
+      console.error('Template creation error:', err);
+      setError(err.response?.data?.detail || err.message || 'Failed to save template');
     } finally {
       setSaving(false);
     }
@@ -732,29 +757,59 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
       page: tempFieldData.page,
       label: fieldLabel,
       description: fieldDescription,
-      required: fieldRequired,
-      validationRegex: fieldValidationRegex || undefined
+      required: fieldRequired
     };
-
-    console.log('Saving new extraction field:', newField);
 
     setExtractionFields(prev => [...prev, newField]);
     setEditingField(null);
     setTempFieldData(null);
-    setSelectedExtractionField(null); // Return to main field creation mode, don't view the new field
+    setSelectedExtractionField(null);
 
     // Reset form fields
     setFieldLabel('');
     setFieldDescription('');
     setFieldRequired(false);
-    setFieldValidationRegex('');
   };
 
-  // Handle Enter key press in field form
+  const handleUpdateExtractionField = () => {
+    if (!editingField || !fieldLabel.trim()) return;
+
+    setExtractionFields(prev =>
+      prev.map(field =>
+        field.id === editingField
+          ? {
+              ...field,
+              label: fieldLabel,
+              description: fieldDescription,
+              required: fieldRequired
+            }
+          : field
+      )
+    );
+
+    setEditingField(null);
+    setSelectedExtractionField(null);
+
+    // Reset form fields
+    setFieldLabel('');
+    setFieldDescription('');
+    setFieldRequired(false);
+  };
+
+  const handleSaveField = () => {
+    // If we have tempFieldData, we're creating a new field
+    // If we don't, we're editing an existing field
+    if (tempFieldData) {
+      handleSaveExtractionField();
+    } else {
+      handleUpdateExtractionField();
+    }
+  };
+
   const handleFieldFormKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSaveExtractionField();
+      handleSaveField();
     }
   };
 
@@ -763,18 +818,15 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
     if (selectedExtractionField === fieldId) {
       setSelectedExtractionField(null);
     }
-    console.log('Deleted extraction field:', fieldId);
   };
 
   const handleCancelFieldEdit = () => {
     setEditingField(null);
     setTempFieldData(null);
-    // Reset form fields
+    setSelectedExtractionField(null); // Clear selected field to return to main view
     setFieldLabel('');
     setFieldDescription('');
     setFieldRequired(false);
-    setFieldValidationRegex('');
-    console.log('Cancelled field editing');
   };
 
   const renderSidebarContent = () => {
@@ -813,6 +865,28 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
             placeholder="Describe this template..."
           />
         </div>
+
+        {/* Show signature objects checkbox only in field-labels step */}
+        {currentStep === 'field-labels' && (
+          <div className="pt-2 border-t border-gray-700">
+            <label className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                checked={showSignatureObjects}
+                onChange={(e) => setShowSignatureObjects(e.target.checked)}
+                className="rounded border-gray-600 bg-gray-800 text-blue-600 focus:ring-blue-500 focus:ring-offset-gray-800"
+              />
+              <span className="text-xs text-gray-300">Show signature objects</span>
+            </label>
+            {showSignatureObjects && (
+              <div className="mt-2 text-xs text-gray-400">
+                Signature objects: {
+                  Object.values(selectedSignatureObjects).reduce((total, objects) => total + objects.length, 0)
+                }
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -827,10 +901,11 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
           >
             ← Back
           </button>
-          <h3 className="text-sm font-semibold text-white">Create Extraction Field</h3>
+          <h3 className="text-sm font-semibold text-white">
+            {tempFieldData ? 'Create Extraction Field' : 'Edit Extraction Field'}
+          </h3>
         </div>
 
-        {/* Show the drawn area information */}
         {tempFieldData && (
           <div className="mb-4 p-3 bg-gray-800 border border-gray-600 rounded">
             <div className="text-xs text-gray-400 mb-1">Extraction Area:</div>
@@ -876,20 +951,9 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
             />
             <label htmlFor="required" className="text-xs text-gray-300">Required field</label>
           </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-300 mb-1">Validation Regex (Optional)</label>
-            <input
-              type="text"
-              value={fieldValidationRegex}
-              onChange={(e) => setFieldValidationRegex(e.target.value)}
-              onKeyDown={handleFieldFormKeyDown}
-              placeholder="^[A-Z0-9]+$"
-              className="w-full px-3 py-2 text-sm bg-gray-800 border border-gray-600 rounded text-white focus:border-blue-500 focus:outline-none"
-            />
-          </div>
           <div className="flex space-x-2">
             <button
-              onClick={handleSaveExtractionField}
+              onClick={handleSaveField}
               disabled={!fieldLabel.trim()}
               className="flex-1 px-3 py-2 text-sm bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white rounded"
             >
@@ -945,12 +1009,6 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
             <label className="block text-xs font-medium text-gray-400 mb-1">Required</label>
             <div className="text-sm text-gray-300">{field.required ? 'Yes' : 'No'}</div>
           </div>
-          {field.validationRegex && (
-            <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1">Validation</label>
-              <div className="text-sm text-gray-300 font-mono">{field.validationRegex}</div>
-            </div>
-          )}
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-1">Extraction Area</label>
             <div className="text-sm text-gray-300">
@@ -958,29 +1016,6 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
               Box: {field.boundingBox.map(n => Math.round(n)).join(', ')}
             </div>
           </div>
-        </div>
-
-        {/* Rules Pipeline Section */}
-        <div className="mt-6 pt-4 border-t border-gray-600">
-          <h4 className="text-sm font-semibold text-white mb-3">Rules Pipeline</h4>
-          <div className="text-xs text-gray-400 mb-3">
-            Transform extracted text before final output
-          </div>
-
-          {/* TODO: Add rules list here when rules are implemented */}
-          <div className="bg-gray-800 rounded p-3 mb-3">
-            <div className="text-sm text-gray-400 text-center">No transformation rules defined</div>
-          </div>
-
-          <button
-            onClick={() => {
-              // TODO: Implement rule creation
-              console.log('Create new transformation rule for field:', field.id);
-            }}
-            className="w-full px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
-          >
-            + Add Transformation Step
-          </button>
         </div>
       </div>
     );
@@ -1010,7 +1045,7 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 mb-2">
               <h2 className="text-lg font-semibold text-white truncate">
-                Template Builder - {pdfData?.original_filename || 'Loading...'}
+                Template Builder NEW - {pdfData?.original_filename || 'Loading...'}
               </h2>
               <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-900 text-blue-300">
                 {currentStep === 'object-selection' ? 'Step 1: Select Objects' : 'Step 2: Assign Field Labels'}
@@ -1037,7 +1072,7 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
         </div>
 
         <div className="flex flex-1 overflow-hidden" style={{ minHeight: 0, minWidth: 0 }}>
-          {/* Left Sidebar - Dynamic Content */}
+          {/* Left Sidebar */}
           <div className="w-80 flex-shrink-0 bg-gray-900 border-r border-gray-700 p-4 overflow-y-auto">
             {currentStep === 'object-selection' && (
               <>
@@ -1059,12 +1094,11 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
 
             {currentStep === 'field-labels' && (
               <>
-                {/* Dynamic Content Based on State */}
                 <div className="mb-6">
                   {renderSidebarContent()}
                 </div>
 
-                {/* Extraction Fields List - Only show when not viewing or editing field details */}
+                {/* Extraction Fields List */}
                 {!selectedExtractionField && !editingField && (
                   <div className="mb-6">
                     <h3 className="text-sm font-semibold text-white mb-2">Extraction Fields ({extractionFields.length})</h3>
@@ -1078,7 +1112,15 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
                         extractionFields.map((field) => (
                           <button
                             key={field.id}
-                            onClick={() => setSelectedExtractionField(field.id)}
+                            onClick={() => {
+                              setSelectedExtractionField(field.id);
+                              setEditingField(field.id);
+
+                              // Populate form fields with existing data
+                              setFieldLabel(field.label);
+                              setFieldDescription(field.description);
+                              setFieldRequired(field.required);
+                            }}
                             className="w-full text-left px-3 py-2 rounded text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors"
                           >
                             <div className="font-medium truncate">{field.label}</div>
@@ -1094,7 +1136,7 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
               </>
             )}
 
-            {/* Object Type Visibility Controls - Only shown in object selection step */}
+            {/* Object Type Visibility Controls */}
             {currentStep === 'object-selection' && (
               <div className="mb-6">
                 <h3 className="text-sm font-semibold text-white mb-3">Object Visibility</h3>
@@ -1115,16 +1157,17 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
                 </div>
 
                 <div className="space-y-2">
-                  {Object.entries(OBJECT_TYPE_NAMES).map(([type, label]) => {
-                    const count = objectCounts[type] || 0;
-                    const isSelected = selectedObjectTypes.has(type);
+                  {(Object.keys(OBJECT_TYPE_CONFIGS) as ObjectType[]).map(objectType => {
+                    const config = OBJECT_TYPE_CONFIGS[objectType];
+                    const count = objectCounts[objectType] || 0;
+                    const isSelected = selectedObjectTypes.has(objectType);
 
                     if (count === 0) return null;
 
                     return (
-                      <div key={type} className="flex items-center">
+                      <div key={objectType} className="flex items-center">
                         <button
-                          onClick={() => handleObjectTypeToggle(type)}
+                          onClick={() => handleObjectTypeToggle(objectType)}
                           className={`flex-1 flex items-center justify-between p-2 text-xs rounded transition-colors ${
                             isSelected ? 'bg-gray-700 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
                           }`}
@@ -1132,9 +1175,9 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
                           <div className="flex items-center space-x-2">
                             <div
                               className="w-3 h-3 rounded"
-                              style={{ backgroundColor: OBJECT_TYPE_COLORS[type as keyof typeof OBJECT_TYPE_COLORS] }}
+                              style={{ backgroundColor: config.color }}
                             ></div>
-                            <span>{label}</span>
+                            <span>{config.label}</span>
                           </div>
                           <span className="font-medium">{count}</span>
                         </button>
@@ -1155,69 +1198,82 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
             )}
           </div>
 
-          {/* Main Content - PDF Viewer (Object Selection Step) or Field Labels */}
+          {/* Main Content - PDF Viewer */}
           <div className="flex-1 flex flex-col overflow-hidden" style={{ minWidth: 0 }}>
-            {currentStep === 'object-selection' && (
-              <>
-                {loading && (
-                  <div className="flex-1 flex items-center justify-center">
-                    <div className="text-white">Loading PDF data...</div>
-                  </div>
-                )}
-
-                {error && (
-                  <div className="flex-1 flex items-center justify-center">
-                    <div className="text-center text-red-400">
-                      <div className="text-xl mb-2">❌ Error</div>
-                      <div>{error}</div>
-                      <button
-                        onClick={fetchPdfData}
-                        className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded"
-                      >
-                        Retry
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {pdfData && pdfUrl && (
-                  <PdfViewer
-                    key={`pdf-${pdfData.pdf_id}-${pdfData.run_id}`}
-                    pdfUrl={pdfUrl}
-                    pdfObjects={pdfData.pdf_objects}
-                    showObjectOverlays={selectedObjectTypes.size > 0 || selectedObjects.size > 0}
-                    selectedObjectTypes={selectedObjectTypes}
-                    selectedObjects={selectedObjects}
-                    className="flex-1"
-                    onObjectClick={handleObjectClick}
-                  />
-                )}
-              </>
+            {loading && (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-white">Loading PDF data...</div>
+              </div>
             )}
 
-            {currentStep === 'field-labels' && (
-              <>
-                {pdfData && pdfUrl && (
-                  <PdfViewer
-                    key={`pdf-labels-${pdfData.pdf_id}-${pdfData.run_id}`}
-                    pdfUrl={pdfUrl}
-                    pdfObjects={pdfData.pdf_objects}
-                    showObjectOverlays={false} // Don't show object overlays - box overlays are the primary visual
-                    selectedObjectTypes={new Set(['word', 'text_line'])} // Show text for context
-                    selectedObjects={new Set()}
-                    extractionFields={extractionFields}
-                    isDrawingMode={currentStep === 'field-labels' && !editingField && !selectedExtractionField}
-                    drawingBox={drawingBox}
-                    tempFieldData={tempFieldData}
-                    className="flex-1"
-                    onObjectClick={handleObjectClick}
-                    onObjectDoubleClick={handleObjectDoubleClick}
-                    onMouseDown={handleMouseDown}
-                    onMouseMove={handleMouseMove}
-                    onMouseUp={handleMouseUp}
-                  />
-                )}
-              </>
+            {error && (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center text-red-400">
+                  <div className="text-xl mb-2">❌ Error</div>
+                  <div>{error}</div>
+                  <button
+                    onClick={fetchPdfData}
+                    className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded"
+                  >
+                    Retry
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {pdfData && pdfUrl && (
+              <PdfViewer_new
+                key={`pdf-new-${pdfData.pdf_id}-${pdfData.run_id}`}
+                pdfUrl={pdfUrl}
+                pdfObjects={
+                  currentStep === 'object-selection'
+                    ? pdfData.pdf_objects
+                    : currentStep === 'field-labels' && showSignatureObjects
+                      ? selectedSignatureObjects  // Only pass selected objects in extraction step
+                      : { // Empty PdfObjects structure when not showing signature objects
+                          text_words: [],
+                          text_lines: [],
+                          graphic_rects: [],
+                          graphic_lines: [],
+                          graphic_curves: [],
+                          images: [],
+                          tables: []
+                        }
+                }
+                showObjectOverlays={
+                  currentStep === 'object-selection'
+                    ? selectedObjectTypes.size > 0 || selectedObjects.size > 0
+                    : currentStep === 'field-labels' && showSignatureObjects
+                }
+                selectedObjectTypes={
+                  currentStep === 'object-selection'
+                    ? selectedObjectTypes
+                    : currentStep === 'field-labels' && showSignatureObjects
+                      ? new Set(Object.keys(selectedSignatureObjects).filter(key =>
+                          selectedSignatureObjects[key as ObjectType].length > 0
+                        ) as ObjectType[])
+                      : new Set()
+                }
+                selectedObjects={
+                  currentStep === 'object-selection'
+                    ? selectedObjects
+                    : currentStep === 'field-labels' && showSignatureObjects
+                      ? selectedObjects
+                      : new Set()
+                }
+                extractionFields={currentStep === 'field-labels' ? extractionFields : []}
+                selectedExtractionFieldId={selectedExtractionField}
+                isDrawingMode={currentStep === 'field-labels'}
+                drawingBox={drawingBox}
+                tempFieldData={tempFieldData}
+                className="flex-1"
+                onObjectClick={handleObjectClick}
+                onObjectDoubleClick={handleObjectDoubleClick}
+                onExtractionFieldClick={handleExtractionFieldClick}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+              />
             )}
           </div>
         </div>
@@ -1290,18 +1346,17 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
           </div>
         </div>
       </div>
-
     </div>
   );
 
-  // Confirmation Dialog Component - rendered as separate modal
+  // Confirmation Dialog Component
   const confirmationDialog = showCloseConfirmation && (
     <div
       className="fixed inset-0 flex items-center justify-center"
       style={{
         backgroundColor: 'rgba(0, 0, 0, 0.8)',
         backdropFilter: 'blur(2px)',
-        zIndex: 10000 // Higher z-index to appear above template builder modal (which uses z-[9999])
+        zIndex: 10000
       }}
       onClick={(e) => {
         if (e.target === e.currentTarget) {
@@ -1339,7 +1394,6 @@ export function TemplateBuilderModal({ runId, onClose, onSave }: TemplateBuilder
     </div>
   );
 
-  // Use portal to render at the root level
   const rootElement = document.getElementById('root');
   if (!rootElement) return null;
 

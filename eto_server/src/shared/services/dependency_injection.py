@@ -211,7 +211,7 @@ class DependencyInjectionContainer:
             return instance
 
         except Exception as e:
-            logger.error(f"Failed to create instance of service '{name}': {e}")
+            logger.exception(f"Failed to create instance of service '{name}': {e}")
             raise ServiceResolutionError(f"Failed to resolve service '{name}': {str(e)}")
 
         finally:
@@ -295,9 +295,9 @@ def configure_services(container: DependencyInjectionContainer,
     required services and their dependencies.
     """
     from features.pdf_processing import PdfProcessingService
-    from features.email_ingestion.service import EmailIngestionService
+    from features.email_ingestion import EmailIngestionService
     from features.eto_processing import EtoProcessingService
-    from features.pdf_templates.service import PdfTemplateService
+    from features.pdf_templates import PdfTemplateService
 
     logger.info("Configuring services in DI container...")
 
@@ -320,20 +320,20 @@ def configure_services(container: DependencyInjectionContainer,
         dependencies=['db']
     )
 
-    # Register ETO service - no longer needs to fetch services in constructor
+    # Register ETO service - with proper dependency injection
     container.register(
         name='eto_processing',
-        factory=lambda db: EtoProcessingService(db),
+        factory=lambda db, pdf_processing, pdf_template: EtoProcessingService(db, pdf_processing, pdf_template),
         lifetime=ServiceLifetime.SINGLETON,
-        dependencies=['db']
+        dependencies=['db', 'pdf_processing', 'pdf_template']
     )
 
-    # Register Email ingestion service
+    # Register Email ingestion service - with proper dependency injection
     container.register(
         name='email_ingestion',
-        factory=lambda db: EmailIngestionService(db),
+        factory=lambda db, pdf_processing, eto_processing: EmailIngestionService(db, pdf_processing, eto_processing),
         lifetime=ServiceLifetime.SINGLETON,
-        dependencies=['db']
+        dependencies=['db', 'pdf_processing', 'eto_processing']
     )
 
     logger.info(f"Registered {len(container.get_all_services())} services")

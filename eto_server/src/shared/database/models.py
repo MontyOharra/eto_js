@@ -191,7 +191,6 @@ class PdfTemplateVersionModel(BaseModel):
     pdf_template_id: Mapped[int] = mapped_column(ForeignKey('pdf_templates.id'), index=True)
     version_num: Mapped[int] = mapped_column(Integer, default=1)
     signature_objects: Mapped[str] = mapped_column(Text)
-    signature_object_count: Mapped[int] = mapped_column(Integer)
     extraction_fields: Mapped[str] = mapped_column(Text)
     usage_count: Mapped[int] = mapped_column(default=0)
     last_used_at: Mapped[datetime] = mapped_column(DATETIME2, default=DateTimeUtils.utc_now)

@@ -13,7 +13,7 @@ from .common import (
     ValidationResponse
 )
 
-from .eto_processing import (
+from .eto import (
     EtoRunPdfDataResponse
 )
 

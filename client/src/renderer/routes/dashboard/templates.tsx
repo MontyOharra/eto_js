@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { TemplatesList } from "../../components/template/TemplatesList";
-import { TemplateBuilderModal } from "../../components/template/TemplateBuilderModal";
+import { TemplateBuilderModal_new as TemplateBuilderModal } from "../../components/template/TemplateBuilderModal_new";
 import { TemplateViewerModal } from "../../components/template/TemplateViewerModal";
 import { useTemplates, useServerHealth } from "../../hooks/useApi";
 import { TemplateSummary } from "../../types/eto";

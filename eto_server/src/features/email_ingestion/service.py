@@ -25,8 +25,12 @@ from features.email_ingestion.integrations.factory import EmailIntegrationFactor
 from features.email_ingestion.integrations.base_integration import BaseEmailIntegration
 from features.email_ingestion.utils.email_listener_thread import EmailListenerThread
 
-from shared.services import get_pdf_processing_service
-
+# TYPE_CHECKING imports for forward references
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from features.pdf_processing.service import PdfProcessingService
+    from features.eto_processing.service import EtoProcessingService
+    from shared.database.connection import DatabaseConnectionManager
 
 
 logger = logging.getLogger(__name__)
@@ -53,23 +57,32 @@ class EmailIngestionService:
     Manages configurations, listeners, integrations, and email processing.
     """
     
-    def __init__(self, connection_manager):
+    def __init__(self,
+                 connection_manager: 'DatabaseConnectionManager',
+                 pdf_service: 'PdfProcessingService',
+                 eto_service: 'EtoProcessingService'):
         """
         Initialize service with database connection and dependencies
 
         Args:
             connection_manager: Database connection manager
-            pdf_service: PDF processing service (optional for lazy initialization)
+            pdf_service: PDF processing service instance
+            eto_service: ETO processing service instance
         """
         if not connection_manager:
             raise RuntimeError("Database connection manager is required")
-        
-        self.connection_manager = connection_manager
-        self.pdf_service = get_pdf_processing_service()
+        if not pdf_service:
+            raise RuntimeError("PDF processing service is required")
+        if not eto_service:
+            raise RuntimeError("ETO processing service is required")
+
+        self.connection_manager: 'DatabaseConnectionManager' = connection_manager
+        self.pdf_service: 'PdfProcessingService' = pdf_service
+        self.eto_service: 'EtoProcessingService' = eto_service
 
         # Initialize repositories
-        self.config_repository = EmailConfigRepository(connection_manager)
-        self.email_repository = EmailRepository(connection_manager)
+        self.config_repository: EmailConfigRepository = EmailConfigRepository(connection_manager)
+        self.email_repository: EmailRepository = EmailRepository(connection_manager)
         
         # Active integrations and listeners
         self.active_integrations: Dict[int, BaseEmailIntegration] = {}
@@ -602,13 +615,11 @@ class EmailIngestionService:
 
             # Step 2: Trigger ETO processing pipeline (lazy load to avoid circular dependency)
             eto_load_start = time.time()
-            from shared.services import get_eto_processing_service
-            eto_service = get_eto_processing_service()
             eto_load_duration = time.time() - eto_load_start
 
             # Start ETO processing for the stored PDF
             eto_start = time.time()
-            eto_run = eto_service.process_pdf(pdf_file.id)
+            eto_run = self.eto_service.process_pdf(pdf_file.id)
             eto_duration = time.time() - eto_start
 
             total_duration = time.time() - pdf_start_time

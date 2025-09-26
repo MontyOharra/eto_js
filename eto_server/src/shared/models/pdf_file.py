@@ -82,7 +82,7 @@ class PdfFile(PdfFileBase):
 
         # Deserialize objects_json from JSON string to PdfObjects
         if db_model.objects_json:
-            PdfObjects.from_json(db_model.objects_json)
+            data['pdf_objects'] = PdfObjects.from_json(db_model.objects_json)
         else:
             data['pdf_objects'] = PdfObjects()
 

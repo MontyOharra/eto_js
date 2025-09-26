@@ -31,7 +31,6 @@ class PdfTemplateService:
             raise RuntimeError("Database connection manager is required")
 
         self.connection_manager = connection_manager
-        self.pdf_service = get_pdf_template_service()
 
         # Repository layer - with explicit type annotations for IDE support
         self.pdf_template_repo: PdfTemplateRepository = PdfTemplateRepository(self.connection_manager)
@@ -606,11 +605,21 @@ class PdfTemplateService:
         if not current_version:
             raise ValueError(f"Current version {template.current_version_id} not found for template {template_id}")
 
+        # DEBUG: Log extraction fields from template
+        logger.info(f"DEBUG: Template {template_id} has {len(current_version.extraction_fields)} extraction fields:")
+        for i, field in enumerate(current_version.extraction_fields):
+            logger.info(f"DEBUG: Field {i+1}: label='{field.label}', page={field.page}, bbox={field.bounding_box}, required={field.required}")
+
+        # DEBUG: Log PDF objects summary
+        logger.info(f"DEBUG: PDF objects available - text_words: {len(pdf_objects.text_words)}, text_lines: {len(pdf_objects.text_lines)}")
+
         # Extract data for each field
         extracted_data: Dict[str, str] = {}
 
         for field in current_version.extraction_fields:
             try:
+                logger.info(f"DEBUG: Processing field '{field.label}' on page {field.page} with bbox {field.bounding_box}")
+
                 # Extract text from the bounding box
                 extracted_text = self._extract_text_from_bounding_box(
                     pdf_objects.text_words,
@@ -630,7 +639,7 @@ class PdfTemplateService:
                     # Still continue extraction, let downstream handle missing required fields
 
                 extracted_data[field.label] = extracted_text
-                logger.debug(f"Extracted field '{field.label}': {extracted_text[:50]}..." if len(extracted_text) > 50 else f"Extracted field '{field.label}': {extracted_text}")
+                logger.info(f"DEBUG: Field '{field.label}' extracted: '{extracted_text}' (length: {len(extracted_text)})")
 
             except Exception as e:
                 logger.error(f"Error extracting field '{field.label}': {e}")
@@ -656,16 +665,43 @@ class PdfTemplateService:
         Returns:
             Concatenated text from all words within the bounding box
         """
+        logger.info(f"DEBUG: Extracting text from bbox {bounding_box} on page {page}")
+
         # Filter words by page
         page_words = [word for word in text_words if word.page == page]
+        logger.info(f"DEBUG: Found {len(page_words)} text words on page {page}")
+
+        # DEBUG: Log first few words on the page
+        for i, word in enumerate(page_words[:10]):  # Show first 10 words
+            word_center_x = (word.bbox[0] + word.bbox[2]) / 2
+            word_center_y = (word.bbox[1] + word.bbox[3]) / 2
+            logger.info(f"DEBUG: Word {i+1}: '{word.text}' at bbox={word.bbox}, center=({word_center_x:.1f}, {word_center_y:.1f})")
+
+        if len(page_words) > 10:
+            logger.info(f"DEBUG: ... and {len(page_words) - 10} more words on this page")
 
         # Find words within bounding box
         words_in_box = []
         for word in page_words:
+            word_center_x = (word.bbox[0] + word.bbox[2]) / 2
+            word_center_y = (word.bbox[1] + word.bbox[3]) / 2
+
+            # Check if word center is within extraction bounding box
+            is_center_in_box = (bounding_box[0] <= word_center_x <= bounding_box[2] and
+                               bounding_box[1] <= word_center_y <= bounding_box[3])
+
+            if is_center_in_box:
+                logger.info(f"DEBUG: Word center IN bbox: '{word.text}' at center=({word_center_x:.1f}, {word_center_y:.1f})")
+
             if self._is_word_in_bounding_box(word, bounding_box):
                 words_in_box.append(word)
+                if not is_center_in_box:
+                    logger.info(f"DEBUG: Word overlap match (center outside): '{word.text}' at bbox={word.bbox}")
+
+        logger.info(f"DEBUG: Found {len(words_in_box)} words within bounding box")
 
         if not words_in_box:
+            logger.info(f"DEBUG: No words found in bounding box {bounding_box} on page {page}")
             return ""
 
         # Sort words by position (top to bottom, left to right)

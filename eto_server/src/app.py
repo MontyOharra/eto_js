@@ -291,7 +291,7 @@ async def initialize_services() -> None:
             else:
                 logger.info("ETO processing service initialized but worker disabled (ETO_WORKER_ENABLED=false)")
         except Exception as eto_error:
-            logger.warning(f"ETO processing service initialization failed: {eto_error}")
+            logger.exception(f"ETO processing service initialization failed: {eto_error}")
 
     except Exception as e:
         logger.error(f"Failed to initialize services: {e}")
@@ -448,7 +448,7 @@ def register_routers(app: FastAPI) -> None:
     """Register FastAPI routers"""
     # Register health router first
     try:
-        from .api.routers.health import router as health_router
+        from .api.routers import health_router
         app.include_router(health_router, prefix="/api")
         logger.info("Registered health router")
     except ImportError as e:
@@ -458,7 +458,7 @@ def register_routers(app: FastAPI) -> None:
 
     # Register PDF templates router
     try:
-        from .api.routers.pdf_templates import router as pdf_templates_router
+        from .api.routers import pdf_templates_router
         app.include_router(pdf_templates_router, prefix="/api")
         logger.info("Registered PDF templates router")
     except ImportError as e:
@@ -468,7 +468,7 @@ def register_routers(app: FastAPI) -> None:
 
     # Register email configs router
     try:
-        from .api.routers.email_configs import router as email_configs_router
+        from .api.routers import email_configs_router
         app.include_router(email_configs_router, prefix="/api")
         logger.info("Registered email configs router")
     except ImportError as e:
@@ -478,7 +478,7 @@ def register_routers(app: FastAPI) -> None:
 
     # Register ETO processing router
     try:
-        from .api.routers.eto import router as eto_router
+        from .api.routers import eto_router
         app.include_router(eto_router, prefix="/api")
         logger.info("Registered ETO processing router")
     except ImportError as e:

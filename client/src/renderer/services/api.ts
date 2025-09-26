@@ -489,14 +489,27 @@ class ApiClient {
     name: string;
     description?: string;
     source_pdf_id: number;
-    source_eto_run_id: number;
-    filename: string;
-    selected_objects: any[];
+    initial_signature_objects: {
+      text_words: any[];
+      text_lines: any[];
+      graphic_rects: any[];
+      graphic_lines: any[];
+      graphic_curves: any[];
+      images: any[];
+      tables: any[];
+    };
+    initial_extraction_fields: any[];
   }): Promise<{
-    template_id: number;
-    message: string;
+    id: number;
+    name: string;
+    description?: string;
+    source_pdf_id: number;
+    status: string;
+    created_at: string;
+    updated_at: string;
+    current_version_id?: number;
   }> {
-    return this.fetchApi('/api/templates/', {
+    return this.fetchApi('/api/pdf_templates/', {
       method: 'POST',
       body: JSON.stringify(templateData),
     });

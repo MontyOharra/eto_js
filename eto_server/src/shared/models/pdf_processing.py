@@ -132,13 +132,11 @@ class PdfObjects(BaseModel):
                     elif obj_type == 'table':
                         result.tables.append(TablePdfObject(**obj_dict))
                 except Exception:
-                    # Skip invalid objects
                     continue
 
         except (json.JSONDecodeError, TypeError):
-            # Return empty container if JSON is invalid
             pass
-
+        
         return result
 
 

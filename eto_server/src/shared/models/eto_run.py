@@ -328,7 +328,6 @@ class EtoEmailInfo(BaseModel):
     sender_email: Optional[str] = Field(None, description="Sender email address")
     sender_name: Optional[str] = Field(None, description="Sender display name")
     received_date: datetime = Field(..., description="When email was received")
-    config_name: Optional[str] = Field(None, description="Email config name that ingested this email")
 
     @field_validator('received_date', mode='before')
     @classmethod
@@ -404,7 +403,6 @@ class EtoRunSummary(BaseModel):
                 sender_email=result.email_sender_email,
                 sender_name=result.email_sender_name,
                 received_date=result.email_received_date,
-                config_name=result.config_name
             )
 
         # Create summary with all required fields

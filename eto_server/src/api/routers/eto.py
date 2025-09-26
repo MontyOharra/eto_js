@@ -15,7 +15,7 @@ from shared.models import (
 )
 from shared.exceptions import ObjectNotFoundError, ServiceError, ValidationError
 from shared.utils import DateTimeUtils
-from api.schemas.eto_processing import EtoRunPdfData, EtoRunPdfDataResponse
+from api.schemas.eto import EtoRunPdfData, EtoRunPdfDataResponse
 
 logger = logging.getLogger(__name__)
 

@@ -14,7 +14,11 @@ from datetime import datetime, timezone
 from shared.database.connection import DatabaseConnectionManager
 from shared.database.repositories.eto_run import EtoRunRepository
 from shared.exceptions import ServiceError, ObjectNotFoundError, EtoProcessingError, EtoStatusValidationError, EtoTemplateMatchingError, EtoDataExtractionError, EtoTransformationError
-from shared.services import get_pdf_processing_service, get_pdf_template_service
+# TYPE_CHECKING imports for forward references
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from features.pdf_processing.service import PdfProcessingService
+    from features.pdf_templates.service import PdfTemplateService
 from shared.models import (
     EtoRun, EtoRunCreate, EtoRunStatus, EtoProcessingStep, EtoErrorType,
     EtoRunStatusUpdate, EtoRunTemplateMatchUpdate, EtoRunDataExtractionUpdate,
@@ -37,7 +41,10 @@ class EtoProcessingService:
     - Provide user-facing operations (reprocessing, skipping, etc.)
     """
 
-    def __init__(self, connection_manager: DatabaseConnectionManager):
+    def __init__(self,
+                 connection_manager: DatabaseConnectionManager,
+                 pdf_service: 'PdfProcessingService',
+                 template_service: 'PdfTemplateService'):
         """
         Initialize ETO processing service with integrated worker
 
@@ -48,11 +55,15 @@ class EtoProcessingService:
         """
         if not connection_manager:
             raise RuntimeError("Database connection manager is required")
+        if not pdf_service:
+            raise RuntimeError("PDF processing service is required")
+        if not template_service:
+            raise RuntimeError("PDF template service is required")
 
-        self.connection_manager = connection_manager
-        self.pdf_service = get_pdf_processing_service()
-        self.template_service = get_pdf_template_service()
-        self.eto_run_repository = EtoRunRepository(connection_manager)
+        self.connection_manager: DatabaseConnectionManager = connection_manager
+        self.pdf_service: 'PdfProcessingService' = pdf_service
+        self.template_service: 'PdfTemplateService' = template_service
+        self.eto_run_repository: EtoRunRepository = EtoRunRepository(connection_manager)
 
         # Worker configuration and state
         self.worker_enabled = os.getenv('ETO_WORKER_ENABLED', 'true').lower() == 'true'
@@ -648,6 +659,7 @@ class EtoProcessingService:
     def _perform_data_extraction(self, eto_run: EtoRun) -> EtoRun:
         """Perform data extraction step"""
         # Validate status and prerequisites
+        
         self._validate_status_for_step(eto_run, EtoProcessingStep.EXTRACTING_DATA)
         self._validate_prerequisites_for_extraction(eto_run)
 
