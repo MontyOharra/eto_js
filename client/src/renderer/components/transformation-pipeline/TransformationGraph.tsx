@@ -10,6 +10,17 @@ import { InputOutputDefinerComponent } from './module-builder/InputOutputDefiner
 import { InputCollectionModal } from './modals/InputCollectionModal';
 import { apiClient } from '../../services/api';
 import { analyzePipelineWithSteps } from '../../services/transformationPipelineApi';
+import {
+  createModuleInstance,
+  ModuleInstance,
+  NodePin,
+  addNodeToModule,
+  removeNodeFromModule,
+  updateNodeType as updateNodeTypeInModule,
+  canAddNode,
+  canRemoveNode
+} from '../../utils/moduleFactory';
+import { generateUniqueId } from '../../utils/idGenerator';
 
 // Types (extracted from original file)
 interface NodeState {
@@ -25,31 +36,33 @@ interface ModuleNodeState {
   outputs: NodeState[];
 }
 
-interface PlacedModule {
-  id: string;
-  template: BaseModuleTemplate;
-  position: { x: number; y: number };
-  config: Record<string, any>;
-  nodes: ModuleNodeState;
-}
-
 interface NodeConnection {
-  id: string;
-  fromModuleId: string;
-  fromOutputIndex: number;
-  toModuleId: string;
-  toInputIndex: number;
+  from_node_id: string;
+  to_node_id: string;
 }
 
-interface StartingConnection {
-  moduleId: string;
-  type: 'input' | 'output';
-  index: number;
+// Pipeline state that matches backend expectations
+interface PipelineState {
+  entry_points: Array<{
+    node_id: string;
+    name: string;
+    type: string;
+  }>;
+  modules: ModuleInstance[];
+  connections: NodeConnection[];
 }
+
+// Visual state for UI positioning
+interface VisualState {
+  modules: Record<string, { x: number; y: number }>;
+}
+
 
 interface TransformationGraphProps {
   modules: BaseModuleTemplate[];
+  rawModules: any[];  // Raw modules from API with meta
   selectedModuleTemplate: BaseModuleTemplate | null;
+  selectedRawModule: any;  // Selected raw module with meta
   onModuleSelect: (module: BaseModuleTemplate | null) => void;
   // Optional props for custom module builder
   enableInputOutputDefiners?: boolean;
@@ -61,7 +74,9 @@ interface TransformationGraphProps {
 
 export const TransformationGraph: React.FC<TransformationGraphProps> = ({
   modules,
+  rawModules,
   selectedModuleTemplate,
+  selectedRawModule,
   onModuleSelect,
   enableInputOutputDefiners = false,
   inputDefiners = [],
@@ -86,9 +101,68 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
   const [dragStartOffset, setDragStartOffset] = useState({ x: 0, y: 0 });
   const canvasRef = useRef<HTMLDivElement>(null);
 
-  // Module state
-  const [placedModules, setPlacedModules] = useState<PlacedModule[]>([]);
+  // Pipeline state (matches backend expectations)
+  const [pipelineState, setPipelineState] = useState<PipelineState>({
+    entry_points: [],
+    modules: [],
+    connections: []
+  });
+
+  // Visual state (UI positioning only)
+  const [visualState, setVisualState] = useState<VisualState>({
+    modules: {}
+  });
+
+  // Map raw modules by ID for quick lookup
+  const rawModulesMap = rawModules.reduce((acc, mod) => {
+    acc[mod.id] = mod;
+    return acc;
+  }, {} as Record<string, any>);
+
   const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null);
+
+  // Convert pipeline modules to old PlacedModule format for UI compatibility
+  // This is a temporary measure until all components are updated
+  const placedModules = pipelineState.modules.map(module => {
+    const position = visualState.modules[module.module_instance_id] || { x: 0, y: 0 };
+    const templateId = module.module_ref.split(':')[0];
+    const template = modules.find(m => m.id === templateId) || {
+      id: templateId,
+      name: templateId,
+      description: '',
+      category: 'Processing',
+      inputs: [],
+      outputs: [],
+      config: [],
+      color: '#3B82F6'
+    };
+
+    // Convert nodes to old format
+    const nodes = {
+      inputs: module.inputs.map(node => ({
+        id: `${module.module_instance_id}_input_${node.position_index}`,
+        name: node.name,
+        type: node.type as any,
+        description: '',
+        required: true
+      })),
+      outputs: module.outputs.map(node => ({
+        id: `${module.module_instance_id}_output_${node.position_index}`,
+        name: node.name,
+        type: node.type as any,
+        description: '',
+        required: false
+      }))
+    };
+
+    return {
+      id: module.module_instance_id,
+      template,
+      position,
+      config: module.config,
+      nodes
+    };
+  });
   
   // Input/Output Definer state (for custom module builder)
   const [selectedDefinerId, setSelectedDefinerId] = useState<string | null>(null);
@@ -102,9 +176,15 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
   const [moduleDragOffset, setModuleDragOffset] = useState({ x: 0, y: 0 });
 
   // Connection state
-  const [connections, setConnections] = useState<NodeConnection[]>([]);
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
-  const [startingConnection, setStartingConnection] = useState<StartingConnection | null>(null);
+  const [startingConnection, setStartingConnection] = useState<{
+    moduleId: string;
+    nodeId: string;
+    nodeType: 'input' | 'output';
+  } | null>(null);
+
+  // Direct access to connections
+  const connections = pipelineState.connections;
 
   // Modal state
   const [isInputModalOpen, setIsInputModalOpen] = useState(false);
@@ -876,7 +956,7 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
     if (e.button !== 0) return; // Only left mouse button
     
     // If module is selected, start placement
-    if (selectedModuleTemplate) {
+    if (selectedRawModule) {
       handleModulePlacementStart(e);
       return;
     }
@@ -905,54 +985,56 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
 
   // Handle module placement start
   const handleModulePlacementStart = (e: React.MouseEvent) => {
-    if (!selectedModuleTemplate || !canvasRef.current) return;
-    
+    if (!selectedRawModule || !canvasRef.current) return;
+
     const canvasRect = canvasRef.current.getBoundingClientRect();
     const clickX = (e.clientX - canvasRect.left - panOffset.x) / zoom;
     const clickY = (e.clientY - canvasRect.top - panOffset.y) / zoom;
-    
+
     setIsPlacingModule(true);
-    
-    // Initialize config with default values from template
-    const config: Record<string, unknown> = {};
-    selectedModuleTemplate.config.forEach(configField => {
-      if (configField.defaultValue !== undefined) {
-        config[configField.name] = configField.defaultValue;
+
+    // Create module instance using factory with raw module template
+    const position = { x: clickX, y: clickY };
+    const newModule = createModuleInstance(selectedRawModule, position);
+
+    // Add to pipeline state
+    setPipelineState(prev => ({
+      ...prev,
+      modules: [...prev.modules, newModule]
+    }));
+
+    // Add to visual state
+    setVisualState(prev => ({
+      ...prev,
+      modules: {
+        ...prev.modules,
+        [newModule.module_instance_id]: position
       }
-    });
-    
-    // Create and place module immediately on click
-    const moduleId = `${selectedModuleTemplate.id}_${Date.now()}`;
-    const newModule: PlacedModule = {
-      id: moduleId,
-      template: selectedModuleTemplate,
-      position: { x: clickX, y: clickY },
-      config,
-      nodes: initializeModuleNodes(selectedModuleTemplate, config, moduleId)
-    };
-    
-    setPlacedModules(prev => [...prev, newModule]);
-    
+    }));
+
     e.preventDefault();
   };
 
   // Handle mouse move for module placement only (canvas dragging is now global)
   const handleCanvasMouseMove = (e: React.MouseEvent) => {
     // If placing module and dragging, update the most recent module position
-    if (isPlacingModule && selectedModuleTemplate && canvasRef.current) {
+    if (isPlacingModule && selectedRawModule && canvasRef.current) {
       const canvasRect = canvasRef.current.getBoundingClientRect();
       const mouseX = (e.clientX - canvasRect.left - panOffset.x) / zoom;
       const mouseY = (e.clientY - canvasRect.top - panOffset.y) / zoom;
-      
-      // Update the position of the most recently placed module
-      setPlacedModules(prev => {
-        if (prev.length === 0) return prev;
-        const updatedModules = [...prev];
-        updatedModules[updatedModules.length - 1] = {
-          ...updatedModules[updatedModules.length - 1],
-          position: { x: mouseX, y: mouseY }
-        };
-        return updatedModules;
+
+      // Update the position of the most recently placed module in visual state
+      setPipelineState(prev => {
+        if (prev.modules.length === 0) return prev;
+        const lastModule = prev.modules[prev.modules.length - 1];
+        setVisualState(vs => ({
+          ...vs,
+          modules: {
+            ...vs.modules,
+            [lastModule.module_instance_id]: { x: mouseX, y: mouseY }
+          }
+        }));
+        return prev;
       });
     }
   };
@@ -1527,13 +1609,38 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
 
   // Handle module deletion
   const handleModuleDelete = (moduleId: string) => () => {
-    setPlacedModules(prev => prev.filter(module => module.id !== moduleId));
-    
+    // Remove module from pipeline state
+    setPipelineState(prev => {
+      const module = prev.modules.find(m => m.module_instance_id === moduleId);
+      if (!module) return prev;
+
+      // Get all node IDs from this module
+      const nodeIds = new Set<string>();
+      module.inputs.forEach(n => nodeIds.add(n.node_id));
+      module.outputs.forEach(n => nodeIds.add(n.node_id));
+
+      return {
+        ...prev,
+        modules: prev.modules.filter(m => m.module_instance_id !== moduleId),
+        // Remove connections to/from this module's nodes
+        connections: prev.connections.filter(conn =>
+          !nodeIds.has(conn.from_node_id) && !nodeIds.has(conn.to_node_id)
+        )
+      };
+    });
+
+    // Remove from visual state
+    setVisualState(prev => {
+      const newModules = { ...prev.modules };
+      delete newModules[moduleId];
+      return { ...prev, modules: newModules };
+    });
+
     // Clear selection if deleted module was selected
     if (selectedModuleId === moduleId) {
       setSelectedModuleId(null);
     }
-    
+
     // Remove all node positions for this module
     setNodePositions(prev => {
       const newPositions = { ...prev };
@@ -1545,24 +1652,6 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
       return newPositions;
     });
     
-    // Remove all connections associated with this module
-    setConnections(prev => {
-      const connectionsToRemove = prev.filter(connection => 
-        connection.fromModuleId === moduleId || connection.toModuleId === moduleId
-      );
-      
-      // Clear selection if selected connection is being deleted
-      connectionsToRemove.forEach(connection => {
-        if (selectedConnectionId === connection.id) {
-          setSelectedConnectionId(null);
-        }
-      });
-      
-      return prev.filter(connection => 
-        connection.fromModuleId !== moduleId && connection.toModuleId !== moduleId
-      );
-    });
-    
     // Cancel any starting connection from this module
     if (startingConnection && startingConnection.moduleId === moduleId) {
       setStartingConnection(null);
@@ -1571,9 +1660,10 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
 
   // Handle module config change
   const handleModuleConfigChange = (moduleId: string) => (config: Record<string, unknown>) => {
-    setPlacedModules(prev => 
-      prev.map(module => {
-        if (module.id === moduleId) {
+    setPipelineState(prev => ({
+      ...prev,
+      modules: prev.modules.map(module => {
+        if (module.module_instance_id === moduleId) {
           const updatedModule = { ...module, config };
           
           // For input/output definers, sync node type with data_type config
@@ -2005,17 +2095,31 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
         }
       });
       
-      // Create new placed module
-      const moduleId = `${moduleData.id}_${Date.now()}`;
-      const newModule: PlacedModule = {
-        id: moduleId,
-        template: moduleData,
-        position: { x: dropX, y: dropY },
-        config,
-        nodes: initializeModuleNodes(moduleData, config, moduleId)
-      };
-      
-      setPlacedModules(prev => [...prev, newModule]);
+      // Find the raw module template
+      const rawModule = rawModulesMap[moduleData.id];
+      if (!rawModule) {
+        console.error('Raw module not found for:', moduleData.id);
+        return;
+      }
+
+      // Create module instance using factory
+      const position = { x: dropX, y: dropY };
+      const newModule = createModuleInstance(rawModule, position);
+
+      // Add to pipeline state
+      setPipelineState(prev => ({
+        ...prev,
+        modules: [...prev.modules, newModule]
+      }));
+
+      // Add to visual state
+      setVisualState(prev => ({
+        ...prev,
+        modules: {
+          ...prev.modules,
+          [newModule.module_instance_id]: position
+        }
+      }));
       
       // Clear selection after successful drop
       onModuleSelect(null);

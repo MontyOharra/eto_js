@@ -5,6 +5,88 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-09-29 20:30] — Transformation Pipeline Type System Migration to Arrays
+### Spec / Intent
+- Migrate module type system from VarType objects to cleaner array-based format
+- Fix module memory refresh issues when code changes (Python module caching)
+- Debug and resolve module sync failures due to old type format persistence
+- Implement validation during module registration
+
+### Changes Made
+- **Type System Migration**: Changed from `{ mode: 'variable', allowed: [...] }` to simple arrays `["str", "int"]`
+- **Frontend Updates**: Modified `pipelineTypes.ts`, `moduleFactory.ts`, `ModuleComponentNew.tsx` to use array-based types
+- **Backend Updates**: Modified `contracts.py`, `module_catalog.py` to use `List[Scalar]` instead of VarType
+- **Module Refresh Fix**: Added Python module cache clearing in `sync_modules.py` to force reload on sync
+- **File Watcher**: Created `watch_modules.py` for auto-sync during development (optional)
+- Files: Multiple files across frontend and backend, primarily type definitions and module factory
+
+### Next Actions
+- Complete module validation implementation during registration
+- Add connection drawing between nodes in frontend
+- Test complete pipeline with new type system
+
+### Notes
+- Empty array `[]` means all types allowed, single element `["str"]` is fixed type, multiple `["str", "int"]` is variable
+- Module sync now clears Python's `sys.modules` cache to ensure fresh code is loaded
+- Pydantic already provides validation, preventing invalid type configurations
+
+---
+
+## [2025-09-29 15:00] — Module System Performance and Security Enhancements
+### Spec / Intent
+- Implement module resolver with registry-first priority for performance
+- Add security validation to prevent arbitrary code execution
+- Add caching layer to avoid repeated module imports
+- Clean up database design to remove unnecessary ui_hints and visual_state table
+
+### Changes Made
+- **Registry Enhancements**: Added `ModuleSecurityValidator`, `ModuleCache`, and `resolve_module()` method with multi-strategy resolution
+- **Security**: Whitelist allowed packages, block dangerous patterns, validate handler paths before loading
+- **Performance**: LRU cache with TTL for loaded modules, cache statistics tracking
+- **Database Cleanup**: Removed PipelineVisualStateModel table, removed all ui_hints references
+- **API Enhancement**: Added `/modules/cache/stats` endpoint for monitoring cache performance
+- Files: `core/registry.py`, `cli/sync_modules.py`, `api/routers/modules.py`, `shared/database/models.py`
+
+### Next Actions
+- Test module loading with new security and caching
+- Monitor cache hit rates in production
+- Add more transform/action/logic modules
+
+### Notes
+- Module loading now tries registry first (fast), then handler_name (flexible)
+- Security validation prevents path traversal and code injection
+- Cache significantly improves performance for repeated module execution
+- Visual state stored directly in pipeline_definitions.visual_json field
+
+---
+
+## [2025-09-29 13:00] — Module Registry Implementation and Type Safety Fixes
+### Spec / Intent
+- Fix type error in module contracts where ConfigModel was incorrectly defined as class instead of type annotation
+- Implement complete module registry system with auto-discovery and decorator registration
+- Create CLI tool for syncing modules to database catalog
+- Add makefile commands for module management operations
+
+### Changes Made
+- **Type System Fix**: Changed `ConfigModel` from nested class to `Type[BaseModel]` annotation in contracts.py, added `config_schema()` method
+- **Module Registry**: Created singleton registry with auto-discovery, decorator pattern, and catalog format conversion
+- **CLI Tool**: Built `sync_modules.py` for database sync with list/clear/refresh commands
+- **Makefile Commands**: Added modules-sync, modules-list, modules-clear, modules-refresh targets
+- Files: `core/contracts.py`, `core/registry.py`, `cli/sync_modules.py`, `Makefile`, `transform/text_cleaner.py`
+
+### Next Actions
+- ~~Test module sync commands with database connection~~ ✅
+- Implement additional transform/action/logic modules
+- Build pipeline compiler and executor
+
+### Notes
+- Registry auto-discovers modules from specified packages using importlib
+- @register decorator automatically adds modules to registry on import
+- CLI tool converts registry entries to database catalog format
+- No versioning for now - refresh command replaces all modules
+
+---
+
 ## [2025-09-26 14:00] — Transformation Pipeline Architecture Analysis and Proposal
 ### Spec / Intent
 - Analyze proposed transformation pipeline design against current implementation

@@ -4,7 +4,7 @@
 
 import { BaseModuleTemplate, BackendModuleInfo, convertBackendModuleToFrontend } from '../types/modules';
 
-const TRANSFORMATION_PIPELINE_API_BASE = 'http://localhost:8080';
+const TRANSFORMATION_PIPELINE_API_BASE = 'http://localhost:8090';
 
 export interface ApiResponse<T> {
   success: boolean;
@@ -13,9 +13,9 @@ export interface ApiResponse<T> {
 }
 
 export interface ModulesResponse {
-  success: boolean;
-  modules: BackendModuleInfo[];
-  message?: string;
+  modules: any[];  // New API structure with nested response
+  total_count: number;
+  stats: any;
 }
 
 export class TransformationPipelineApiError extends Error {
@@ -23,6 +23,82 @@ export class TransformationPipelineApiError extends Error {
     super(message);
     this.name = 'TransformationPipelineApiError';
   }
+}
+
+// Helper functions to convert new API format to frontend format
+function convertMetaToInputs(meta: any, ioDefinitions: any): any[] {
+  if (!meta) return [];
+
+  // Check if there are fixed inputs defined
+  if (ioDefinitions?.inputs && Array.isArray(ioDefinitions.inputs)) {
+    return ioDefinitions.inputs.map((input: any) => ({
+      id: `input-${input.name}`,
+      name: input.name,
+      type: input.type || 'string',
+      description: input.description || '',
+      required: input.required !== false
+    }));
+  }
+
+  // If it's a dynamic input with no fixed inputs, return empty array
+  // The frontend will handle dynamic inputs through the dynamicInputs property
+  return [];
+}
+
+function convertMetaToOutputs(meta: any, ioDefinitions: any): any[] {
+  if (!meta) return [];
+
+  // Check if there are fixed outputs defined
+  if (ioDefinitions?.outputs && Array.isArray(ioDefinitions.outputs)) {
+    return ioDefinitions.outputs.map((output: any) => ({
+      id: `output-${output.name}`,
+      name: output.name,
+      type: output.type || 'string',
+      description: output.description || '',
+      required: false
+    }));
+  }
+
+  // If it's a dynamic output with no fixed outputs, return empty array
+  // The frontend will handle dynamic outputs through the dynamicOutputs property
+  return [];
+}
+
+function convertSchemaToConfig(schema: any): any[] {
+  if (!schema || !schema.properties) return [];
+
+  const configs: any[] = [];
+
+  for (const [key, value] of Object.entries(schema.properties)) {
+    const prop = value as any;
+
+    // Determine the UI type based on schema and x-ui hints
+    let uiType = prop.type || 'string';
+
+    // Handle special UI types
+    if (prop.enum) {
+      uiType = 'select';
+    } else if (prop['x-ui']?.widget === 'textarea') {
+      uiType = 'textarea';
+    } else if (prop.type === 'boolean') {
+      uiType = 'boolean';
+    } else if (prop.type === 'integer' || prop.type === 'number') {
+      uiType = 'number';
+    }
+
+    configs.push({
+      name: key,
+      type: uiType,
+      description: prop.description || '',
+      required: schema.required?.includes(key) || false,
+      defaultValue: prop.default,
+      options: prop.enum,
+      placeholder: prop['x-ui']?.placeholder,
+      hidden: prop['x-ui']?.hidden || false
+    });
+  }
+
+  return configs;
 }
 
 /**
@@ -46,16 +122,42 @@ export async function fetchBaseModules(): Promise<BaseModuleTemplate[]> {
 
     const data: ModulesResponse = await response.json();
 
-    if (!data.success) {
-      throw new TransformationPipelineApiError(
-        data.message || 'Failed to fetch modules'
-      );
+    // New API doesn't have a success field - check if modules exist
+    if (!data.modules) {
+      throw new TransformationPipelineApiError('No modules found in response');
     }
 
-    // Convert backend modules to frontend format
-    const backendModules = data.modules || [];
-    const frontendModules = backendModules.map(convertBackendModuleToFrontend);
-    
+    // Convert new API format to frontend format
+    const frontendModules = data.modules.map((module: any) => {
+      // Map the new API structure to BaseModuleTemplate
+      return {
+        id: module.id,
+        name: module.title || module.name,  // New API uses 'title'
+        description: module.description || '',
+        category: module.category || 'Processing',
+        inputs: convertMetaToInputs(module.meta?.inputs, module.io_definitions),
+        outputs: convertMetaToOutputs(module.meta?.outputs, module.io_definitions),
+        config: convertSchemaToConfig(module.config_schema),
+        color: module.color || '#3B82F6',
+        maxInputs: module.meta?.inputs?.max_count || undefined,
+        maxOutputs: module.meta?.outputs?.max_count || undefined,
+        dynamicInputs: module.meta?.inputs?.allow ? {
+          enabled: true,
+          minNodes: module.meta.inputs.min_count || 0,
+          maxNodes: module.meta.inputs.max_count || undefined,
+          defaultTemplate: { name: 'input', type: module.meta.inputs.type || 'string' },
+          allowTypeConfiguration: true  // Allow type changes for dynamic nodes
+        } : undefined,
+        dynamicOutputs: module.meta?.outputs?.allow ? {
+          enabled: true,
+          minNodes: module.meta.outputs.min_count || 0,
+          maxNodes: module.meta.outputs.max_count || undefined,
+          defaultTemplate: { name: 'output', type: module.meta.outputs.type || 'string' },
+          allowTypeConfiguration: true  // Allow type changes for dynamic nodes
+        } : undefined,
+      } as BaseModuleTemplate;
+    });
+
     return frontendModules;
   } catch (error) {
     if (error instanceof TransformationPipelineApiError) {

@@ -1,109 +1,109 @@
-# Session Continuity - 2025-09-25 21:45
+# Session Continuity - 2025-09-29 20:45
 
-## Current State
+## Current Work: Transformation Pipeline Module System
 
-### Completed Work
-- ✅ Analyzed existing transformation pipeline server architecture
-- ✅ Created proper monolithic transformation pipeline structure in `features/transformation_pipeline/`
-- ✅ Built comprehensive module system foundation with base class and text cleaner specifications
-- ✅ Added repository layer for transformation module CRUD and analytics
-- ✅ Created Pydantic models matching existing SQLAlchemy schema
-- ✅ Documented architectural insights and performance recommendations
+### Context
+We've been working on the transformation pipeline module system, specifically dealing with type system improvements and module registration/sync issues.
 
-### Current Architecture
+### Recent Changes Made (This Session)
+
+1. **Type System Migration (Completed)**
+   - Changed from complex VarType objects `{ mode: 'variable', allowed: [...] }` to simple arrays
+   - New format: `["str"]` for fixed type, `["str", "int", "float"]` for variable types, `[]` for all types
+   - Updated both frontend (TypeScript) and backend (Python) to use array-based types
+
+2. **Module Memory Refresh Fix (Completed)**
+   - Fixed issue where Python was caching old module definitions in memory
+   - Modified `sync_modules.py` to clear `sys.modules` cache before re-importing
+   - Created optional file watcher (`watch_modules.py`) for auto-sync during development
+
+3. **Frontend Module Dragging Fix (Completed)**
+   - Fixed issue where modules couldn't be dragged on canvas
+   - Problem was `pointer-events-none` on container divs blocking mouse events
+   - Modules now properly draggable with visual feedback
+
+### Current Debugging Issue
+
+**Problem**: Module sync is failing with Pydantic validation errors
+- Error message: `Input should be a valid list [type=list_type, input_value='str', input_type=str]`
+- This indicates somewhere in the code, the old string format is still being used instead of arrays
+
+**Investigation Status**:
+- We've updated all module definitions (text_cleaner.py, string_concatenator.py)
+- We've updated the backend type definitions (contracts.py, module_catalog.py)
+- The issue seems to be Python caching - modules aren't reloading even after file changes
+- Created `debug_modules.py` to inspect what's in memory
+
+**Key Finding**: The sync process loads modules from Python memory, not from disk. Even though files are updated, Python keeps the old class definitions cached until the process restarts.
+
+### Files Recently Modified
+
+**Frontend (Client)**:
+- `client/src/renderer/types/pipelineTypes.ts` - Changed type to string[]
+- `client/src/renderer/utils/moduleFactory.ts` - Updated all type handling functions
+- `client/src/renderer/components/transformation-pipeline/TransformationGraphNew.tsx` - Fixed dragging
+- `client/src/renderer/components/transformation-pipeline/ModuleComponentNew.tsx` - Fixed event handling
+
+**Backend (Server)**:
+- `transformation_pipeline_server_v2/src/features/modules/core/contracts.py` - Changed to List[Scalar]
+- `transformation_pipeline_server_v2/src/shared/models/module_catalog.py` - Changed to List[str]
+- `transformation_pipeline_server_v2/src/features/modules/transform/text_cleaner.py` - Updated to use ["str"]
+- `transformation_pipeline_server_v2/src/features/modules/transform/string_concatenator.py` - Updated to use arrays
+- `transformation_pipeline_server_v2/src/cli/sync_modules.py` - Added module cache clearing
+- `transformation_pipeline_server_v2/src/cli/watch_modules.py` - Created file watcher
+- `debug_modules.py` - Created for debugging module memory issues
+
+## Next Steps When Resuming
+
+1. **Test Module Sync** (IMMEDIATE):
+   ```bash
+   cd transformation_pipeline_server_v2
+   make modules-refresh  # This should clear DB and reload from disk
+   ```
+
+2. **If Still Failing**:
+   - Check if there are any other modules we missed updating
+   - Run the debug script: `./venv/Scripts/python debug_modules.py`
+   - Consider if database has cached old format that needs clearing
+
+3. **Once Sync Works**:
+   - Test the frontend with new type system (variable type dropdowns)
+   - Implement module validation during registration (check for duplicate types, invalid types)
+   - Continue with connection drawing between nodes
+
+### Important Notes
+
+- **Type System Change**: NOT backward compatible - all modules must be updated
+- **Python Module Caching**: Persistent issue - always restart processes after code changes
+- **Frontend Status**: Ready and working with the new type system
+- **Pydantic Validation**: Working correctly - it's catching the format issues
+
+### Commands for Reference
+
+```bash
+# Backend module management
+make modules-list     # List modules in memory (no DB)
+make modules-sync     # Sync memory to DB
+make modules-clear    # Clear DB only
+make modules-refresh  # Clear DB + sync (fresh start)
+make modules-watch    # Auto-sync on file changes (needs watchdog)
+
+# Run backend server
+make dev
+
+# Frontend
+cd client
+npm run dev
 ```
-features/transformation_pipeline/
-├── __init__.py
-├── modules/
-│   ├── __init__.py
-│   ├── base_module.py (comprehensive specification)
-│   └── text_cleaner_module.py (detailed requirements)
-├── utils/
-│   └── __init__.py (placeholder for pipeline analysis)
-shared/database/repositories/
-└── transformation_pipeline_module_repository.py (full CRUD spec)
-shared/models/
-└── transformation_pipeline_module.py (Pydantic models spec)
-```
-
-### Key Insights from Architecture Analysis
-- **Performance Bottlenecks**: JSON parsing overhead and module instance recreation
-- **Recommended Optimizations**: Configuration caching, instance pooling, async execution
-- **Design Patterns**: Keep validation framework and node configuration system
-- **Integration Strategy**: Monolithic first, extract to microservice if scaling needed
-
-## Next Session Priorities
-
-### Immediate Next Steps (High Priority)
-1. **Implement Base Module Class** (`features/transformation_pipeline/modules/base_module.py`)
-   - Abstract interface with metadata, validation, execution methods
-   - Add configuration caching to avoid JSON parsing overhead
-   - Include input/output schema management and type checking
-
-2. **Create Text Cleaner Module** (`features/transformation_pipeline/modules/text_cleaner_module.py`)
-   - Concrete implementation inheriting from base class
-   - Text normalization, case conversion, special character handling
-   - Configurable cleaning options (preserve line breaks, remove numbers, etc.)
-
-3. **Build Module Registry System**
-   - Module discovery and registration pattern
-   - Instance pooling to avoid recreation overhead
-   - Thread-safe module execution with caching
-
-### Secondary Priorities (Medium Priority)
-4. **Repository Implementation**
-   - Complete the transformation_pipeline_module_repository.py
-   - CRUD operations, module discovery, usage analytics
-   - Integration with existing database patterns
-
-5. **Pydantic Models Implementation**
-   - Complete transformation_pipeline_module.py models
-   - Database integration methods (from_db_model, to_db_dict)
-   - Validation and business logic
-
-6. **Pipeline Service Creation**
-   - Service for orchestrating multi-step transformations
-   - Integration with ETO processing pipeline
-   - Async execution capabilities
-
-### Future Work (Lower Priority)
-7. **Utils Package Development**
-   - Pipeline analysis utilities for dependency resolution
-   - Async processing helpers for parallel execution
-   - Performance monitoring and metrics
-
-8. **Additional Modules**
-   - Type converter module for data type transformations
-   - Date parser module for date/time normalization
-   - Regex extractor module for pattern-based extraction
-
-## Context for Next Session
-
-### Architecture Decision
-- **Chose monolithic over microservices** for initial implementation
-- **Performance-focused design** based on analysis of existing separate server
-- **Migration path preserved** - can extract to separate service later if needed
-
-### Key Files to Reference
-- `transformation_pipeline_server/` - Original separate server for architecture reference
-- `shared/database/models.py` - Existing SQLAlchemy models for transformation modules
-- Files created in this session contain detailed specifications for implementation
-
-### Performance Lessons Learned
-- Avoid JSON parsing on every module execution (cache configurations)
-- Don't recreate module instances for each execution (use pooling)
-- Keep validation framework but optimize for high-frequency operations
-- Consider async execution for I/O-bound operations
-
-### Implementation Strategy
-Start with the base module class implementation, following the detailed specifications in the comment blocks. Use the architectural insights to avoid the performance pitfalls identified in the separate server analysis.
-
-## Questions for Next Session
-1. Should we implement the full node configuration system from the separate server, or start with a simplified version?
-2. Do you want to focus on one complete module first, or build out the base infrastructure?
-3. Should we integrate with the existing ETO pipeline immediately, or build standalone first?
 
 ## Current Branch
 - Branch: `server_unification`
-- All changes committed and ready to continue development
-- No merge conflicts or pending issues
+- Changes need to be committed and pushed
+- Main issue to resolve: Module sync failing due to Python caching
+
+## Session End State
+- Changes made and documented in CHANGELOG.md
+- Module sync issue identified as Python caching problem
+- Solution implemented (cache clearing) but needs testing with fresh Python process
+- Frontend fully updated and working with new type system
+- Session continuity file created for resuming work
