@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { ModuleSelectionPane } from "../../components/transformation-pipeline/ui/ModuleSelectionPane";
-import { TransformationGraph } from "../../components/transformation-pipeline/TransformationGraph";
+import { TransformationGraph } from "../../components/transformation-pipeline/pipeline_builder/TransformationGraph";
 import { ModuleTemplate, PipelineState, VisualState } from "../../types/pipelineTypes";
 
 export const Route = createFileRoute("/transformation_pipeline/graph")({

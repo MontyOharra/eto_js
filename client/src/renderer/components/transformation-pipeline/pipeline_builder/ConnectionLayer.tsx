@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Connection, NodePin } from '../../types/pipelineTypes';
+import { Connection, NodePin } from '../../../types/pipelineTypes';
 
 interface StartingConnection {
   moduleId: string;

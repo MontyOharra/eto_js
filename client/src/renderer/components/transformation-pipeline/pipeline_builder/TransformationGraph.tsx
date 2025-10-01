@@ -6,8 +6,8 @@ import {
   VisualState,
   PipelineData,
   Connection
-} from '../../types/pipelineTypes';
-import { createModuleInstance, addNodeToModule, removeNodeFromModule, updateNodeType } from '../../utils/moduleFactory';
+} from '../../../types/pipelineTypes';
+import { createModuleInstance, addNodeToModule, removeNodeFromModule, updateNodeType } from '../../../utils/moduleFactory';
 import { ModuleComponent } from './ModuleComponent';
 import { ConnectionLayer } from './ConnectionLayer';
 import { ConnectionInfoOverlay } from './ConnectionInfoOverlay';

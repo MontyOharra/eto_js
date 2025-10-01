@@ -1,17 +1,7 @@
 import React from 'react';
 import { BasicModulesSection } from './BasicModulesSection';
-import { CustomModulesSection } from './CustomModulesSection';
 
 export const ModuleManagementPage: React.FC = () => {
-  const handleNewModule = () => {
-    // TODO: Implement new module creation when needed
-    console.log('New module creation not yet implemented');
-  };
-
-  const handleEditModule = (moduleId: string) => {
-    // TODO: Implement module editing when needed
-    console.log('Module editing not yet implemented:', moduleId);
-  };
 
   return (
     <div className="h-full bg-gray-900 text-white">
@@ -29,13 +19,6 @@ export const ModuleManagementPage: React.FC = () => {
           <BasicModulesSection />
         </div>
 
-        {/* Custom Modules Section */}
-        <div>
-          <CustomModulesSection
-            onNewModule={handleNewModule}
-            onEditModule={handleEditModule}
-          />
-        </div>
       </div>
     </div>
   );

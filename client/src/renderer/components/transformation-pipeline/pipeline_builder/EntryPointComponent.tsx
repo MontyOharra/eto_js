@@ -1,5 +1,5 @@
 import React from 'react';
-import { EntryPoint } from '../../types/pipelineTypes';
+import { EntryPoint } from '../../../types/pipelineTypes';
 
 interface EntryPointComponentProps {
   entryPoint: EntryPoint;

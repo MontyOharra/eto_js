@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { ModuleInstance, ModuleTemplate, NodePin } from '../../types/pipelineTypes';
-import { canAddNode, canRemoveNode, hasVariableTypes, getAllowedTypes } from '../../utils/moduleFactory';
+import { ModuleInstance, ModuleTemplate, NodePin } from '../../../types/pipelineTypes';
+import { canAddNode, canRemoveNode, hasVariableTypes, getAllowedTypes } from '../../../utils/moduleFactory';
 
 interface ModuleComponentProps {
   module: ModuleInstance;
