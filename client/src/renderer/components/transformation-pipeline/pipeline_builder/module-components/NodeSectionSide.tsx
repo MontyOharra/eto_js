@@ -18,6 +18,7 @@ interface NodeSectionSideProps {
   onNodeClick: (nodeId: string) => void;
   getConnectedOutputName?: (nodeId: string) => string; // Only for input side
   getTypeColor: (type: string) => string;
+  getRestrictedTypesForNode: (nodeId: string) => string[]; // Get available types considering constraints
 }
 
 export const NodeSectionSide: React.FC<NodeSectionSideProps> = ({
@@ -35,7 +36,8 @@ export const NodeSectionSide: React.FC<NodeSectionSideProps> = ({
   onNodeTypeChange,
   onNodeClick,
   getConnectedOutputName,
-  getTypeColor
+  getTypeColor,
+  getRestrictedTypesForNode
 }) => {
   // Organize nodes into groups using actual node properties
   const organizeNodesIntoGroups = () => {
@@ -143,6 +145,7 @@ export const NodeSectionSide: React.FC<NodeSectionSideProps> = ({
           onNodeClick={onNodeClick}
           getConnectedOutputName={getConnectedOutputName}
           getTypeColor={getTypeColor}
+          getRestrictedTypesForNode={getRestrictedTypesForNode}
           isFirstGroup={index === 0}
           isStatic={group.isStatic}
         />

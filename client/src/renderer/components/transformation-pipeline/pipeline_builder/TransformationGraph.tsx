@@ -362,6 +362,34 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
     }));
   };
 
+  // Enhanced handler for coordinated type changes (handles TypeVar propagation)
+  const handleCoordinatedTypeChange = (updates: Array<{ moduleId: string; nodeId: string; newType: string }>) => {
+    setPipelineState(prev => ({
+      ...prev,
+      modules: prev.modules.map(module => {
+        const moduleUpdates = updates.filter(update => update.moduleId === module.module_instance_id);
+        if (moduleUpdates.length === 0) return module;
+
+        // Apply all updates for this module
+        const updatedModule = { ...module };
+
+        // Update inputs
+        updatedModule.inputs = module.inputs.map(node => {
+          const update = moduleUpdates.find(u => u.nodeId === node.node_id);
+          return update ? { ...node, type: update.newType } : node;
+        });
+
+        // Update outputs
+        updatedModule.outputs = module.outputs.map(node => {
+          const update = moduleUpdates.find(u => u.nodeId === node.node_id);
+          return update ? { ...node, type: update.newType } : node;
+        });
+
+        return updatedModule;
+      })
+    }));
+  };
+
   const handleNodeNameChange = (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number, newName: string) => {
     setPipelineState(prev => ({
       ...prev,
@@ -971,6 +999,9 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
                     template={template}
                     position={position}
                     isSelected={selectedModuleId === module.module_instance_id}
+                    allModules={pipelineState.modules}
+                    allTemplates={moduleTemplates}
+                    connections={pipelineState.connections}
                     getConnectedOutputName={getConnectedOutputName}
                     onSelect={handleModuleSelect}
                     onMouseDown={handleModuleMouseDown(module.module_instance_id)}
@@ -981,6 +1012,7 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
                     onNodeNameChange={handleNodeNameChange}
                     onNodeClick={handleNodeClick}
                     onConfigChange={handleConfigChange}
+                    onCoordinatedTypeChange={handleCoordinatedTypeChange}
                   />
                 </div>
               );

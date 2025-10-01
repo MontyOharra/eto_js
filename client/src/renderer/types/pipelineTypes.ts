@@ -102,3 +102,19 @@ export interface ModulesResponse {
     module_refs: string[];
   };
 }
+
+// Enhanced NodePin with TypeVar support (imported from moduleTypes for consistency)
+export interface NodePin {
+  node_id: string;
+  direction: 'in' | 'out';
+  type: string;
+  name: string;              // user-editable name
+  label: string;             // from NodeSpec (static)
+  position_index: number;
+  group_key?: string;        // for dynamic nodes - which group they belong to
+  is_static: boolean;        // whether this is a static or dynamic node
+  type_var?: string;         // type variable name if applicable
+}
+
+// Type alias for compatibility
+export type Connection = NodeConnection;

@@ -22,6 +22,7 @@ interface NodeGroupProps {
   onNodeClick: (nodeId: string) => void;
   getConnectedOutputName?: (nodeId: string) => string; // Only for input side
   getTypeColor: (type: string) => string;
+  getRestrictedTypesForNode: (nodeId: string) => string[]; // Get available types considering constraints
   isFirstGroup: boolean;
   isStatic: boolean; // Whether this is a static group (always shows label)
 }
@@ -45,6 +46,7 @@ export const NodeGroup: React.FC<NodeGroupProps> = ({
   onNodeClick,
   getConnectedOutputName,
   getTypeColor,
+  getRestrictedTypesForNode,
   isFirstGroup,
   isStatic
 }) => {
@@ -76,6 +78,7 @@ export const NodeGroup: React.FC<NodeGroupProps> = ({
           activeTypeVar={activeTypeVar}
           onTypeVarFocus={onTypeVarFocus}
           onTypeVarBlur={onTypeVarBlur}
+          getRestrictedTypesForNode={getRestrictedTypesForNode}
           canRemove={canRemoveNodes}
           onRemove={() => onRemoveNode(node.node_id)}
           onNameChange={(newName) => onNodeNameChange(node.node_id, newName)}

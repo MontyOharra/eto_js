@@ -1,13 +1,18 @@
 import React, { useState } from 'react';
-import { ModuleInstance, ModuleTemplate, NodePin } from '../../../types/pipelineTypes';
+import { ModuleInstance, ModuleTemplate, NodePin, NodeConnection } from '../../../types/pipelineTypes';
 import { canAddNode, canRemoveNode, hasVariableTypes, getAllowedTypes } from '../../../utils/moduleFactory';
 import { NodeSectionSide } from './module-components';
+import { calculateTypePropagation, getRestrictedTypesForTypeVar, getNodeTypeInfo } from '../../../utils/typeConstraints';
 
 interface ModuleComponentProps {
   module: ModuleInstance;
   template: ModuleTemplate;
   position: { x: number; y: number };
   isSelected: boolean;
+  // Type constraint system data
+  allModules: ModuleInstance[];
+  allTemplates: ModuleTemplate[];
+  connections: NodeConnection[];
   getConnectedOutputName?: (inputNodeId: string) => string;
   onSelect: (moduleId: string) => void;
   onMouseDown?: (e: React.MouseEvent) => void;
@@ -18,6 +23,8 @@ interface ModuleComponentProps {
   onNodeNameChange?: (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number, newName: string) => void;
   onNodeClick?: (moduleId: string, nodeId: string, nodeType: 'input' | 'output') => void;
   onConfigChange?: (moduleId: string, config: Record<string, any>) => void;
+  // New callback for coordinated type changes
+  onCoordinatedTypeChange?: (updates: Array<{ moduleId: string; nodeId: string; newType: string }>) => void;
 }
 
 // Get color for node type
@@ -44,6 +51,9 @@ export const ModuleComponent: React.FC<ModuleComponentProps> = ({
   template,
   position,
   isSelected,
+  allModules,
+  allTemplates,
+  connections,
   getConnectedOutputName,
   onSelect,
   onMouseDown,
@@ -53,7 +63,8 @@ export const ModuleComponent: React.FC<ModuleComponentProps> = ({
   onNodeTypeChange,
   onNodeNameChange,
   onNodeClick,
-  onConfigChange
+  onConfigChange,
+  onCoordinatedTypeChange
 }) => {
   const [editingNodeName, setEditingNodeName] = useState<string | null>(null);
   const [isConfigExpanded, setIsConfigExpanded] = useState(false);
@@ -68,6 +79,56 @@ export const ModuleComponent: React.FC<ModuleComponentProps> = ({
 
   const handleTypeVarBlur = () => {
     setActiveTypeVar(null);
+  };
+
+  // Enhanced type change handler with constraint propagation
+  const handleCoordinatedNodeTypeChange = (nodeId: string, newType: string) => {
+    // Calculate all the type changes that need to happen
+    const propagation = calculateTypePropagation(
+      nodeId,
+      newType,
+      allModules,
+      allTemplates,
+      connections
+    );
+
+    // Add the original node change
+    const allUpdates = [
+      { moduleId: module.module_instance_id, nodeId, newType },
+      ...propagation.nodesToUpdate
+    ];
+
+    // Use the coordinated type change callback if available
+    if (onCoordinatedTypeChange) {
+      onCoordinatedTypeChange(allUpdates);
+    } else {
+      // Fallback to individual changes
+      const nodeIndex = [...module.inputs, ...module.outputs].findIndex(n => n.node_id === nodeId);
+      const nodeType = module.inputs.find(n => n.node_id === nodeId) ? 'input' : 'output';
+      if (nodeIndex !== -1) {
+        onNodeTypeChange?.(module.module_instance_id, nodeType, nodeIndex, newType);
+      }
+    }
+  };
+
+  // Function to get restricted types for a node (considering connections)
+  const getRestrictedTypesForNode = (nodeId: string): string[] => {
+    const nodeInfo = getNodeTypeInfo(nodeId, allModules, allTemplates);
+    if (!nodeInfo) return [];
+
+    // If this is a TypeVar node, get the restricted types for the entire group
+    if (nodeInfo.isTypeVar && nodeInfo.typeVar) {
+      return getRestrictedTypesForTypeVar(
+        module.module_instance_id,
+        nodeInfo.typeVar,
+        allModules,
+        allTemplates,
+        connections
+      );
+    }
+
+    // For non-TypeVar nodes, just return their normal available types
+    return nodeInfo.availableTypes;
   };
 
   // Auto-resize textareas on mount and when content changes
@@ -202,6 +263,7 @@ export const ModuleComponent: React.FC<ModuleComponentProps> = ({
               activeTypeVar={activeTypeVar}
               onTypeVarFocus={handleTypeVarFocus}
               onTypeVarBlur={handleTypeVarBlur}
+              getRestrictedTypesForNode={getRestrictedTypesForNode}
               onAddNode={(groupId: string) => {
                 // Pass the groupId to enable group-specific node addition
                 onAddNode?.(module.module_instance_id, 'input', groupId);
@@ -220,13 +282,7 @@ export const ModuleComponent: React.FC<ModuleComponentProps> = ({
                   onNodeNameChange?.(module.module_instance_id, 'input', nodeIndex, newName);
                 }
               }}
-              onNodeTypeChange={(nodeId: string, newType: string) => {
-                // Find the node index for the old API
-                const nodeIndex = module.inputs.findIndex(n => n.node_id === nodeId);
-                if (nodeIndex !== -1) {
-                  onNodeTypeChange?.(module.module_instance_id, 'input', nodeIndex, newType);
-                }
-              }}
+              onNodeTypeChange={handleCoordinatedNodeTypeChange}
               onNodeClick={(nodeId: string) => {
                 onNodeClick?.(module.module_instance_id, nodeId, 'input');
               }}
@@ -249,6 +305,7 @@ export const ModuleComponent: React.FC<ModuleComponentProps> = ({
               activeTypeVar={activeTypeVar}
               onTypeVarFocus={handleTypeVarFocus}
               onTypeVarBlur={handleTypeVarBlur}
+              getRestrictedTypesForNode={getRestrictedTypesForNode}
               onAddNode={(groupId: string) => {
                 // Pass the groupId to enable group-specific node addition
                 onAddNode?.(module.module_instance_id, 'output', groupId);
@@ -267,13 +324,7 @@ export const ModuleComponent: React.FC<ModuleComponentProps> = ({
                   onNodeNameChange?.(module.module_instance_id, 'output', nodeIndex, newName);
                 }
               }}
-              onNodeTypeChange={(nodeId: string, newType: string) => {
-                // Find the node index for the old API
-                const nodeIndex = module.outputs.findIndex(n => n.node_id === nodeId);
-                if (nodeIndex !== -1) {
-                  onNodeTypeChange?.(module.module_instance_id, 'output', nodeIndex, newType);
-                }
-              }}
+              onNodeTypeChange={handleCoordinatedNodeTypeChange}
               onNodeClick={(nodeId: string) => {
                 onNodeClick?.(module.module_instance_id, nodeId, 'output');
               }}

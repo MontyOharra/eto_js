@@ -11,6 +11,7 @@ interface NodeComponentProps {
   activeTypeVar: string | null; // Currently active TypeVar for highlighting
   onTypeVarFocus: (typeVar: string | undefined) => void; // When TypeVar dropdown is focused
   onTypeVarBlur: () => void; // When TypeVar dropdown is blurred
+  getRestrictedTypesForNode: (nodeId: string) => string[]; // Get available types considering constraints
   canRemove: boolean;
   onRemove: () => void;
   onNameChange: (newName: string) => void;
@@ -29,6 +30,7 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
   activeTypeVar,
   onTypeVarFocus,
   onTypeVarBlur,
+  getRestrictedTypesForNode,
   canRemove,
   onRemove,
   onNameChange,
@@ -57,8 +59,8 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
     target.style.height = target.scrollHeight + 'px';
   };
 
-  // Get available types using proper TypeVar resolution
-  const rawTypes = getAvailableTypesForNode(node, template);
+  // Get available types using constraint system (considers connections and TypeVar restrictions)
+  const rawTypes = getRestrictedTypesForNode(node.node_id);
   const availableTypes = rawTypes.map(convertTypeToDisplayName);
   const hasMultipleTypes = availableTypes.length > 1;
   const isTypeVariable = !!nodeSpec.typing.type_var;
