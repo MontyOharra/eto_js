@@ -8,12 +8,12 @@ import {
   Connection
 } from '../../types/pipelineTypes';
 import { createModuleInstance, addNodeToModule, removeNodeFromModule, updateNodeType } from '../../utils/moduleFactory';
-import { ModuleComponentNew } from './ModuleComponentNew';
-import { ConnectionLayerNew } from './ConnectionLayerNew';
+import { ModuleComponent } from './ModuleComponent';
+import { ConnectionLayer } from './ConnectionLayer';
 import { ConnectionInfoOverlay } from './ConnectionInfoOverlay';
 import { EntryPointComponent } from './EntryPointComponent';
 
-interface TransformationGraphNewProps {
+interface TransformationGraphProps {
   // Available module templates from API
   moduleTemplates: ModuleTemplate[];
 
@@ -30,7 +30,7 @@ interface TransformationGraphNewProps {
   onVisualChange?: (visual: VisualState) => void;
 }
 
-export const TransformationGraphNew: React.FC<TransformationGraphNewProps> = ({
+export const TransformationGraph: React.FC<TransformationGraphProps> = ({
   moduleTemplates,
   selectedModule,
   onModuleSelect,
@@ -943,7 +943,7 @@ export const TransformationGraphNew: React.FC<TransformationGraphNewProps> = ({
                     zIndex: zIndex
                   }}
                 >
-                  <ModuleComponentNew
+                  <ModuleComponent
                     module={module}
                     template={template}
                     position={position}
@@ -966,7 +966,7 @@ export const TransformationGraphNew: React.FC<TransformationGraphNewProps> = ({
 
           {/* Connection Layer - Behind modules for proper click priority */}
           <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 0 }}>
-            <ConnectionLayerNew
+            <ConnectionLayer
               connections={pipelineState.connections}
               selectedConnectionId={selectedConnectionId}
               startingConnection={startingConnection}

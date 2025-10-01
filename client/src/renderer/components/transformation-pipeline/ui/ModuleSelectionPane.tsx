@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ModuleTemplate } from '../../../types/pipelineTypes';
 
-interface ModuleSelectionPaneNewProps {
+interface ModuleSelectionPaneProps {
   modules: ModuleTemplate[];
   isCollapsed: boolean;
   onToggleCollapse: () => void;
@@ -9,7 +9,7 @@ interface ModuleSelectionPaneNewProps {
   selectedModule: ModuleTemplate | null;
 }
 
-export const ModuleSelectionPaneNew: React.FC<ModuleSelectionPaneNewProps> = ({
+export const ModuleSelectionPane: React.FC<ModuleSelectionPaneProps> = ({
   modules,
   isCollapsed,
   onToggleCollapse,

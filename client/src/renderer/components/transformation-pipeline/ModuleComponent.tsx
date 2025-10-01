@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ModuleInstance, ModuleTemplate, NodePin } from '../../types/pipelineTypes';
 import { canAddNode, canRemoveNode, hasVariableTypes, getAllowedTypes } from '../../utils/moduleFactory';
 
-interface ModuleComponentNewProps {
+interface ModuleComponentProps {
   module: ModuleInstance;
   template: ModuleTemplate;
   position: { x: number; y: number };
@@ -30,7 +30,7 @@ const getTypeColor = (type: string): string => {
   }
 };
 
-export const ModuleComponentNew: React.FC<ModuleComponentNewProps> = ({
+export const ModuleComponent: React.FC<ModuleComponentProps> = ({
   module,
   template,
   position,

@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { ModuleSelectionPaneNew } from "../../components/transformation-pipeline/ui/ModuleSelectionPaneNew";
-import { TransformationGraphNew } from "../../components/transformation-pipeline/TransformationGraphNew";
+import { ModuleSelectionPane } from "../../components/transformation-pipeline/ui/ModuleSelectionPane";
+import { TransformationGraph } from "../../components/transformation-pipeline/TransformationGraph";
 import { ModuleTemplate, PipelineState, VisualState } from "../../types/pipelineTypes";
 
-export const Route = createFileRoute("/transformation_pipeline/graphNew")({
+export const Route = createFileRoute("/transformation_pipeline/graph")({
   component: TransformationPipelineGraph,
 });
 
@@ -109,7 +109,7 @@ function TransformationPipelineGraph() {
     <div className="relative w-full h-full overflow-hidden bg-gray-900 flex">
       {/* Module Selection Sidebar */}
       <div className="relative z-50">
-        <ModuleSelectionPaneNew
+        <ModuleSelectionPane
           modules={moduleTemplates}
           isCollapsed={isSidebarCollapsed}
           onToggleCollapse={toggleSidebar}
@@ -119,7 +119,7 @@ function TransformationPipelineGraph() {
       </div>
 
       {/* Main Graph Area */}
-      <TransformationGraphNew
+      <TransformationGraph
         moduleTemplates={moduleTemplates}
         selectedModule={selectedModule}
         onModuleSelect={handleModuleSelect}

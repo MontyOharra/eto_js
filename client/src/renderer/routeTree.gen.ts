@@ -15,7 +15,7 @@ import { Route as DashboardRouteRouteImport } from './routes/dashboard/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as Transformation_pipelineIndexRouteImport } from './routes/transformation_pipeline/index'
 import { Route as Transformation_pipelineModulesRouteImport } from './routes/transformation_pipeline/modules'
-import { Route as Transformation_pipelineGraphNewRouteImport } from './routes/transformation_pipeline/graphNew'
+import { Route as Transformation_pipelineGraphRouteImport } from './routes/transformation_pipeline/graph'
 import { Route as DashboardTemplatesRouteImport } from './routes/dashboard/templates'
 import { Route as DashboardHomeRouteImport } from './routes/dashboard/home'
 import { Route as DashboardEtoInfoRouteImport } from './routes/dashboard/eto-info'
@@ -55,10 +55,10 @@ const Transformation_pipelineModulesRoute =
     path: '/modules',
     getParentRoute: () => Transformation_pipelineRouteRoute,
   } as any)
-const Transformation_pipelineGraphNewRoute =
-  Transformation_pipelineGraphNewRouteImport.update({
-    id: '/graphNew',
-    path: '/graphNew',
+const Transformation_pipelineGraphRoute =
+  Transformation_pipelineGraphRouteImport.update({
+    id: '/graph',
+    path: '/graph',
     getParentRoute: () => Transformation_pipelineRouteRoute,
   } as any)
 const DashboardTemplatesRoute = DashboardTemplatesRouteImport.update({
@@ -97,7 +97,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/eto-info': typeof DashboardEtoInfoRoute
   '/dashboard/home': typeof DashboardHomeRoute
   '/dashboard/templates': typeof DashboardTemplatesRoute
-  '/transformation_pipeline/graphNew': typeof Transformation_pipelineGraphNewRoute
+  '/transformation_pipeline/graph': typeof Transformation_pipelineGraphRoute
   '/transformation_pipeline/modules': typeof Transformation_pipelineModulesRoute
   '/transformation_pipeline/': typeof Transformation_pipelineIndexRoute
   '/dashboard/settings/email-configs': typeof DashboardSettingsEmailConfigsRoute
@@ -110,7 +110,7 @@ export interface FileRoutesByTo {
   '/dashboard/eto-info': typeof DashboardEtoInfoRoute
   '/dashboard/home': typeof DashboardHomeRoute
   '/dashboard/templates': typeof DashboardTemplatesRoute
-  '/transformation_pipeline/graphNew': typeof Transformation_pipelineGraphNewRoute
+  '/transformation_pipeline/graph': typeof Transformation_pipelineGraphRoute
   '/transformation_pipeline/modules': typeof Transformation_pipelineModulesRoute
   '/transformation_pipeline': typeof Transformation_pipelineIndexRoute
   '/dashboard/settings/email-configs': typeof DashboardSettingsEmailConfigsRoute
@@ -125,7 +125,7 @@ export interface FileRoutesById {
   '/dashboard/eto-info': typeof DashboardEtoInfoRoute
   '/dashboard/home': typeof DashboardHomeRoute
   '/dashboard/templates': typeof DashboardTemplatesRoute
-  '/transformation_pipeline/graphNew': typeof Transformation_pipelineGraphNewRoute
+  '/transformation_pipeline/graph': typeof Transformation_pipelineGraphRoute
   '/transformation_pipeline/modules': typeof Transformation_pipelineModulesRoute
   '/transformation_pipeline/': typeof Transformation_pipelineIndexRoute
   '/dashboard/settings/email-configs': typeof DashboardSettingsEmailConfigsRoute
@@ -141,7 +141,7 @@ export interface FileRouteTypes {
     | '/dashboard/eto-info'
     | '/dashboard/home'
     | '/dashboard/templates'
-    | '/transformation_pipeline/graphNew'
+    | '/transformation_pipeline/graph'
     | '/transformation_pipeline/modules'
     | '/transformation_pipeline/'
     | '/dashboard/settings/email-configs'
@@ -154,7 +154,7 @@ export interface FileRouteTypes {
     | '/dashboard/eto-info'
     | '/dashboard/home'
     | '/dashboard/templates'
-    | '/transformation_pipeline/graphNew'
+    | '/transformation_pipeline/graph'
     | '/transformation_pipeline/modules'
     | '/transformation_pipeline'
     | '/dashboard/settings/email-configs'
@@ -168,7 +168,7 @@ export interface FileRouteTypes {
     | '/dashboard/eto-info'
     | '/dashboard/home'
     | '/dashboard/templates'
-    | '/transformation_pipeline/graphNew'
+    | '/transformation_pipeline/graph'
     | '/transformation_pipeline/modules'
     | '/transformation_pipeline/'
     | '/dashboard/settings/email-configs'
@@ -225,11 +225,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Transformation_pipelineModulesRouteImport
       parentRoute: typeof Transformation_pipelineRouteRoute
     }
-    '/transformation_pipeline/graphNew': {
-      id: '/transformation_pipeline/graphNew'
-      path: '/graphNew'
-      fullPath: '/transformation_pipeline/graphNew'
-      preLoaderRoute: typeof Transformation_pipelineGraphNewRouteImport
+    '/transformation_pipeline/graph': {
+      id: '/transformation_pipeline/graph'
+      path: '/graph'
+      fullPath: '/transformation_pipeline/graph'
+      preLoaderRoute: typeof Transformation_pipelineGraphRouteImport
       parentRoute: typeof Transformation_pipelineRouteRoute
     }
     '/dashboard/templates': {
@@ -303,14 +303,14 @@ const DashboardRouteRouteWithChildren = DashboardRouteRoute._addFileChildren(
 )
 
 interface Transformation_pipelineRouteRouteChildren {
-  Transformation_pipelineGraphNewRoute: typeof Transformation_pipelineGraphNewRoute
+  Transformation_pipelineGraphRoute: typeof Transformation_pipelineGraphRoute
   Transformation_pipelineModulesRoute: typeof Transformation_pipelineModulesRoute
   Transformation_pipelineIndexRoute: typeof Transformation_pipelineIndexRoute
 }
 
 const Transformation_pipelineRouteRouteChildren: Transformation_pipelineRouteRouteChildren =
   {
-    Transformation_pipelineGraphNewRoute: Transformation_pipelineGraphNewRoute,
+    Transformation_pipelineGraphRoute: Transformation_pipelineGraphRoute,
     Transformation_pipelineModulesRoute: Transformation_pipelineModulesRoute,
     Transformation_pipelineIndexRoute: Transformation_pipelineIndexRoute,
   }

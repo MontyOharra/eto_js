@@ -31,7 +31,7 @@ interface ConnectionLayerProps {
   onConnectionDelete: (connectionId: string) => void;
 }
 
-export const ConnectionLayerNew: React.FC<ConnectionLayerProps> = ({
+export const ConnectionLayer: React.FC<ConnectionLayerProps> = ({
   connections,
   selectedConnectionId,
   startingConnection,
