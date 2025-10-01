@@ -221,7 +221,7 @@ export function canAddNodeToGroup(
   const group = ioSide.dynamic.groups[groupKey];
   const currentGroupCount = currentNodes.filter(n => n.group_key === groupKey).length;
 
-  return group.max_count === undefined || currentGroupCount < group.max_count;
+  return group.max_count === undefined || group.max_count === null || currentGroupCount < group.max_count;
 }
 
 export function canRemoveNodeFromGroup(
