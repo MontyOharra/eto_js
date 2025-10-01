@@ -1,5 +1,5 @@
 import React from 'react';
-import { Connection, ModuleInstance, NodePin, ModuleTemplate } from '../../types/pipelineTypes';
+import { Connection, ModuleInstance, NodePin, ModuleTemplate } from '../../../types/pipelineTypes';
 
 interface ConnectionInfoOverlayProps {
   selectedConnectionId: string | null;

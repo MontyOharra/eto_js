@@ -15,7 +15,6 @@ import { Route as DashboardRouteRouteImport } from './routes/dashboard/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as Transformation_pipelineIndexRouteImport } from './routes/transformation_pipeline/index'
 import { Route as Transformation_pipelineModulesRouteImport } from './routes/transformation_pipeline/modules'
-import { Route as Transformation_pipelineGraphNewRouteImport } from './routes/transformation_pipeline/graphNew'
 import { Route as Transformation_pipelineGraphRouteImport } from './routes/transformation_pipeline/graph'
 import { Route as DashboardTemplatesRouteImport } from './routes/dashboard/templates'
 import { Route as DashboardHomeRouteImport } from './routes/dashboard/home'
@@ -54,12 +53,6 @@ const Transformation_pipelineModulesRoute =
   Transformation_pipelineModulesRouteImport.update({
     id: '/modules',
     path: '/modules',
-    getParentRoute: () => Transformation_pipelineRouteRoute,
-  } as any)
-const Transformation_pipelineGraphNewRoute =
-  Transformation_pipelineGraphNewRouteImport.update({
-    id: '/graphNew',
-    path: '/graphNew',
     getParentRoute: () => Transformation_pipelineRouteRoute,
   } as any)
 const Transformation_pipelineGraphRoute =
@@ -105,7 +98,6 @@ export interface FileRoutesByFullPath {
   '/dashboard/home': typeof DashboardHomeRoute
   '/dashboard/templates': typeof DashboardTemplatesRoute
   '/transformation_pipeline/graph': typeof Transformation_pipelineGraphRoute
-  '/transformation_pipeline/graphNew': typeof Transformation_pipelineGraphNewRoute
   '/transformation_pipeline/modules': typeof Transformation_pipelineModulesRoute
   '/transformation_pipeline/': typeof Transformation_pipelineIndexRoute
   '/dashboard/settings/email-configs': typeof DashboardSettingsEmailConfigsRoute
@@ -119,7 +111,6 @@ export interface FileRoutesByTo {
   '/dashboard/home': typeof DashboardHomeRoute
   '/dashboard/templates': typeof DashboardTemplatesRoute
   '/transformation_pipeline/graph': typeof Transformation_pipelineGraphRoute
-  '/transformation_pipeline/graphNew': typeof Transformation_pipelineGraphNewRoute
   '/transformation_pipeline/modules': typeof Transformation_pipelineModulesRoute
   '/transformation_pipeline': typeof Transformation_pipelineIndexRoute
   '/dashboard/settings/email-configs': typeof DashboardSettingsEmailConfigsRoute
@@ -135,7 +126,6 @@ export interface FileRoutesById {
   '/dashboard/home': typeof DashboardHomeRoute
   '/dashboard/templates': typeof DashboardTemplatesRoute
   '/transformation_pipeline/graph': typeof Transformation_pipelineGraphRoute
-  '/transformation_pipeline/graphNew': typeof Transformation_pipelineGraphNewRoute
   '/transformation_pipeline/modules': typeof Transformation_pipelineModulesRoute
   '/transformation_pipeline/': typeof Transformation_pipelineIndexRoute
   '/dashboard/settings/email-configs': typeof DashboardSettingsEmailConfigsRoute
@@ -152,7 +142,6 @@ export interface FileRouteTypes {
     | '/dashboard/home'
     | '/dashboard/templates'
     | '/transformation_pipeline/graph'
-    | '/transformation_pipeline/graphNew'
     | '/transformation_pipeline/modules'
     | '/transformation_pipeline/'
     | '/dashboard/settings/email-configs'
@@ -166,7 +155,6 @@ export interface FileRouteTypes {
     | '/dashboard/home'
     | '/dashboard/templates'
     | '/transformation_pipeline/graph'
-    | '/transformation_pipeline/graphNew'
     | '/transformation_pipeline/modules'
     | '/transformation_pipeline'
     | '/dashboard/settings/email-configs'
@@ -181,7 +169,6 @@ export interface FileRouteTypes {
     | '/dashboard/home'
     | '/dashboard/templates'
     | '/transformation_pipeline/graph'
-    | '/transformation_pipeline/graphNew'
     | '/transformation_pipeline/modules'
     | '/transformation_pipeline/'
     | '/dashboard/settings/email-configs'
@@ -236,13 +223,6 @@ declare module '@tanstack/react-router' {
       path: '/modules'
       fullPath: '/transformation_pipeline/modules'
       preLoaderRoute: typeof Transformation_pipelineModulesRouteImport
-      parentRoute: typeof Transformation_pipelineRouteRoute
-    }
-    '/transformation_pipeline/graphNew': {
-      id: '/transformation_pipeline/graphNew'
-      path: '/graphNew'
-      fullPath: '/transformation_pipeline/graphNew'
-      preLoaderRoute: typeof Transformation_pipelineGraphNewRouteImport
       parentRoute: typeof Transformation_pipelineRouteRoute
     }
     '/transformation_pipeline/graph': {
@@ -324,7 +304,6 @@ const DashboardRouteRouteWithChildren = DashboardRouteRoute._addFileChildren(
 
 interface Transformation_pipelineRouteRouteChildren {
   Transformation_pipelineGraphRoute: typeof Transformation_pipelineGraphRoute
-  Transformation_pipelineGraphNewRoute: typeof Transformation_pipelineGraphNewRoute
   Transformation_pipelineModulesRoute: typeof Transformation_pipelineModulesRoute
   Transformation_pipelineIndexRoute: typeof Transformation_pipelineIndexRoute
 }
@@ -332,7 +311,6 @@ interface Transformation_pipelineRouteRouteChildren {
 const Transformation_pipelineRouteRouteChildren: Transformation_pipelineRouteRouteChildren =
   {
     Transformation_pipelineGraphRoute: Transformation_pipelineGraphRoute,
-    Transformation_pipelineGraphNewRoute: Transformation_pipelineGraphNewRoute,
     Transformation_pipelineModulesRoute: Transformation_pipelineModulesRoute,
     Transformation_pipelineIndexRoute: Transformation_pipelineIndexRoute,
   }

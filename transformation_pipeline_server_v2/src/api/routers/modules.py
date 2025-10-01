@@ -9,7 +9,7 @@ import time
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from ...shared.services import get_modules_service
+from src.shared.services import get_modules_service
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +56,7 @@ async def get_module_catalog():
 
     try:
         # Get the singleton registry directly to ensure we have the same instance
-        from ...features.modules.core.registry import get_registry
+        from src.features.modules.core.registry import get_registry
         registry = get_registry()
 
         # Get all modules from registry
@@ -137,7 +137,7 @@ async def get_module_cache_stats():
         modules_service = get_modules_service()
 
         # Get cache stats from registry
-        from ...features.modules.core.registry import get_registry
+        from src.features.modules.core.registry import get_registry
         registry = get_registry()
         cache_stats = registry.get_cache_stats()
 
@@ -220,7 +220,7 @@ async def execute_module(request: ModuleExecuteRequest):
 
     try:
         # Get registry directly for better control
-        from ...features.modules.core.registry import get_registry, ModuleCache
+        from src.features.modules.core.registry import get_registry, ModuleCache
         from ...shared.database.repositories.module_catalog import ModuleCatalogRepository
         from ...shared.database import get_connection_manager
 

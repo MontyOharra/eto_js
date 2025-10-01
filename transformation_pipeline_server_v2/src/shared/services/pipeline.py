@@ -6,8 +6,8 @@ import logging
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
-from ..database.repositories import PipelineRepository, ObjectNotFoundError
-from ..models.pipeline import (
+from src.shared.database.repositories import PipelineRepository, ObjectNotFoundError
+from src.shared.models.pipeline import (
     Pipeline, PipelineCreate, PipelineUpdate,
     PipelineSummary, PipelineState, VisualState
 )

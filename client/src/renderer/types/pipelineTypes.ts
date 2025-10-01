@@ -3,11 +3,44 @@
  * Re-exports from the new module types system for backward compatibility
  */
 
-// Export new types
-export * from './moduleTypes';
+// Node type definitions
+export interface NodeTypeRule {
+  allowed_types?: string[];
+  type_var?: string;
+}
 
-// Legacy types for backward compatibility
-export interface LegacyModuleTemplate {
+export interface NodeSpec {
+  label: string;
+  typing: NodeTypeRule;
+}
+
+export interface StaticNodes {
+  slots: NodeSpec[];
+}
+
+export interface DynamicNodeGroup {
+  min_count: number;
+  max_count?: number | null;
+  item: NodeSpec;
+}
+
+export interface DynamicNodes {
+  groups: Record<string, DynamicNodeGroup>;
+}
+
+export interface IOSideShape {
+  static?: StaticNodes;
+  dynamic?: DynamicNodes;
+}
+
+export interface IOShape {
+  inputs: IOSideShape;
+  outputs: IOSideShape;
+  type_params?: Record<string, string[]>;
+}
+
+// Module template from API
+export interface ModuleTemplate {
   module_ref: string;
   id: string;
   version: string;
@@ -15,18 +48,7 @@ export interface LegacyModuleTemplate {
   description: string;
   kind: 'transform' | 'action' | 'logic';
   meta: {
-    inputs: {
-      allow: boolean;
-      min_count: number;
-      max_count: number | null;
-      type: string[];  // Array of allowed types - empty array means all types allowed
-    };
-    outputs: {
-      allow: boolean;
-      min_count: number;
-      max_count: number | null;
-      type: string[];  // Array of allowed types - empty array means all types allowed
-    };
+    io_shape: IOShape;
   };
   config_schema: any; // JSON Schema object
   category: string;

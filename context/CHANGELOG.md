@@ -5,6 +5,42 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-10-01 14:30] — ModuleComponent Refactoring: Component Breakdown Architecture & Integration
+### Spec / Intent
+- Break down ModuleComponent's node section into smaller, focused components for better maintainability
+- Create component hierarchy: NodeSectionSide → NodeGroup → NodeComponent with supporting components
+- Implement group-based node organization where each dynamic node is its own group with separators
+- Maintain existing functionality while creating cleaner separation of concerns
+- Integrate new components into existing ModuleComponent with compatibility bridging
+
+### Changes Made
+- **Component Architecture**: Created `/module-components/` directory with 5 new components following clear hierarchy
+- **NodeSectionSide**: Organizes input/output sides into groups, handles group-level add/remove logic
+- **NodeGroup**: Manages individual groups (static or dynamic), enforces min/max constraints, renders separators
+- **NodeComponent**: Pure node rendering with circle, name, type, and individual interactions
+- **AddNodeButton**: Reusable add button for dynamic groups that haven't reached max_count
+- **GroupSeparator**: Horizontal line separators between groups with optional group labels
+- **ModuleComponent Integration**: Commented out old node section, added new component usage with API bridging
+- **Compatibility Layer**: Added bridge functions to convert between node-ID based new API and index-based old API
+- **Temporary Fix**: Modified NodeSectionSide to work with current NodePin structure (missing is_static/group_id properties)
+- Files: `module-components/NodeSectionSide.tsx`, `NodeGroup.tsx`, `NodeComponent.tsx`, `AddNodeButton.tsx`, `GroupSeparator.tsx`, `index.ts`, `ModuleComponent.tsx`
+
+### Next Actions
+- Update NodePin interface to include is_static and group_id properties for proper group organization
+- Implement proper static vs dynamic node grouping once data structure supports it
+- Test new component architecture with real module instances
+- Extract configuration section using similar component breakdown pattern
+- Remove commented old code once new architecture is fully validated
+
+### Notes
+- **Group Strategy**: Each dynamic node becomes its own group with separators for visual organization
+- **Event Flow**: Clean data bubbling from NodeComponent → NodeGroup → NodeSectionSide → parent component
+- **API Bridging**: New node-ID based API bridges to existing index-based ModuleComponent API
+- **Temporary Workaround**: Simplified grouping logic due to current NodePin structure limitations
+- **Architecture Ready**: Foundation established for proper group-based node management once data model is updated
+
+---
+
 ## [2025-09-29 20:30] — Transformation Pipeline Type System Migration to Arrays
 ### Spec / Intent
 - Migrate module type system from VarType objects to cleaner array-based format

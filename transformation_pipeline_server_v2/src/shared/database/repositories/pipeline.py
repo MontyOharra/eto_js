@@ -7,8 +7,8 @@ import uuid
 from typing import Optional, List, Dict, Any
 from sqlalchemy.exc import SQLAlchemyError
 
-from ..models import PipelineDefinitionModel, PipelineStepModel
-from ...models.pipeline import Pipeline, PipelineCreate, PipelineUpdate, PipelineSummary
+from src.shared.database.models import PipelineDefinitionModel, PipelineStepModel
+from src.shared.models.pipeline import Pipeline, PipelineCreate, PipelineUpdate, PipelineSummary
 
 logger = logging.getLogger(__name__)
 

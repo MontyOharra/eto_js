@@ -5,8 +5,8 @@ Concatenates multiple string inputs with configurable separator and formatting
 from typing import Dict, Any
 from pydantic import BaseModel, Field
 
-from ..core.contracts import TransformModule, ModuleMeta, DynamicSide
-from ..core.registry import register
+from src.features.modules.core.contracts import TransformModule, ModuleMeta, IOShape, IOSideShape, DynamicNodes, DynamicNodeGroup, NodeSpec, NodeTypeRule, StaticNodes
+from src.features.modules.core.registry import register
 
 
 class StringConcatenatorConfig(BaseModel):
@@ -33,7 +33,7 @@ class StringConcatenator(TransformModule):
 
     # UI customization
     color = "#10B981"  # Green
-    category = "Text poopoo shit"
+    category = "Text Processing"
 
     # Configuration model
     ConfigModel = StringConcatenatorConfig
@@ -42,17 +42,39 @@ class StringConcatenator(TransformModule):
     def meta(cls) -> ModuleMeta:
         """Define I/O constraints for this module"""
         return ModuleMeta(
-            inputs=DynamicSide(
-                allow=True,  # Dynamic inputs allowed
-                min_count=2,  # At least two inputs required
-                max_count=None,  # Unlimited inputs
-                type=["str", "float"]  # Multiple allowed types for demonstration
-            ),
-            outputs=DynamicSide(
-                allow=False,  # Static output
-                min_count=1,
-                max_count=1,
-                type=["str"]  # Output is a string
+            io_shape=IOShape(
+                inputs=IOSideShape(
+                    static= StaticNodes(
+                        slots=[
+                            NodeSpec(
+                                label="input",
+                                typing=NodeTypeRule(allowed_types=["str", "bool"])  # Multiple allowed types
+                            )
+                        ]
+                    ),
+                    dynamic=DynamicNodes(
+                        groups={
+                            "inputs": DynamicNodeGroup(
+                                min_count=2,  # At least two inputs required
+                                max_count=None,  # Unlimited inputs
+                                item=NodeSpec(
+                                    label="input",
+                                    typing=NodeTypeRule(allowed_types=["str", "float"])  # Multiple allowed types
+                                )
+                            )
+                        }
+                    )
+                ),
+                outputs=IOSideShape(
+                    static=StaticNodes(
+                        slots=[
+                            NodeSpec(
+                                label="concatenated_text",
+                                typing=NodeTypeRule(allowed_types=["str"])
+                            )
+                        ]
+                    )
+                )
             )
         )
 
@@ -125,7 +147,7 @@ class StringConcatenator(TransformModule):
         return {output_node_id: result}
 
 
-# Module validation hook (optional)
+    # Module validation hook (optional)
     @classmethod
     def validate_wiring(cls,
                        module_instance_id: str,

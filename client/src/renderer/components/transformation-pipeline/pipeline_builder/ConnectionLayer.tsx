@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Connection, NodePin } from '../../types/pipelineTypes';
+import { Connection, NodePin } from '../../../types/pipelineTypes';
 
 interface StartingConnection {
   moduleId: string;
@@ -31,7 +31,7 @@ interface ConnectionLayerProps {
   onConnectionDelete: (connectionId: string) => void;
 }
 
-export const ConnectionLayerNew: React.FC<ConnectionLayerProps> = ({
+export const ConnectionLayer: React.FC<ConnectionLayerProps> = ({
   connections,
   selectedConnectionId,
   startingConnection,

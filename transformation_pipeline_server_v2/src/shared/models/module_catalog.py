@@ -7,19 +7,8 @@ from typing import Optional, Dict, Any, Literal, List
 from datetime import datetime
 import json
 
-
-class DynamicSide(BaseModel):
-    """Dynamic I/O side configuration"""
-    allow: bool = True
-    min_count: int = 0
-    max_count: Optional[int] = None  # None = unbounded
-    type: List[str] = Field(default=["str"])  # Array of allowed types - empty array means all types allowed
-
-
-class ModuleMeta(BaseModel):
-    """Module I/O metadata"""
-    inputs: DynamicSide
-    outputs: DynamicSide
+# Import the new IOShape system from contracts
+from src.features.modules.core.contracts import ModuleMeta
 
 
 class ModuleCatalogCreate(BaseModel):
@@ -112,7 +101,7 @@ class ModuleCatalog(BaseModel):
             name=db_model.name,
             description=db_model.description,
             module_kind=db_model.module_kind,
-            meta=ModuleMeta(**meta_data),
+            meta=ModuleMeta.model_validate(meta_data),  # Use model_validate for new IOShape structure
             config_schema=config_schema_data,
             handler_name=db_model.handler_name,
             color=db_model.color,
