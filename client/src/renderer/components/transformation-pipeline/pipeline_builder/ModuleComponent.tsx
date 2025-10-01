@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { ModuleInstance, ModuleTemplate, NodePin, NodeConnection } from '../../../types/pipelineTypes';
+import { ModuleInstance, ModuleTemplate, NodePin } from '../../../types/moduleTypes';
+import { NodeConnection } from '../../../types/pipelineTypes';
 import { canAddNode, canRemoveNode, hasVariableTypes, getAllowedTypes } from '../../../utils/moduleFactory';
 import { NodeSectionSide } from './module-components';
-import { calculateTypePropagation, getRestrictedTypesForTypeVar, getNodeTypeInfo } from '../../../utils/typeConstraints';
+import { calculateTypePropagation, getNodeTypeConstraints, getNodeTypeInfo } from '../../../utils/typeConstraints';
 
 interface ModuleComponentProps {
   module: ModuleInstance;
@@ -27,20 +28,14 @@ interface ModuleComponentProps {
   onCoordinatedTypeChange?: (updates: Array<{ moduleId: string; nodeId: string; newType: string }>) => void;
 }
 
-// Get color for node type
+// Get color for node type (Python type names)
 const getTypeColor = (type: string): string => {
   switch (type) {
-    // Frontend naming convention
-    case 'string': return '#3B82F6'; // Blue
-    case 'number': return '#EF4444'; // Red
-    case 'boolean': return '#10B981'; // Green
-    case 'datetime': return '#8B5CF6'; // Purple
-
-    // Backend naming convention (Python types)
     case 'str': return '#3B82F6'; // Blue
     case 'int': return '#EF4444'; // Red
-    case 'float': return '#EF4444'; // Red (same as number)
+    case 'float': return '#F59E0B'; // Orange (different from int)
     case 'bool': return '#10B981'; // Green
+    case 'datetime': return '#8B5CF6'; // Purple
 
     default: return '#6B7280'; // Gray
   }
@@ -111,24 +106,9 @@ export const ModuleComponent: React.FC<ModuleComponentProps> = ({
     }
   };
 
-  // Function to get restricted types for a node (considering connections)
-  const getRestrictedTypesForNode = (nodeId: string): string[] => {
-    const nodeInfo = getNodeTypeInfo(nodeId, allModules, allTemplates);
-    if (!nodeInfo) return [];
-
-    // If this is a TypeVar node, get the restricted types for the entire group
-    if (nodeInfo.isTypeVar && nodeInfo.typeVar) {
-      return getRestrictedTypesForTypeVar(
-        module.module_instance_id,
-        nodeInfo.typeVar,
-        allModules,
-        allTemplates,
-        connections
-      );
-    }
-
-    // For non-TypeVar nodes, just return their normal available types
-    return nodeInfo.availableTypes;
+  // Function to get type constraints for a node (considering connections)
+  const getRestrictedTypesForNode = (nodeId: string): { allowedTypes: string[]; disabledTypes: string[]; allTypes: string[] } => {
+    return getNodeTypeConstraints(nodeId, allModules, allTemplates, connections);
   };
 
   // Auto-resize textareas on mount and when content changes

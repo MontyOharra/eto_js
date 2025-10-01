@@ -1,59 +1,32 @@
 /**
  * Type definitions for the Transformation Pipeline system
- * Re-exports from the new module types system for backward compatibility
  */
 
-// Node type definitions
-export interface NodeTypeRule {
-  allowed_types?: string[];
-  type_var?: string;
-}
+import {
+  NodeTypeRule as _NodeTypeRule,
+  NodeSpec as _NodeSpec,
+  StaticNodes as _StaticNodes,
+  DynamicNodeGroup as _DynamicNodeGroup,
+  DynamicNodes as _DynamicNodes,
+  IOSideShape as _IOSideShape,
+  IOShape as _IOShape,
+  ModuleTemplate as _ModuleTemplate,
+  ModuleInstance as _ModuleInstance,
+  NodePin as _NodePin
+} from './moduleTypes';
 
-export interface NodeSpec {
-  label: string;
-  typing: NodeTypeRule;
-}
+// Re-export module type definitions
+export type NodeTypeRule = _NodeTypeRule;
+export type NodeSpec = _NodeSpec;
+export type StaticNodes = _StaticNodes;
+export type DynamicNodeGroup = _DynamicNodeGroup;
+export type DynamicNodes = _DynamicNodes;
+export type IOSideShape = _IOSideShape;
+export type IOShape = _IOShape;
+export type ModuleTemplate = _ModuleTemplate;
+export type ModuleInstance = _ModuleInstance;
+export type NodePin = _NodePin;
 
-export interface StaticNodes {
-  slots: NodeSpec[];
-}
-
-export interface DynamicNodeGroup {
-  min_count: number;
-  max_count?: number | null;
-  item: NodeSpec;
-}
-
-export interface DynamicNodes {
-  groups: DynamicNodeGroup[];
-}
-
-export interface IOSideShape {
-  static?: StaticNodes;
-  dynamic?: DynamicNodes;
-}
-
-export interface IOShape {
-  inputs: IOSideShape;
-  outputs: IOSideShape;
-  type_params?: Record<string, string[]>;
-}
-
-// Module template from API
-export interface ModuleTemplate {
-  module_ref: string;
-  id: string;
-  version: string;
-  title: string;
-  description: string;
-  kind: 'transform' | 'action' | 'logic';
-  meta: {
-    io_shape: IOShape;
-  };
-  config_schema: any; // JSON Schema object
-  category: string;
-  color: string;
-}
 
 // Connection between nodes
 export interface NodeConnection {
@@ -101,19 +74,6 @@ export interface ModulesResponse {
     logic_modules: number;
     module_refs: string[];
   };
-}
-
-// Enhanced NodePin with TypeVar support (imported from moduleTypes for consistency)
-export interface NodePin {
-  node_id: string;
-  direction: 'in' | 'out';
-  type: string;
-  name: string;              // user-editable name
-  label: string;             // from NodeSpec (static)
-  position_index: number;
-  group_key?: string;        // for dynamic nodes - which group they belong to
-  is_static: boolean;        // whether this is a static or dynamic node
-  type_var?: string;         // type variable name if applicable
 }
 
 // Type alias for compatibility

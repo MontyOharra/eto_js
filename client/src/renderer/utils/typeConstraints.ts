@@ -2,7 +2,8 @@
  * Type constraint system for TypeVar coordination and connection validation
  */
 
-import { ModuleInstance, ModuleTemplate, NodePin, NodeConnection } from '../types/pipelineTypes';
+import { ModuleInstance, ModuleTemplate, NodePin } from '../types/moduleTypes';
+import { NodeConnection } from '../types/pipelineTypes';
 import { getAvailableTypesForNode } from './moduleFactoryNew';
 
 // Type constraint information for a node
@@ -101,6 +102,79 @@ export function getTypeVarGroup(
 }
 
 /**
+ * Find all nodes that are connected to a given node through the entire constraint network
+ * This includes direct connections AND TypeVar relationships
+ */
+export function getConstraintNetwork(
+  startNodeId: string,
+  modules: ModuleInstance[],
+  templates: ModuleTemplate[],
+  connections: NodeConnection[]
+): Set<string> {
+  const networkNodes = new Set<string>();
+  const toVisit = [startNodeId];
+
+  while (toVisit.length > 0) {
+    const currentNodeId = toVisit.shift()!;
+
+    if (networkNodes.has(currentNodeId)) {
+      continue; // Already processed this node
+    }
+
+    networkNodes.add(currentNodeId);
+
+    // Find all nodes connected to this one
+    const connectedNodes = getDirectlyConnectedNodes(currentNodeId, modules, templates, connections);
+
+    for (const connectedNodeId of connectedNodes) {
+      if (!networkNodes.has(connectedNodeId)) {
+        toVisit.push(connectedNodeId);
+      }
+    }
+  }
+
+  return networkNodes;
+}
+
+/**
+ * Get all nodes directly connected to a given node (via connections OR TypeVars)
+ */
+function getDirectlyConnectedNodes(
+  nodeId: string,
+  modules: ModuleInstance[],
+  templates: ModuleTemplate[],
+  connections: NodeConnection[]
+): string[] {
+  const connectedNodes: string[] = [];
+
+  // 1. Find nodes connected via actual connections
+  const directConnections = connections.filter(conn =>
+    conn.from_node_id === nodeId || conn.to_node_id === nodeId
+  );
+
+  for (const connection of directConnections) {
+    const otherNodeId = connection.from_node_id === nodeId
+      ? connection.to_node_id
+      : connection.from_node_id;
+    connectedNodes.push(otherNodeId);
+  }
+
+  // 2. Find nodes connected via TypeVar relationships
+  const nodeInfo = getNodeTypeInfo(nodeId, modules, templates);
+  if (nodeInfo && nodeInfo.isTypeVar && nodeInfo.typeVar) {
+    const typeVarNodes = getTypeVarGroup(nodeInfo.moduleId, nodeInfo.typeVar, modules);
+
+    for (const typeVarNode of typeVarNodes) {
+      if (typeVarNode.node_id !== nodeId) {
+        connectedNodes.push(typeVarNode.node_id);
+      }
+    }
+  }
+
+  return connectedNodes;
+}
+
+/**
  * Check if a connection between two nodes is valid
  */
 export function validateConnection(
@@ -153,6 +227,7 @@ export function validateConnection(
 
 /**
  * Calculate what type changes would be needed if a specific node type changes
+ * Now considers the entire constraint network
  */
 export function calculateTypePropagation(
   nodeId: string,
@@ -166,62 +241,47 @@ export function calculateTypePropagation(
     invalidConnections: []
   };
 
-  const nodeInfo = getNodeTypeInfo(nodeId, modules, templates);
-  if (!nodeInfo) return result;
+  // Find the entire constraint network for this node
+  const constraintNetwork = getConstraintNetwork(nodeId, modules, templates, connections);
 
-  // 1. If this is a TypeVar node, update all nodes in the same TypeVar group
-  if (nodeInfo.isTypeVar && nodeInfo.typeVar) {
-    const typeVarNodes = getTypeVarGroup(nodeInfo.moduleId, nodeInfo.typeVar, modules);
+  // Check if the new type is valid for the entire network
+  for (const networkNodeId of constraintNetwork) {
+    const networkNodeInfo = getNodeTypeInfo(networkNodeId, modules, templates);
+    if (!networkNodeInfo) continue;
 
-    for (const node of typeVarNodes) {
-      if (node.node_id !== nodeId) {
-        result.nodesToUpdate.push({
-          moduleId: nodeInfo.moduleId,
-          nodeId: node.node_id,
-          newType
-        });
+    // If any node in the network can't support the new type, find invalid connections
+    if (!networkNodeInfo.availableTypes.includes(newType)) {
+      // Find connections that would become invalid
+      const nodeConnections = connections.filter(conn =>
+        (conn.from_node_id === networkNodeId || conn.to_node_id === networkNodeId) &&
+        (constraintNetwork.has(conn.from_node_id) && constraintNetwork.has(conn.to_node_id))
+      );
+
+      for (const connection of nodeConnections) {
+        result.invalidConnections.push(`${connection.from_node_id}->${connection.to_node_id}`);
       }
     }
   }
 
-  // 2. Check connections and propagate to connected nodes
-  const relatedConnections = connections.filter(conn =>
-    conn.from_node_id === nodeId || conn.to_node_id === nodeId
-  );
+  // If there are invalid connections, don't proceed with updates
+  if (result.invalidConnections.length > 0) {
+    return result;
+  }
 
-  for (const connection of relatedConnections) {
-    const otherNodeId = connection.from_node_id === nodeId
-      ? connection.to_node_id
-      : connection.from_node_id;
+  // Update all nodes in the constraint network that need to change
+  for (const networkNodeId of constraintNetwork) {
+    if (networkNodeId === nodeId) continue; // Skip the original node
 
-    const otherNodeInfo = getNodeTypeInfo(otherNodeId, modules, templates);
-    if (!otherNodeInfo) continue;
+    const networkNodeInfo = getNodeTypeInfo(networkNodeId, modules, templates);
+    if (!networkNodeInfo) continue;
 
-    // Check if the other node can accept the new type
-    if (!otherNodeInfo.availableTypes.includes(newType)) {
-      result.invalidConnections.push(`${connection.from_node_id}->${connection.to_node_id}`);
-      continue;
-    }
-
-    // If the other node needs to change type
-    if (otherNodeInfo.currentType !== newType) {
+    // Only update if the node's current type is different from the new type
+    if (networkNodeInfo.currentType !== newType) {
       result.nodesToUpdate.push({
-        moduleId: otherNodeInfo.moduleId,
-        nodeId: otherNodeInfo.nodeId,
+        moduleId: networkNodeInfo.moduleId,
+        nodeId: networkNodeId,
         newType
       });
-
-      // Recursively propagate from the other node
-      const recursiveResult = calculateTypePropagation(
-        otherNodeId,
-        newType,
-        modules,
-        templates,
-        connections
-      );
-
-      result.nodesToUpdate.push(...recursiveResult.nodesToUpdate);
-      result.invalidConnections.push(...recursiveResult.invalidConnections);
     }
   }
 
@@ -230,51 +290,157 @@ export function calculateTypePropagation(
     arr.findIndex(other => other.nodeId === item.nodeId) === index
   );
 
-  result.invalidConnections = [...new Set(result.invalidConnections)];
+  result.invalidConnections = Array.from(new Set(result.invalidConnections));
 
   return result;
 }
 
 /**
- * Get restricted types for a TypeVar group based on connections
+ * Get allowed and disabled types for a node based on network-wide constraints
  */
-export function getRestrictedTypesForTypeVar(
-  moduleId: string,
-  typeVar: string,
+export function getNodeTypeConstraints(
+  nodeId: string,
   modules: ModuleInstance[],
   templates: ModuleTemplate[],
   connections: NodeConnection[]
-): string[] {
-  const typeVarNodes = getTypeVarGroup(moduleId, typeVar, modules);
-  if (typeVarNodes.length === 0) return [];
+): { allowedTypes: string[]; disabledTypes: string[]; allTypes: string[] } {
+  const ALL_TYPES = ['str', 'int', 'float', 'bool', 'datetime'];
 
-  // Get base available types for any node in the group
-  const firstNode = typeVarNodes[0];
-  const nodeInfo = getNodeTypeInfo(firstNode.node_id, modules, templates);
-  if (!nodeInfo) return [];
+  const nodeInfo = getNodeTypeInfo(nodeId, modules, templates);
+  if (!nodeInfo) {
+    return { allowedTypes: ALL_TYPES, disabledTypes: [], allTypes: ALL_TYPES };
+  }
 
-  let restrictedTypes = [...nodeInfo.availableTypes];
+  // Find the entire constraint network for this node
+  const constraintNetwork = getConstraintNetwork(nodeId, modules, templates, connections);
 
-  // Check each node in the TypeVar group for connection constraints
-  for (const node of typeVarNodes) {
-    const nodeConnections = connections.filter(conn =>
-      conn.from_node_id === node.node_id || conn.to_node_id === node.node_id
+  // If the network only contains this node (no connections or TypeVars), return base types
+  if (constraintNetwork.size === 1) {
+    return {
+      allowedTypes: [...nodeInfo.availableTypes],
+      disabledTypes: ALL_TYPES.filter(type => !nodeInfo.availableTypes.includes(type)),
+      allTypes: ALL_TYPES
+    };
+  }
+
+  // Calculate the intersection of allowed types across the entire network
+  let networkAllowedTypes = [...ALL_TYPES]; // Start with all possible types
+
+  for (const networkNodeId of constraintNetwork) {
+    const networkNodeInfo = getNodeTypeInfo(networkNodeId, modules, templates);
+    if (!networkNodeInfo) continue;
+
+    // Intersect with this node's available types
+    networkAllowedTypes = networkAllowedTypes.filter(type =>
+      networkNodeInfo.availableTypes.includes(type)
     );
+  }
 
-    for (const connection of nodeConnections) {
-      const otherNodeId = connection.from_node_id === node.node_id
-        ? connection.to_node_id
-        : connection.from_node_id;
+  // The allowed types for this specific node are the intersection of:
+  // 1. The node's base available types
+  // 2. The network-wide allowed types
+  const allowedTypes = nodeInfo.availableTypes.filter(type =>
+    networkAllowedTypes.includes(type)
+  );
 
-      const otherNodeInfo = getNodeTypeInfo(otherNodeId, modules, templates);
-      if (!otherNodeInfo) continue;
+  // Determine disabled types
+  const disabledTypes = ALL_TYPES.filter(type => !allowedTypes.includes(type));
 
-      // Intersect with compatible types from connected node
-      restrictedTypes = restrictedTypes.filter(type =>
-        otherNodeInfo.availableTypes.includes(type)
-      );
+  return {
+    allowedTypes,
+    disabledTypes,
+    allTypes: ALL_TYPES
+  };
+}
+
+/**
+ * Connection creation result
+ */
+export interface ConnectionCreationResult {
+  canConnect: boolean;
+  reason?: string;
+  typeChanges?: Array<{
+    moduleId: string;
+    nodeId: string;
+    newType: string;
+  }>;
+}
+
+/**
+ * Validates if two nodes can be connected and determines type changes needed
+ * Now considers network-wide constraints for both TypeVar and non-TypeVar nodes
+ */
+export function validateAndPrepareConnection(
+  fromNodeId: string,
+  toNodeId: string,
+  modules: ModuleInstance[],
+  templates: ModuleTemplate[],
+  connections: NodeConnection[]
+): ConnectionCreationResult {
+  const fromNodeInfo = getNodeTypeInfo(fromNodeId, modules, templates);
+  const toNodeInfo = getNodeTypeInfo(toNodeId, modules, templates);
+
+  if (!fromNodeInfo || !toNodeInfo) {
+    return { canConnect: false, reason: 'Node not found' };
+  }
+
+  // Find the constraint networks for both nodes
+  const fromNetwork = getConstraintNetwork(fromNodeId, modules, templates, connections);
+  const toNetwork = getConstraintNetwork(toNodeId, modules, templates, connections);
+
+  // Calculate the constraint intersection for the combined network
+  const combinedNetwork = new Set([...fromNetwork, ...toNetwork]);
+  let networkAllowedTypes = ['str', 'int', 'float', 'bool', 'datetime'];
+
+  for (const networkNodeId of combinedNetwork) {
+    const networkNodeInfo = getNodeTypeInfo(networkNodeId, modules, templates);
+    if (!networkNodeInfo) continue;
+
+    // Intersect with this node's available types
+    networkAllowedTypes = networkAllowedTypes.filter(type =>
+      networkNodeInfo.availableTypes.includes(type)
+    );
+  }
+
+  // If no types are compatible across the entire network, connection is not allowed
+  if (networkAllowedTypes.length === 0) {
+    return {
+      canConnect: false,
+      reason: 'No compatible types across the constraint network'
+    };
+  }
+
+  // Determine the target type for the connection
+  let targetType: string;
+
+  // Priority logic:
+  // 1. If from node's current type is in allowed types, use it
+  // 2. If to node's current type is in allowed types, use it
+  // 3. Use first allowed type
+  if (networkAllowedTypes.includes(fromNodeInfo.currentType)) {
+    targetType = fromNodeInfo.currentType;
+  } else if (networkAllowedTypes.includes(toNodeInfo.currentType)) {
+    targetType = toNodeInfo.currentType;
+  } else {
+    targetType = networkAllowedTypes[0];
+  }
+
+  // Calculate all type changes needed for the entire combined network
+  const typeChanges: Array<{ moduleId: string; nodeId: string; newType: string }> = [];
+
+  for (const networkNodeId of combinedNetwork) {
+    const networkNodeInfo = getNodeTypeInfo(networkNodeId, modules, templates);
+    if (!networkNodeInfo) continue;
+
+    // Only add type change if the current type is different
+    if (networkNodeInfo.currentType !== targetType) {
+      typeChanges.push({
+        moduleId: networkNodeInfo.moduleId,
+        nodeId: networkNodeId,
+        newType: targetType
+      });
     }
   }
 
-  return restrictedTypes;
+  return { canConnect: true, typeChanges };
 }

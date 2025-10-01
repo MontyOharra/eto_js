@@ -1,5 +1,5 @@
 import React from 'react';
-import { NodePin, NodeSpec, ModuleTemplate } from '../../../../types/pipelineTypes';
+import { NodePin, NodeSpec, ModuleTemplate } from '../../../../types/moduleTypes';
 import { getAvailableTypesForNode } from '../../../../utils/moduleFactoryNew';
 
 interface NodeComponentProps {
@@ -11,7 +11,7 @@ interface NodeComponentProps {
   activeTypeVar: string | null; // Currently active TypeVar for highlighting
   onTypeVarFocus: (typeVar: string | undefined) => void; // When TypeVar dropdown is focused
   onTypeVarBlur: () => void; // When TypeVar dropdown is blurred
-  getRestrictedTypesForNode: (nodeId: string) => string[]; // Get available types considering constraints
+  getRestrictedTypesForNode: (nodeId: string) => { allowedTypes: string[]; disabledTypes: string[]; allTypes: string[] }; // Get type constraints considering connections
   canRemove: boolean;
   onRemove: () => void;
   onNameChange: (newName: string) => void;
@@ -59,10 +59,19 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
     target.style.height = target.scrollHeight + 'px';
   };
 
-  // Get available types using constraint system (considers connections and TypeVar restrictions)
-  const rawTypes = getRestrictedTypesForNode(node.node_id);
-  const availableTypes = rawTypes.map(convertTypeToDisplayName);
-  const hasMultipleTypes = availableTypes.length > 1;
+  // Get type constraints using constraint system (considers connections and TypeVar restrictions)
+  const typeConstraints = getRestrictedTypesForNode(node.node_id);
+  const availableTypes = typeConstraints.allowedTypes.map(convertTypeToDisplayName);
+  const disabledTypes = typeConstraints.disabledTypes.map(convertTypeToDisplayName);
+  const allTypes = typeConstraints.allTypes.map(convertTypeToDisplayName);
+
+  // For unconnected nodes: show only availableTypes
+  // For connected nodes: show allTypes but disable incompatible ones
+  const nodeBaseTypes = getAvailableTypesForNode(node, template).map(convertTypeToDisplayName);
+  const isConnected = availableTypes.length < nodeBaseTypes.length; // If constrained, then it's connected
+
+  const typesToShow = isConnected ? nodeBaseTypes : availableTypes;
+  const hasMultipleTypes = typesToShow.length > 1;
   const isTypeVariable = !!nodeSpec.typing.type_var;
 
   // Check if this node should be highlighted (same TypeVar as active one)
@@ -75,7 +84,8 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
       case 'bool': return 'boolean';
       case 'int': return 'integer';
       case 'float': return 'float';
-      default: return type; // datetime, etc. stay as-is
+      case 'datetime': return 'datetime';
+      default: return type; // fallback
     }
   }
 
@@ -86,7 +96,8 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
       case 'boolean': return 'bool';
       case 'integer': return 'int';
       case 'float': return 'float';
-      default: return displayName;
+      case 'datetime': return 'datetime';
+      default: return displayName; // fallback
     }
   }
 
@@ -124,15 +135,23 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
               : 'border border-gray-600'
           }`}
         >
-          {availableTypes.map(displayType => (
-            <option
-              key={displayType}
-              value={displayType}
-              className="bg-gray-700 text-gray-300"
-            >
-              {displayType}
-            </option>
-          ))}
+          {typesToShow.map(displayType => {
+            const isDisabled = isConnected && !availableTypes.includes(displayType);
+            return (
+              <option
+                key={displayType}
+                value={displayType}
+                disabled={isDisabled}
+                className={`${
+                  isDisabled
+                    ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
+                    : 'bg-gray-700 text-gray-300'
+                }`}
+              >
+                {displayType}
+              </option>
+            );
+          })}
         </select>
       );
     } else {

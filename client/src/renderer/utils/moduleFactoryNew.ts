@@ -120,7 +120,7 @@ function getDefaultTypeForSpec(nodeSpec: NodeSpec, typeVarManager: TypeVariableM
     return nodeSpec.typing.allowed_types[0];
   }
 
-  return 'string'; // fallback
+  return 'str'; // fallback
 }
 
 // Main module generation
@@ -242,9 +242,15 @@ export function getAvailableTypesForNode(
   nodePin: NodePin,
   template: ModuleTemplate
 ): string[] {
+  // Define all possible types (Python type names)
+  const ALL_TYPES = ['str', 'int', 'float', 'bool', 'datetime'];
+
   if (nodePin.type_var) {
     const domain = template.meta.io_shape.type_params[nodePin.type_var];
-    return domain || ['string'];
+    if (!domain || domain.length === 0) {
+      return ALL_TYPES; // Empty domain means all types allowed
+    }
+    return domain;
   }
 
   // Find the node spec
@@ -261,7 +267,13 @@ export function getAvailableTypesForNode(
     nodeSpec = group?.item;
   }
 
-  return nodeSpec?.typing.allowed_types || ['string'];
+  const allowedTypes = nodeSpec?.typing.allowed_types;
+
+  // Empty array means all types are allowed
+  if (!allowedTypes || allowedTypes.length === 0) {
+    return ALL_TYPES;
+  }
+  return allowedTypes;
 }
 
 export function hasVariableTypes(nodePin: NodePin, template: ModuleTemplate): boolean {

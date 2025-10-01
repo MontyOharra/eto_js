@@ -7,7 +7,8 @@ import {
   PipelineData,
   Connection
 } from '../../../types/pipelineTypes';
-import { removeNodeFromModule, updateNodeType } from '../../../utils/moduleFactory';
+import { removeNodeFromModule, updateNodeType, addNodeToModule } from '../../../utils/moduleFactory';
+import { validateAndPrepareConnection, ConnectionCreationResult } from '../../../utils/typeConstraints';
 import { createModuleInstance, addNodeToGroup, TypeVariableManager } from '../../../utils/moduleFactoryNew';
 import { ModuleComponent } from './ModuleComponent';
 import { ConnectionLayer } from './ConnectionLayer';
@@ -513,16 +514,82 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
           }
         }
 
-        // For both editing and new connections, remove existing connections and add the new one
-        setPipelineState(prev => ({
-          ...prev,
-          connections: [
-            ...prev.connections.filter(conn =>
-              conn.to_node_id !== toNodeId && conn.from_node_id !== fromNodeId
-            ),
-            { from_node_id: fromNodeId, to_node_id: toNodeId }
-          ]
-        }));
+        // Validate connection and get type changes needed
+        const connectionResult = validateAndPrepareConnection(
+          fromNodeId,
+          toNodeId,
+          pipelineState.modules,
+          moduleTemplates,
+          pipelineState.connections
+        );
+
+        if (!connectionResult.canConnect) {
+          console.log('Connection rejected:', connectionResult.reason);
+          // Reset starting connection without creating the connection
+          setStartingConnection(null);
+          setCurrentMousePosition({ x: 0, y: 0 });
+          return;
+        }
+
+        // Apply type changes if needed
+        if (connectionResult.typeChanges && connectionResult.typeChanges.length > 0) {
+          console.log('Applying type changes:', connectionResult.typeChanges);
+
+          // Apply all type changes
+          setPipelineState(prev => ({
+            ...prev,
+            modules: prev.modules.map(module => {
+              const moduleChanges = connectionResult.typeChanges!.filter(change =>
+                change.moduleId === module.module_instance_id
+              );
+
+              if (moduleChanges.length === 0) return module;
+
+              // Apply changes to this module
+              let updatedModule = { ...module };
+              for (const change of moduleChanges) {
+                // Find and update the node
+                const inputIndex = updatedModule.inputs.findIndex(n => n.node_id === change.nodeId);
+                if (inputIndex !== -1) {
+                  updatedModule = {
+                    ...updatedModule,
+                    inputs: updatedModule.inputs.map((input, idx) =>
+                      idx === inputIndex ? { ...input, type: change.newType } : input
+                    )
+                  };
+                } else {
+                  const outputIndex = updatedModule.outputs.findIndex(n => n.node_id === change.nodeId);
+                  if (outputIndex !== -1) {
+                    updatedModule = {
+                      ...updatedModule,
+                      outputs: updatedModule.outputs.map((output, idx) =>
+                        idx === outputIndex ? { ...output, type: change.newType } : output
+                      )
+                    };
+                  }
+                }
+              }
+              return updatedModule;
+            }),
+            connections: [
+              ...prev.connections.filter(conn =>
+                conn.to_node_id !== toNodeId && conn.from_node_id !== fromNodeId
+              ),
+              { from_node_id: fromNodeId, to_node_id: toNodeId }
+            ]
+          }));
+        } else {
+          // No type changes needed, just add the connection
+          setPipelineState(prev => ({
+            ...prev,
+            connections: [
+              ...prev.connections.filter(conn =>
+                conn.to_node_id !== toNodeId && conn.from_node_id !== fromNodeId
+              ),
+              { from_node_id: fromNodeId, to_node_id: toNodeId }
+            ]
+          }));
+        }
 
         console.log(`Connection created/updated: ${fromNodeId} -> ${toNodeId}`);
 
