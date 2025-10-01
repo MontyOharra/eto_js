@@ -198,3 +198,112 @@ class PdfTemplateVersionModel(BaseModel):
 
     # Relationships
     pdf_template = relationship("PdfTemplateModel", back_populates="pdf_template_versions", foreign_keys=[pdf_template_id])
+
+
+class PipelineDefinitionModel(BaseModel):
+    """
+    Pipeline definitions - stores complete pipeline configuration
+    Pipelines are immutable once created (no updates)
+    """
+    __tablename__ = 'pipeline_definitions'
+
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    template_id: Mapped[Optional[str]] = mapped_column(String(100), index=True)  # For ETO integration
+    schema_version: Mapped[str] = mapped_column(String(50), default='1.0')
+
+    # Complete pipeline JSON (modules, pins, connections, configs)
+    pipeline_json: Mapped[str] = mapped_column(Text, nullable=False)
+    visual_json: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # Compilation metadata
+    plan_checksum: Mapped[Optional[str]] = mapped_column(String(64), index=True)
+    compiled_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
+
+    # Audit fields (no updated_at since pipelines are immutable)
+    created_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate())
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    # Relationships
+    pipeline_steps = relationship("PipelineStepModel", back_populates="pipeline_definition", cascade="all, delete-orphan")
+    execution_logs = relationship("PipelineExecutionLogModel", back_populates="pipeline_definition")
+
+    __table_args__ = (
+        Index('ix_pipeline_name', 'name'),
+        Index('ix_pipeline_template_id', 'template_id'),
+        Index('ix_pipeline_checksum', 'plan_checksum'),
+        Index('ix_pipeline_active', 'is_active'),
+    )
+
+
+class PipelineStepModel(BaseModel):
+    """
+    Pipeline steps - compiled execution steps from pipeline definitions
+    Generated during pipeline compilation for optimized execution
+    """
+    __tablename__ = 'pipeline_steps'
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    pipeline_id: Mapped[str] = mapped_column(ForeignKey('pipeline_definitions.id'), nullable=False)
+    plan_checksum: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    # Module instance information
+    module_instance_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    module_ref: Mapped[str] = mapped_column(String(100), nullable=False)  # "name:version"
+    module_kind: Mapped[str] = mapped_column(String(20), nullable=False)  # "transform"|"action"|"logic"
+
+    # Compiled configuration and mappings
+    module_config: Mapped[str] = mapped_column(Text, nullable=False)  # JSON
+    input_field_mappings: Mapped[str] = mapped_column(Text, nullable=False)  # JSON: {input_node_id: upstream_node_id}
+
+    # Execution metadata
+    step_number: Mapped[Optional[int]] = mapped_column(Integer)
+    output_display_names: Mapped[Optional[str]] = mapped_column(Text)  # JSON
+
+    # Relationships
+    pipeline_definition = relationship("PipelineDefinitionModel", back_populates="pipeline_steps")
+
+    __table_args__ = (
+        Index('ix_pipeline_steps_pipeline_checksum', 'pipeline_id', 'plan_checksum'),
+        Index('ix_pipeline_steps_module_ref', 'module_ref'),
+        Index('ix_pipeline_steps_kind', 'module_kind'),
+        Index('ix_pipeline_steps_step_number', 'step_number'),
+    )
+
+
+class PipelineExecutionLogModel(BaseModel):
+    """
+    Pipeline execution logs - track execution history and performance
+    For monitoring pipeline runs and debugging
+    """
+    __tablename__ = 'pipeline_execution_logs'
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    pipeline_id: Mapped[str] = mapped_column(ForeignKey('pipeline_definitions.id'), nullable=False)
+    execution_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    plan_checksum: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    # Execution input/output
+    entry_values: Mapped[str] = mapped_column(Text, nullable=False)  # JSON: input values
+    result_values: Mapped[Optional[str]] = mapped_column(Text)  # JSON: output values
+
+    # Execution status and timing
+    status: Mapped[str] = mapped_column(String(20), nullable=False)  # "success"|"failed"|"timeout"
+    error_message: Mapped[Optional[str]] = mapped_column(Text)
+    started_at: Mapped[datetime] = mapped_column(DATETIME2, nullable=False)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
+    duration_ms: Mapped[Optional[int]] = mapped_column(Integer)
+
+    # Step-level execution details
+    step_logs: Mapped[Optional[str]] = mapped_column(Text)  # JSON: per-step execution info
+
+    # Relationships
+    pipeline_definition = relationship("PipelineDefinitionModel", back_populates="execution_logs")
+
+    __table_args__ = (
+        Index('ix_pipeline_logs_execution_id', 'execution_id'),
+        Index('ix_pipeline_logs_pipeline_id', 'pipeline_id'),
+        Index('ix_pipeline_logs_status', 'status'),
+        Index('ix_pipeline_logs_started_at', 'started_at'),
+    )

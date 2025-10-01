@@ -17,6 +17,7 @@ class PipelineDefinitionModel(BaseModel):
     """
     Pipeline definitions - canonical pipeline JSON storage
     Stores the source of truth for pipeline configuration with checksums
+    Pipelines are immutable once created (no updates allowed)
     """
     __tablename__ = 'pipeline_definitions'
 
@@ -24,7 +25,7 @@ class PipelineDefinitionModel(BaseModel):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text)
 
-    # Canonical pipeline JSON (modules, pins, connections, configs)
+    # Canonical pipeline JSON (modules, pins, connections, configs) - always required
     pipeline_json: Mapped[str] = mapped_column(Text, nullable=False)
     visual_json: Mapped[str] = mapped_column(Text, nullable=False)
 
@@ -32,16 +33,18 @@ class PipelineDefinitionModel(BaseModel):
     plan_checksum: Mapped[Optional[str]] = mapped_column(String(64))
     compiled_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
 
-    # Audit fields
+    # Audit fields (no updated_at since pipelines are immutable)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Relationships
     pipeline_steps = relationship("PipelineStepModel", back_populates="pipeline_definition", cascade="all, delete-orphan")
+    execution_logs = relationship("PipelineExecutionLogModel", back_populates="pipeline_definition")
 
     __table_args__ = (
         Index('idx_pipeline_definitions_name', 'name'),
         Index('idx_pipeline_definitions_checksum', 'plan_checksum'),
+        Index('idx_pipeline_definitions_active', 'is_active'),
     )
 
 

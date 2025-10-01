@@ -62,19 +62,18 @@ class VisualState(BaseModel):
 # CRUD Models for Pipeline Operations
 
 class PipelineBase(BaseModel):
-    """Base fields for pipeline"""
+    """Base fields for pipeline - includes visual and execution state (always required)"""
     name: str = Field(..., min_length=1, max_length=255, description="Pipeline name")
     description: Optional[str] = Field(None, max_length=1000, description="Pipeline description")
+    pipeline_json: PipelineState = Field(..., description="Pipeline execution state")
+    visual_json: VisualState = Field(..., description="Pipeline visual layout")
 
     class Config:
         from_attributes = True
 
 
 class PipelineCreate(PipelineBase):
-    """Model for creating new pipeline"""
-    pipeline_json: PipelineState = Field(..., description="Pipeline definition")
-    visual_json: VisualState = Field(..., description="Visual positioning data")
-    created_by_user: str = Field(..., description="User ID who created the pipeline")
+    """Model for creating new pipeline - pipelines are immutable, no updates allowed"""
 
     def model_dump_for_db(self) -> Dict[str, Any]:
         """Convert to database-ready dictionary with JSON serialization"""
@@ -82,84 +81,19 @@ class PipelineCreate(PipelineBase):
         # Convert complex objects to JSON strings for database storage
         data['pipeline_json'] = json.dumps(data['pipeline_json'])
         data['visual_json'] = json.dumps(data['visual_json'])
-        # Compute derived fields
-        pipeline_state = self.pipeline_json
-        data['start_modules'] = json.dumps(self._get_start_modules(pipeline_state))
-        data['end_modules'] = json.dumps(self._get_end_modules(pipeline_state))
         return data
-
-    def _get_start_modules(self, pipeline_state: PipelineState) -> List[str]:
-        """Get modules that have no inputs (start of pipeline)"""
-        start_modules = []
-        for module in pipeline_state.modules:
-            if not module.inputs or len(module.inputs) == 0:
-                start_modules.append(module.module_instance_id)
-        return start_modules
-
-    def _get_end_modules(self, pipeline_state: PipelineState) -> List[str]:
-        """Get modules that have no outputs or are action modules (end of pipeline)"""
-        end_modules = []
-        for module in pipeline_state.modules:
-            if not module.outputs or len(module.outputs) == 0 or module.module_kind == "action":
-                end_modules.append(module.module_instance_id)
-        return end_modules
-
-    class Config:
-        from_attributes = True
-
-
-class PipelineUpdate(BaseModel):
-    """Model for updating existing pipeline"""
-    name: Optional[str] = Field(None, min_length=1, max_length=255, description="Pipeline name")
-    description: Optional[str] = Field(None, max_length=1000, description="Pipeline description")
-    pipeline_json: Optional[PipelineState] = Field(None, description="Pipeline definition")
-    visual_json: Optional[VisualState] = Field(None, description="Visual positioning data")
-    status: Optional[Literal["draft", "active", "archived"]] = Field(None, description="Pipeline status")
-
-    def model_dump_for_db(self, exclude_unset: bool = True) -> Dict[str, Any]:
-        """Convert to database-ready dictionary with JSON serialization"""
-        data = self.model_dump(exclude_unset=exclude_unset)
-        # Convert complex objects to JSON strings if present
-        if 'pipeline_json' in data and data['pipeline_json'] is not None:
-            pipeline_state = PipelineState(**data['pipeline_json'])
-            data['pipeline_json'] = json.dumps(data['pipeline_json'])
-            # Update derived fields when pipeline changes
-            data['start_modules'] = json.dumps(self._get_start_modules(pipeline_state))
-            data['end_modules'] = json.dumps(self._get_end_modules(pipeline_state))
-        if 'visual_json' in data and data['visual_json'] is not None:
-            data['visual_json'] = json.dumps(data['visual_json'])
-        return data
-
-    def _get_start_modules(self, pipeline_state: PipelineState) -> List[str]:
-        """Get modules that have no inputs (start of pipeline)"""
-        start_modules = []
-        for module in pipeline_state.modules:
-            if not module.inputs or len(module.inputs) == 0:
-                start_modules.append(module.module_instance_id)
-        return start_modules
-
-    def _get_end_modules(self, pipeline_state: PipelineState) -> List[str]:
-        """Get modules that have no outputs or are action modules (end of pipeline)"""
-        end_modules = []
-        for module in pipeline_state.modules:
-            if not module.outputs or len(module.outputs) == 0 or module.module_kind == "action":
-                end_modules.append(module.module_instance_id)
-        return end_modules
 
     class Config:
         from_attributes = True
 
 
 class Pipeline(PipelineBase):
-    """Full pipeline model retrieved from database"""
+    """Full pipeline model retrieved from database - immutable once created"""
     id: str = Field(..., description="Pipeline ID")
-    pipeline_json: PipelineState = Field(..., description="Pipeline definition")
-    visual_json: VisualState = Field(..., description="Visual positioning data")
-    created_by_user: str = Field(..., description="User ID who created the pipeline")
-    status: Literal["draft", "active", "archived"] = Field("draft", description="Pipeline status")
+    plan_checksum: Optional[str] = Field(None, description="Compiled plan checksum")
+    compiled_at: Optional[datetime] = Field(None, description="When pipeline was compiled")
+    created_at: datetime = Field(..., description="When pipeline was created")
     is_active: bool = Field(True, description="Whether pipeline is active")
-    created_at: datetime
-    updated_at: datetime
 
     # Computed fields for convenience
     module_count: int = Field(0, description="Number of modules")
@@ -172,7 +106,7 @@ class Pipeline(PipelineBase):
         Convert SQLAlchemy model to Pydantic model
 
         Args:
-            db_model: TransformationPipelineModel instance from database
+            db_model: PipelineDefinitionModel instance from database
 
         Returns:
             Pipeline Pydantic model
@@ -191,11 +125,10 @@ class Pipeline(PipelineBase):
             description=db_model.description,
             pipeline_json=pipeline_state,
             visual_json=visual_state,
-            created_by_user=db_model.created_by_user,
-            status=db_model.status,
+            plan_checksum=db_model.plan_checksum,
+            compiled_at=db_model.compiled_at,
             is_active=db_model.is_active,
             created_at=db_model.created_at,
-            updated_at=db_model.updated_at,
             # Compute counts
             module_count=len(pipeline_state.modules),
             connection_count=len(pipeline_state.connections),
@@ -211,13 +144,11 @@ class PipelineSummary(BaseModel):
     id: str
     name: str
     description: Optional[str] = None
-    created_by_user: str
-    status: Literal["draft", "active", "archived"] = "draft"
+    is_active: bool = True
     module_count: int = 0
     connection_count: int = 0
     entry_point_count: int = 0
     created_at: datetime
-    updated_at: datetime
 
     @classmethod
     def from_full_pipeline(cls, pipeline: Pipeline) -> "PipelineSummary":
@@ -226,13 +157,11 @@ class PipelineSummary(BaseModel):
             id=pipeline.id,
             name=pipeline.name,
             description=pipeline.description,
-            created_by_user=pipeline.created_by_user,
-            status=pipeline.status,
+            is_active=pipeline.is_active,
             module_count=pipeline.module_count,
             connection_count=pipeline.connection_count,
             entry_point_count=pipeline.entry_point_count,
-            created_at=pipeline.created_at,
-            updated_at=pipeline.updated_at
+            created_at=pipeline.created_at
         )
 
     class Config:

@@ -935,7 +935,7 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
           }}
         >
           {/* Modules and Entry Points will be rendered here */}
-          <div className="absolute inset-0" style={{ zIndex: 1 }}>
+          <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 1 }}>
             {/* Entry Points */}
             {pipelineState.entry_points.map((entryPoint, index) => {
               // Use temporary position if this entry point is being dragged, otherwise use visual state
@@ -1087,8 +1087,8 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
             })}
           </div>
 
-          {/* Connection Layer - Below modules but above background */}
-          <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 0 }}>
+          {/* Connection Layer - Above background, clickable */}
+          <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 2 }}>
             <ConnectionLayer
               connections={pipelineState.connections}
               selectedConnectionId={selectedConnectionId}

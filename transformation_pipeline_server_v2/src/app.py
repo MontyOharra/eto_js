@@ -345,9 +345,11 @@ def create_app() -> FastAPI:
     # Import and register routers
     from .api.routers.health import router as health_router
     from .api.routers.modules import router as modules_router
+    from .api.routers.pipelines import router as pipelines_router
 
     app.include_router(health_router, prefix="/api", tags=["health"])
     app.include_router(modules_router, prefix="/api", tags=["modules"])
+    app.include_router(pipelines_router, prefix="/api", tags=["pipelines"])
 
     logger.info("FastAPI application created and configured")
 
