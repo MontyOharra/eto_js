@@ -1,36 +1,17 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { BasicModulesSection } from './BasicModulesSection';
 import { CustomModulesSection } from './CustomModulesSection';
-import { CustomModuleBuilder } from '../module-builder/CustomModuleBuilder';
 
 export const ModuleManagementPage: React.FC = () => {
-  const [isBuilderOpen, setIsBuilderOpen] = useState(false);
-  const [editingModuleId, setEditingModuleId] = useState<string | null>(null);
-
   const handleNewModule = () => {
-    setEditingModuleId(null);
-    setIsBuilderOpen(true);
+    // TODO: Implement new module creation when needed
+    console.log('New module creation not yet implemented');
   };
 
   const handleEditModule = (moduleId: string) => {
-    setEditingModuleId(moduleId);
-    setIsBuilderOpen(true);
+    // TODO: Implement module editing when needed
+    console.log('Module editing not yet implemented:', moduleId);
   };
-
-  const handleCloseBuilder = () => {
-    setIsBuilderOpen(false);
-    setEditingModuleId(null);
-  };
-
-  if (isBuilderOpen) {
-    return (
-      <CustomModuleBuilder
-        moduleId={editingModuleId}
-        onClose={handleCloseBuilder}
-        onSave={handleCloseBuilder}
-      />
-    );
-  }
 
   return (
     <div className="h-full bg-gray-900 text-white">
@@ -39,7 +20,7 @@ export const ModuleManagementPage: React.FC = () => {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-white mb-2">Module Management</h1>
           <p className="text-gray-400">
-            Manage and create transformation modules for your pipelines
+            View and manage transformation modules for your pipelines
           </p>
         </div>
 
