@@ -4,62 +4,20 @@
 
 import { generateUniqueId } from './idGenerator';
 
-// Type definitions for the new structure
-export interface NodePin {
-  node_id: string;
-  direction: 'in' | 'out';
-  type: string;
-  name: string;
-  position_index: number;
-}
+// Import types from the main types file
+import type {
+  NodePin,
+  ModuleInstance,
+  ModuleTemplate,
+  IOSideShape,
+  StaticNodes,
+  DynamicNodes,
+  NodeSpec
+} from '../types/pipelineTypes';
 
-export interface ModuleInstance {
-  module_instance_id: string;
-  module_ref: string;
-  module_kind: string;
-  config: Record<string, any>;
-  inputs: NodePin[];
-  outputs: NodePin[];
-}
+// Removed getDefaultType - replaced with getDefaultTypeFromNodeSpec
 
-export interface MetaDefinition {
-  allow: boolean;
-  min_count: number;
-  max_count: number | null;
-  type: string[];  // Array of allowed types - empty array means all types allowed
-}
-
-/**
- * Get the default type from a meta type definition
- */
-function getDefaultType(metaType: string[]): string {
-  // If empty array, default to string
-  if (metaType.length === 0) {
-    return 'string';
-  }
-  // Use first allowed type as default
-  return mapPythonTypeToJs(metaType[0]);
-}
-
-/**
- * Check if a meta definition allows variable types
- */
-export function hasVariableTypes(metaType: string[]): boolean {
-  // Variable if array has more than one element or is empty (all types)
-  return metaType.length !== 1;
-}
-
-/**
- * Get allowed types from meta definition
- */
-export function getAllowedTypes(metaType: string[]): string[] {
-  // If empty array, return all scalar types
-  if (metaType.length === 0) {
-    return ['string', 'number', 'boolean', 'datetime'];
-  }
-  // Otherwise return the mapped array
-  return metaType.map(mapPythonTypeToJs);
-}
+// Removed hasVariableTypes and getAllowedTypes - no longer needed with IOShape structure
 
 /**
  * Map Python type names to JavaScript/frontend type names
@@ -91,33 +49,111 @@ function getDefaultForType(type: string): any {
 }
 
 /**
- * Generate initial nodes based on meta constraints
+ * Generate initial nodes based on IOSideShape definition
  */
-function generateInitialNodes(meta: MetaDefinition, direction: 'in' | 'out'): NodePin[] {
+function generateInitialNodes(ioSide: IOSideShape, direction: 'in' | 'out'): NodePin[] {
   const nodes: NodePin[] = [];
 
-  // Determine initial count
-  let count: number;
-  if (!meta.allow) {
-    // Static nodes - use min_count (or 1 if not specified)
-    count = meta.min_count || 1;
-  } else {
-    // Dynamic nodes - start with minimum
-    count = meta.min_count || 0;
+  // Handle static nodes
+  if (ioSide.static) {
+    ioSide.static.slots.forEach((nodeSpec, index) => {
+      const nodeType = getDefaultTypeFromNodeSpec(nodeSpec);
+      nodes.push({
+        node_id: generateUniqueId('N'),
+        direction,
+        type: nodeType,
+        name: nodeSpec.label,
+        position_index: index
+      });
+    });
   }
 
-  // Create nodes
-  for (let i = 0; i < count; i++) {
-    nodes.push({
-      node_id: generateUniqueId('N'),
-      direction,
-      type: getDefaultType(meta.type),
-      name: `${direction === 'in' ? 'input' : 'output'}_${i + 1}`,
-      position_index: i
+  // Handle dynamic nodes
+  if (ioSide.dynamic) {
+    let currentIndex = nodes.length; // Continue from where static nodes ended
+
+    Object.entries(ioSide.dynamic.groups).forEach(([groupName, group]) => {
+      const minCount = group.min_count || 0;
+
+      // Create minimum required nodes for this group
+      for (let i = 0; i < minCount; i++) {
+        const nodeType = getDefaultTypeFromNodeSpec(group.item);
+        nodes.push({
+          node_id: generateUniqueId('N'),
+          direction,
+          type: nodeType,
+          name: `${group.item.label}_${i + 1}`,
+          position_index: currentIndex++
+        });
+      }
     });
   }
 
   return nodes;
+}
+
+/**
+ * Get the default type from a NodeSpec
+ */
+function getDefaultTypeFromNodeSpec(nodeSpec: NodeSpec): string {
+  if (nodeSpec.typing.allowed_types && nodeSpec.typing.allowed_types.length > 0) {
+    return mapPythonTypeToJs(nodeSpec.typing.allowed_types[0]);
+  }
+  return 'string'; // Default fallback
+}
+
+/**
+ * Check if an IOSideShape allows variable types for the first node/group
+ */
+export function hasVariableTypes(ioSide: IOSideShape): boolean {
+  // Check static nodes first
+  if (ioSide.static && ioSide.static.slots.length > 0) {
+    const firstSlot = ioSide.static.slots[0];
+    const allowedTypes = firstSlot.typing.allowed_types || [];
+    return allowedTypes.length !== 1;
+  }
+
+  // Check dynamic nodes
+  if (ioSide.dynamic) {
+    const groups = Object.values(ioSide.dynamic.groups);
+    if (groups.length > 0) {
+      const firstGroup = groups[0];
+      const allowedTypes = firstGroup.item.typing.allowed_types || [];
+      return allowedTypes.length !== 1;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Get allowed types for the first node/group in an IOSideShape
+ */
+export function getAllowedTypes(ioSide: IOSideShape): string[] {
+  // Check static nodes first
+  if (ioSide.static && ioSide.static.slots.length > 0) {
+    const firstSlot = ioSide.static.slots[0];
+    const allowedTypes = firstSlot.typing.allowed_types || [];
+    if (allowedTypes.length === 0) {
+      return ['string', 'number', 'boolean', 'datetime']; // All types
+    }
+    return allowedTypes.map(mapPythonTypeToJs);
+  }
+
+  // Check dynamic nodes
+  if (ioSide.dynamic) {
+    const groups = Object.values(ioSide.dynamic.groups);
+    if (groups.length > 0) {
+      const firstGroup = groups[0];
+      const allowedTypes = firstGroup.item.typing.allowed_types || [];
+      if (allowedTypes.length === 0) {
+        return ['string', 'number', 'boolean', 'datetime']; // All types
+      }
+      return allowedTypes.map(mapPythonTypeToJs);
+    }
+  }
+
+  return ['string']; // Default fallback
 }
 
 /**
@@ -143,15 +179,15 @@ function initializeConfig(configSchema: any): Record<string, any> {
 /**
  * Create a new module instance from a template
  */
-export function createModuleInstance(template: any, position: { x: number; y: number }): ModuleInstance {
+export function createModuleInstance(template: ModuleTemplate, position: { x: number; y: number }): ModuleInstance {
   const moduleId = generateUniqueId('M');
 
   // Initialize config from schema defaults
   const config = initializeConfig(template.config_schema);
 
-  // Generate initial nodes based on meta
-  const inputs = generateInitialNodes(template.meta.inputs, 'in');
-  const outputs = generateInitialNodes(template.meta.outputs, 'out');
+  // Generate initial nodes based on new IOShape meta structure
+  const inputs = generateInitialNodes(template.meta.io_shape.inputs, 'in');
+  const outputs = generateInitialNodes(template.meta.io_shape.outputs, 'out');
 
   return {
     module_instance_id: moduleId,
@@ -166,27 +202,72 @@ export function createModuleInstance(template: any, position: { x: number; y: nu
 /**
  * Check if nodes are static (cannot add/remove)
  */
-export function isNodeSideStatic(meta: MetaDefinition): boolean {
-  return !meta.allow || meta.min_count === meta.max_count;
+export function isNodeSideStatic(ioSide: IOSideShape): boolean {
+  // If only static nodes exist, it's static
+  if (ioSide.static && !ioSide.dynamic) return true;
+
+  // If only dynamic nodes exist, check if they can be modified
+  if (!ioSide.static && ioSide.dynamic) {
+    const groups = Object.values(ioSide.dynamic.groups);
+    return groups.every(group => group.min_count === group.max_count);
+  }
+
+  // Mixed static/dynamic: dynamic part determines if we can add/remove
+  if (ioSide.dynamic) {
+    const groups = Object.values(ioSide.dynamic.groups);
+    return groups.every(group => group.min_count === group.max_count);
+  }
+
+  return true; // Default to static if no clear dynamic behavior
 }
 
 /**
- * Check if can add more nodes
+ * Check if can add more nodes to a dynamic group
  */
-export function canAddNode(currentCount: number, meta: MetaDefinition): boolean {
-  if (!meta.allow) return false;
-  if (meta.min_count === meta.max_count) return false;
-  if (meta.max_count === null) return true;
-  return currentCount < meta.max_count;
+export function canAddNode(currentCount: number, ioSide: IOSideShape): boolean {
+  if (!ioSide) {
+    console.error('canAddNode: ioSide is undefined');
+    return false;
+  }
+  if (!ioSide.dynamic) return false;
+
+  const groups = Object.values(ioSide.dynamic.groups);
+  if (groups.length === 0) return false;
+
+  // For simplicity, check the first dynamic group
+  const group = groups[0];
+  if (group.min_count === group.max_count) return false;
+  if (group.max_count === null || group.max_count === undefined) return true;
+
+  // Count only dynamic nodes (subtract static nodes if any)
+  const staticCount = ioSide.static ? ioSide.static.slots.length : 0;
+  const dynamicCount = currentCount - staticCount;
+
+  return dynamicCount < group.max_count;
 }
 
 /**
- * Check if can remove nodes
+ * Check if can remove nodes from a dynamic group
  */
-export function canRemoveNode(currentCount: number, meta: MetaDefinition): boolean {
-  if (!meta.allow) return false;
-  if (meta.min_count === meta.max_count) return false;
-  return currentCount > meta.min_count;
+export function canRemoveNode(currentCount: number, ioSide: IOSideShape): boolean {
+  if (!ioSide) {
+    console.error('canRemoveNode: ioSide is undefined');
+    return false;
+  }
+  if (!ioSide.dynamic) return false;
+
+  const groups = Object.values(ioSide.dynamic.groups);
+  if (groups.length === 0) return false;
+
+  // For simplicity, check the first dynamic group
+  const group = groups[0];
+  if (group.min_count === group.max_count) return false;
+
+  // Count only dynamic nodes (subtract static nodes if any)
+  const staticCount = ioSide.static ? ioSide.static.slots.length : 0;
+  const dynamicCount = currentCount - staticCount;
+
+  return dynamicCount > group.min_count;
 }
 
 /**
@@ -195,19 +276,32 @@ export function canRemoveNode(currentCount: number, meta: MetaDefinition): boole
 export function addNodeToModule(
   module: ModuleInstance,
   nodeType: 'input' | 'output',
-  meta: MetaDefinition
+  ioSide: IOSideShape
 ): NodePin | null {
-  const nodesArray = nodeType === 'input' ? module.inputs : module.outputs;
-
-  if (!canAddNode(nodesArray.length, meta)) {
+  if (!ioSide) {
+    console.error('addNodeToModule: ioSide is undefined');
     return null;
   }
+
+  const nodesArray = nodeType === 'input' ? module.inputs : module.outputs;
+
+  if (!canAddNode(nodesArray.length, ioSide)) {
+    return null;
+  }
+
+  // Get the dynamic group template
+  if (!ioSide.dynamic) return null;
+  const groups = Object.values(ioSide.dynamic.groups);
+  if (groups.length === 0) return null;
+
+  const group = groups[0]; // Use first group for simplicity
+  const defaultType = getDefaultTypeFromNodeSpec(group.item);
 
   const newNode: NodePin = {
     node_id: generateUniqueId('N'),
     direction: nodeType === 'input' ? 'in' : 'out',
-    type: getDefaultType(meta.type),
-    name: `${nodeType}_${nodesArray.length + 1}`,
+    type: defaultType,
+    name: `${group.item.label}_${nodesArray.length + 1}`,
     position_index: nodesArray.length
   };
 
@@ -222,11 +316,11 @@ export function removeNodeFromModule(
   module: ModuleInstance,
   nodeType: 'input' | 'output',
   nodeIndex: number,
-  meta: MetaDefinition
+  ioSide: IOSideShape
 ): string | null {
   const nodesArray = nodeType === 'input' ? module.inputs : module.outputs;
 
-  if (!canRemoveNode(nodesArray.length, meta)) {
+  if (!canRemoveNode(nodesArray.length, ioSide)) {
     return null;
   }
 

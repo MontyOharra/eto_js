@@ -3,6 +3,42 @@
  * These types match the backend API structure exactly
  */
 
+// Node type definitions
+export interface NodeTypeRule {
+  allowed_types?: string[];
+  type_var?: string;
+}
+
+export interface NodeSpec {
+  label: string;
+  typing: NodeTypeRule;
+}
+
+export interface StaticNodes {
+  slots: NodeSpec[];
+}
+
+export interface DynamicNodeGroup {
+  min_count: number;
+  max_count?: number | null;
+  item: NodeSpec;
+}
+
+export interface DynamicNodes {
+  groups: Record<string, DynamicNodeGroup>;
+}
+
+export interface IOSideShape {
+  static?: StaticNodes;
+  dynamic?: DynamicNodes;
+}
+
+export interface IOShape {
+  inputs: IOSideShape;
+  outputs: IOSideShape;
+  type_params?: Record<string, string[]>;
+}
+
 // Module template from API
 export interface ModuleTemplate {
   module_ref: string;
@@ -12,18 +48,7 @@ export interface ModuleTemplate {
   description: string;
   kind: 'transform' | 'action' | 'logic';
   meta: {
-    inputs: {
-      allow: boolean;
-      min_count: number;
-      max_count: number | null;
-      type: string[];  // Array of allowed types - empty array means all types allowed
-    };
-    outputs: {
-      allow: boolean;
-      min_count: number;
-      max_count: number | null;
-      type: string[];  // Array of allowed types - empty array means all types allowed
-    };
+    io_shape: IOShape;
   };
   config_schema: any; // JSON Schema object
   category: string;

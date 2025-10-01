@@ -6,8 +6,8 @@ import logging
 from typing import Optional, List
 from sqlalchemy.exc import SQLAlchemyError
 
-from ..models import ModuleCatalogModel
-from ...models.module_catalog import ModuleCatalog, ModuleCatalogCreate, ModuleCatalogUpdate
+from src.shared.database.models import ModuleCatalogModel
+from src.shared.models.module_catalog import ModuleCatalog, ModuleCatalogCreate, ModuleCatalogUpdate
 
 logger = logging.getLogger(__name__)
 

@@ -11,7 +11,7 @@ from datetime import datetime
 import importlib
 import pkgutil
 
-from .contracts import CommonCore
+from src.features.modules.core.contracts import CommonCore
 
 logger = logging.getLogger(__name__)
 

@@ -293,7 +293,7 @@ def configure_services(container: DependencyInjectionContainer,
     This function sets up the dependency injection container with all
     required services and their dependencies.
     """
-    from ...features.modules.service import ModulesService
+    from src.features.modules.service import ModulesService
 
     logger.info("Configuring services in DI container...")
 

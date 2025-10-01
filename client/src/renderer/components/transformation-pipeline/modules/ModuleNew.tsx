@@ -121,22 +121,22 @@ export const ModuleNew: React.FC<ModuleProps> = ({
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   // Determine if nodes are static or dynamic
-  const inputsStatic = isNodeSideStatic(template.meta.inputs);
-  const outputsStatic = isNodeSideStatic(template.meta.outputs);
+  const inputsStatic = isNodeSideStatic(template.meta.io_shape.inputs);
+  const outputsStatic = isNodeSideStatic(template.meta.io_shape.outputs);
 
   // Can add/remove nodes
-  const canAddInputs = canAddNode(moduleData.inputs.length, template.meta.inputs);
-  const canRemoveInputs = canRemoveNode(moduleData.inputs.length, template.meta.inputs);
-  const canAddOutputs = canAddNode(moduleData.outputs.length, template.meta.outputs);
-  const canRemoveOutputs = canRemoveNode(moduleData.outputs.length, template.meta.outputs);
+  const canAddInputs = canAddNode(moduleData.inputs.length, template.meta.io_shape.inputs);
+  const canRemoveInputs = canRemoveNode(moduleData.inputs.length, template.meta.io_shape.inputs);
+  const canAddOutputs = canAddNode(moduleData.outputs.length, template.meta.io_shape.outputs);
+  const canRemoveOutputs = canRemoveNode(moduleData.outputs.length, template.meta.io_shape.outputs);
 
   // Check if types are variable
-  const inputTypesVariable = hasVariableTypes(template.meta.inputs.type);
-  const outputTypesVariable = hasVariableTypes(template.meta.outputs.type);
+  const inputTypesVariable = hasVariableTypes(template.meta.io_shape.inputs);
+  const outputTypesVariable = hasVariableTypes(template.meta.io_shape.outputs);
 
   // Get allowed types
-  const allowedInputTypes = getAllowedTypes(template.meta.inputs.type);
-  const allowedOutputTypes = getAllowedTypes(template.meta.outputs.type);
+  const allowedInputTypes = getAllowedTypes(template.meta.io_shape.inputs);
+  const allowedOutputTypes = getAllowedTypes(template.meta.io_shape.outputs);
 
   // Convert nodes to old format for compatibility
   const inputNodes = useMemo(() =>

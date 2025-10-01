@@ -88,10 +88,10 @@ export const ModuleComponentNew: React.FC<ModuleComponentNewProps> = ({
   const borderColor = isSelected ? '#60A5FA' : '#4B5563';
 
   // Check if we can add/remove nodes
-  const canAddInputs = canAddNode(module.inputs.length, template.meta.inputs);
-  const canRemoveInputs = canRemoveNode(module.inputs.length, template.meta.inputs);
-  const canAddOutputs = canAddNode(module.outputs.length, template.meta.outputs);
-  const canRemoveOutputs = canRemoveNode(module.outputs.length, template.meta.outputs);
+  const canAddInputs = canAddNode(module.inputs.length, template.meta.io_shape.inputs);
+  const canRemoveInputs = canRemoveNode(module.inputs.length, template.meta.io_shape.inputs);
+  const canAddOutputs = canAddNode(module.outputs.length, template.meta.io_shape.outputs);
+  const canRemoveOutputs = canRemoveNode(module.outputs.length, template.meta.io_shape.outputs);
 
   // Calculate total rows including add button rows
   const inputRowCount = module.inputs.length + (canAddInputs ? 1 : 0);
@@ -222,9 +222,9 @@ export const ModuleComponentNew: React.FC<ModuleComponentNewProps> = ({
                             </div>
                             {/* Type indicator */}
                             {(() => {
-                              const inputMeta = template.meta.inputs;
-                              const hasVariableType = hasVariableTypes(inputMeta.type);
-                              const allowedTypes = getAllowedTypes(inputMeta.type);
+                              const inputIOSide = template.meta.io_shape.inputs;
+                              const hasVariableType = hasVariableTypes(inputIOSide);
+                              const allowedTypes = getAllowedTypes(inputIOSide);
 
                               if (hasVariableType && allowedTypes.length > 1) {
                                 // Show dropdown for variable types
@@ -320,9 +320,9 @@ export const ModuleComponentNew: React.FC<ModuleComponentNewProps> = ({
                             </div>
                             {/* Type indicator */}
                             {(() => {
-                              const outputMeta = template.meta.outputs;
-                              const hasVariableType = hasVariableTypes(outputMeta.type);
-                              const allowedTypes = getAllowedTypes(outputMeta.type);
+                              const outputIOSide = template.meta.io_shape.outputs;
+                              const hasVariableType = hasVariableTypes(outputIOSide);
+                              const allowedTypes = getAllowedTypes(outputIOSide);
 
                               if (hasVariableType && allowedTypes.length > 1) {
                                 // Show dropdown for variable types

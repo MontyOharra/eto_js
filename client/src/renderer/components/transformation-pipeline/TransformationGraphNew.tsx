@@ -287,8 +287,8 @@ export const TransformationGraphNew: React.FC<TransformationGraphNewProps> = ({
 
     if (!module || !template) return;
 
-    const meta = nodeType === 'input' ? template.meta.inputs : template.meta.outputs;
-    const newNode = addNodeToModule(module, nodeType, meta);
+    const ioSide = nodeType === 'input' ? template.meta.io_shape.inputs : template.meta.io_shape.outputs;
+    const newNode = addNodeToModule(module, nodeType, ioSide);
 
     if (newNode) {
       setPipelineState(prev => ({
@@ -308,8 +308,8 @@ export const TransformationGraphNew: React.FC<TransformationGraphNewProps> = ({
 
     if (!module || !template) return;
 
-    const meta = nodeType === 'input' ? template.meta.inputs : template.meta.outputs;
-    const removedNodeId = removeNodeFromModule(module, nodeType, nodeIndex, meta);
+    const ioSide = nodeType === 'input' ? template.meta.io_shape.inputs : template.meta.io_shape.outputs;
+    const removedNodeId = removeNodeFromModule(module, nodeType, nodeIndex, ioSide);
 
     if (removedNodeId) {
       // Update pipeline state

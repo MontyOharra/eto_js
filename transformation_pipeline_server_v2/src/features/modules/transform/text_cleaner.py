@@ -6,8 +6,8 @@ import re
 from typing import Dict, Any
 from pydantic import BaseModel, Field
 
-from ..core.contracts import TransformModule, ModuleMeta, DynamicSide
-from ..core.registry import register
+from src.features.modules.core.contracts import TransformModule, ModuleMeta, IOShape, IOSideShape, StaticNodes, NodeSpec, NodeTypeRule
+from src.features.modules.core.registry import register
 
 
 class TextCleanerConfig(BaseModel):
@@ -38,17 +38,27 @@ class BasicTextCleaner(TransformModule):
     def meta(cls) -> ModuleMeta:
         """Define I/O constraints for this module"""
         return ModuleMeta(
-            inputs=DynamicSide(
-                allow=False,  # Static inputs
-                min_count=1,
-                max_count=1,
-                type=["str"]  # Only string inputs
-            ),
-            outputs=DynamicSide(
-                allow=False,  # Static outputs
-                min_count=1,
-                max_count=1,
-                type=["str"]  # Only string outputs
+            io_shape=IOShape(
+                inputs=IOSideShape(
+                    static=StaticNodes(
+                        slots=[
+                            NodeSpec(
+                                label="input_text",
+                                typing=NodeTypeRule(allowed_types=["str"])
+                            )
+                        ]
+                    )
+                ),
+                outputs=IOSideShape(
+                    static=StaticNodes(
+                        slots=[
+                            NodeSpec(
+                                label="cleaned_text",
+                                typing=NodeTypeRule(allowed_types=["str"])
+                            )
+                        ]
+                    )
+                )
             )
         )
 

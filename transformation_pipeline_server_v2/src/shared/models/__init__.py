@@ -18,7 +18,6 @@ from .pipeline import (
 )
 
 from .module_catalog import (
-    DynamicSide,
     ModuleMeta,
     ModuleCatalogCreate,
     ModuleCatalogUpdate,
@@ -40,7 +39,6 @@ __all__ = [
     "Pipeline",
     "PipelineSummary",
     # Module catalog types
-    "DynamicSide",
     "ModuleMeta",
     "ModuleCatalogCreate",
     "ModuleCatalogUpdate",
