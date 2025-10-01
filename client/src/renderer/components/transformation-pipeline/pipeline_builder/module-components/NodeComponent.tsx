@@ -8,6 +8,9 @@ interface NodeComponentProps {
   side: 'input' | 'output';
   moduleId: string;
   template: ModuleTemplate; // Add template for TypeVar resolution
+  activeTypeVar: string | null; // Currently active TypeVar for highlighting
+  onTypeVarFocus: (typeVar: string | undefined) => void; // When TypeVar dropdown is focused
+  onTypeVarBlur: () => void; // When TypeVar dropdown is blurred
   canRemove: boolean;
   onRemove: () => void;
   onNameChange: (newName: string) => void;
@@ -23,6 +26,9 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
   side,
   moduleId,
   template,
+  activeTypeVar,
+  onTypeVarFocus,
+  onTypeVarBlur,
   canRemove,
   onRemove,
   onNameChange,
@@ -56,6 +62,9 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
   const availableTypes = rawTypes.map(convertTypeToDisplayName);
   const hasMultipleTypes = availableTypes.length > 1;
   const isTypeVariable = !!nodeSpec.typing.type_var;
+
+  // Check if this node should be highlighted (same TypeVar as active one)
+  const shouldHighlight = isTypeVariable && activeTypeVar === nodeSpec.typing.type_var;
 
   // Convert backend type names to display names
   function convertTypeToDisplayName(type: string): string {
@@ -95,9 +104,23 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
               onTypeChange(backendType);
             }
           }}
+          onFocus={() => {
+            if (isTypeVariable) {
+              onTypeVarFocus(nodeSpec.typing.type_var);
+            }
+          }}
+          onBlur={() => {
+            if (isTypeVariable) {
+              onTypeVarBlur();
+            }
+          }}
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
-          className="text-xs bg-gray-700 border border-gray-600 text-gray-300 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 w-20 text-center h-6"
+          className={`text-xs bg-gray-700 text-gray-300 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 w-20 text-center h-6 ${
+            shouldHighlight
+              ? 'border-2 border-yellow-400 bg-yellow-900/20'
+              : 'border border-gray-600'
+          }`}
         >
           {availableTypes.map(displayType => (
             <option key={displayType} value={displayType}>{displayType}</option>
@@ -106,7 +129,13 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
       );
     } else {
       return (
-        <span className={`text-xs bg-gray-700 text-gray-400 px-1 py-0.5 rounded w-20 text-center inline-block h-6 flex items-center justify-center ${isTypeVariable ? 'border border-blue-400' : 'border border-gray-600'}`}>
+        <span className={`text-xs bg-gray-700 text-gray-400 px-1 py-0.5 rounded w-20 text-center inline-block h-6 flex items-center justify-center ${
+          shouldHighlight
+            ? 'border-2 border-yellow-400 bg-yellow-900/20'
+            : isTypeVariable
+              ? 'border border-blue-400'
+              : 'border border-gray-600'
+        }`}>
           {availableTypes[0] || currentDisplayType}
         </span>
       );

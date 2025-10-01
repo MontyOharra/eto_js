@@ -57,6 +57,18 @@ export const ModuleComponent: React.FC<ModuleComponentProps> = ({
 }) => {
   const [editingNodeName, setEditingNodeName] = useState<string | null>(null);
   const [isConfigExpanded, setIsConfigExpanded] = useState(false);
+  const [activeTypeVar, setActiveTypeVar] = useState<string | null>(null);
+
+  // TypeVar highlighting handlers
+  const handleTypeVarFocus = (typeVar: string | undefined) => {
+    if (typeVar) {
+      setActiveTypeVar(typeVar);
+    }
+  };
+
+  const handleTypeVarBlur = () => {
+    setActiveTypeVar(null);
+  };
 
   // Auto-resize textareas on mount and when content changes
   React.useEffect(() => {
@@ -187,6 +199,9 @@ export const ModuleComponent: React.FC<ModuleComponentProps> = ({
               currentNodes={module.inputs}
               moduleId={module.module_instance_id}
               template={template}
+              activeTypeVar={activeTypeVar}
+              onTypeVarFocus={handleTypeVarFocus}
+              onTypeVarBlur={handleTypeVarBlur}
               onAddNode={(groupId: string) => {
                 // Pass the groupId to enable group-specific node addition
                 onAddNode?.(module.module_instance_id, 'input', groupId);
@@ -231,6 +246,9 @@ export const ModuleComponent: React.FC<ModuleComponentProps> = ({
               currentNodes={module.outputs}
               moduleId={module.module_instance_id}
               template={template}
+              activeTypeVar={activeTypeVar}
+              onTypeVarFocus={handleTypeVarFocus}
+              onTypeVarBlur={handleTypeVarBlur}
               onAddNode={(groupId: string) => {
                 // Pass the groupId to enable group-specific node addition
                 onAddNode?.(module.module_instance_id, 'output', groupId);

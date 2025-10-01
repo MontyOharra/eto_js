@@ -12,6 +12,9 @@ interface NodeGroupProps {
   side: 'input' | 'output';
   moduleId: string;
   template: ModuleTemplate; // Add template for TypeVar resolution
+  activeTypeVar: string | null; // Currently active TypeVar for highlighting
+  onTypeVarFocus: (typeVar: string | undefined) => void; // When TypeVar dropdown is focused
+  onTypeVarBlur: () => void; // When TypeVar dropdown is blurred
   onAddNode: () => void;
   onRemoveNode: (nodeId: string) => void;
   onNodeNameChange: (nodeId: string, newName: string) => void;
@@ -32,6 +35,9 @@ export const NodeGroup: React.FC<NodeGroupProps> = ({
   side,
   moduleId,
   template,
+  activeTypeVar,
+  onTypeVarFocus,
+  onTypeVarBlur,
   onAddNode,
   onRemoveNode,
   onNodeNameChange,
@@ -67,6 +73,9 @@ export const NodeGroup: React.FC<NodeGroupProps> = ({
           side={side}
           moduleId={moduleId}
           template={template}
+          activeTypeVar={activeTypeVar}
+          onTypeVarFocus={onTypeVarFocus}
+          onTypeVarBlur={onTypeVarBlur}
           canRemove={canRemoveNodes}
           onRemove={() => onRemoveNode(node.node_id)}
           onNameChange={(newName) => onNodeNameChange(node.node_id, newName)}

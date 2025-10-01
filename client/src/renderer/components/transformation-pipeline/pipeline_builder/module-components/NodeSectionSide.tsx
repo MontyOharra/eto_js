@@ -8,6 +8,9 @@ interface NodeSectionSideProps {
   currentNodes: NodePin[];
   moduleId: string;
   template: ModuleTemplate; // Add template for TypeVar resolution
+  activeTypeVar: string | null; // Currently active TypeVar for highlighting
+  onTypeVarFocus: (typeVar: string | undefined) => void; // When TypeVar dropdown is focused
+  onTypeVarBlur: () => void; // When TypeVar dropdown is blurred
   onAddNode: (groupId: string) => void;
   onRemoveNode: (nodeId: string, groupId: string) => void;
   onNodeNameChange: (nodeId: string, newName: string) => void;
@@ -23,6 +26,9 @@ export const NodeSectionSide: React.FC<NodeSectionSideProps> = ({
   currentNodes,
   moduleId,
   template,
+  activeTypeVar,
+  onTypeVarFocus,
+  onTypeVarBlur,
   onAddNode,
   onRemoveNode,
   onNodeNameChange,
@@ -127,6 +133,9 @@ export const NodeSectionSide: React.FC<NodeSectionSideProps> = ({
           side={side}
           moduleId={moduleId}
           template={template}
+          activeTypeVar={activeTypeVar}
+          onTypeVarFocus={onTypeVarFocus}
+          onTypeVarBlur={onTypeVarBlur}
           onAddNode={() => handleAddNode(group.id)}
           onRemoveNode={handleRemoveNode}
           onNodeNameChange={onNodeNameChange}
