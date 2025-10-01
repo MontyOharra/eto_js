@@ -76,6 +76,29 @@ export const ModuleComponent: React.FC<ModuleComponentProps> = ({
     setActiveTypeVar(null);
   };
 
+  // Click-outside handler to clear TypeVar highlighting
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      // Only clear if there's an active TypeVar and the click is outside any select element
+      if (activeTypeVar && event.target) {
+        const target = event.target as Element;
+        // Check if the click was on a select element or its children
+        const isSelectClick = target.closest('select') !== null;
+        if (!isSelectClick) {
+          setActiveTypeVar(null);
+        }
+      }
+    };
+
+    if (activeTypeVar) {
+      document.addEventListener('click', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [activeTypeVar]);
+
   // Enhanced type change handler with constraint propagation
   const handleCoordinatedNodeTypeChange = (nodeId: string, newType: string) => {
     // Calculate all the type changes that need to happen
@@ -173,7 +196,7 @@ export const ModuleComponent: React.FC<ModuleComponentProps> = ({
       style={{
         left: `${position.x}px`,
         top: `${position.y}px`,
-        width: '480px', // Fixed width (increased for side-by-side layout)
+        width: '400px', // Fixed width (increased for side-by-side layout)
         transform: 'translate(-50%, 0)',
         borderColor,
         userSelect: 'none',

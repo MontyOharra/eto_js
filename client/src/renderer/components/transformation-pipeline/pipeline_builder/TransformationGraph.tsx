@@ -626,15 +626,16 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
       const outputNode = module.outputs.find(n => n.node_id === nodeId);
       if (outputNode) return outputNode.type;
     }
-    return 'string'; // Default type
+    return 'str'; // Default type
   };
 
   const getTypeColor = (type: string): string => {
     switch (type) {
-      case 'string': return '#3B82F6'; // Blue
-      case 'number': return '#EF4444'; // Red
-      case 'boolean': return '#10B981'; // Green
-      case 'datetime': return '#F59E0B'; // Amber
+      case 'str': return '#3B82F6'; // Blue
+      case 'int': return '#EF4444'; // Red
+      case 'float': return '#F59E0B'; // Orange (different from int)
+      case 'bool': return '#10B981'; // Green
+      case 'datetime': return '#8B5CF6'; // Purple
       default: return '#6B7280'; // Gray for undefined
     }
   };
@@ -1086,7 +1087,7 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
             })}
           </div>
 
-          {/* Connection Layer - Behind modules for proper click priority */}
+          {/* Connection Layer - Below modules but above background */}
           <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 0 }}>
             <ConnectionLayer
               connections={pipelineState.connections}

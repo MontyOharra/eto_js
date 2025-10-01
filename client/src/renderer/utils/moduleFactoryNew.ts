@@ -61,10 +61,11 @@ function createStaticNode(
   nodeSpec: NodeSpec,
   direction: 'in' | 'out',
   positionIndex: number,
-  typeVarManager: TypeVariableManager
+  typeVarManager: TypeVariableManager,
+  moduleInstance?: ModuleInstance
 ): NodePin {
   const nodeId = generateUniqueId('N');
-  const defaultType = getDefaultTypeForSpec(nodeSpec, typeVarManager);
+  const defaultType = getDefaultTypeForSpec(nodeSpec, typeVarManager, moduleInstance);
 
   const node: NodePin = {
     node_id: nodeId,
@@ -87,10 +88,11 @@ function createDynamicNode(
   positionIndex: number,
   groupKey: string,
   instanceIndex: number,
-  typeVarManager: TypeVariableManager
+  typeVarManager: TypeVariableManager,
+  moduleInstance?: ModuleInstance
 ): NodePin {
   const nodeId = generateUniqueId('N');
-  const defaultType = getDefaultTypeForSpec(nodeSpec, typeVarManager);
+  const defaultType = getDefaultTypeForSpec(nodeSpec, typeVarManager, moduleInstance);
 
   const node: NodePin = {
     node_id: nodeId,
@@ -108,11 +110,22 @@ function createDynamicNode(
   return node;
 }
 
-function getDefaultTypeForSpec(nodeSpec: NodeSpec, typeVarManager: TypeVariableManager): string {
+function getDefaultTypeForSpec(nodeSpec: NodeSpec, typeVarManager: TypeVariableManager, moduleInstance?: ModuleInstance): string {
   // Check if type variable is already assigned
   if (nodeSpec.typing.type_var) {
     const existingType = typeVarManager.getTypeVar(nodeSpec.typing.type_var);
     if (existingType) return existingType;
+
+    // If not found in typeVarManager, check existing nodes in the module for the current TypeVar value
+    if (moduleInstance) {
+      const allNodes = [...moduleInstance.inputs, ...moduleInstance.outputs];
+      const existingTypeVarNode = allNodes.find(node => node.type_var === nodeSpec.typing.type_var);
+      if (existingTypeVarNode) {
+        // Set the TypeVar in the manager and return the found type
+        typeVarManager.setTypeVar(nodeSpec.typing.type_var, existingTypeVarNode.type);
+        return existingTypeVarNode.type;
+      }
+    }
   }
 
   // Use first allowed type
@@ -349,7 +362,8 @@ export function addNodeToGroup(
     positionIndex,
     groupKey,
     instanceIndex,
-    typeVarManager
+    typeVarManager,
+    moduleInstance
   );
 
   nodesArray.push(newNode);

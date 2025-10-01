@@ -153,11 +153,13 @@ export const ConnectionLayer: React.FC<ConnectionLayerProps> = ({
 
     if (!startPos || !endPos) return null;
 
-    return {
+    const connData = {
       id: `${connection.from_node_id}-${connection.to_node_id}`,
       path: generateBezierPath(startPos, endPos, 'output', false),
       color: getTypeColor(getNodeType(connection.from_node_id))
     };
+
+    return connData;
   }).filter(Boolean);
 
   return (
@@ -233,7 +235,6 @@ export const ConnectionLayer: React.FC<ConnectionLayerProps> = ({
                     }}
                     onClick={(e) => {
                       e.stopPropagation();
-                      console.log('Selected connection clicked:', connData.id);
                       onConnectionClick(connData.id);
                     }}
                   />
@@ -249,7 +250,6 @@ export const ConnectionLayer: React.FC<ConnectionLayerProps> = ({
                   style={{ pointerEvents: 'all', cursor: 'pointer' }}
                   onClick={(e) => {
                     e.stopPropagation();
-                    console.log('Connection clicked:', connData.id);
                     onConnectionClick(connData.id);
                   }}
                 />
@@ -264,7 +264,6 @@ export const ConnectionLayer: React.FC<ConnectionLayerProps> = ({
                 style={{ pointerEvents: 'all', cursor: 'pointer' }}
                 onClick={(e) => {
                   e.stopPropagation();
-                  console.log('Invisible path clicked:', connData.id);
                   onConnectionClick(connData.id);
                 }}
               />

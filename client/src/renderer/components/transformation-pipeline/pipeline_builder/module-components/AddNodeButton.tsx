@@ -48,7 +48,7 @@ export const AddNodeButton: React.FC<AddNodeButtonProps> = ({
     return (
       <div className="flex items-center px-3 py-2 relative">
         {/* Add Output Text */}
-        <div className="mr-3 text-xs text-gray-500">Add {side}</div>
+        <div className="mr-3 flex-1 text-xs text-gray-500 text-right">Add {side}</div>
 
         {/* Add Output Button */}
         <div
