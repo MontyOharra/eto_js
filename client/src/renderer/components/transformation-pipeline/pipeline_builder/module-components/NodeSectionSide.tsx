@@ -1,5 +1,5 @@
 import React from 'react';
-import { IOSideShape, NodePin, NodeSpec } from '../../../../types/pipelineTypes';
+import { IOSideShape, NodePin, NodeSpec, ModuleTemplate } from '../../../../types/pipelineTypes';
 import { NodeGroup } from './NodeGroup';
 
 interface NodeSectionSideProps {
@@ -7,6 +7,7 @@ interface NodeSectionSideProps {
   ioSideShape: IOSideShape;
   currentNodes: NodePin[];
   moduleId: string;
+  template: ModuleTemplate; // Add template for TypeVar resolution
   onAddNode: (groupId: string) => void;
   onRemoveNode: (nodeId: string, groupId: string) => void;
   onNodeNameChange: (nodeId: string, newName: string) => void;
@@ -21,6 +22,7 @@ export const NodeSectionSide: React.FC<NodeSectionSideProps> = ({
   ioSideShape,
   currentNodes,
   moduleId,
+  template,
   onAddNode,
   onRemoveNode,
   onNodeNameChange,
@@ -124,6 +126,7 @@ export const NodeSectionSide: React.FC<NodeSectionSideProps> = ({
           nodeSpec={group.nodeSpec}
           side={side}
           moduleId={moduleId}
+          template={template}
           onAddNode={() => handleAddNode(group.id)}
           onRemoveNode={handleRemoveNode}
           onNodeNameChange={onNodeNameChange}

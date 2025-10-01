@@ -1,5 +1,5 @@
 import React from 'react';
-import { NodePin, NodeSpec } from '../../../../types/pipelineTypes';
+import { NodePin, NodeSpec, ModuleTemplate } from '../../../../types/pipelineTypes';
 import { NodeComponent } from './NodeComponent';
 import { AddNodeButton } from './AddNodeButton';
 
@@ -11,6 +11,7 @@ interface NodeGroupProps {
   nodeSpec: NodeSpec; // The template spec for this group
   side: 'input' | 'output';
   moduleId: string;
+  template: ModuleTemplate; // Add template for TypeVar resolution
   onAddNode: () => void;
   onRemoveNode: (nodeId: string) => void;
   onNodeNameChange: (nodeId: string, newName: string) => void;
@@ -30,6 +31,7 @@ export const NodeGroup: React.FC<NodeGroupProps> = ({
   nodeSpec,
   side,
   moduleId,
+  template,
   onAddNode,
   onRemoveNode,
   onNodeNameChange,
@@ -64,6 +66,7 @@ export const NodeGroup: React.FC<NodeGroupProps> = ({
           nodeSpec={nodeSpec}
           side={side}
           moduleId={moduleId}
+          template={template}
           canRemove={canRemoveNodes}
           onRemove={() => onRemoveNode(node.node_id)}
           onNameChange={(newName) => onNodeNameChange(node.node_id, newName)}

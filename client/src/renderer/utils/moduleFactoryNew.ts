@@ -257,7 +257,8 @@ export function getAvailableTypesForNode(
   if (nodePin.is_static && ioSide.static) {
     nodeSpec = ioSide.static.slots[nodePin.position_index];
   } else if (!nodePin.is_static && ioSide.dynamic && nodePin.group_key) {
-    nodeSpec = ioSide.dynamic.groups[nodePin.group_key].item;
+    const group = ioSide.dynamic.groups.find(g => g.item.label === nodePin.group_key);
+    nodeSpec = group?.item;
   }
 
   return nodeSpec?.typing.allowed_types || ['string'];

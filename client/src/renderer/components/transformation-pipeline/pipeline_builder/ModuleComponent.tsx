@@ -186,6 +186,7 @@ export const ModuleComponent: React.FC<ModuleComponentProps> = ({
               ioSideShape={template.meta.io_shape.inputs}
               currentNodes={module.inputs}
               moduleId={module.module_instance_id}
+              template={template}
               onAddNode={(groupId: string) => {
                 // Pass the groupId to enable group-specific node addition
                 onAddNode?.(module.module_instance_id, 'input', groupId);
@@ -229,6 +230,7 @@ export const ModuleComponent: React.FC<ModuleComponentProps> = ({
               ioSideShape={template.meta.io_shape.outputs}
               currentNodes={module.outputs}
               moduleId={module.module_instance_id}
+              template={template}
               onAddNode={(groupId: string) => {
                 // Pass the groupId to enable group-specific node addition
                 onAddNode?.(module.module_instance_id, 'output', groupId);

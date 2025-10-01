@@ -1,11 +1,13 @@
 import React from 'react';
-import { NodePin, NodeSpec } from '../../../../types/pipelineTypes';
+import { NodePin, NodeSpec, ModuleTemplate } from '../../../../types/pipelineTypes';
+import { getAvailableTypesForNode } from '../../../../utils/moduleFactoryNew';
 
 interface NodeComponentProps {
   node: NodePin;
   nodeSpec: NodeSpec; // Template specification for this node
   side: 'input' | 'output';
   moduleId: string;
+  template: ModuleTemplate; // Add template for TypeVar resolution
   canRemove: boolean;
   onRemove: () => void;
   onNameChange: (newName: string) => void;
@@ -20,6 +22,7 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
   nodeSpec,
   side,
   moduleId,
+  template,
   canRemove,
   onRemove,
   onNameChange,
@@ -48,8 +51,8 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
     target.style.height = target.scrollHeight + 'px';
   };
 
-  // Get available types from NodeSpec and convert to display names
-  const rawTypes = nodeSpec.typing.allowed_types || [];
+  // Get available types using proper TypeVar resolution
+  const rawTypes = getAvailableTypesForNode(node, template);
   const availableTypes = rawTypes.map(convertTypeToDisplayName);
   const hasMultipleTypes = availableTypes.length > 1;
   const isTypeVariable = !!nodeSpec.typing.type_var;
@@ -104,7 +107,7 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
     } else {
       return (
         <span className={`text-xs bg-gray-700 text-gray-400 px-1 py-0.5 rounded w-20 text-center inline-block h-6 flex items-center justify-center ${isTypeVariable ? 'border border-blue-400' : 'border border-gray-600'}`}>
-          {isTypeVariable ? nodeSpec.typing.type_var : (availableTypes[0] || currentDisplayType)}
+          {availableTypes[0] || currentDisplayType}
         </span>
       );
     }
