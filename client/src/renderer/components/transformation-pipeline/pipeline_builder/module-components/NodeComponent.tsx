@@ -118,12 +118,18 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
           onMouseDown={(e) => e.stopPropagation()}
           className={`text-xs bg-gray-700 text-gray-300 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 w-20 text-center h-6 ${
             shouldHighlight
-              ? 'border-2 border-yellow-400 bg-yellow-900/20'
+              ? 'border-2 border-amber-500/70 bg-amber-900/10'
               : 'border border-gray-600'
           }`}
         >
           {availableTypes.map(displayType => (
-            <option key={displayType} value={displayType}>{displayType}</option>
+            <option
+              key={displayType}
+              value={displayType}
+              className="bg-gray-700 text-gray-300"
+            >
+              {displayType}
+            </option>
           ))}
         </select>
       );
@@ -131,7 +137,7 @@ export const NodeComponent: React.FC<NodeComponentProps> = ({
       return (
         <span className={`text-xs bg-gray-700 text-gray-400 px-1 py-0.5 rounded w-20 text-center inline-block h-6 flex items-center justify-center ${
           shouldHighlight
-            ? 'border-2 border-yellow-400 bg-yellow-900/20'
+            ? 'border-2 border-amber-500/70 bg-amber-900/10'
             : isTypeVariable
               ? 'border border-blue-400'
               : 'border border-gray-600'
