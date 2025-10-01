@@ -29,7 +29,7 @@ export const NodeSectionSide: React.FC<NodeSectionSideProps> = ({
   getConnectedOutputName,
   getTypeColor
 }) => {
-  // Organize nodes into groups based on backend structure
+  // Organize nodes into groups using actual node properties
   const organizeNodesIntoGroups = () => {
     const groups: Array<{
       id: string;
@@ -41,13 +41,22 @@ export const NodeSectionSide: React.FC<NodeSectionSideProps> = ({
       isStatic: boolean;
     }> = [];
 
-    let nodeIndex = 0;
+    // Separate static and dynamic nodes using node properties
+    const staticNodes = currentNodes.filter(node =>
+      (node as any).is_static === true
+    );
+    const dynamicNodes = currentNodes.filter(node =>
+      (node as any).is_static === false
+    );
 
-    // Handle static nodes - each slot becomes its own group
+    // Handle static nodes - create individual groups for each static node
     if (ioSideShape.static && ioSideShape.static.slots.length > 0) {
       ioSideShape.static.slots.forEach((slot, slotIndex) => {
-        const nodesInSlot = currentNodes.slice(nodeIndex, nodeIndex + 1); // Static slots have exactly 1 node
-        nodeIndex += 1;
+        // Find the corresponding static node by position index
+        const staticNode = staticNodes.find(node =>
+          (node as any).position_index === slotIndex
+        );
+        const nodesInSlot = staticNode ? [staticNode] : [];
 
         groups.push({
           id: `static-${slotIndex}`,
@@ -61,23 +70,23 @@ export const NodeSectionSide: React.FC<NodeSectionSideProps> = ({
       });
     }
 
-    // Handle dynamic groups
+    // Handle dynamic groups - organize by group_key
     if (ioSideShape.dynamic && Object.keys(ioSideShape.dynamic.groups).length > 0) {
       Object.entries(ioSideShape.dynamic.groups).forEach(([groupId, groupConfig]) => {
-        // Count remaining nodes for this group
-        const remainingNodes = currentNodes.slice(nodeIndex);
+        // Find nodes that belong to this dynamic group
+        const nodesInGroup = dynamicNodes.filter(node =>
+          (node as any).group_key === groupId
+        );
 
         groups.push({
           id: groupId,
           label: groupConfig.item.label,
-          nodes: remainingNodes, // For now, all remaining nodes go to first dynamic group
+          nodes: nodesInGroup,
           minCount: groupConfig.min_count,
           maxCount: groupConfig.max_count,
           nodeSpec: groupConfig.item,
           isStatic: false
         });
-
-        nodeIndex = currentNodes.length; // All remaining nodes consumed
       });
     }
 
@@ -91,11 +100,13 @@ export const NodeSectionSide: React.FC<NodeSectionSideProps> = ({
   };
 
   const handleRemoveNode = (nodeId: string) => {
-    // Find which group this node belongs to
+    // Find which group this node belongs to using node properties
     const node = currentNodes.find(n => n.node_id === nodeId);
     if (node) {
-      // For now, pass a generic group ID - this needs to be improved when NodePin has group info
-      const groupId = 'dynamic-group'; // TODO: Use actual group tracking
+      // Use actual group information from node properties
+      const groupId = (node as any).is_static
+        ? `static-${(node as any).position_index}`
+        : (node as any).group_key || 'unknown-group';
       onRemoveNode(nodeId, groupId);
     }
   };

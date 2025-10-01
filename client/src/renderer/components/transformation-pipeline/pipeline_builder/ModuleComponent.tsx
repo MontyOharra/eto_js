@@ -12,7 +12,7 @@ interface ModuleComponentProps {
   onSelect: (moduleId: string) => void;
   onMouseDown?: (e: React.MouseEvent) => void;
   onDelete?: (moduleId: string) => void;
-  onAddNode?: (moduleId: string, nodeType: 'input' | 'output') => void;
+  onAddNode?: (moduleId: string, nodeType: 'input' | 'output', groupId?: string) => void;
   onRemoveNode?: (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number) => void;
   onNodeTypeChange?: (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number, newType: string) => void;
   onNodeNameChange?: (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number, newName: string) => void;
@@ -187,8 +187,8 @@ export const ModuleComponent: React.FC<ModuleComponentProps> = ({
               currentNodes={module.inputs}
               moduleId={module.module_instance_id}
               onAddNode={(groupId: string) => {
-                // Convert groupId back to add node call
-                onAddNode?.(module.module_instance_id, 'input');
+                // Pass the groupId to enable group-specific node addition
+                onAddNode?.(module.module_instance_id, 'input', groupId);
               }}
               onRemoveNode={(nodeId: string, groupId: string) => {
                 // Find the node index for the old API
@@ -230,8 +230,8 @@ export const ModuleComponent: React.FC<ModuleComponentProps> = ({
               currentNodes={module.outputs}
               moduleId={module.module_instance_id}
               onAddNode={(groupId: string) => {
-                // Convert groupId back to add node call
-                onAddNode?.(module.module_instance_id, 'output');
+                // Pass the groupId to enable group-specific node addition
+                onAddNode?.(module.module_instance_id, 'output', groupId);
               }}
               onRemoveNode={(nodeId: string, groupId: string) => {
                 // Find the node index for the old API

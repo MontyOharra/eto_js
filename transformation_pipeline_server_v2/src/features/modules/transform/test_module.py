@@ -82,11 +82,11 @@ class StringConcatenator(TransformModule):
                                     typing=NodeTypeRule(type_var="T")  # Multiple allowed types
                                 )
                             ),
-                            "d2" : DynamicNodeGroup(
+                            "fart" : DynamicNodeGroup(
                                 min_count=0,  # At least two inputs required
                                 max_count=None,  # Unlimited inputs
                                 item=NodeSpec(
-                                    label="d2",
+                                    label="shit",
                                     typing=NodeTypeRule(type_var="U")  # Multiple allowed types
                                 )
                             )

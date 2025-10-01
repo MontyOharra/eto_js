@@ -7,7 +7,8 @@ import {
   PipelineData,
   Connection
 } from '../../../types/pipelineTypes';
-import { createModuleInstance, addNodeToModule, removeNodeFromModule, updateNodeType } from '../../../utils/moduleFactory';
+import { removeNodeFromModule, updateNodeType } from '../../../utils/moduleFactory';
+import { createModuleInstance, addNodeToGroup, TypeVariableManager } from '../../../utils/moduleFactoryNew';
 import { ModuleComponent } from './ModuleComponent';
 import { ConnectionLayer } from './ConnectionLayer';
 import { ConnectionInfoOverlay } from './ConnectionInfoOverlay';
@@ -277,7 +278,7 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
     setSelectedModuleId(moduleId);
   };
 
-  const handleAddNode = (moduleId: string, nodeType: 'input' | 'output') => {
+  const handleAddNode = (moduleId: string, nodeType: 'input' | 'output', groupId?: string) => {
     const module = pipelineState.modules.find(m => m.module_instance_id === moduleId);
 
     // Don't allow adding nodes to entry points
@@ -287,14 +288,36 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
 
     if (!module || !template) return;
 
-    const ioSide = nodeType === 'input' ? template.meta.io_shape.inputs : template.meta.io_shape.outputs;
-    const newNode = addNodeToModule(module, nodeType, ioSide);
+    // If groupId is provided, use the new factory system with group support
+    if (groupId) {
+      // Create a temporary TypeVariableManager for this operation
+      const typeVarManager = new TypeVariableManager();
 
-    if (newNode) {
-      setPipelineState(prev => ({
-        ...prev,
-        modules: prev.modules.map(m => m.module_instance_id === moduleId ? module : m)
-      }));
+      const newNode = addNodeToGroup(
+        module,
+        nodeType,
+        groupId,
+        template,
+        typeVarManager
+      );
+
+      if (newNode) {
+        setPipelineState(prev => ({
+          ...prev,
+          modules: prev.modules.map(m => m.module_instance_id === moduleId ? module : m)
+        }));
+      }
+    } else {
+      // Fallback to old system for backward compatibility
+      const ioSide = nodeType === 'input' ? template.meta.io_shape.inputs : template.meta.io_shape.outputs;
+      const newNode = addNodeToModule(module, nodeType, ioSide);
+
+      if (newNode) {
+        setPipelineState(prev => ({
+          ...prev,
+          modules: prev.modules.map(m => m.module_instance_id === moduleId ? module : m)
+        }));
+      }
     }
   };
 
@@ -620,8 +643,8 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
         const dropX = (e.clientX - rect.left - panOffset.x) / zoom;
         const dropY = (e.clientY - rect.top - panOffset.y) / zoom;
 
-        // Create new module instance
-        const moduleInstance = createModuleInstance(moduleTemplate, { x: dropX, y: dropY });
+        // Create new module instance using new factory
+        const { moduleInstance, typeVarManager } = createModuleInstance(moduleTemplate, { x: dropX, y: dropY });
 
         // Update pipeline state
         setPipelineState(prev => ({
