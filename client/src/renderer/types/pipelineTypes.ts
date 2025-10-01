@@ -1,10 +1,13 @@
 /**
  * Type definitions for the Transformation Pipeline system
- * These types match the backend API structure exactly
+ * Re-exports from the new module types system for backward compatibility
  */
 
-// Module template from API
-export interface ModuleTemplate {
+// Export new types
+export * from './moduleTypes';
+
+// Legacy types for backward compatibility
+export interface LegacyModuleTemplate {
   module_ref: string;
   id: string;
   version: string;
@@ -28,25 +31,6 @@ export interface ModuleTemplate {
   config_schema: any; // JSON Schema object
   category: string;
   color: string;
-}
-
-// Node/Pin in a module instance
-export interface NodePin {
-  node_id: string;
-  direction: 'in' | 'out';
-  type: string;
-  name: string;
-  position_index: number;
-}
-
-// Module instance (placed on canvas)
-export interface ModuleInstance {
-  module_instance_id: string;
-  module_ref: string; // e.g., "text_cleaner:1.0.0"
-  module_kind: string;
-  config: Record<string, any>;
-  inputs: NodePin[];
-  outputs: NodePin[];
 }
 
 // Connection between nodes

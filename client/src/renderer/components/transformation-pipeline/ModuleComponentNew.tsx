@@ -1,6 +1,11 @@
 import React, { useState } from 'react';
-import { ModuleInstance, ModuleTemplate, NodePin } from '../../types/pipelineTypes';
-import { canAddNode, canRemoveNode, hasVariableTypes, getAllowedTypes } from '../../utils/moduleFactory';
+import { ModuleInstance, ModuleTemplate, NodePin, DynamicGroupInfo } from '../../types/moduleTypes';
+import {
+  getAvailableTypesForNode,
+  hasVariableTypes,
+  isTypeVariable,
+  getDynamicGroupsInfo
+} from '../../utils/moduleFactoryNew';
 
 interface ModuleComponentNewProps {
   module: ModuleInstance;
@@ -11,7 +16,7 @@ interface ModuleComponentNewProps {
   onSelect: (moduleId: string) => void;
   onMouseDown?: (e: React.MouseEvent) => void;
   onDelete?: (moduleId: string) => void;
-  onAddNode?: (moduleId: string, nodeType: 'input' | 'output') => void;
+  onAddNode?: (moduleId: string, nodeType: 'input' | 'output', groupKey?: string) => void;
   onRemoveNode?: (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number) => void;
   onNodeTypeChange?: (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number, newType: string) => void;
   onNodeNameChange?: (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number, newName: string) => void;
@@ -87,11 +92,15 @@ export const ModuleComponentNew: React.FC<ModuleComponentNewProps> = ({
   const textColor = isLightColor(template.color) ? '#000000' : '#FFFFFF';
   const borderColor = isSelected ? '#60A5FA' : '#4B5563';
 
-  // Check if we can add/remove nodes
-  const canAddInputs = canAddNode(module.inputs.length, template.meta.inputs);
-  const canRemoveInputs = canRemoveNode(module.inputs.length, template.meta.inputs);
-  const canAddOutputs = canAddNode(module.outputs.length, template.meta.outputs);
-  const canRemoveOutputs = canRemoveNode(module.outputs.length, template.meta.outputs);
+  // Get dynamic group information
+  const inputGroups = getDynamicGroupsInfo(module, 'input', template);
+  const outputGroups = getDynamicGroupsInfo(module, 'output', template);
+
+  // Check if we can add/remove nodes (any dynamic group allows adding)
+  const canAddInputs = inputGroups.some(g => g.canAdd);
+  const canRemoveInputs = inputGroups.some(g => g.canRemove);
+  const canAddOutputs = outputGroups.some(g => g.canAdd);
+  const canRemoveOutputs = outputGroups.some(g => g.canRemove);
 
   // Calculate total rows including add button rows
   const inputRowCount = module.inputs.length + (canAddInputs ? 1 : 0);
@@ -218,15 +227,21 @@ export const ModuleComponentNew: React.FC<ModuleComponentNewProps> = ({
                           <div className="flex flex-col items-center gap-1">
                             {/* Label */}
                             <div className="text-xs text-gray-400">
-                              label
+                              {inputNode.label}
                             </div>
+                            {/* Type variable indicator */}
+                            {inputNode.type_var && (
+                              <div className="text-xs text-blue-400 font-mono">
+                                {inputNode.type_var}
+                              </div>
+                            )}
                             {/* Type indicator */}
                             {(() => {
-                              const inputMeta = template.meta.inputs;
-                              const hasVariableType = hasVariableTypes(inputMeta.type);
-                              const allowedTypes = getAllowedTypes(inputMeta.type);
+                              const availableTypes = getAvailableTypesForNode(inputNode, template);
+                              const hasVariableType = hasVariableTypes(inputNode, template);
+                              const isTypeVar = isTypeVariable(inputNode);
 
-                              if (hasVariableType && allowedTypes.length > 1) {
+                              if (hasVariableType) {
                                 // Show dropdown for variable types
                                 return (
                                   <select
@@ -235,9 +250,11 @@ export const ModuleComponentNew: React.FC<ModuleComponentNewProps> = ({
                                       onNodeTypeChange?.(module.module_instance_id, 'input', rowIndex, e.target.value);
                                     }}
                                     onMouseDown={(e) => e.stopPropagation()}
-                                    className="text-xs bg-gray-700 border border-gray-600 text-gray-300 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 flex-shrink-0 w-16 text-center"
+                                    className={`text-xs bg-gray-700 border border-gray-600 text-gray-300 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 flex-shrink-0 w-16 text-center ${
+                                      isTypeVar ? 'border-blue-400' : ''
+                                    }`}
                                   >
-                                    {allowedTypes.map(type => (
+                                    {availableTypes.map(type => (
                                       <option key={type} value={type}>{type}</option>
                                     ))}
                                   </select>
@@ -245,7 +262,9 @@ export const ModuleComponentNew: React.FC<ModuleComponentNewProps> = ({
                               } else {
                                 // Show type badge for fixed type
                                 return (
-                                  <span className="text-xs bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded inline-block flex-shrink-0 w-16 text-center">
+                                  <span className={`text-xs bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded inline-block flex-shrink-0 w-16 text-center ${
+                                    isTypeVar ? 'border border-blue-400' : ''
+                                  }`}>
                                     {inputNode.type}
                                   </span>
                                 );
@@ -253,7 +272,7 @@ export const ModuleComponentNew: React.FC<ModuleComponentNewProps> = ({
                             })()}
                           </div>
                         </div>
-                        {canRemoveInputs && (
+                        {!inputNode.is_static && inputNode.group_key && inputGroups.find(g => g.groupKey === inputNode.group_key)?.canRemove && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -277,22 +296,46 @@ export const ModuleComponentNew: React.FC<ModuleComponentNewProps> = ({
                       className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-1/2"
                       style={{ zIndex: 10 }}
                     >
-                      <button
-                        className="w-5 h-5 rounded-full border-2 border-gray-600 bg-gray-700 hover:bg-gray-600 cursor-pointer hover:scale-110 transition-all flex items-center justify-center"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onAddNode?.(module.module_instance_id, 'input');
-                        }}
-                        onMouseDown={(e) => {
-                          e.stopPropagation();
-                          e.preventDefault();
-                        }}
-                        title="Add Input"
-                      >
-                        <svg className="w-3 h-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                        </svg>
-                      </button>
+{inputGroups.length === 1 ? (
+                        <button
+                          className="w-5 h-5 rounded-full border-2 border-gray-600 bg-gray-700 hover:bg-gray-600 cursor-pointer hover:scale-110 transition-all flex items-center justify-center"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const group = inputGroups.find(g => g.canAdd);
+                            onAddNode?.(module.module_instance_id, 'input', group?.groupKey);
+                          }}
+                          onMouseDown={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                          }}
+                          title="Add Input"
+                        >
+                          <svg className="w-3 h-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                          </svg>
+                        </button>
+                      ) : (
+                        <div className="relative">
+                          <select
+                            onChange={(e) => {
+                              if (e.target.value) {
+                                onAddNode?.(module.module_instance_id, 'input', e.target.value);
+                                e.target.value = ''; // Reset selection
+                              }
+                            }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            className="text-xs bg-gray-700 border border-gray-600 text-gray-300 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            value=""
+                          >
+                            <option value="">Add input...</option>
+                            {inputGroups.filter(g => g.canAdd).map(group => (
+                              <option key={group.groupKey} value={group.groupKey}>
+                                {group.group.item.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
                     </div>
                     <div className="ml-3 text-xs text-gray-500">Add input</div>
                   </>
@@ -316,15 +359,21 @@ export const ModuleComponentNew: React.FC<ModuleComponentNewProps> = ({
                           <div className="flex flex-col items-center gap-1">
                             {/* Label */}
                             <div className="text-xs text-gray-400">
-                              label
+                              {outputNode.label}
                             </div>
+                            {/* Type variable indicator */}
+                            {outputNode.type_var && (
+                              <div className="text-xs text-blue-400 font-mono">
+                                {outputNode.type_var}
+                              </div>
+                            )}
                             {/* Type indicator */}
                             {(() => {
-                              const outputMeta = template.meta.outputs;
-                              const hasVariableType = hasVariableTypes(outputMeta.type);
-                              const allowedTypes = getAllowedTypes(outputMeta.type);
+                              const availableTypes = getAvailableTypesForNode(outputNode, template);
+                              const hasVariableType = hasVariableTypes(outputNode, template);
+                              const isTypeVar = isTypeVariable(outputNode);
 
-                              if (hasVariableType && allowedTypes.length > 1) {
+                              if (hasVariableType) {
                                 // Show dropdown for variable types
                                 return (
                                   <select
@@ -333,9 +382,11 @@ export const ModuleComponentNew: React.FC<ModuleComponentNewProps> = ({
                                       onNodeTypeChange?.(module.module_instance_id, 'output', rowIndex, e.target.value);
                                     }}
                                     onMouseDown={(e) => e.stopPropagation()}
-                                    className="text-xs bg-gray-700 border border-gray-600 text-gray-300 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 flex-shrink-0 w-16 text-center"
+                                    className={`text-xs bg-gray-700 border border-gray-600 text-gray-300 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 flex-shrink-0 w-16 text-center ${
+                                      isTypeVar ? 'border-blue-400' : ''
+                                    }`}
                                   >
-                                    {allowedTypes.map(type => (
+                                    {availableTypes.map(type => (
                                       <option key={type} value={type}>{type}</option>
                                     ))}
                                   </select>
@@ -343,7 +394,9 @@ export const ModuleComponentNew: React.FC<ModuleComponentNewProps> = ({
                               } else {
                                 // Show type badge for fixed type
                                 return (
-                                  <span className="text-xs bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded inline-block flex-shrink-0 w-16 text-center">
+                                  <span className={`text-xs bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded inline-block flex-shrink-0 w-16 text-center ${
+                                    isTypeVar ? 'border border-blue-400' : ''
+                                  }`}>
                                     {outputNode.type}
                                   </span>
                                 );
@@ -379,7 +432,7 @@ export const ModuleComponentNew: React.FC<ModuleComponentNewProps> = ({
                             }}
                           />
                         </div>
-                        {canRemoveOutputs && (
+                        {!outputNode.is_static && outputNode.group_key && outputGroups.find(g => g.groupKey === outputNode.group_key)?.canRemove && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -429,22 +482,46 @@ export const ModuleComponentNew: React.FC<ModuleComponentNewProps> = ({
                       className="absolute right-0 top-1/2 transform -translate-y-1/2 translate-x-1/2"
                       style={{ zIndex: 10 }}
                     >
-                      <button
-                        className="w-5 h-5 rounded-full border-2 border-gray-600 bg-gray-700 hover:bg-gray-600 cursor-pointer hover:scale-110 transition-all flex items-center justify-center"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onAddNode?.(module.module_instance_id, 'output');
-                        }}
-                        onMouseDown={(e) => {
-                          e.stopPropagation();
-                          e.preventDefault();
-                        }}
-                        title="Add Output"
-                      >
-                        <svg className="w-3 h-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                        </svg>
-                      </button>
+{outputGroups.length === 1 ? (
+                        <button
+                          className="w-5 h-5 rounded-full border-2 border-gray-600 bg-gray-700 hover:bg-gray-600 cursor-pointer hover:scale-110 transition-all flex items-center justify-center"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const group = outputGroups.find(g => g.canAdd);
+                            onAddNode?.(module.module_instance_id, 'output', group?.groupKey);
+                          }}
+                          onMouseDown={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                          }}
+                          title="Add Output"
+                        >
+                          <svg className="w-3 h-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                          </svg>
+                        </button>
+                      ) : (
+                        <div className="relative">
+                          <select
+                            onChange={(e) => {
+                              if (e.target.value) {
+                                onAddNode?.(module.module_instance_id, 'output', e.target.value);
+                                e.target.value = ''; // Reset selection
+                              }
+                            }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            className="text-xs bg-gray-700 border border-gray-600 text-gray-300 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            value=""
+                          >
+                            <option value="">Add output...</option>
+                            {outputGroups.filter(g => g.canAdd).map(group => (
+                              <option key={group.groupKey} value={group.groupKey}>
+                                {group.group.item.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
                     </div>
                   </>
                 ) : null}

@@ -6,8 +6,14 @@ import {
   VisualState,
   PipelineData,
   Connection
-} from '../../types/pipelineTypes';
-import { createModuleInstance, addNodeToModule, removeNodeFromModule, updateNodeType } from '../../utils/moduleFactory';
+} from '../../types/moduleTypes';
+import {
+  createModuleInstance,
+  addNodeToGroup,
+  removeNodeFromGroup,
+  updateNodeTypeWithTypeVars,
+  TypeVariableManager
+} from '../../utils/moduleFactoryNew';
 import { ModuleComponentNew } from './ModuleComponentNew';
 import { ConnectionLayerNew } from './ConnectionLayerNew';
 import { ConnectionInfoOverlay } from './ConnectionInfoOverlay';
@@ -91,6 +97,9 @@ export const TransformationGraphNew: React.FC<TransformationGraphNewProps> = ({
     acc[mod.id] = mod;
     return acc;
   }, {} as Record<string, ModuleTemplate>);
+
+  // Type variable managers for each module
+  const [typeVariableManagers, setTypeVariableManagers] = useState<Record<string, TypeVariableManager>>({});
 
   // Helper function to get the name of the output connected to an input
   const getConnectedOutputName = (inputNodeId: string): string => {
@@ -277,18 +286,18 @@ export const TransformationGraphNew: React.FC<TransformationGraphNewProps> = ({
     setSelectedModuleId(moduleId);
   };
 
-  const handleAddNode = (moduleId: string, nodeType: 'input' | 'output') => {
+  const handleAddNode = (moduleId: string, nodeType: 'input' | 'output', groupKey?: string) => {
     const module = pipelineState.modules.find(m => m.module_instance_id === moduleId);
 
     // Don't allow adding nodes to entry points
     if (module?.module_ref === 'entry_point:1.0.0') return;
 
     const template = module ? moduleTemplatesMap[module.module_ref.split(':')[0]] : null;
+    const typeVarManager = typeVariableManagers[moduleId];
 
-    if (!module || !template) return;
+    if (!module || !template || !typeVarManager || !groupKey) return;
 
-    const meta = nodeType === 'input' ? template.meta.inputs : template.meta.outputs;
-    const newNode = addNodeToModule(module, nodeType, meta);
+    const newNode = addNodeToGroup(module, nodeType, groupKey, template, typeVarManager);
 
     if (newNode) {
       setPipelineState(prev => ({
@@ -305,11 +314,11 @@ export const TransformationGraphNew: React.FC<TransformationGraphNewProps> = ({
     if (module?.module_ref === 'entry_point:1.0.0') return;
 
     const template = module ? moduleTemplatesMap[module.module_ref.split(':')[0]] : null;
+    const typeVarManager = typeVariableManagers[moduleId];
 
-    if (!module || !template) return;
+    if (!module || !template || !typeVarManager) return;
 
-    const meta = nodeType === 'input' ? template.meta.inputs : template.meta.outputs;
-    const removedNodeId = removeNodeFromModule(module, nodeType, nodeIndex, meta);
+    const removedNodeId = removeNodeFromGroup(module, nodeType, nodeIndex, template, typeVarManager);
 
     if (removedNodeId) {
       // Update pipeline state
@@ -325,18 +334,26 @@ export const TransformationGraphNew: React.FC<TransformationGraphNewProps> = ({
   };
 
   const handleNodeTypeChange = (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number, newType: string) => {
+    const module = pipelineState.modules.find(m => m.module_instance_id === moduleId);
+    const typeVarManager = typeVariableManagers[moduleId];
+
+    if (!module || !typeVarManager) return;
+
+    const nodes = nodeType === 'input' ? module.inputs : module.outputs;
+    if (nodeIndex < 0 || nodeIndex >= nodes.length) return;
+
+    const targetNode = nodes[nodeIndex];
+    const affectedNodeIds = updateNodeTypeWithTypeVars(module, targetNode.node_id, newType, typeVarManager);
+
     setPipelineState(prev => ({
       ...prev,
-      modules: prev.modules.map(module => {
-        if (module.module_instance_id === moduleId) {
-          const nodes = nodeType === 'input' ? module.inputs : module.outputs;
-          if (nodeIndex >= 0 && nodeIndex < nodes.length) {
-            nodes[nodeIndex].type = newType;
-          }
-        }
-        return module;
-      })
+      modules: prev.modules.map(m => m.module_instance_id === moduleId ? module : m)
     }));
+
+    // Log type variable changes for debugging
+    if (affectedNodeIds.length > 0) {
+      console.log(`Type variable ${targetNode.type_var} changed to ${newType}, affecting nodes:`, affectedNodeIds);
+    }
   };
 
   const handleNodeNameChange = (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number, newName: string) => {
@@ -592,6 +609,13 @@ export const TransformationGraphNew: React.FC<TransformationGraphNewProps> = ({
       return { ...prev, modules: newModules };
     });
 
+    // Remove type variable manager
+    setTypeVariableManagers(prev => {
+      const newManagers = { ...prev };
+      delete newManagers[moduleId];
+      return newManagers;
+    });
+
     // Clear selection if deleted module was selected
     if (selectedModuleId === moduleId) {
       setSelectedModuleId(null);
@@ -620,8 +644,8 @@ export const TransformationGraphNew: React.FC<TransformationGraphNewProps> = ({
         const dropX = (e.clientX - rect.left - panOffset.x) / zoom;
         const dropY = (e.clientY - rect.top - panOffset.y) / zoom;
 
-        // Create new module instance
-        const moduleInstance = createModuleInstance(moduleTemplate, { x: dropX, y: dropY });
+        // Create new module instance with type variable manager
+        const { moduleInstance, typeVarManager } = createModuleInstance(moduleTemplate, { x: dropX, y: dropY });
 
         // Update pipeline state
         setPipelineState(prev => ({
@@ -636,6 +660,12 @@ export const TransformationGraphNew: React.FC<TransformationGraphNewProps> = ({
             ...prev.modules,
             [moduleInstance.module_instance_id]: { x: dropX, y: dropY }
           }
+        }));
+
+        // Store the type variable manager
+        setTypeVariableManagers(prev => ({
+          ...prev,
+          [moduleInstance.module_instance_id]: typeVarManager
         }));
 
         // Select the newly placed module
