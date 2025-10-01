@@ -1,90 +1,87 @@
 import React from 'react';
-import { NodePin, DynamicNodeGroup } from '../../../../types/pipelineTypes';
+import { NodePin, NodeSpec } from '../../../../types/pipelineTypes';
 import { NodeComponent } from './NodeComponent';
 import { AddNodeButton } from './AddNodeButton';
-import { GroupSeparator } from './GroupSeparator';
 
 interface NodeGroupProps {
-  groupId: string;
-  groupType: 'static' | 'dynamic';
+  label: string; // From NodeSpec.label
   nodes: NodePin[];
-  groupConfig?: DynamicNodeGroup; // Only for dynamic groups
+  minCount: number;
+  maxCount?: number | null;
+  nodeSpec: NodeSpec; // The template spec for this group
   side: 'input' | 'output';
   moduleId: string;
-  canAddNodes: boolean;
-  canRemoveNodes: boolean;
   onAddNode: () => void;
   onRemoveNode: (nodeId: string) => void;
   onNodeNameChange: (nodeId: string, newName: string) => void;
+  onNodeTypeChange: (nodeId: string, newType: string) => void;
   onNodeClick: (nodeId: string) => void;
   getConnectedOutputName?: (nodeId: string) => string; // Only for input side
   getTypeColor: (type: string) => string;
   isFirstGroup: boolean;
+  isStatic: boolean; // Whether this is a static group (always shows label)
 }
 
 export const NodeGroup: React.FC<NodeGroupProps> = ({
-  groupId,
-  groupType,
+  label,
   nodes,
-  groupConfig,
+  minCount,
+  maxCount,
+  nodeSpec,
   side,
   moduleId,
-  canAddNodes,
-  canRemoveNodes,
   onAddNode,
   onRemoveNode,
   onNodeNameChange,
+  onNodeTypeChange,
   onNodeClick,
   getConnectedOutputName,
   getTypeColor,
-  isFirstGroup
+  isFirstGroup,
+  isStatic
 }) => {
-  const handleNodeRemove = (nodeId: string) => {
-    onRemoveNode(nodeId);
-  };
-
-  const handleNodeNameChange = (nodeId: string, newName: string) => {
-    onNodeNameChange(nodeId, newName);
-  };
-
-  const handleNodeClick = (nodeId: string) => {
-    onNodeClick(nodeId);
-  };
-
-  // Determine if we can remove nodes from this specific group
-  const canRemoveFromGroup = canRemoveNodes && groupType === 'dynamic' && groupConfig && nodes.length > groupConfig.min_count;
+  const canAddNodes = maxCount ? nodes.length < maxCount : true;
+  const canRemoveNodes = nodes.length > minCount;
 
   return (
-    <>
-      {/* Group separator (not shown for first group) */}
-      <GroupSeparator
-        groupLabel={groupType === 'dynamic' ? groupConfig?.label : undefined}
-        isFirst={isFirstGroup}
-      />
+    <div>
+      {/* Group label separator */}
+      {(isStatic || !isFirstGroup) && (
+        <div className="pt-1 pb-1 px-3">
+          <div className="flex items-center">
+            <div className="flex-1 h-px bg-gray-600"></div>
+            <span className="px-2 text-xs text-gray-400 font-bold bg-gray-800">{label}</span>
+            <div className="flex-1 h-px bg-gray-600"></div>
+          </div>
+        </div>
+      )}
 
-      {/* Render nodes in this group */}
+      {/* Render nodes in this group (no borders between individual nodes) */}
       {nodes.map((node) => (
         <NodeComponent
           key={node.node_id}
           node={node}
+          nodeSpec={nodeSpec}
           side={side}
           moduleId={moduleId}
-          canRemove={canRemoveFromGroup}
-          onRemove={() => handleNodeRemove(node.node_id)}
-          onNameChange={(newName) => handleNodeNameChange(node.node_id, newName)}
-          onClick={() => handleNodeClick(node.node_id)}
+          canRemove={canRemoveNodes}
+          onRemove={() => onRemoveNode(node.node_id)}
+          onNameChange={(newName) => onNodeNameChange(node.node_id, newName)}
+          onTypeChange={(newType) => onNodeTypeChange(node.node_id, newType)}
+          onClick={() => onNodeClick(node.node_id)}
           connectedOutputName={getConnectedOutputName?.(node.node_id)}
           getTypeColor={getTypeColor}
         />
       ))}
 
-      {/* Add button for dynamic groups that can accept more nodes */}
-      {groupType === 'dynamic' && canAddNodes && groupConfig && nodes.length < groupConfig.max_count && (
+      {/* Add button for groups that can accept more nodes */}
+      {canAddNodes && (
         <AddNodeButton
           side={side}
           onAdd={onAddNode}
+          disabled={false}
         />
       )}
-    </>
+    </div>
   );
 };

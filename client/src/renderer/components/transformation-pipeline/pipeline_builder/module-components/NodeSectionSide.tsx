@@ -1,5 +1,5 @@
 import React from 'react';
-import { IOSideShape, NodePin, DynamicNodeGroup } from '../../../../types/pipelineTypes';
+import { IOSideShape, NodePin, NodeSpec } from '../../../../types/pipelineTypes';
 import { NodeGroup } from './NodeGroup';
 
 interface NodeSectionSideProps {
@@ -10,6 +10,7 @@ interface NodeSectionSideProps {
   onAddNode: (groupId: string) => void;
   onRemoveNode: (nodeId: string, groupId: string) => void;
   onNodeNameChange: (nodeId: string, newName: string) => void;
+  onNodeTypeChange: (nodeId: string, newType: string) => void;
   onNodeClick: (nodeId: string) => void;
   getConnectedOutputName?: (nodeId: string) => string; // Only for input side
   getTypeColor: (type: string) => string;
@@ -23,40 +24,60 @@ export const NodeSectionSide: React.FC<NodeSectionSideProps> = ({
   onAddNode,
   onRemoveNode,
   onNodeNameChange,
+  onNodeTypeChange,
   onNodeClick,
   getConnectedOutputName,
   getTypeColor
 }) => {
-  // TEMPORARY: Simple organization that works with current NodePin structure
-  // TODO: Update when NodePin has is_static and group_id properties
+  // Organize nodes into groups based on backend structure
   const organizeNodesIntoGroups = () => {
     const groups: Array<{
       id: string;
-      type: 'static' | 'dynamic';
+      label: string;
       nodes: NodePin[];
-      config?: DynamicNodeGroup;
+      minCount: number;
+      maxCount?: number | null;
+      nodeSpec: NodeSpec;
+      isStatic: boolean;
     }> = [];
 
-    // For now, treat each existing node as its own group
-    // This is a simplified version to get things working
-    currentNodes.forEach((node, index) => {
-      groups.push({
-        id: `node-${node.node_id}`,
-        type: 'static', // Treat all as static for now
-        nodes: [node]
+    let nodeIndex = 0;
+
+    // Handle static nodes - each slot becomes its own group
+    if (ioSideShape.static && ioSideShape.static.slots.length > 0) {
+      ioSideShape.static.slots.forEach((slot, slotIndex) => {
+        const nodesInSlot = currentNodes.slice(nodeIndex, nodeIndex + 1); // Static slots have exactly 1 node
+        nodeIndex += 1;
+
+        groups.push({
+          id: `static-${slotIndex}`,
+          label: slot.label,
+          nodes: nodesInSlot,
+          minCount: 1, // Static nodes are required
+          maxCount: 1, // Static nodes are exactly 1
+          nodeSpec: slot,
+          isStatic: true
+        });
       });
-    });
+    }
 
-    // Add a simple add button group if we have dynamic config
+    // Handle dynamic groups
     if (ioSideShape.dynamic && Object.keys(ioSideShape.dynamic.groups).length > 0) {
-      const firstGroupId = Object.keys(ioSideShape.dynamic.groups)[0];
-      const firstGroupConfig = ioSideShape.dynamic.groups[firstGroupId];
+      Object.entries(ioSideShape.dynamic.groups).forEach(([groupId, groupConfig]) => {
+        // Count remaining nodes for this group
+        const remainingNodes = currentNodes.slice(nodeIndex);
 
-      groups.push({
-        id: `${firstGroupId}-add`,
-        type: 'dynamic',
-        nodes: [],
-        config: firstGroupConfig
+        groups.push({
+          id: groupId,
+          label: groupConfig.item.label,
+          nodes: remainingNodes, // For now, all remaining nodes go to first dynamic group
+          minCount: groupConfig.min_count,
+          maxCount: groupConfig.max_count,
+          nodeSpec: groupConfig.item,
+          isStatic: false
+        });
+
+        nodeIndex = currentNodes.length; // All remaining nodes consumed
       });
     }
 
@@ -66,40 +87,17 @@ export const NodeSectionSide: React.FC<NodeSectionSideProps> = ({
   const groups = organizeNodesIntoGroups();
 
   const handleAddNode = (groupId: string) => {
-    // Extract the original dynamic group ID from the group ID
-    const dynamicGroupId = groupId.replace('-add', '');
-    onAddNode(dynamicGroupId);
+    onAddNode(groupId);
   };
 
   const handleRemoveNode = (nodeId: string) => {
-    // Find the node to determine its group
+    // Find which group this node belongs to
     const node = currentNodes.find(n => n.node_id === nodeId);
     if (node) {
-      const groupId = node.is_static ? `static-${node.position_index}` : node.group_id || 'unknown';
+      // For now, pass a generic group ID - this needs to be improved when NodePin has group info
+      const groupId = 'dynamic-group'; // TODO: Use actual group tracking
       onRemoveNode(nodeId, groupId);
     }
-  };
-
-  const canAddNodesForGroup = (group: any) => {
-    if (group.type === 'static') return false;
-    if (!group.config) return false;
-
-    // Check if this is an "add" group (empty group for showing add button)
-    const isAddGroup = group.id.endsWith('-add');
-    return isAddGroup;
-  };
-
-  const canRemoveNodesForGroup = (group: any) => {
-    if (group.type === 'static') return false;
-    if (!group.config) return false;
-
-    // Can remove if we have more than min_count nodes in the entire dynamic group
-    const dynamicGroupId = group.id.split('-')[0];
-    const allNodesInGroup = currentNodes.filter(
-      node => !node.is_static && node.group_id === dynamicGroupId
-    );
-
-    return allNodesInGroup.length > group.config.min_count;
   };
 
   return (
@@ -107,21 +105,22 @@ export const NodeSectionSide: React.FC<NodeSectionSideProps> = ({
       {groups.map((group, index) => (
         <NodeGroup
           key={group.id}
-          groupId={group.id}
-          groupType={group.type}
+          label={group.label}
           nodes={group.nodes}
-          groupConfig={group.config}
+          minCount={group.minCount}
+          maxCount={group.maxCount}
+          nodeSpec={group.nodeSpec}
           side={side}
           moduleId={moduleId}
-          canAddNodes={canAddNodesForGroup(group)}
-          canRemoveNodes={canRemoveNodesForGroup(group)}
           onAddNode={() => handleAddNode(group.id)}
           onRemoveNode={handleRemoveNode}
           onNodeNameChange={onNodeNameChange}
+          onNodeTypeChange={onNodeTypeChange}
           onNodeClick={onNodeClick}
           getConnectedOutputName={getConnectedOutputName}
           getTypeColor={getTypeColor}
           isFirstGroup={index === 0}
+          isStatic={group.isStatic}
         />
       ))}
     </div>

@@ -23,10 +23,18 @@ interface ModuleComponentProps {
 // Get color for node type
 const getTypeColor = (type: string): string => {
   switch (type) {
+    // Frontend naming convention
     case 'string': return '#3B82F6'; // Blue
     case 'number': return '#EF4444'; // Red
     case 'boolean': return '#10B981'; // Green
     case 'datetime': return '#8B5CF6'; // Purple
+
+    // Backend naming convention (Python types)
+    case 'str': return '#3B82F6'; // Blue
+    case 'int': return '#EF4444'; // Red
+    case 'float': return '#EF4444'; // Red (same as number)
+    case 'bool': return '#10B981'; // Green
+
     default: return '#6B7280'; // Gray
   }
 };
@@ -112,7 +120,7 @@ export const ModuleComponent: React.FC<ModuleComponentProps> = ({
       style={{
         left: `${position.x}px`,
         top: `${position.y}px`,
-        width: '400px', // Fixed width (increased for side-by-side layout)
+        width: '480px', // Fixed width (increased for side-by-side layout)
         transform: 'translate(-50%, 0)',
         borderColor,
         userSelect: 'none',
@@ -168,74 +176,90 @@ export const ModuleComponent: React.FC<ModuleComponentProps> = ({
       </div>
       */}
 
-      {/* NEW Nodes Section - Using Component Architecture */}
+      {/* NEW Nodes Section - Clean Side-by-Side Architecture */}
       <div className="border-t border-gray-700 bg-gray-800">
         <div className="flex">
-          {/* Input Side */}
-          <NodeSectionSide
-            side="input"
-            ioSideShape={template.meta.io_shape.inputs}
-            currentNodes={module.inputs}
-            moduleId={module.module_instance_id}
-            onAddNode={(groupId: string) => {
-              // Convert groupId back to add node call
-              onAddNode?.(module.module_instance_id, 'input');
-            }}
-            onRemoveNode={(nodeId: string, groupId: string) => {
-              // Find the node index for the old API
-              const nodeIndex = module.inputs.findIndex(n => n.node_id === nodeId);
-              if (nodeIndex !== -1) {
-                onRemoveNode?.(module.module_instance_id, 'input', nodeIndex);
-              }
-            }}
-            onNodeNameChange={(nodeId: string, newName: string) => {
-              // Find the node index for the old API
-              const nodeIndex = module.inputs.findIndex(n => n.node_id === nodeId);
-              if (nodeIndex !== -1) {
-                onNodeNameChange?.(module.module_instance_id, 'input', nodeIndex, newName);
-              }
-            }}
-            onNodeClick={(nodeId: string) => {
-              onNodeClick?.(module.module_instance_id, nodeId, 'input');
-            }}
-            getConnectedOutputName={getConnectedOutputName}
-            getTypeColor={getTypeColor}
-          />
-
-          {/* Vertical Separator */}
-          <div className="flex justify-center py-3">
-            <div className="w-px bg-gray-600 h-full min-h-6"></div>
+          {/* Input Side - Exactly half width */}
+          <div className="flex-1">
+            <NodeSectionSide
+              side="input"
+              ioSideShape={template.meta.io_shape.inputs}
+              currentNodes={module.inputs}
+              moduleId={module.module_instance_id}
+              onAddNode={(groupId: string) => {
+                // Convert groupId back to add node call
+                onAddNode?.(module.module_instance_id, 'input');
+              }}
+              onRemoveNode={(nodeId: string, groupId: string) => {
+                // Find the node index for the old API
+                const nodeIndex = module.inputs.findIndex(n => n.node_id === nodeId);
+                if (nodeIndex !== -1) {
+                  onRemoveNode?.(module.module_instance_id, 'input', nodeIndex);
+                }
+              }}
+              onNodeNameChange={(nodeId: string, newName: string) => {
+                // Find the node index for the old API
+                const nodeIndex = module.inputs.findIndex(n => n.node_id === nodeId);
+                if (nodeIndex !== -1) {
+                  onNodeNameChange?.(module.module_instance_id, 'input', nodeIndex, newName);
+                }
+              }}
+              onNodeTypeChange={(nodeId: string, newType: string) => {
+                // Find the node index for the old API
+                const nodeIndex = module.inputs.findIndex(n => n.node_id === nodeId);
+                if (nodeIndex !== -1) {
+                  onNodeTypeChange?.(module.module_instance_id, 'input', nodeIndex, newType);
+                }
+              }}
+              onNodeClick={(nodeId: string) => {
+                onNodeClick?.(module.module_instance_id, nodeId, 'input');
+              }}
+              getConnectedOutputName={getConnectedOutputName}
+              getTypeColor={getTypeColor}
+            />
           </div>
 
-          {/* Output Side */}
-          <NodeSectionSide
-            side="output"
-            ioSideShape={template.meta.io_shape.outputs}
-            currentNodes={module.outputs}
-            moduleId={module.module_instance_id}
-            onAddNode={(groupId: string) => {
-              // Convert groupId back to add node call
-              onAddNode?.(module.module_instance_id, 'output');
-            }}
-            onRemoveNode={(nodeId: string, groupId: string) => {
-              // Find the node index for the old API
-              const nodeIndex = module.outputs.findIndex(n => n.node_id === nodeId);
-              if (nodeIndex !== -1) {
-                onRemoveNode?.(module.module_instance_id, 'output', nodeIndex);
-              }
-            }}
-            onNodeNameChange={(nodeId: string, newName: string) => {
-              // Find the node index for the old API
-              const nodeIndex = module.outputs.findIndex(n => n.node_id === nodeId);
-              if (nodeIndex !== -1) {
-                onNodeNameChange?.(module.module_instance_id, 'output', nodeIndex, newName);
-              }
-            }}
-            onNodeClick={(nodeId: string) => {
-              onNodeClick?.(module.module_instance_id, nodeId, 'output');
-            }}
-            getTypeColor={getTypeColor}
-          />
+          {/* Vertical Separator */}
+          <div className="w-px bg-gray-600"></div>
+
+          {/* Output Side - Exactly half width */}
+          <div className="flex-1">
+            <NodeSectionSide
+              side="output"
+              ioSideShape={template.meta.io_shape.outputs}
+              currentNodes={module.outputs}
+              moduleId={module.module_instance_id}
+              onAddNode={(groupId: string) => {
+                // Convert groupId back to add node call
+                onAddNode?.(module.module_instance_id, 'output');
+              }}
+              onRemoveNode={(nodeId: string, groupId: string) => {
+                // Find the node index for the old API
+                const nodeIndex = module.outputs.findIndex(n => n.node_id === nodeId);
+                if (nodeIndex !== -1) {
+                  onRemoveNode?.(module.module_instance_id, 'output', nodeIndex);
+                }
+              }}
+              onNodeNameChange={(nodeId: string, newName: string) => {
+                // Find the node index for the old API
+                const nodeIndex = module.outputs.findIndex(n => n.node_id === nodeId);
+                if (nodeIndex !== -1) {
+                  onNodeNameChange?.(module.module_instance_id, 'output', nodeIndex, newName);
+                }
+              }}
+              onNodeTypeChange={(nodeId: string, newType: string) => {
+                // Find the node index for the old API
+                const nodeIndex = module.outputs.findIndex(n => n.node_id === nodeId);
+                if (nodeIndex !== -1) {
+                  onNodeTypeChange?.(module.module_instance_id, 'output', nodeIndex, newType);
+                }
+              }}
+              onNodeClick={(nodeId: string) => {
+                onNodeClick?.(module.module_instance_id, nodeId, 'output');
+              }}
+              getTypeColor={getTypeColor}
+            />
+          </div>
         </div>
       </div>
 
