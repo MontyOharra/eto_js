@@ -8,22 +8,44 @@ from abc import ABC, abstractmethod
 
 
 # Type definitions
-Scalar = Literal["str", "int", "float", "datetime", "bool"]
+Scalar = Literal["str", "float", "datetime", "bool"]
 
 
-class DynamicSide(BaseModel):
-    """Configuration for dynamic I/O behavior on one side (inputs or outputs)"""
-    allow: bool = True
-    min_count: int = 0
-    max_count: Optional[int] = None  # None = unbounded
-    type: List[Scalar] = Field(default=["str"])  # Array of allowed types - empty array means all types allowed
+class NodeTypeRule(BaseModel):
+    # exactly one of these is used
+    allowed_types: Optional[List[Scalar]] = None  # per-pin whitelist; user picks independently
+    type_var: Optional[str] = None             # e.g., "T" (unifies across pins)
+
+class NodeSpec(BaseModel):
+    label: str                                 # UI label, e.g., "cond", "value"
+    typing: NodeTypeRule
+
+class StaticNodes(BaseModel):
+    slots: List[NodeSpec]                        # exact count, fixed order
+
+class DynamicNodeGroup(BaseModel):
+    # user can add/remove pins; each pin conforms to 'item' typing
+    min_count: int = 1
+    max_count: Optional[int] = None
+    item: NodeSpec                               # typing applies per pin instance
+
+class DynamicNodes():
+    groups: Dict[str, DynamicNodeGroup] = Field(default_factory=dict)
+
+class IOSideShape(BaseModel):
+    static: Optional[StaticNodes] = None
+    dynamic: Optional[DynamicNodes] = None
+
+class IOShape(BaseModel):
+    inputs: IOSideShape = IOSideShape()
+    outputs: IOSideShape = IOSideShape()
+    # declare domains for type variables (if any are used in pins)
+    type_params: Dict[str, List[Scalar]] = Field(default_factory=dict)
 
 
 class ModuleMeta(BaseModel):
     """Metadata defining I/O constraints for a module"""
-    inputs: DynamicSide = DynamicSide()   # one dynamic list per side
-    outputs: DynamicSide = DynamicSide()  # one dynamic list per side
-
+    io_shape: IOShape = IOShape()
 
 class CommonCore(ABC):
     """

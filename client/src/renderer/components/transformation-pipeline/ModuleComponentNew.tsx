@@ -7,6 +7,7 @@ interface ModuleComponentNewProps {
   template: ModuleTemplate;
   position: { x: number; y: number };
   isSelected: boolean;
+  getConnectedOutputName?: (inputNodeId: string) => string;
   onSelect: (moduleId: string) => void;
   onMouseDown?: (e: React.MouseEvent) => void;
   onDelete?: (moduleId: string) => void;
@@ -34,6 +35,7 @@ export const ModuleComponentNew: React.FC<ModuleComponentNewProps> = ({
   template,
   position,
   isSelected,
+  getConnectedOutputName,
   onSelect,
   onMouseDown,
   onDelete,
@@ -46,6 +48,16 @@ export const ModuleComponentNew: React.FC<ModuleComponentNewProps> = ({
 }) => {
   const [editingNodeName, setEditingNodeName] = useState<string | null>(null);
   const [isConfigExpanded, setIsConfigExpanded] = useState(false);
+
+  // Auto-resize textareas on mount and when content changes
+  React.useEffect(() => {
+    const textareas = document.querySelectorAll(`[data-module-id="${module.module_instance_id}"] textarea`);
+    textareas.forEach((textarea) => {
+      const target = textarea as HTMLTextAreaElement;
+      target.style.height = 'auto';
+      target.style.height = target.scrollHeight + 'px';
+    });
+  }, [module.outputs, module.inputs, getConnectedOutputName]);
 
   // Helper function to determine if a color is light or dark
   const isLightColor = (hexColor: string): boolean => {
@@ -99,9 +111,7 @@ export const ModuleComponentNew: React.FC<ModuleComponentNewProps> = ({
       style={{
         left: `${position.x}px`,
         top: `${position.y}px`,
-        minWidth: '240px',
-        width: 'max-content',
-        maxWidth: '320px',
+        width: '400px', // Fixed width (increased for side-by-side layout)
         transform: 'translate(-50%, 0)',
         borderColor,
         userSelect: 'none',
@@ -111,6 +121,7 @@ export const ModuleComponentNew: React.FC<ModuleComponentNewProps> = ({
         pointerEvents: 'auto',
         cursor: 'move'
       }}
+      data-module-id={module.module_instance_id}
       onMouseDown={handleMouseDown}
     >
       {/* Header */}
@@ -173,16 +184,75 @@ export const ModuleComponentNew: React.FC<ModuleComponentNewProps> = ({
                           e.preventDefault();
                         }}
                         data-node-id={inputNode.node_id}
-                        data-node-direction="in"
+                        data-node-direction="input"
                         data-module-id={module.module_instance_id}
                       />
                     </div>
                     {/* Input Content */}
-                    <div className="ml-6 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-300 font-medium">
-                          {inputNode.name}
-                        </span>
+                    <div className="ml-3 flex-1">
+                      <div className="flex items-stretch gap-2">
+                        <div className="flex-1 flex items-center">
+                          <textarea
+                            value={getConnectedOutputName ? getConnectedOutputName(inputNode.node_id) : inputNode.name}
+                            readOnly
+                            className={`text-xs bg-transparent border-0 rounded px-1 py-0.5 focus:outline-none w-full text-left resize-none overflow-hidden ${
+                              getConnectedOutputName && getConnectedOutputName(inputNode.node_id) === 'Not Connected'
+                                ? 'text-gray-500 italic'
+                                : 'text-gray-300'
+                            }`}
+                            style={{
+                              minHeight: '20px',
+                              height: 'auto',
+                              cursor: 'default'
+                            }}
+                            rows={1}
+                            onInput={(e) => {
+                              const target = e.target as HTMLTextAreaElement;
+                              target.style.height = 'auto';
+                              target.style.height = target.scrollHeight + 'px';
+                            }}
+                          />
+                        </div>
+                        {/* Label and Type configuration beside name */}
+                        <div className="flex items-center">
+                          <div className="flex flex-col items-center gap-1">
+                            {/* Label */}
+                            <div className="text-xs text-gray-400">
+                              label
+                            </div>
+                            {/* Type indicator */}
+                            {(() => {
+                              const inputMeta = template.meta.inputs;
+                              const hasVariableType = hasVariableTypes(inputMeta.type);
+                              const allowedTypes = getAllowedTypes(inputMeta.type);
+
+                              if (hasVariableType && allowedTypes.length > 1) {
+                                // Show dropdown for variable types
+                                return (
+                                  <select
+                                    value={inputNode.type}
+                                    onChange={(e) => {
+                                      onNodeTypeChange?.(module.module_instance_id, 'input', rowIndex, e.target.value);
+                                    }}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    className="text-xs bg-gray-700 border border-gray-600 text-gray-300 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 flex-shrink-0 w-16 text-center"
+                                  >
+                                    {allowedTypes.map(type => (
+                                      <option key={type} value={type}>{type}</option>
+                                    ))}
+                                  </select>
+                                );
+                              } else {
+                                // Show type badge for fixed type
+                                return (
+                                  <span className="text-xs bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded inline-block flex-shrink-0 w-16 text-center">
+                                    {inputNode.type}
+                                  </span>
+                                );
+                              }
+                            })()}
+                          </div>
+                        </div>
                         {canRemoveInputs && (
                           <button
                             onClick={(e) => {
@@ -198,37 +268,6 @@ export const ModuleComponentNew: React.FC<ModuleComponentNewProps> = ({
                           </button>
                         )}
                       </div>
-                      {/* Type configuration */}
-                      {(() => {
-                        const inputMeta = template.meta.inputs;
-                        const hasVariableType = hasVariableTypes(inputMeta.type);
-                        const allowedTypes = getAllowedTypes(inputMeta.type);
-
-                        if (hasVariableType && allowedTypes.length > 1) {
-                          // Show dropdown for variable types
-                          return (
-                            <select
-                              value={inputNode.type}
-                              onChange={(e) => {
-                                onNodeTypeChange?.(module.module_instance_id, 'input', rowIndex, e.target.value);
-                              }}
-                              onMouseDown={(e) => e.stopPropagation()}
-                              className="text-xs bg-gray-700 border border-gray-600 text-gray-300 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 mt-1"
-                            >
-                              {allowedTypes.map(type => (
-                                <option key={type} value={type}>{type}</option>
-                              ))}
-                            </select>
-                          );
-                        } else {
-                          // Show type badge for fixed type
-                          return (
-                            <span className="text-xs bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded mt-1 inline-block">
-                              {inputNode.type}
-                            </span>
-                          );
-                        }
-                      })()}
                     </div>
                   </>
                 ) : showAddInput ? (
@@ -255,9 +294,14 @@ export const ModuleComponentNew: React.FC<ModuleComponentNewProps> = ({
                         </svg>
                       </button>
                     </div>
-                    <div className="ml-6 text-xs text-gray-500">Add input</div>
+                    <div className="ml-3 text-xs text-gray-500">Add input</div>
                   </>
                 ) : null}
+              </div>
+
+              {/* Vertical Separator */}
+              <div className="flex justify-center py-3">
+                <div className="w-px bg-gray-600 h-full min-h-6"></div>
               </div>
 
               {/* Output Half */}
@@ -265,38 +309,76 @@ export const ModuleComponentNew: React.FC<ModuleComponentNewProps> = ({
                 {outputNode ? (
                   <>
                     {/* Output Content */}
-                    <div className="mr-6 flex-1 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        {editingNodeName === outputNode.node_id ? (
-                          <input
-                            type="text"
+                    <div className="mr-3 flex-1">
+                      <div className="flex items-stretch justify-end gap-2">
+                        {/* Label and Type configuration beside name */}
+                        <div className="flex items-center">
+                          <div className="flex flex-col items-center gap-1">
+                            {/* Label */}
+                            <div className="text-xs text-gray-400">
+                              label
+                            </div>
+                            {/* Type indicator */}
+                            {(() => {
+                              const outputMeta = template.meta.outputs;
+                              const hasVariableType = hasVariableTypes(outputMeta.type);
+                              const allowedTypes = getAllowedTypes(outputMeta.type);
+
+                              if (hasVariableType && allowedTypes.length > 1) {
+                                // Show dropdown for variable types
+                                return (
+                                  <select
+                                    value={outputNode.type}
+                                    onChange={(e) => {
+                                      onNodeTypeChange?.(module.module_instance_id, 'output', rowIndex, e.target.value);
+                                    }}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    className="text-xs bg-gray-700 border border-gray-600 text-gray-300 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 flex-shrink-0 w-16 text-center"
+                                  >
+                                    {allowedTypes.map(type => (
+                                      <option key={type} value={type}>{type}</option>
+                                    ))}
+                                  </select>
+                                );
+                              } else {
+                                // Show type badge for fixed type
+                                return (
+                                  <span className="text-xs bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded inline-block flex-shrink-0 w-16 text-center">
+                                    {outputNode.type}
+                                  </span>
+                                );
+                              }
+                            })()}
+                          </div>
+                        </div>
+                        <div className="flex-1 flex items-center">
+                          <textarea
                             value={outputNode.name}
                             onChange={(e) => {
                               onNodeNameChange?.(module.module_instance_id, 'output', rowIndex, e.target.value);
                             }}
-                            onBlur={() => setEditingNodeName(null)}
                             onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                setEditingNodeName(null);
+                              // Prevent Enter from creating new line, use Shift+Enter for new line
+                              if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                (e.target as HTMLTextAreaElement).blur();
                               }
                             }}
                             onClick={(e) => e.stopPropagation()}
                             onMouseDown={(e) => e.stopPropagation()}
-                            className="text-xs bg-gray-700 border border-gray-600 text-gray-300 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 min-w-0 text-right max-w-24"
-                            autoFocus
-                          />
-                        ) : (
-                          <span
-                            className="text-xs text-gray-300 font-medium cursor-text hover:text-gray-100"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingNodeName(outputNode.node_id);
+                            className="text-xs bg-gray-700 border border-gray-600 text-gray-300 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 w-full text-right resize-none overflow-hidden"
+                            style={{
+                              minHeight: '20px',
+                              height: 'auto'
                             }}
-                            title="Click to edit name"
-                          >
-                            {outputNode.name}
-                          </span>
-                        )}
+                            rows={1}
+                            onInput={(e) => {
+                              const target = e.target as HTMLTextAreaElement;
+                              target.style.height = 'auto';
+                              target.style.height = target.scrollHeight + 'px';
+                            }}
+                          />
+                        </div>
                         {canRemoveOutputs && (
                           <button
                             onClick={(e) => {
@@ -312,41 +394,6 @@ export const ModuleComponentNew: React.FC<ModuleComponentNewProps> = ({
                           </button>
                         )}
                       </div>
-                      {/* Type configuration */}
-                      {(() => {
-                        const outputMeta = template.meta.outputs;
-                        const hasVariableType = hasVariableTypes(outputMeta.type);
-                        const allowedTypes = getAllowedTypes(outputMeta.type);
-
-                        if (hasVariableType && allowedTypes.length > 1) {
-                          // Show dropdown for variable types
-                          return (
-                            <div className="text-right mt-1">
-                              <select
-                                value={outputNode.type}
-                                onChange={(e) => {
-                                  onNodeTypeChange?.(module.module_instance_id, 'output', rowIndex, e.target.value);
-                                }}
-                                onMouseDown={(e) => e.stopPropagation()}
-                                className="text-xs bg-gray-700 border border-gray-600 text-gray-300 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                              >
-                                {allowedTypes.map(type => (
-                                  <option key={type} value={type}>{type}</option>
-                                ))}
-                              </select>
-                            </div>
-                          );
-                        } else {
-                          // Show type badge for fixed type
-                          return (
-                            <div className="text-right mt-1">
-                              <span className="text-xs bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded inline-block">
-                                {outputNode.type}
-                              </span>
-                            </div>
-                          );
-                        }
-                      })()}
                     </div>
                     {/* Output Node Circle */}
                     <div
@@ -369,14 +416,14 @@ export const ModuleComponentNew: React.FC<ModuleComponentNewProps> = ({
                           e.preventDefault();
                         }}
                         data-node-id={outputNode.node_id}
-                        data-node-direction="out"
+                        data-node-direction="output"
                         data-module-id={module.module_instance_id}
                       />
                     </div>
                   </>
                 ) : showAddOutput ? (
                   <>
-                    <div className="mr-6 text-xs text-gray-500">Add output</div>
+                    <div className="mr-3 text-xs text-gray-500">Add output</div>
                     {/* Add Output Button */}
                     <div
                       className="absolute right-0 top-1/2 transform -translate-y-1/2 translate-x-1/2"

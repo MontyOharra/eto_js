@@ -46,7 +46,7 @@ class StringConcatenator(TransformModule):
                 allow=True,  # Dynamic inputs allowed
                 min_count=2,  # At least two inputs required
                 max_count=None,  # Unlimited inputs
-                type=["str", "int", "float"]  # Multiple allowed types for demonstration
+                type=["str", "float"]  # Multiple allowed types for demonstration
             ),
             outputs=DynamicSide(
                 allow=False,  # Static output

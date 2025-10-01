@@ -4,10 +4,14 @@ import {
   ModuleInstance,
   PipelineState,
   VisualState,
-  PipelineData
+  PipelineData,
+  Connection
 } from '../../types/pipelineTypes';
 import { createModuleInstance, addNodeToModule, removeNodeFromModule, updateNodeType } from '../../utils/moduleFactory';
 import { ModuleComponentNew } from './ModuleComponentNew';
+import { ConnectionLayerNew } from './ConnectionLayerNew';
+import { ConnectionInfoOverlay } from './ConnectionInfoOverlay';
+import { EntryPointComponent } from './EntryPointComponent';
 
 interface TransformationGraphNewProps {
   // Available module templates from API
@@ -56,6 +60,16 @@ export const TransformationGraphNew: React.FC<TransformationGraphNewProps> = ({
   // Selection state
   const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null);
 
+  // Connection state
+  const [startingConnection, setStartingConnection] = useState<{
+    moduleId: string;
+    nodeId: string;
+    nodeType: 'input' | 'output';
+    editingConnections?: Connection[]; // Connections being edited/redirected
+  } | null>(null);
+  const [currentMousePosition, setCurrentMousePosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
+
   // Pipeline state (matches backend expectations)
   const [pipelineState, setPipelineState] = useState<PipelineState>(
     initialPipeline || {
@@ -78,6 +92,28 @@ export const TransformationGraphNew: React.FC<TransformationGraphNewProps> = ({
     return acc;
   }, {} as Record<string, ModuleTemplate>);
 
+  // Helper function to get the name of the output connected to an input
+  const getConnectedOutputName = (inputNodeId: string): string => {
+    // Find connection where this input is the target
+    const connection = pipelineState.connections.find(conn => conn.to_node_id === inputNodeId);
+    if (!connection) return 'Not Connected';
+
+    // Find the output node
+    const outputNodeId = connection.from_node_id;
+
+    // Check if it's an entry point
+    const entryPoint = pipelineState.entry_points.find(ep => ep.node_id === outputNodeId);
+    if (entryPoint) return entryPoint.name;
+
+    // Otherwise, find the module and output
+    for (const module of pipelineState.modules) {
+      const outputNode = module.outputs.find(n => n.node_id === outputNodeId);
+      if (outputNode) return outputNode.name;
+    }
+
+    return 'Not Connected';
+  };
+
   // Notify parent of state changes
   useEffect(() => {
     if (onPipelineChange) {
@@ -90,6 +126,38 @@ export const TransformationGraphNew: React.FC<TransformationGraphNewProps> = ({
       onVisualChange(visualState);
     }
   }, [visualState]);
+
+  // Track mouse movement for connection preview
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (startingConnection && canvasRef.current) {
+        const canvasRect = canvasRef.current.getBoundingClientRect();
+        const mouseX = (e.clientX - canvasRect.left - panOffset.x) / zoom;
+        const mouseY = (e.clientY - canvasRect.top - panOffset.y) / zoom;
+        setCurrentMousePosition({ x: mouseX, y: mouseY });
+      }
+    };
+
+    if (startingConnection) {
+      document.addEventListener('mousemove', handleMouseMove);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+      };
+    }
+  }, [startingConnection, panOffset, zoom]);
+
+  // Keyboard shortcuts for deleting selected connection
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedConnectionId) {
+        e.preventDefault();
+        handleConnectionDelete(selectedConnectionId);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [selectedConnectionId]);
 
   // Zoom controls
   const handleZoomIn = () => {
@@ -162,9 +230,22 @@ export const TransformationGraphNew: React.FC<TransformationGraphNewProps> = ({
     // Don't start canvas drag if we're already dragging a module
     if (isDraggingModule) return;
 
-    // Deselect module if clicking on canvas background
+    // Blur any active textarea when clicking canvas
+    const activeElement = document.activeElement as HTMLElement;
+    if (activeElement && activeElement.tagName === 'TEXTAREA') {
+      activeElement.blur();
+    }
+
+    // Cancel any active connection when clicking empty canvas
+    if (startingConnection) {
+      setStartingConnection(null);
+      return;
+    }
+
+    // Deselect module and connection if clicking on canvas background
     if (e.target === e.currentTarget) {
       setSelectedModuleId(null);
+      setSelectedConnectionId(null);
     }
 
     // Start canvas dragging
@@ -198,6 +279,10 @@ export const TransformationGraphNew: React.FC<TransformationGraphNewProps> = ({
 
   const handleAddNode = (moduleId: string, nodeType: 'input' | 'output') => {
     const module = pipelineState.modules.find(m => m.module_instance_id === moduleId);
+
+    // Don't allow adding nodes to entry points
+    if (module?.module_ref === 'entry_point:1.0.0') return;
+
     const template = module ? moduleTemplatesMap[module.module_ref.split(':')[0]] : null;
 
     if (!module || !template) return;
@@ -215,6 +300,10 @@ export const TransformationGraphNew: React.FC<TransformationGraphNewProps> = ({
 
   const handleRemoveNode = (moduleId: string, nodeType: 'input' | 'output', nodeIndex: number) => {
     const module = pipelineState.modules.find(m => m.module_instance_id === moduleId);
+
+    // Don't allow removing nodes from entry points
+    if (module?.module_ref === 'entry_point:1.0.0') return;
+
     const template = module ? moduleTemplatesMap[module.module_ref.split(':')[0]] : null;
 
     if (!module || !template) return;
@@ -266,8 +355,136 @@ export const TransformationGraphNew: React.FC<TransformationGraphNewProps> = ({
   };
 
   const handleNodeClick = (moduleId: string, nodeId: string, nodeType: 'input' | 'output') => {
-    // This will be used for connection creation later
-    console.log('Node clicked:', moduleId, nodeId, nodeType);
+    if (!startingConnection) {
+      // Check if this node has existing connections
+      const existingConnections = pipelineState.connections.filter(conn => {
+        if (nodeType === 'output') {
+          // Output nodes can only have one connection (one-to-one)
+          return conn.from_node_id === nodeId;
+        } else {
+          // Input nodes can only have one connection
+          return conn.to_node_id === nodeId;
+        }
+      });
+
+      if (existingConnections.length > 0) {
+        // Enter connection editing mode
+        console.log(`Editing connection(s) from ${moduleId}[${nodeType}:${nodeId}]`);
+
+        // Don't select connections when editing - they'll be temporarily removed
+
+        // For visual feedback, start from the OPPOSITE node (the anchored one)
+        // But store that we clicked this node for the completion logic
+        const firstConn = existingConnections[0];
+        const oppositeNodeId = nodeType === 'output' ? firstConn.to_node_id : firstConn.from_node_id;
+        const oppositeNodeType = nodeType === 'output' ? 'input' : 'output';
+
+        // Find the module containing the opposite node
+        let oppositeModuleId = '';
+        for (const module of pipelineState.modules) {
+          if (oppositeNodeType === 'input') {
+            if (module.inputs.some(n => n.node_id === oppositeNodeId)) {
+              oppositeModuleId = module.module_instance_id;
+              break;
+            }
+          } else {
+            if (module.outputs.some(n => n.node_id === oppositeNodeId)) {
+              oppositeModuleId = module.module_instance_id;
+              break;
+            }
+          }
+        }
+
+        // Start from opposite (anchored) node, store clicked node info
+        setStartingConnection({
+          moduleId: oppositeModuleId,
+          nodeId: oppositeNodeId,
+          nodeType: oppositeNodeType,
+          editingConnections: existingConnections,
+          clickedNodeId: nodeId, // Store which node was clicked to move
+          clickedNodeType: nodeType // Store type of clicked node
+        } as any);
+
+        // Remove the existing connections temporarily
+        setPipelineState(prev => ({
+          ...prev,
+          connections: prev.connections.filter(conn =>
+            !existingConnections.includes(conn)
+          )
+        }));
+      } else {
+        // Start new connection normally
+        console.log(`Starting connection from ${moduleId}[${nodeType}:${nodeId}]`);
+        setStartingConnection({ moduleId, nodeId, nodeType });
+      }
+
+      // Initialize mouse position to the starting node position (will be updated by mouse move)
+      const nodeElement = document.querySelector(`[data-node-id="${nodeId}"]`);
+      if (nodeElement && canvasRef.current) {
+        const rect = nodeElement.getBoundingClientRect();
+        const canvasRect = canvasRef.current.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2 - canvasRect.left;
+        const centerY = rect.top + rect.height / 2 - canvasRect.top;
+        setCurrentMousePosition({
+          x: (centerX - panOffset.x) / zoom,
+          y: (centerY - panOffset.y) / zoom
+        });
+      }
+    } else {
+      // Try to complete connection
+      const start = startingConnection;
+
+      // Can only connect output to input or input to output
+      if (start.nodeType !== nodeType) {
+        // Determine which is output and which is input
+        let fromNodeId = start.nodeType === 'output' ? start.nodeId : nodeId;
+        let toNodeId = start.nodeType === 'input' ? start.nodeId : nodeId;
+
+        // If we're editing existing connections
+        if (start.editingConnections) {
+          // The clicked node is being moved to the target node
+          // The anchored node stays where it was (start.nodeId)
+
+          // The visual starts from the anchored node (start.nodeId)
+          // The clicked node type tells us what was clicked to be moved
+          if ((start as any).clickedNodeType === 'output') {
+            // User clicked an output, wanting to connect it to a different input
+            // The anchored node is the input (start.nodeId is the input)
+            // The new target (nodeId) becomes the new output
+            fromNodeId = nodeId; // Target node is the new output
+            toNodeId = start.nodeId; // Anchored input
+          } else {
+            // User clicked an input, wanting to connect it to a different output
+            // The anchored node is the output (start.nodeId is the output)
+            // The new target (nodeId) becomes the new input
+            fromNodeId = start.nodeId; // Anchored output
+            toNodeId = nodeId; // Target node is the new input
+          }
+        }
+
+        // For both editing and new connections, remove existing connections and add the new one
+        setPipelineState(prev => ({
+          ...prev,
+          connections: [
+            ...prev.connections.filter(conn =>
+              conn.to_node_id !== toNodeId && conn.from_node_id !== fromNodeId
+            ),
+            { from_node_id: fromNodeId, to_node_id: toNodeId }
+          ]
+        }));
+
+        console.log(`Connection created/updated: ${fromNodeId} -> ${toNodeId}`);
+
+        // Reset starting connection
+        setStartingConnection(null);
+        setCurrentMousePosition({ x: 0, y: 0 });
+      } else {
+        // Can't connect same type nodes
+        console.log('Cannot connect', nodeType, 'to', nodeType);
+        setStartingConnection(null);
+        setCurrentMousePosition({ x: 0, y: 0 });
+      }
+    }
   };
 
   const handleConfigChange = (moduleId: string, config: Record<string, any>) => {
@@ -279,6 +496,48 @@ export const TransformationGraphNew: React.FC<TransformationGraphNewProps> = ({
           : module
       )
     }));
+  };
+
+  // Connection helper functions
+  const getNodeType = (nodeId: string): string => {
+    // Find the module and node to get its type
+    for (const module of pipelineState.modules) {
+      const inputNode = module.inputs.find(n => n.node_id === nodeId);
+      if (inputNode) return inputNode.type;
+
+      const outputNode = module.outputs.find(n => n.node_id === nodeId);
+      if (outputNode) return outputNode.type;
+    }
+    return 'string'; // Default type
+  };
+
+  const getTypeColor = (type: string): string => {
+    switch (type) {
+      case 'string': return '#3B82F6'; // Blue
+      case 'number': return '#EF4444'; // Red
+      case 'boolean': return '#10B981'; // Green
+      case 'datetime': return '#F59E0B'; // Amber
+      default: return '#6B7280'; // Gray for undefined
+    }
+  };
+
+  const handleConnectionClick = (connectionId: string) => {
+    setSelectedConnectionId(connectionId);
+    setSelectedModuleId(null); // Deselect module when selecting connection
+  };
+
+  const handleConnectionDelete = (connectionId: string) => {
+    // Parse the connection ID (format: "fromNodeId-toNodeId")
+    const [fromNodeId, toNodeId] = connectionId.split('-');
+
+    setPipelineState(prev => ({
+      ...prev,
+      connections: prev.connections.filter(conn =>
+        !(conn.from_node_id === fromNodeId && conn.to_node_id === toNodeId)
+      )
+    }));
+
+    setSelectedConnectionId(null);
   };
 
   const handleModuleMouseDown = (moduleId: string) => (e: React.MouseEvent) => {
@@ -429,14 +688,27 @@ export const TransformationGraphNew: React.FC<TransformationGraphNewProps> = ({
         e.preventDefault();
         e.stopPropagation();
 
+        // Check if it's an entry point or a module
+        const isEntryPoint = pipelineState.entry_points.some(ep => ep.node_id === draggedModuleId);
+
         // Update visual state with final position
-        setVisualState(prev => ({
-          ...prev,
-          modules: {
-            ...prev.modules,
-            [draggedModuleId]: temporaryPosition
-          }
-        }));
+        if (isEntryPoint) {
+          setVisualState(prev => ({
+            ...prev,
+            entryPoints: {
+              ...prev.entryPoints,
+              [draggedModuleId]: temporaryPosition
+            }
+          }));
+        } else {
+          setVisualState(prev => ({
+            ...prev,
+            modules: {
+              ...prev.modules,
+              [draggedModuleId]: temporaryPosition
+            }
+          }));
+        }
 
         // Reset dragging state
         setIsDraggingModule(false);
@@ -460,23 +732,8 @@ export const TransformationGraphNew: React.FC<TransformationGraphNewProps> = ({
     };
   }, [isDraggingModule, draggedModuleId, moduleDragOffset, temporaryPosition, panOffset, zoom, isDragging, dragStart, dragStartOffset]);
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Delete selected module
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedModuleId) {
-        handleModuleDelete(selectedModuleId);
-      }
-
-      // Deselect on Escape
-      if (e.key === 'Escape') {
-        setSelectedModuleId(null);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedModuleId]);
+  // Remove all keyboard shortcuts - typing should only affect input fields
+  // (Removed keyboard event listeners to prevent interference with typing)
 
   // Wheel event handler for zoom
   useEffect(() => {
@@ -533,7 +790,7 @@ export const TransformationGraphNew: React.FC<TransformationGraphNewProps> = ({
       {/* Canvas */}
       <div
         ref={canvasRef}
-        className="absolute inset-0"
+        className="absolute inset-0 transformation-graph-canvas"
         onMouseDown={handleCanvasMouseDown}
         onMouseMove={handleCanvasMouseMove}
         onMouseUp={handleCanvasMouseUp}
@@ -558,46 +815,212 @@ export const TransformationGraphNew: React.FC<TransformationGraphNewProps> = ({
             pointerEvents: 'auto'
           }}
         >
-          {/* Modules will be rendered here */}
-          <div className="absolute inset-0">
-            {pipelineState.modules.map(module => {
+          {/* Modules and Entry Points will be rendered here */}
+          <div className="absolute inset-0" style={{ zIndex: 1 }}>
+            {/* Entry Points */}
+            {pipelineState.entry_points.map((entryPoint, index) => {
+              // Use temporary position if this entry point is being dragged, otherwise use visual state
+              const position = (isDraggingModule && draggedModuleId === entryPoint.node_id && temporaryPosition)
+                ? temporaryPosition
+                : (visualState.entryPoints?.[entryPoint.node_id] || { x: 100, y: 100 + index * 100 });
+
+              // Higher z-index for dragged entry point
+              const zIndex = (isDraggingModule && draggedModuleId === entryPoint.node_id) ? 1000 : index;
+
+              return (
+                <div
+                  key={entryPoint.node_id}
+                  style={{
+                    position: 'absolute',
+                    zIndex: zIndex
+                  }}
+                >
+                  <EntryPointComponent
+                    entryPoint={entryPoint}
+                    position={position}
+                    isSelected={selectedModuleId === entryPoint.node_id}
+                    onSelect={(nodeId) => setSelectedModuleId(nodeId)}
+                    onMouseDown={(e) => {
+                      const nodeId = entryPoint.node_id;
+                      setSelectedModuleId(nodeId);
+                      setIsDraggingModule(true);
+                      setDraggedModuleId(nodeId);
+
+                      // Calculate offset from mouse to module position
+                      // Module is already centered horizontally due to transform
+                      const moduleX = position.x * zoom + panOffset.x;
+                      const moduleY = position.y * zoom + panOffset.y;
+
+                      const canvasRect = canvasRef.current?.getBoundingClientRect();
+                      if (canvasRect) {
+                        const mouseX = e.clientX - canvasRect.left;
+                        const mouseY = e.clientY - canvasRect.top;
+
+                        setModuleDragOffset({
+                          x: (mouseX - moduleX) / zoom,
+                          y: (mouseY - moduleY) / zoom
+                        });
+                      }
+
+                      setTemporaryPosition(position);
+                    }}
+                    onDelete={(nodeId) => {
+                      // Remove entry point and its connections
+                      setPipelineState(prev => ({
+                        ...prev,
+                        entry_points: prev.entry_points.filter(ep => ep.node_id !== nodeId),
+                        connections: prev.connections.filter(conn =>
+                          conn.from_node_id !== nodeId && conn.to_node_id !== nodeId
+                        )
+                      }));
+
+                      // Remove visual position
+                      setVisualState(prev => {
+                        const newEntryPoints = { ...prev.entryPoints };
+                        delete newEntryPoints[nodeId];
+                        return { ...prev, entryPoints: newEntryPoints };
+                      });
+                    }}
+                    onNameChange={(nodeId, name) => {
+                      setPipelineState(prev => ({
+                        ...prev,
+                        entry_points: prev.entry_points.map(ep =>
+                          ep.node_id === nodeId ? { ...ep, name } : ep
+                        )
+                      }));
+                    }}
+                    onNodeClick={(nodeId) => {
+                      handleNodeClick(`entry-${nodeId}`, nodeId, 'output');
+                    }}
+                  />
+                </div>
+              );
+            })}
+
+            {/* Regular Modules */}
+            {pipelineState.modules.map((module, index) => {
               // Use temporary position if this module is being dragged, otherwise use visual state
               const position = (isDraggingModule && draggedModuleId === module.module_instance_id && temporaryPosition)
                 ? temporaryPosition
                 : (visualState.modules[module.module_instance_id] || { x: 0, y: 0 });
 
-              const template = moduleTemplatesMap[module.module_ref.split(':')[0]];
+              // Check if this is an entry point module
+              let template;
+              if (module.module_ref === 'entry_point:1.0.0') {
+                // Create a special template for entry point modules
+                template = {
+                  module_ref: 'entry_point:1.0.0',
+                  id: 'entry_point',
+                  version: '1.0.0',
+                  title: 'Entry Point',
+                  description: 'Pipeline entry point',
+                  kind: 'transform',
+                  meta: {
+                    inputs: { allow: false, min_count: 0, max_count: 0, type: [] },
+                    outputs: { allow: false, min_count: 1, max_count: 1, type: ['string'] }
+                  },
+                  config_schema: {},
+                  category: 'Entry',
+                  color: '#FFFFFF' // White color for entry points
+                };
+              } else {
+                template = moduleTemplatesMap[module.module_ref.split(':')[0]];
 
-              if (!template) {
-                console.warn('Template not found for module:', module.module_ref);
-                return null;
+                if (!template) {
+                  console.warn('Template not found for module:', module.module_ref);
+                  return null;
+                }
               }
 
+              // Higher z-index for dragged module
+              const zIndex = (isDraggingModule && draggedModuleId === module.module_instance_id) ? 1000 : index;
+
               return (
-                <ModuleComponentNew
+                <div
                   key={module.module_instance_id}
-                  module={module}
-                  template={template}
-                  position={position}
-                  isSelected={selectedModuleId === module.module_instance_id}
-                  onSelect={handleModuleSelect}
-                  onMouseDown={handleModuleMouseDown(module.module_instance_id)}
-                  onDelete={handleModuleDelete}
-                  onAddNode={handleAddNode}
-                  onRemoveNode={handleRemoveNode}
-                  onNodeTypeChange={handleNodeTypeChange}
-                  onNodeNameChange={handleNodeNameChange}
-                  onNodeClick={handleNodeClick}
-                  onConfigChange={handleConfigChange}
-                />
+                  style={{
+                    position: 'absolute',
+                    zIndex: zIndex
+                  }}
+                >
+                  <ModuleComponentNew
+                    module={module}
+                    template={template}
+                    position={position}
+                    isSelected={selectedModuleId === module.module_instance_id}
+                    getConnectedOutputName={getConnectedOutputName}
+                    onSelect={handleModuleSelect}
+                    onMouseDown={handleModuleMouseDown(module.module_instance_id)}
+                    onDelete={handleModuleDelete}
+                    onAddNode={handleAddNode}
+                    onRemoveNode={handleRemoveNode}
+                    onNodeTypeChange={handleNodeTypeChange}
+                    onNodeNameChange={handleNodeNameChange}
+                    onNodeClick={handleNodeClick}
+                    onConfigChange={handleConfigChange}
+                  />
+                </div>
               );
             })}
+          </div>
+
+          {/* Connection Layer - Behind modules for proper click priority */}
+          <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 0 }}>
+            <ConnectionLayerNew
+              connections={pipelineState.connections}
+              selectedConnectionId={selectedConnectionId}
+              startingConnection={startingConnection}
+              currentMousePosition={currentMousePosition}
+              modulePositions={(() => {
+                // Use temporary position for dragged module
+                if (isDraggingModule && draggedModuleId && temporaryPosition) {
+                  return {
+                    ...visualState.modules,
+                    [draggedModuleId]: temporaryPosition
+                  };
+                }
+                return visualState.modules;
+              })()}
+              modules={pipelineState.modules}
+              zoom={zoom}
+              panOffset={panOffset}
+              getNodeType={getNodeType}
+              getTypeColor={getTypeColor}
+              onConnectionClick={handleConnectionClick}
+              onConnectionDelete={handleConnectionDelete}
+            />
           </div>
         </div>
       </div>
 
-      {/* Zoom Controls - Top Right */}
-      <div className="absolute top-4 right-4 z-20 flex flex-col bg-gray-800 rounded-lg shadow-lg border border-gray-700">
+      {/* Top Controls Bar */}
+      <div className="absolute top-4 right-4 z-20 flex gap-4">
+        {/* Save Pipeline Button */}
+        <button
+          onClick={() => {
+            // Prepare the pipeline data for saving
+            const pipelineData = {
+              schema_version: '1.0.0',
+              name: 'Untitled Pipeline',
+              description: 'Pipeline created in visual editor',
+              pipeline_json: pipelineState,
+              visual_json: visualState
+            };
+
+            console.log('=== SAVING PIPELINE ===');
+            console.log(JSON.stringify(pipelineData, null, 2));
+            console.log('======================');
+
+            // TODO: Call API to save pipeline
+            alert('Pipeline save functionality coming soon!\nCheck console for pipeline data.');
+          }}
+          className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow-lg border border-gray-700 font-medium"
+        >
+          Save Pipeline
+        </button>
+
+        {/* Zoom Controls */}
+        <div className="flex flex-col bg-gray-800 rounded-lg shadow-lg border border-gray-700">
         <button
           onClick={handleZoomIn}
           className="w-10 h-10 flex items-center justify-center text-white hover:bg-gray-700 transition-colors rounded-t-lg border-b border-gray-700"
@@ -631,15 +1054,126 @@ export const TransformationGraphNew: React.FC<TransformationGraphNewProps> = ({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
           </svg>
         </button>
+        </div>
       </div>
 
-      {/* Debug Info (temporary) */}
+      {/* Debug Info and Controls */}
       <div className="absolute bottom-4 left-4 bg-gray-800 rounded p-2 text-xs text-gray-400">
         <div>Zoom: {(zoom * 100).toFixed(0)}%</div>
         <div>Pan: ({panOffset.x.toFixed(0)}, {panOffset.y.toFixed(0)})</div>
         <div>Modules: {pipelineState.modules.length}</div>
         <div>Connections: {pipelineState.connections.length}</div>
+        <div>Entry Points: {pipelineState.entry_points.length}</div>
+        <button
+          onClick={() => {
+            console.log('=== PIPELINE STATE ===');
+            console.log(JSON.stringify(pipelineState, null, 2));
+            console.log('=== VISUAL STATE ===');
+            console.log(JSON.stringify(visualState, null, 2));
+            console.log('=====================');
+          }}
+          className="mt-2 px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs"
+        >
+          Print State to Console
+        </button>
+        <button
+          onClick={() => {
+            // Create a new entry point
+            const nodeId = `N${Date.now()}`;
+            const newEntryPoint = {
+              node_id: nodeId,
+              name: `Entry ${pipelineState.entry_points.length + 1}`,
+              type: 'str' // Default to string type
+            };
+
+            setPipelineState(prev => ({
+              ...prev,
+              entry_points: [...prev.entry_points, newEntryPoint]
+            }));
+
+            // Add visual position for the entry point (center of viewport)
+            if (canvasRef.current) {
+              const rect = canvasRef.current.getBoundingClientRect();
+              const centerX = (rect.width / 2 - panOffset.x) / zoom;
+              const centerY = (rect.height / 2 - panOffset.y) / zoom;
+
+              setVisualState(prev => ({
+                ...prev,
+                entryPoints: {
+                  ...prev.entryPoints,
+                  [nodeId]: { x: centerX, y: centerY }
+                }
+              }));
+            }
+          }}
+          className="mt-1 px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs w-full"
+        >
+          Add Entry Point (Old)
+        </button>
+        <button
+          onClick={() => {
+            // Create a new entry point as a module
+            const timestamp = Date.now();
+            const moduleId = `E${timestamp}`;
+            const outputNodeId = `N${timestamp}_out`;
+
+            // Create a special module that acts as an entry point
+            const entryPointModule = {
+              module_instance_id: moduleId,
+              module_ref: 'entry_point:1.0.0', // Special module ref for entry points
+              module_kind: 'transform' as const,
+              config: {},
+              inputs: [], // No inputs for entry points
+              outputs: [{
+                node_id: outputNodeId,
+                direction: 'out' as const,
+                type: 'string',
+                name: `Entry ${pipelineState.modules.filter(m => m.module_ref === 'entry_point:1.0.0').length + 1}`,
+                position_index: 0
+              }]
+            };
+
+            setPipelineState(prev => ({
+              ...prev,
+              modules: [...prev.modules, entryPointModule]
+            }));
+
+            // Add visual position for the module (center of viewport)
+            if (canvasRef.current) {
+              const rect = canvasRef.current.getBoundingClientRect();
+              const centerX = (rect.width / 2 - panOffset.x) / zoom;
+              const centerY = (rect.height / 2 - panOffset.y) / zoom;
+
+              setVisualState(prev => ({
+                ...prev,
+                modules: {
+                  ...prev.modules,
+                  [moduleId]: { x: centerX, y: centerY }
+                }
+              }));
+            }
+
+            console.log('Added entry point module:', moduleId);
+          }}
+          className="mt-1 px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs w-full"
+        >
+          Add Entry Point (Module)
+        </button>
       </div>
+
+      {/* Connection Info Overlay */}
+      <ConnectionInfoOverlay
+        selectedConnectionId={selectedConnectionId}
+        connections={pipelineState.connections}
+        modules={pipelineState.modules}
+        moduleTemplates={moduleTemplates}
+        onDelete={() => {
+          if (selectedConnectionId) {
+            handleConnectionDelete(selectedConnectionId);
+          }
+        }}
+        onClose={() => setSelectedConnectionId(null)}
+      />
     </div>
   );
 };

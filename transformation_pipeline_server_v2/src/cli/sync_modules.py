@@ -38,20 +38,22 @@ def sync_modules_to_database():
     try:
         logger.info("Starting module sync process...")
 
-        # Clear the registry and module cache to force fresh reload
-        logger.info("Clearing module registry and cache...")
-        registry = get_registry()
-        registry.clear()
-
-        # Also clear Python's module cache for our modules
+        # First clear Python's module cache for our modules
+        logger.info("Clearing Python module cache...")
         import sys
         modules_to_clear = [
-            key for key in sys.modules.keys()
-            if key.startswith("src.features.modules.")
+            key for key in list(sys.modules.keys())  # Use list() to avoid dict change during iteration
+            if key.startswith("src.features.modules.") and
+            not key.startswith("src.features.modules.core")  # Don't clear core/registry!
         ]
         for module_name in modules_to_clear:
             logger.debug(f"Removing {module_name} from Python cache")
             del sys.modules[module_name]
+
+        # Then clear the registry to remove old registrations
+        logger.info("Clearing module registry...")
+        registry = get_registry()
+        registry.clear()
 
         # Step 1: Auto-discover modules (will now import fresh)
         logger.info("Auto-discovering modules...")
@@ -135,20 +137,21 @@ def clear_module_catalog():
 
         connection_manager = DatabaseConnectionManager(database_url)
         connection_manager.initialize_connection()  # Initialize the connection
-        module_repository = ModuleCatalogRepository(connection_manager)
 
-        # Get all modules and soft-delete them
-        modules = module_repository.get_all(only_active=False)
-        count = 0
+        # Direct database deletion to avoid Pydantic validation issues with old format
+        from src.shared.database.models import ModuleCatalogModel
 
-        for module in modules:
-            try:
-                module_repository.delete(module.id, module.version)
-                count += 1
-            except Exception as e:
-                logger.warning(f"Failed to delete {module.id}:{module.version}: {e}")
+        with connection_manager.session_scope() as session:
+            # Get all module records
+            modules = session.query(ModuleCatalogModel).all()
+            count = len(modules)
 
-        logger.info(f"Cleared {count} modules from catalog")
+            # Delete all modules
+            for module in modules:
+                session.delete(module)
+
+            session.commit()
+            logger.info(f"Cleared {count} modules from catalog")
 
     except Exception as e:
         logger.error(f"Failed to clear catalog: {e}")
@@ -163,18 +166,19 @@ def list_registered_modules():
     try:
         logger.info("Discovering modules...")
 
-        # Clear the registry and module cache to force fresh reload
-        registry = get_registry()
-        registry.clear()
-
-        # Also clear Python's module cache for our modules
+        # First clear Python's module cache for our modules (but not core/registry)
         import sys
         modules_to_clear = [
-            key for key in sys.modules.keys()
-            if key.startswith("src.features.modules.")
+            key for key in list(sys.modules.keys())
+            if key.startswith("src.features.modules.") and
+            not key.startswith("src.features.modules.core")  # Don't clear core/registry!
         ]
         for module_name in modules_to_clear:
             del sys.modules[module_name]
+
+        # Then clear the registry
+        registry = get_registry()
+        registry.clear()
 
         # Auto-discover modules
         packages_to_scan = [

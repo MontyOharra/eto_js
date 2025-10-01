@@ -72,6 +72,7 @@ export interface PipelineState {
 // Visual state (UI positioning)
 export interface VisualState {
   modules: Record<string, { x: number; y: number }>;
+  entryPoints?: Record<string, { x: number; y: number }>;
 }
 
 // Complete pipeline data (for saving/loading)
