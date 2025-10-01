@@ -30,7 +30,7 @@ class DynamicNodeGroup(BaseModel):
     item: NodeSpec                               # typing applies per pin instance
 
 class DynamicNodes(BaseModel):
-    groups: Dict[str, DynamicNodeGroup] = Field(default_factory=dict)
+    groups: List[DynamicNodeGroup] = Field(default_factory=list)
 
 class IOSideShape(BaseModel):
     static: Optional[StaticNodes] = None

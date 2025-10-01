@@ -142,7 +142,8 @@ export function generateInitialNodes(
 
   // Generate minimum dynamic nodes for each group
   if (ioSide.dynamic) {
-    for (const [groupKey, group] of Object.entries(ioSide.dynamic.groups)) {
+    for (const group of ioSide.dynamic.groups) {
+      const groupKey = group.item.label; // Use label as group identifier
       for (let i = 0; i < group.min_count; i++) {
         nodes.push(createDynamicNode(group.item, direction, positionIndex, groupKey, i, typeVarManager));
         positionIndex++;
@@ -216,9 +217,9 @@ export function canAddNodeToGroup(
   groupKey: string,
   ioSide: IOSideShape
 ): boolean {
-  if (!ioSide.dynamic?.groups[groupKey]) return false;
+  const group = ioSide.dynamic?.groups.find(g => g.item.label === groupKey);
+  if (!group) return false;
 
-  const group = ioSide.dynamic.groups[groupKey];
   const currentGroupCount = currentNodes.filter(n => n.group_key === groupKey).length;
 
   return group.max_count === undefined || group.max_count === null || currentGroupCount < group.max_count;
@@ -229,9 +230,9 @@ export function canRemoveNodeFromGroup(
   groupKey: string,
   ioSide: IOSideShape
 ): boolean {
-  if (!ioSide.dynamic?.groups[groupKey]) return false;
+  const group = ioSide.dynamic?.groups.find(g => g.item.label === groupKey);
+  if (!group) return false;
 
-  const group = ioSide.dynamic.groups[groupKey];
   const currentGroupCount = currentNodes.filter(n => n.group_key === groupKey).length;
 
   return currentGroupCount > group.min_count;
@@ -319,7 +320,7 @@ export function addNodeToGroup(
     return null;
   }
 
-  const group = ioSide.dynamic?.groups[groupKey];
+  const group = ioSide.dynamic?.groups.find(g => g.item.label === groupKey);
   if (!group) return null;
 
   // Find current group instance count
@@ -400,7 +401,8 @@ export function getDynamicGroupsInfo(
 
   if (!ioSide.dynamic) return [];
 
-  return Object.entries(ioSide.dynamic.groups).map(([groupKey, group]) => {
+  return ioSide.dynamic.groups.map((group) => {
+    const groupKey = group.item.label; // Use label as group identifier
     const currentCount = nodesArray.filter(n => n.group_key === groupKey).length;
 
     return {

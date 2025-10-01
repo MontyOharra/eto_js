@@ -53,8 +53,8 @@ class StringConcatenator(TransformModule):
                         ]
                     ),
                     dynamic=DynamicNodes(
-                        groups={
-                            "inputs": DynamicNodeGroup(
+                        groups=[
+                            DynamicNodeGroup(
                                 min_count=2,  # At least two inputs required
                                 max_count=None,  # Unlimited inputs
                                 item=NodeSpec(
@@ -62,7 +62,7 @@ class StringConcatenator(TransformModule):
                                     typing=NodeTypeRule(allowed_types=["str", "float"])  # Multiple allowed types
                                 )
                             )
-                        }
+                        ]
                     )
                 ),
                 outputs=IOSideShape(

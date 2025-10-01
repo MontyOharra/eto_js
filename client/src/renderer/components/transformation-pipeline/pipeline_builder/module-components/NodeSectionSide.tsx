@@ -71,8 +71,9 @@ export const NodeSectionSide: React.FC<NodeSectionSideProps> = ({
     }
 
     // Handle dynamic groups - organize by group_key
-    if (ioSideShape.dynamic && Object.keys(ioSideShape.dynamic.groups).length > 0) {
-      Object.entries(ioSideShape.dynamic.groups).forEach(([groupId, groupConfig]) => {
+    if (ioSideShape.dynamic && ioSideShape.dynamic.groups.length > 0) {
+      ioSideShape.dynamic.groups.forEach((groupConfig) => {
+        const groupId = groupConfig.item.label; // Use label as identifier
         // Find nodes that belong to this dynamic group
         const nodesInGroup = dynamicNodes.filter(node =>
           (node as any).group_key === groupId

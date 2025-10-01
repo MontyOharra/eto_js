@@ -25,7 +25,7 @@ export interface DynamicNodeGroup {
 }
 
 export interface DynamicNodes {
-  groups: Record<string, DynamicNodeGroup>;
+  groups: DynamicNodeGroup[];
 }
 
 export interface IOSideShape {

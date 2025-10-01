@@ -26,8 +26,8 @@ export const testModulesNew: ModuleTemplate[] = [
             ]
           },
           dynamic: {
-            groups: {
-              'values': {
+            groups: [
+              {
                 min_count: 2,
                 max_count: 10,
                 item: {
@@ -37,7 +37,7 @@ export const testModulesNew: ModuleTemplate[] = [
                   }
                 }
               }
-            }
+            ]
           }
         },
         outputs: {
@@ -89,8 +89,8 @@ export const testModulesNew: ModuleTemplate[] = [
             ]
           },
           dynamic: {
-            groups: {
-              'conditions': {
+            groups: [
+              {
                 min_count: 1,
                 max_count: 5,
                 item: {
@@ -100,7 +100,7 @@ export const testModulesNew: ModuleTemplate[] = [
                   }
                 }
               }
-            }
+            ]
           }
         },
         outputs: {
@@ -149,8 +149,8 @@ export const testModulesNew: ModuleTemplate[] = [
       io_shape: {
         inputs: {
           dynamic: {
-            groups: {
-              'sources': {
+            groups: [
+              {
                 min_count: 1,
                 item: {
                   label: 'source',
@@ -159,7 +159,7 @@ export const testModulesNew: ModuleTemplate[] = [
                   }
                 }
               },
-              'transforms': {
+              {
                 min_count: 0,
                 max_count: 3,
                 item: {
@@ -169,13 +169,13 @@ export const testModulesNew: ModuleTemplate[] = [
                   }
                 }
               }
-            }
+            ]
           }
         },
         outputs: {
           dynamic: {
-            groups: {
-              'results': {
+            groups: [
+              {
                 min_count: 1,
                 item: {
                   label: 'result',
@@ -184,7 +184,7 @@ export const testModulesNew: ModuleTemplate[] = [
                   }
                 }
               }
-            }
+            ]
           }
         },
         type_params: {

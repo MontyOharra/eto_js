@@ -27,7 +27,7 @@ export interface DynamicNodeGroup {
 }
 
 export interface DynamicNodes {
-  groups: Record<string, DynamicNodeGroup>;
+  groups: DynamicNodeGroup[];
 }
 
 // I/O shape definitions

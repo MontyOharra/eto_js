@@ -72,7 +72,7 @@ function generateInitialNodes(ioSide: IOSideShape, direction: 'in' | 'out'): Nod
   if (ioSide.dynamic) {
     let currentIndex = nodes.length; // Continue from where static nodes ended
 
-    Object.entries(ioSide.dynamic.groups).forEach(([groupName, group]) => {
+    ioSide.dynamic.groups.forEach((group) => {
       const minCount = group.min_count || 0;
 
       // Create minimum required nodes for this group
