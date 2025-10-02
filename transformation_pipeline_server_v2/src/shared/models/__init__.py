@@ -3,6 +3,7 @@
 from .pipeline import (
     # Supporting types
     NodePin,
+    NodeGroup,
     ModuleInstance,
     NodeConnection,
     EntryPoint,
@@ -12,7 +13,6 @@ from .pipeline import (
     # CRUD models
     PipelineBase,
     PipelineCreate,
-    PipelineUpdate,
     Pipeline,
     PipelineSummary
 )
@@ -27,6 +27,7 @@ from .module_catalog import (
 __all__ = [
     # Pipeline types
     "NodePin",
+    "NodeGroup",
     "ModuleInstance",
     "NodeConnection",
     "EntryPoint",
@@ -35,7 +36,6 @@ __all__ = [
     "VisualState",
     "PipelineBase",
     "PipelineCreate",
-    "PipelineUpdate",
     "Pipeline",
     "PipelineSummary",
     # Module catalog types

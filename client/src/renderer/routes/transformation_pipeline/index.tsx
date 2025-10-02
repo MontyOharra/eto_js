@@ -1,5 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useState, useEffect } from "react";
+import { pipelineApiClient } from "../../services/api";
 
 export const Route = createFileRoute("/transformation_pipeline/")({
   component: PipelineListPage,
@@ -31,8 +32,28 @@ const ClockIcon = ({ className }: { className?: string }) => (
 );
 
 function PipelineListPage() {
-  // Placeholder state for pipelines (will be replaced with API call)
-  const [pipelines] = useState<any[]>([]);
+  const navigate = useNavigate();
+  const [pipelines, setPipelines] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchPipelines = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await pipelineApiClient.getPipelines({ summary_only: true });
+        setPipelines(response.pipelines);
+      } catch (err: any) {
+        console.error('Failed to fetch pipelines:', err);
+        setError(err.message || 'Failed to load pipelines');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPipelines();
+  }, []);
 
   return (
     <div className="min-h-full bg-gray-900">
@@ -61,7 +82,30 @@ function PipelineListPage() {
 
       {/* Main Content */}
       <div className="px-6 py-6">
-        {pipelines.length === 0 ? (
+        {loading ? (
+          /* Loading State */
+          <div className="text-center py-12">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-4"></div>
+            <p className="text-gray-400">Loading pipelines...</p>
+          </div>
+        ) : error ? (
+          /* Error State */
+          <div className="text-center py-12">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-red-900 rounded-full mb-4">
+              <svg className="h-8 w-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-medium text-gray-300 mb-2">Failed to load pipelines</h3>
+            <p className="text-gray-500 mb-6 max-w-md mx-auto">{error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
+            >
+              Try Again
+            </button>
+          </div>
+        ) : pipelines.length === 0 ? (
           /* Empty State */
           <div className="text-center py-12">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-800 rounded-full mb-4">
@@ -80,7 +124,7 @@ function PipelineListPage() {
             </Link>
           </div>
         ) : (
-          /* Pipeline Grid (placeholder for future) */
+          /* Pipeline Grid */
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {pipelines.map((pipeline) => (
               <PipelineCard key={pipeline.id} pipeline={pipeline} />
@@ -132,25 +176,78 @@ function PipelineListPage() {
   );
 }
 
-// Placeholder component for when pipelines exist (future implementation)
+// Pipeline card component for displaying individual pipelines
 function PipelineCard({ pipeline }: { pipeline: any }) {
+  const navigate = useNavigate();
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const handleViewPipeline = () => {
+    // Navigate to pipeline viewer using React Router
+    navigate({ to: `/pipeline-view/${pipeline.id}` });
+  };
+
   return (
-    <div className="bg-gray-800 rounded-lg border border-gray-700 hover:border-gray-600 transition-colors p-4">
-      <div className="flex items-start justify-between">
+    <div className="bg-gray-800 rounded-lg border border-gray-700 hover:border-gray-600 transition-colors p-6">
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex-1">
+          <h3 className="text-lg font-medium text-white truncate">{pipeline.name}</h3>
+          {pipeline.description && (
+            <p className="mt-1 text-sm text-gray-400 line-clamp-2">{pipeline.description}</p>
+          )}
+        </div>
+        {pipeline.is_active ? (
+          <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+            Active
+          </span>
+        ) : (
+          <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+            Inactive
+          </span>
+        )}
+      </div>
+
+      {/* Pipeline Stats */}
+      <div className="grid grid-cols-3 gap-4 mb-4 text-center">
         <div>
-          <h3 className="text-lg font-medium text-white">{pipeline.name}</h3>
-          <p className="mt-1 text-sm text-gray-400">{pipeline.description}</p>
+          <div className="text-lg font-semibold text-white">{pipeline.module_count || 0}</div>
+          <div className="text-xs text-gray-400">Modules</div>
+        </div>
+        <div>
+          <div className="text-lg font-semibold text-white">{pipeline.connection_count || 0}</div>
+          <div className="text-xs text-gray-400">Connections</div>
+        </div>
+        <div>
+          <div className="text-lg font-semibold text-white">{pipeline.entry_point_count || 0}</div>
+          <div className="text-xs text-gray-400">Entries</div>
         </div>
       </div>
-      <div className="mt-4 flex items-center text-sm text-gray-500">
+
+      <div className="flex items-center text-sm text-gray-500 mb-4">
         <ClockIcon className="h-4 w-4 mr-1" />
-        <span>Last modified: {pipeline.updatedAt}</span>
+        <span>Created: {formatDate(pipeline.created_at)}</span>
       </div>
-      <div className="mt-4 flex justify-end space-x-2">
-        <button className="px-3 py-1 text-sm text-gray-300 hover:text-white border border-gray-600 hover:border-gray-500 rounded-md transition-colors">
-          Edit
+
+      <div className="flex justify-end space-x-2">
+        <button
+          onClick={handleViewPipeline}
+          className="px-3 py-1 text-sm text-gray-300 hover:text-white border border-gray-600 hover:border-gray-500 rounded-md transition-colors"
+        >
+          View
         </button>
-        <button className="px-3 py-1 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors">
+        <button
+          className="px-3 py-1 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+          onClick={() => alert('Run functionality coming soon!')}
+        >
           Run
         </button>
       </div>

@@ -8,6 +8,8 @@ from typing import Optional, List, Dict, Any, Type, TypeVar, Generic, Protocol
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
+from shared.database.connection import DatabaseConnectionManager
+
 logger = logging.getLogger(__name__)
 
 
@@ -30,7 +32,7 @@ class BaseRepository(ABC, Generic[ModelType]):
     All model-specific repositories should inherit from this class
     """
 
-    def __init__(self, connection_manager):
+    def __init__(self, connection_manager: DatabaseConnectionManager):
         """Initialize repository with connection manager"""
         if not connection_manager:
             raise ValueError("DatabaseConnectionManager is required")
@@ -54,7 +56,7 @@ class BaseRepository(ABC, Generic[ModelType]):
             return None
 
         try:
-            with self.connection_manager.get_session_context() as session:
+            with self.connection_manager.session_scope() as session:
                 model = session.get(self.model_class, id_value)
                 return model
 
@@ -66,7 +68,7 @@ class BaseRepository(ABC, Generic[ModelType]):
                limit: Optional[int] = None, offset: Optional[int] = None) -> List[ModelType]:
         """Get all records with optional sorting and pagination"""
         try:
-            with self.connection_manager.get_session_context() as session:
+            with self.connection_manager.session_scope() as session:
                 query = session.query(self.model_class)
 
                 # Apply sorting if specified
@@ -95,7 +97,7 @@ class BaseRepository(ABC, Generic[ModelType]):
             raise ValueError("Data dictionary cannot be empty")
 
         try:
-            with self.connection_manager.get_session_context() as session:
+            with self.connection_manager.session_scope() as session:
                 # Create new instance of the model
                 instance = self.model_class(**data)
 
@@ -123,7 +125,7 @@ class BaseRepository(ABC, Generic[ModelType]):
             raise ValueError("Data dictionary cannot be empty")
 
         try:
-            with self.connection_manager.get_session_context() as session:
+            with self.connection_manager.session_scope() as session:
                 # Create new instance of the model
                 instance = self.model_class(**data)
 
@@ -153,7 +155,7 @@ class BaseRepository(ABC, Generic[ModelType]):
             raise ValueError("Update data cannot be empty")
 
         try:
-            with self.connection_manager.get_session_context() as session:
+            with self.connection_manager.session_scope() as session:
                 # Get existing record
                 instance = session.query(self.model_class).filter(
                     self.model_class.id == id_value
@@ -187,7 +189,7 @@ class BaseRepository(ABC, Generic[ModelType]):
             raise ValueError("ID value cannot be None")
 
         try:
-            with self.connection_manager.get_session_context() as session:
+            with self.connection_manager.session_scope() as session:
                 # Get existing record
                 instance = session.query(self.model_class).filter(
                     self.model_class.id == id_value
@@ -210,7 +212,7 @@ class BaseRepository(ABC, Generic[ModelType]):
     def count(self) -> int:
         """Count total records"""
         try:
-            with self.connection_manager.get_session_context() as session:
+            with self.connection_manager.session_scope() as session:
                 return session.query(self.model_class).count()
 
         except SQLAlchemyError as e:
@@ -223,7 +225,7 @@ class BaseRepository(ABC, Generic[ModelType]):
             return False
 
         try:
-            with self.connection_manager.get_session_context() as session:
+            with self.connection_manager.session_scope() as session:
                 return session.query(self.model_class).filter(
                     self.model_class.id == id_value
                 ).first() is not None
@@ -238,7 +240,7 @@ class BaseRepository(ABC, Generic[ModelType]):
             raise ValueError(f"Field '{field_name}' does not exist on {self.model_class.__name__}")
 
         try:
-            with self.connection_manager.get_session_context() as session:
+            with self.connection_manager.session_scope() as session:
                 return session.query(self.model_class).filter(
                     getattr(self.model_class, field_name) == field_value
                 ).all()
@@ -253,7 +255,7 @@ class BaseRepository(ABC, Generic[ModelType]):
             raise ValueError(f"Field '{field_name}' does not exist on {self.model_class.__name__}")
 
         try:
-            with self.connection_manager.get_session_context() as session:
+            with self.connection_manager.session_scope() as session:
                 return session.query(self.model_class).filter(
                     getattr(self.model_class, field_name) == field_value
                 ).first()

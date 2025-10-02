@@ -52,7 +52,7 @@ class PipelineRepository(BaseRepository[PipelineDefinitionModel]):
             Created Pipeline domain model
         """
         try:
-            with self.connection_manager.get_session_context() as session:
+            with self.connection_manager.session_scope() as session:
                 # Generate ID
                 pipeline_id = self._generate_pipeline_id()
 
@@ -86,7 +86,7 @@ class PipelineRepository(BaseRepository[PipelineDefinitionModel]):
             Pipeline domain object or None if not found
         """
         try:
-            with self.connection_manager.get_session_context() as session:
+            with self.connection_manager.session_scope() as session:
                 model = session.get(self.model_class, pipeline_id)
 
                 if not model:
@@ -110,7 +110,7 @@ class PipelineRepository(BaseRepository[PipelineDefinitionModel]):
             List of Pipeline domain objects
         """
         try:
-            with self.connection_manager.get_session_context() as session:
+            with self.connection_manager.session_scope() as session:
                 query = session.query(self.model_class)
 
                 # Filter by active status if requested
@@ -140,7 +140,7 @@ class PipelineRepository(BaseRepository[PipelineDefinitionModel]):
             List of PipelineSummary objects
         """
         try:
-            with self.connection_manager.get_session_context() as session:
+            with self.connection_manager.session_scope() as session:
                 query = session.query(self.model_class)
 
                 # Filter by active status if requested

@@ -10,22 +10,29 @@ import json
 
 # Supporting types for pipeline structure
 class NodePin(BaseModel):
-    """Represents an input or output pin on a module"""
+    """Represents an input or output pin on a module - stores selected type without typing structure"""
     node_id: str
-    direction: Literal["in", "out"]
-    type: str  # "str", "int", "float", "bool", "datetime", etc.
+    type: str  # Selected type: "str", "int", "float", "bool", "datetime", etc.
     name: str
     position_index: int
+    # For dynamic nodes only
+    group_key: Optional[str] = None  # Which dynamic group this node belongs to
+
+
+class NodeGroup(BaseModel):
+    """Group of nodes that can be static or dynamic"""
+    static: List[NodePin] = Field(default_factory=list)
+    dynamic: List[NodePin] = Field(default_factory=list)
 
 
 class ModuleInstance(BaseModel):
-    """A module instance placed on the canvas"""
+    """A module instance placed on the canvas - aligned with module meta structure"""
     module_instance_id: str
     module_ref: str  # e.g., "text_cleaner:1.0.0"
     module_kind: Literal["transform", "action", "logic"]
     config: Dict[str, Any]  # Module-specific configuration
-    inputs: List[NodePin]
-    outputs: List[NodePin]
+    inputs: NodeGroup
+    outputs: NodeGroup
 
 
 class NodeConnection(BaseModel):

@@ -14,6 +14,7 @@ import { ModuleComponent } from './ModuleComponent';
 import { ConnectionLayer } from './ConnectionLayer';
 import { ConnectionInfoOverlay } from './ConnectionInfoOverlay';
 import { EntryPointComponent } from './EntryPointComponent';
+import { pipelineApiClient } from '../../../services/api';
 
 interface TransformationGraphProps {
   // Available module templates from API
@@ -30,6 +31,9 @@ interface TransformationGraphProps {
   // Callbacks for state changes (optional)
   onPipelineChange?: (pipeline: PipelineState) => void;
   onVisualChange?: (visual: VisualState) => void;
+
+  // View-only mode (disables editing)
+  viewOnly?: boolean;
 }
 
 export const TransformationGraph: React.FC<TransformationGraphProps> = ({
@@ -39,7 +43,8 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
   initialPipeline,
   initialVisual,
   onPipelineChange,
-  onVisualChange
+  onVisualChange,
+  viewOnly = false
 }) => {
   // Canvas ref for mouse position calculations
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -87,6 +92,18 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
       modules: {}
     }
   );
+
+  // Debug logging for view-only mode
+  useEffect(() => {
+    if (viewOnly && initialPipeline) {
+      console.log('🔍 VIEW-ONLY MODE: TransformationGraph initialized');
+      console.log('📦 Pipeline State to display:', pipelineState);
+      console.log('🧩 Modules to render:', pipelineState.modules);
+      console.log('🔗 Connections to render:', pipelineState.connections);
+      console.log('📥 Entry points to render:', pipelineState.entry_points);
+      console.log('🎨 Visual positions:', visualState.modules);
+    }
+  }, [viewOnly, initialPipeline, pipelineState, visualState]);
 
   // Map of module templates by ID for quick lookup
   const moduleTemplatesMap = moduleTemplates.reduce((acc, mod) => {
@@ -1118,15 +1135,54 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
 
       {/* Top Controls Bar */}
       <div className="absolute top-4 right-4 z-20 flex gap-4">
-        {/* Save Pipeline Button */}
-        <button
-          onClick={() => {
+        {/* Save Pipeline Button - Hidden in view-only mode */}
+        {!viewOnly && (
+          <button
+          onClick={async () => {
+            // Transform the frontend pipeline structure to match backend models
+            const transformPipelineForBackend = (frontendPipeline: PipelineState) => {
+              // Helper function to transform node to match NodePin model
+              const transformNode = (node: any) => ({
+                node_id: node.node_id,
+                type: node.type,
+                name: node.name,
+                position_index: node.position_index,
+                group_key: node.group_key || null
+              });
+
+              console.log('Frontend pipeline modules:', frontendPipeline.modules);
+
+              return {
+                ...frontendPipeline,
+                modules: frontendPipeline.modules.map(module => {
+                  console.log('Processing module:', module);
+
+                  return {
+                    module_instance_id: module.module_instance_id || module.id,
+                    module_ref: module.module_ref || 'unknown:1.0.0',
+                    module_kind: module.module_kind || 'transform',
+                    config: module.config || {},
+                    // Transform inputs from array to NodeGroup structure
+                    inputs: {
+                      static: module.inputs.filter((input: any) => input.is_static || true).map(transformNode),
+                      dynamic: module.inputs.filter((input: any) => !input.is_static && false).map(transformNode)
+                    },
+                    // Transform outputs from array to NodeGroup structure
+                    outputs: {
+                      static: module.outputs.filter((output: any) => output.is_static || true).map(transformNode),
+                      dynamic: module.outputs.filter((output: any) => !output.is_static && false).map(transformNode)
+                    }
+                  };
+                })
+              };
+            };
+
             // Prepare the pipeline data for saving
+            const transformedPipelineState = transformPipelineForBackend(pipelineState);
             const pipelineData = {
-              schema_version: '1.0.0',
               name: 'Untitled Pipeline',
               description: 'Pipeline created in visual editor',
-              pipeline_json: pipelineState,
+              pipeline_json: transformedPipelineState,
               visual_json: visualState
             };
 
@@ -1134,13 +1190,20 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
             console.log(JSON.stringify(pipelineData, null, 2));
             console.log('======================');
 
-            // TODO: Call API to save pipeline
-            alert('Pipeline save functionality coming soon!\nCheck console for pipeline data.');
+            try {
+              const savedPipeline = await pipelineApiClient.createPipeline(pipelineData);
+              console.log('Pipeline saved successfully:', savedPipeline);
+              alert(`Pipeline saved successfully!\nID: ${savedPipeline.id}\nName: ${savedPipeline.name}`);
+            } catch (error) {
+              console.error('Failed to save pipeline:', error);
+              alert(`Failed to save pipeline: ${error.message || 'Unknown error'}`);
+            }
           }}
           className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow-lg border border-gray-700 font-medium"
         >
           Save Pipeline
         </button>
+        )}
 
         {/* Zoom Controls */}
         <div className="flex flex-col bg-gray-800 rounded-lg shadow-lg border border-gray-700">

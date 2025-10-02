@@ -877,6 +877,78 @@ class ApiClient {
     return { data };
   }
 
+  // === Transformation Pipeline API Methods ===
+
+  /**
+   * Create/upload a new pipeline
+   */
+  async createPipeline(pipelineData: {
+    name: string;
+    description?: string;
+    pipeline_json: any;
+    visual_json: any;
+  }): Promise<{
+    id: string;
+    name: string;
+    description?: string;
+    pipeline_json: any;
+    visual_json: any;
+    plan_checksum?: string;
+    compiled_at?: string;
+    created_at: string;
+    is_active: boolean;
+    module_count: number;
+    connection_count: number;
+    entry_point_count: number;
+  }> {
+    return this.fetchApi('/api/pipelines', {
+      method: 'POST',
+      body: JSON.stringify(pipelineData),
+    });
+  }
+
+  /**
+   * Get all pipelines
+   */
+  async getPipelines(params?: {
+    include_inactive?: boolean;
+    summary_only?: boolean;
+  }): Promise<{
+    pipelines: any[];
+    total_count: number;
+  }> {
+    const searchParams = new URLSearchParams();
+    if (params?.include_inactive) {
+      searchParams.append('include_inactive', params.include_inactive.toString());
+    }
+    if (params?.summary_only) {
+      searchParams.append('summary_only', params.summary_only.toString());
+    }
+
+    const endpoint = `/api/pipelines${searchParams.toString() ? `?${searchParams}` : ''}`;
+    return this.fetchApi(endpoint);
+  }
+
+  /**
+   * Get specific pipeline by ID
+   */
+  async getPipeline(pipelineId: string): Promise<{
+    id: string;
+    name: string;
+    description?: string;
+    pipeline_json: any;
+    visual_json: any;
+    plan_checksum?: string;
+    compiled_at?: string;
+    created_at: string;
+    is_active: boolean;
+    module_count: number;
+    connection_count: number;
+    entry_point_count: number;
+  }> {
+    return this.fetchApi(`/api/pipelines/${pipelineId}`);
+  }
+
   // === Email Ingestion API Methods ===
 
   /**
@@ -1121,5 +1193,8 @@ export class ApiError extends Error {
 
 // Export singleton instance
 export const apiClient = new ApiClient();
+
+// Export transformation pipeline client instance (different port)
+export const pipelineApiClient = new ApiClient('http://localhost:8090');
 
 // Types are exported as part of the interface definitions above

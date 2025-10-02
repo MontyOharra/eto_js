@@ -77,7 +77,7 @@ async def upload_pipeline(
         raise HTTPException(status_code=500, detail="Failed to upload pipeline")
 
 
-@router.get("/pipelines", response_model=PipelineListResponse)
+@router.get("/pipelines")
 async def list_pipelines(
     include_inactive: bool = False,
     summary_only: bool = False,

@@ -5,6 +5,48 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-10-01 19:30] — View-Only Pipeline Builder Implementation Complete
+
+### Spec / Intent
+- Create comprehensive view-only pipeline builder for displaying saved pipelines from backend API
+- Implement frontend pipeline list with proper API integration and navigation
+- Fix backend pipeline save/load system authentication and data structure issues
+- Enable analysis of saved pipeline data to understand transformation requirements for future work
+
+### Changes Made
+- **Backend Fixes**: Fixed missing SQLAlchemy relationship in database models, removed incorrect imports from services, fixed API response models for summary endpoints
+- **Frontend Pipeline List** (`client/src/renderer/routes/transformation_pipeline/index.tsx`): Complete rewrite with real API integration, loading/error/empty states, professional pipeline cards with stats and actions
+- **View-Only Pipeline Route** (`client/src/renderer/routes/pipeline-view.$pipelineId.tsx`): New standalone route displaying TransformationGraph in view-only mode with comprehensive console logging
+- **TransformationGraph Enhancement**: Added `viewOnly` prop to hide save button, implemented debug logging for data structure analysis, fixed initialization order bugs
+- **Navigation Fixes**: Replaced `window.location.href` with proper React Router navigation for Electron compatibility, fixed route structure and authentication issues
+- **Layout Rendering Fix**: Fixed flexbox container structure to properly display TransformationGraph canvas with zoom controls
+
+### Architecture Decisions
+- **Route Pattern**: Used standalone `/pipeline-view/$pipelineId` route instead of nested route for Electron compatibility
+- **Console Logging Strategy**: Two-level logging (route + component) with structured emoji-based identification for data analysis
+- **Data Flow**: Pipeline List → View Button → Standalone Route → Fetch Full Pipeline → TransformationGraph (view-only)
+
+### Current State
+- ✅ **Pipeline List Working**: Fetches real pipelines, displays professional cards with stats
+- ✅ **View-Only Builder Working**: Shows actual TransformationGraph canvas with zoom controls
+- ✅ **Authentication Fixed**: No more login redirects, proper route handling
+- ✅ **Navigation Fixed**: Proper React Router navigation for Electron app
+- ✅ **Comprehensive Logging**: Detailed console output for data structure analysis
+
+### Next Actions
+- **Data Transformation Analysis**: Use console logs to understand backend vs frontend data structure differences
+- **Module Template Integration**: Fetch and map module metadata for proper module rendering
+- **Node Structure Mapping**: Transform backend static/dynamic node groups to frontend arrays
+- **Connection Rendering**: Ensure saved connections display correctly in view-only mode
+
+### Notes
+- **Foundation Complete**: Save/load pipeline system working, view-only interface functional
+- **Ready for Analysis**: Console shows exact data structures for transformation planning
+- **Architecture Solid**: Proper separation of concerns, authentication working, navigation patterns established
+- **Development Ready**: Next session can focus on data transformation to display saved pipelines correctly
+
+---
+
 ## [2025-10-01 15:45] — Type Constraint System Debugging Cleanup
 
 ### Spec / Intent

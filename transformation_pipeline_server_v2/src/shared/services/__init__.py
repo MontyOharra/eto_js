@@ -6,7 +6,6 @@ from .service_container import (
     initialize_services,
     reset_service_container
 )
-from .pipeline import PipelineService, PipelineServiceError, PipelineValidationError
 
 __all__ = [
     'ServiceContainer',
@@ -14,8 +13,5 @@ __all__ = [
     'get_connection_manager',
     'is_service_container_initialized',
     'initialize_services',
-    'reset_service_container',
-    'PipelineService',
-    'PipelineServiceError',
-    'PipelineValidationError'
+    'reset_service_container'
 ]

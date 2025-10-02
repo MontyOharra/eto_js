@@ -148,6 +148,9 @@ class PipelineExecutionLogModel(BaseModel):
     # Step-level execution details
     step_logs: Mapped[Optional[str]] = mapped_column(Text)  # JSON: per-step execution info
 
+    # Relationships
+    pipeline_definition = relationship("PipelineDefinitionModel", back_populates="execution_logs")
+
     __table_args__ = (
         Index('idx_pipeline_execution_logs_pipeline', 'pipeline_id'),
         Index('idx_pipeline_execution_logs_execution_id', 'execution_id'),
