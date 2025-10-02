@@ -43,7 +43,10 @@ export function getNodeTypeInfo(
 ): NodeTypeInfo | null {
   // Find the module and node
   for (const module of modules) {
-    const allNodes = [...module.inputs, ...module.outputs];
+    // Handle NodeGroup structure by flattening static and dynamic arrays
+    const allInputs = [...(module.inputs?.static || []), ...(module.inputs?.dynamic || [])];
+    const allOutputs = [...(module.outputs?.static || []), ...(module.outputs?.dynamic || [])];
+    const allNodes = [...allInputs, ...allOutputs];
     const node = allNodes.find(n => n.node_id === nodeId);
 
     if (node) {
@@ -92,7 +95,10 @@ export function getTypeVarGroup(
   const module = modules.find(m => m.module_instance_id === moduleId);
   if (!module) return [];
 
-  const allNodes = [...module.inputs, ...module.outputs];
+  // Handle NodeGroup structure by flattening static and dynamic arrays
+  const allInputs = [...(module.inputs?.static || []), ...(module.inputs?.dynamic || [])];
+  const allOutputs = [...(module.outputs?.static || []), ...(module.outputs?.dynamic || [])];
+  const allNodes = [...allInputs, ...allOutputs];
 
   return allNodes.filter(node => {
     // Check if this node uses the same typeVar

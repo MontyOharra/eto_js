@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 
 
 # Type definitions
-Scalar = Literal["str", "float", "datetime", "bool"]
+Scalar = Literal["str", "float", "datetime", "bool", "int"]
 
 
 class NodeTypeRule(BaseModel):

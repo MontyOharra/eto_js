@@ -137,20 +137,19 @@ function getDefaultTypeForSpec(nodeSpec: NodeSpec, typeVarManager: TypeVariableM
 }
 
 // Main module generation
-export function generateInitialNodes(
+export function generateInitialNodeGroup(
   ioSide: IOSideShape,
   direction: 'in' | 'out',
   typeVarManager: TypeVariableManager
-): NodePin[] {
-  const nodes: NodePin[] = [];
-  let positionIndex = 0;
+): { static: NodePin[], dynamic: NodePin[] } {
+  const staticNodes: NodePin[] = [];
+  const dynamicNodes: NodePin[] = [];
 
-  // Generate static nodes first
+  // Generate static nodes
   if (ioSide.static) {
-    for (const nodeSpec of ioSide.static.slots) {
-      nodes.push(createStaticNode(nodeSpec, direction, positionIndex, typeVarManager));
-      positionIndex++;
-    }
+    ioSide.static.slots.forEach((nodeSpec, index) => {
+      staticNodes.push(createStaticNode(nodeSpec, direction, index, typeVarManager));
+    });
   }
 
   // Generate minimum dynamic nodes for each group
@@ -158,13 +157,13 @@ export function generateInitialNodes(
     for (const group of ioSide.dynamic.groups) {
       const groupKey = group.item.label; // Use label as group identifier
       for (let i = 0; i < group.min_count; i++) {
-        nodes.push(createDynamicNode(group.item, direction, positionIndex, groupKey, i, typeVarManager));
-        positionIndex++;
+        const positionIndex = i; // Position within this specific group
+        dynamicNodes.push(createDynamicNode(group.item, direction, positionIndex, groupKey, i, typeVarManager));
       }
     }
   }
 
-  return nodes;
+  return { static: staticNodes, dynamic: dynamicNodes };
 }
 
 // Initialize config from schema with defaults
@@ -205,9 +204,9 @@ export function createModuleInstance(template: ModuleTemplate, position: { x: nu
   // Initialize config from schema defaults
   const config = initializeConfig(template.config_schema);
 
-  // Generate initial nodes
-  const inputs = generateInitialNodes(template.meta.io_shape.inputs, 'in', typeVarManager);
-  const outputs = generateInitialNodes(template.meta.io_shape.outputs, 'out', typeVarManager);
+  // Generate initial NodeGroups
+  const inputs = generateInitialNodeGroup(template.meta.io_shape.inputs, 'in', typeVarManager);
+  const outputs = generateInitialNodeGroup(template.meta.io_shape.outputs, 'out', typeVarManager);
 
   const moduleInstance: ModuleInstance = {
     module_instance_id: moduleId,
@@ -226,27 +225,37 @@ export function createModuleInstance(template: ModuleTemplate, position: { x: nu
 
 // Node management functions
 export function canAddNodeToGroup(
-  currentNodes: NodePin[],
+  currentNodes: { static: NodePin[], dynamic: NodePin[] } | NodePin[],
   groupKey: string,
   ioSide: IOSideShape
 ): boolean {
   const group = ioSide.dynamic?.groups.find(g => g.item.label === groupKey);
   if (!group) return false;
 
-  const currentGroupCount = currentNodes.filter(n => n.group_key === groupKey).length;
+  // Handle both NodeGroup structure and array format
+  const allNodes = Array.isArray(currentNodes) ?
+    currentNodes :
+    [...(currentNodes.static || []), ...(currentNodes.dynamic || [])];
+
+  const currentGroupCount = allNodes.filter(n => n.group_key === groupKey).length;
 
   return group.max_count === undefined || group.max_count === null || currentGroupCount < group.max_count;
 }
 
 export function canRemoveNodeFromGroup(
-  currentNodes: NodePin[],
+  currentNodes: { static: NodePin[], dynamic: NodePin[] } | NodePin[],
   groupKey: string,
   ioSide: IOSideShape
 ): boolean {
   const group = ioSide.dynamic?.groups.find(g => g.item.label === groupKey);
   if (!group) return false;
 
-  const currentGroupCount = currentNodes.filter(n => n.group_key === groupKey).length;
+  // Handle both NodeGroup structure and array format
+  const allNodes = Array.isArray(currentNodes) ?
+    currentNodes :
+    [...(currentNodes.static || []), ...(currentNodes.dynamic || [])];
+
+  const currentGroupCount = allNodes.filter(n => n.group_key === groupKey).length;
 
   return currentGroupCount > group.min_count;
 }
@@ -349,12 +358,15 @@ export function addNodeToGroup(
   const group = ioSide.dynamic?.groups.find(g => g.item.label === groupKey);
   if (!group) return null;
 
+  // Handle NodeGroup structure
+  const allNodes = [...(nodesArray.static || []), ...(nodesArray.dynamic || [])];
+
   // Find current group instance count
-  const groupNodes = nodesArray.filter(n => n.group_key === groupKey);
+  const groupNodes = allNodes.filter(n => n.group_key === groupKey);
   const instanceIndex = groupNodes.length;
 
-  // Find position index (after all existing nodes)
-  const positionIndex = nodesArray.length;
+  // Find position index within the dynamic group
+  const positionIndex = nodesArray.dynamic ? nodesArray.dynamic.filter(n => n.group_key === groupKey).length : 0;
 
   const newNode = createDynamicNode(
     group.item,
@@ -366,7 +378,13 @@ export function addNodeToGroup(
     moduleInstance
   );
 
-  nodesArray.push(newNode);
+  // Add to dynamic array
+  if (nodesArray.dynamic) {
+    nodesArray.dynamic.push(newNode);
+  } else {
+    // This shouldn't happen with proper NodeGroup structure, but handle it
+    console.error('Dynamic array not found in NodeGroup structure');
+  }
   return newNode;
 }
 

@@ -121,8 +121,11 @@ export const ModuleComponent: React.FC<ModuleComponentProps> = ({
       onCoordinatedTypeChange(allUpdates);
     } else {
       // Fallback to individual changes
-      const nodeIndex = [...module.inputs, ...module.outputs].findIndex(n => n.node_id === nodeId);
-      const nodeType = module.inputs.find(n => n.node_id === nodeId) ? 'input' : 'output';
+      // Helper to get all nodes from NodeGroup structure
+      const allInputs = [...(module.inputs?.static || []), ...(module.inputs?.dynamic || [])];
+      const allOutputs = [...(module.outputs?.static || []), ...(module.outputs?.dynamic || [])];
+      const nodeIndex = [...allInputs, ...allOutputs].findIndex(n => n.node_id === nodeId);
+      const nodeType = allInputs.find(n => n.node_id === nodeId) ? 'input' : 'output';
       if (nodeIndex !== -1) {
         onNodeTypeChange?.(module.module_instance_id, nodeType, nodeIndex, newType);
       }
@@ -172,15 +175,17 @@ export const ModuleComponent: React.FC<ModuleComponentProps> = ({
   const textColor = isLightColor(template.color) ? '#000000' : '#FFFFFF';
   const borderColor = isSelected ? '#60A5FA' : '#4B5563';
 
-  // Check if we can add/remove nodes
-  const canAddInputs = canAddNode(module.inputs.length, template.meta.io_shape.inputs);
-  const canRemoveInputs = canRemoveNode(module.inputs.length, template.meta.io_shape.inputs);
-  const canAddOutputs = canAddNode(module.outputs.length, template.meta.io_shape.outputs);
-  const canRemoveOutputs = canRemoveNode(module.outputs.length, template.meta.io_shape.outputs);
+  // Check if we can add/remove nodes (now using NodeGroup structure)
+  const canAddInputs = canAddNode(module.inputs, template.meta.io_shape.inputs);
+  const canRemoveInputs = canRemoveNode(module.inputs, template.meta.io_shape.inputs);
+  const canAddOutputs = canAddNode(module.outputs, template.meta.io_shape.outputs);
+  const canRemoveOutputs = canRemoveNode(module.outputs, template.meta.io_shape.outputs);
 
-  // Calculate total rows including add button rows
-  const inputRowCount = module.inputs.length + (canAddInputs ? 1 : 0);
-  const outputRowCount = module.outputs.length + (canAddOutputs ? 1 : 0);
+  // Calculate total rows including add button rows (using NodeGroup structure)
+  const inputNodeCount = (module.inputs?.static || []).length + (module.inputs?.dynamic || []).length;
+  const outputNodeCount = (module.outputs?.static || []).length + (module.outputs?.dynamic || []).length;
+  const inputRowCount = inputNodeCount + (canAddInputs ? 1 : 0);
+  const outputRowCount = outputNodeCount + (canAddOutputs ? 1 : 0);
   const totalRows = Math.max(inputRowCount, outputRowCount, 1);
 
   // Get visible config properties from schema
@@ -272,15 +277,17 @@ export const ModuleComponent: React.FC<ModuleComponentProps> = ({
                 onAddNode?.(module.module_instance_id, 'input', groupId);
               }}
               onRemoveNode={(nodeId: string, groupId: string) => {
-                // Find the node index for the old API
-                const nodeIndex = module.inputs.findIndex(n => n.node_id === nodeId);
+                // Find the node index for the old API (using NodeGroup structure)
+                const allInputs = [...(module.inputs?.static || []), ...(module.inputs?.dynamic || [])];
+                const nodeIndex = allInputs.findIndex(n => n.node_id === nodeId);
                 if (nodeIndex !== -1) {
                   onRemoveNode?.(module.module_instance_id, 'input', nodeIndex);
                 }
               }}
               onNodeNameChange={(nodeId: string, newName: string) => {
-                // Find the node index for the old API
-                const nodeIndex = module.inputs.findIndex(n => n.node_id === nodeId);
+                // Find the node index for the old API (using NodeGroup structure)
+                const allInputs = [...(module.inputs?.static || []), ...(module.inputs?.dynamic || [])];
+                const nodeIndex = allInputs.findIndex(n => n.node_id === nodeId);
                 if (nodeIndex !== -1) {
                   onNodeNameChange?.(module.module_instance_id, 'input', nodeIndex, newName);
                 }
@@ -314,15 +321,17 @@ export const ModuleComponent: React.FC<ModuleComponentProps> = ({
                 onAddNode?.(module.module_instance_id, 'output', groupId);
               }}
               onRemoveNode={(nodeId: string, groupId: string) => {
-                // Find the node index for the old API
-                const nodeIndex = module.outputs.findIndex(n => n.node_id === nodeId);
+                // Find the node index for the old API (using NodeGroup structure)
+                const allOutputs = [...(module.outputs?.static || []), ...(module.outputs?.dynamic || [])];
+                const nodeIndex = allOutputs.findIndex(n => n.node_id === nodeId);
                 if (nodeIndex !== -1) {
                   onRemoveNode?.(module.module_instance_id, 'output', nodeIndex);
                 }
               }}
               onNodeNameChange={(nodeId: string, newName: string) => {
-                // Find the node index for the old API
-                const nodeIndex = module.outputs.findIndex(n => n.node_id === nodeId);
+                // Find the node index for the old API (using NodeGroup structure)
+                const allOutputs = [...(module.outputs?.static || []), ...(module.outputs?.dynamic || [])];
+                const nodeIndex = allOutputs.findIndex(n => n.node_id === nodeId);
                 if (nodeIndex !== -1) {
                   onNodeNameChange?.(module.module_instance_id, 'output', nodeIndex, newName);
                 }

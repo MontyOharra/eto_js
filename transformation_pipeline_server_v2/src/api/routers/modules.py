@@ -9,7 +9,7 @@ import time
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from src.shared.services import get_modules_service
+from shared.services import get_modules_service
 
 logger = logging.getLogger(__name__)
 

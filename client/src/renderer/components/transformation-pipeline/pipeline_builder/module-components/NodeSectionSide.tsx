@@ -51,13 +51,33 @@ export const NodeSectionSide: React.FC<NodeSectionSideProps> = ({
       isStatic: boolean;
     }> = [];
 
+
+    // Handle case where currentNodes might not be an array (backend data structure difference)
+    let nodesArray: NodePin[] = [];
+    if (Array.isArray(currentNodes)) {
+      nodesArray = currentNodes;
+    } else if (currentNodes && typeof currentNodes === 'object') {
+      // Backend might store as {static: [...], dynamic: [...]} structure
+      if (currentNodes.static && Array.isArray(currentNodes.static)) {
+        nodesArray = [...nodesArray, ...currentNodes.static];
+      }
+      if (currentNodes.dynamic && Array.isArray(currentNodes.dynamic)) {
+        nodesArray = [...nodesArray, ...currentNodes.dynamic];
+      }
+    } else {
+      console.warn(`🚨 [${side}] currentNodes is neither array nor object:`, currentNodes);
+      nodesArray = [];
+    }
+
+
     // Separate static and dynamic nodes using node properties
-    const staticNodes = currentNodes.filter(node =>
+    const staticNodes = nodesArray.filter(node =>
       (node as any).is_static === true
     );
-    const dynamicNodes = currentNodes.filter(node =>
+    const dynamicNodes = nodesArray.filter(node =>
       (node as any).is_static === false
     );
+
 
     // Handle static nodes - create individual groups for each static node
     if (ioSideShape.static && ioSideShape.static.slots.length > 0) {
@@ -84,10 +104,14 @@ export const NodeSectionSide: React.FC<NodeSectionSideProps> = ({
     if (ioSideShape.dynamic && ioSideShape.dynamic.groups.length > 0) {
       ioSideShape.dynamic.groups.forEach((groupConfig) => {
         const groupId = groupConfig.item.label; // Use label as identifier
+
         // Find nodes that belong to this dynamic group
-        const nodesInGroup = dynamicNodes.filter(node =>
-          (node as any).group_key === groupId
-        );
+        const nodesInGroup = dynamicNodes.filter(node => {
+          const nodeGroupKey = (node as any).group_key;
+          const matches = nodeGroupKey === groupId;
+          return matches;
+        });
+
 
         groups.push({
           id: groupId,
@@ -106,13 +130,27 @@ export const NodeSectionSide: React.FC<NodeSectionSideProps> = ({
 
   const groups = organizeNodesIntoGroups();
 
+
   const handleAddNode = (groupId: string) => {
     onAddNode(groupId);
   };
 
   const handleRemoveNode = (nodeId: string) => {
     // Find which group this node belongs to using node properties
-    const node = currentNodes.find(n => n.node_id === nodeId);
+    // Handle both array and object structures
+    let nodesArray: NodePin[] = [];
+    if (Array.isArray(currentNodes)) {
+      nodesArray = currentNodes;
+    } else if (currentNodes && typeof currentNodes === 'object') {
+      if (currentNodes.static && Array.isArray(currentNodes.static)) {
+        nodesArray = [...nodesArray, ...currentNodes.static];
+      }
+      if (currentNodes.dynamic && Array.isArray(currentNodes.dynamic)) {
+        nodesArray = [...nodesArray, ...currentNodes.dynamic];
+      }
+    }
+
+    const node = nodesArray.find(n => n.node_id === nodeId);
     if (node) {
       // Use actual group information from node properties
       const groupId = (node as any).is_static

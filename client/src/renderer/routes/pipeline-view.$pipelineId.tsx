@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { pipelineApiClient } from "../services/api";
 import { isAuthenticated } from "../helpers/auth";
 import { TransformationGraph } from "../components/transformation-pipeline/pipeline_builder/TransformationGraph";
+import { ModuleTemplate } from "../types/pipelineTypes";
 
 export const Route = createFileRoute("/pipeline-view/$pipelineId")({
   loader: async () => {
@@ -16,15 +17,43 @@ export const Route = createFileRoute("/pipeline-view/$pipelineId")({
 function PipelineViewPage() {
   const { pipelineId } = Route.useParams();
   const [pipeline, setPipeline] = useState<any>(null);
+  const [moduleTemplates, setModuleTemplates] = useState<ModuleTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Load module templates from API
+  useEffect(() => {
+    const loadModules = async () => {
+      try {
+        const response = await fetch('http://localhost:8090/api/modules');
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (!data.modules) {
+          throw new Error('No modules found in response');
+        }
+
+        setModuleTemplates(data.modules);
+
+      } catch (err) {
+        console.error('❌ Error loading module templates:', err);
+        // Don't set error state for module templates, just log it
+        setModuleTemplates([]);
+      }
+    };
+
+    loadModules();
+  }, []);
 
   useEffect(() => {
     const fetchPipeline = async () => {
       try {
         setLoading(true);
         setError(null);
-        console.log('Fetching pipeline with ID:', pipelineId);
         const fetchedPipeline = await pipelineApiClient.getPipeline(pipelineId);
         setPipeline(fetchedPipeline);
 
@@ -161,7 +190,7 @@ function PipelineViewPage() {
       <div className="flex-1 flex">
         {pipeline && (
           <TransformationGraph
-            moduleTemplates={[]} // No module templates in view mode
+            moduleTemplates={moduleTemplates} // Pass loaded module templates
             selectedModule={null}
             onModuleSelect={() => {}} // No module selection in view mode
             initialPipeline={pipeline.pipeline_json}

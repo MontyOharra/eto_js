@@ -11,8 +11,11 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-# Add src to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+# Add both src and current directory to Python path for proper module resolution
+project_root = str(Path(__file__).parent.parent.parent)
+src_path = os.path.join(project_root, 'src')
+sys.path.insert(0, src_path)
+sys.path.insert(0, project_root)
 
 from src.features.modules.core.registry import get_registry, auto_discover_modules, ModuleSecurityValidator
 from src.shared.database import DatabaseConnectionManager

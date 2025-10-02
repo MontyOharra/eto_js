@@ -77,13 +77,79 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
   const [currentMousePosition, setCurrentMousePosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
 
-  // Pipeline state (matches backend expectations)
-  const [pipelineState, setPipelineState] = useState<PipelineState>(
-    initialPipeline || {
-      entry_points: [],
-      modules: [],
-      connections: []
+  // Helper functions for NodeGroup operations
+  const getAllNodes = (nodeGroup: any): any[] => {
+    if (Array.isArray(nodeGroup)) {
+      // Legacy array format
+      return nodeGroup;
     }
+    // NodeGroup format
+    return [
+      ...(nodeGroup?.static || []),
+      ...(nodeGroup?.dynamic || [])
+    ];
+  };
+
+  const updateNodeInGroup = (nodeGroup: any, nodeId: string, updateFn: (node: any) => any): any => {
+    if (Array.isArray(nodeGroup)) {
+      // Legacy array format
+      return nodeGroup.map(node => node.node_id === nodeId ? updateFn(node) : node);
+    }
+    // NodeGroup format
+    return {
+      static: (nodeGroup?.static || []).map(node => node.node_id === nodeId ? updateFn(node) : node),
+      dynamic: (nodeGroup?.dynamic || []).map(node => node.node_id === nodeId ? updateFn(node) : node)
+    };
+  };
+
+  const updateAllNodesInGroup = (nodeGroup: any, updateFn: (node: any) => any): any => {
+    if (Array.isArray(nodeGroup)) {
+      // Legacy array format
+      return nodeGroup.map(updateFn);
+    }
+    // NodeGroup format
+    return {
+      static: (nodeGroup?.static || []).map(updateFn),
+      dynamic: (nodeGroup?.dynamic || []).map(updateFn)
+    };
+  };
+
+  // Convert flat arrays to NodeGroup structure
+  const convertToNodeGroupStructure = (pipeline: any) => {
+    if (!pipeline) return { entry_points: [], modules: [], connections: [] };
+
+
+    const converted = {
+      ...pipeline,
+      modules: pipeline.modules.map((module: any, index: number) => {
+
+        const newInputs = !module.inputs ? { static: [], dynamic: [] } :
+          Array.isArray(module.inputs) ? {
+            static: module.inputs.filter((node: any) => node.is_static === true),
+            dynamic: module.inputs.filter((node: any) => node.is_static === false)
+          } : module.inputs;
+
+        const newOutputs = !module.outputs ? { static: [], dynamic: [] } :
+          Array.isArray(module.outputs) ? {
+            static: module.outputs.filter((node: any) => node.is_static === true),
+            dynamic: module.outputs.filter((node: any) => node.is_static === false)
+          } : module.outputs;
+
+
+        return {
+          ...module,
+          inputs: newInputs,
+          outputs: newOutputs
+        };
+      })
+    };
+
+    return converted;
+  };
+
+  // Pipeline state (uses backend NodeGroup structure directly)
+  const [pipelineState, setPipelineState] = useState<PipelineState>(
+    convertToNodeGroupStructure(initialPipeline)
   );
 
   // Visual state (UI positioning only)
@@ -93,17 +159,18 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
     }
   );
 
-  // Debug logging for view-only mode
+
+  // Auto-center view in view-only mode when pipeline loads
   useEffect(() => {
-    if (viewOnly && initialPipeline) {
-      console.log('🔍 VIEW-ONLY MODE: TransformationGraph initialized');
-      console.log('📦 Pipeline State to display:', pipelineState);
-      console.log('🧩 Modules to render:', pipelineState.modules);
-      console.log('🔗 Connections to render:', pipelineState.connections);
-      console.log('📥 Entry points to render:', pipelineState.entry_points);
-      console.log('🎨 Visual positions:', visualState.modules);
+    if (viewOnly && pipelineState.modules.length > 0 && Object.keys(visualState.modules).length > 0) {
+      // Use a small delay to ensure DOM elements are rendered
+      const timer = setTimeout(() => {
+        handleResetZoom();
+      }, 100);
+
+      return () => clearTimeout(timer);
     }
-  }, [viewOnly, initialPipeline, pipelineState, visualState]);
+  }, [viewOnly, pipelineState.modules, visualState.modules]);
 
   // Map of module templates by ID for quick lookup
   const moduleTemplatesMap = moduleTemplates.reduce((acc, mod) => {
@@ -126,7 +193,8 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
 
     // Otherwise, find the module and output
     for (const module of pipelineState.modules) {
-      const outputNode = module.outputs.find(n => n.node_id === outputNodeId);
+      const allOutputs = getAllNodes(module.outputs);
+      const outputNode = allOutputs.find(n => n.node_id === outputNodeId);
       if (outputNode) return outputNode.name;
     }
 
@@ -192,21 +260,26 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
     if (pipelineState.modules.length > 0 && canvasRef.current) {
       const positions = Object.values(visualState.modules);
       if (positions.length > 0) {
-        // Calculate bounding box of all modules
+        // Module dimensions (from ModuleComponent styling)
+        const moduleWidth = 400; // Fixed width from ModuleComponent
+        const moduleHeight = 200; // Estimated height (varies based on content, but this is a safe estimate)
+
+        // Calculate actual bounding box including module dimensions
+        // Positions are module centers, so we need to account for half-width/half-height
         const xs = positions.map(p => p.x);
         const ys = positions.map(p => p.y);
 
-        const minX = Math.min(...xs);
-        const maxX = Math.max(...xs);
-        const minY = Math.min(...ys);
-        const maxY = Math.max(...ys);
+        const minX = Math.min(...xs) - moduleWidth / 2;  // Leftmost edge
+        const maxX = Math.max(...xs) + moduleWidth / 2;  // Rightmost edge
+        const minY = Math.min(...ys) - moduleHeight / 2; // Topmost edge
+        const maxY = Math.max(...ys) + moduleHeight / 2; // Bottommost edge
 
-        // Add padding around the bounding box (accounting for module size)
-        const padding = 150; // Padding in canvas coordinates
+        // Add padding around the actual module bounds
+        const padding = 50; // Reduced padding since we now account for actual module size
         const boundingWidth = maxX - minX + padding * 2;
         const boundingHeight = maxY - minY + padding * 2;
 
-        // Calculate center of bounding box
+        // Calculate center of the actual bounding box (including module dimensions)
         const centerX = (minX + maxX) / 2;
         const centerY = (minY + maxY) / 2;
 
@@ -349,8 +422,15 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
 
     if (!module || !template) return;
 
+    // Get the nodeId from the flattened array using the index
+    const nodeGroup = nodeType === 'input' ? module.inputs : module.outputs;
+    const allNodes = [...(nodeGroup?.static || []), ...(nodeGroup?.dynamic || [])];
+    const nodeToRemove = allNodes[nodeIndex];
+
+    if (!nodeToRemove) return;
+
     const ioSide = nodeType === 'input' ? template.meta.io_shape.inputs : template.meta.io_shape.outputs;
-    const removedNodeId = removeNodeFromModule(module, nodeType, nodeIndex, ioSide);
+    const removedNodeId = removeNodeFromModule(module, nodeType, nodeToRemove.node_id, ioSide);
 
     if (removedNodeId) {
       // Update pipeline state
@@ -370,7 +450,7 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
       ...prev,
       modules: prev.modules.map(module => {
         if (module.module_instance_id === moduleId) {
-          const nodes = nodeType === 'input' ? module.inputs : module.outputs;
+          const nodes = getAllNodes(nodeType === 'input' ? module.inputs : module.outputs);
           if (nodeIndex >= 0 && nodeIndex < nodes.length) {
             nodes[nodeIndex].type = newType;
           }
@@ -392,13 +472,13 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
         const updatedModule = { ...module };
 
         // Update inputs
-        updatedModule.inputs = module.inputs.map(node => {
+        updatedModule.inputs = updateAllNodesInGroup(module.inputs, node => {
           const update = moduleUpdates.find(u => u.nodeId === node.node_id);
           return update ? { ...node, type: update.newType } : node;
         });
 
         // Update outputs
-        updatedModule.outputs = module.outputs.map(node => {
+        updatedModule.outputs = updateAllNodesInGroup(module.outputs, node => {
           const update = moduleUpdates.find(u => u.nodeId === node.node_id);
           return update ? { ...node, type: update.newType } : node;
         });
@@ -413,7 +493,7 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
       ...prev,
       modules: prev.modules.map(module => {
         if (module.module_instance_id === moduleId) {
-          const nodes = nodeType === 'input' ? module.inputs : module.outputs;
+          const nodes = getAllNodes(nodeType === 'input' ? module.inputs : module.outputs);
           if (nodeIndex >= 0 && nodeIndex < nodes.length) {
             nodes[nodeIndex].name = newName;
           }
@@ -438,7 +518,6 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
 
       if (existingConnections.length > 0) {
         // Enter connection editing mode
-        console.log(`Editing connection(s) from ${moduleId}[${nodeType}:${nodeId}]`);
 
         // Don't select connections when editing - they'll be temporarily removed
 
@@ -452,12 +531,14 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
         let oppositeModuleId = '';
         for (const module of pipelineState.modules) {
           if (oppositeNodeType === 'input') {
-            if (module.inputs.some(n => n.node_id === oppositeNodeId)) {
+            const allInputs = getAllNodes(module.inputs);
+            if (allInputs.some(n => n.node_id === oppositeNodeId)) {
               oppositeModuleId = module.module_instance_id;
               break;
             }
           } else {
-            if (module.outputs.some(n => n.node_id === oppositeNodeId)) {
+            const allOutputs = getAllNodes(module.outputs);
+            if (allOutputs.some(n => n.node_id === oppositeNodeId)) {
               oppositeModuleId = module.module_instance_id;
               break;
             }
@@ -483,7 +564,6 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
         }));
       } else {
         // Start new connection normally
-        console.log(`Starting connection from ${moduleId}[${nodeType}:${nodeId}]`);
         setStartingConnection({ moduleId, nodeId, nodeType });
       }
 
@@ -541,7 +621,6 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
         );
 
         if (!connectionResult.canConnect) {
-          console.log('Connection rejected:', connectionResult.reason);
           // Reset starting connection without creating the connection
           setStartingConnection(null);
           setCurrentMousePosition({ x: 0, y: 0 });
@@ -550,7 +629,6 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
 
         // Apply type changes if needed
         if (connectionResult.typeChanges && connectionResult.typeChanges.length > 0) {
-          console.log('Applying type changes:', connectionResult.typeChanges);
 
           // Apply all type changes
           setPipelineState(prev => ({
@@ -565,23 +643,70 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
               // Apply changes to this module
               let updatedModule = { ...module };
               for (const change of moduleChanges) {
-                // Find and update the node
-                const inputIndex = updatedModule.inputs.findIndex(n => n.node_id === change.nodeId);
-                if (inputIndex !== -1) {
+                // Find and update the node in NodeGroup structure
+                let found = false;
+
+                // Check static inputs
+                const staticInputIndex = (updatedModule.inputs?.static || []).findIndex(n => n.node_id === change.nodeId);
+                if (staticInputIndex !== -1) {
                   updatedModule = {
                     ...updatedModule,
-                    inputs: updatedModule.inputs.map((input, idx) =>
-                      idx === inputIndex ? { ...input, type: change.newType } : input
-                    )
+                    inputs: {
+                      ...updatedModule.inputs,
+                      static: (updatedModule.inputs?.static || []).map((input, idx) =>
+                        idx === staticInputIndex ? { ...input, type: change.newType } : input
+                      )
+                    }
                   };
-                } else {
-                  const outputIndex = updatedModule.outputs.findIndex(n => n.node_id === change.nodeId);
-                  if (outputIndex !== -1) {
+                  found = true;
+                }
+
+                // Check dynamic inputs
+                if (!found) {
+                  const dynamicInputIndex = (updatedModule.inputs?.dynamic || []).findIndex(n => n.node_id === change.nodeId);
+                  if (dynamicInputIndex !== -1) {
                     updatedModule = {
                       ...updatedModule,
-                      outputs: updatedModule.outputs.map((output, idx) =>
-                        idx === outputIndex ? { ...output, type: change.newType } : output
-                      )
+                      inputs: {
+                        ...updatedModule.inputs,
+                        dynamic: (updatedModule.inputs?.dynamic || []).map((input, idx) =>
+                          idx === dynamicInputIndex ? { ...input, type: change.newType } : input
+                        )
+                      }
+                    };
+                    found = true;
+                  }
+                }
+
+                // Check static outputs
+                if (!found) {
+                  const staticOutputIndex = (updatedModule.outputs?.static || []).findIndex(n => n.node_id === change.nodeId);
+                  if (staticOutputIndex !== -1) {
+                    updatedModule = {
+                      ...updatedModule,
+                      outputs: {
+                        ...updatedModule.outputs,
+                        static: (updatedModule.outputs?.static || []).map((output, idx) =>
+                          idx === staticOutputIndex ? { ...output, type: change.newType } : output
+                        )
+                      }
+                    };
+                    found = true;
+                  }
+                }
+
+                // Check dynamic outputs
+                if (!found) {
+                  const dynamicOutputIndex = (updatedModule.outputs?.dynamic || []).findIndex(n => n.node_id === change.nodeId);
+                  if (dynamicOutputIndex !== -1) {
+                    updatedModule = {
+                      ...updatedModule,
+                      outputs: {
+                        ...updatedModule.outputs,
+                        dynamic: (updatedModule.outputs?.dynamic || []).map((output, idx) =>
+                          idx === dynamicOutputIndex ? { ...output, type: change.newType } : output
+                        )
+                      }
                     };
                   }
                 }
@@ -608,14 +733,12 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
           }));
         }
 
-        console.log(`Connection created/updated: ${fromNodeId} -> ${toNodeId}`);
 
         // Reset starting connection
         setStartingConnection(null);
         setCurrentMousePosition({ x: 0, y: 0 });
       } else {
         // Can't connect same type nodes
-        console.log('Cannot connect', nodeType, 'to', nodeType);
         setStartingConnection(null);
         setCurrentMousePosition({ x: 0, y: 0 });
       }
@@ -637,10 +760,12 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
   const getNodeType = (nodeId: string): string => {
     // Find the module and node to get its type
     for (const module of pipelineState.modules) {
-      const inputNode = module.inputs.find(n => n.node_id === nodeId);
+      const allInputs = getAllNodes(module.inputs);
+      const inputNode = allInputs.find(n => n.node_id === nodeId);
       if (inputNode) return inputNode.type;
 
-      const outputNode = module.outputs.find(n => n.node_id === nodeId);
+      const allOutputs = getAllNodes(module.outputs);
+      const outputNode = allOutputs.find(n => n.node_id === nodeId);
       if (outputNode) return outputNode.type;
     }
     return 'str'; // Default type
@@ -712,9 +837,28 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
         const moduleToDelete = prev.modules.find(m => m.module_instance_id === moduleId);
         if (!moduleToDelete) return true;
 
+        // Handle both NodeGroup structure and legacy flat arrays
+        let allInputs: any[] = [];
+        let allOutputs: any[] = [];
+
+        if (Array.isArray(moduleToDelete.inputs)) {
+          // Legacy flat array structure
+          allInputs = moduleToDelete.inputs;
+        } else if (moduleToDelete.inputs) {
+          // NodeGroup structure
+          allInputs = [...(moduleToDelete.inputs.static || []), ...(moduleToDelete.inputs.dynamic || [])];
+        }
+
+        if (Array.isArray(moduleToDelete.outputs)) {
+          // Legacy flat array structure
+          allOutputs = moduleToDelete.outputs;
+        } else if (moduleToDelete.outputs) {
+          // NodeGroup structure
+          allOutputs = [...(moduleToDelete.outputs.static || []), ...(moduleToDelete.outputs.dynamic || [])];
+        }
         const nodeIds = [
-          ...moduleToDelete.inputs.map(n => n.node_id),
-          ...moduleToDelete.outputs.map(n => n.node_id)
+          ...allInputs.map(n => n.node_id),
+          ...allOutputs.map(n => n.node_id)
         ];
 
         return !nodeIds.includes(conn.from_node_id) && !nodeIds.includes(conn.to_node_id);
@@ -777,7 +921,6 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
         // Select the newly placed module
         setSelectedModuleId(moduleInstance.module_instance_id);
 
-        console.log('Module placed:', moduleInstance.module_instance_id, 'at', dropX, dropY);
       }
     } catch (error) {
       console.error('Failed to handle drop:', error);
@@ -1139,65 +1282,39 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
         {!viewOnly && (
           <button
           onClick={async () => {
-            // Transform the frontend pipeline structure to match backend models
-            const transformPipelineForBackend = (frontendPipeline: PipelineState) => {
-              // Helper function to transform node to match NodePin model
-              const transformNode = (node: any) => ({
-                node_id: node.node_id,
-                type: node.type,
-                name: node.name,
-                position_index: node.position_index,
-                group_key: node.group_key || null
-              });
-
-              console.log('Frontend pipeline modules:', frontendPipeline.modules);
-
-              return {
-                ...frontendPipeline,
-                modules: frontendPipeline.modules.map(module => {
-                  console.log('Processing module:', module);
-
-                  return {
-                    module_instance_id: module.module_instance_id || module.id,
-                    module_ref: module.module_ref || 'unknown:1.0.0',
-                    module_kind: module.module_kind || 'transform',
-                    config: module.config || {},
-                    // Transform inputs from array to NodeGroup structure
-                    inputs: {
-                      static: module.inputs.filter((input: any) => input.is_static || true).map(transformNode),
-                      dynamic: module.inputs.filter((input: any) => !input.is_static && false).map(transformNode)
-                    },
-                    // Transform outputs from array to NodeGroup structure
-                    outputs: {
-                      static: module.outputs.filter((output: any) => output.is_static || true).map(transformNode),
-                      dynamic: module.outputs.filter((output: any) => !output.is_static && false).map(transformNode)
-                    }
-                  };
-                })
-              };
-            };
-
-            // Prepare the pipeline data for saving
-            const transformedPipelineState = transformPipelineForBackend(pipelineState);
+            // Pipeline state is already in backend format (NodeGroup structure)
             const pipelineData = {
               name: 'Untitled Pipeline',
               description: 'Pipeline created in visual editor',
-              pipeline_json: transformedPipelineState,
+              pipeline_json: pipelineState,
               visual_json: visualState
             };
 
-            console.log('=== SAVING PIPELINE ===');
-            console.log(JSON.stringify(pipelineData, null, 2));
-            console.log('======================');
+            console.log('=== PIPELINE STATE ANALYSIS ===');
+            console.log('🔍 Pipeline State (NodeGroup format):', JSON.stringify(pipelineState, null, 2));
+            console.log('📋 Module Analysis:');
 
-            try {
-              const savedPipeline = await pipelineApiClient.createPipeline(pipelineData);
-              console.log('Pipeline saved successfully:', savedPipeline);
-              alert(`Pipeline saved successfully!\nID: ${savedPipeline.id}\nName: ${savedPipeline.name}`);
-            } catch (error) {
-              console.error('Failed to save pipeline:', error);
-              alert(`Failed to save pipeline: ${error.message || 'Unknown error'}`);
-            }
+            pipelineState.modules.forEach((module, index) => {
+              console.log(`Module ${index + 1} (${module.module_ref}):`);
+              console.log('  inputs.static:', module.inputs?.static || []);
+              console.log('  inputs.dynamic:', module.inputs?.dynamic || []);
+              console.log('  outputs.static:', module.outputs?.static || []);
+              console.log('  outputs.dynamic:', module.outputs?.dynamic || []);
+            });
+
+            console.log('=================================');
+
+            // COMMENTED OUT: Actual saving
+            // try {
+            //   const savedPipeline = await pipelineApiClient.createPipeline(pipelineData);
+            //   console.log('Pipeline saved successfully:', savedPipeline);
+            //   alert(`Pipeline saved successfully!\nID: ${savedPipeline.id}\nName: ${savedPipeline.name}`);
+            // } catch (error) {
+            //   console.error('Failed to save pipeline:', error);
+            //   alert(`Failed to save pipeline: ${error.message || 'Unknown error'}`);
+            // }
+
+            alert('Pipeline save is currently disabled for debugging. Check console for detailed pipeline state analysis.');
           }}
           className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg shadow-lg border border-gray-700 font-medium"
         >
@@ -1252,11 +1369,6 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
         <div>Entry Points: {pipelineState.entry_points.length}</div>
         <button
           onClick={() => {
-            console.log('=== PIPELINE STATE ===');
-            console.log(JSON.stringify(pipelineState, null, 2));
-            console.log('=== VISUAL STATE ===');
-            console.log(JSON.stringify(visualState, null, 2));
-            console.log('=====================');
           }}
           className="mt-2 px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs"
         >
@@ -1339,7 +1451,6 @@ export const TransformationGraph: React.FC<TransformationGraphProps> = ({
               }));
             }
 
-            console.log('Added entry point module:', moduleId);
           }}
           className="mt-1 px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs w-full"
         >
