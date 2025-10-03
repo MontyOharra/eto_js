@@ -4,10 +4,7 @@
 
 import {
   NodeTypeRule as _NodeTypeRule,
-  NodeSpec as _NodeSpec,
-  StaticNodes as _StaticNodes,
-  DynamicNodeGroup as _DynamicNodeGroup,
-  DynamicNodes as _DynamicNodes,
+  NodeGroup as _NodeGroup,
   IOSideShape as _IOSideShape,
   IOShape as _IOShape,
   ModuleTemplate as _ModuleTemplate,
@@ -17,10 +14,7 @@ import {
 
 // Re-export module type definitions
 export type NodeTypeRule = _NodeTypeRule;
-export type NodeSpec = _NodeSpec;
-export type StaticNodes = _StaticNodes;
-export type DynamicNodeGroup = _DynamicNodeGroup;
-export type DynamicNodes = _DynamicNodes;
+export type NodeGroup = _NodeGroup;
 export type IOSideShape = _IOSideShape;
 export type IOShape = _IOShape;
 export type ModuleTemplate = _ModuleTemplate;

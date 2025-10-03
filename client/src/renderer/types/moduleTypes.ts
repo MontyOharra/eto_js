@@ -1,6 +1,6 @@
 /**
- * New module type system supporting static/dynamic nodes and type variables
- * Based on backend contracts.py structure
+ * Module type system with unified NodeGroup structure
+ * Matches backend contracts.py structure
  */
 
 // Node type system
@@ -9,31 +9,19 @@ export interface NodeTypeRule {
   type_var?: string;         // e.g., "T" (unifies across pins)
 }
 
-export interface NodeSpec {
-  label: string;             // UI label, e.g., "cond", "value"
-  typing: NodeTypeRule;
-}
-
-// Static node definitions
-export interface StaticNodes {
-  slots: NodeSpec[];         // exact count, fixed order
-}
-
-// Dynamic node groups
-export interface DynamicNodeGroup {
+// Unified NodeGroup - replaces StaticNodes/DynamicNodes split
+// Static nodes: min_count === max_count === 1
+// Dynamic nodes: max_count > 1 or null
+export interface NodeGroup {
+  label: string;
   min_count: number;
-  max_count?: number;
-  item: NodeSpec;            // typing applies per pin instance
-}
-
-export interface DynamicNodes {
-  groups: DynamicNodeGroup[];
+  max_count?: number;        // null/undefined = unlimited
+  typing: NodeTypeRule;
 }
 
 // I/O shape definitions
 export interface IOSideShape {
-  static?: StaticNodes;
-  dynamic?: DynamicNodes;
+  nodes: NodeGroup[];        // All nodes in a single array, ordered
 }
 
 export interface IOShape {
@@ -46,16 +34,15 @@ export interface ModuleMeta {
   io_shape: IOShape;
 }
 
-// Updated NodePin with new fields
+// Runtime instance of a pin in a module instance
 export interface NodePin {
   node_id: string;
   direction: 'in' | 'out';
   type: string;
   name: string;              // user-editable name
-  label: string;             // from NodeSpec (static)
-  position_index: number;
-  group_key?: string;        // for dynamic nodes - which group they belong to
-  is_static: boolean;        // whether this is a static or dynamic node
+  label: string;             // from NodeGroup.label
+  position_index: number;    // position within the group
+  group_index: number;       // index in meta.io_shape.inputs.nodes or outputs.nodes
   type_var?: string;         // type variable name if applicable
   allowed_types?: string[];  // allowed types for this node (from template)
 }
@@ -66,7 +53,7 @@ export interface ModuleInstance {
   module_ref: string;
   module_kind: string;
   config: Record<string, any>;
-  inputs: NodePin[];
+  inputs: NodePin[];         // Flat array, grouped by group_index
   outputs: NodePin[];
 }
 
@@ -88,10 +75,10 @@ export interface TypeVariableState {
   affectedNodes: Record<string, string[]>; // typeVar -> nodeIds[]
 }
 
-// Dynamic group info for UI
-export interface DynamicGroupInfo {
-  groupKey: string;
-  group: DynamicNodeGroup;
+// Group info for UI
+export interface GroupInfo {
+  groupIndex: number;
+  group: NodeGroup;
   currentCount: number;
   canAdd: boolean;
   canRemove: boolean;
