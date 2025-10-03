@@ -25,7 +25,7 @@ function Login() {
           // Simulate the same authentication flow
           await new Promise((r) => setTimeout(r, 100)); // Shorter delay for dev
           setAuthenticated(true);
-          navigate({ to: "/dashboard", replace: true });
+          navigate({ to: "/transformation_pipeline", replace: true });
         } catch (error) {
           console.error('Auto-authentication failed:', error);
           setSubmitting(false);
@@ -53,7 +53,7 @@ function Login() {
       const ok = await fakeAuthenticate(username, password);
       if (ok) {
         setAuthenticated(true);
-        navigate({ to: "/dashboard", replace: true });
+        navigate({ to: "/transformation_pipeline", replace: true });
       }
     } finally {
       setSubmitting(false);

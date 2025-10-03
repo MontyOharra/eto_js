@@ -71,7 +71,7 @@ function createStaticNode(
     node_id: nodeId,
     direction,
     type: defaultType,
-    name: `${nodeSpec.label}_${positionIndex + 1}`, // Default name based on label
+    name: '', // Start blank, user must fill in
     label: nodeSpec.label,
     position_index: positionIndex,
     is_static: true,
@@ -98,7 +98,7 @@ function createDynamicNode(
     node_id: nodeId,
     direction,
     type: defaultType,
-    name: `${nodeSpec.label}_${instanceIndex + 1}`,
+    name: '', // Start blank, user must fill in
     label: nodeSpec.label,
     position_index: positionIndex,
     group_key: groupKey,
@@ -424,11 +424,7 @@ export function removeNodeFromGroup(
     node.position_index = idx;
   });
 
-  // Re-number nodes in the same group
-  const groupNodes = nodesArray.filter(n => n.group_key === nodeToRemove.group_key);
-  groupNodes.forEach((node, idx) => {
-    node.name = `${node.label}_${idx + 1}`;
-  });
+  // Don't rename nodes - names are user-editable and should be preserved
 
   return removedNode.node_id;
 }

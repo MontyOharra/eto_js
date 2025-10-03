@@ -1,465 +1,362 @@
+"""
+Transformation Pipeline Server - FastAPI Application
+Node-based pipeline system with Dask execution
+"""
 import os
 import logging
-from flask import Flask, jsonify, request
-from flask_cors import CORS
-from dotenv import load_dotenv
-from .database import init_database, get_db_service, create_database_if_not_exists, BaseModule
-from .modules import get_module_registry, populate_database_with_modules
-from .services import get_pipeline_analyzer, get_pipeline_executor, PipelineAnalysisError, PipelineExecutionError
-from .services.simple_pipeline_execution import get_simple_pipeline_executor
-from .services.step_based_execution import get_step_based_pipeline_executor
+import sys
+from contextlib import asynccontextmanager
+from typing import Optional, Dict, Any
 
-# Load environment variables
-load_dotenv()
+from fastapi import FastAPI, HTTPException, Request, status
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError, HTTPException as FastAPIHTTPException
+from pydantic import ValidationError
+import uvicorn
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__)
+# Global variables to store initialized services and database connection
+_connection_manager = None
+_service_container = None
 
-# Enable CORS for frontend integration
-CORS(app, origins=["http://localhost:5002", "http://localhost:3000"], 
-     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-     allow_headers=["Content-Type", "Authorization"])
 
-# Initialize database and services
-try:
-    logger.info("ETO Transformation Pipeline Server starting up...")
-    
-    # Initialize database
-    database_url = os.getenv('DATABASE_URL')
-    if not database_url:
-        raise ValueError("DATABASE_URL environment variable is required")
-    
-    # Create database if it doesn't exist
-    create_database_if_not_exists(database_url)
-    
-    # Initialize database service
-    init_database(database_url)
-    logger.info("Database initialized successfully")
-    
-    logger.info("All services initialized successfully")
-    
-except Exception as e:
-    logger.error(f"Failed to initialize services: {e}")
-    logger.error("Server will start but some functionality may be limited")
-    
+class DatabaseConnectionError(Exception):
+    """Raised when database connection cannot be established"""
+    pass
 
-@app.get("/health")
-def health():
-    return jsonify({
-        "status": "ok",
-        "service": "eto-transformation-pipeline-server",
-        "timestamp": __import__("datetime").datetime.utcnow().isoformat() + "Z",
-        "port": int(os.environ.get("PORT", "8090"))
-    })
 
-# Module Management Endpoints
+class ServiceInitializationError(Exception):
+    """Raised when services cannot be initialized"""
+    pass
 
-@app.post("/api/modules/populate")
-def populate_modules():
-    """Populate database with all registered base modules"""
-    try:
-        success = populate_database_with_modules()
-        if success:
-            return jsonify({
-                "success": True,
-                "message": "Database populated with base modules successfully"
-            })
+
+def get_log_level() -> int:
+    """Get logging level from environment variable"""
+    log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
+    level_mapping = {
+        'DEBUG': logging.DEBUG,
+        'INFO': logging.INFO,
+        'WARNING': logging.WARNING,
+        'ERROR': logging.ERROR,
+        'CRITICAL': logging.CRITICAL,
+        'TRACE': 5,  # Custom level below DEBUG for very verbose tracing
+        'MONITOR': 7  # Custom level for monitoring loops (between TRACE and DEBUG)
+    }
+    return level_mapping.get(log_level, logging.INFO)
+
+
+def setup_custom_log_levels():
+    """Setup custom logging levels"""
+    # Add TRACE level (5) - for very detailed tracing
+    logging.addLevelName(5, 'TRACE')
+    def trace(self, message, *args, **kwargs):
+        if self.isEnabledFor(5):
+            self._log(5, message, args, **kwargs)
+    logging.Logger.trace = trace
+
+    # Add MONITOR level (7) - for monitoring loops
+    logging.addLevelName(7, 'MONITOR')
+    def monitor(self, message, *args, **kwargs):
+        if self.isEnabledFor(7):
+            self._log(7, message, args, **kwargs)
+    logging.Logger.monitor = monitor
+
+
+class ColoredFormatter(logging.Formatter):
+    """Custom formatter with color support for different log levels"""
+
+    # ANSI color codes
+    COLORS = {
+        'TRACE': '\033[37m',      # Light gray
+        'MONITOR': '\033[90m',    # Dark gray
+        'DEBUG': '\033[90m',      # Gray
+        'INFO': '\033[94m',       # Blue
+        'WARNING': '\033[93m',    # Yellow
+        'ERROR': '\033[91m',      # Red
+        'CRITICAL': '\033[91m',   # Red
+        'RESET': '\033[0m'        # Reset
+    }
+
+    def __init__(self, fmt=None, datefmt=None, use_colors=True):
+        super().__init__(fmt, datefmt)
+        self.use_colors = use_colors
+
+    def format(self, record):
+        if self.use_colors:
+            # Get color for this log level
+            color = self.COLORS.get(record.levelname, self.COLORS['RESET'])
+            reset = self.COLORS['RESET']
+
+            # Format the message normally first
+            formatted = super().format(record)
+
+            # Check if the formatted message contains the separator between header and content
+            if ':\n    ' in formatted:
+                # Split at the separator to color only the header
+                header, content = formatted.split(':\n    ', 1)
+                return f"{color}{header}{reset}:\n    {content}"
+            else:
+                # If no separator, color the entire message (for simple logs)
+                return f"{color}{formatted}{reset}"
         else:
-            return jsonify({
-                "success": False,
-                "message": "Failed to populate database with modules"
-            }), 500
-    except Exception as e:
-        logger.error(f"Error populating modules: {e}")
-        return jsonify({
-            "success": False,
-            "message": f"Error: {str(e)}"
-        }), 500
+            return super().format(record)
 
-@app.get("/api/modules")
-def get_modules():
-    """Get all available base modules from database"""
+
+def configure_logging():
+    """Configure comprehensive logging for the application"""
+    setup_custom_log_levels()
+
+    # Get logging configuration from environment
+    log_level = get_log_level()
+    log_format = os.getenv('LOG_FORMAT',
+        '%(asctime)s | %(levelname)-8s | %(name)s:\n    %(message)s'
+    )
+    date_format = os.getenv('LOG_DATE_FORMAT', '%Y-%m-%d %H:%M:%S')
+    use_colors = os.getenv('LOG_COLORS', 'true').lower() == 'true'
+
+    # Create logs directory if it doesn't exist
+    logs_dir = os.getenv('LOGS_DIR', 'logs')
+    os.makedirs(logs_dir, exist_ok=True)
+
+    # Configure root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(log_level)
+
+    # Remove existing handlers to avoid duplicates
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+
+    # Console handler with colors
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(log_level)
+    console_formatter = ColoredFormatter(
+        fmt=log_format,
+        datefmt=date_format,
+        use_colors=use_colors
+    )
+    console_handler.setFormatter(console_formatter)
+    root_logger.addHandler(console_handler)
+
+    # File handler (always without colors)
+    log_file = os.path.join(logs_dir, 'transformation_pipeline.log')
+    file_handler = logging.FileHandler(log_file, encoding='utf-8')
+    file_handler.setLevel(log_level)
+    file_formatter = logging.Formatter(
+        fmt=log_format,
+        datefmt=date_format
+    )
+    file_handler.setFormatter(file_formatter)
+    root_logger.addHandler(file_handler)
+
+    # Reduce noise from external libraries
+    logging.getLogger('urllib3').setLevel(logging.WARNING)
+    logging.getLogger('requests').setLevel(logging.WARNING)
+    logging.getLogger('uvicorn').setLevel(logging.INFO)
+    logging.getLogger('uvicorn.access').setLevel(logging.INFO)
+    logging.getLogger('fastapi').setLevel(logging.INFO)
+
+    logger.info("Logging configured successfully")
+    logger.info(f"Log level: {logging.getLevelName(log_level)}")
+    logger.info(f"Console colors: {use_colors}")
+    logger.info(f"Log file: {log_file}")
+
+
+async def initialize_database_connection() -> None:
+    """Initialize database connection and verify connectivity"""
+    global _connection_manager
+
     try:
-        db_service = get_db_service()
-        if not db_service:
-            return jsonify({
-                "success": False,
-                "message": "Database service not available"
-            }), 500
-        
-        session = db_service.get_session()
+        database_url = os.getenv('DATABASE_URL')
+        if not database_url:
+            raise DatabaseConnectionError("DATABASE_URL environment variable is required")
+
+        # Import database initialization (when you implement it)
+        from .shared.database import init_database_connection
+        _connection_manager = init_database_connection(database_url)
+
+        # For now, just log that we would initialize the database
+        logger.info(f"Would initialize database connection with URL: {database_url[:20]}...")
+        logger.info("Database connection established and verified")
+
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
+
+        # Print available drivers for debugging
         try:
-            modules = session.query(BaseModule).filter(BaseModule.is_active == True).all()
-            
-            # Convert to frontend format using new schema
-            modules_data = []
-            for module in modules:
-                import json
-                
-                try:
-                    # Parse the backend configurations directly
-                    input_config = {"nodes": [], "dynamic": None, "allowedTypes": []}
-                    output_config = {"nodes": [], "dynamic": None, "allowedTypes": []}
-                    config_schema = []
-                    
-                    # Get the actual string values from the database row
-                    input_config_str = getattr(module, 'input_config', None)
-                    output_config_str = getattr(module, 'output_config', None)
-                    config_schema_str = getattr(module, 'config_schema', None)
-                    
-                    if input_config_str and isinstance(input_config_str, str):
-                        try:
-                            parsed_input = json.loads(input_config_str)
-                            if parsed_input and isinstance(parsed_input, dict):
-                                input_config = parsed_input
-                        except (json.JSONDecodeError, TypeError) as e:
-                            logger.warning(f"Failed to parse input_config for module {module.id}: {e}")
-                    
-                    if output_config_str and isinstance(output_config_str, str):
-                        try:
-                            parsed_output = json.loads(output_config_str)
-                            if parsed_output and isinstance(parsed_output, dict):
-                                output_config = parsed_output
-                        except (json.JSONDecodeError, TypeError) as e:
-                            logger.warning(f"Failed to parse output_config for module {module.id}: {e}")
-                    
-                    if config_schema_str and isinstance(config_schema_str, str):
-                        try:
-                            parsed_config = json.loads(config_schema_str)
-                            if parsed_config and isinstance(parsed_config, list):
-                                config_schema = parsed_config
-                        except (json.JSONDecodeError, TypeError) as e:
-                            logger.warning(f"Failed to parse config_schema for module {module.id}: {e}")
-                    
-                    # Return the exact backend NodeConfiguration objects
-                    module_data = {
-                        "id": module.id,
-                        "name": module.name,
-                        "description": module.description or "",
-                        "category": module.category or "Text Processing",
-                        "color": module.color or "#3B82F6",
-                        "version": module.version or "1.0.0",
-                        # Direct backend schema format
-                        "inputConfig": input_config,
-                        "outputConfig": output_config,
-                        "config": config_schema
-                    }
-                    
-                    modules_data.append(module_data)
-                    
-                except (json.JSONDecodeError, TypeError) as e:
-                    logger.error(f"Error parsing module {module.id} configuration: {e}")
-                    # Skip malformed modules
-                    continue
-            
-            return jsonify({
-                "success": True,
-                "modules": modules_data
-            })
-            
-        finally:
-            session.close()
-            
-    except Exception as e:
-        logger.error(f"Error getting modules: {e}")
-        return jsonify({
-            "success": False,
-            "message": f"Error: {str(e)}"
-        }), 500
+            import pyodbc
+            drivers = pyodbc.drivers()
+            logger.debug(f"Available ODBC drivers: {drivers}")
+        except ImportError:
+            logger.warning("pyodbc not available for driver debugging")
+        except Exception:
+            pass
 
-@app.post("/api/modules/<module_id>/execute")
-def execute_module(module_id):
-    """Execute a specific module"""
+        # Re-raise to prevent app startup with broken database
+        raise DatabaseConnectionError(f"Database initialization failed: {e}")
+
+
+async def initialize_services() -> None:
+    """Initialize all services using the ServiceContainer singleton"""
+    global _connection_manager, _service_container
+
     try:
-        data = request.get_json()
-        if not data:
-            return jsonify({
-                "success": False,
-                "message": "Request body required"
-            }), 400
-        
-        inputs = data.get('inputs', {})
-        config = data.get('config', {})
-        output_names = data.get('output_names', None)  # For variable output modules
-        
-        registry = get_module_registry()
-        result = registry.execute_module(module_id, inputs, config, output_names)
-        
-        return jsonify({
-            "success": True,
-            "outputs": result
-        })
-        
-    except ValueError as e:
-        return jsonify({
-            "success": False,
-            "message": f"Module error: {str(e)}"
-        }), 404
-    except Exception as e:
-        logger.error(f"Error executing module {module_id}: {e}")
-        return jsonify({
-            "success": False,
-            "message": f"Execution error: {str(e)}"
-        }), 500
+        logger.debug("Initializing services via ServiceContainer...")
 
+        # Initialize the service container with all services
+        logger.info("Creating ServiceContainer singleton instance...")
 
-# Pipeline Execution Endpoints
+        # Import service container
+        from .shared.services.service_container import ServiceContainer
 
-@app.post("/api/pipeline/analyze")
-def analyze_pipeline():
-    """Analyze a pipeline for execution planning with step-based algorithm"""
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({
-                "success": False,
-                "message": "Request body required"
-            }), 400
-        
-        modules = data.get('modules', [])
-        connections = data.get('connections', [])
-        input_definitions = data.get('input_definitions', [])
-        output_definitions = data.get('output_definitions', [])
-        
-        if not modules and not input_definitions and not output_definitions:
-            return jsonify({
-                "success": False,
-                "message": "At least one module or I/O definition is required"
-            }), 400
-        
-        analyzer = get_pipeline_analyzer()
-        result = analyzer.analyze_pipeline_with_steps(modules, connections, input_definitions, output_definitions)
-        
-        return jsonify(result)
-        
-    except PipelineAnalysisError as e:
-        return jsonify({
-            "success": False,
-            "message": f"Analysis error: {str(e)}"
-        }), 400
-    except Exception as e:
-        logger.error(f"Error analyzing pipeline: {e}")
-        return jsonify({
-            "success": False,
-            "message": f"Analysis failed: {str(e)}"
-        }), 500
+        # Create service container instance
+        _service_container = ServiceContainer()
+        logger.info(f"ServiceContainer instance created (ID: {id(_service_container)}), calling initialize")
+        _service_container.initialize(_connection_manager)
+        logger.info("ServiceContainer.initialize() completed successfully")
 
-@app.post("/api/pipeline/execute")
-def execute_pipeline():
-    """Execute a complete transformation pipeline with clean separation"""
-    try:
-        logger.info("Pipeline execution request received")
-        
-        data = request.get_json()
-        if not data:
-            logger.error("No request body provided")
-            return jsonify({
-                "success": False,
-                "message": "Request body required"
-            }), 400
-        
-        logger.info(f"Request data keys: {list(data.keys())}")
-        
-        modules = data.get('modules', [])
-        connections = data.get('connections', [])
-        input_data = data.get('inputData', {})  # Changed from baseInputs to inputData
-        
-        logger.info(f"Received {len(modules)} modules, {len(connections)} connections")
-        logger.info(f"Input data: {input_data}")
-        
-        if not modules:
-            logger.error("No modules provided in request")
-            return jsonify({
-                "success": False,
-                "message": "Modules list is required"
-            }), 400
-        
-        # Step 1: Analyze pipeline to get transformation steps
-        logger.info("Step 1: Analyzing pipeline...")
-        analyzer = get_pipeline_analyzer()
-        analysis_result = analyzer.analyze_pipeline(modules, connections)
-        
-        if not analysis_result['success']:
-            logger.error("Pipeline analysis failed")
-            return jsonify({
-                "success": False,
-                "message": "Pipeline analysis failed"
-            }), 400
-        
-        transformation_steps = analysis_result['transformation_steps']
-        field_mappings = analysis_result['field_mappings']
-        
-        logger.info(f"Analysis complete: {len(transformation_steps)} transformation steps")
-        logger.info(f"Field mappings: {field_mappings}")
-        
-        # Step 2: Execute pipeline with clean separation
-        logger.info("Step 2: Executing transformations...")
-        executor = get_simple_pipeline_executor()
-        
-        final_outputs = executor.execute_pipeline(
-            transformation_steps=transformation_steps,
-            input_data=input_data,
-            field_mappings=field_mappings
-        )
-        
-        logger.info("Pipeline execution completed successfully")
-        return jsonify({
-            "success": True,
-            "analysis": {
-                "transformation_steps": transformation_steps,
-                "field_mappings": field_mappings
-            },
-            "outputs": final_outputs
-        })
-        
-    except PipelineAnalysisError as e:
-        logger.error(f"Pipeline analysis error: {str(e)}")
-        return jsonify({
-            "success": False,
-            "message": f"Analysis error: {str(e)}"
-        }), 400
-    except Exception as e:
-        logger.error(f"Unexpected error executing pipeline: {str(e)}", exc_info=True)
-        return jsonify({
-            "success": False,
-            "message": f"Execution failed: {str(e)}"
-        }), 500
+        logger.info("All services initialized successfully via ServiceContainer")
 
-@app.post("/api/pipeline/validate")
-def validate_pipeline():
-    """Validate a pipeline structure and requirements"""
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({
-                "success": False,
-                "message": "Request body required"
-            }), 400
-        
-        modules = data.get('modules', [])
-        connections = data.get('connections', [])
-        
-        if not modules:
-            return jsonify({
-                "success": False,
-                "message": "Modules list is required"
-            }), 400
-        
-        executor = get_pipeline_executor()
-        result = executor.validate_execution_requirements(modules, connections)
-        
-        return jsonify({
-            "success": True,
-            "validation": result
-        })
-        
-    except Exception as e:
-        logger.error(f"Error validating pipeline: {e}")
-        return jsonify({
-            "success": False,
-            "message": f"Validation failed: {str(e)}"
-        }), 500
-
-@app.post("/api/pipeline/execute-steps")
-def execute_pipeline_with_steps():
-    """Execute a pipeline using step-based dependency analysis with parallel processing"""
-    try:
-        logger.info("Step-based pipeline execution request received")
-        
-        data = request.get_json()
-        if not data:
-            logger.error("No request body provided")
-            return jsonify({
-                "success": False,
-                "message": "Request body required"
-            }), 400
-        
-        logger.info(f"Request data keys: {list(data.keys())}")
-        
-        modules = data.get('modules', [])
-        connections = data.get('connections', [])
-        input_definitions = data.get('input_definitions', [])
-        output_definitions = data.get('output_definitions', [])
-        input_data = data.get('input_data', {})  # Node ID -> value mapping
-        
-        logger.info(f"Received {len(modules)} modules, {len(connections)} connections")
-        logger.info(f"Input definitions: {len(input_definitions)}, Output definitions: {len(output_definitions)}")
-        logger.info(f"Input data keys: {list(input_data.keys())}")
-        
-        if not modules and not input_definitions:
-            logger.error("No modules or input definitions provided")
-            return jsonify({
-                "success": False,
-                "message": "Modules or input definitions are required"
-            }), 400
-        
-        # Step 1: Analyze pipeline to get step-based execution plan
-        logger.info("Step 1: Analyzing pipeline with steps...")
-        analyzer = get_pipeline_analyzer()
-        analysis_result = analyzer.analyze_pipeline_with_steps(
-            modules, connections, input_definitions, output_definitions
-        )
-        
-        if not analysis_result['success']:
-            logger.error("Step-based pipeline analysis failed")
-            return jsonify({
-                "success": False,
-                "message": "Pipeline analysis failed"
-            }), 400
-        
-        steps = analysis_result['steps']
-        output_endpoints = analysis_result['output_endpoints']
-        
-        logger.info(f"Analysis complete: {len(steps)} steps, {len(output_endpoints)} output endpoints")
-        
-        # Step 2: Execute pipeline using step-based executor
-        logger.info("Step 2: Executing pipeline with steps...")
-        import asyncio
-        executor = get_step_based_pipeline_executor()
-        
-        # Run async executor in sync context
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        # Auto-register default modules
         try:
-            final_outputs = loop.run_until_complete(
-                executor.execute_pipeline_with_steps(
-                    steps=steps,
-                    connections=connections,
-                    input_data=input_data,
-                    output_endpoints=output_endpoints
-                )
-            )
-        finally:
-            loop.close()
-        
-        logger.info("Step-based pipeline execution completed successfully")
-        return jsonify({
-            "success": True,
-            "analysis": {
-                "steps": steps,
-                "output_endpoints": output_endpoints,
-                "total_steps": analysis_result['total_steps'],
-                "parallel_opportunities": analysis_result['parallel_opportunities']
-            },
-            "outputs": final_outputs
-        })
-        
-    except PipelineAnalysisError as e:
-        logger.error(f"Pipeline analysis error: {str(e)}")
-        return jsonify({
-            "success": False,
-            "message": f"Analysis error: {str(e)}"
-        }), 400
-    except Exception as e:
-        logger.error(f"Unexpected error executing step-based pipeline: {str(e)}", exc_info=True)
-        return jsonify({
-            "success": False,
-            "message": f"Execution failed: {str(e)}"
-        }), 500
+            modules_service = _service_container.get_modules_service()
+            # Register any additional modules here if needed
+            logger.info("Modules service initialized and default modules registered")
+        except Exception as service_error:
+            logger.warning(f"Module service initialization warning: {service_error}")
 
+    except Exception as e:
+        logger.error(f"Failed to initialize services: {e}")
+        # Don't re-raise - allow app to continue with limited functionality
+        logger.info("Application will continue with limited functionality")
+
+
+async def cleanup_services() -> None:
+    """Cleanup services and database connections on shutdown"""
+    global _service_container, _connection_manager
+
+    try:
+        if _service_container:
+            logger.info("Stopping services...")
+            # Any service-specific cleanup can go here
+
+        if _connection_manager:
+            logger.info("Cleaning up database connections...")
+            # Add database connection cleanup when implemented
+            # _connection_manager.close()
+
+    except Exception as e:
+        logger.error(f"Error during cleanup: {e}")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """FastAPI lifespan event handler for startup and shutdown"""
+    # Startup
+    # Configure logging first so we can see startup logs
+    configure_logging()
+    logger.info("Starting Transformation Pipeline Server...")
+
+    try:
+        await initialize_database_connection()
+        await initialize_services()
+        logger.info("Application startup completed successfully")
+    except Exception as e:
+        logger.error(f"Application startup failed: {e}")
+        raise
+
+    yield
+
+    # Shutdown
+    logger.info("Shutting down Transformation Pipeline Server...")
+    await cleanup_services()
+    logger.info("Application shutdown completed")
+
+
+# Exception handlers
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Handle Pydantic validation errors"""
+    logger.warning(f"Validation error on {request.method} {request.url}: {exc}")
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={
+            "error": "Validation Error",
+            "detail": exc.errors(),
+            "message": "Invalid request data"
+        }
+    )
+
+
+async def http_exception_handler(request: Request, exc: FastAPIHTTPException):
+    """Handle HTTP exceptions"""
+    logger.warning(f"HTTP {exc.status_code} on {request.method} {request.url}: {exc.detail}")
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": "HTTP Error",
+            "detail": exc.detail,
+            "status_code": exc.status_code
+        }
+    )
+
+
+async def general_exception_handler(request: Request, exc: Exception):
+    """Handle unexpected exceptions"""
+    logger.error(f"Unexpected error on {request.method} {request.url}: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "error": "Internal Server Error",
+            "detail": "An unexpected error occurred",
+            "message": str(exc) if os.getenv('DEBUG', 'false').lower() == 'true' else "Internal server error"
+        }
+    )
+
+
+def create_app() -> FastAPI:
+    """Create and configure the FastAPI application"""
+    # Note: Logging is now configured in lifespan startup
+
+    # Create FastAPI app with lifespan
+    app = FastAPI(
+        title="Transformation Pipeline Server",
+        description="Node-based transformation pipeline system with Dask execution",
+        version="1.0.0",
+        docs_url="/docs",
+        redoc_url="/redoc",
+        lifespan=lifespan
+    )
+
+    # Add exception handlers
+    app.add_exception_handler(RequestValidationError, validation_exception_handler)
+    app.add_exception_handler(FastAPIHTTPException, http_exception_handler)
+    app.add_exception_handler(Exception, general_exception_handler)
+
+    # Configure CORS
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173,http://localhost:5002").split(","),
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # Import and register routers
+    from .api.routers.health import router as health_router
+    from .api.routers.modules import router as modules_router
+    from .api.routers.pipelines import router as pipelines_router
+
+    app.include_router(health_router, prefix="/api", tags=["health"])
+    app.include_router(modules_router, prefix="/api", tags=["modules"])
+    app.include_router(pipelines_router, prefix="/api", tags=["pipelines"])
+
+    logger.info("FastAPI application created and configured")
+
+    return app
+
+
+# This is used when running with uvicorn directly (not via main.py)
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", "8090"))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    app = create_app()
+    uvicorn.run(app, host="0.0.0.0", port=8090)

@@ -14,14 +14,12 @@ import { Route as Transformation_pipelineRouteRouteImport } from './routes/trans
 import { Route as DashboardRouteRouteImport } from './routes/dashboard/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as Transformation_pipelineIndexRouteImport } from './routes/transformation_pipeline/index'
-import { Route as Transformation_pipelineModulesRouteImport } from './routes/transformation_pipeline/modules'
-import { Route as Transformation_pipelineGraphRouteImport } from './routes/transformation_pipeline/graph'
-import { Route as PipelineViewPipelineIdRouteImport } from './routes/pipeline-view.$pipelineId'
+import { Route as Transformation_pipelineCreateRouteImport } from './routes/transformation_pipeline/create'
 import { Route as DashboardTemplatesRouteImport } from './routes/dashboard/templates'
 import { Route as DashboardHomeRouteImport } from './routes/dashboard/home'
 import { Route as DashboardEtoInfoRouteImport } from './routes/dashboard/eto-info'
 import { Route as DashboardSettingsRouteRouteImport } from './routes/dashboard/settings/route'
-import { Route as Transformation_pipelineViewPipelinePipelineIdRouteImport } from './routes/transformation_pipeline/view-pipeline.$pipelineId'
+import { Route as Transformation_pipelineViewPipelineIdRouteImport } from './routes/transformation_pipeline/view.$pipelineId'
 import { Route as DashboardSettingsEmailConfigsRouteImport } from './routes/dashboard/settings/email-configs'
 
 const LoginRoute = LoginRouteImport.update({
@@ -51,23 +49,12 @@ const Transformation_pipelineIndexRoute =
     path: '/',
     getParentRoute: () => Transformation_pipelineRouteRoute,
   } as any)
-const Transformation_pipelineModulesRoute =
-  Transformation_pipelineModulesRouteImport.update({
-    id: '/modules',
-    path: '/modules',
+const Transformation_pipelineCreateRoute =
+  Transformation_pipelineCreateRouteImport.update({
+    id: '/create',
+    path: '/create',
     getParentRoute: () => Transformation_pipelineRouteRoute,
   } as any)
-const Transformation_pipelineGraphRoute =
-  Transformation_pipelineGraphRouteImport.update({
-    id: '/graph',
-    path: '/graph',
-    getParentRoute: () => Transformation_pipelineRouteRoute,
-  } as any)
-const PipelineViewPipelineIdRoute = PipelineViewPipelineIdRouteImport.update({
-  id: '/pipeline-view/$pipelineId',
-  path: '/pipeline-view/$pipelineId',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const DashboardTemplatesRoute = DashboardTemplatesRouteImport.update({
   id: '/templates',
   path: '/templates',
@@ -88,10 +75,10 @@ const DashboardSettingsRouteRoute = DashboardSettingsRouteRouteImport.update({
   path: '/settings',
   getParentRoute: () => DashboardRouteRoute,
 } as any)
-const Transformation_pipelineViewPipelinePipelineIdRoute =
-  Transformation_pipelineViewPipelinePipelineIdRouteImport.update({
-    id: '/view-pipeline/$pipelineId',
-    path: '/view-pipeline/$pipelineId',
+const Transformation_pipelineViewPipelineIdRoute =
+  Transformation_pipelineViewPipelineIdRouteImport.update({
+    id: '/view/$pipelineId',
+    path: '/view/$pipelineId',
     getParentRoute: () => Transformation_pipelineRouteRoute,
   } as any)
 const DashboardSettingsEmailConfigsRoute =
@@ -110,12 +97,10 @@ export interface FileRoutesByFullPath {
   '/dashboard/eto-info': typeof DashboardEtoInfoRoute
   '/dashboard/home': typeof DashboardHomeRoute
   '/dashboard/templates': typeof DashboardTemplatesRoute
-  '/pipeline-view/$pipelineId': typeof PipelineViewPipelineIdRoute
-  '/transformation_pipeline/graph': typeof Transformation_pipelineGraphRoute
-  '/transformation_pipeline/modules': typeof Transformation_pipelineModulesRoute
+  '/transformation_pipeline/create': typeof Transformation_pipelineCreateRoute
   '/transformation_pipeline/': typeof Transformation_pipelineIndexRoute
   '/dashboard/settings/email-configs': typeof DashboardSettingsEmailConfigsRoute
-  '/transformation_pipeline/view-pipeline/$pipelineId': typeof Transformation_pipelineViewPipelinePipelineIdRoute
+  '/transformation_pipeline/view/$pipelineId': typeof Transformation_pipelineViewPipelineIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -125,12 +110,10 @@ export interface FileRoutesByTo {
   '/dashboard/eto-info': typeof DashboardEtoInfoRoute
   '/dashboard/home': typeof DashboardHomeRoute
   '/dashboard/templates': typeof DashboardTemplatesRoute
-  '/pipeline-view/$pipelineId': typeof PipelineViewPipelineIdRoute
-  '/transformation_pipeline/graph': typeof Transformation_pipelineGraphRoute
-  '/transformation_pipeline/modules': typeof Transformation_pipelineModulesRoute
+  '/transformation_pipeline/create': typeof Transformation_pipelineCreateRoute
   '/transformation_pipeline': typeof Transformation_pipelineIndexRoute
   '/dashboard/settings/email-configs': typeof DashboardSettingsEmailConfigsRoute
-  '/transformation_pipeline/view-pipeline/$pipelineId': typeof Transformation_pipelineViewPipelinePipelineIdRoute
+  '/transformation_pipeline/view/$pipelineId': typeof Transformation_pipelineViewPipelineIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -142,12 +125,10 @@ export interface FileRoutesById {
   '/dashboard/eto-info': typeof DashboardEtoInfoRoute
   '/dashboard/home': typeof DashboardHomeRoute
   '/dashboard/templates': typeof DashboardTemplatesRoute
-  '/pipeline-view/$pipelineId': typeof PipelineViewPipelineIdRoute
-  '/transformation_pipeline/graph': typeof Transformation_pipelineGraphRoute
-  '/transformation_pipeline/modules': typeof Transformation_pipelineModulesRoute
+  '/transformation_pipeline/create': typeof Transformation_pipelineCreateRoute
   '/transformation_pipeline/': typeof Transformation_pipelineIndexRoute
   '/dashboard/settings/email-configs': typeof DashboardSettingsEmailConfigsRoute
-  '/transformation_pipeline/view-pipeline/$pipelineId': typeof Transformation_pipelineViewPipelinePipelineIdRoute
+  '/transformation_pipeline/view/$pipelineId': typeof Transformation_pipelineViewPipelineIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -160,12 +141,10 @@ export interface FileRouteTypes {
     | '/dashboard/eto-info'
     | '/dashboard/home'
     | '/dashboard/templates'
-    | '/pipeline-view/$pipelineId'
-    | '/transformation_pipeline/graph'
-    | '/transformation_pipeline/modules'
+    | '/transformation_pipeline/create'
     | '/transformation_pipeline/'
     | '/dashboard/settings/email-configs'
-    | '/transformation_pipeline/view-pipeline/$pipelineId'
+    | '/transformation_pipeline/view/$pipelineId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -175,12 +154,10 @@ export interface FileRouteTypes {
     | '/dashboard/eto-info'
     | '/dashboard/home'
     | '/dashboard/templates'
-    | '/pipeline-view/$pipelineId'
-    | '/transformation_pipeline/graph'
-    | '/transformation_pipeline/modules'
+    | '/transformation_pipeline/create'
     | '/transformation_pipeline'
     | '/dashboard/settings/email-configs'
-    | '/transformation_pipeline/view-pipeline/$pipelineId'
+    | '/transformation_pipeline/view/$pipelineId'
   id:
     | '__root__'
     | '/'
@@ -191,12 +168,10 @@ export interface FileRouteTypes {
     | '/dashboard/eto-info'
     | '/dashboard/home'
     | '/dashboard/templates'
-    | '/pipeline-view/$pipelineId'
-    | '/transformation_pipeline/graph'
-    | '/transformation_pipeline/modules'
+    | '/transformation_pipeline/create'
     | '/transformation_pipeline/'
     | '/dashboard/settings/email-configs'
-    | '/transformation_pipeline/view-pipeline/$pipelineId'
+    | '/transformation_pipeline/view/$pipelineId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -204,7 +179,6 @@ export interface RootRouteChildren {
   DashboardRouteRoute: typeof DashboardRouteRouteWithChildren
   Transformation_pipelineRouteRoute: typeof Transformation_pipelineRouteRouteWithChildren
   LoginRoute: typeof LoginRoute
-  PipelineViewPipelineIdRoute: typeof PipelineViewPipelineIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -244,26 +218,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Transformation_pipelineIndexRouteImport
       parentRoute: typeof Transformation_pipelineRouteRoute
     }
-    '/transformation_pipeline/modules': {
-      id: '/transformation_pipeline/modules'
-      path: '/modules'
-      fullPath: '/transformation_pipeline/modules'
-      preLoaderRoute: typeof Transformation_pipelineModulesRouteImport
+    '/transformation_pipeline/create': {
+      id: '/transformation_pipeline/create'
+      path: '/create'
+      fullPath: '/transformation_pipeline/create'
+      preLoaderRoute: typeof Transformation_pipelineCreateRouteImport
       parentRoute: typeof Transformation_pipelineRouteRoute
-    }
-    '/transformation_pipeline/graph': {
-      id: '/transformation_pipeline/graph'
-      path: '/graph'
-      fullPath: '/transformation_pipeline/graph'
-      preLoaderRoute: typeof Transformation_pipelineGraphRouteImport
-      parentRoute: typeof Transformation_pipelineRouteRoute
-    }
-    '/pipeline-view/$pipelineId': {
-      id: '/pipeline-view/$pipelineId'
-      path: '/pipeline-view/$pipelineId'
-      fullPath: '/pipeline-view/$pipelineId'
-      preLoaderRoute: typeof PipelineViewPipelineIdRouteImport
-      parentRoute: typeof rootRouteImport
     }
     '/dashboard/templates': {
       id: '/dashboard/templates'
@@ -293,11 +253,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardSettingsRouteRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
-    '/transformation_pipeline/view-pipeline/$pipelineId': {
-      id: '/transformation_pipeline/view-pipeline/$pipelineId'
-      path: '/view-pipeline/$pipelineId'
-      fullPath: '/transformation_pipeline/view-pipeline/$pipelineId'
-      preLoaderRoute: typeof Transformation_pipelineViewPipelinePipelineIdRouteImport
+    '/transformation_pipeline/view/$pipelineId': {
+      id: '/transformation_pipeline/view/$pipelineId'
+      path: '/view/$pipelineId'
+      fullPath: '/transformation_pipeline/view/$pipelineId'
+      preLoaderRoute: typeof Transformation_pipelineViewPipelineIdRouteImport
       parentRoute: typeof Transformation_pipelineRouteRoute
     }
     '/dashboard/settings/email-configs': {
@@ -343,19 +303,17 @@ const DashboardRouteRouteWithChildren = DashboardRouteRoute._addFileChildren(
 )
 
 interface Transformation_pipelineRouteRouteChildren {
-  Transformation_pipelineGraphRoute: typeof Transformation_pipelineGraphRoute
-  Transformation_pipelineModulesRoute: typeof Transformation_pipelineModulesRoute
+  Transformation_pipelineCreateRoute: typeof Transformation_pipelineCreateRoute
   Transformation_pipelineIndexRoute: typeof Transformation_pipelineIndexRoute
-  Transformation_pipelineViewPipelinePipelineIdRoute: typeof Transformation_pipelineViewPipelinePipelineIdRoute
+  Transformation_pipelineViewPipelineIdRoute: typeof Transformation_pipelineViewPipelineIdRoute
 }
 
 const Transformation_pipelineRouteRouteChildren: Transformation_pipelineRouteRouteChildren =
   {
-    Transformation_pipelineGraphRoute: Transformation_pipelineGraphRoute,
-    Transformation_pipelineModulesRoute: Transformation_pipelineModulesRoute,
+    Transformation_pipelineCreateRoute: Transformation_pipelineCreateRoute,
     Transformation_pipelineIndexRoute: Transformation_pipelineIndexRoute,
-    Transformation_pipelineViewPipelinePipelineIdRoute:
-      Transformation_pipelineViewPipelinePipelineIdRoute,
+    Transformation_pipelineViewPipelineIdRoute:
+      Transformation_pipelineViewPipelineIdRoute,
   }
 
 const Transformation_pipelineRouteRouteWithChildren =
@@ -369,7 +327,6 @@ const rootRouteChildren: RootRouteChildren = {
   Transformation_pipelineRouteRoute:
     Transformation_pipelineRouteRouteWithChildren,
   LoginRoute: LoginRoute,
-  PipelineViewPipelineIdRoute: PipelineViewPipelineIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
