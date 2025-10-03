@@ -89,6 +89,8 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(({
   moduleTemplates,
   selectedModuleId,
   onModulePlaced,
+  initialPipelineState,
+  initialVisualState,
 }, ref) => {
   const { screenToFlowPosition, flowToScreenPosition } = useReactFlow();
   const [nodes, setNodes] = useState<Node[]>([]);
@@ -148,6 +150,123 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(({
       };
     }
   }), [nodes, edges]);
+
+  // Reconstruct pipeline from initial state (for view mode)
+  useEffect(() => {
+    if (!initialPipelineState || !initialVisualState) return;
+
+    console.log("Reconstructing pipeline from initial state...");
+
+    // Build nodes from module instances
+    const reconstructedNodes: Node[] = initialPipelineState.modules.map((moduleInstance) => {
+      // Find the template for this module
+      const [templateId, version] = moduleInstance.module_ref.split(":");
+      const template = moduleTemplates.find(t => t.id === templateId && t.version === version);
+
+      if (!template) {
+        console.warn(`Template not found for module: ${moduleInstance.module_ref}`);
+        return null;
+      }
+
+      // Get position from visual state
+      const position = initialVisualState.modules[moduleInstance.module_instance_id];
+      if (!position) {
+        console.warn(`Position not found for module: ${moduleInstance.module_instance_id}`);
+        return null;
+      }
+
+      // Reconstruct full NodePin objects from stored InstanceNodePins
+      // We need to add back the UI-only fields (direction, label, type_var, allowed_types)
+      const reconstructPins = (pins: any[], direction: 'in' | 'out'): NodePin[] => {
+        const ioSide = direction === 'in'
+          ? template.meta.io_shape.inputs
+          : template.meta.io_shape.outputs;
+
+        return pins.map(pin => {
+          const group = ioSide.nodes[pin.group_index];
+          if (!group) {
+            console.warn(`Group not found at index ${pin.group_index}`);
+            return pin;
+          }
+
+          const typeVar = group.typing.type_var;
+          const allowedTypes = typeVar
+            ? (template.meta.io_shape.type_params[typeVar] || [])
+            : (group.typing.allowed_types || []);
+
+          return {
+            ...pin,
+            direction,
+            label: group.label,
+            type_var: typeVar,
+            allowed_types: allowedTypes,
+          };
+        });
+      };
+
+      const fullModuleInstance: ModuleInstance = {
+        ...moduleInstance,
+        inputs: reconstructPins(moduleInstance.inputs, 'in'),
+        outputs: reconstructPins(moduleInstance.outputs, 'out'),
+      };
+
+      return {
+        id: moduleInstance.module_instance_id,
+        type: 'module',
+        position: { x: position.x, y: position.y },
+        data: {
+          moduleInstance: fullModuleInstance,
+          template,
+        },
+      };
+    }).filter(Boolean) as Node[];
+
+    // Build edges from connections
+    const reconstructedEdges: Edge[] = initialPipelineState.connections.map((connection, index) => {
+      // Find the nodes to get their types for edge color
+      let edgeColor = "#6B7280"; // default gray
+
+      const sourceNode = reconstructedNodes.find(n => {
+        const moduleInstance = n.data.moduleInstance as ModuleInstance;
+        return moduleInstance.outputs.some(p => p.node_id === connection.from_node_id);
+      });
+
+      if (sourceNode) {
+        const moduleInstance = sourceNode.data.moduleInstance as ModuleInstance;
+        const sourcePin = moduleInstance.outputs.find(p => p.node_id === connection.from_node_id);
+        if (sourcePin) {
+          edgeColor = TYPE_COLORS[sourcePin.type] || "#6B7280";
+        }
+      }
+
+      // Find which module contains the source and target nodes
+      let sourceModuleId = "";
+      let targetModuleId = "";
+
+      reconstructedNodes.forEach(node => {
+        const moduleInstance = node.data.moduleInstance as ModuleInstance;
+        if (moduleInstance.outputs.some(p => p.node_id === connection.from_node_id)) {
+          sourceModuleId = node.id;
+        }
+        if (moduleInstance.inputs.some(p => p.node_id === connection.to_node_id)) {
+          targetModuleId = node.id;
+        }
+      });
+
+      return {
+        id: `edge-${index}`,
+        source: sourceModuleId,
+        sourceHandle: connection.from_node_id,
+        target: targetModuleId,
+        targetHandle: connection.to_node_id,
+        style: { stroke: edgeColor, strokeWidth: 2 },
+      };
+    });
+
+    console.log(`Reconstructed ${reconstructedNodes.length} nodes and ${reconstructedEdges.length} edges`);
+    setNodes(reconstructedNodes);
+    setEdges(reconstructedEdges);
+  }, [initialPipelineState, initialVisualState, moduleTemplates]);
 
   // Helper function to get connected output name for an input pin
   const getConnectedOutputName = useCallback((moduleId: string, inputPinId: string): string | undefined => {
