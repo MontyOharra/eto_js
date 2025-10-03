@@ -5,7 +5,7 @@ Uses Large Language Model to parse and extract data from multiple text inputs
 from typing import Dict, Any
 from pydantic import BaseModel, Field
 
-from src.features.modules.core.contracts import TransformModule, ModuleMeta, IOShape, IOSideShape, StaticNodes, DynamicNodes, DynamicNodeGroup, NodeSpec, NodeTypeRule
+from src.features.modules.core.contracts import TransformModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from src.features.modules.core.registry import register
 
 
@@ -38,32 +38,24 @@ class LlmParser(TransformModule):
         return ModuleMeta(
             io_shape=IOShape(
                 inputs=IOSideShape(
-                    dynamic=DynamicNodes(
-                        groups=[
-                            DynamicNodeGroup(
-                                min_count=1,
-                                max_count=None,  # Unlimited inputs
-                                item=NodeSpec(
-                                    label="text_input",
-                                    typing=NodeTypeRule(allowed_types=["str"])
-                                )
-                            )
-                        ]
-                    )
+                    nodes=[
+                        NodeGroup(
+                            label="text_input",
+                            min_count=1,
+                            max_count=None,  # Unlimited inputs
+                            typing=NodeTypeRule(allowed_types=["str"])
+                        )
+                    ]
                 ),
                 outputs=IOSideShape(
-                    dynamic=DynamicNodes(
-                        groups=[
-                            DynamicNodeGroup(
-                                min_count=1,
-                                max_count=None,  # Unlimited outputs
-                                item=NodeSpec(
-                                    label="parsed_output",
-                                    typing=NodeTypeRule(allowed_types=["str", "float", "datetime", "bool"])
-                                )
-                            )
-                        ]
-                    )
+                    nodes=[
+                        NodeGroup(
+                            label="parsed_output",
+                            min_count=1,
+                            max_count=None,  # Unlimited outputs
+                            typing=NodeTypeRule(allowed_types=["str", "float", "datetime", "bool"])
+                        )
+                    ]
                 )
             )
         )

@@ -6,7 +6,7 @@ import re
 from typing import Dict, Any
 from pydantic import BaseModel, Field
 
-from src.features.modules.core.contracts import TransformModule, ModuleMeta, IOShape, IOSideShape, StaticNodes, NodeSpec, NodeTypeRule
+from src.features.modules.core.contracts import TransformModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from src.features.modules.core.registry import register
 
 
@@ -40,24 +40,24 @@ class BasicTextCleaner(TransformModule):
         return ModuleMeta(
             io_shape=IOShape(
                 inputs=IOSideShape(
-                    static=StaticNodes(
-                        slots=[
-                            NodeSpec(
-                                label="input_text",
-                                typing=NodeTypeRule(allowed_types=["str"])
-                            )
-                        ]
-                    )
+                    nodes=[
+                        NodeGroup(
+                            label="input_text",
+                            min_count=1,
+                            max_count=1,
+                            typing=NodeTypeRule(allowed_types=["str"])
+                        )
+                    ]
                 ),
                 outputs=IOSideShape(
-                    static=StaticNodes(
-                        slots=[
-                            NodeSpec(
-                                label="cleaned_text",
-                                typing=NodeTypeRule(allowed_types=["str"])
-                            )
-                        ]
-                    )
+                    nodes=[
+                        NodeGroup(
+                            label="cleaned_text",
+                            min_count=1,
+                            max_count=1,
+                            typing=NodeTypeRule(allowed_types=["str"])
+                        )
+                    ]
                 )
             )
         )

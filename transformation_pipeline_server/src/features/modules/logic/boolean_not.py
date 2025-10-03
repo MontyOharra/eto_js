@@ -5,7 +5,7 @@ Infrastructure module for logical NOT operation
 from typing import Dict, Any
 from pydantic import BaseModel
 
-from src.features.modules.core.contracts import LogicModule, ModuleMeta, IOShape, IOSideShape, StaticNodes, NodeSpec, NodeTypeRule
+from src.features.modules.core.contracts import LogicModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from src.features.modules.core.registry import register
 
 
@@ -36,24 +36,24 @@ class BooleanNot(LogicModule):
         return ModuleMeta(
             io_shape=IOShape(
                 inputs=IOSideShape(
-                    static=StaticNodes(
-                        slots=[
-                            NodeSpec(
-                                label="A",
-                                typing=NodeTypeRule(allowed_types=["bool"])
-                            )
-                        ]
-                    )
+                    nodes=[
+                        NodeGroup(
+                            label="A",
+                            min_count=1,
+                            max_count=1,
+                            typing=NodeTypeRule(allowed_types=["bool"])
+                        )
+                    ]
                 ),
                 outputs=IOSideShape(
-                    static=StaticNodes(
-                        slots=[
-                            NodeSpec(
-                                label="Not",
-                                typing=NodeTypeRule(allowed_types=["bool"])
-                            )
-                        ]
-                    )
+                    nodes=[
+                        NodeGroup(
+                            label="Not",
+                            min_count=1,
+                            max_count=1,
+                            typing=NodeTypeRule(allowed_types=["bool"])
+                        )
+                    ]
                 )
             )
         )

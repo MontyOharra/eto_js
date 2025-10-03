@@ -5,7 +5,7 @@ Infrastructure module for converting between data types
 from typing import Dict, Any
 from pydantic import BaseModel
 
-from src.features.modules.core.contracts import TransformModule, ModuleMeta, IOShape, IOSideShape, StaticNodes, NodeSpec, NodeTypeRule
+from src.features.modules.core.contracts import TransformModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from src.features.modules.core.registry import register
 
 
@@ -37,24 +37,24 @@ class TypeConverter(TransformModule):
         return ModuleMeta(
             io_shape=IOShape(
                 inputs=IOSideShape(
-                    static=StaticNodes(
-                        slots=[
-                            NodeSpec(
-                                label="input_value",
-                                typing=NodeTypeRule(allowed_types=["str", "float", "datetime", "bool"])
-                            )
-                        ]
-                    )
+                    nodes=[
+                        NodeGroup(
+                            label="input_value",
+                            min_count=1,
+                            max_count=1,
+                            typing=NodeTypeRule(allowed_types=["str", "float", "datetime", "bool"])
+                        )
+                    ]
                 ),
                 outputs=IOSideShape(
-                    static=StaticNodes(
-                        slots=[
-                            NodeSpec(
-                                label="converted_value",
-                                typing=NodeTypeRule(allowed_types=["str", "float", "datetime", "bool"])
-                            )
-                        ]
-                    )
+                    nodes=[
+                        NodeGroup(
+                            label="converted_value",
+                            min_count=1,
+                            max_count=1,
+                            typing=NodeTypeRule(allowed_types=["str", "float", "datetime", "bool"])
+                        )
+                    ]
                 )
             )
         )

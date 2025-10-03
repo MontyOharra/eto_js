@@ -5,7 +5,7 @@ Splits text input into multiple outputs based on a delimiter
 from typing import Dict, Any
 from pydantic import BaseModel, Field
 
-from src.features.modules.core.contracts import TransformModule, ModuleMeta, IOShape, IOSideShape, StaticNodes, DynamicNodes, DynamicNodeGroup, NodeSpec, NodeTypeRule
+from src.features.modules.core.contracts import TransformModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from src.features.modules.core.registry import register
 
 
@@ -36,28 +36,24 @@ class TextSplitter(TransformModule):
         return ModuleMeta(
             io_shape=IOShape(
                 inputs=IOSideShape(
-                    static=StaticNodes(
-                        slots=[
-                            NodeSpec(
-                                label="input_text",
-                                typing=NodeTypeRule(allowed_types=["str"])
-                            )
-                        ]
-                    )
+                    nodes=[
+                        NodeGroup(
+                            label="input_text",
+                            min_count=1,
+                            max_count=1,
+                            typing=NodeTypeRule(allowed_types=["str"])
+                        )
+                    ]
                 ),
                 outputs=IOSideShape(
-                    dynamic=DynamicNodes(
-                        groups=[
-                            DynamicNodeGroup(
-                                min_count=2,
-                                max_count=None,  # Unlimited outputs
-                                item=NodeSpec(
-                                    label="split_text",
-                                    typing=NodeTypeRule(allowed_types=["str"])
-                                )
-                            )
-                        ]
-                    )
+                    nodes=[
+                        NodeGroup(
+                            label="split_text",
+                            min_count=2,
+                            max_count=None,  # Unlimited outputs
+                            typing=NodeTypeRule(allowed_types=["str"])
+                        )
+                    ]
                 )
             )
         )

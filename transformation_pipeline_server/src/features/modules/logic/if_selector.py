@@ -5,7 +5,7 @@ Infrastructure module for conditional value selection
 from typing import Dict, Any
 from pydantic import BaseModel
 
-from src.features.modules.core.contracts import LogicModule, ModuleMeta, IOShape, IOSideShape, StaticNodes, NodeSpec, NodeTypeRule
+from src.features.modules.core.contracts import LogicModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from src.features.modules.core.registry import register
 
 
@@ -37,32 +37,36 @@ class IfSelector(LogicModule):
         return ModuleMeta(
             io_shape=IOShape(
                 inputs=IOSideShape(
-                    static=StaticNodes(
-                        slots=[
-                            NodeSpec(
-                                label="Condition",
-                                typing=NodeTypeRule(allowed_types=["bool"])
-                            ),
-                            NodeSpec(
-                                label="False",
-                                typing=NodeTypeRule(type_var="T")
-                            ),
-                            NodeSpec(
-                                label="True",
-                                typing=NodeTypeRule(type_var="T")
-                            )
-                        ]
-                    )
+                    nodes=[
+                        NodeGroup(
+                            label="Condition",
+                            min_count=1,
+                            max_count=1,
+                            typing=NodeTypeRule(allowed_types=["bool"])
+                        ),
+                        NodeGroup(
+                            label="False",
+                            min_count=1,
+                            max_count=1,
+                            typing=NodeTypeRule(type_var="T")
+                        ),
+                        NodeGroup(
+                            label="True",
+                            min_count=1,
+                            max_count=1,
+                            typing=NodeTypeRule(type_var="T")
+                        )
+                    ]
                 ),
                 outputs=IOSideShape(
-                    static=StaticNodes(
-                        slots=[
-                            NodeSpec(
-                                label="selected_value",
-                                typing=NodeTypeRule(type_var="T")
-                            )
-                        ]
-                    )
+                    nodes=[
+                        NodeGroup(
+                            label="selected_value",
+                            min_count=1,
+                            max_count=1,
+                            typing=NodeTypeRule(type_var="T")
+                        )
+                    ]
                 ),
                 type_params={"T": ["str", "float", "datetime", "bool"]}  # Domain for TypeVar T
             )

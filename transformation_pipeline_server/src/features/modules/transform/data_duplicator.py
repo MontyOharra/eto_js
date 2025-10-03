@@ -5,7 +5,7 @@ Infrastructure module for duplicating input data to multiple outputs
 from typing import Dict, Any
 from pydantic import BaseModel
 
-from src.features.modules.core.contracts import TransformModule, ModuleMeta, IOShape, IOSideShape, StaticNodes, DynamicNodes, DynamicNodeGroup, NodeSpec, NodeTypeRule
+from src.features.modules.core.contracts import TransformModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from src.features.modules.core.registry import register
 
 
@@ -37,28 +37,24 @@ class DataDuplicator(TransformModule):
         return ModuleMeta(
             io_shape=IOShape(
                 inputs=IOSideShape(
-                    static=StaticNodes(
-                        slots=[
-                            NodeSpec(
-                                label="Data",
-                                typing=NodeTypeRule(type_var="T")
-                            )
-                        ]
-                    )
+                    nodes=[
+                        NodeGroup(
+                            label="Data",
+                            min_count=1,
+                            max_count=1,
+                            typing=NodeTypeRule(type_var="T")
+                        )
+                    ]
                 ),
                 outputs=IOSideShape(
-                    dynamic=DynamicNodes(
-                        groups=[
-                            DynamicNodeGroup(
-                                min_count=2,
-                                max_count=None,  # Unlimited outputs
-                                item=NodeSpec(
-                                    label="Duplication",
-                                    typing=NodeTypeRule(type_var="T")
-                                )
-                            )
-                        ]
-                    )
+                    nodes=[
+                        NodeGroup(
+                            label="Duplication",
+                            min_count=2,
+                            max_count=None,  # Unlimited outputs
+                            typing=NodeTypeRule(type_var="T")
+                        )
+                    ]
                 ),
                 type_params={"T": []}  # Domain for TypeVar T
             )
