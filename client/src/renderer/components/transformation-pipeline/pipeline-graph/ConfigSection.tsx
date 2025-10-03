@@ -130,7 +130,7 @@ export const ConfigSection: React.FC<ConfigSectionProps> = ({ schema, config, on
   };
 
   return (
-    <div className="px-3 pb-3">
+    <div className="px-3 pt-2 pb-3">
       {Object.entries(schema.properties).map(([key, property]) =>
         renderField(key, property)
       )}

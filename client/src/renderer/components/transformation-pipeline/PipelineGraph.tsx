@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, forwardRef, useImperativeHandle } from "react";
 import {
   ReactFlow,
   Node,
@@ -19,7 +19,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { ModuleTemplate, ModuleInstance, NodePin } from "../../types/moduleTypes";
-import { PipelineState, VisualState } from "../../types/pipelineTypes";
+import { PipelineState, VisualState, NodeConnection } from "../../types/pipelineTypes";
 import { ModuleNodeNew } from "./pipeline-graph/ModuleNodeNew";
 
 // Type to color mapping (same as ModuleNodeNew)
@@ -47,6 +47,12 @@ interface PipelineGraphProps {
   onModulePlaced?: () => void;
 }
 
+// Methods exposed to parent via ref
+export interface PipelineGraphRef {
+  getPipelineState: () => PipelineState;
+  getVisualState: () => VisualState;
+}
+
 // Custom node types
 const nodeTypes = {
   module: ModuleNodeNew,
@@ -69,20 +75,20 @@ function createExampleModuleInstance(
   };
 }
 
-export function PipelineGraph(props: PipelineGraphProps) {
+export const PipelineGraph = forwardRef<PipelineGraphRef, PipelineGraphProps>((props, ref) => {
   return (
     <ReactFlowProvider>
-      <PipelineGraphInner {...props} />
+      <PipelineGraphInner {...props} ref={ref} />
     </ReactFlowProvider>
   );
-}
+});
 
-function PipelineGraphInner({
+const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(({
   viewOnly,
   moduleTemplates,
   selectedModuleId,
   onModulePlaced,
-}: PipelineGraphProps) {
+}, ref) => {
   const { screenToFlowPosition, flowToScreenPosition } = useReactFlow();
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
@@ -97,6 +103,50 @@ function PipelineGraphInner({
     nodeType: string; // The type of the starting node for preview color
   } | null>(null);
   const [mousePosition, setMousePosition] = useState<{ x: number; y: number } | null>(null);
+
+  // Expose methods to parent component via ref
+  useImperativeHandle(ref, () => ({
+    getPipelineState: (): PipelineState => {
+      // Extract module instances from nodes
+      const modules: ModuleInstance[] = nodes
+        .map(node => node.data.moduleInstance as ModuleInstance)
+        .filter(Boolean);
+
+      // Extract connections from edges
+      const connections: NodeConnection[] = edges.map(edge => ({
+        from_node_id: edge.sourceHandle!,
+        to_node_id: edge.targetHandle!
+      }));
+
+      // Entry points (not implemented yet, will add later)
+      const entry_points = [];
+
+      return {
+        entry_points,
+        modules,
+        connections
+      };
+    },
+
+    getVisualState: (): VisualState => {
+      // Extract module positions
+      const modules: Record<string, { x: number; y: number }> = {};
+      nodes.forEach(node => {
+        modules[node.id] = {
+          x: node.position.x,
+          y: node.position.y
+        };
+      });
+
+      // Entry points (not implemented yet, will add later)
+      const entryPoints = {};
+
+      return {
+        modules,
+        entryPoints
+      };
+    }
+  }), [nodes, edges]);
 
   // Helper function to get connected output name for an input pin
   const getConnectedOutputName = useCallback((moduleId: string, inputPinId: string): string | undefined => {
@@ -1074,7 +1124,7 @@ function PipelineGraphInner({
       </ReactFlow>
     </div>
   );
-}
+});
 
 // Connection preview line component
 interface ConnectionPreviewLineProps {

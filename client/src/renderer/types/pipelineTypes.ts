@@ -28,11 +28,25 @@ export interface NodeConnection {
   to_node_id: string;
 }
 
-// Entry point for pipeline
+// Entry point for pipeline (frontend - includes type for UI)
 export interface EntryPoint {
   node_id: string;
   name: string;
   type: string;
+}
+
+// Backend-compatible types for serialization
+export interface InstanceNodePin {
+  node_id: string;
+  type: string;
+  name: string;
+  position_index: number;
+  group_index: number;
+}
+
+export interface BackendEntryPoint {
+  node_id: string;
+  name: string;
 }
 
 // Pipeline state (execution data)

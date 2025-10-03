@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { ModuleSelectorPane } from "../../components/transformation-pipeline/ModuleSelectorPane";
-import { PipelineGraph } from "../../components/transformation-pipeline/PipelineGraph";
+import { PipelineGraph, PipelineGraphRef } from "../../components/transformation-pipeline/PipelineGraph";
 import { ModuleTemplate } from "../../types/moduleTypes";
+import { serializePipelineData } from "../../utils/pipelineSerializer";
 
 export const Route = createFileRoute("/transformation_pipeline/create")({
   component: PipelineCreatePage,
@@ -16,6 +17,9 @@ function PipelineCreatePage() {
   const [pipelineDescription, setPipelineDescription] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Reference to PipelineGraph to extract state
+  const pipelineGraphRef = useRef<PipelineGraphRef>(null);
 
   // Fetch module templates on mount
   useEffect(() => {
@@ -48,8 +52,37 @@ function PipelineCreatePage() {
   };
 
   const handleSave = async () => {
-    // TODO: Extract state from PipelineGraph and save
-    console.log("Save pipeline:", { pipelineName, pipelineDescription });
+    if (!pipelineGraphRef.current) {
+      console.error("PipelineGraph ref not available");
+      return;
+    }
+
+    // Extract current state from graph
+    const pipelineState = pipelineGraphRef.current.getPipelineState();
+    const visualState = pipelineGraphRef.current.getVisualState();
+
+    // Serialize to backend format
+    const backendData = serializePipelineData(
+      pipelineState,
+      visualState,
+      pipelineName,
+      pipelineDescription
+    );
+
+    // Log to console for verification
+    console.log("=== PIPELINE STATE ===");
+    console.log("Frontend PipelineState:", pipelineState);
+    console.log("\n=== VISUAL STATE ===");
+    console.log("Frontend VisualState:", visualState);
+    console.log("\n=== BACKEND SERIALIZED DATA ===");
+    console.log("Backend format:", JSON.stringify(backendData, null, 2));
+
+    // TODO: Send to backend API
+    // const response = await fetch("http://localhost:8090/api/pipelines", {
+    //   method: "POST",
+    //   headers: { "Content-Type": "application/json" },
+    //   body: JSON.stringify(backendData)
+    // });
   };
 
   const handleCancel = () => {
@@ -151,6 +184,7 @@ function PipelineCreatePage() {
         {/* Pipeline Graph */}
         <div className="flex-1">
           <PipelineGraph
+            ref={pipelineGraphRef}
             moduleTemplates={moduleTemplates}
             selectedModuleId={selectedModuleId}
             onModulePlaced={handleModulePlaced}
