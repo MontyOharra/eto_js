@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import {
   ReactFlow,
   Node,
@@ -87,6 +87,16 @@ function PipelineGraphInner({
   const [isTextFocused, setIsTextFocused] = useState(false);
   let nodeIdCounter = useRef(0);
 
+  // Connection creation state
+  const [pendingConnection, setPendingConnection] = useState<{
+    nodeId: string;
+    handleId: string;
+    handleType: 'source' | 'target';
+  } | null>(null);
+
+  // Track mouse position for drawing connection line
+  const [mousePosition, setMousePosition] = useState<{ x: number; y: number } | null>(null);
+
   // Convert edges to simple connection format for ModuleNode
   const connections = edges.map((edge) => ({
     from_node_id: edge.sourceHandle || "",
@@ -129,6 +139,102 @@ function PipelineGraphInner({
     },
     [viewOnly, nodes]
   );
+
+  // Handle click on connection handle to start connection
+  const handleHandleClick = useCallback(
+    (event: React.MouseEvent, handleId: string, nodeId: string, handleType: 'source' | 'target') => {
+      if (viewOnly) return;
+
+      event.stopPropagation();
+
+      // If no pending connection, start one
+      if (!pendingConnection) {
+        setPendingConnection({
+          nodeId,
+          handleId,
+          handleType,
+        });
+        return;
+      }
+
+      // We have a pending connection, complete it
+      // Check if we're connecting compatible types (source to target or target to source)
+      const isValidConnection =
+        (pendingConnection.handleType === 'source' && handleType === 'target') ||
+        (pendingConnection.handleType === 'target' && handleType === 'source');
+
+      if (!isValidConnection) {
+        // Cancel and start new connection from this handle
+        setPendingConnection({
+          nodeId,
+          handleId,
+          handleType,
+        });
+        return;
+      }
+
+      // Build the connection based on which type was clicked first
+      let connection: Connection;
+      if (pendingConnection.handleType === 'source') {
+        // Started from output, ending at input
+        connection = {
+          source: pendingConnection.nodeId,
+          sourceHandle: pendingConnection.handleId,
+          target: nodeId,
+          targetHandle: handleId,
+        };
+      } else {
+        // Started from input, ending at output
+        connection = {
+          source: nodeId,
+          sourceHandle: handleId,
+          target: pendingConnection.nodeId,
+          targetHandle: pendingConnection.handleId,
+        };
+      }
+
+      onConnect(connection);
+      setPendingConnection(null);
+    },
+    [viewOnly, pendingConnection, onConnect]
+  );
+
+  // Cancel pending connection on Escape key or background click
+  const handlePaneClick = useCallback(() => {
+    if (pendingConnection) {
+      setPendingConnection(null);
+    }
+  }, [pendingConnection]);
+
+  // Handle Escape key to cancel connection
+  const handleKeyDown = useCallback((event: KeyboardEvent) => {
+    if (event.key === 'Escape' && pendingConnection) {
+      setPendingConnection(null);
+    }
+  }, [pendingConnection]);
+
+  // Add/remove keyboard listener
+  useEffect(() => {
+    if (pendingConnection) {
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [pendingConnection, handleKeyDown]);
+
+  // Track mouse position when there's a pending connection
+  useEffect(() => {
+    if (!pendingConnection) {
+      setMousePosition(null);
+      return;
+    }
+
+    const handleMouseMove = (event: MouseEvent) => {
+      setMousePosition({ x: event.clientX, y: event.clientY });
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, [pendingConnection]);
 
   // Handle module deletion
   const handleDeleteModule = useCallback((moduleId: string) => {
@@ -359,6 +465,8 @@ function PipelineGraphInner({
       connections,
       onTextFocus: () => setIsTextFocused(true),
       onTextBlur: () => setIsTextFocused(false),
+      onHandleClick: handleHandleClick,
+      pendingConnection,
     },
     draggable: !isTextFocused,
   }));
@@ -376,19 +484,86 @@ function PipelineGraphInner({
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onPaneClick={handlePaneClick}
         nodeTypes={nodeTypes}
         nodesDraggable={!viewOnly}
-        nodesConnectable={!viewOnly}
+        nodesConnectable={false}
         elementsSelectable={!viewOnly}
-        connectOnClick={!viewOnly}
-        connectionLineStyle={{ strokeDasharray: "5,5" }}
+        connectOnClick={false}
+        connectionLineStyle={{
+          strokeDasharray: "5,5",
+          stroke: "#3B82F6",
+          strokeWidth: 3
+        }}
         connectionMode="loose"
         defaultEdgeOptions={{ style: { strokeWidth: 2 } }}
         fitView
       >
         <Controls />
         <Background variant="dots" gap={20} size={1} />
+
+        {/* Visual indicator when connection is pending */}
+        {pendingConnection && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg z-50 pointer-events-none">
+            Click a {pendingConnection.handleType === 'source' ? 'target (input)' : 'source (output)'} handle to complete connection
+          </div>
+        )}
       </ReactFlow>
+
+      {/* Custom connection line that follows mouse */}
+      {pendingConnection && mousePosition && (() => {
+        // Find the handle element in the DOM to get its position
+        const handleElement = document.querySelector(`[data-handleid="${pendingConnection.handleId}"]`) as HTMLElement;
+        if (!handleElement) return null;
+
+        const rect = handleElement.getBoundingClientRect();
+        const handleX = rect.left + rect.width / 2;
+        const handleY = rect.top + rect.height / 2;
+
+        return (
+          <svg
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              pointerEvents: 'none',
+              zIndex: 1000,
+            }}
+          >
+            <defs>
+              <marker
+                id="arrowhead"
+                markerWidth="10"
+                markerHeight="10"
+                refX="9"
+                refY="3"
+                orient="auto"
+              >
+                <polygon points="0 0, 10 3, 0 6" fill="#3B82F6" />
+              </marker>
+            </defs>
+            <line
+              x1={handleX}
+              y1={handleY}
+              x2={mousePosition.x}
+              y2={mousePosition.y}
+              stroke="#3B82F6"
+              strokeWidth="3"
+              strokeDasharray="5,5"
+              markerEnd="url(#arrowhead)"
+            />
+            <circle
+              cx={mousePosition.x}
+              cy={mousePosition.y}
+              r="6"
+              fill="#3B82F6"
+              opacity="0.5"
+            />
+          </svg>
+        );
+      })()}
     </div>
   );
 }

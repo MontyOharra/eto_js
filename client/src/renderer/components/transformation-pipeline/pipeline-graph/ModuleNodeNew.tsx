@@ -13,6 +13,8 @@ interface ModuleNodeNewProps {
     connections?: Array<{ from_node_id: string; to_node_id: string }>;
     onTextFocus?: () => void;
     onTextBlur?: () => void;
+    onHandleClick?: (event: React.MouseEvent, handleId: string, nodeId: string, handleType: 'source' | 'target') => void;
+    pendingConnection?: { nodeId: string; handleId: string; handleType: 'source' | 'target' } | null;
   };
 }
 
@@ -51,7 +53,7 @@ function groupNodesByLabel(nodes: NodePin[]): Map<string, NodePin[]> {
 }
 
 export function ModuleNodeNew({ data }: ModuleNodeNewProps) {
-  const { moduleInstance, template, onDeleteModule, onUpdateNode, onAddNode, onRemoveNode, connections, onTextFocus, onTextBlur } = data;
+  const { moduleInstance, template, onDeleteModule, onUpdateNode, onAddNode, onRemoveNode, connections, onTextFocus, onTextBlur, onHandleClick, pendingConnection } = data;
   const [isConfigExpanded, setIsConfigExpanded] = useState(false);
   const [highlightedTypeVar, setHighlightedTypeVar] = useState<string | null>(null);
 
@@ -93,7 +95,7 @@ export function ModuleNodeNew({ data }: ModuleNodeNewProps) {
   const textColor = getTextColor(headerColor);
 
   return (
-    <div className="bg-gray-800 rounded-lg border-2 border-gray-600 min-w-[340px]">
+    <div className="bg-gray-800 rounded-lg border-2 border-gray-600 min-w-[100px] w-min">
       {/* Header */}
       <div
         className="px-3 py-2 rounded-t-lg border-b border-gray-600 flex items-center justify-between"
@@ -150,6 +152,8 @@ export function ModuleNodeNew({ data }: ModuleNodeNewProps) {
               onTypeVarFocus={setHighlightedTypeVar}
               onTextFocus={onTextFocus}
               onTextBlur={onTextBlur}
+              onHandleClick={onHandleClick}
+              pendingConnection={pendingConnection}
             />
           ))}
         </div>
@@ -172,6 +176,8 @@ export function ModuleNodeNew({ data }: ModuleNodeNewProps) {
               onTypeVarFocus={setHighlightedTypeVar}
               onTextFocus={onTextFocus}
               onTextBlur={onTextBlur}
+              onHandleClick={onHandleClick}
+              pendingConnection={pendingConnection}
             />
           ))}
         </div>
@@ -232,6 +238,8 @@ interface NodeGroupSectionProps {
   onTypeVarFocus: (typeVar: string | null) => void;
   onTextFocus?: () => void;
   onTextBlur?: () => void;
+  onHandleClick?: (event: React.MouseEvent, handleId: string, nodeId: string, handleType: 'source' | 'target') => void;
+  pendingConnection?: { nodeId: string; handleId: string; handleType: 'source' | 'target' } | null;
 }
 
 function NodeGroupSection({
@@ -249,6 +257,8 @@ function NodeGroupSection({
   onTypeVarFocus,
   onTextFocus,
   onTextBlur,
+  onHandleClick,
+  pendingConnection,
 }: NodeGroupSectionProps) {
   // Determine if these are static or dynamic nodes and get constraints
   const isStatic = nodes.length > 0 ? nodes[0].is_static : true;
@@ -307,6 +317,9 @@ function NodeGroupSection({
             onTypeVarFocus={onTypeVarFocus}
             onTextFocus={onTextFocus}
             onTextBlur={onTextBlur}
+            moduleId={moduleId}
+            onHandleClick={onHandleClick}
+            pendingConnection={pendingConnection}
           />
         ))}
 
@@ -354,6 +367,9 @@ interface NodeRowProps {
   onTypeVarFocus: (typeVar: string | null) => void;
   onTextFocus?: () => void;
   onTextBlur?: () => void;
+  moduleId: string;
+  onHandleClick?: (event: React.MouseEvent, handleId: string, nodeId: string, handleType: 'source' | 'target') => void;
+  pendingConnection?: { nodeId: string; handleId: string; handleType: 'source' | 'target' } | null;
 }
 
 function NodeRow({
@@ -368,15 +384,28 @@ function NodeRow({
   onTypeVarFocus,
   onTextFocus,
   onTextBlur,
+  moduleId,
+  onHandleClick,
+  pendingConnection,
 }: NodeRowProps) {
   const isHighlighted = node.type_var && node.type_var === highlightedTypeVar;
   const handleColor = TYPE_COLORS[node.type] || "#6B7280";
+
+  // Check if this handle is the source of a pending connection
+  const isPendingSource = pendingConnection?.handleId === node.node_id;
 
   // For input nodes, display connected output name or "Not Connected"
   const displayName =
     direction === "input"
       ? getConnectedOutputName?.(node.node_id) ?? "Not Connected"
       : node.name || "";
+
+  // Handle click on connection handle
+  const handleClick = (event: React.MouseEvent) => {
+    if (onHandleClick) {
+      onHandleClick(event, node.node_id, moduleId, direction === "input" ? "target" : "source");
+    }
+  };
 
   return (
     <div className="relative flex items-center gap-2 py-1.5">
@@ -385,11 +414,15 @@ function NodeRow({
         type={direction === "input" ? "target" : "source"}
         position={direction === "input" ? Position.Left : Position.Right}
         id={node.node_id}
-        className="!w-5 !h-5 !border-3 !border-gray-900 !cursor-pointer"
+        onClick={handleClick}
+        className="!w-5 !h-5 !border-3 !border-gray-900 !cursor-pointer transition-all"
         style={{
           [direction === "input" ? "left" : "right"]: -13,
           backgroundColor: handleColor,
+          boxShadow: isPendingSource ? "0 0 0 3px rgba(59, 130, 246, 0.5)" : undefined,
+          transform: isPendingSource ? "scale(1.2)" : undefined,
         }}
+        data-handleid={node.node_id}
       />
 
       {/* Node Content - Mirrored layout based on direction */}

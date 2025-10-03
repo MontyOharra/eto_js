@@ -5,6 +5,62 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-10-03 01:00] — Click-to-Connect Connection Creation Implementation
+
+### Spec / Intent
+- Replace drag-to-connect behavior with more intuitive click-to-connect workflow
+- Add visual feedback showing connection line following mouse cursor during connection creation
+- Support bidirectional connection creation (start from input or output)
+- Implement connection cancellation via Escape key or background click
+- Improve user experience with clear visual indicators and instructions
+
+### Changes Made
+- **PipelineGraph.tsx**: Complete connection handling rewrite
+  - Added `pendingConnection` state to track active connection creation
+  - Added `mousePosition` state and mouse tracking for visual line rendering
+  - Implemented `handleHandleClick` callback supporting bidirectional connections
+  - Added `handlePaneClick` for canceling pending connections
+  - Added keyboard listener for Escape key cancellation
+  - Disabled React Flow's default drag-to-connect (`nodesConnectable={false}`)
+  - Added SVG overlay rendering connection line from handle to mouse cursor with dashed line, arrow, and cursor indicator
+  - Added blue banner showing instructions when connection is pending
+- **ModuleNodeNew.tsx**: Updated to support click-to-connect
+  - Added `onHandleClick` callback prop to all relevant interfaces
+  - Added `pendingConnection` prop for visual feedback
+  - Updated Handle components with `onClick` handler and `data-handleid` attribute
+  - Added visual feedback (blue glow and scale effect) for pending connection source handle
+  - Passed callbacks through component hierarchy: ModuleNodeNew → NodeGroupSection → NodeRow
+
+### Architecture Decisions
+- **Bidirectional Support**: Users can start connection from either input or output handle
+- **Invalid Connection Handling**: Clicking two handles of same type cancels and starts new connection
+- **Visual Feedback**: Real-time SVG line follows mouse from source handle to cursor
+- **State Management**: Pending connection state managed at graph level, passed down to nodes
+- **Clean Cancellation**: Multiple ways to cancel (Escape, background click, clicking incompatible handle)
+
+### Current State
+- ✅ **Click-to-Connect Working**: Users click handle, move mouse, click target handle
+- ✅ **Visual Line Following Mouse**: Blue dashed line with arrow shows where connection will go
+- ✅ **Bidirectional Connections**: Can start from input or output
+- ✅ **Cancellation Working**: Escape key and background click cancel pending connections
+- ✅ **Visual Feedback**: Source handle glows blue when selected
+- ✅ **Instructions Shown**: Banner explains next step during connection creation
+
+### Next Actions
+- Add connection type validation (ensure compatible data types)
+- Implement connection deletion/editing
+- Add connection hover states and tooltips
+- Consider adding connection curves/bezier paths for better visual routing
+
+### Notes
+- **User Experience**: Click-to-connect is more intuitive than drag-to-connect for precision work
+- **Visual Clarity**: Real-time line feedback helps users understand connection path
+- **Flexibility**: Bidirectional support accommodates different user mental models
+- **Clean Code**: Removed all debug logging after feature was working
+- **React Flow Integration**: Disabled default connection behavior, implemented custom system
+
+---
+
 ## [2025-10-01 19:30] — View-Only Pipeline Builder Implementation Complete
 
 ### Spec / Intent
