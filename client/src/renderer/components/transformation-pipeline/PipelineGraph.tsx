@@ -14,6 +14,8 @@ import {
   ConnectionLineType,
   useReactFlow,
   ReactFlowProvider,
+  ViewportPortal,
+  useViewport,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { ModuleTemplate, ModuleInstance, NodePin } from "../../types/moduleTypes";
@@ -81,20 +83,20 @@ function PipelineGraphInner({
   selectedModuleId,
   onModulePlaced,
 }: PipelineGraphProps) {
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, flowToScreenPosition } = useReactFlow();
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [isTextFocused, setIsTextFocused] = useState(false);
   let nodeIdCounter = useRef(0);
 
-  // Connection creation state
-  const [pendingConnection, setPendingConnection] = useState<{
-    nodeId: string;
+  // Track connection preview
+  const [connectionPreview, setConnectionPreview] = useState<{
     handleId: string;
+    nodeId: string;
     handleType: 'source' | 'target';
+    x: number;
+    y: number;
   } | null>(null);
-
-  // Track mouse position for drawing connection line
   const [mousePosition, setMousePosition] = useState<{ x: number; y: number } | null>(null);
 
   // Convert edges to simple connection format for ModuleNode
@@ -140,101 +142,69 @@ function PipelineGraphInner({
     [viewOnly, nodes]
   );
 
-  // Handle click on connection handle to start connection
-  const handleHandleClick = useCallback(
-    (event: React.MouseEvent, handleId: string, nodeId: string, handleType: 'source' | 'target') => {
-      if (viewOnly) return;
+  // Track connection start for preview
+  const onConnectStart = useCallback((_event: any, params: { nodeId: string | null; handleId: string | null; handleType: 'source' | 'target' | null }) => {
+    console.log('🔵 onConnectStart fired:', params);
 
-      event.stopPropagation();
-
-      // If no pending connection, start one
-      if (!pendingConnection) {
-        setPendingConnection({
-          nodeId,
-          handleId,
-          handleType,
-        });
-        return;
-      }
-
-      // We have a pending connection, complete it
-      // Check if we're connecting compatible types (source to target or target to source)
-      const isValidConnection =
-        (pendingConnection.handleType === 'source' && handleType === 'target') ||
-        (pendingConnection.handleType === 'target' && handleType === 'source');
-
-      if (!isValidConnection) {
-        // Cancel and start new connection from this handle
-        setPendingConnection({
-          nodeId,
-          handleId,
-          handleType,
-        });
-        return;
-      }
-
-      // Build the connection based on which type was clicked first
-      let connection: Connection;
-      if (pendingConnection.handleType === 'source') {
-        // Started from output, ending at input
-        connection = {
-          source: pendingConnection.nodeId,
-          sourceHandle: pendingConnection.handleId,
-          target: nodeId,
-          targetHandle: handleId,
-        };
-      } else {
-        // Started from input, ending at output
-        connection = {
-          source: nodeId,
-          sourceHandle: handleId,
-          target: pendingConnection.nodeId,
-          targetHandle: pendingConnection.handleId,
-        };
-      }
-
-      onConnect(connection);
-      setPendingConnection(null);
-    },
-    [viewOnly, pendingConnection, onConnect]
-  );
-
-  // Cancel pending connection on Escape key or background click
-  const handlePaneClick = useCallback(() => {
-    if (pendingConnection) {
-      setPendingConnection(null);
+    if (viewOnly || !params.nodeId || !params.handleId || !params.handleType) {
+      console.log('⚠️ Skipping preview - viewOnly or missing params');
+      return;
     }
-  }, [pendingConnection]);
 
-  // Handle Escape key to cancel connection
-  const handleKeyDown = useCallback((event: KeyboardEvent) => {
-    if (event.key === 'Escape' && pendingConnection) {
-      setPendingConnection(null);
+    // Find the handle element to get its position
+    const handleElement = document.querySelector(`[data-handleid="${params.handleId}"]`) as HTMLElement;
+    console.log('🔍 Handle element found:', !!handleElement, params.handleId);
+
+    if (handleElement) {
+      const rect = handleElement.getBoundingClientRect();
+      const handleScreenX = rect.left + rect.width / 2;
+      const handleScreenY = rect.top + rect.height / 2;
+
+      console.log('✅ Setting connection preview:', { handleScreenX, handleScreenY });
+
+      setConnectionPreview({
+        handleId: params.handleId,
+        nodeId: params.nodeId,
+        handleType: params.handleType,
+        x: handleScreenX,
+        y: handleScreenY,
+      });
+    } else {
+      console.log('❌ Handle element not found!');
     }
-  }, [pendingConnection]);
+  }, [viewOnly]);
 
-  // Add/remove keyboard listener
+  // Clear connection preview when done
+  const onConnectEnd = useCallback(() => {
+    setConnectionPreview(null);
+    setMousePosition(null);
+  }, []);
+
+  // Track mouse movement for preview line
   useEffect(() => {
-    if (pendingConnection) {
-      window.addEventListener('keydown', handleKeyDown);
-      return () => window.removeEventListener('keydown', handleKeyDown);
-    }
-  }, [pendingConnection, handleKeyDown]);
-
-  // Track mouse position when there's a pending connection
-  useEffect(() => {
-    if (!pendingConnection) {
+    if (!connectionPreview) {
       setMousePosition(null);
       return;
     }
+
+    console.log('👂 Starting mouse tracking for connection preview');
 
     const handleMouseMove = (event: MouseEvent) => {
       setMousePosition({ x: event.clientX, y: event.clientY });
     };
 
     window.addEventListener('mousemove', handleMouseMove);
-    return () => window.removeEventListener('mousemove', handleMouseMove);
-  }, [pendingConnection]);
+    return () => {
+      console.log('🛑 Stopping mouse tracking');
+      window.removeEventListener('mousemove', handleMouseMove);
+    };
+  }, [connectionPreview]);
+
+  // Debug: Log when preview state changes
+  useEffect(() => {
+    console.log('🔄 Connection preview state:', connectionPreview);
+    console.log('🔄 Mouse position:', mousePosition);
+  }, [connectionPreview, mousePosition]);
 
   // Handle module deletion
   const handleDeleteModule = useCallback((moduleId: string) => {
@@ -465,8 +435,6 @@ function PipelineGraphInner({
       connections,
       onTextFocus: () => setIsTextFocused(true),
       onTextBlur: () => setIsTextFocused(false),
-      onHandleClick: handleHandleClick,
-      pendingConnection,
     },
     draggable: !isTextFocused,
   }));
@@ -484,86 +452,121 @@ function PipelineGraphInner({
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
-        onPaneClick={handlePaneClick}
+        onConnectStart={onConnectStart}
+        onConnectEnd={onConnectEnd}
         nodeTypes={nodeTypes}
         nodesDraggable={!viewOnly}
-        nodesConnectable={false}
+        nodesConnectable={!viewOnly}
         elementsSelectable={!viewOnly}
-        connectOnClick={false}
+        connectOnClick={!viewOnly}
         connectionLineStyle={{
           strokeDasharray: "5,5",
-          stroke: "#3B82F6",
-          strokeWidth: 3
         }}
         connectionMode="loose"
         defaultEdgeOptions={{ style: { strokeWidth: 2 } }}
-        fitView
       >
         <Controls />
         <Background variant="dots" gap={20} size={1} />
 
-        {/* Visual indicator when connection is pending */}
-        {pendingConnection && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg z-50 pointer-events-none">
-            Click a {pendingConnection.handleType === 'source' ? 'target (input)' : 'source (output)'} handle to complete connection
-          </div>
-        )}
+        {/* Connection preview line */}
+        {connectionPreview && mousePosition && (() => {
+          console.log('🎨 Rendering ConnectionPreviewLine:', {
+            start: { x: connectionPreview.x, y: connectionPreview.y },
+            end: { x: mousePosition.x, y: mousePosition.y }
+          });
+          return (
+            <ConnectionPreviewLine
+              startX={connectionPreview.x}
+              startY={connectionPreview.y}
+              endX={mousePosition.x}
+              endY={mousePosition.y}
+              handleType={connectionPreview.handleType}
+              nodes={nodes}
+              nodeId={connectionPreview.nodeId}
+              handleId={connectionPreview.handleId}
+            />
+          );
+        })()}
       </ReactFlow>
-
-      {/* Custom connection line that follows mouse */}
-      {pendingConnection && mousePosition && (() => {
-        // Find the handle element in the DOM to get its position
-        const handleElement = document.querySelector(`[data-handleid="${pendingConnection.handleId}"]`) as HTMLElement;
-        if (!handleElement) return null;
-
-        const rect = handleElement.getBoundingClientRect();
-        const handleX = rect.left + rect.width / 2;
-        const handleY = rect.top + rect.height / 2;
-
-        return (
-          <svg
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: '100%',
-              height: '100%',
-              pointerEvents: 'none',
-              zIndex: 1000,
-            }}
-          >
-            <defs>
-              <marker
-                id="arrowhead"
-                markerWidth="10"
-                markerHeight="10"
-                refX="9"
-                refY="3"
-                orient="auto"
-              >
-                <polygon points="0 0, 10 3, 0 6" fill="#3B82F6" />
-              </marker>
-            </defs>
-            <line
-              x1={handleX}
-              y1={handleY}
-              x2={mousePosition.x}
-              y2={mousePosition.y}
-              stroke="#3B82F6"
-              strokeWidth="3"
-              strokeDasharray="5,5"
-              markerEnd="url(#arrowhead)"
-            />
-            <circle
-              cx={mousePosition.x}
-              cy={mousePosition.y}
-              r="6"
-              fill="#3B82F6"
-              opacity="0.5"
-            />
-          </svg>
-        );
-      })()}
     </div>
+  );
+}
+
+// Connection preview line component
+interface ConnectionPreviewLineProps {
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
+  handleType: 'source' | 'target';
+  nodes: Node[];
+  nodeId: string;
+  handleId: string;
+}
+
+function ConnectionPreviewLine({
+  startX,
+  startY,
+  endX,
+  endY,
+  handleType,
+  nodes,
+  nodeId,
+  handleId,
+}: ConnectionPreviewLineProps) {
+  // Get the color from the source node's output type
+  const sourceNode = nodes.find((n) => n.id === nodeId);
+  let edgeColor = "#6B7280"; // default gray
+
+  if (sourceNode) {
+    const moduleInstance = sourceNode.data.moduleInstance as ModuleInstance;
+    if (handleType === 'source') {
+      // Starting from output, find the output node
+      const outputPin = moduleInstance.outputs.find((p) => p.node_id === handleId);
+      edgeColor = outputPin ? TYPE_COLORS[outputPin.type] || "#6B7280" : "#6B7280";
+    } else {
+      // Starting from input, find the input node
+      const inputPin = moduleInstance.inputs.find((p) => p.node_id === handleId);
+      edgeColor = inputPin ? TYPE_COLORS[inputPin.type] || "#6B7280" : "#6B7280";
+    }
+  }
+
+  // Calculate bezier curve control points
+  const dx = endX - startX;
+  const controlPointDistance = Math.abs(dx) * 0.5;
+  const controlX1 = startX + (handleType === 'source' ? controlPointDistance : -controlPointDistance);
+  const controlY1 = startY;
+  const controlX2 = endX + (handleType === 'source' ? -controlPointDistance : controlPointDistance);
+  const controlY2 = endY;
+
+  const path = `M ${startX} ${startY} C ${controlX1} ${controlY1}, ${controlX2} ${controlY2}, ${endX} ${endY}`;
+
+  console.log('🖌️ ConnectionPreviewLine rendering:', {
+    path,
+    color: edgeColor,
+    start: { x: startX, y: startY },
+    end: { x: endX, y: endY }
+  });
+
+  return (
+    <svg
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        pointerEvents: 'none',
+        zIndex: 1000,
+      }}
+    >
+      <path
+        d={path}
+        stroke={edgeColor}
+        strokeWidth="2"
+        strokeDasharray="5,5"
+        fill="none"
+      />
+    </svg>
   );
 }
