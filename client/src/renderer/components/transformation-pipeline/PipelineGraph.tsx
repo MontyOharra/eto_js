@@ -117,15 +117,15 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(({
   // Expose methods to parent component via ref
   useImperativeHandle(ref, () => ({
     getPipelineState: (): PipelineState => {
-      // Extract module instances from nodes
+      // Extract module instances from nodes (excluding entry points)
       const modules: ModuleInstance[] = nodes
-        .filter(node => node.type === 'module')
+        .filter(node => node.type === 'module' && !node.data.isEntryPoint)
         .map(node => node.data.moduleInstance as ModuleInstance)
         .filter(Boolean);
 
-      // Extract entry points from entry point nodes
+      // Extract entry points from nodes marked as entry points
       const entry_points: EntryPoint[] = nodes
-        .filter(node => node.type === 'entryPoint')
+        .filter(node => node.data.isEntryPoint && node.data.entryPoint)
         .map(node => node.data.entryPoint as EntryPoint)
         .filter(Boolean);
 
@@ -143,18 +143,19 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(({
     },
 
     getVisualState: (): VisualState => {
-      // Extract module positions
+      // Extract module and entry point positions
       const modules: Record<string, { x: number; y: number }> = {};
       const entryPoints: Record<string, { x: number; y: number }> = {};
 
       nodes.forEach(node => {
-        if (node.type === 'module') {
+        if (node.type === 'module' && !node.data.isEntryPoint) {
+          // Regular module
           modules[node.id] = {
             x: node.position.x,
             y: node.position.y
           };
-        } else if (node.type === 'entryPoint') {
-          // Store entry point positions using their node_id
+        } else if (node.data.isEntryPoint && node.data.entryPoint) {
+          // Entry point node - store using entryPoint's node_id
           const entryPoint = node.data.entryPoint as EntryPoint;
           entryPoints[entryPoint.node_id] = {
             x: node.position.x,
@@ -291,15 +292,65 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(({
   useEffect(() => {
     if (entryPoints.length === 0 || initialPipelineState) return; // Skip if no entry points or in view mode
 
-    const entryPointNodes: Node[] = entryPoints.map((ep, index) => ({
-      id: `entry-${ep.node_id}`,
-      type: 'entryPoint',
-      position: { x: 50, y: 50 + index * 120 }, // Stack vertically on left
-      data: {
-        entryPoint: ep,
-        onHandleClick: handleHandleClick,
-      },
-    }));
+    // Create entry points as module-like visual nodes
+    const entryPointNodes: Node[] = entryPoints.map((ep, index) => {
+      // Create a fake ModuleInstance for visual rendering
+      const fakeModuleInstance: ModuleInstance = {
+        module_instance_id: `entry-${ep.node_id}`,
+        module_ref: 'entry_point:1.0.0',
+        module_kind: 'transform',
+        config: {},
+        inputs: [],
+        outputs: [{
+          node_id: ep.node_id,
+          direction: 'out',
+          type: ep.type,
+          name: ep.name,
+          label: ep.name,
+          position_index: 0,
+          group_index: 0,
+          allowed_types: ['str'],
+        }],
+      };
+
+      // Create a fake template for the entry point
+      const fakeTemplate: ModuleTemplate = {
+        id: 'entry_point',
+        version: '1.0.0',
+        kind: 'transform',
+        display_name: 'Entry Point',
+        description: 'Pipeline entry point',
+        config_schema: {},
+        meta: {
+          io_shape: {
+            inputs: { nodes: [] },
+            outputs: {
+              nodes: [{
+                label: ep.name,
+                min_count: 1,
+                max_count: 1,
+                typing: {
+                  allowed_types: ['str'],
+                },
+              }],
+            },
+            type_params: {},
+          },
+        },
+      };
+
+      return {
+        id: `entry-${ep.node_id}`,
+        type: 'module',
+        position: { x: 50, y: 50 + index * 120 },
+        data: {
+          moduleInstance: fakeModuleInstance,
+          template: fakeTemplate,
+          isEntryPoint: true, // Mark it as an entry point
+          entryPoint: ep, // Store original entry point data
+        },
+      };
+    });
 
     setNodes(entryPointNodes);
   }, [entryPoints, initialPipelineState]);
