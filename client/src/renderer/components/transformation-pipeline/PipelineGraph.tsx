@@ -1396,8 +1396,8 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(({
         style: {
           ...edge.style,
           strokeDasharray: '5,5',
-          strokeWidth: 3,
-          filter: `drop-shadow(0 0 6px ${edgeColor}) drop-shadow(0 0 12px ${edgeColor})`,
+          strokeWidth: 4,
+          filter: `drop-shadow(0 0 8px ${edgeColor}) drop-shadow(0 0 16px ${edgeColor}) drop-shadow(0 0 24px ${edgeColor})`,
         },
       };
     }
