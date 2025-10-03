@@ -1393,7 +1393,8 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(({
         style: {
           ...edge.style,
           strokeDasharray: '5,5',
-          filter: 'drop-shadow(0 0 8px rgba(59, 130, 246, 0.6))',
+          strokeWidth: 3,
+          filter: 'drop-shadow(0 0 6px rgba(59, 130, 246, 0.8)) drop-shadow(0 0 12px rgba(59, 130, 246, 0.4))',
         },
       };
     }
