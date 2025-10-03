@@ -21,6 +21,7 @@ import "@xyflow/react/dist/style.css";
 import { ModuleTemplate, ModuleInstance, NodePin } from "../../types/moduleTypes";
 import { PipelineState, VisualState, NodeConnection } from "../../types/pipelineTypes";
 import { ModuleNodeNew } from "./pipeline-graph/ModuleNodeNew";
+import { initializeConfig } from "../../utils/moduleFactoryNew";
 
 // Type to color mapping (same as ModuleNodeNew)
 const TYPE_COLORS: Record<string, string> = {
@@ -996,11 +997,14 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(({
     const inputs = createNodes(template.meta?.io_shape?.inputs, "in");
     const outputs = createNodes(template.meta?.io_shape?.outputs, "out");
 
+    // Initialize config with defaults from schema
+    const config = initializeConfig(template.config_schema);
+
     return {
       module_instance_id: instanceId,
       module_ref: `${template.id}:${template.version}`,
       module_kind: template.kind,
-      config: {},
+      config,
       inputs,
       outputs,
     };

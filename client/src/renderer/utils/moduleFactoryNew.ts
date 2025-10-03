@@ -145,7 +145,7 @@ function generatePinsForSide(
 }
 
 // Initialize config from schema with defaults
-function initializeConfig(configSchema: any): Record<string, any> {
+export function initializeConfig(configSchema: any): Record<string, any> {
   const config: Record<string, any> = {};
 
   if (configSchema?.properties) {
@@ -162,7 +162,7 @@ function initializeConfig(configSchema: any): Record<string, any> {
   return config;
 }
 
-function getDefaultForType(type: string): any {
+export function getDefaultForType(type: string): any {
   switch (type) {
     case 'string': return '';
     case 'number':
