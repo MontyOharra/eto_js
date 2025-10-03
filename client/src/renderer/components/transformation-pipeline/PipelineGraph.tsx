@@ -780,31 +780,39 @@ function PipelineGraphInner({
   }, []);
 
   // Handle adding a node to a group
-  const handleAddNode = useCallback((moduleId: string, direction: "input" | "output", groupLabel: string) => {
+  const handleAddNode = useCallback((moduleId: string, direction: "input" | "output", groupIndex: number) => {
     setNodes((nds) =>
       nds.map((node) => {
         if (node.id === moduleId) {
           const moduleInstance = node.data.moduleInstance as ModuleInstance;
+          const template = node.data.template as ModuleTemplate;
           const nodeArray = direction === "input" ? moduleInstance.inputs : moduleInstance.outputs;
 
-          // Find nodes in this group to copy type_var and allowed_types
-          const groupNodes = nodeArray.filter((n) => n.label === groupLabel);
-          const nextIndex = groupNodes.length;
+          // Get the NodeGroup from template
+          const ioShape = direction === "input" ? template.meta.io_shape.inputs : template.meta.io_shape.outputs;
+          const nodeGroup = ioShape.nodes[groupIndex];
 
-          // Copy type_var and allowed_types from existing nodes in the group
-          const existingNode = groupNodes[0];
-          const typeVar = existingNode?.type_var;
-          const allowedTypes = existingNode?.allowed_types || ["str"];
+          if (!nodeGroup) return node;
 
-          // If there's a typevar, find the current type being used by other nodes with same typevar
+          // Find existing nodes in this group
+          const groupNodes = nodeArray.filter((n) => n.group_index === groupIndex);
+          const positionIndex = groupNodes.length;
+
+          // Get type_var and allowed_types from template
+          const typeVar = nodeGroup.typing.type_var;
+          const allowedTypes = typeVar
+            ? (template.meta.io_shape.type_params[typeVar] || [])
+            : (nodeGroup.typing.allowed_types || []);
+
+          // Determine node type
           let nodeType: string;
           if (typeVar) {
-            // Look for any node (input or output) with the same typevar to get current type
+            // Look for any node with the same typevar to get current type
             const allNodes = [...moduleInstance.inputs, ...moduleInstance.outputs];
             const sameTypeVarNode = allNodes.find(n => n.type_var === typeVar);
-            nodeType = sameTypeVarNode?.type || allowedTypes[0];
+            nodeType = sameTypeVarNode?.type || (allowedTypes[0] || "str");
           } else {
-            nodeType = allowedTypes[0];
+            nodeType = allowedTypes[0] || "str";
           }
 
           // Create new node
@@ -813,10 +821,9 @@ function PipelineGraphInner({
             direction: direction === "input" ? "in" : "out",
             type: nodeType,
             name: "",
-            label: groupLabel,
-            position_index: nextIndex,
-            is_static: false,
-            group_key: groupLabel.toLowerCase().replace(/\s+/g, "_"),
+            label: nodeGroup.label,
+            position_index: positionIndex,
+            group_index: groupIndex,
             type_var: typeVar,
             allowed_types: allowedTypes,
           };
@@ -845,14 +852,37 @@ function PipelineGraphInner({
         if (node.id === moduleId) {
           const moduleInstance = node.data.moduleInstance as ModuleInstance;
 
+          // Find the pin being removed to get its group_index
+          const allPins = [...moduleInstance.inputs, ...moduleInstance.outputs];
+          const removedPin = allPins.find(p => p.node_id === nodeId);
+
+          if (!removedPin) return node;
+
+          // Filter out the removed pin
+          const newInputs = moduleInstance.inputs.filter((input) => input.node_id !== nodeId);
+          const newOutputs = moduleInstance.outputs.filter((output) => output.node_id !== nodeId);
+
+          // Re-index pins in the same group
+          const reindexGroup = (pins: NodePin[]) => {
+            return pins.map(pin => {
+              if (pin.group_index === removedPin.group_index) {
+                // Recalculate position_index for this group
+                const sameGroupPins = pins.filter(p => p.group_index === pin.group_index);
+                const newPositionIndex = sameGroupPins.indexOf(pin);
+                return { ...pin, position_index: newPositionIndex };
+              }
+              return pin;
+            });
+          };
+
           return {
             ...node,
             data: {
               ...node.data,
               moduleInstance: {
                 ...moduleInstance,
-                inputs: moduleInstance.inputs.filter((input) => input.node_id !== nodeId),
-                outputs: moduleInstance.outputs.filter((output) => output.node_id !== nodeId),
+                inputs: reindexGroup(newInputs),
+                outputs: reindexGroup(newOutputs),
               },
             },
           };
@@ -870,15 +900,14 @@ function PipelineGraphInner({
     const instanceId = `module-${Date.now()}-${nodeIdCounter.current++}`;
 
     const createNodes = (ioShape: any, direction: "in" | "out"): NodePin[] => {
-      const nodes: NodePin[] = [];
-      let positionIndex = 0;
+      const pins: NodePin[] = [];
       const typeParams = template.meta?.io_shape?.type_params || {};
       const ALL_TYPES = ["str", "int", "float", "bool", "datetime"];
 
-      // Process static nodes
-      if (ioShape?.static?.slots) {
-        ioShape.static.slots.forEach((nodeSpec: any) => {
-          const typeVar = nodeSpec.typing?.type_var;
+      // Process each NodeGroup
+      if (ioShape?.nodes) {
+        ioShape.nodes.forEach((nodeGroup: any, groupIndex: number) => {
+          const typeVar = nodeGroup.typing?.type_var;
 
           // Get allowed types: if typeVar exists, look it up in type_params, otherwise use allowed_types
           let allowedTypes: string[];
@@ -887,58 +916,23 @@ function PipelineGraphInner({
             // Empty array means all types allowed
             allowedTypes = typeParamTypes.length === 0 ? ALL_TYPES : typeParamTypes;
           } else {
-            const directTypes = nodeSpec.typing?.allowed_types || ["str"];
+            const directTypes = nodeGroup.typing?.allowed_types || ["str"];
             // Empty array means all types allowed
             allowedTypes = directTypes.length === 0 ? ALL_TYPES : directTypes;
           }
 
-          const defaultType = allowedTypes[0];
+          const defaultType = allowedTypes[0] || "str";
 
-          nodes.push({
-            node_id: `${instanceId}-${direction}-static-${positionIndex}`,
-            direction,
-            type: defaultType,
-            name: "",
-            label: nodeSpec.label,
-            position_index: positionIndex++,
-            is_static: true,
-            type_var: typeVar,
-            allowed_types: allowedTypes,
-          });
-        });
-      }
-
-      // Process dynamic node groups
-      if (ioShape?.dynamic?.groups) {
-        ioShape.dynamic.groups.forEach((group: any, groupIndex: number) => {
-          const typeVar = group.item?.typing?.type_var;
-
-          // Get allowed types: if typeVar exists, look it up in type_params, otherwise use allowed_types
-          let allowedTypes: string[];
-          if (typeVar && typeParams[typeVar]) {
-            const typeParamTypes = typeParams[typeVar];
-            // Empty array means all types allowed
-            allowedTypes = typeParamTypes.length === 0 ? ALL_TYPES : typeParamTypes;
-          } else {
-            const directTypes = group.item?.typing?.allowed_types || ["str"];
-            // Empty array means all types allowed
-            allowedTypes = directTypes.length === 0 ? ALL_TYPES : directTypes;
-          }
-
-          const defaultType = allowedTypes[0];
-          const groupKey = `dynamic-group-${groupIndex}`;
-
-          // Create min_count instances
-          for (let i = 0; i < group.min_count; i++) {
-            nodes.push({
-              node_id: `${instanceId}-${direction}-dynamic-${groupIndex}-${i}`,
+          // Create min_count pins for this group
+          for (let i = 0; i < nodeGroup.min_count; i++) {
+            pins.push({
+              node_id: `${instanceId}-${direction}-g${groupIndex}-${i}`,
               direction,
               type: defaultType,
               name: "",
-              label: group.item.label,
-              position_index: positionIndex++,
-              is_static: false,
-              group_key: groupKey,
+              label: nodeGroup.label,
+              position_index: i,
+              group_index: groupIndex,
               type_var: typeVar,
               allowed_types: allowedTypes,
             });
@@ -946,7 +940,7 @@ function PipelineGraphInner({
         });
       }
 
-      return nodes;
+      return pins;
     };
 
     const inputs = createNodes(template.meta?.io_shape?.inputs, "in");

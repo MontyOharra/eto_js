@@ -9,7 +9,7 @@ interface ModuleNodeNewProps {
     template: ModuleTemplate;
     onDeleteModule?: (moduleId: string) => void;
     onUpdateNode?: (moduleId: string, nodeId: string, updates: Partial<NodePin>) => void;
-    onAddNode?: (moduleId: string, direction: "input" | "output", groupLabel: string) => void;
+    onAddNode?: (moduleId: string, direction: "input" | "output", groupIndex: number) => void;
     onRemoveNode?: (moduleId: string, nodeId: string) => void;
     onConfigChange?: (moduleId: string, configKey: string, value: any) => void;
     onTextFocus?: () => void;
@@ -44,16 +44,16 @@ function getTextColor(hexColor: string): string {
   return brightness > 128 ? "#000000" : "#FFFFFF";
 }
 
-// Group nodes by their group_key (label)
-function groupNodesByLabel(nodes: NodePin[]): Map<string, NodePin[]> {
-  const groups = new Map<string, NodePin[]>();
+// Group nodes by their group_index
+function groupNodesByIndex(nodes: NodePin[]): Map<number, NodePin[]> {
+  const groups = new Map<number, NodePin[]>();
 
   nodes.forEach((node) => {
-    const label = node.label || "Ungrouped";
-    if (!groups.has(label)) {
-      groups.set(label, []);
+    const groupIndex = node.group_index;
+    if (!groups.has(groupIndex)) {
+      groups.set(groupIndex, []);
     }
-    groups.get(label)!.push(node);
+    groups.get(groupIndex)!.push(node);
   });
 
   return groups;
@@ -85,8 +85,8 @@ export function ModuleNodeNew({ data }: ModuleNodeNewProps) {
   }, [moduleInstance, getEffectiveAllowedTypes, onUpdateNode]);
 
   // Group inputs and outputs
-  const inputGroups = groupNodesByLabel(moduleInstance.inputs);
-  const outputGroups = groupNodesByLabel(moduleInstance.outputs);
+  const inputGroups = groupNodesByIndex(moduleInstance.inputs);
+  const outputGroups = groupNodesByIndex(moduleInstance.outputs);
 
   // Get connected output name for an input node by looking at edges across modules
   const getConnectedOutputName = useCallback((inputNodeId: string): string | undefined => {
@@ -178,10 +178,11 @@ export function ModuleNodeNew({ data }: ModuleNodeNewProps) {
       <div className="flex relative">
         {/* Inputs Section */}
         <div className="w-1/2 p-3 border-r border-gray-600">
-          {Array.from(inputGroups.entries()).map(([groupLabel, nodes]) => (
+          {Array.from(inputGroups.entries()).map(([groupIndex, nodes]) => (
             <NodeGroupSection
-              key={groupLabel}
-              groupLabel={groupLabel}
+              key={groupIndex}
+              groupIndex={groupIndex}
+              groupLabel={nodes[0]?.label || 'Group'}
               nodes={nodes}
               direction="input"
               moduleId={moduleInstance.module_instance_id}
@@ -204,10 +205,11 @@ export function ModuleNodeNew({ data }: ModuleNodeNewProps) {
 
         {/* Outputs Section */}
         <div className="w-1/2 p-3">
-          {Array.from(outputGroups.entries()).map(([groupLabel, nodes]) => (
+          {Array.from(outputGroups.entries()).map(([groupIndex, nodes]) => (
             <NodeGroupSection
-              key={groupLabel}
-              groupLabel={groupLabel}
+              key={groupIndex}
+              groupIndex={groupIndex}
+              groupLabel={nodes[0]?.label || 'Group'}
               nodes={nodes}
               direction="output"
               moduleId={moduleInstance.module_instance_id}
@@ -268,6 +270,7 @@ export function ModuleNodeNew({ data }: ModuleNodeNewProps) {
 
 // NodeGroup Section Component
 interface NodeGroupSectionProps {
+  groupIndex: number;
   groupLabel: string;
   nodes: NodePin[];
   direction: "input" | "output";
@@ -275,7 +278,7 @@ interface NodeGroupSectionProps {
   template: ModuleTemplate;
   onTypeChange: (nodeId: string, newType: string) => void;
   onNameChange: (nodeId: string, newName: string) => void;
-  onAddNode?: (moduleId: string, direction: "input" | "output", groupLabel: string) => void;
+  onAddNode?: (moduleId: string, direction: "input" | "output", groupIndex: number) => void;
   onRemoveNode?: (moduleId: string, nodeId: string) => void;
   getConnectedOutputName?: (inputNodeId: string) => string | undefined;
   highlightedTypeVar: string | null;
@@ -292,6 +295,7 @@ interface NodeGroupSectionProps {
 }
 
 function NodeGroupSection({
+  groupIndex,
   groupLabel,
   nodes,
   direction,
@@ -310,32 +314,15 @@ function NodeGroupSection({
   pendingConnection,
   getEffectiveAllowedTypes,
 }: NodeGroupSectionProps) {
-  // Determine if these are static or dynamic nodes and get constraints
-  const isStatic = nodes.length > 0 ? nodes[0].is_static : true;
-  const groupKey = nodes.length > 0 ? nodes[0].group_key : undefined;
+  // Get the NodeGroup from template
+  const ioShape = direction === "input"
+    ? template.meta?.io_shape?.inputs
+    : template.meta?.io_shape?.outputs;
 
-  let minCount = 1;
-  let maxCount: number | undefined = undefined;
+  const nodeGroup = ioShape?.nodes[groupIndex];
 
-  if (!isStatic && groupKey) {
-    // Look up the dynamic group in the template
-    const ioShape = direction === "input"
-      ? template.meta?.io_shape?.inputs
-      : template.meta?.io_shape?.outputs;
-
-    if (ioShape?.dynamic?.groups) {
-      // Find the group by matching the label
-      const group = ioShape.dynamic.groups.find((g: any) => g.item.label === groupLabel);
-      if (group) {
-        minCount = group.min_count || 1;
-        maxCount = group.max_count;
-      }
-    }
-  } else {
-    // Static nodes cannot be added or removed
-    minCount = nodes.length;
-    maxCount = nodes.length;
-  }
+  const minCount = nodeGroup?.min_count || 1;
+  const maxCount = nodeGroup?.max_count;
 
   const canAdd = maxCount === undefined || nodes.length < maxCount;
   const canRemove = nodes.length > minCount;
@@ -378,7 +365,7 @@ function NodeGroupSection({
         {canAdd && onAddNode && (
           <div className="relative flex items-center gap-2 py-1.5 group">
             <button
-              onClick={() => onAddNode(moduleId, direction, groupLabel)}
+              onClick={() => onAddNode(moduleId, direction, groupIndex)}
               className="absolute flex items-center justify-center w-5 h-5 rounded-full border-2 border-gray-900 bg-gray-500 group-hover:bg-gray-400 transition-colors"
               style={{
                 [direction === "input" ? "left" : "right"]: -23,
@@ -395,7 +382,7 @@ function NodeGroupSection({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
               </svg>
             </button>
-            <div className="flex-1 text-xs text-gray-300 font-medium px-2 py-1.5 border-2 border-dashed border-gray-500 bg-gray-800 rounded cursor-pointer group-hover:border-gray-400 group-hover:bg-gray-700 group-hover:text-white transition-colors text-center" onClick={() => onAddNode(moduleId, direction, groupLabel)}>
+            <div className="flex-1 text-xs text-gray-300 font-medium px-2 py-1.5 border-2 border-dashed border-gray-500 bg-gray-800 rounded cursor-pointer group-hover:border-gray-400 group-hover:bg-gray-700 group-hover:text-white transition-colors text-center" onClick={() => onAddNode(moduleId, direction, groupIndex)}>
               Add {direction === "input" ? "Input" : "Output"}
             </div>
           </div>
