@@ -872,9 +872,12 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(({
                   p => p.node_id === edge.targetHandle
                 );
 
-                // If both pins exist and have the same type, update edge color to match
-                if (sourcePin && targetPin && sourcePin.type === targetPin.type) {
-                  const edgeColor = TYPE_COLORS[sourcePin.type] || "#6B7280";
+                // Update edge color based on whether types match
+                if (sourcePin && targetPin) {
+                  const edgeColor = sourcePin.type === targetPin.type
+                    ? (TYPE_COLORS[sourcePin.type] || "#6B7280")
+                    : "#6B7280"; // Gray for mismatched types
+
                   if (edge.style?.stroke !== edgeColor) {
                     return {
                       ...edge,

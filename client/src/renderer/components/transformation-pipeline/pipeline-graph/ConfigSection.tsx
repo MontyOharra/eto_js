@@ -80,7 +80,7 @@ export const ConfigSection: React.FC<ConfigSectionProps> = ({ schema, config, on
               handleChange(isNaN(parsed) ? property.default : parsed);
             }}
             step={property.type === 'integer' ? '1' : 'any'}
-            className="w-full px-2 py-1 text-xs bg-gray-700 border border-gray-600 rounded text-gray-200 focus:outline-none focus:border-blue-500"
+            className="nodrag w-full px-2 py-1 text-xs bg-gray-700 border border-gray-600 rounded text-gray-200 focus:outline-none focus:border-blue-500"
           />
           {description && (
             <p className="text-[10px] text-gray-400 mt-0.5">{description}</p>
@@ -97,7 +97,7 @@ export const ConfigSection: React.FC<ConfigSectionProps> = ({ schema, config, on
           <select
             value={value ?? ''}
             onChange={(e) => handleChange(e.target.value)}
-            className="w-full px-2 py-1 text-xs bg-gray-700 border border-gray-600 rounded text-gray-200 focus:outline-none focus:border-blue-500"
+            className="nodrag w-full px-2 py-1 text-xs bg-gray-700 border border-gray-600 rounded text-gray-200 focus:outline-none focus:border-blue-500"
           >
             {property.enum.map((option) => (
               <option key={option} value={option}>
