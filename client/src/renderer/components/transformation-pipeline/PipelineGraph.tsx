@@ -785,7 +785,7 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(({
       setPendingConnection(null);
       setMousePosition(null);
     }
-  }, [viewOnly, pendingConnection, nodes, getTypeIntersection]);
+  }, [viewOnly, pendingConnection, nodes, edges, getTypeIntersection]);
 
   // Handle edge click (select edge)
   const handleEdgeClick = useCallback((_event: React.MouseEvent, edge: Edge) => {
