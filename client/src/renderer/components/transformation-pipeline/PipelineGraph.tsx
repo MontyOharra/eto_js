@@ -1388,13 +1388,16 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(({
   // Update edges to show selection styling
   const edgesWithSelection = edges.map((edge) => {
     if (edge.id === selectedEdge) {
+      // Get the edge color to match the glow
+      const edgeColor = edge.style?.stroke || '#6B7280';
+
       return {
         ...edge,
         style: {
           ...edge.style,
           strokeDasharray: '5,5',
           strokeWidth: 3,
-          filter: 'drop-shadow(0 0 6px rgba(59, 130, 246, 0.8)) drop-shadow(0 0 12px rgba(59, 130, 246, 0.4))',
+          filter: `drop-shadow(0 0 6px ${edgeColor}) drop-shadow(0 0 12px ${edgeColor})`,
         },
       };
     }
