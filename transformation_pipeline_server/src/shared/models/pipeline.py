@@ -15,7 +15,7 @@ class InstanceNodePin(BaseModel):
     type: str  # Selected type: "str", "int", "float", "bool", "datetime", etc.
     name: str
     position_index: int
-    group_label: str  # Which NodeGroup template this came from (e.g., "input_text", "text_data")
+    group_index: int  # Index of the NodeGroup in meta.io_shape.inputs.nodes or outputs.nodes
 
 
 class ModuleInstance(BaseModel):
@@ -24,7 +24,7 @@ class ModuleInstance(BaseModel):
     module_ref: str  # e.g., "text_cleaner:1.0.0"
     module_kind: Literal["transform", "action", "logic"]
     config: Dict[str, Any]  # Module-specific configuration
-    inputs: List[InstanceNodePin] = Field(default_factory=list)  # Flat list, grouped by group_label
+    inputs: List[InstanceNodePin] = Field(default_factory=list)  # Flat list, grouped by group_index
     outputs: List[InstanceNodePin] = Field(default_factory=list)
 
 
