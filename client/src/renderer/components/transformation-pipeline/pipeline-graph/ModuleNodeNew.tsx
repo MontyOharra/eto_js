@@ -1,6 +1,7 @@
-import { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { Handle, Position } from "@xyflow/react";
 import { ModuleTemplate, ModuleInstance, NodePin } from "../../../types/moduleTypes";
+import { ConfigSection as ImportedConfigSection } from "./ConfigSection";
 
 interface ModuleNodeNewProps {
   data: {
@@ -10,7 +11,7 @@ interface ModuleNodeNewProps {
     onUpdateNode?: (moduleId: string, nodeId: string, updates: Partial<NodePin>) => void;
     onAddNode?: (moduleId: string, direction: "input" | "output", groupLabel: string) => void;
     onRemoveNode?: (moduleId: string, nodeId: string) => void;
-    connections?: Array<{ from_node_id: string; to_node_id: string }>;
+    onConfigChange?: (moduleId: string, configKey: string, value: any) => void;
     onTextFocus?: () => void;
     onTextBlur?: () => void;
     onHandleClick?: (nodeId: string, handleId: string, handleType: 'source' | 'target') => void;
@@ -20,6 +21,7 @@ interface ModuleNodeNewProps {
       handleType: 'source' | 'target';
     } | null;
     getEffectiveAllowedTypes?: (moduleId: string, pinId: string, baseAllowedTypes: string[]) => string[];
+    getConnectedOutputName?: (moduleId: string, inputPinId: string) => string | undefined;
   };
 }
 
@@ -58,25 +60,39 @@ function groupNodesByLabel(nodes: NodePin[]): Map<string, NodePin[]> {
 }
 
 export function ModuleNodeNew({ data }: ModuleNodeNewProps) {
-  const { moduleInstance, template, onDeleteModule, onUpdateNode, onAddNode, onRemoveNode, connections, onTextFocus, onTextBlur, onHandleClick, pendingConnection, getEffectiveAllowedTypes } = data;
+  const { moduleInstance, template, onDeleteModule, onUpdateNode, onAddNode, onRemoveNode, onConfigChange, onTextFocus, onTextBlur, onHandleClick, pendingConnection, getEffectiveAllowedTypes, getConnectedOutputName: getConnectedOutputNameFromParent } = data;
   const [isConfigExpanded, setIsConfigExpanded] = useState(false);
   const [highlightedTypeVar, setHighlightedTypeVar] = useState<string | null>(null);
+
+  // Auto-correct types when effective allowed types change and current type becomes invalid
+  useEffect(() => {
+    if (!getEffectiveAllowedTypes || !onUpdateNode) return;
+
+    const allPins = [...moduleInstance.inputs, ...moduleInstance.outputs];
+
+    allPins.forEach((pin) => {
+      const effectiveTypes = getEffectiveAllowedTypes(
+        moduleInstance.module_instance_id,
+        pin.node_id,
+        pin.allowed_types || []
+      );
+
+      // If current type is not in effective types, update to first valid type
+      if (effectiveTypes.length > 0 && !effectiveTypes.includes(pin.type)) {
+        onUpdateNode(moduleInstance.module_instance_id, pin.node_id, { type: effectiveTypes[0] });
+      }
+    });
+  }, [moduleInstance, getEffectiveAllowedTypes, onUpdateNode]);
 
   // Group inputs and outputs
   const inputGroups = groupNodesByLabel(moduleInstance.inputs);
   const outputGroups = groupNodesByLabel(moduleInstance.outputs);
 
-  // Get connected output name for an input node
+  // Get connected output name for an input node by looking at edges across modules
   const getConnectedOutputName = useCallback((inputNodeId: string): string | undefined => {
-    if (!connections) return undefined;
-    const connection = connections.find((c) => c.to_node_id === inputNodeId);
-    if (!connection) return undefined;
-
-    // Find the output node
-    const allOutputs = moduleInstance.outputs;
-    const outputNode = allOutputs.find((n) => n.node_id === connection.from_node_id);
-    return outputNode?.name;
-  }, [connections, moduleInstance.outputs]);
+    if (!getConnectedOutputNameFromParent) return undefined;
+    return getConnectedOutputNameFromParent(moduleInstance.module_instance_id, inputNodeId);
+  }, [getConnectedOutputNameFromParent, moduleInstance.module_instance_id]);
 
   const handleTypeChange = (nodeId: string, newType: string) => {
     if (!onUpdateNode) return;
@@ -109,6 +125,12 @@ export function ModuleNodeNew({ data }: ModuleNodeNewProps) {
   const handleDelete = () => {
     if (onDeleteModule) {
       onDeleteModule(moduleInstance.module_instance_id);
+    }
+  };
+
+  const handleConfigChange = (configKey: string, value: any) => {
+    if (onConfigChange) {
+      onConfigChange(moduleInstance.module_instance_id, configKey, value);
     }
   };
 
@@ -233,12 +255,11 @@ export function ModuleNodeNew({ data }: ModuleNodeNewProps) {
         </button>
 
         {isConfigExpanded && (
-          <div className="px-3 pb-3">
-            <ConfigSection
-              configSchema={template.config_schema}
-              configValues={moduleInstance.config}
-            />
-          </div>
+          <ImportedConfigSection
+            schema={template.config_schema}
+            config={moduleInstance.config}
+            onConfigChange={handleConfigChange}
+          />
         )}
       </div>
     </div>
@@ -439,11 +460,23 @@ function NodeRow({
     }
   };
 
-  // For input nodes, display connected output name or "Not Connected"
+  // For input nodes, display connected output name (even if empty) or "Not Connected"
+  const connectedOutputName = direction === "input" ? getConnectedOutputName?.(node.node_id) : undefined;
   const displayName =
     direction === "input"
-      ? getConnectedOutputName?.(node.node_id) ?? "Not Connected"
+      ? connectedOutputName !== undefined ? connectedOutputName : "Not Connected"
       : node.name || "";
+
+  // Ref for input textarea to auto-resize
+  const inputTextareaRef = React.useRef<HTMLTextAreaElement>(null);
+
+  // Auto-resize input textarea when displayName changes
+  React.useEffect(() => {
+    if (inputTextareaRef.current && direction === "input") {
+      inputTextareaRef.current.style.height = 'auto';
+      inputTextareaRef.current.style.height = inputTextareaRef.current.scrollHeight + 'px';
+    }
+  }, [displayName, direction]);
 
   return (
     <div className="relative flex items-center gap-2 py-1.5">
@@ -465,10 +498,17 @@ function NodeRow({
       {direction === "input" ? (
         // Input layout: [handle] name - type - delete
         <div className="flex items-center w-full gap-2">
-          <div className="flex-[2] min-w-0">
-            <div className="text-[10px] text-gray-300 px-1.5 py-0.5 bg-gray-700 rounded border border-gray-600 w-full min-h-[24px] flex items-center overflow-hidden">
-              <span className="truncate">{displayName}</span>
-            </div>
+          <div className="flex-[2] min-w-0 nodrag flex items-center">
+            <textarea
+              ref={inputTextareaRef}
+              value={displayName}
+              readOnly
+              rows={1}
+              className="text-[10px] text-gray-300 px-1.5 py-0.5 bg-gray-700 rounded border border-gray-600 w-full resize-none overflow-hidden cursor-default min-h-[24px]"
+              style={{
+                height: 'auto',
+              }}
+            />
           </div>
           <div className="flex-shrink-0 w-12 flex items-center">
             <TypeIndicator
@@ -609,18 +649,3 @@ function TypeIndicator({ node, onTypeChange, onFocus, onBlur, isHighlighted, eff
   );
 }
 
-// Configuration Section Component
-interface ConfigSectionProps {
-  configSchema: any;
-  configValues: Record<string, any>;
-}
-
-function ConfigSection({ configSchema, configValues }: ConfigSectionProps) {
-  // TODO: Parse JSON schema and generate dynamic form fields
-  return (
-    <div className="text-xs text-gray-400 py-2">
-      Configuration parsing coming soon...
-      <pre className="text-[10px] mt-2">{JSON.stringify(configSchema, null, 2)}</pre>
-    </div>
-  );
-}

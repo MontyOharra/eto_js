@@ -65,6 +65,10 @@ class ComprehensiveTest(TransformModule):
                             NodeSpec(
                                 label="enable_flag",
                                 typing=NodeTypeRule(allowed_types=["bool"])
+                            ),
+                            NodeSpec(
+                                label="test",
+                                typing=NodeTypeRule(allowed_types=["bool", "float"])
                             )
                         ]
                     ),
@@ -128,6 +132,10 @@ class ComprehensiveTest(TransformModule):
                             NodeSpec(
                                 label="processed_data",
                                 typing=NodeTypeRule(type_var="T")
+                            ),
+                            NodeSpec(
+                                label="test",
+                                typing=NodeTypeRule(allowed_types=["bool", "int"])
                             )
                         ]
                     ),

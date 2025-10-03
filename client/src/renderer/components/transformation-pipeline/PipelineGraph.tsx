@@ -98,11 +98,21 @@ function PipelineGraphInner({
   } | null>(null);
   const [mousePosition, setMousePosition] = useState<{ x: number; y: number } | null>(null);
 
-  // Convert edges to simple connection format for ModuleNode
-  const connections = edges.map((edge) => ({
-    from_node_id: edge.sourceHandle || "",
-    to_node_id: edge.targetHandle || "",
-  }));
+  // Helper function to get connected output name for an input pin
+  const getConnectedOutputName = useCallback((moduleId: string, inputPinId: string): string | undefined => {
+    // Find edge where this input is the target
+    const edge = edges.find((e) => e.target === moduleId && e.targetHandle === inputPinId);
+    if (!edge) return undefined;
+
+    // Find the source module and pin
+    const sourceModule = nodes.find((n) => n.id === edge.source);
+    if (!sourceModule?.data?.moduleInstance) return undefined;
+
+    const sourceModuleInstance = sourceModule.data.moduleInstance as ModuleInstance;
+    const sourcePin = sourceModuleInstance.outputs.find((p) => p.node_id === edge.sourceHandle);
+
+    return sourcePin ? sourcePin.name : undefined;
+  }, [edges, nodes]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -127,7 +137,7 @@ function PipelineGraphInner({
     return types1.filter(type => types2.includes(type));
   }, []);
 
-  // Helper: Calculate effective allowed types for a pin based on connections
+  // Helper: Calculate effective allowed types for a pin based on entire connection graph
   const getEffectiveAllowedTypes = useCallback((
     moduleId: string,
     pinId: string,
@@ -139,59 +149,60 @@ function PipelineGraphInner({
     const moduleInstance = module.data.moduleInstance as ModuleInstance;
     const allPins = [...moduleInstance.inputs, ...moduleInstance.outputs];
     const currentPin = allPins.find((p) => p.node_id === pinId);
+    if (!currentPin) return baseAllowedTypes;
 
-    // Collect all edges that affect this pin's type restrictions
-    const relevantEdges: typeof edges = [];
+    // Use BFS to traverse the entire connected graph and collect all type restrictions
+    const visited = new Set<string>();
+    const queue: Array<{ moduleId: string; pinId: string }> = [];
+    let effectiveTypes = baseAllowedTypes;
 
-    // 1. Direct connections to this pin
-    edges.forEach((edge) => {
-      if ((edge.source === moduleId && edge.sourceHandle === pinId) ||
-          (edge.target === moduleId && edge.targetHandle === pinId)) {
-        relevantEdges.push(edge);
-      }
-    });
+    // Start with current pin
+    queue.push({ moduleId, pinId });
 
-    // 2. If this pin has a typevar, include connections to all pins with same typevar
-    if (currentPin?.type_var) {
+    // If current pin has typevar, add all typevar siblings to start
+    if (currentPin.type_var) {
       const typeVarPins = allPins.filter((p) => p.type_var === currentPin.type_var);
-
       typeVarPins.forEach((pin) => {
-        edges.forEach((edge) => {
-          if ((edge.source === moduleId && edge.sourceHandle === pin.node_id) ||
-              (edge.target === moduleId && edge.targetHandle === pin.node_id)) {
-            // Avoid duplicates
-            if (!relevantEdges.some((e) => e.id === edge.id)) {
-              relevantEdges.push(edge);
-            }
-          }
-        });
+        queue.push({ moduleId, pinId: pin.node_id });
       });
     }
 
-    if (relevantEdges.length === 0) {
-      return baseAllowedTypes; // No restrictions
-    }
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      const key = `${current.moduleId}:${current.pinId}`;
 
-    // Calculate intersection of all connected pins' allowed types
-    let effectiveTypes = baseAllowedTypes;
+      if (visited.has(key)) continue;
+      visited.add(key);
 
-    relevantEdges.forEach((edge) => {
-      const isSource = edge.source === moduleId;
-      const otherModuleId = isSource ? edge.target : edge.source;
-      const otherPinId = isSource ? edge.targetHandle : edge.sourceHandle;
+      // Get the module and pin
+      const mod = nodes.find((n) => n.id === current.moduleId);
+      if (!mod?.data?.moduleInstance) continue;
 
-      const otherModule = nodes.find((n) => n.id === otherModuleId);
-      if (!otherModule?.data?.moduleInstance) return;
+      const modInstance = mod.data.moduleInstance as ModuleInstance;
+      const modPins = [...modInstance.inputs, ...modInstance.outputs];
+      const pin = modPins.find((p) => p.node_id === current.pinId);
+      if (!pin) continue;
 
-      const otherModuleInstance = otherModule.data.moduleInstance as ModuleInstance;
-      const otherPins = [...otherModuleInstance.inputs, ...otherModuleInstance.outputs];
-      const otherPin = otherPins.find((p: NodePin) => p.node_id === otherPinId);
+      // Intersect with this pin's allowed types
+      effectiveTypes = getTypeIntersection(effectiveTypes, pin.allowed_types || []);
 
-      if (otherPin) {
-        // Intersect with the connected pin's allowed types
-        effectiveTypes = getTypeIntersection(effectiveTypes, otherPin.allowed_types || []);
+      // If this pin has a typevar, add all typevar siblings
+      if (pin.type_var) {
+        const typeVarPins = modPins.filter((p) => p.type_var === pin.type_var);
+        typeVarPins.forEach((p) => {
+          queue.push({ moduleId: current.moduleId, pinId: p.node_id });
+        });
       }
-    });
+
+      // Find all connected pins via edges
+      edges.forEach((edge) => {
+        if (edge.source === current.moduleId && edge.sourceHandle === current.pinId) {
+          queue.push({ moduleId: edge.target!, pinId: edge.targetHandle! });
+        } else if (edge.target === current.moduleId && edge.targetHandle === current.pinId) {
+          queue.push({ moduleId: edge.source!, pinId: edge.sourceHandle! });
+        }
+      });
+    }
 
     return effectiveTypes;
   }, [edges, nodes, getTypeIntersection]);
@@ -201,21 +212,56 @@ function PipelineGraphInner({
     if (viewOnly) return;
 
     if (!pendingConnection) {
-      // Start a new connection - find the node's type for preview color
-      const node = nodes.find(n => n.id === nodeId);
-      if (!node) return;
-
-      const moduleInstance = node.data.moduleInstance as ModuleInstance;
-      const pin = handleType === 'source'
-        ? moduleInstance.outputs.find(p => p.node_id === handleId)
-        : moduleInstance.inputs.find(p => p.node_id === handleId);
-
-      setPendingConnection({
-        sourceHandleId: handleId,
-        sourceNodeId: nodeId,
-        handleType,
-        nodeType: pin?.type || 'str',
+      // Check if this handle already has a connection
+      const existingEdge = edges.find((edge) => {
+        return (edge.source === nodeId && edge.sourceHandle === handleId) ||
+               (edge.target === nodeId && edge.targetHandle === handleId);
       });
+
+      if (existingEdge) {
+        // Handle already connected - pick up the connection from the OTHER end
+        // Keep the clicked handle as the destination
+        const isSource = existingEdge.source === nodeId && existingEdge.sourceHandle === handleId;
+        const otherNodeId = isSource ? existingEdge.target : existingEdge.source;
+        const otherHandleId = isSource ? existingEdge.targetHandle : existingEdge.sourceHandle;
+        const otherHandleType: 'source' | 'target' = isSource ? 'target' : 'source';
+
+        // Remove the existing edge
+        setEdges((eds) => eds.filter((e) => e.id !== existingEdge.id));
+
+        // Find the other node's pin for the type
+        const otherNode = nodes.find(n => n.id === otherNodeId);
+        if (!otherNode) return;
+
+        const otherModuleInstance = otherNode.data.moduleInstance as ModuleInstance;
+        const otherPin = otherHandleType === 'source'
+          ? otherModuleInstance.outputs.find(p => p.node_id === otherHandleId)
+          : otherModuleInstance.inputs.find(p => p.node_id === otherHandleId);
+
+        // Start pending connection from the OTHER end
+        setPendingConnection({
+          sourceHandleId: otherHandleId!,
+          sourceNodeId: otherNodeId!,
+          handleType: otherHandleType,
+          nodeType: otherPin?.type || 'str',
+        });
+      } else {
+        // Start a new connection - find the node's type for preview color
+        const node = nodes.find(n => n.id === nodeId);
+        if (!node) return;
+
+        const moduleInstance = node.data.moduleInstance as ModuleInstance;
+        const pin = handleType === 'source'
+          ? moduleInstance.outputs.find(p => p.node_id === handleId)
+          : moduleInstance.inputs.find(p => p.node_id === handleId);
+
+        setPendingConnection({
+          sourceHandleId: handleId,
+          sourceNodeId: nodeId,
+          handleType,
+          nodeType: pin?.type || 'str',
+        });
+      }
     } else {
       // Complete the connection
       const { sourceHandleId, sourceNodeId, handleType: sourceHandleType } = pendingConnection;
@@ -239,6 +285,16 @@ function PipelineGraphInner({
           nodeType: pin?.type || 'str',
         });
         return;
+      }
+
+      // Check if target handle already has a connection - if so, remove it
+      const existingTargetEdge = edges.find((edge) => {
+        return (edge.source === nodeId && edge.sourceHandle === handleId) ||
+               (edge.target === nodeId && edge.targetHandle === handleId);
+      });
+
+      if (existingTargetEdge) {
+        setEdges((eds) => eds.filter((e) => e.id !== existingTargetEdge.id));
       }
 
       // Get both nodes and their pins
@@ -476,125 +532,192 @@ function PipelineGraphInner({
         })
       );
 
-      // Update connected nodes to match the new type
+      // Update connected nodes to match the new type using queue-based cascading
       if (connectedEdges.length > 0) {
         setNodes((nds) => {
           let updatedNodes = [...nds];
-          const nodesToUpdate = new Map<string, { moduleId: string; pinId: string; newType: string }>();
 
-          // First pass: identify all nodes that need to be updated
+          // Queue of pins to process: { moduleId, pinId, newType }
+          const queue: Array<{ moduleId: string; pinId: string; newType: string }> = [];
+          const processed = new Set<string>(); // Track processed pins to avoid infinite loops
+
+          // Initialize queue with directly connected pins
           for (const edge of connectedEdges) {
             const isSource = edge.source === moduleId && edge.sourceHandle === nodeId;
             const connectedModuleId = isSource ? edge.target : edge.source;
             const connectedPinId = isSource ? edge.targetHandle : edge.sourceHandle;
 
-            nodesToUpdate.set(`${connectedModuleId}:${connectedPinId}`, {
+            queue.push({
               moduleId: connectedModuleId,
               pinId: connectedPinId,
               newType,
             });
           }
 
-          // Second pass: update nodes and cascade through typevars
-          updatedNodes = updatedNodes.map((node) => {
-            // Check if any pin in this node needs updating
-            const moduleInstance = node.data.moduleInstance as ModuleInstance;
-            let hasChanges = false;
+          // Process queue until empty
+          while (queue.length > 0) {
+            const update = queue.shift()!;
+            const key = `${update.moduleId}:${update.pinId}`;
+
+            // Skip if already processed
+            if (processed.has(key)) continue;
+            processed.add(key);
+
+            // Find the module in the current updatedNodes
+            const moduleNode = updatedNodes.find(n => n.id === update.moduleId);
+            if (!moduleNode?.data?.moduleInstance) continue;
+
+            const moduleInstance = moduleNode.data.moduleInstance as ModuleInstance;
             let updatedInputs = [...moduleInstance.inputs];
             let updatedOutputs = [...moduleInstance.outputs];
 
-            // Update directly connected pins
-            for (const [key, update] of nodesToUpdate.entries()) {
-              if (node.id === update.moduleId) {
-                const changedPin = [...updatedInputs, ...updatedOutputs].find(p => p.node_id === update.pinId);
+            // Find the pin being updated
+            const allPins = [...updatedInputs, ...updatedOutputs];
+            const targetPin = allPins.find(p => p.node_id === update.pinId);
 
-                updatedInputs = updatedInputs.map((input) =>
-                  input.node_id === update.pinId ? { ...input, type: newType } : input
-                );
+            if (!targetPin) {
+              continue;
+            }
 
-                updatedOutputs = updatedOutputs.map((output) =>
-                  output.node_id === update.pinId ? { ...output, type: newType } : output
-                );
-
-                hasChanges = true;
-
-                // If the changed pin has a typevar, update all pins with the same typevar in this module
-                if (changedPin?.type_var) {
-                  const typeVar = changedPin.type_var;
-
-                  updatedInputs = updatedInputs.map((input) =>
-                    input.type_var === typeVar ? { ...input, type: newType } : input
-                  );
-
-                  updatedOutputs = updatedOutputs.map((output) =>
-                    output.type_var === typeVar ? { ...output, type: newType } : output
-                  );
+            if (targetPin.type === update.newType) {
+              // Still need to check for edges to propagate further, even if this pin is already correct
+              edges.forEach((edge) => {
+                if (edge.source === update.moduleId && edge.sourceHandle === update.pinId) {
+                  queue.push({
+                    moduleId: edge.target!,
+                    pinId: edge.targetHandle!,
+                    newType: update.newType,
+                  });
+                } else if (edge.target === update.moduleId && edge.targetHandle === update.pinId) {
+                  queue.push({
+                    moduleId: edge.source!,
+                    pinId: edge.sourceHandle!,
+                    newType: update.newType,
+                  });
                 }
+              });
+              continue;
+            }
+
+            // Update the target pin
+            updatedInputs = updatedInputs.map((input) =>
+              input.node_id === update.pinId ? { ...input, type: update.newType } : input
+            );
+            updatedOutputs = updatedOutputs.map((output) =>
+              output.node_id === update.pinId ? { ...output, type: update.newType } : output
+            );
+
+            // If the pin has a typevar, cascade to all typevar siblings
+            if (targetPin.type_var) {
+              const typeVar = targetPin.type_var;
+
+              // Update typevar siblings and add to queue
+              updatedInputs = updatedInputs.map((input) => {
+                if (input.type_var === typeVar && input.type !== update.newType) {
+                  queue.push({
+                    moduleId: update.moduleId,
+                    pinId: input.node_id,
+                    newType: update.newType,
+                  });
+                  return { ...input, type: update.newType };
+                }
+                return input;
+              });
+
+              updatedOutputs = updatedOutputs.map((output) => {
+                if (output.type_var === typeVar && output.type !== update.newType) {
+                  queue.push({
+                    moduleId: update.moduleId,
+                    pinId: output.node_id,
+                    newType: update.newType,
+                  });
+                  return { ...output, type: update.newType };
+                }
+                return output;
+              });
+            }
+
+            // Find all edges connected to the updated pin and add them to queue
+            edges.forEach((edge) => {
+              if (edge.source === update.moduleId && edge.sourceHandle === update.pinId) {
+                queue.push({
+                  moduleId: edge.target!,
+                  pinId: edge.targetHandle!,
+                  newType: update.newType,
+                });
+              } else if (edge.target === update.moduleId && edge.targetHandle === update.pinId) {
+                queue.push({
+                  moduleId: edge.source!,
+                  pinId: edge.sourceHandle!,
+                  newType: update.newType,
+                });
               }
-            }
+            });
 
-            if (hasChanges) {
-              return {
-                ...node,
-                data: {
-                  ...node.data,
-                  moduleInstance: {
-                    ...moduleInstance,
-                    inputs: updatedInputs,
-                    outputs: updatedOutputs,
+            // Update the module in updatedNodes
+            updatedNodes = updatedNodes.map((node) => {
+              if (node.id === update.moduleId) {
+                return {
+                  ...node,
+                  data: {
+                    ...node.data,
+                    moduleInstance: {
+                      ...moduleInstance,
+                      inputs: updatedInputs,
+                      outputs: updatedOutputs,
+                    },
                   },
-                },
-              };
-            }
-
-            return node;
-          });
+                };
+              }
+              return node;
+            });
+          }
 
           return updatedNodes;
         });
 
-        // Update edge colors to match the new type
-        // Need to update edges connected to the original node AND edges connected to typevar siblings
-        setEdges((eds) => {
-          const edgesToUpdate = new Set<string>();
+        // Update edge colors for all edges in the graph
+        // Use setTimeout to ensure this runs after the node state has updated
+        setTimeout(() => {
+          setEdges((eds) => {
+            // We need to access the updated nodes from the state
+            let latestNodes: typeof nodes = [];
+            setNodes((currentNodes) => {
+              latestNodes = currentNodes;
+              return currentNodes;
+            });
 
-          // Add directly connected edges
-          connectedEdges.forEach((ce) => edgesToUpdate.add(ce.id));
+            return eds.map((edge) => {
+              const sourceNode = latestNodes.find(n => n.id === edge.source);
+              const targetNode = latestNodes.find(n => n.id === edge.target);
 
-          // Find the original node to check for typevar
-          const originalNode = nodes.find(n => n.id === moduleId);
-          if (originalNode?.data?.moduleInstance) {
-            const moduleInstance = originalNode.data.moduleInstance as ModuleInstance;
-            const allPins = [...moduleInstance.inputs, ...moduleInstance.outputs];
-            const changedPin = allPins.find(p => p.node_id === nodeId);
+              if (sourceNode?.data?.moduleInstance && targetNode?.data?.moduleInstance) {
+                const sourceModule = sourceNode.data.moduleInstance as ModuleInstance;
+                const targetModule = targetNode.data.moduleInstance as ModuleInstance;
 
-            if (changedPin?.type_var) {
-              // Find all pins with the same typevar in this module
-              const typeVarPins = allPins.filter(p => p.type_var === changedPin.type_var);
+                const sourcePin = [...sourceModule.inputs, ...sourceModule.outputs].find(
+                  p => p.node_id === edge.sourceHandle
+                );
+                const targetPin = [...targetModule.inputs, ...targetModule.outputs].find(
+                  p => p.node_id === edge.targetHandle
+                );
 
-              // Find edges connected to these pins
-              eds.forEach((edge) => {
-                typeVarPins.forEach((pin) => {
-                  if ((edge.source === moduleId && edge.sourceHandle === pin.node_id) ||
-                      (edge.target === moduleId && edge.targetHandle === pin.node_id)) {
-                    edgesToUpdate.add(edge.id);
+                // If both pins exist and have the same type, update edge color to match
+                if (sourcePin && targetPin && sourcePin.type === targetPin.type) {
+                  const edgeColor = TYPE_COLORS[sourcePin.type] || "#6B7280";
+                  if (edge.style?.stroke !== edgeColor) {
+                    return {
+                      ...edge,
+                      style: { ...edge.style, stroke: edgeColor, strokeWidth: 2 },
+                    };
                   }
-                });
-              });
-            }
-          }
+                }
+              }
 
-          return eds.map((edge) => {
-            if (edgesToUpdate.has(edge.id)) {
-              const edgeColor = TYPE_COLORS[newType] || "#6B7280";
-              return {
-                ...edge,
-                style: { ...edge.style, stroke: edgeColor, strokeWidth: 2 },
-              };
-            }
-            return edge;
+              return edge;
+            });
           });
-        });
+        }, 0);
       }
     } else {
       // Not a type change, just update normally
@@ -630,6 +753,31 @@ function PipelineGraphInner({
       );
     }
   }, [edges, nodes]);
+
+  // Handle config changes
+  const handleConfigChange = useCallback((moduleId: string, configKey: string, value: any) => {
+    setNodes((nds) =>
+      nds.map((node) => {
+        if (node.id === moduleId) {
+          const moduleInstance = node.data.moduleInstance as ModuleInstance;
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              moduleInstance: {
+                ...moduleInstance,
+                config: {
+                  ...moduleInstance.config,
+                  [configKey]: value,
+                },
+              },
+            },
+          };
+        }
+        return node;
+      })
+    );
+  }, []);
 
   // Handle adding a node to a group
   const handleAddNode = useCallback((moduleId: string, direction: "input" | "output", groupLabel: string) => {
@@ -863,12 +1011,13 @@ function PipelineGraphInner({
       onUpdateNode: handleUpdateNode,
       onAddNode: handleAddNode,
       onRemoveNode: handleRemoveNode,
-      connections,
+      onConfigChange: handleConfigChange,
       onTextFocus: () => setIsTextFocused(true),
       onTextBlur: () => setIsTextFocused(false),
       onHandleClick: handleHandleClick,
       pendingConnection,
       getEffectiveAllowedTypes,
+      getConnectedOutputName,
     },
     draggable: !isTextFocused,
   }));
@@ -892,6 +1041,8 @@ function PipelineGraphInner({
         onPaneClick={handlePaneClick}
         panOnDrag={!isTextFocused}
         defaultEdgeOptions={{ style: { strokeWidth: 2 } }}
+        minZoom={0.1}
+        maxZoom={4}
       >
         <Controls />
         <Background variant="dots" gap={20} size={1} />
@@ -949,8 +1100,9 @@ function ConnectionPreviewLine({
   nodes,
 }: ConnectionPreviewLineProps) {
   const { sourceHandleId, nodeType, handleType } = pendingConnection;
+  const viewport = useViewport(); // Get current viewport for zoom/pan
 
-  // Find the handle element to get its position
+  // Find the handle element to get its position (recalculates on viewport change)
   const handleElement = document.querySelector(`[data-handleid="${sourceHandleId}"]`) as HTMLElement;
   if (!handleElement) return null;
 
@@ -973,6 +1125,7 @@ function ConnectionPreviewLine({
 
   return (
     <svg
+      key={`${viewport.x}-${viewport.y}-${viewport.zoom}`} // Force re-render on viewport change
       style={{
         position: 'fixed',
         top: 0,

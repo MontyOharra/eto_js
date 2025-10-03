@@ -57,7 +57,7 @@ async def health_check():
         message="Transformation Pipeline Server is running",
         timestamp=current_time.isoformat(),
         version="1.0.0",
-        server="transformation_pipeline_server_v2",
+        server="transformation_pipeline_server",
         uptime_seconds=round(uptime, 2),
         system=system_info
     )

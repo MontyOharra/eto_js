@@ -16,10 +16,6 @@ class NodeTypeRule(BaseModel):
     allowed_types: Optional[List[Scalar]] = None  # per-pin whitelist; user picks independently
     type_var: Optional[str] = None             # e.g., "T" (unifies across pins)
 
-class NodeSpec(BaseModel):
-    label: str                                 # UI label, e.g., "cond", "value"
-    typing: NodeTypeRule
-
 class NodeGroup(BaseModel):
     min_count: int = 1
     max_count: Optional[int] = 1
@@ -27,23 +23,7 @@ class NodeGroup(BaseModel):
     label: str
 
 class IOSideShape(BaseModel):
-    nodes: List[NodeGroup]                      # exact count, fixed order
-
-class StaticNodes(BaseModel):
-    slots: List[NodeSpec]                        # exact count, fixed order
-
-class DynamicNodeGroup(BaseModel):
-    # user can add/remove pins; each pin conforms to 'item' typing
-    min_count: int = 1
-    max_count: Optional[int] = None
-    item: NodeSpec                               # typing applies per pin instance
-
-class DynamicNodes(BaseModel):
-    groups: List[DynamicNodeGroup] = Field(default_factory=list)
-
-class IOSideShape(BaseModel):
-    static: Optional[StaticNodes] = None
-    dynamic: Optional[DynamicNodes] = None
+    nodes: List[NodeGroup] = []                      # exact count, fixed order
 
 class IOShape(BaseModel):
     inputs: IOSideShape = IOSideShape()
