@@ -2,8 +2,7 @@
 
 from .pipeline import (
     # Supporting types
-    NodePin,
-    NodeGroup,
+    InstanceNodePin,
     ModuleInstance,
     NodeConnection,
     EntryPoint,
@@ -26,8 +25,7 @@ from .module_catalog import (
 
 __all__ = [
     # Pipeline types
-    "NodePin",
-    "NodeGroup",
+    "InstanceNodePin",
     "ModuleInstance",
     "NodeConnection",
     "EntryPoint",
