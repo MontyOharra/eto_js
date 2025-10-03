@@ -1,18 +1,16 @@
 /**
- * New module factory supporting static/dynamic nodes and type variables
- * Replaces the old moduleFactory.ts system
+ * Module factory with unified NodeGroup structure
+ * Creates module instances from templates
  */
 
 import {
   ModuleTemplate,
   NodePin,
+  NodeGroup,
   IOSideShape,
-  DynamicNodeGroup,
-  NodeSpec,
-  NodeTypeRule,
   ModuleInstance,
   TypeVariableState,
-  DynamicGroupInfo
+  GroupInfo
 } from '../types/moduleTypes';
 import { generateUniqueId } from './idGenerator';
 
@@ -56,114 +54,94 @@ export class TypeVariableManager {
   }
 }
 
-// Node generation functions
-function createStaticNode(
-  nodeSpec: NodeSpec,
-  direction: 'in' | 'out',
-  positionIndex: number,
+// Helper to get default type for a NodeGroup
+function getDefaultType(
+  group: NodeGroup,
+  template: ModuleTemplate,
   typeVarManager: TypeVariableManager,
   moduleInstance?: ModuleInstance
-): NodePin {
-  const nodeId = generateUniqueId('N');
-  const defaultType = getDefaultTypeForSpec(nodeSpec, typeVarManager, moduleInstance);
-
-  const node: NodePin = {
-    node_id: nodeId,
-    direction,
-    type: defaultType,
-    name: '', // Start blank, user must fill in
-    label: nodeSpec.label,
-    position_index: positionIndex,
-    is_static: true,
-    type_var: nodeSpec.typing.type_var
-  };
-
-  typeVarManager.registerNode(nodeId, nodeSpec.typing.type_var);
-  return node;
-}
-
-function createDynamicNode(
-  nodeSpec: NodeSpec,
-  direction: 'in' | 'out',
-  positionIndex: number,
-  groupKey: string,
-  instanceIndex: number,
-  typeVarManager: TypeVariableManager,
-  moduleInstance?: ModuleInstance
-): NodePin {
-  const nodeId = generateUniqueId('N');
-  const defaultType = getDefaultTypeForSpec(nodeSpec, typeVarManager, moduleInstance);
-
-  const node: NodePin = {
-    node_id: nodeId,
-    direction,
-    type: defaultType,
-    name: '', // Start blank, user must fill in
-    label: nodeSpec.label,
-    position_index: positionIndex,
-    group_key: groupKey,
-    is_static: false,
-    type_var: nodeSpec.typing.type_var
-  };
-
-  typeVarManager.registerNode(nodeId, nodeSpec.typing.type_var);
-  return node;
-}
-
-function getDefaultTypeForSpec(nodeSpec: NodeSpec, typeVarManager: TypeVariableManager, moduleInstance?: ModuleInstance): string {
+): string {
   // Check if type variable is already assigned
-  if (nodeSpec.typing.type_var) {
-    const existingType = typeVarManager.getTypeVar(nodeSpec.typing.type_var);
+  if (group.typing.type_var) {
+    const existingType = typeVarManager.getTypeVar(group.typing.type_var);
     if (existingType) return existingType;
 
-    // If not found in typeVarManager, check existing nodes in the module for the current TypeVar value
+    // Check existing nodes in the module for the current TypeVar value
     if (moduleInstance) {
       const allNodes = [...moduleInstance.inputs, ...moduleInstance.outputs];
-      const existingTypeVarNode = allNodes.find(node => node.type_var === nodeSpec.typing.type_var);
+      const existingTypeVarNode = allNodes.find(node => node.type_var === group.typing.type_var);
       if (existingTypeVarNode) {
-        // Set the TypeVar in the manager and return the found type
-        typeVarManager.setTypeVar(nodeSpec.typing.type_var, existingTypeVarNode.type);
+        typeVarManager.setTypeVar(group.typing.type_var, existingTypeVarNode.type);
         return existingTypeVarNode.type;
       }
+    }
+
+    // Check type_params for domain
+    const domain = template.meta.io_shape.type_params[group.typing.type_var];
+    if (domain && domain.length > 0) {
+      return domain[0];
     }
   }
 
   // Use first allowed type
-  if (nodeSpec.typing.allowed_types && nodeSpec.typing.allowed_types.length > 0) {
-    return nodeSpec.typing.allowed_types[0];
+  if (group.typing.allowed_types && group.typing.allowed_types.length > 0) {
+    return group.typing.allowed_types[0];
   }
 
   return 'str'; // fallback
 }
 
-// Main module generation
-export function generateInitialNodeGroup(
+// Create a single pin instance
+function createPin(
+  group: NodeGroup,
+  groupIndex: number,
+  positionIndex: number,
+  direction: 'in' | 'out',
+  template: ModuleTemplate,
+  typeVarManager: TypeVariableManager,
+  moduleInstance?: ModuleInstance
+): NodePin {
+  const nodeId = generateUniqueId('N');
+  const defaultType = getDefaultType(group, template, typeVarManager, moduleInstance);
+
+  // Get allowed types for this pin
+  const allowedTypes = group.typing.type_var
+    ? template.meta.io_shape.type_params[group.typing.type_var] || []
+    : group.typing.allowed_types || [];
+
+  const pin: NodePin = {
+    node_id: nodeId,
+    direction,
+    type: defaultType,
+    name: '',
+    label: group.label,
+    position_index: positionIndex,
+    group_index: groupIndex,
+    type_var: group.typing.type_var,
+    allowed_types: allowedTypes
+  };
+
+  typeVarManager.registerNode(nodeId, group.typing.type_var);
+  return pin;
+}
+
+// Generate initial pins for one side (inputs or outputs)
+function generatePinsForSide(
   ioSide: IOSideShape,
   direction: 'in' | 'out',
+  template: ModuleTemplate,
   typeVarManager: TypeVariableManager
-): { static: NodePin[], dynamic: NodePin[] } {
-  const staticNodes: NodePin[] = [];
-  const dynamicNodes: NodePin[] = [];
+): NodePin[] {
+  const pins: NodePin[] = [];
 
-  // Generate static nodes
-  if (ioSide.static) {
-    ioSide.static.slots.forEach((nodeSpec, index) => {
-      staticNodes.push(createStaticNode(nodeSpec, direction, index, typeVarManager));
-    });
-  }
-
-  // Generate minimum dynamic nodes for each group
-  if (ioSide.dynamic) {
-    for (const group of ioSide.dynamic.groups) {
-      const groupKey = group.item.label; // Use label as group identifier
-      for (let i = 0; i < group.min_count; i++) {
-        const positionIndex = i; // Position within this specific group
-        dynamicNodes.push(createDynamicNode(group.item, direction, positionIndex, groupKey, i, typeVarManager));
-      }
+  ioSide.nodes.forEach((group, groupIndex) => {
+    // Create min_count pins for this group
+    for (let i = 0; i < group.min_count; i++) {
+      pins.push(createPin(group, groupIndex, i, direction, template, typeVarManager));
     }
-  }
+  });
 
-  return { static: staticNodes, dynamic: dynamicNodes };
+  return pins;
 }
 
 // Initialize config from schema with defaults
@@ -196,17 +174,14 @@ function getDefaultForType(type: string): any {
   }
 }
 
-// Create module instance with type variable manager
+// Create module instance
 export function createModuleInstance(template: ModuleTemplate, position: { x: number; y: number }) {
   const moduleId = generateUniqueId('M');
   const typeVarManager = new TypeVariableManager();
 
-  // Initialize config from schema defaults
   const config = initializeConfig(template.config_schema);
-
-  // Generate initial NodeGroups
-  const inputs = generateInitialNodeGroup(template.meta.io_shape.inputs, 'in', typeVarManager);
-  const outputs = generateInitialNodeGroup(template.meta.io_shape.outputs, 'out', typeVarManager);
+  const inputs = generatePinsForSide(template.meta.io_shape.inputs, 'in', template, typeVarManager);
+  const outputs = generatePinsForSide(template.meta.io_shape.outputs, 'out', template, typeVarManager);
 
   const moduleInstance: ModuleInstance = {
     module_instance_id: moduleId,
@@ -223,78 +198,155 @@ export function createModuleInstance(template: ModuleTemplate, position: { x: nu
   };
 }
 
-// Node management functions
-export function canAddNodeToGroup(
-  currentNodes: { static: NodePin[], dynamic: NodePin[] } | NodePin[],
-  groupKey: string,
+// Group management functions
+export function canAddPinToGroup(
+  currentPins: NodePin[],
+  groupIndex: number,
   ioSide: IOSideShape
 ): boolean {
-  const group = ioSide.dynamic?.groups.find(g => g.item.label === groupKey);
+  const group = ioSide.nodes[groupIndex];
   if (!group) return false;
 
-  // Handle both NodeGroup structure and array format
-  const allNodes = Array.isArray(currentNodes) ?
-    currentNodes :
-    [...(currentNodes.static || []), ...(currentNodes.dynamic || [])];
-
-  const currentGroupCount = allNodes.filter(n => n.group_key === groupKey).length;
-
-  return group.max_count === undefined || group.max_count === null || currentGroupCount < group.max_count;
+  const currentCount = currentPins.filter(p => p.group_index === groupIndex).length;
+  return group.max_count === undefined || group.max_count === null || currentCount < group.max_count;
 }
 
-export function canRemoveNodeFromGroup(
-  currentNodes: { static: NodePin[], dynamic: NodePin[] } | NodePin[],
-  groupKey: string,
+export function canRemovePinFromGroup(
+  currentPins: NodePin[],
+  groupIndex: number,
   ioSide: IOSideShape
 ): boolean {
-  const group = ioSide.dynamic?.groups.find(g => g.item.label === groupKey);
+  const group = ioSide.nodes[groupIndex];
   if (!group) return false;
 
-  // Handle both NodeGroup structure and array format
-  const allNodes = Array.isArray(currentNodes) ?
-    currentNodes :
-    [...(currentNodes.static || []), ...(currentNodes.dynamic || [])];
-
-  const currentGroupCount = allNodes.filter(n => n.group_key === groupKey).length;
-
-  return currentGroupCount > group.min_count;
+  const currentCount = currentPins.filter(p => p.group_index === groupIndex).length;
+  return currentCount > group.min_count;
 }
 
+export function addPinToGroup(
+  moduleInstance: ModuleInstance,
+  direction: 'input' | 'output',
+  groupIndex: number,
+  template: ModuleTemplate,
+  typeVarManager: TypeVariableManager
+): NodePin | null {
+  const ioSide = direction === 'input'
+    ? template.meta.io_shape.inputs
+    : template.meta.io_shape.outputs;
+
+  const pinsArray = direction === 'input' ? moduleInstance.inputs : moduleInstance.outputs;
+
+  if (!canAddPinToGroup(pinsArray, groupIndex, ioSide)) {
+    return null;
+  }
+
+  const group = ioSide.nodes[groupIndex];
+  if (!group) return null;
+
+  // Find current position index within this group
+  const groupPins = pinsArray.filter(p => p.group_index === groupIndex);
+  const positionIndex = groupPins.length;
+
+  const newPin = createPin(
+    group,
+    groupIndex,
+    positionIndex,
+    direction === 'input' ? 'in' : 'out',
+    template,
+    typeVarManager,
+    moduleInstance
+  );
+
+  pinsArray.push(newPin);
+  return newPin;
+}
+
+export function removePinFromGroup(
+  moduleInstance: ModuleInstance,
+  direction: 'input' | 'output',
+  pinId: string,
+  template: ModuleTemplate,
+  typeVarManager: TypeVariableManager
+): boolean {
+  const ioSide = direction === 'input'
+    ? template.meta.io_shape.inputs
+    : template.meta.io_shape.outputs;
+
+  const pinsArray = direction === 'input' ? moduleInstance.inputs : moduleInstance.outputs;
+  const pinIndex = pinsArray.findIndex(p => p.node_id === pinId);
+
+  if (pinIndex === -1) return false;
+
+  const pin = pinsArray[pinIndex];
+  const group = ioSide.nodes[pin.group_index];
+
+  // Check if min_count === max_count === 1 (static node)
+  if (group.min_count === 1 && group.max_count === 1) {
+    return false; // Can't remove static nodes
+  }
+
+  if (!canRemovePinFromGroup(pinsArray, pin.group_index, ioSide)) {
+    return false;
+  }
+
+  // Remove the pin
+  pinsArray.splice(pinIndex, 1);
+  typeVarManager.unregisterNode(pin.node_id);
+
+  // Re-index position_index for pins in the same group
+  pinsArray
+    .filter(p => p.group_index === pin.group_index)
+    .forEach((p, idx) => {
+      p.position_index = idx;
+    });
+
+  return true;
+}
+
+export function getGroupsInfo(
+  moduleInstance: ModuleInstance,
+  direction: 'input' | 'output',
+  template: ModuleTemplate
+): GroupInfo[] {
+  const ioSide = direction === 'input'
+    ? template.meta.io_shape.inputs
+    : template.meta.io_shape.outputs;
+
+  const pinsArray = direction === 'input' ? moduleInstance.inputs : moduleInstance.outputs;
+
+  return ioSide.nodes.map((group, groupIndex) => {
+    const currentCount = pinsArray.filter(p => p.group_index === groupIndex).length;
+
+    return {
+      groupIndex,
+      group,
+      currentCount,
+      canAdd: canAddPinToGroup(pinsArray, groupIndex, ioSide),
+      canRemove: canRemovePinFromGroup(pinsArray, groupIndex, ioSide)
+    };
+  });
+}
+
+// Type utilities
 export function getAvailableTypesForNode(
   nodePin: NodePin,
   template: ModuleTemplate
 ): string[] {
-  // Define all possible types (Python type names)
   const ALL_TYPES = ['str', 'int', 'float', 'bool', 'datetime'];
 
   if (nodePin.type_var) {
     const domain = template.meta.io_shape.type_params[nodePin.type_var];
     if (!domain || domain.length === 0) {
-      return ALL_TYPES; // Empty domain means all types allowed
+      return ALL_TYPES;
     }
     return domain;
   }
 
-  // Find the node spec
-  const ioSide = nodePin.direction === 'in'
-    ? template.meta.io_shape.inputs
-    : template.meta.io_shape.outputs;
-
-  let nodeSpec: NodeSpec | undefined;
-
-  if (nodePin.is_static && ioSide.static) {
-    nodeSpec = ioSide.static.slots[nodePin.position_index];
-  } else if (!nodePin.is_static && ioSide.dynamic && nodePin.group_key) {
-    const group = ioSide.dynamic.groups.find(g => g.item.label === nodePin.group_key);
-    nodeSpec = group?.item;
-  }
-
-  const allowedTypes = nodeSpec?.typing.allowed_types;
-
-  // Empty array means all types are allowed
+  const allowedTypes = nodePin.allowed_types;
   if (!allowedTypes || allowedTypes.length === 0) {
     return ALL_TYPES;
   }
+
   return allowedTypes;
 }
 
@@ -318,14 +370,11 @@ export function updateNodeTypeWithTypeVars(
 
   if (!targetNode) return [];
 
-  // Update the target node
   targetNode.type = newType;
 
-  // If it has a type variable, update all related nodes
   if (targetNode.type_var) {
     const affectedNodeIds = typeVarManager.setTypeVar(targetNode.type_var, newType);
 
-    // Update all affected nodes
     allNodes.forEach(node => {
       if (node.type_var === targetNode.type_var && node.node_id !== nodeId) {
         node.type = newType;
@@ -336,122 +385,4 @@ export function updateNodeTypeWithTypeVars(
   }
 
   return [];
-}
-
-export function addNodeToGroup(
-  moduleInstance: ModuleInstance,
-  direction: 'input' | 'output',
-  groupKey: string,
-  template: ModuleTemplate,
-  typeVarManager: TypeVariableManager
-): NodePin | null {
-  const ioSide = direction === 'input'
-    ? template.meta.io_shape.inputs
-    : template.meta.io_shape.outputs;
-
-  const nodesArray = direction === 'input' ? moduleInstance.inputs : moduleInstance.outputs;
-
-  if (!canAddNodeToGroup(nodesArray, groupKey, ioSide)) {
-    return null;
-  }
-
-  const group = ioSide.dynamic?.groups.find(g => g.item.label === groupKey);
-  if (!group) return null;
-
-  // Handle NodeGroup structure
-  const allNodes = [...(nodesArray.static || []), ...(nodesArray.dynamic || [])];
-
-  // Find current group instance count
-  const groupNodes = allNodes.filter(n => n.group_key === groupKey);
-  const instanceIndex = groupNodes.length;
-
-  // Find position index within the dynamic group
-  const positionIndex = nodesArray.dynamic ? nodesArray.dynamic.filter(n => n.group_key === groupKey).length : 0;
-
-  const newNode = createDynamicNode(
-    group.item,
-    direction === 'input' ? 'in' : 'out',
-    positionIndex,
-    groupKey,
-    instanceIndex,
-    typeVarManager,
-    moduleInstance
-  );
-
-  // Add to dynamic array
-  if (nodesArray.dynamic) {
-    nodesArray.dynamic.push(newNode);
-  } else {
-    // This shouldn't happen with proper NodeGroup structure, but handle it
-    console.error('Dynamic array not found in NodeGroup structure');
-  }
-  return newNode;
-}
-
-export function removeNodeFromGroup(
-  moduleInstance: ModuleInstance,
-  direction: 'input' | 'output',
-  nodeIndex: number,
-  template: ModuleTemplate,
-  typeVarManager: TypeVariableManager
-): string | null {
-  const ioSide = direction === 'input'
-    ? template.meta.io_shape.inputs
-    : template.meta.io_shape.outputs;
-
-  const nodesArray = direction === 'input' ? moduleInstance.inputs : moduleInstance.outputs;
-
-  if (nodeIndex < 0 || nodeIndex >= nodesArray.length) return null;
-
-  const nodeToRemove = nodesArray[nodeIndex];
-
-  // Can't remove static nodes
-  if (nodeToRemove.is_static) return null;
-
-  // Check if can remove from group
-  if (!nodeToRemove.group_key || !canRemoveNodeFromGroup(nodesArray, nodeToRemove.group_key, ioSide)) {
-    return null;
-  }
-
-  // Remove the node
-  const [removedNode] = nodesArray.splice(nodeIndex, 1);
-
-  // Unregister from type variable manager
-  typeVarManager.unregisterNode(removedNode.node_id);
-
-  // Re-index remaining nodes
-  nodesArray.forEach((node, idx) => {
-    node.position_index = idx;
-  });
-
-  // Don't rename nodes - names are user-editable and should be preserved
-
-  return removedNode.node_id;
-}
-
-export function getDynamicGroupsInfo(
-  moduleInstance: ModuleInstance,
-  direction: 'input' | 'output',
-  template: ModuleTemplate
-): DynamicGroupInfo[] {
-  const ioSide = direction === 'input'
-    ? template.meta.io_shape.inputs
-    : template.meta.io_shape.outputs;
-
-  const nodesArray = direction === 'input' ? moduleInstance.inputs : moduleInstance.outputs;
-
-  if (!ioSide.dynamic) return [];
-
-  return ioSide.dynamic.groups.map((group) => {
-    const groupKey = group.item.label; // Use label as group identifier
-    const currentCount = nodesArray.filter(n => n.group_key === groupKey).length;
-
-    return {
-      groupKey,
-      group,
-      currentCount,
-      canAdd: canAddNodeToGroup(nodesArray, groupKey, ioSide),
-      canRemove: canRemoveNodeFromGroup(nodesArray, groupKey, ioSide)
-    };
-  });
 }
