@@ -49,6 +49,16 @@ function PipelineViewPage() {
         const pipelineData = await pipelineResponse.json();
         const modulesData = await modulesResponse.json();
 
+        // Log loaded pipeline data to console
+        console.log("=== LOADED PIPELINE DATA ===");
+        console.log("Pipeline:", pipelineData);
+        console.log("\n=== PIPELINE STATE ===");
+        console.log("PipelineState:", pipelineData.pipeline_json);
+        console.log("\n=== VISUAL STATE ===");
+        console.log("VisualState:", pipelineData.visual_json);
+        console.log("\n=== MODULE TEMPLATES ===");
+        console.log("Available templates:", modulesData.modules?.length || 0);
+
         setPipeline(pipelineData);
         setModuleTemplates(modulesData.modules || []);
       } catch (err) {
