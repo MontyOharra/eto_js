@@ -2,7 +2,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useRef } from "react";
 import { ModuleSelectorPane } from "../../components/transformation-pipeline/ModuleSelectorPane";
 import { PipelineGraph, PipelineGraphRef } from "../../components/transformation-pipeline/PipelineGraph";
+import { EntryPointModal } from "../../components/transformation-pipeline/EntryPointModal";
 import { ModuleTemplate } from "../../types/moduleTypes";
+import { EntryPoint } from "../../types/pipelineTypes";
 import { serializePipelineData } from "../../utils/pipelineSerializer";
 
 export const Route = createFileRoute("/transformation_pipeline/create")({
@@ -17,6 +19,10 @@ function PipelineCreatePage() {
   const [pipelineDescription, setPipelineDescription] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Entry points state
+  const [showEntryPointModal, setShowEntryPointModal] = useState(true);
+  const [entryPoints, setEntryPoints] = useState<EntryPoint[]>([]);
 
   // Reference to PipelineGraph to extract state
   const pipelineGraphRef = useRef<PipelineGraphRef>(null);
@@ -49,6 +55,22 @@ function PipelineCreatePage() {
 
   const handleModulePlaced = () => {
     setSelectedModuleId(null);
+  };
+
+  const handleEntryPointsConfirm = (points: Array<{ name: string }>) => {
+    // Create entry points with IDs and str type
+    const newEntryPoints: EntryPoint[] = points.map(p => ({
+      node_id: crypto.randomUUID(),
+      name: p.name,
+      type: 'str'
+    }));
+    setEntryPoints(newEntryPoints);
+    setShowEntryPointModal(false);
+  };
+
+  const handleEntryPointsCancel = () => {
+    // Go back to pipeline list
+    window.history.back();
   };
 
   const handleSave = async () => {
@@ -158,7 +180,17 @@ function PipelineCreatePage() {
   }
 
   return (
-    <div className="flex h-screen flex-col bg-gray-900">
+    <>
+      {/* Entry Point Modal */}
+      {showEntryPointModal && (
+        <EntryPointModal
+          onConfirm={handleEntryPointsConfirm}
+          onCancel={handleEntryPointsCancel}
+        />
+      )}
+
+      {/* Main Pipeline Builder */}
+      <div className="flex h-screen flex-col bg-gray-900">
       {/* Header */}
       <div className="bg-gray-800 border-b border-gray-600 px-4 py-3">
         <div className="flex items-center justify-between">
@@ -212,9 +244,11 @@ function PipelineCreatePage() {
             selectedModuleId={selectedModuleId}
             onModulePlaced={handleModulePlaced}
             viewOnly={false}
+            entryPoints={entryPoints}
           />
         </div>
       </div>
     </div>
+    </>
   );
 }

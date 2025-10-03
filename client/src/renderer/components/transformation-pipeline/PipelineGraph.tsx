@@ -19,8 +19,9 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { ModuleTemplate, ModuleInstance, NodePin } from "../../types/moduleTypes";
-import { PipelineState, VisualState, NodeConnection } from "../../types/pipelineTypes";
+import { PipelineState, VisualState, NodeConnection, EntryPoint } from "../../types/pipelineTypes";
 import { ModuleNodeNew } from "./pipeline-graph/ModuleNodeNew";
+import { EntryPointNode } from "./pipeline-graph/EntryPointNode";
 import { initializeConfig } from "../../utils/moduleFactoryNew";
 
 // Type to color mapping (same as ModuleNodeNew)
@@ -46,6 +47,7 @@ interface PipelineGraphProps {
   // Create mode only
   selectedModuleId?: string | null;
   onModulePlaced?: () => void;
+  entryPoints?: EntryPoint[];
 }
 
 // Methods exposed to parent via ref
@@ -57,6 +59,7 @@ export interface PipelineGraphRef {
 // Custom node types
 const nodeTypes = {
   module: ModuleNodeNew,
+  entryPoint: EntryPointNode,
 };
 
 // Helper function to create example module instances
@@ -91,6 +94,7 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(({
   onModulePlaced,
   initialPipelineState,
   initialVisualState,
+  entryPoints = [],
 }, ref) => {
   const { screenToFlowPosition, flowToScreenPosition } = useReactFlow();
   const [nodes, setNodes] = useState<Node[]>([]);
@@ -115,7 +119,14 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(({
     getPipelineState: (): PipelineState => {
       // Extract module instances from nodes
       const modules: ModuleInstance[] = nodes
+        .filter(node => node.type === 'module')
         .map(node => node.data.moduleInstance as ModuleInstance)
+        .filter(Boolean);
+
+      // Extract entry points from entry point nodes
+      const entry_points: EntryPoint[] = nodes
+        .filter(node => node.type === 'entryPoint')
+        .map(node => node.data.entryPoint as EntryPoint)
         .filter(Boolean);
 
       // Extract connections from edges
@@ -123,9 +134,6 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(({
         from_node_id: edge.sourceHandle!,
         to_node_id: edge.targetHandle!
       }));
-
-      // Entry points (not implemented yet, will add later)
-      const entry_points = [];
 
       return {
         entry_points,
@@ -137,15 +145,23 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(({
     getVisualState: (): VisualState => {
       // Extract module positions
       const modules: Record<string, { x: number; y: number }> = {};
-      nodes.forEach(node => {
-        modules[node.id] = {
-          x: node.position.x,
-          y: node.position.y
-        };
-      });
+      const entryPoints: Record<string, { x: number; y: number }> = {};
 
-      // Entry points (not implemented yet, will add later)
-      const entryPoints = {};
+      nodes.forEach(node => {
+        if (node.type === 'module') {
+          modules[node.id] = {
+            x: node.position.x,
+            y: node.position.y
+          };
+        } else if (node.type === 'entryPoint') {
+          // Store entry point positions using their node_id
+          const entryPoint = node.data.entryPoint as EntryPoint;
+          entryPoints[entryPoint.node_id] = {
+            x: node.position.x,
+            y: node.position.y
+          };
+        }
+      });
 
       return {
         modules,
@@ -270,6 +286,23 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(({
     setNodes(reconstructedNodes);
     setEdges(reconstructedEdges);
   }, [initialPipelineState, initialVisualState, moduleTemplates]);
+
+  // Create entry point nodes when entry points are provided (create mode)
+  useEffect(() => {
+    if (entryPoints.length === 0 || initialPipelineState) return; // Skip if no entry points or in view mode
+
+    const entryPointNodes: Node[] = entryPoints.map((ep, index) => ({
+      id: `entry-${ep.node_id}`,
+      type: 'entryPoint',
+      position: { x: 50, y: 50 + index * 120 }, // Stack vertically on left
+      data: {
+        entryPoint: ep,
+        onHandleClick: handleHandleClick,
+      },
+    }));
+
+    setNodes(entryPointNodes);
+  }, [entryPoints, initialPipelineState]);
 
   // Helper function to get connected output name for an input pin
   const getConnectedOutputName = useCallback((moduleId: string, inputPinId: string): string | undefined => {
