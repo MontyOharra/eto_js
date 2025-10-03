@@ -57,6 +57,7 @@ export interface NodePin {
   group_key?: string;        // for dynamic nodes - which group they belong to
   is_static: boolean;        // whether this is a static or dynamic node
   type_var?: string;         // type variable name if applicable
+  allowed_types?: string[];  // allowed types for this node (from template)
 }
 
 // Module instance structure

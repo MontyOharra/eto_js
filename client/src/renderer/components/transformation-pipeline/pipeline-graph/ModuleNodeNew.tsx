@@ -13,6 +13,13 @@ interface ModuleNodeNewProps {
     connections?: Array<{ from_node_id: string; to_node_id: string }>;
     onTextFocus?: () => void;
     onTextBlur?: () => void;
+    onHandleClick?: (nodeId: string, handleId: string, handleType: 'source' | 'target') => void;
+    pendingConnection?: {
+      sourceHandleId: string;
+      sourceNodeId: string;
+      handleType: 'source' | 'target';
+    } | null;
+    getEffectiveAllowedTypes?: (moduleId: string, pinId: string, baseAllowedTypes: string[]) => string[];
   };
 }
 
@@ -51,7 +58,7 @@ function groupNodesByLabel(nodes: NodePin[]): Map<string, NodePin[]> {
 }
 
 export function ModuleNodeNew({ data }: ModuleNodeNewProps) {
-  const { moduleInstance, template, onDeleteModule, onUpdateNode, onAddNode, onRemoveNode, connections, onTextFocus, onTextBlur } = data;
+  const { moduleInstance, template, onDeleteModule, onUpdateNode, onAddNode, onRemoveNode, connections, onTextFocus, onTextBlur, onHandleClick, pendingConnection, getEffectiveAllowedTypes } = data;
   const [isConfigExpanded, setIsConfigExpanded] = useState(false);
   const [highlightedTypeVar, setHighlightedTypeVar] = useState<string | null>(null);
 
@@ -72,9 +79,25 @@ export function ModuleNodeNew({ data }: ModuleNodeNewProps) {
   }, [connections, moduleInstance.outputs]);
 
   const handleTypeChange = (nodeId: string, newType: string) => {
-    if (onUpdateNode) {
+    if (!onUpdateNode) return;
+
+    // Find the node being changed to get its typevar
+    const allNodes = [...moduleInstance.inputs, ...moduleInstance.outputs];
+    const changedNode = allNodes.find(n => n.node_id === nodeId);
+
+    if (!changedNode || !changedNode.type_var) {
+      // No typevar, just update this node
       onUpdateNode(moduleInstance.module_instance_id, nodeId, { type: newType });
+      return;
     }
+
+    // Update all nodes with the same typevar
+    const typeVar = changedNode.type_var;
+    allNodes.forEach(node => {
+      if (node.type_var === typeVar) {
+        onUpdateNode(moduleInstance.module_instance_id, node.node_id, { type: newType });
+      }
+    });
   };
 
   const handleNameChange = (nodeId: string, newName: string) => {
@@ -93,7 +116,7 @@ export function ModuleNodeNew({ data }: ModuleNodeNewProps) {
   const textColor = getTextColor(headerColor);
 
   return (
-    <div className="bg-gray-800 rounded-lg border-2 border-gray-600 min-w-[100px] w-min">
+    <div className="bg-gray-800 rounded-lg border-2 border-gray-600 min-w-[400px] w-min">
       {/* Header */}
       <div
         className="px-3 py-2 rounded-t-lg border-b border-gray-600 flex items-center justify-between"
@@ -150,6 +173,9 @@ export function ModuleNodeNew({ data }: ModuleNodeNewProps) {
               onTypeVarFocus={setHighlightedTypeVar}
               onTextFocus={onTextFocus}
               onTextBlur={onTextBlur}
+              onHandleClick={onHandleClick}
+              pendingConnection={pendingConnection}
+              getEffectiveAllowedTypes={getEffectiveAllowedTypes}
             />
           ))}
         </div>
@@ -172,6 +198,9 @@ export function ModuleNodeNew({ data }: ModuleNodeNewProps) {
               onTypeVarFocus={setHighlightedTypeVar}
               onTextFocus={onTextFocus}
               onTextBlur={onTextBlur}
+              onHandleClick={onHandleClick}
+              pendingConnection={pendingConnection}
+              getEffectiveAllowedTypes={getEffectiveAllowedTypes}
             />
           ))}
         </div>
@@ -232,6 +261,13 @@ interface NodeGroupSectionProps {
   onTypeVarFocus: (typeVar: string | null) => void;
   onTextFocus?: () => void;
   onTextBlur?: () => void;
+  onHandleClick?: (nodeId: string, handleId: string, handleType: 'source' | 'target') => void;
+  pendingConnection?: {
+    sourceHandleId: string;
+    sourceNodeId: string;
+    handleType: 'source' | 'target';
+  } | null;
+  getEffectiveAllowedTypes?: (moduleId: string, pinId: string, baseAllowedTypes: string[]) => string[];
 }
 
 function NodeGroupSection({
@@ -249,6 +285,9 @@ function NodeGroupSection({
   onTypeVarFocus,
   onTextFocus,
   onTextBlur,
+  onHandleClick,
+  pendingConnection,
+  getEffectiveAllowedTypes,
 }: NodeGroupSectionProps) {
   // Determine if these are static or dynamic nodes and get constraints
   const isStatic = nodes.length > 0 ? nodes[0].is_static : true;
@@ -292,12 +331,13 @@ function NodeGroupSection({
       </div>
 
       {/* Node Rows */}
-      <div className="space-y-2">
+      <div className="space-y-1">
         {nodes.map((node) => (
           <NodeRow
             key={node.node_id}
             node={node}
             direction={direction}
+            moduleId={moduleId}
             canRemove={canRemove}
             onTypeChange={onTypeChange}
             onNameChange={onNameChange}
@@ -307,6 +347,9 @@ function NodeGroupSection({
             onTypeVarFocus={onTypeVarFocus}
             onTextFocus={onTextFocus}
             onTextBlur={onTextBlur}
+            onHandleClick={onHandleClick}
+            pendingConnection={pendingConnection}
+            getEffectiveAllowedTypes={getEffectiveAllowedTypes}
           />
         ))}
 
@@ -345,6 +388,7 @@ function NodeGroupSection({
 interface NodeRowProps {
   node: NodePin;
   direction: "input" | "output";
+  moduleId: string;
   canRemove: boolean;
   onTypeChange: (nodeId: string, newType: string) => void;
   onNameChange: (nodeId: string, newName: string) => void;
@@ -354,11 +398,19 @@ interface NodeRowProps {
   onTypeVarFocus: (typeVar: string | null) => void;
   onTextFocus?: () => void;
   onTextBlur?: () => void;
+  onHandleClick?: (nodeId: string, handleId: string, handleType: 'source' | 'target') => void;
+  pendingConnection?: {
+    sourceHandleId: string;
+    sourceNodeId: string;
+    handleType: 'source' | 'target';
+  } | null;
+  getEffectiveAllowedTypes?: (moduleId: string, pinId: string, baseAllowedTypes: string[]) => string[];
 }
 
 function NodeRow({
   node,
   direction,
+  moduleId,
   canRemove,
   onTypeChange,
   onNameChange,
@@ -368,9 +420,24 @@ function NodeRow({
   onTypeVarFocus,
   onTextFocus,
   onTextBlur,
+  onHandleClick,
+  pendingConnection,
+  getEffectiveAllowedTypes,
 }: NodeRowProps) {
   const isHighlighted = node.type_var && node.type_var === highlightedTypeVar;
   const handleColor = TYPE_COLORS[node.type] || "#6B7280";
+
+  // Check if this handle is the source of the pending connection
+  const isPendingSource = pendingConnection?.sourceHandleId === node.node_id;
+
+  // Handle click
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onHandleClick) {
+      const handleType = direction === "input" ? "target" : "source";
+      onHandleClick(moduleId, node.node_id, handleType);
+    }
+  };
 
   // For input nodes, display connected output name or "Not Connected"
   const displayName =
@@ -391,33 +458,35 @@ function NodeRow({
           backgroundColor: handleColor,
         }}
         data-handleid={node.node_id}
+        onClick={handleClick}
       />
 
       {/* Node Content - Mirrored layout based on direction */}
       {direction === "input" ? (
         // Input layout: [handle] name - type - delete
-        <>
-          <div className="w-1/2 pl-2 pr-2 flex items-center">
-            <div className="text-xs text-gray-300 px-2 py-1 bg-gray-700 rounded border border-gray-600 break-words w-full min-h-[28px] flex items-center">
-              {displayName}
+        <div className="flex items-center w-full gap-2">
+          <div className="flex-[2] min-w-0">
+            <div className="text-[10px] text-gray-300 px-1.5 py-0.5 bg-gray-700 rounded border border-gray-600 w-full min-h-[24px] flex items-center overflow-hidden">
+              <span className="truncate">{displayName}</span>
             </div>
           </div>
-          <div className="flex items-center gap-2 flex-1 min-h-[28px] pl-1">
-            <div className="w-20 flex items-center">
-              <TypeIndicator
-                node={node}
-                onTypeChange={onTypeChange}
-                onFocus={() => onTypeVarFocus(node.type_var || null)}
-                onBlur={() => onTypeVarFocus(null)}
-                isHighlighted={isHighlighted}
-              />
-            </div>
+          <div className="flex-shrink-0 w-12 flex items-center">
+            <TypeIndicator
+              node={node}
+              onTypeChange={onTypeChange}
+              onFocus={() => onTypeVarFocus(node.type_var || null)}
+              onBlur={() => onTypeVarFocus(null)}
+              isHighlighted={isHighlighted}
+              effectiveAllowedTypes={getEffectiveAllowedTypes?.(moduleId, node.node_id, node.allowed_types || [])}
+            />
+          </div>
+          <div className="flex-shrink-0">
             <button
               onClick={canRemove && onRemove ? onRemove : undefined}
-              className={`p-1 rounded transition-colors flex-shrink-0 mr-1 ${
+              className={`p-0.5 rounded transition-colors ${
                 canRemove && onRemove
                   ? "text-gray-500 hover:text-red-400 hover:bg-red-900 cursor-pointer"
-                  : "text-transparent cursor-default"
+                  : "invisible cursor-default"
               }`}
               title={canRemove ? "Remove node" : ""}
               disabled={!canRemove || !onRemove}
@@ -427,17 +496,17 @@ function NodeRow({
               </svg>
             </button>
           </div>
-        </>
+        </div>
       ) : (
         // Output layout: delete - type - name [handle]
-        <>
-          <div className="flex items-center gap-2 flex-1 min-h-[28px] pr-1">
+        <div className="flex items-center w-full gap-2">
+          <div className="flex-shrink-0">
             <button
               onClick={canRemove && onRemove ? onRemove : undefined}
-              className={`p-1 rounded transition-colors flex-shrink-0 ml-1 ${
+              className={`p-0.5 rounded transition-colors ${
                 canRemove && onRemove
                   ? "text-gray-500 hover:text-red-400 hover:bg-red-900 cursor-pointer"
-                  : "text-transparent cursor-default"
+                  : "invisible cursor-default"
               }`}
               title={canRemove ? "Remove node" : ""}
               disabled={!canRemove || !onRemove}
@@ -446,24 +515,25 @@ function NodeRow({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
-            <div className="w-20 flex items-center">
-              <TypeIndicator
-                node={node}
-                onTypeChange={onTypeChange}
-                onFocus={() => onTypeVarFocus(node.type_var || null)}
-                onBlur={() => onTypeVarFocus(null)}
-                isHighlighted={isHighlighted}
-              />
-            </div>
           </div>
-          <div className="w-1/2 pr-2 pl-2 flex items-center">
+          <div className="flex-shrink-0 w-12 flex items-center">
+            <TypeIndicator
+              node={node}
+              onTypeChange={onTypeChange}
+              onFocus={() => onTypeVarFocus(node.type_var || null)}
+              onBlur={() => onTypeVarFocus(null)}
+              isHighlighted={isHighlighted}
+              effectiveAllowedTypes={getEffectiveAllowedTypes?.(moduleId, node.node_id, node.allowed_types || [])}
+            />
+          </div>
+          <div className="flex-[2] min-w-0 nodrag flex items-center">
             <textarea
               value={node.name}
               onChange={(e) => onNameChange(node.node_id, e.target.value)}
               onFocus={onTextFocus}
               onBlur={onTextBlur}
               placeholder="Node name"
-              className="w-full text-xs bg-gray-700 text-gray-200 px-2 py-1 rounded border border-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none overflow-hidden min-h-[28px]"
+              className="w-full text-[10px] bg-gray-700 text-gray-200 px-1.5 py-0.5 rounded border border-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none overflow-hidden min-h-[24px] nodrag"
               rows={1}
               onInput={(e) => {
                 const target = e.target as HTMLTextAreaElement;
@@ -472,7 +542,7 @@ function NodeRow({
               }}
             />
           </div>
-        </>
+        </div>
       )}
     </div>
   );
@@ -485,12 +555,15 @@ interface TypeIndicatorProps {
   onFocus: () => void;
   onBlur: () => void;
   isHighlighted: boolean;
+  effectiveAllowedTypes?: string[]; // Types that are actually available based on connections
 }
 
-function TypeIndicator({ node, onTypeChange, onFocus, onBlur, isHighlighted }: TypeIndicatorProps) {
-  // TODO: Get available types from template
-  const availableTypes = ["str", "int", "float", "bool", "datetime"];
-  const handleColor = TYPE_COLORS[node.type] || "#6B7280";
+function TypeIndicator({ node, onTypeChange, onFocus, onBlur, isHighlighted, effectiveAllowedTypes }: TypeIndicatorProps) {
+  // Get available types from node's allowed_types, or all types if not specified
+  const availableTypes = node.allowed_types || ["str", "int", "float", "bool", "datetime"];
+
+  // Use effective types if provided (for showing disabled options), otherwise use available types
+  const effectiveTypes = effectiveAllowedTypes || availableTypes;
 
   const highlightStyle = isHighlighted
     ? {
@@ -499,13 +572,11 @@ function TypeIndicator({ node, onTypeChange, onFocus, onBlur, isHighlighted }: T
     : {};
 
   if (availableTypes.length === 1) {
-    // Static display
+    // Static display - same size as dropdown
     return (
       <div
-        className="text-[10px] px-1 py-0.5 rounded border"
+        className="w-full text-[9px] px-0.5 py-0.5 rounded border border-gray-600 min-h-[24px] flex items-center justify-center"
         style={{
-          borderLeftColor: handleColor,
-          borderLeftWidth: "3px",
           backgroundColor: "#374151",
           color: "#D1D5DB",
           ...highlightStyle,
@@ -516,25 +587,24 @@ function TypeIndicator({ node, onTypeChange, onFocus, onBlur, isHighlighted }: T
     );
   }
 
-  // Dropdown
+  // Dropdown with disabled options for types not in effectiveTypes
   return (
     <select
       value={node.type}
       onChange={(e) => onTypeChange(node.node_id, e.target.value)}
       onFocus={onFocus}
       onBlur={onBlur}
-      className="w-full text-[10px] bg-gray-700 text-gray-300 px-1 rounded border border-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500 min-h-[28px]"
-      style={{
-        borderLeftColor: handleColor,
-        borderLeftWidth: "3px",
-        ...highlightStyle,
-      }}
+      className="w-full text-[9px] bg-gray-700 text-gray-300 px-0.5 py-0.5 rounded border border-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500 min-h-[24px]"
+      style={highlightStyle}
     >
-      {availableTypes.map((type) => (
-        <option key={type} value={type}>
-          {type}
-        </option>
-      ))}
+      {availableTypes.map((type) => {
+        const isDisabled = !effectiveTypes.includes(type);
+        return (
+          <option key={type} value={type} disabled={isDisabled} className={isDisabled ? "text-gray-500" : ""}>
+            {type}
+          </option>
+        );
+      })}
     </select>
   );
 }
