@@ -107,6 +107,9 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(({
   } | null>(null);
   const [mousePosition, setMousePosition] = useState<{ x: number; y: number } | null>(null);
 
+  // Track selected edge
+  const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
+
   // Expose methods to parent component via ref
   useImperativeHandle(ref, () => ({
     getPipelineState: (): PipelineState => {
@@ -784,13 +787,29 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(({
     }
   }, [viewOnly, pendingConnection, nodes, getTypeIntersection]);
 
-  // Handle click on the pane (background) to cancel pending connection
+  // Handle edge click (select edge)
+  const handleEdgeClick = useCallback((_event: React.MouseEvent, edge: Edge) => {
+    if (viewOnly) return;
+    setSelectedEdge(edge.id);
+  }, [viewOnly]);
+
+  // Handle edge deletion
+  const handleDeleteEdge = useCallback(() => {
+    if (!selectedEdge) return;
+    setEdges((eds) => eds.filter((e) => e.id !== selectedEdge));
+    setSelectedEdge(null);
+  }, [selectedEdge]);
+
+  // Handle click on the pane (background) to cancel pending connection or deselect edge
   const handlePaneClick = useCallback(() => {
     if (pendingConnection) {
       setPendingConnection(null);
       setMousePosition(null);
     }
-  }, [pendingConnection]);
+    if (selectedEdge) {
+      setSelectedEdge(null);
+    }
+  }, [pendingConnection, selectedEdge]);
 
   // Track mouse movement for preview line
   useEffect(() => {
@@ -1366,6 +1385,21 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(({
     draggable: !isTextFocused,
   }));
 
+  // Update edges to show selection styling
+  const edgesWithSelection = edges.map((edge) => {
+    if (edge.id === selectedEdge) {
+      return {
+        ...edge,
+        style: {
+          ...edge.style,
+          strokeDasharray: '5,5',
+          filter: 'drop-shadow(0 0 8px rgba(59, 130, 246, 0.6))',
+        },
+      };
+    }
+    return edge;
+  });
+
   return (
     <div
       className="w-full h-full bg-gray-900"
@@ -1375,9 +1409,10 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(({
     >
       <ReactFlow
         nodes={nodesWithCallbacks}
-        edges={edges}
+        edges={edgesWithSelection}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onEdgeClick={handleEdgeClick}
         nodeTypes={nodeTypes}
         nodesDraggable={!viewOnly && !isTextFocused}
         nodesConnectable={false}
@@ -1419,6 +1454,53 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(({
             }}
           >
             Click another handle to connect, or press Escape to cancel
+          </div>
+        )}
+
+        {/* Edge deletion modal */}
+        {selectedEdge && (
+          <div
+            style={{
+              position: 'absolute',
+              bottom: 20,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              backgroundColor: '#1F2937',
+              border: '1px solid #374151',
+              padding: '12px 20px',
+              borderRadius: '8px',
+              zIndex: 1000,
+              boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '16px',
+            }}
+          >
+            <span style={{ color: '#D1D5DB', fontSize: '14px' }}>
+              Connection selected
+            </span>
+            <button
+              onClick={handleDeleteEdge}
+              style={{
+                backgroundColor: '#EF4444',
+                color: 'white',
+                padding: '6px 16px',
+                borderRadius: '6px',
+                fontSize: '14px',
+                fontWeight: 500,
+                border: 'none',
+                cursor: 'pointer',
+                transition: 'background-color 0.2s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#DC2626';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = '#EF4444';
+              }}
+            >
+              Delete Connection
+            </button>
           </div>
         )}
       </ReactFlow>
