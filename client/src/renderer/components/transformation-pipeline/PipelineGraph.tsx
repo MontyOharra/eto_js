@@ -177,8 +177,70 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(({
 
     console.log("Reconstructing pipeline from initial state...");
 
+    // Build entry point nodes
+    const entryPointNodes: Node[] = (initialPipelineState.entry_points || []).map((ep) => {
+      const position = initialVisualState.entryPoints?.[ep.node_id] || { x: 50, y: 50 };
+
+      // Create fake module instance for visual rendering
+      const fakeModuleInstance: ModuleInstance = {
+        module_instance_id: `entry-${ep.node_id}`,
+        module_ref: 'entry_point:1.0.0',
+        module_kind: 'transform',
+        config: {},
+        inputs: [],
+        outputs: [{
+          node_id: ep.node_id,
+          direction: 'out',
+          type: ep.type,
+          name: ep.name,
+          label: ep.name,
+          position_index: 0,
+          group_index: 0,
+          allowed_types: ['str'],
+        }],
+      };
+
+      // Create fake template for entry point
+      const fakeTemplate: ModuleTemplate = {
+        id: 'entry_point',
+        version: '1.0.0',
+        kind: 'transform',
+        display_name: 'Entry Point',
+        description: 'Pipeline entry point',
+        config_schema: {},
+        meta: {
+          io_shape: {
+            inputs: { nodes: [] },
+            outputs: {
+              nodes: [{
+                label: ep.name,
+                min_count: 1,
+                max_count: 1,
+                typing: {
+                  allowed_types: ['str'],
+                },
+              }],
+            },
+            type_params: {},
+          },
+        },
+      };
+
+      return {
+        id: `entry-${ep.node_id}`,
+        type: 'module',
+        position: { x: position.x, y: position.y },
+        data: {
+          moduleInstance: fakeModuleInstance,
+          template: fakeTemplate,
+          isEntryPoint: true,
+          entryPoint: ep,
+        },
+      };
+    });
+
     // Build nodes from module instances
-    const reconstructedNodes: Node[] = initialPipelineState.modules.map((moduleInstance) => {
+    const moduleNodes: Node[] = initialPipelineState.modules.map((moduleInstance) => {
       // Find the template for this module
       const [templateId, version] = moduleInstance.module_ref.split(":");
       const template = moduleTemplates.find(t => t.id === templateId && t.version === version);
@@ -241,6 +303,9 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(({
       };
     }).filter(Boolean) as Node[];
 
+    // Combine entry point nodes and module nodes
+    const reconstructedNodes = [...entryPointNodes, ...moduleNodes];
+
     // Build edges from connections
     const reconstructedEdges: Edge[] = initialPipelineState.connections.map((connection, index) => {
       // Find the nodes to get their types for edge color
@@ -283,7 +348,7 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(({
       };
     });
 
-    console.log(`Reconstructed ${reconstructedNodes.length} nodes and ${reconstructedEdges.length} edges`);
+    console.log(`Reconstructed ${entryPointNodes.length} entry points, ${moduleNodes.length} modules (${reconstructedNodes.length} total nodes), and ${reconstructedEdges.length} edges`);
     setNodes(reconstructedNodes);
     setEdges(reconstructedEdges);
   }, [initialPipelineState, initialVisualState, moduleTemplates]);
