@@ -57,6 +57,12 @@ function PipelineCreatePage() {
       return;
     }
 
+    // Validate pipeline name
+    if (!pipelineName || pipelineName.trim() === "") {
+      alert("Please provide a pipeline name");
+      return;
+    }
+
     // Extract current state from graph
     const pipelineState = pipelineGraphRef.current.getPipelineState();
     const visualState = pipelineGraphRef.current.getVisualState();
@@ -77,12 +83,29 @@ function PipelineCreatePage() {
     console.log("\n=== BACKEND SERIALIZED DATA ===");
     console.log("Backend format:", JSON.stringify(backendData, null, 2));
 
-    // TODO: Send to backend API
-    // const response = await fetch("http://localhost:8090/api/pipelines", {
-    //   method: "POST",
-    //   headers: { "Content-Type": "application/json" },
-    //   body: JSON.stringify(backendData)
-    // });
+    try {
+      // Send to backend API
+      const response = await fetch("http://localhost:8090/api/pipelines", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(backendData)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: "Unknown error" }));
+        throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const savedPipeline = await response.json();
+      console.log("Pipeline saved successfully:", savedPipeline);
+
+      // Show success message and redirect
+      alert(`Pipeline "${pipelineName}" saved successfully!`);
+      window.history.back();
+    } catch (err) {
+      console.error("Failed to save pipeline:", err);
+      alert(`Failed to save pipeline: ${err instanceof Error ? err.message : "Unknown error"}`);
+    }
   };
 
   const handleCancel = () => {
