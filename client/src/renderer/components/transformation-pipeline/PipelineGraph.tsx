@@ -515,9 +515,9 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(({
         targetType = typeIntersection[0];
       }
 
-      // Update both nodes to the target type AND cascade through typevars
-      setNodes((nds) =>
-        nds.map((node) => {
+      // Update both nodes to the target type AND cascade through typevars and connections
+      setNodes((nds) => {
+        let updatedNodes = nds.map((node) => {
           if (node.id === sourceNodeId) {
             const moduleInstance = node.data.moduleInstance as ModuleInstance;
             let updatedInputs = [...moduleInstance.inputs];
@@ -592,8 +592,137 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(({
             };
           }
           return node;
-        })
-      );
+        });
+
+        // Queue-based cascading through existing connections
+        const queue: Array<{ moduleId: string; pinId: string; newType: string }> = [];
+        const processed = new Set<string>();
+
+        // Initialize queue with all pins that were updated in the two modules
+        const sourceNode = updatedNodes.find(n => n.id === sourceNodeId);
+        const targetNode = updatedNodes.find(n => n.id === nodeId);
+
+        if (sourceNode?.data?.moduleInstance) {
+          const moduleInstance = sourceNode.data.moduleInstance as ModuleInstance;
+          [...moduleInstance.inputs, ...moduleInstance.outputs].forEach(pin => {
+            if (pin.type === targetType) {
+              // Find existing connections for this pin
+              edges.forEach(edge => {
+                if ((edge.source === sourceNodeId && edge.sourceHandle === pin.node_id) ||
+                    (edge.target === sourceNodeId && edge.targetHandle === pin.node_id)) {
+                  const isSource = edge.source === sourceNodeId && edge.sourceHandle === pin.node_id;
+                  const connectedModuleId = isSource ? edge.target : edge.source;
+                  const connectedPinId = isSource ? edge.targetHandle : edge.sourceHandle;
+
+                  queue.push({ moduleId: connectedModuleId, pinId: connectedPinId, newType: targetType });
+                }
+              });
+            }
+          });
+        }
+
+        if (targetNode?.data?.moduleInstance) {
+          const moduleInstance = targetNode.data.moduleInstance as ModuleInstance;
+          [...moduleInstance.inputs, ...moduleInstance.outputs].forEach(pin => {
+            if (pin.type === targetType) {
+              // Find existing connections for this pin
+              edges.forEach(edge => {
+                if ((edge.source === nodeId && edge.sourceHandle === pin.node_id) ||
+                    (edge.target === nodeId && edge.targetHandle === pin.node_id)) {
+                  const isSource = edge.source === nodeId && edge.sourceHandle === pin.node_id;
+                  const connectedModuleId = isSource ? edge.target : edge.source;
+                  const connectedPinId = isSource ? edge.targetHandle : edge.sourceHandle;
+
+                  queue.push({ moduleId: connectedModuleId, pinId: connectedPinId, newType: targetType });
+                }
+              });
+            }
+          });
+        }
+
+        // Process queue
+        while (queue.length > 0) {
+          const update = queue.shift()!;
+          const key = `${update.moduleId}:${update.pinId}`;
+
+          if (processed.has(key)) continue;
+          processed.add(key);
+
+          const moduleNode = updatedNodes.find(n => n.id === update.moduleId);
+          if (!moduleNode?.data?.moduleInstance) continue;
+
+          const moduleInstance = moduleNode.data.moduleInstance as ModuleInstance;
+          let updatedInputs = [...moduleInstance.inputs];
+          let updatedOutputs = [...moduleInstance.outputs];
+
+          const allPins = [...updatedInputs, ...updatedOutputs];
+          const targetPin = allPins.find(p => p.node_id === update.pinId);
+
+          if (!targetPin) continue;
+
+          // Check if new type is allowed
+          const allowedTypes = targetPin.allowed_types || [];
+          if (allowedTypes.length > 0 && !allowedTypes.includes(update.newType)) {
+            continue;
+          }
+
+          // Update the pin
+          updatedInputs = updatedInputs.map((input) =>
+            input.node_id === update.pinId ? { ...input, type: update.newType } : input
+          );
+          updatedOutputs = updatedOutputs.map((output) =>
+            output.node_id === update.pinId ? { ...output, type: update.newType } : output
+          );
+
+          // Cascade to typevar siblings
+          if (targetPin.type_var) {
+            const typeVar = targetPin.type_var;
+            updatedInputs = updatedInputs.map((input) =>
+              input.type_var === typeVar ? { ...input, type: update.newType } : input
+            );
+            updatedOutputs = updatedOutputs.map((output) =>
+              output.type_var === typeVar ? { ...output, type: update.newType } : output
+            );
+          }
+
+          // Update node
+          updatedNodes = updatedNodes.map((n) => {
+            if (n.id === update.moduleId) {
+              return {
+                ...n,
+                data: {
+                  ...n.data,
+                  moduleInstance: {
+                    ...moduleInstance,
+                    inputs: updatedInputs,
+                    outputs: updatedOutputs,
+                  },
+                },
+              };
+            }
+            return n;
+          });
+
+          // Add connected pins to queue
+          edges.forEach(edge => {
+            const allUpdatedPins = [...updatedInputs, ...updatedOutputs];
+            allUpdatedPins.forEach(pin => {
+              if (pin.type === update.newType) {
+                if ((edge.source === update.moduleId && edge.sourceHandle === pin.node_id) ||
+                    (edge.target === update.moduleId && edge.targetHandle === pin.node_id)) {
+                  const isSource = edge.source === update.moduleId && edge.sourceHandle === pin.node_id;
+                  const connectedModuleId = isSource ? edge.target : edge.source;
+                  const connectedPinId = isSource ? edge.targetHandle : edge.sourceHandle;
+
+                  queue.push({ moduleId: connectedModuleId, pinId: connectedPinId, newType: update.newType });
+                }
+              }
+            });
+          });
+        }
+
+        return updatedNodes;
+      });
 
       // Create the connection
       const connection: Connection = sourceHandleType === 'source'
@@ -603,6 +732,51 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(({
       // Use the target type for edge color
       const edgeColor = TYPE_COLORS[targetType] || "#6B7280";
       setEdges((eds) => addEdge({ ...connection, style: { stroke: edgeColor, strokeWidth: 2 } }, eds));
+
+      // Update edge colors for ALL edges in the graph after type propagation
+      setTimeout(() => {
+        setEdges((eds) => {
+          // Access updated nodes
+          let latestNodes: typeof nodes = [];
+          setNodes((currentNodes) => {
+            latestNodes = currentNodes;
+            return currentNodes;
+          });
+
+          return eds.map((edge) => {
+            const sourceNode = latestNodes.find(n => n.id === edge.source);
+            const targetNode = latestNodes.find(n => n.id === edge.target);
+
+            if (sourceNode?.data?.moduleInstance && targetNode?.data?.moduleInstance) {
+              const sourceModule = sourceNode.data.moduleInstance as ModuleInstance;
+              const targetModule = targetNode.data.moduleInstance as ModuleInstance;
+
+              const sourcePin = [...sourceModule.inputs, ...sourceModule.outputs].find(
+                p => p.node_id === edge.sourceHandle
+              );
+              const targetPin = [...targetModule.inputs, ...targetModule.outputs].find(
+                p => p.node_id === edge.targetHandle
+              );
+
+              // Update edge color based on whether types match
+              if (sourcePin && targetPin) {
+                const updatedEdgeColor = sourcePin.type === targetPin.type
+                  ? (TYPE_COLORS[sourcePin.type] || "#6B7280")
+                  : "#6B7280"; // Gray for mismatched types
+
+                if (edge.style?.stroke !== updatedEdgeColor) {
+                  return {
+                    ...edge,
+                    style: { ...edge.style, stroke: updatedEdgeColor, strokeWidth: 2 },
+                  };
+                }
+              }
+            }
+
+            return edge;
+          });
+        });
+      }, 0);
 
       // Clear pending connection
       setPendingConnection(null);
