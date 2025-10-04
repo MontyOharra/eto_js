@@ -64,6 +64,7 @@ def sync_modules_to_database():
             "src.features.modules.transform",
             "src.features.modules.action",
             "src.features.modules.logic",
+            "src.features.modules.comparator",
             # Add more packages as needed
         ]
         auto_discover_modules(packages_to_scan)
@@ -188,6 +189,7 @@ def list_registered_modules():
             "src.features.modules.transform",
             "src.features.modules.action",
             "src.features.modules.logic",
+            "src.features.modules.comparator",
         ]
         auto_discover_modules(packages_to_scan)
 

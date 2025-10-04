@@ -33,6 +33,8 @@ class ComprehensiveTest(TransformModule):
     version = "1.0.0"
     title = "Comprehensive Test Module"
     description = "Complex test module with all edge cases for node configurations"
+    category = "Testing"
+    color = "#EC4899"  # Pink
 
     # Configuration model
     ConfigModel = ComprehensiveTestConfig

@@ -39,7 +39,7 @@ class ModuleMeta(BaseModel):
 class CommonCore(ABC):
     """
     Shared core functionality for all module types
-    Contains common fields and methods used across Transform/Action/Logic modules
+    Contains common fields and methods used across Transform/Action/Logic/Comparator modules
     """
 
     # Class-level metadata (must be defined in subclasses)
@@ -47,7 +47,7 @@ class CommonCore(ABC):
     version: str
     title: str
     description: str
-    kind: Literal["transform", "action", "logic"] = "transform"
+    kind: Literal["transform", "action", "logic", "comparator"] = "transform"
 
     # Configuration model type - must be defined in subclasses
     ConfigModel: Type[BaseModel]
@@ -132,3 +132,11 @@ class LogicModule(CommonCore):
     Logic modules handle branching, conditionals, and pipeline control flow
     """
     kind: Literal["logic"] = "logic"
+
+
+class ComparatorModule(CommonCore):
+    """
+    Base class for Comparator modules - comparison and boolean evaluation modules
+    Comparator modules produce boolean outputs based on comparing inputs to config values
+    """
+    kind: Literal["comparator"] = "comparator"

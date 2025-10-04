@@ -7,21 +7,16 @@ interface ModuleSelectorPaneProps {
   onModuleSelect: (moduleId: string | null) => void;
 }
 
-type ModuleKind = "all" | "transform" | "action" | "control";
+type ModuleKind = "all" | "transform" | "action" | "logic" | "comparator";
 
-const MODULE_KINDS: ModuleKind[] = ["all", "transform", "action", "control"];
+const MODULE_KINDS: ModuleKind[] = ["all", "transform", "action", "logic", "comparator"];
 
 const KIND_LABELS: Record<ModuleKind, string> = {
   all: "All",
   transform: "Transform",
   action: "Action",
-  control: "Control",
-};
-
-const KIND_COLORS: Record<string, string> = {
-  transform: "#3B82F6", // blue-500
-  action: "#10B981", // green-500
-  control: "#8B5CF6", // purple-500
+  logic: "Logic",
+  comparator: "Comparator",
 };
 
 export function ModuleSelectorPane({
@@ -255,7 +250,7 @@ interface ModuleCardProps {
 }
 
 function ModuleCard({ module, isSelected, onSelect }: ModuleCardProps) {
-  const kindColor = KIND_COLORS[module.kind] || "#6B7280";
+  const moduleColor = module.color || "#6B7280";
 
   const handleDragStart = (e: React.DragEvent) => {
     e.dataTransfer.setData("application/reactflow", JSON.stringify({ moduleId: module.id }));
@@ -266,7 +261,7 @@ function ModuleCard({ module, isSelected, onSelect }: ModuleCardProps) {
     dragPreview.style.position = "absolute";
     dragPreview.style.top = "-1000px";
     dragPreview.style.padding = "8px 12px";
-    dragPreview.style.backgroundColor = module.color || "#4B5563";
+    dragPreview.style.backgroundColor = moduleColor;
     dragPreview.style.color = "white";
     dragPreview.style.borderRadius = "8px 8px 0 0";
     dragPreview.style.fontSize = "14px";
@@ -289,7 +284,7 @@ function ModuleCard({ module, isSelected, onSelect }: ModuleCardProps) {
           : "bg-gray-700 border-2 border-transparent hover:bg-gray-600"
       }`}
       style={{
-        borderLeftColor: isSelected ? undefined : kindColor,
+        borderLeftColor: isSelected ? undefined : moduleColor,
         borderLeftWidth: isSelected ? undefined : "4px",
       }}
     >
@@ -301,8 +296,8 @@ function ModuleCard({ module, isSelected, onSelect }: ModuleCardProps) {
         <span
           className="inline-block px-2 py-0.5 rounded text-xs font-medium uppercase"
           style={{
-            backgroundColor: kindColor + "33",
-            color: kindColor,
+            backgroundColor: moduleColor + "33",
+            color: moduleColor,
           }}
         >
           {module.kind}

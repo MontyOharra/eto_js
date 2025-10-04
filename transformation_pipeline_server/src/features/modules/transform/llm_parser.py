@@ -28,6 +28,8 @@ class LlmParser(TransformModule):
     version = "1.0.0"
     title = "LLM Parser"
     description = "Use Large Language Model to parse and extract data from text"
+    category = "AI"
+    color = "#EC4899"  # Pink
 
     # Configuration model
     ConfigModel = LlmParserConfig

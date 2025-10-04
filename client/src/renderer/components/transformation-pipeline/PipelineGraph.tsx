@@ -205,8 +205,9 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(({
         id: 'entry_point',
         version: '1.0.0',
         kind: 'transform',
-        display_name: 'Entry Point',
+        title: 'Entry Point',
         description: 'Pipeline entry point',
+        color: '#000000',
         config_schema: {},
         meta: {
           io_shape: {
@@ -383,8 +384,9 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(({
         id: 'entry_point',
         version: '1.0.0',
         kind: 'transform',
-        display_name: 'Entry Point',
+        title: 'Entry Point',
         description: 'Pipeline entry point',
+        color: '#000000',
         config_schema: {},
         meta: {
           io_shape: {

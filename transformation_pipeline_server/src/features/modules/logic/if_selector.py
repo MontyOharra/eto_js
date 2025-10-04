@@ -27,6 +27,8 @@ class IfSelector(LogicModule):
     version = "1.0.0"
     title = "If Selector"
     description = "Select one of two values based on a boolean condition"
+    category = "Routing"
+    color = "#F3F4F6"  # Light gray/white
 
     # Configuration model
     ConfigModel = IfSelectorConfig

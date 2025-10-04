@@ -73,6 +73,42 @@ function PipelineCreatePage() {
     window.history.back();
   };
 
+  const handleValidate = async () => {
+    if (!pipelineGraphRef.current) {
+      console.error("PipelineGraph ref not available");
+      return;
+    }
+
+    // Extract current pipeline state
+    const pipelineState = pipelineGraphRef.current.getPipelineState();
+
+    try {
+      const response = await fetch("http://localhost:8090/api/pipelines/validate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          pipeline_json: pipelineState
+        }),
+      });
+
+      const validationResult = await response.json();
+      console.log("Validation result:", validationResult);
+
+      if (validationResult.valid) {
+        console.log("✅ Pipeline is valid!");
+      } else {
+        console.log("❌ Pipeline validation failed:");
+        validationResult.errors.forEach((error: any) => {
+          console.log(`  - [${error.code}] ${error.message}`, error.where);
+        });
+      }
+    } catch (error) {
+      console.error("Validation request failed:", error);
+    }
+  };
+
   const handleSave = async () => {
     if (!pipelineGraphRef.current) {
       console.error("PipelineGraph ref not available");
@@ -216,6 +252,12 @@ function PipelineCreatePage() {
               className="px-4 py-2 text-sm font-medium text-gray-300 bg-gray-700 hover:bg-gray-600 rounded-md transition-colors"
             >
               Cancel
+            </button>
+            <button
+              onClick={handleValidate}
+              className="px-4 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-md transition-colors"
+            >
+              Validate Pipeline
             </button>
             <button
               onClick={handleSave}

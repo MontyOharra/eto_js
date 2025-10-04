@@ -26,6 +26,8 @@ class BooleanNot(LogicModule):
     version = "1.0.0"
     title = "Boolean NOT"
     description = "Logical NOT operation on one boolean input"
+    category = "Gate"
+    color = "#10B981"  # Green
 
     # Configuration model
     ConfigModel = BooleanNotConfig

@@ -22,7 +22,7 @@ class ModuleInstance(BaseModel):
     """A module instance placed on the canvas"""
     module_instance_id: str
     module_ref: str  # e.g., "text_cleaner:1.0.0"
-    module_kind: Literal["transform", "action", "logic"]
+    module_kind: Literal["transform", "action", "logic", "comparator"]
     config: Dict[str, Any]  # Module-specific configuration
     inputs: List[InstanceNodePin] = Field(default_factory=list)  # Flat list, grouped by group_index
     outputs: List[InstanceNodePin] = Field(default_factory=list)

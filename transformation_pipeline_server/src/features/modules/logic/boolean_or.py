@@ -26,6 +26,8 @@ class BooleanOr(LogicModule):
     version = "1.0.0"
     title = "Boolean OR"
     description = "Logical OR operation on two boolean inputs"
+    category = "Gate"
+    color = "#10B981"  # Green
 
     # Configuration model
     ConfigModel = BooleanOrConfig

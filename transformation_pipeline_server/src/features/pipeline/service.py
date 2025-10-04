@@ -6,8 +6,11 @@ import logging
 from typing import Optional, List
 
 from src.shared.database.repositories.pipeline import PipelineRepository
+from src.shared.database.repositories.module_catalog import ModuleCatalogRepository
 from src.shared.exceptions import RepositoryError, ObjectNotFoundError
-from src.shared.models.pipeline import Pipeline, PipelineCreate, PipelineSummary
+from src.shared.models.pipeline import Pipeline, PipelineCreate, PipelineSummary, PipelineState
+from src.features.pipeline.validation.validator import PipelineValidator
+from src.features.pipeline.validation.errors import ValidationResult
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +32,7 @@ class PipelineService:
 
         # Repository layer - with explicit type annotations for IDE support
         self.pipeline_repo: PipelineRepository = PipelineRepository(self.connection_manager)
+        self.module_catalog_repo: ModuleCatalogRepository = ModuleCatalogRepository(self.connection_manager)
 
         logger.info("Pipeline Service initialized")
 
@@ -153,6 +157,40 @@ class PipelineService:
         except Exception as e:
             logger.error(f"Unexpected error listing pipeline summaries: {e}")
             raise RepositoryError(f"Failed to list pipeline summaries: {e}") from e
+
+    # === Validation Operations ===
+
+    def validate_pipeline(self, pipeline_state: PipelineState) -> ValidationResult:
+        """
+        Validate a pipeline state
+
+        Args:
+            pipeline_state: Pipeline state to validate
+
+        Returns:
+            ValidationResult with valid flag and any errors
+
+        Raises:
+            Exception: If validation process fails unexpectedly
+        """
+        try:
+            logger.debug("Validating pipeline state")
+
+            # Create validator with module catalog repository and run validation
+            validator = PipelineValidator(module_catalog_repo=self.module_catalog_repo)
+            result = validator.validate(pipeline_state)
+
+            if result.valid:
+                logger.debug("Pipeline validation passed")
+            else:
+                logger.debug(f"Pipeline validation failed with {len(result.errors)} error(s)")
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Unexpected error during pipeline validation: {e}")
+            # Re-raise to let caller handle it
+            raise
 
     # === Utility Operations ===
 

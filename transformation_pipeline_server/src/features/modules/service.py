@@ -95,7 +95,8 @@ class ModulesService:
             packages_to_scan = [
                 "src.features.modules.transform",
                 "src.features.modules.action",
-                "src.features.modules.logic"
+                "src.features.modules.logic",
+                "src.features.modules.comparator"
             ]
 
             logger.info("Auto-discovering modules from packages...")

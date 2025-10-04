@@ -30,6 +30,8 @@ class BasicTextCleaner(TransformModule):
     version = "1.0.0"
     title = "Basic Text Cleaner"
     description = "Clean and normalize text by removing extra whitespace and applying basic transformations"
+    category = "Text"
+    color = "#EC4899"  # Pink
 
     # Configuration model
     ConfigModel = TextCleanerConfig

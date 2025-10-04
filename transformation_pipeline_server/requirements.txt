@@ -10,6 +10,9 @@ python-dotenv==1.0.0
 # Dask for pipeline execution (to be used later)
 dask[complete]==2023.12.0
 
+# Graph operations for pipeline compilation and validation
+networkx>=3.0
+
 # Database
 sqlalchemy==2.0.23
 pyodbc==5.0.1  # SQL Server driver for database connectivity

@@ -23,6 +23,7 @@ class ModuleSecurityValidator:
         "src.features.modules.transform",
         "src.features.modules.action",
         "src.features.modules.logic",
+        "src.features.modules.comparator",
         "user_modules",
         "custom_modules",
     ]

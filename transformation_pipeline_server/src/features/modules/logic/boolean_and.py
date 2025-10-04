@@ -26,6 +26,8 @@ class BooleanAnd(LogicModule):
     version = "1.0.0"
     title = "Boolean AND"
     description = "Logical AND operation on two boolean inputs"
+    category = "Gate"
+    color = "#10B981"  # Green
 
     # Configuration model
     ConfigModel = BooleanAndConfig

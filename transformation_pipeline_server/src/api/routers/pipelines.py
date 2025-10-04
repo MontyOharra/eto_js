@@ -9,8 +9,9 @@ from pydantic import BaseModel
 
 from src.features.pipeline import PipelineService
 from src.shared.database import get_connection_manager
-from src.shared.models.pipeline import Pipeline, PipelineCreate, PipelineSummary
+from src.shared.models.pipeline import Pipeline, PipelineCreate, PipelineSummary, PipelineState
 from src.shared.exceptions import RepositoryError, ObjectNotFoundError
+from src.features.pipeline.validation.errors import ValidationResult
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,11 @@ class PipelineSummaryListResponse(BaseModel):
     """Response model for pipeline summary listing"""
     pipelines: List[PipelineSummary]
     total_count: int
+
+
+class ValidatePipelineRequest(BaseModel):
+    """Request model for pipeline validation"""
+    pipeline_json: PipelineState
 
 
 def get_pipeline_service() -> PipelineService:
@@ -167,3 +173,46 @@ async def get_pipeline(
     except Exception as e:
         logger.error(f"Unexpected error getting pipeline {pipeline_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve pipeline")
+
+
+@router.post("/pipelines/validate", response_model=ValidationResult)
+async def validate_pipeline(
+    request: ValidatePipelineRequest,
+    pipeline_service: PipelineService = Depends(get_pipeline_service)
+):
+    """
+    Validate a pipeline state
+
+    Validates pipeline structure, connections, types, and reachability
+    without saving to database.
+
+    Args:
+        request: Pipeline validation request with pipeline_json
+
+    Returns:
+        ValidationResult with valid flag and any errors
+
+    Raises:
+        400: Invalid request body or malformed pipeline JSON
+        500: Internal server error
+    """
+    logger.info("Pipeline validation requested")
+
+    try:
+        # Validate the pipeline state
+        result = pipeline_service.validate_pipeline(request.pipeline_json)
+
+        if result.valid:
+            logger.info("Pipeline validation passed")
+        else:
+            logger.info(f"Pipeline validation failed with {len(result.errors)} error(s)")
+
+        return result
+
+    except ValueError as e:
+        # Pydantic validation errors for malformed data
+        logger.warning(f"Invalid pipeline data: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid pipeline data: {str(e)}")
+    except Exception as e:
+        logger.error(f"Unexpected error validating pipeline: {e}")
+        raise HTTPException(status_code=500, detail="Failed to validate pipeline")

@@ -26,6 +26,8 @@ class TextSplitter(TransformModule):
     version = "1.0.0"
     title = "Text Splitter"
     description = "Split text input into multiple outputs based on a delimiter"
+    category = "Text"
+    color = "#EC4899"  # Pink
 
     # Configuration model
     ConfigModel = TextSplitterConfig
