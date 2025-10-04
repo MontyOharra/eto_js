@@ -74,3 +74,5 @@ modules-refresh: $(VENV_DIR) ## Clear and re-sync all modules (fresh refresh)
 modules-watch: $(VENV_DIR) ## Watch module files and auto-sync on changes (dev mode)
 	@echo "Starting module file watcher..."
 	$(PYTHON) -m src.cli.watch_modules
+
+dev-modules: clean-data modules-sync dev

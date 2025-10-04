@@ -11,6 +11,7 @@ from src.shared.exceptions import RepositoryError, ObjectNotFoundError
 from src.shared.models.pipeline import Pipeline, PipelineCreate, PipelineSummary, PipelineState
 from src.features.pipeline.validation.validator import PipelineValidator
 from src.features.pipeline.validation.errors import ValidationResult
+from src.features.pipeline.compilation.graph_pruner import GraphPruner
 
 logger = logging.getLogger(__name__)
 
@@ -191,6 +192,83 @@ class PipelineService:
             logger.error(f"Unexpected error during pipeline validation: {e}")
             # Re-raise to let caller handle it
             raise
+
+    def test_upload_pipeline(self, pipeline_create: PipelineCreate) -> bool:
+        """
+        TEST METHOD: Validate and prune pipeline (compilation step 1)
+
+        This method is under development and will eventually handle full compilation.
+        Currently it:
+        1. Validates the pipeline
+        2. Prunes dead branches using GraphPruner
+        3. Prints debug info about pruning results
+
+        Args:
+            pipeline_create: Pipeline creation data
+
+        Returns:
+            True if validation and pruning succeeded, False otherwise
+        """
+        try:
+            logger.info(f"[TEST_UPLOAD] Starting test upload for pipeline: {pipeline_create.name}")
+
+            # Step 1: Validate the pipeline
+            logger.info("[TEST_UPLOAD] Step 1: Validating pipeline...")
+            validator = PipelineValidator(module_catalog_repo=self.module_catalog_repo)
+            result = validator.validate(pipeline_create.pipeline_json)
+
+            if not result.valid:
+                logger.error(f"[TEST_UPLOAD] Validation failed with {len(result.errors)} error(s):")
+                for i, error in enumerate(result.errors, 1):
+                    logger.error(f"[TEST_UPLOAD]   Error {i}: {error.code.value} - {error.message}")
+                return False
+
+            logger.info("[TEST_UPLOAD] ✓ Validation passed")
+
+            # Step 2: Prune the pipeline using reachable modules from validator
+            logger.info("[TEST_UPLOAD] Step 2: Pruning pipeline...")
+
+            original_pipeline = pipeline_create.pipeline_json
+            reachable_modules = validator.reachable_modules
+
+            # Debug: Print original state
+            logger.debug(f"[TEST_UPLOAD] Original pipeline:")
+            logger.debug(f"[TEST_UPLOAD]   - Entry points: {len(original_pipeline.entry_points)}")
+            logger.debug(f"[TEST_UPLOAD]   - Modules: {len(original_pipeline.modules)}")
+            logger.debug(f"[TEST_UPLOAD]   - Connections: {len(original_pipeline.connections)}")
+            logger.debug(f"[TEST_UPLOAD]   - Module IDs: {[m.module_instance_id for m in original_pipeline.modules]}")
+
+            # Prune using GraphPruner
+            pruned_pipeline = GraphPruner.prune(original_pipeline, reachable_modules)
+
+            # Debug: Print pruned state
+            logger.debug(f"[TEST_UPLOAD] Pruned pipeline:")
+            logger.debug(f"[TEST_UPLOAD]   - Entry points: {len(pruned_pipeline.entry_points)}")
+            logger.debug(f"[TEST_UPLOAD]   - Modules: {len(pruned_pipeline.modules)}")
+            logger.debug(f"[TEST_UPLOAD]   - Connections: {len(pruned_pipeline.connections)}")
+            logger.debug(f"[TEST_UPLOAD]   - Module IDs: {[m.module_instance_id for m in pruned_pipeline.modules]}")
+
+            # Calculate what was pruned
+            original_module_ids = {m.module_instance_id for m in original_pipeline.modules}
+            pruned_module_ids = {m.module_instance_id for m in pruned_pipeline.modules}
+            removed_modules = original_module_ids - pruned_module_ids
+
+            if removed_modules:
+                logger.info(f"[TEST_UPLOAD] ✓ Pruned {len(removed_modules)} dead branch module(s): {list(removed_modules)}")
+            else:
+                logger.info(f"[TEST_UPLOAD] ✓ No dead branches found - all {len(original_pipeline.modules)} modules are reachable")
+
+            # Show connection pruning
+            connections_removed = len(original_pipeline.connections) - len(pruned_pipeline.connections)
+            if connections_removed > 0:
+                logger.info(f"[TEST_UPLOAD] ✓ Removed {connections_removed} connection(s) to dead branches")
+
+            logger.info("[TEST_UPLOAD] ✅ Test upload completed successfully")
+            return True
+
+        except Exception as e:
+            logger.error(f"[TEST_UPLOAD] ❌ Unexpected error during test upload: {e}", exc_info=True)
+            return False
 
     # === Utility Operations ===
 

@@ -142,8 +142,8 @@ function PipelineCreatePage() {
     console.log("Backend format:", JSON.stringify(backendData, null, 2));
 
     try {
-      // Send to backend API
-      const response = await fetch("http://localhost:8090/api/pipelines", {
+      // Send to backend API (using test-upload endpoint during compilation development)
+      const response = await fetch("http://localhost:8090/api/pipelines/test-upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(backendData)
@@ -154,15 +154,19 @@ function PipelineCreatePage() {
         throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
       }
 
-      const savedPipeline = await response.json();
-      console.log("Pipeline saved successfully:", savedPipeline);
+      const result = await response.json();
+      console.log("Test upload result:", result);
 
-      // Show success message and redirect
-      alert(`Pipeline "${pipelineName}" saved successfully!`);
-      window.history.back();
+      if (result.success) {
+        // Show success message
+        alert(`✅ ${result.message}\n\nCheck the server console for detailed pruning information.`);
+      } else {
+        // Show failure message
+        alert(`❌ ${result.message}`);
+      }
     } catch (err) {
-      console.error("Failed to save pipeline:", err);
-      alert(`Failed to save pipeline: ${err instanceof Error ? err.message : "Unknown error"}`);
+      console.error("Failed to process pipeline:", err);
+      alert(`Failed to process pipeline: ${err instanceof Error ? err.message : "Unknown error"}`);
     }
   };
 

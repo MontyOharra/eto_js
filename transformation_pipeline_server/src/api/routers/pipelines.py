@@ -35,6 +35,12 @@ class ValidatePipelineRequest(BaseModel):
     pipeline_json: PipelineState
 
 
+class TestUploadResponse(BaseModel):
+    """Response model for test upload"""
+    success: bool
+    message: str
+
+
 def get_pipeline_service() -> PipelineService:
     """Dependency injection for pipeline service"""
     connection_manager = get_connection_manager()
@@ -46,13 +52,15 @@ def get_pipeline_service() -> PipelineService:
     return PipelineService(connection_manager)
 
 
-@router.post("/pipelines", response_model=Pipeline)
+# NOTE: upload_pipeline route disabled - replaced by test_upload_pipeline during development
+# Keeping method available for future use, but not exposed as API endpoint
+# @router.post("/pipelines", response_model=Pipeline)
 async def upload_pipeline(
     pipeline_create: PipelineCreate,
     pipeline_service: PipelineService = Depends(get_pipeline_service)
 ):
     """
-    Upload/create a new pipeline
+    Upload/create a new pipeline (DISABLED - use test_upload_pipeline instead)
 
     Creates a new pipeline with the provided configuration.
     Pipelines are immutable once created.
@@ -81,6 +89,57 @@ async def upload_pipeline(
     except Exception as e:
         logger.error(f"Unexpected error uploading pipeline: {e}")
         raise HTTPException(status_code=500, detail="Failed to upload pipeline")
+
+
+@router.post("/pipelines/test-upload", response_model=TestUploadResponse)
+async def test_upload_pipeline(
+    pipeline_create: PipelineCreate,
+    pipeline_service: PipelineService = Depends(get_pipeline_service)
+):
+    """
+    TEST ENDPOINT: Validate and prune pipeline (compilation in progress)
+
+    This endpoint is under development and will eventually replace /pipelines.
+    Currently it validates the pipeline and prunes dead branches, returning
+    success/failure status.
+
+    Future steps will add:
+    - Topological sorting
+    - Checksum calculation
+    - Compilation to execution steps
+    - Database persistence
+
+    Args:
+        pipeline_create: Pipeline creation data
+
+    Returns:
+        TestUploadResponse with success flag and message
+
+    Raises:
+        400: Invalid pipeline data
+        500: Internal server error
+    """
+    logger.info(f"[TEST_UPLOAD_API] Test upload requested: {pipeline_create.name}")
+
+    try:
+        # Call the test upload service method
+        success = pipeline_service.test_upload_pipeline(pipeline_create)
+
+        if success:
+            message = f"Pipeline '{pipeline_create.name}' validated and pruned successfully. Check server logs for details."
+            logger.info(f"[TEST_UPLOAD_API] ✅ Test upload succeeded: {pipeline_create.name}")
+            return TestUploadResponse(success=True, message=message)
+        else:
+            message = f"Pipeline '{pipeline_create.name}' validation or pruning failed. Check server logs for details."
+            logger.warning(f"[TEST_UPLOAD_API] ❌ Test upload failed: {pipeline_create.name}")
+            return TestUploadResponse(success=False, message=message)
+
+    except ValueError as e:
+        logger.error(f"[TEST_UPLOAD_API] Invalid pipeline data: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid pipeline data: {str(e)}")
+    except Exception as e:
+        logger.error(f"[TEST_UPLOAD_API] Unexpected error in test upload: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to process test upload")
 
 
 @router.get("/pipelines")
