@@ -48,6 +48,10 @@ wheels/
 *.egg
 MANIFEST
 
+# Environment files
+.env
+*.env
+
 # Node/Electron artifacts (anywhere)
 node_modules/
 build/
