@@ -5,7 +5,7 @@ Provides endpoints for pipeline upload, retrieval, and listing
 import logging
 from fastapi import APIRouter, HTTPException, Depends
 
-from shared.services import get_pipeline_service
+from shared.services.service_container import ServiceContainer
 from features.pipeline import PipelineService
 from shared.models.pipeline import Pipeline, PipelineCreate, PipelineSummary, PipelineState
 from shared.exceptions import RepositoryError, ObjectNotFoundError
@@ -26,7 +26,7 @@ router = APIRouter(
 @router.post("/upload", response_model=Pipeline)
 async def upload_pipeline(
     pipeline_create: PipelineCreate,
-    pipeline_service: PipelineService = Depends(get_pipeline_service)
+    pipeline_service: PipelineService = Depends(lambda: ServiceContainer.get_pipeline_service())
 ):
     """
     TEST ENDPOINT: Create and compile pipeline with full compilation flow
@@ -76,7 +76,7 @@ async def upload_pipeline(
 async def list_pipelines(
     include_inactive: bool = False,
     summary_only: bool = False,
-    pipeline_service: PipelineService = Depends(get_pipeline_service)
+    pipeline_service: PipelineService = Depends(lambda: ServiceContainer.get_pipeline_service())
 ):
     """
     Get all pipelines
@@ -129,7 +129,7 @@ async def list_pipelines(
 @router.get("/{pipeline_id}", response_model=Pipeline)
 async def get_pipeline(
     pipeline_id: str,
-    pipeline_service: PipelineService = Depends(get_pipeline_service)
+    pipeline_service: PipelineService = Depends(lambda: ServiceContainer.get_pipeline_service())
 ):
     """
     Get a specific pipeline by ID
@@ -168,7 +168,7 @@ async def get_pipeline(
 @router.post("/validate", response_model=ValidationResult)
 async def validate_pipeline(
     request: ValidatePipelineRequest,
-    pipeline_service: PipelineService = Depends(get_pipeline_service)
+    pipeline_service: PipelineService = Depends(lambda: ServiceContainer.get_pipeline_service())
 ):
     """
     Validate a pipeline state

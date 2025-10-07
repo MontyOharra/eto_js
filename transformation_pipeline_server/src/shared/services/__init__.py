@@ -1,21 +1,8 @@
-from .service_container import (
-    ServiceContainer,
-    initialize_services,
-    get_service_container,
-    get_modules_service,
-    get_pipeline_service,
-    get_connection_manager,
-    is_service_container_initialized,
-    reset_service_container
-)
+# The ServiceContainer is now accessed directly via class methods
+# Import it where needed: from shared.services.service_container import ServiceContainer
+
+from .service_container import ServiceContainer
 
 __all__ = [
-    'ServiceContainer',
-    'initialize_services',
-    'get_service_container',
-    'get_modules_service',
-    'get_pipeline_service',
-    'get_connection_manager',
-    'is_service_container_initialized',
-    'reset_service_container'
+    'ServiceContainer'
 ]

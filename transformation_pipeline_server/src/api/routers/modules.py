@@ -7,7 +7,7 @@ import time
 
 from fastapi import APIRouter, HTTPException, Depends, status
 
-from shared.services import get_modules_service
+from shared.services.service_container import ServiceContainer
 from api.schemas import ModuleCatalogResponse, ModuleExecuteRequest, ModuleExecuteResponse
 from features.modules.service import ModuleNotFoundError, ModuleLoadError, ModuleExecutionError, ModulesService
 
@@ -21,7 +21,7 @@ router = APIRouter(
 
 @router.get("", response_model=ModuleCatalogResponse)
 async def get_module_catalog(
-    modules_service : ModulesService = Depends(get_modules_service)
+    modules_service: ModulesService = Depends(lambda: ServiceContainer.get_modules_service())
 ):
     """
     Get catalog of all available modules from database
@@ -70,7 +70,7 @@ async def get_module_catalog(
 @router.get("/{module_id}")
 async def get_module_info(
     module_id: str,
-    modules_service: ModulesService = Depends(get_modules_service)
+    modules_service: ModulesService = Depends(lambda: ServiceContainer.get_modules_service())
 ):
     """
     Get detailed information about a specific module
@@ -114,7 +114,7 @@ async def get_module_info(
 @router.post("/execute", response_model=ModuleExecuteResponse)
 async def execute_module(
     request: ModuleExecuteRequest,
-    modules_service: ModulesService = Depends(get_modules_service)
+    modules_service: ModulesService = Depends(lambda: ServiceContainer.get_modules_service())
 ):
     """
     Execute a module with given inputs and configuration

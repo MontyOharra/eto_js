@@ -5,6 +5,10 @@ Node-based pipeline system with Dask execution
 import os
 import logging
 import sys
+
+# Add src directory to path BEFORE any local imports
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 from contextlib import asynccontextmanager
 from typing import Optional, Dict, Any
 
@@ -15,17 +19,13 @@ from fastapi.exceptions import RequestValidationError, HTTPException as FastAPIH
 from pydantic import ValidationError
 import uvicorn
 
-
-from .shared.database import init_database_connection
-from .shared.services import initialize_services, get_service_container
-
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from shared.database import init_database_connection
+from shared.services.service_container import ServiceContainer
 
 logger = logging.getLogger(__name__)
 
-# Global variables to store initialized services and database connection
+# Global variables to store initialized database connection
 _connection_manager = None
-_service_container = None
 
 
 class DatabaseConnectionError(Exception):
@@ -189,7 +189,7 @@ async def initialize_database_connection() -> None:
 
 async def initialize_services_app() -> None:
     """Initialize all services using the ServiceContainer singleton"""
-    global _connection_manager, _service_container
+    global _connection_manager
 
     try:
         logger.debug("Initializing services via ServiceContainer...")
@@ -197,16 +197,16 @@ async def initialize_services_app() -> None:
         if not _connection_manager:
             raise ServiceInitializationError("Database connection manager not available")
 
-        # Use the shared services module function to initialize the container
-        logger.info("Initializing ServiceContainer singleton...")
-        _service_container = initialize_services(_connection_manager)
-        logger.info(f"ServiceContainer initialized (ID: {id(_service_container)})")
+        # Initialize the ServiceContainer directly
+        logger.info("Initializing ServiceContainer...")
+        ServiceContainer.initialize(_connection_manager)
+        logger.info("ServiceContainer initialized successfully")
 
         logger.info("All services initialized successfully via ServiceContainer")
 
         # Try to get modules service to verify initialization
         try:
-            modules_service = _service_container.get_modules_service()
+            modules_service = ServiceContainer.get_modules_service()
             logger.info("Modules service initialized successfully")
         except Exception as service_error:
             logger.warning(f"Module service initialization warning: {service_error}")
@@ -219,10 +219,10 @@ async def initialize_services_app() -> None:
 
 async def cleanup_services() -> None:
     """Cleanup services and database connections on shutdown"""
-    global _service_container, _connection_manager
+    global _connection_manager
 
     try:
-        if _service_container:
+        if ServiceContainer.is_initialized():
             logger.info("Stopping services...")
             # Any service-specific cleanup can go here
 
