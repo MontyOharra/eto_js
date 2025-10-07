@@ -5,14 +5,13 @@ Infrastructure module for duplicating input data to multiple outputs
 from typing import Dict, Any
 from pydantic import BaseModel
 
-from src.features.modules.core.contracts import TransformModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
-from src.features.modules.core.registry import register
+from shared.models import TransformModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
+from shared.utils.registry import register
 
 
 class DataDuplicatorConfig(BaseModel):
     """Configuration for Data Duplicator - no configuration needed"""
     pass
-
 
 @register
 class DataDuplicator(TransformModule):

@@ -5,14 +5,13 @@ Splits text input into multiple outputs based on a delimiter
 from typing import Dict, Any
 from pydantic import BaseModel, Field
 
-from src.features.modules.core.contracts import TransformModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
-from src.features.modules.core.registry import register
+from shared.models import TransformModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
+from shared.utils.registry import register
 
 
 class TextSplitterConfig(BaseModel):
     """Configuration for Text Splitter"""
     split_character: str = Field(",", description="Character to split on")
-
 
 @register
 class TextSplitter(TransformModule):

@@ -143,7 +143,7 @@ function PipelineCreatePage() {
 
     try {
       // Send to backend API (using test-upload endpoint during compilation development)
-      const response = await fetch("http://localhost:8090/api/pipelines/test-upload", {
+      const response = await fetch("http://localhost:8090/api/pipelines/upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(backendData)

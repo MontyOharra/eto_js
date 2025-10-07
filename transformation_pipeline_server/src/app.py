@@ -15,6 +15,12 @@ from fastapi.exceptions import RequestValidationError, HTTPException as FastAPIH
 from pydantic import ValidationError
 import uvicorn
 
+
+from .shared.database import init_database_connection
+from .shared.services import initialize_services, get_service_container
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 logger = logging.getLogger(__name__)
 
 # Global variables to store initialized services and database connection
@@ -54,14 +60,14 @@ def setup_custom_log_levels():
     def trace(self, message, *args, **kwargs):
         if self.isEnabledFor(5):
             self._log(5, message, args, **kwargs)
-    logging.Logger.trace = trace
+    setattr(logging.Logger, 'trace', trace)  # Use setattr to avoid type checker warnings
 
     # Add MONITOR level (7) - for monitoring loops
     logging.addLevelName(7, 'MONITOR')
     def monitor(self, message, *args, **kwargs):
         if self.isEnabledFor(7):
             self._log(7, message, args, **kwargs)
-    logging.Logger.monitor = monitor
+    setattr(logging.Logger, 'monitor', monitor)  # Use setattr to avoid type checker warnings
 
 
 class ColoredFormatter(logging.Formatter):
@@ -111,7 +117,7 @@ def configure_logging():
     # Get logging configuration from environment
     log_level = get_log_level()
     log_format = os.getenv('LOG_FORMAT',
-        '%(asctime)s | %(levelname)-8s | %(name)s:\n    %(message)s'
+         '\n%(asctime)s | %(levelname)s | %(name)s - line %(lineno)s:\n    %(message)s\n'
     )
     date_format = os.getenv('LOG_DATE_FORMAT', '%Y-%m-%d %H:%M:%S')
     use_colors = os.getenv('LOG_COLORS', 'true').lower() == 'true'
@@ -168,61 +174,40 @@ async def initialize_database_connection() -> None:
     global _connection_manager
 
     try:
+        logger.debug("Initializing database connection...")
         database_url = os.getenv('DATABASE_URL')
         if not database_url:
             raise DatabaseConnectionError("DATABASE_URL environment variable is required")
 
-        # Import database initialization (when you implement it)
-        from .shared.database import init_database_connection
         _connection_manager = init_database_connection(database_url)
-
-        # For now, just log that we would initialize the database
-        logger.info(f"Would initialize database connection with URL: {database_url[:20]}...")
         logger.info("Database connection established and verified")
 
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
-
-        # Print available drivers for debugging
-        try:
-            import pyodbc
-            drivers = pyodbc.drivers()
-            logger.debug(f"Available ODBC drivers: {drivers}")
-        except ImportError:
-            logger.warning("pyodbc not available for driver debugging")
-        except Exception:
-            pass
-
-        # Re-raise to prevent app startup with broken database
         raise DatabaseConnectionError(f"Database initialization failed: {e}")
 
 
-async def initialize_services() -> None:
+async def initialize_services_app() -> None:
     """Initialize all services using the ServiceContainer singleton"""
     global _connection_manager, _service_container
 
     try:
         logger.debug("Initializing services via ServiceContainer...")
 
-        # Initialize the service container with all services
-        logger.info("Creating ServiceContainer singleton instance...")
+        if not _connection_manager:
+            raise ServiceInitializationError("Database connection manager not available")
 
-        # Import service container
-        from .shared.services.service_container import ServiceContainer
-
-        # Create service container instance
-        _service_container = ServiceContainer()
-        logger.info(f"ServiceContainer instance created (ID: {id(_service_container)}), calling initialize")
-        _service_container.initialize(_connection_manager)
-        logger.info("ServiceContainer.initialize() completed successfully")
+        # Use the shared services module function to initialize the container
+        logger.info("Initializing ServiceContainer singleton...")
+        _service_container = initialize_services(_connection_manager)
+        logger.info(f"ServiceContainer initialized (ID: {id(_service_container)})")
 
         logger.info("All services initialized successfully via ServiceContainer")
 
-        # Auto-register default modules
+        # Try to get modules service to verify initialization
         try:
             modules_service = _service_container.get_modules_service()
-            # Register any additional modules here if needed
-            logger.info("Modules service initialized and default modules registered")
+            logger.info("Modules service initialized successfully")
         except Exception as service_error:
             logger.warning(f"Module service initialization warning: {service_error}")
 
@@ -253,14 +238,13 @@ async def cleanup_services() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """FastAPI lifespan event handler for startup and shutdown"""
-    # Startup
-    # Configure logging first so we can see startup logs
+    
     configure_logging()
     logger.info("Starting Transformation Pipeline Server...")
 
     try:
         await initialize_database_connection()
-        await initialize_services()
+        await initialize_services_app()
         logger.info("Application startup completed successfully")
     except Exception as e:
         logger.error(f"Application startup failed: {e}")
@@ -273,45 +257,122 @@ async def lifespan(app: FastAPI):
     await cleanup_services()
     logger.info("Application shutdown completed")
 
-
-# Exception handlers
-async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    """Handle Pydantic validation errors"""
-    logger.warning(f"Validation error on {request.method} {request.url}: {exc}")
-    return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content={
-            "error": "Validation Error",
-            "detail": exc.errors(),
-            "message": "Invalid request data"
-        }
+def setup_cors_middleware(app: FastAPI) -> None:
+    """Setup CORS middleware for FastAPI"""
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # Allow all origins for development
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
+        allow_headers=["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"],
+        expose_headers=["Content-Range", "X-Content-Range"],
+        max_age=86400
     )
 
+def setup_exception_handlers(app: FastAPI) -> None:
+    """Setup exception handlers for FastAPI"""
+    
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(request: Request, exc: RequestValidationError):
+        """Handle Pydantic validation errors"""
+        logger.warning(f"Validation error on {request.method} {request.url}: {exc}")
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content={
+                "success": False,
+                "error": "Validation error",
+                "message": "The request data failed validation",
+                "details": exc.errors(),
+                "status_code": 422
+            }
+        )
 
-async def http_exception_handler(request: Request, exc: FastAPIHTTPException):
-    """Handle HTTP exceptions"""
-    logger.warning(f"HTTP {exc.status_code} on {request.method} {request.url}: {exc.detail}")
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={
-            "error": "HTTP Error",
-            "detail": exc.detail,
-            "status_code": exc.status_code
-        }
-    )
+    @app.exception_handler(FastAPIHTTPException)
+    async def http_exception_handler(request: Request, exc: FastAPIHTTPException):
+        """Handle HTTP exceptions with consistent JSON response"""
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "success": False,
+                "error": exc.detail,
+                "message": exc.detail,
+                "status_code": exc.status_code
+            }
+        )
+
+    @app.exception_handler(404)
+    async def not_found_handler(request: Request, exc):
+        """Handle 404 errors with consistent JSON response"""
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={
+                "success": False,
+                "error": "Resource not found",
+                "message": "The requested resource does not exist",
+                "status_code": 404
+            }
+        )
+
+    @app.exception_handler(500)
+    async def internal_server_error_handler(request: Request, exc):
+        """Handle 500 errors with consistent JSON response"""
+        logger.error(f"Internal server error: {exc}")
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "success": False,
+                "error": "Internal server error",
+                "message": "An unexpected error occurred on the server",
+                "status_code": 500
+            }
+        )
+
+    @app.exception_handler(405)
+    async def method_not_allowed_handler(request: Request, exc):
+        """Handle 405 errors with consistent JSON response"""
+        return JSONResponse(
+            status_code=status.HTTP_405_METHOD_NOT_ALLOWED,
+            content={
+                "success": False,
+                "error": "Method not allowed",
+                "message": "The HTTP method is not allowed for this endpoint",
+                "status_code": 405
+            }
+        )
 
 
-async def general_exception_handler(request: Request, exc: Exception):
-    """Handle unexpected exceptions"""
-    logger.error(f"Unexpected error on {request.method} {request.url}: {exc}", exc_info=True)
-    return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={
-            "error": "Internal Server Error",
-            "detail": "An unexpected error occurred",
-            "message": str(exc) if os.getenv('DEBUG', 'false').lower() == 'true' else "Internal server error"
-        }
-    )
+
+def register_routers(app: FastAPI) -> None:
+    """Register FastAPI routers"""
+    # Register health router first
+    try:
+        from .api.routers import health_router
+        app.include_router(health_router, prefix="/api")
+        logger.info("Registered health router")
+    except ImportError as e:
+        logger.warning(f"Could not import health router: {e}")
+    except Exception as e:
+        logger.error(f"Error registering health router: {e}")
+
+    # Register modules router
+    try:
+        from .api.routers import modules_router
+        app.include_router(modules_router, prefix="/api")
+        logger.info("Registered modules router")
+    except ImportError as e:
+        logger.warning(f"Could not import modules router: {e}")
+    except Exception as e:
+        logger.error(f"Error registering modules router: {e}")
+
+    # Register pipelines router
+    try:
+        from .api.routers import pipelines_router
+        app.include_router(pipelines_router, prefix="/api")
+        logger.info("Registered pipelines router")
+    except ImportError as e:
+        logger.warning(f"Could not import pipelines router: {e}")
+    except Exception as e:
+        logger.error(f"Error registering pipelines router: {e}")
 
 
 def create_app() -> FastAPI:
@@ -328,35 +389,54 @@ def create_app() -> FastAPI:
         lifespan=lifespan
     )
 
-    # Add exception handlers
-    app.add_exception_handler(RequestValidationError, validation_exception_handler)
-    app.add_exception_handler(FastAPIHTTPException, http_exception_handler)
-    app.add_exception_handler(Exception, general_exception_handler)
-
-    # Configure CORS
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173,http://localhost:5002").split(","),
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
-    # Import and register routers
-    from .api.routers.health import router as health_router
-    from .api.routers.modules import router as modules_router
-    from .api.routers.pipelines import router as pipelines_router
-
-    app.include_router(health_router, prefix="/api", tags=["health"])
-    app.include_router(modules_router, prefix="/api", tags=["modules"])
-    app.include_router(pipelines_router, prefix="/api", tags=["pipelines"])
+    
+    setup_cors_middleware(app)
+    setup_exception_handlers(app)
+    register_routers(app)
 
     logger.info("FastAPI application created and configured")
 
     return app
 
 
-# This is used when running with uvicorn directly (not via main.py)
+def run_server():
+    """Run the FastAPI server with uvicorn"""
+    # Get configuration from environment
+    port = int(os.getenv('PORT', 8080))
+    host = os.getenv('HOST', '0.0.0.0')
+    debug = os.getenv('DEBUG', 'false').lower() == 'true'
+
+    logger.info(f"Starting FastAPI server on {host}:{port}")
+
+    if debug:
+        logger.warning("Running in DEBUG mode - not suitable for production!")
+
+    # Run with uvicorn
+    if debug:
+        # In debug mode, configure reload to only watch src/ directory
+        uvicorn.run(
+            "app-fastapi:create_app",
+            factory=True,
+            host=host,
+            port=port,
+            reload=True,
+            reload_dirs=["./src"],  # Only watch src directory
+            reload_excludes=["./storage", "./logs", "./data"],  # Exclude storage/logs/data directories
+            log_level="debug",
+            access_log=True
+        )
+    else:
+        # Production mode - no reload
+        uvicorn.run(
+            "app-fastapi:create_app",
+            factory=True,
+            host=host,
+            port=port,
+            reload=False,
+            log_level="info",
+            access_log=True
+        )
+
+
 if __name__ == "__main__":
-    app = create_app()
-    uvicorn.run(app, host="0.0.0.0", port=8090)
+    run_server()

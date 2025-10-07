@@ -324,7 +324,7 @@ function NodeGroupSection({
   const minCount = nodeGroup?.min_count || 1;
   const maxCount = nodeGroup?.max_count;
 
-  const canAdd = maxCount === undefined || nodes.length < maxCount;
+  const canAdd = maxCount == null || nodes.length < maxCount;
   const canRemove = nodes.length > minCount;
 
   return (

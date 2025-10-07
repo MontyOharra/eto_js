@@ -1,5 +1,22 @@
 """Shared Pydantic models for domain objects"""
 
+from .modules import ModuleKind
+
+from .modules import (
+    Scalar,
+    NodeTypeRule,
+    NodeGroup,
+    IOSideShape,
+    IOShape,
+    ModuleMeta,
+    ModuleKind,
+    BaseModule,
+    TransformModule,
+    ActionModule,
+    LogicModule,
+    ComparatorModule
+)
+
 from .pipeline import (
     # Supporting types
     InstanceNodePin,
@@ -16,14 +33,34 @@ from .pipeline import (
     PipelineSummary
 )
 
+from .pipeline_step import (
+    PipelineStepBase,
+    PipelineStepCreate,
+    PipelineStep
+)
+
 from .module_catalog import (
-    ModuleMeta,
     ModuleCatalogCreate,
     ModuleCatalogUpdate,
     ModuleCatalog
 )
 
 __all__ = [
+    # Module types
+    "ModuleKind",
+    # Module metadata types
+    "Scalar",
+    "NodeTypeRule",
+    "NodeGroup",
+    "IOSideShape",
+    "IOShape",
+    "ModuleMeta",
+    # Module base classes
+    "BaseModule",
+    "TransformModule",
+    "ActionModule",
+    "LogicModule",
+    "ComparatorModule",
     # Pipeline types
     "InstanceNodePin",
     "ModuleInstance",
@@ -36,8 +73,11 @@ __all__ = [
     "PipelineCreate",
     "Pipeline",
     "PipelineSummary",
+    # Pipeline step types
+    "PipelineStepBase",
+    "PipelineStepCreate",
+    "PipelineStep",
     # Module catalog types
-    "ModuleMeta",
     "ModuleCatalogCreate",
     "ModuleCatalogUpdate",
     "ModuleCatalog"

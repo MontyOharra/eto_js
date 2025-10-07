@@ -1,31 +1,36 @@
 """
-Core Module Contracts - Base classes and type definitions
-Based on the transformation pipeline design document
+Shared module type definitions and base classes
 """
-from typing import Optional, Literal, Dict, Any, List, Union, Type
-from pydantic import BaseModel, Field
+from typing import Optional, List, Dict, Literal, Type, Any
 from abc import ABC, abstractmethod
-
+from pydantic import BaseModel, Field
 
 # Type definitions
 Scalar = Literal["str", "float", "datetime", "bool", "int"]
 
 
 class NodeTypeRule(BaseModel):
+    """Type rule for a node group - either allowed_types list or type_var"""
     # exactly one of these is used
     allowed_types: Optional[List[Scalar]] = None  # per-pin whitelist; user picks independently
     type_var: Optional[str] = None             # e.g., "T" (unifies across pins)
 
+
 class NodeGroup(BaseModel):
+    """Definition of a group of nodes (pins) with cardinality constraints"""
     min_count: int = 1
     max_count: Optional[int] = 1
     typing: NodeTypeRule
     label: str
 
+
 class IOSideShape(BaseModel):
-    nodes: List[NodeGroup] = []                      # exact count, fixed order
+    """Shape definition for one side of I/O (inputs or outputs)"""
+    nodes: List[NodeGroup] = []  # exact count, fixed order
+
 
 class IOShape(BaseModel):
+    """Complete I/O shape definition for a module"""
     inputs: IOSideShape = IOSideShape()
     outputs: IOSideShape = IOSideShape()
     # declare domains for type variables (if any are used in pins)
@@ -36,7 +41,12 @@ class ModuleMeta(BaseModel):
     """Metadata defining I/O constraints for a module"""
     io_shape: IOShape = IOShape()
 
-class CommonCore(ABC):
+# Module kind type - centralized definition for all valid module types
+# Similar to TypeScript: type ModuleKind = "transform" | "action" | "logic" | "comparator"
+ModuleKind = Literal["transform", "action", "logic", "comparator"]
+
+
+class BaseModule(ABC):
     """
     Shared core functionality for all module types
     Contains common fields and methods used across Transform/Action/Logic/Comparator modules
@@ -47,9 +57,7 @@ class CommonCore(ABC):
     version: str
     title: str
     description: str
-    kind: Literal["transform", "action", "logic", "comparator"] = "transform"
-
-    # Configuration model type - must be defined in subclasses
+    kind: ModuleKind
     ConfigModel: Type[BaseModel]
 
     @classmethod
@@ -110,33 +118,33 @@ class CommonCore(ABC):
         raise NotImplementedError
 
 
-class TransformModule(CommonCore):
+class TransformModule(BaseModule):
     """
     Base class for Transform modules - pure functions that transform data
     Transform modules are stateless and should have no side effects
     """
-    kind: Literal["transform"] = "transform"
+    kind: ModuleKind = "transform"
 
 
-class ActionModule(CommonCore):
+class ActionModule(BaseModule):
     """
     Base class for Action modules - modules that perform side effects
     Action modules may modify external state and require special handling
     """
-    kind: Literal["action"] = "action"
+    kind: ModuleKind = "action"
 
 
-class LogicModule(CommonCore):
+class LogicModule(BaseModule):
     """
     Base class for Logic modules - conditional and control flow modules
     Logic modules handle branching, conditionals, and pipeline control flow
     """
-    kind: Literal["logic"] = "logic"
+    kind: ModuleKind = "logic"
 
 
-class ComparatorModule(CommonCore):
+class ComparatorModule(BaseModule):
     """
     Base class for Comparator modules - comparison and boolean evaluation modules
     Comparator modules produce boolean outputs based on comparing inputs to config values
     """
-    kind: Literal["comparator"] = "comparator"
+    kind: ModuleKind = "comparator"

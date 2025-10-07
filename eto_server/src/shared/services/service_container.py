@@ -160,21 +160,19 @@ def get_eto_processing_service():
     return _get_container().get_eto_service()
 
 
-def get_connection_manager():
-    """Get database connection manager - global access function"""
-    return _get_container().get_connection_manager()
-
-
 def get_pdf_template_service():
     """Get PDF template service - global access function"""
     return _get_container().get_pdf_template_service()
 
 
-
-
 def is_service_container_initialized() -> bool:
     """Check if the service container has been initialized"""
     return _get_container().is_initialized()
+
+
+def get_connection_manager():
+    """Get database connection manager - global access function"""
+    return _get_container().get_connection_manager()
 
 
 def get_service_container() -> ServiceContainer:

@@ -1317,9 +1317,24 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(({
 
           // Get type_var and allowed_types from template
           const typeVar = nodeGroup.typing.type_var;
-          const allowedTypes = typeVar
-            ? (template.meta.io_shape.type_params[typeVar] || [])
-            : (nodeGroup.typing.allowed_types || []);
+          const ALL_TYPES = ["str", "int", "float", "bool", "datetime"];
+
+          // Determine allowed types: prefer direct allowed_types, fall back to type_params
+          let allowedTypes: string[];
+          if (typeVar && template.meta.io_shape.type_params[typeVar]) {
+            // If there's a type variable, use type_params for the type variable domain
+            const typeParamTypes = template.meta.io_shape.type_params[typeVar];
+            // Empty array means all types allowed
+            allowedTypes = typeParamTypes.length === 0 ? ALL_TYPES : typeParamTypes;
+          } else if (nodeGroup.typing.allowed_types) {
+            // Otherwise use explicit allowed_types from NodeGroup if specified
+            const directTypes = nodeGroup.typing.allowed_types;
+            // Empty array means all types allowed
+            allowedTypes = directTypes.length === 0 ? ALL_TYPES : directTypes;
+          } else {
+            // Default to all types if nothing specified
+            allowedTypes = ALL_TYPES;
+          }
 
           // Determine node type
           let nodeType: string;
@@ -1327,9 +1342,9 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(({
             // Look for any node with the same typevar to get current type
             const allNodes = [...moduleInstance.inputs, ...moduleInstance.outputs];
             const sameTypeVarNode = allNodes.find(n => n.type_var === typeVar);
-            nodeType = sameTypeVarNode?.type || (allowedTypes[0] || "str");
+            nodeType = sameTypeVarNode?.type || allowedTypes[0];
           } else {
-            nodeType = allowedTypes[0] || "str";
+            nodeType = allowedTypes[0];
           }
 
           // Create new node

@@ -3,7 +3,8 @@ Graph Pruner
 Prunes pipeline to action-reachable modules only (§3.1 from spec)
 """
 from typing import Set
-from src.shared.models.pipeline import PipelineState
+
+from shared.models.pipeline import PipelineState
 
 
 class GraphPruner:

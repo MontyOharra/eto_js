@@ -38,7 +38,6 @@ class PipelineDefinitionModel(BaseModel):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Relationships
-    pipeline_steps = relationship("PipelineStepModel", back_populates="pipeline_definition", cascade="all, delete-orphan")
     execution_logs = relationship("PipelineExecutionLogModel", back_populates="pipeline_definition")
 
     __table_args__ = (
@@ -51,12 +50,13 @@ class PipelineDefinitionModel(BaseModel):
 class PipelineStepModel(BaseModel):
     """
     Pipeline steps - compiled cache for execution
-    Stores compiled execution steps with dependency mappings
+    Stores compiled execution steps shared across pipelines via checksum
+    Steps are grouped by plan_checksum, not by pipeline_id
+    Multiple pipelines with identical structure share the same compiled steps
     """
     __tablename__ = 'pipeline_steps'
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    pipeline_id: Mapped[str] = mapped_column(ForeignKey('pipeline_definitions.id'), nullable=False)
     plan_checksum: Mapped[str] = mapped_column(String(64), nullable=False)
 
     # Module instance information
@@ -72,11 +72,8 @@ class PipelineStepModel(BaseModel):
     output_display_names: Mapped[Optional[str]] = mapped_column(Text)  # JSON
     step_number: Mapped[Optional[int]] = mapped_column(Integer)
 
-    # Relationships
-    pipeline_definition = relationship("PipelineDefinitionModel", back_populates="pipeline_steps")
-
     __table_args__ = (
-        Index('idx_pipeline_steps_pipeline_checksum', 'pipeline_id', 'plan_checksum'),
+        Index('idx_pipeline_steps_checksum', 'plan_checksum'),
         Index('idx_pipeline_steps_module_ref', 'module_ref'),
         Index('idx_pipeline_steps_kind', 'module_kind'),
     )

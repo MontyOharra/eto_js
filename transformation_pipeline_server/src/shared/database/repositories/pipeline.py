@@ -5,6 +5,7 @@ Repository for pipeline operations following ETO server patterns
 import logging
 import uuid
 from typing import Optional, List
+from datetime import datetime
 from sqlalchemy.exc import SQLAlchemyError
 
 from .base import BaseRepository
@@ -158,3 +159,77 @@ class PipelineRepository(BaseRepository[PipelineDefinitionModel]):
         except SQLAlchemyError as e:
             logger.error(f"Error getting pipeline summaries: {e}")
             raise RepositoryError(f"Failed to get pipeline summaries: {e}") from e
+
+    def create_with_checksum(self, data: dict) -> Pipeline:
+        """
+        Create pipeline with pre-calculated checksum
+
+        Used when checksum is calculated before creation (compilation flow)
+
+        Args:
+            data: Pipeline data dict (from model_dump_for_db) with 'plan_checksum' and 'compiled_at' already set
+
+        Returns:
+            Created Pipeline domain object
+        """
+        try:
+            with self.connection_manager.session_scope() as session:
+                # Generate ID if not present
+                if 'id' not in data:
+                    data['id'] = self._generate_pipeline_id()
+
+                # Create model instance
+                model = self.model_class(**data)
+                session.add(model)
+                session.flush()
+                session.refresh(model)
+
+                checksum_preview = data.get('plan_checksum', 'none')
+                checksum_str = checksum_preview[:8] + "..." if checksum_preview and checksum_preview != 'none' else 'none'
+                logger.info(f"Created pipeline: {data['id']} - {data.get('name')} with checksum {checksum_str}")
+
+                return self._convert_to_domain_object(model)
+
+        except SQLAlchemyError as e:
+            logger.error(f"Error creating pipeline: {e}")
+            raise RepositoryError(f"Failed to create pipeline: {e}") from e
+
+    # ========== Compilation-Related Operations ==========
+
+    def update_pipeline_checksum(self, pipeline_id: str, checksum: str, compiled_at: datetime) -> Pipeline:
+        """
+        Update pipeline's plan_checksum and compiled_at timestamp
+
+        Args:
+            pipeline_id: Pipeline ID to update
+            checksum: Plan checksum to set
+            compiled_at: Compilation timestamp
+
+        Returns:
+            Updated Pipeline domain object
+
+        Raises:
+            ObjectNotFoundError: If pipeline doesn't exist
+            RepositoryError: If update fails
+        """
+        try:
+            with self.connection_manager.session_scope() as session:
+                model = session.get(self.model_class, pipeline_id)
+
+                if not model:
+                    raise ObjectNotFoundError('Pipeline', pipeline_id)
+
+                model.plan_checksum = checksum
+                model.compiled_at = compiled_at
+                session.flush()
+                session.refresh(model)
+
+                logger.info(f"Updated pipeline {pipeline_id} with checksum {checksum[:8]}...")
+
+                return self._convert_to_domain_object(model)
+
+        except ObjectNotFoundError:
+            raise
+        except SQLAlchemyError as e:
+            logger.error(f"Error updating pipeline checksum: {e}")
+            raise RepositoryError(f"Failed to update checksum: {e}") from e

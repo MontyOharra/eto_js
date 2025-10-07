@@ -4,8 +4,8 @@ Validates module constraints (§2.5 from spec)
 """
 from typing import List, Dict, Set
 from pydantic import ValidationError as PydanticValidationError
-from src.shared.models.pipeline import PipelineState
-from src.shared.database.repositories.module_catalog import ModuleCatalogRepository
+from shared.models.pipeline import PipelineState
+from shared.database.repositories.module_catalog import ModuleCatalogRepository
 from .errors import ValidationError, ValidationErrorCode
 from .index_builder import PipelineIndices
 

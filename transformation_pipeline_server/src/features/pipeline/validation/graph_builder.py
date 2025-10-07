@@ -3,8 +3,9 @@ Graph Builder
 Builds NetworkX graph from pipeline state for cycle detection and topological sorting
 """
 import networkx as nx
-from typing import Dict, Any
-from src.shared.models.pipeline import PipelineState
+
+from shared.models.pipeline import PipelineState
+
 from .index_builder import PipelineIndices
 
 

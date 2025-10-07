@@ -11,7 +11,7 @@ from datetime import datetime
 import importlib
 import pkgutil
 
-from src.features.modules.core.contracts import CommonCore
+from shared.models import BaseModule
 
 logger = logging.getLogger(__name__)
 
@@ -71,13 +71,13 @@ class ModuleCache:
     """Simple cache for loaded modules"""
 
     def __init__(self, max_size: int = 50, ttl_seconds: int = 3600):
-        self._cache: Dict[str, Tuple[Type[CommonCore], datetime]] = {}
+        self._cache: Dict[str, Tuple[Type[BaseModule], datetime]] = {}
         self.max_size = max_size
         self.ttl_seconds = ttl_seconds
         self.hits = 0
         self.misses = 0
 
-    def get(self, key: str) -> Optional[Type[CommonCore]]:
+    def get(self, key: str) -> Optional[Type[BaseModule]]:
         """Get module from cache"""
         if key in self._cache:
             module_class, cached_at = self._cache[key]
@@ -91,7 +91,7 @@ class ModuleCache:
         self.misses += 1
         return None
 
-    def put(self, key: str, module_class: Type[CommonCore]):
+    def put(self, key: str, module_class: Type[BaseModule]):
         """Add module to cache"""
         if len(self._cache) >= self.max_size:
             # Remove oldest entry
@@ -119,18 +119,18 @@ class ModuleRegistry:
     def __init__(self):
         """Initialize registry (only once)"""
         if not self._initialized:
-            self._registry: Dict[str, Type[CommonCore]] = {}
+            self._registry: Dict[str, Type[BaseModule]] = {}
             self._cache = ModuleCache()
             self._initialized = True
             logger.debug("ModuleRegistry initialized")
 
-    def register(self, module_class: Type[CommonCore]) -> Type[CommonCore]:
+    def register(self, module_class: Type[BaseModule]) -> Type[BaseModule]:
         """
         Register a module class with the registry
         Used as a decorator on module classes
 
         Args:
-            module_class: Module class inheriting from CommonCore
+            module_class: Module class inheriting from BaseModule
 
         Returns:
             The module class (for decorator pattern)
@@ -154,7 +154,7 @@ class ModuleRegistry:
 
         return module_class
 
-    def get(self, module_id: str) -> Optional[Type[CommonCore]]:
+    def get(self, module_id: str) -> Optional[Type[BaseModule]]:
         """
         Get a module class by ID
 
@@ -166,7 +166,7 @@ class ModuleRegistry:
         """
         return self._registry.get(module_id)
 
-    def get_all(self) -> Dict[str, Type[CommonCore]]:
+    def get_all(self) -> Dict[str, Type[BaseModule]]:
         """
         Get all registered modules
 
@@ -175,7 +175,7 @@ class ModuleRegistry:
         """
         return dict(self._registry)
 
-    def get_by_kind(self, kind: str) -> List[Type[CommonCore]]:
+    def get_by_kind(self, kind: str) -> List[Type[BaseModule]]:
         """
         Get all modules of a specific kind
 
@@ -197,7 +197,7 @@ class ModuleRegistry:
         self._cache = ModuleCache()  # Reset cache too
         logger.debug("Module registry cleared")
 
-    def load_module_from_handler(self, handler_name: str) -> Optional[Type[CommonCore]]:
+    def load_module_from_handler(self, handler_name: str) -> Optional[Type[BaseModule]]:
         """
         Load a module from handler_name with security validation and caching
 
@@ -234,8 +234,8 @@ class ModuleRegistry:
             module_class = getattr(module, class_name)
 
             # Validate it's a proper module
-            if not issubclass(module_class, CommonCore):
-                logger.error(f"{class_name} is not a valid module (must inherit from CommonCore)")
+            if not issubclass(module_class, BaseModule):
+                logger.error(f"{class_name} is not a valid module (must inherit from BaseModule)")
                 return None
 
             # Cache the loaded module
@@ -251,7 +251,7 @@ class ModuleRegistry:
             logger.error(f"Error loading module from {handler_name}: {e}")
             return None
 
-    def resolve_module(self, module_id: str, handler_name: Optional[str] = None) -> Optional[Type[CommonCore]]:
+    def resolve_module(self, module_id: str, handler_name: Optional[str] = None) -> Optional[Type[BaseModule]]:
         """
         Resolve a module using multiple strategies:
         1. Check registry (fast)
@@ -335,7 +335,7 @@ class ModuleRegistry:
                     "name": module_class.title,
                     "description": module_class.description,
                     "module_kind": module_class.kind,
-                    "meta": meta.model_dump(),  # Convert to dict
+                    "meta": meta.model_dump(exclude_none=False),  # Convert to dict
                     "config_schema": config_schema,
                     "handler_name": f"{module_class.__module__}:{module_class.__name__}",
                     "color": getattr(module_class, 'color', '#3B82F6'),  # Default color
@@ -369,7 +369,7 @@ class ModuleRegistry:
 _registry = ModuleRegistry()
 
 # Convenience functions for module access
-def register(module_class: Type[CommonCore]) -> Type[CommonCore]:
+def register(module_class: Type[BaseModule]) -> Type[BaseModule]:
     """
     Decorator to register a module class
 
@@ -386,12 +386,12 @@ def get_registry() -> ModuleRegistry:
     return _registry
 
 
-def get_module(module_id: str) -> Optional[Type[CommonCore]]:
+def get_module(module_id: str) -> Optional[Type[BaseModule]]:
     """Get a module class by ID"""
     return _registry.get(module_id)
 
 
-def get_all_modules() -> Dict[str, Type[CommonCore]]:
+def get_all_modules() -> Dict[str, Type[BaseModule]]:
     """Get all registered modules"""
     return _registry.get_all()
 

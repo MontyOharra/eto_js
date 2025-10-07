@@ -4,15 +4,14 @@ All number comparison and boolean evaluation modules
 """
 from typing import Dict, Any, Union
 from pydantic import BaseModel, Field
-from src.features.modules.core.contracts import ComparatorModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
-from src.features.modules.core.registry import register
+from shared.models import ComparatorModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
+from shared.utils.registry import register
 
 
 # Number Equals
 class NumberEqualsConfig(BaseModel):
     compare_value: Union[int, float] = Field(..., description="Value to compare against")
     tolerance: float = Field(0.0001, description="Tolerance for float comparison (ignored for ints)")
-
 
 @register
 class NumberEquals(ComparatorModule):
@@ -62,7 +61,6 @@ class NumberEquals(ComparatorModule):
 class NumberGreaterThanConfig(BaseModel):
     threshold: Union[int, float] = Field(..., description="Threshold value")
 
-
 @register
 class NumberGreaterThan(ComparatorModule):
     id = "number_greater_than"
@@ -105,7 +103,6 @@ class NumberGreaterThan(ComparatorModule):
 # Number Less Than
 class NumberLessThanConfig(BaseModel):
     threshold: Union[int, float] = Field(..., description="Threshold value")
-
 
 @register
 class NumberLessThan(ComparatorModule):
@@ -151,7 +148,6 @@ class NumberInRangeConfig(BaseModel):
     min: Union[int, float] = Field(..., description="Minimum value (inclusive if inclusive=True)")
     max: Union[int, float] = Field(..., description="Maximum value (inclusive if inclusive=True)")
     inclusive: bool = Field(True, description="Whether range bounds are inclusive")
-
 
 @register
 class NumberInRange(ComparatorModule):
@@ -201,7 +197,6 @@ class NumberInRange(ComparatorModule):
 class NumberIsEvenConfig(BaseModel):
     pass  # No configuration needed
 
-
 @register
 class NumberIsEven(ComparatorModule):
     id = "number_is_even"
@@ -244,7 +239,6 @@ class NumberIsEven(ComparatorModule):
 # Number Is Odd
 class NumberIsOddConfig(BaseModel):
     pass  # No configuration needed
-
 
 @register
 class NumberIsOdd(ComparatorModule):

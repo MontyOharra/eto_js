@@ -3,12 +3,11 @@ Module Catalog Domain Models
 Pydantic models for module catalog operations based on modules.md specification
 """
 from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any, Literal, List
+from typing import Optional, Dict, Any, List
 from datetime import datetime
 import json
 
-# Import the new IOShape system from contracts
-from src.features.modules.core.contracts import ModuleMeta
+from .modules import ModuleKind, ModuleMeta
 
 
 class ModuleCatalogCreate(BaseModel):
@@ -17,7 +16,7 @@ class ModuleCatalogCreate(BaseModel):
     version: str = Field(..., min_length=1, max_length=50, description="Module version")
     name: str = Field(..., min_length=1, max_length=255, description="Module display name")
     description: Optional[str] = Field(None, description="Module description")
-    module_kind: Literal["transform", "action", "logic", "comparator"] = Field(..., description="Module type")
+    module_kind: ModuleKind = Field(..., description="Module type")
     meta: ModuleMeta = Field(..., description="Module I/O metadata")
     config_schema: Dict[str, Any] = Field(..., description="Pydantic JSON Schema with x-ui extensions")
     handler_name: str = Field(..., min_length=1, max_length=255, description="Python handler path")
@@ -42,7 +41,7 @@ class ModuleCatalogUpdate(BaseModel):
     """Model for updating module catalog entries"""
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
-    module_kind: Optional[Literal["transform", "action", "logic", "comparator"]] = None
+    module_kind: Optional[ModuleKind] = None
     meta: Optional[ModuleMeta] = None
     config_schema: Optional[Dict[str, Any]] = None
     handler_name: Optional[str] = Field(None, min_length=1, max_length=255)
@@ -70,7 +69,7 @@ class ModuleCatalog(BaseModel):
     version: str
     name: str
     description: Optional[str]
-    module_kind: Literal["transform", "action", "logic", "comparator"]
+    module_kind: ModuleKind
     meta: ModuleMeta
     config_schema: Dict[str, Any]
     handler_name: str

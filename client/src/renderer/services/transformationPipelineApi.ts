@@ -26,42 +26,72 @@ export class TransformationPipelineApiError extends Error {
 }
 
 // Helper functions to convert new API format to frontend format
-function convertMetaToInputs(meta: any, ioDefinitions: any): any[] {
-  if (!meta) return [];
+function convertIOShapeToInputs(meta: any): any[] {
+  if (!meta?.io_shape?.inputs?.nodes) return [];
 
-  // Check if there are fixed inputs defined
-  if (ioDefinitions?.inputs && Array.isArray(ioDefinitions.inputs)) {
-    return ioDefinitions.inputs.map((input: any) => ({
-      id: `input-${input.name}`,
-      name: input.name,
-      type: input.type || 'string',
-      description: input.description || '',
-      required: input.required !== false
-    }));
-  }
+  const inputs: any[] = [];
 
-  // If it's a dynamic input with no fixed inputs, return empty array
-  // The frontend will handle dynamic inputs through the dynamicInputs property
-  return [];
+  // Convert each NodeGroup to frontend input format
+  meta.io_shape.inputs.nodes.forEach((nodeGroup: any, index: number) => {
+    // For fixed nodes (min_count = max_count = 1), create a single input
+    if (nodeGroup.min_count === 1 && nodeGroup.max_count === 1) {
+      inputs.push({
+        id: `input-${nodeGroup.label || index}`,
+        name: nodeGroup.label || `input_${index + 1}`,
+        type: nodeGroup.typing?.allowed_types?.[0] || 'string',
+        description: '',
+        required: true
+      });
+    }
+    // Dynamic nodes are handled through dynamicInputs property
+  });
+
+  return inputs;
 }
 
-function convertMetaToOutputs(meta: any, ioDefinitions: any): any[] {
-  if (!meta) return [];
+function convertIOShapeToOutputs(meta: any): any[] {
+  if (!meta?.io_shape?.outputs?.nodes) return [];
 
-  // Check if there are fixed outputs defined
-  if (ioDefinitions?.outputs && Array.isArray(ioDefinitions.outputs)) {
-    return ioDefinitions.outputs.map((output: any) => ({
-      id: `output-${output.name}`,
-      name: output.name,
-      type: output.type || 'string',
-      description: output.description || '',
-      required: false
-    }));
-  }
+  const outputs: any[] = [];
 
-  // If it's a dynamic output with no fixed outputs, return empty array
-  // The frontend will handle dynamic outputs through the dynamicOutputs property
-  return [];
+  // Convert each NodeGroup to frontend output format
+  meta.io_shape.outputs.nodes.forEach((nodeGroup: any, index: number) => {
+    // For fixed nodes (min_count = max_count = 1), create a single output
+    if (nodeGroup.min_count === 1 && nodeGroup.max_count === 1) {
+      outputs.push({
+        id: `output-${nodeGroup.label || index}`,
+        name: nodeGroup.label || `output_${index + 1}`,
+        type: nodeGroup.typing?.allowed_types?.[0] || 'string',
+        description: '',
+        required: false
+      });
+    }
+    // Dynamic nodes are handled through dynamicOutputs property
+  });
+
+  return outputs;
+}
+
+function getDynamicNodeConfig(nodes: any[], side: 'input' | 'output'): any {
+  if (!nodes || !Array.isArray(nodes)) return undefined;
+
+  // Find a node group that allows multiple nodes (max_count > 1 or null)
+  const dynamicGroup = nodes.find((ng: any) =>
+    ng.max_count === null || ng.max_count > 1
+  );
+
+  if (!dynamicGroup) return undefined;
+
+  return {
+    enabled: true,
+    minNodes: dynamicGroup.min_count || 0,
+    maxNodes: dynamicGroup.max_count || undefined,
+    defaultTemplate: {
+      name: dynamicGroup.label || side,
+      type: dynamicGroup.typing?.allowed_types?.[0] || 'string'
+    },
+    allowTypeConfiguration: true
+  };
 }
 
 function convertSchemaToConfig(schema: any): any[] {
@@ -129,32 +159,28 @@ export async function fetchBaseModules(): Promise<BaseModuleTemplate[]> {
 
     // Convert new API format to frontend format
     const frontendModules = data.modules.map((module: any) => {
-      // Map the new API structure to BaseModuleTemplate
+      // Map the database catalog format to BaseModuleTemplate
+      const inputs = convertIOShapeToInputs(module.meta);
+      const outputs = convertIOShapeToOutputs(module.meta);
+      const dynamicInputs = getDynamicNodeConfig(module.meta?.io_shape?.inputs?.nodes, 'input');
+      const dynamicOutputs = getDynamicNodeConfig(module.meta?.io_shape?.outputs?.nodes, 'output');
+
       return {
         id: module.id,
-        name: module.title || module.name,  // New API uses 'title'
+        name: module.title || module.name,  // Database uses 'title' field (from API response)
         description: module.description || '',
         category: module.category || 'Processing',
-        inputs: convertMetaToInputs(module.meta?.inputs, module.io_definitions),
-        outputs: convertMetaToOutputs(module.meta?.outputs, module.io_definitions),
+        inputs: inputs,
+        outputs: outputs,
         config: convertSchemaToConfig(module.config_schema),
         color: module.color || '#3B82F6',
-        maxInputs: module.meta?.inputs?.max_count || undefined,
-        maxOutputs: module.meta?.outputs?.max_count || undefined,
-        dynamicInputs: module.meta?.inputs?.allow ? {
-          enabled: true,
-          minNodes: module.meta.inputs.min_count || 0,
-          maxNodes: module.meta.inputs.max_count || undefined,
-          defaultTemplate: { name: 'input', type: module.meta.inputs.type || 'string' },
-          allowTypeConfiguration: true  // Allow type changes for dynamic nodes
-        } : undefined,
-        dynamicOutputs: module.meta?.outputs?.allow ? {
-          enabled: true,
-          minNodes: module.meta.outputs.min_count || 0,
-          maxNodes: module.meta.outputs.max_count || undefined,
-          defaultTemplate: { name: 'output', type: module.meta.outputs.type || 'string' },
-          allowTypeConfiguration: true  // Allow type changes for dynamic nodes
-        } : undefined,
+        // If we have dynamic inputs/outputs, don't set max counts
+        maxInputs: dynamicInputs ? undefined : inputs.length,
+        maxOutputs: dynamicOutputs ? undefined : outputs.length,
+        dynamicInputs: dynamicInputs,
+        dynamicOutputs: dynamicOutputs,
+        // Store the module kind for reference
+        kind: module.kind || module.module_kind
       } as BaseModuleTemplate;
     });
 
@@ -180,12 +206,13 @@ export async function executeModule(
   config: Record<string, any>
 ): Promise<Record<string, any>> {
   try {
-    const response = await fetch(`${TRANSFORMATION_PIPELINE_API_BASE}/api/modules/${moduleId}/execute`, {
+    const response = await fetch(`${TRANSFORMATION_PIPELINE_API_BASE}/api/modules/execute`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
+        module_id: moduleId,
         inputs,
         config,
       }),

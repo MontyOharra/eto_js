@@ -5,15 +5,14 @@ All string comparison and boolean evaluation modules
 from typing import Dict, Any
 from pydantic import BaseModel, Field
 import re
-from src.features.modules.core.contracts import ComparatorModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
-from src.features.modules.core.registry import register
+from shared.models import ComparatorModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
+from shared.utils.registry import register
 
 
 # String Equals
 class StringEqualsConfig(BaseModel):
     compare_value: str = Field(..., description="Value to compare against")
     case_sensitive: bool = Field(True, description="Whether comparison is case-sensitive")
-
 
 @register
 class StringEquals(ComparatorModule):
@@ -64,7 +63,6 @@ class StringContainsConfig(BaseModel):
     substring: str = Field(..., description="Substring to search for")
     case_sensitive: bool = Field(True, description="Whether search is case-sensitive")
 
-
 @register
 class StringContains(ComparatorModule):
     id = "string_contains"
@@ -113,7 +111,6 @@ class StringContains(ComparatorModule):
 class StringStartsWithConfig(BaseModel):
     prefix: str = Field(..., description="Prefix to check for")
     case_sensitive: bool = Field(True, description="Whether check is case-sensitive")
-
 
 @register
 class StringStartsWith(ComparatorModule):
@@ -164,7 +161,6 @@ class StringEndsWithConfig(BaseModel):
     suffix: str = Field(..., description="Suffix to check for")
     case_sensitive: bool = Field(True, description="Whether check is case-sensitive")
 
-
 @register
 class StringEndsWith(ComparatorModule):
     id = "string_ends_with"
@@ -213,7 +209,6 @@ class StringEndsWith(ComparatorModule):
 class StringMatchesRegexConfig(BaseModel):
     pattern: str = Field(..., description="Regular expression pattern to match")
 
-
 @register
 class StringMatchesRegex(ComparatorModule):
     id = "string_matches_regex"
@@ -261,7 +256,6 @@ class StringMatchesRegex(ComparatorModule):
 # String Is Empty
 class StringIsEmptyConfig(BaseModel):
     trim_whitespace: bool = Field(True, description="Whether to trim whitespace before checking")
-
 
 @register
 class StringIsEmpty(ComparatorModule):

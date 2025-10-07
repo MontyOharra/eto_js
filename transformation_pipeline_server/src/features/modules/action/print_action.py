@@ -4,14 +4,13 @@ Prints messages to server backend logs for testing pipeline execution
 """
 from typing import Dict, Any
 from pydantic import BaseModel, Field
-from src.features.modules.core.contracts import ActionModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
-from src.features.modules.core.registry import register
+from shared.models import ActionModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
+from shared.utils.registry import register
 
 
 class PrintActionConfig(BaseModel):
     """Configuration for print action"""
     prefix: str = Field("", description="Optional prefix to add before message")
-
 
 @register
 class PrintAction(ActionModule):

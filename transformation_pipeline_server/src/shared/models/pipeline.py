@@ -2,10 +2,12 @@
 Strongly-typed pipeline domain models
 These models define the structure of transformation pipelines following CRUD patterns
 """
-from typing import List, Dict, Any, Optional, Literal
+from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 from datetime import datetime
 import json
+
+from .modules import ModuleKind
 
 
 # Supporting types for pipeline structure
@@ -22,7 +24,7 @@ class ModuleInstance(BaseModel):
     """A module instance placed on the canvas"""
     module_instance_id: str
     module_ref: str  # e.g., "text_cleaner:1.0.0"
-    module_kind: Literal["transform", "action", "logic", "comparator"]
+    module_kind: ModuleKind
     config: Dict[str, Any]  # Module-specific configuration
     inputs: List[InstanceNodePin] = Field(default_factory=list)  # Flat list, grouped by group_index
     outputs: List[InstanceNodePin] = Field(default_factory=list)

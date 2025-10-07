@@ -1,1 +1,0 @@
-"""Core module contracts and base classes"""

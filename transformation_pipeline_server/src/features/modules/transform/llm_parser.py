@@ -5,15 +5,14 @@ Uses Large Language Model to parse and extract data from multiple text inputs
 from typing import Dict, Any
 from pydantic import BaseModel, Field
 
-from src.features.modules.core.contracts import TransformModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
-from src.features.modules.core.registry import register
+from shared.models import TransformModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
+from shared.utils.registry import register
 
 
 class LlmParserConfig(BaseModel):
     """Configuration for LLM Parser"""
     model: str = Field("gpt-4", description="Select the LLM model to use")
     prompt: str = Field("Extract and parse the relevant information from the input text.", description="Instructions for the LLM to parse the input text")
-
 
 @register
 class LlmParser(TransformModule):

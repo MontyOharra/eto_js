@@ -3,100 +3,60 @@ Modules Router - API endpoints for module management
 Provides endpoints for module discovery and catalog access
 """
 import logging
-from typing import List, Dict, Any, Optional
 import time
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, HTTPException, Depends, status
 
 from shared.services import get_modules_service
+from api.schemas import ModuleCatalogResponse, ModuleExecuteRequest, ModuleExecuteResponse
+from features.modules.service import ModuleNotFoundError, ModuleLoadError, ModuleExecutionError, ModulesService
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(
+    prefix="/modules",
+    tags=["Modules"]
+)
 
 
-class ModuleCatalogResponse(BaseModel):
-    """Response model for module catalog"""
-    modules: List[Dict[str, Any]]
-    total_count: int
-    stats: Dict[str, Any]
-
-
-class ModuleStatsResponse(BaseModel):
-    """Response model for module statistics"""
-    stats: Dict[str, Any]
-
-
-class ModuleExecuteRequest(BaseModel):
-    """Request model for module execution"""
-    module_id: str = Field(..., description="Module ID from catalog")
-    inputs: Dict[str, Any] = Field(..., description="Input values keyed by input node ID")
-    config: Dict[str, Any] = Field(..., description="Module configuration parameters")
-    use_cache: bool = Field(True, description="Whether to use cached module (faster)")
-
-
-class ModuleExecuteResponse(BaseModel):
-    """Response model for module execution"""
-    success: bool
-    module_id: str
-    outputs: Dict[str, Any] = Field(..., description="Output values keyed by output node ID")
-    error: Optional[str] = None
-    performance_ms: float = Field(..., description="Execution time in milliseconds")
-    cache_used: bool = Field(..., description="Whether module was loaded from cache")
-
-
-@router.get("/modules", response_model=ModuleCatalogResponse)
-async def get_module_catalog():
+@router.get("", response_model=ModuleCatalogResponse)
+async def get_module_catalog(
+    modules_service : ModulesService = Depends(get_modules_service)
+):
     """
-    Get catalog of all available modules
-    Returns metadata for all registered modules
+    Get catalog of all available modules from database
+    Returns metadata for all active modules
     """
     logger.info("Module catalog requested")
 
     try:
-        # Get the singleton registry directly to ensure we have the same instance
-        from src.features.modules.core.registry import get_registry
-        registry = get_registry()
+        # Get modules from service (which queries database)
+        modules = modules_service.get_module_catalog(only_active=True)
 
-        # Get all modules from registry
-        all_modules = registry.get_all()
-        logger.info(f"Registry has {len(all_modules)} modules")
+        logger.info(f"Retrieved {len(modules)} modules from catalog")
 
-        # Convert to catalog format
+        # Convert to API response format
         catalog = []
-        for module_id, module_class in all_modules.items():
+        for module in modules:
             try:
-                meta = module_class.meta()
                 catalog_entry = {
-                    "module_ref": f"{module_class.id}:{getattr(module_class, 'version', '1.0.0')}",
-                    "id": module_class.id,
-                    "version": getattr(module_class, 'version', '1.0.0'),
-                    "title": module_class.title,
-                    "description": module_class.description,
-                    "kind": module_class.kind,
-                    "meta": meta.model_dump(),
-                    "config_schema": module_class.config_schema(),
-                    "category": getattr(module_class, 'category', 'Processing'),
-                    "color": getattr(module_class, 'color', '#3B82F6')
+                    "module_ref": f"{module.id}:{module.version}",
+                    "id": module.id,
+                    "version": module.version,
+                    "title": module.name,  # Using name field from DB
+                    "description": module.description,
+                    "kind": module.module_kind,
+                    "meta": module.meta if module.meta else {},
+                    "config_schema": module.config_schema if module.config_schema else {},
+                    "category": module.category if hasattr(module, 'category') else 'Processing',
+                    "color": module.color if hasattr(module, 'color') else '#3B82F6'
                 }
                 catalog.append(catalog_entry)
             except Exception as e:
-                logger.error(f"Error converting module {module_id} to catalog format: {e}")
-
-        # Get stats
-        stats = {
-            "total_modules": len(catalog),
-            "transform_modules": len([m for m in catalog if m['kind'] == 'transform']),
-            "action_modules": len([m for m in catalog if m['kind'] == 'action']),
-            "logic_modules": len([m for m in catalog if m['kind'] == 'logic']),
-            "module_refs": [m['module_ref'] for m in catalog]
-        }
+                logger.error(f"Error converting module {module.id} to response format: {e}")
 
         response = ModuleCatalogResponse(
-            modules=catalog,
-            total_count=len(catalog),
-            stats=stats
+            modules=catalog
         )
 
         logger.info(f"Returned {len(catalog)} modules in catalog")
@@ -107,91 +67,55 @@ async def get_module_catalog():
         raise HTTPException(status_code=500, detail="Failed to retrieve module catalog")
 
 
-@router.get("/modules/stats", response_model=ModuleStatsResponse)
-async def get_module_stats():
-    """
-    Get statistics about registered modules
-    """
-    logger.info("Module stats requested")
-
-    try:
-        modules_service = get_modules_service()
-        stats = modules_service.get_module_stats()
-
-        response = ModuleStatsResponse(stats=stats)
-
-        logger.info("Module stats retrieved successfully")
-        return response
-
-    except Exception as e:
-        logger.error(f"Failed to get module stats: {e}")
-        raise HTTPException(status_code=500, detail="Failed to retrieve module stats")
-
-
-@router.get("/modules/cache/stats")
-async def get_module_cache_stats():
-    """
-    Get cache performance statistics
-    """
-    try:
-        modules_service = get_modules_service()
-
-        # Get cache stats from registry
-        from src.features.modules.core.registry import get_registry
-        registry = get_registry()
-        cache_stats = registry.get_cache_stats()
-
-        logger.info("Module cache stats retrieved successfully")
-        return cache_stats
-
-    except Exception as e:
-        logger.error(f"Failed to get module cache stats: {e}")
-        raise HTTPException(status_code=500, detail="Failed to retrieve cache statistics")
-
-
-@router.get("/modules/{module_ref}")
-async def get_module_info(module_ref: str):
+@router.get("/{module_id}")
+async def get_module_info(
+    module_id: str,
+    modules_service: ModulesService = Depends(get_modules_service)
+):
     """
     Get detailed information about a specific module
 
     Args:
-        module_ref: Module reference in format "id:version"
+        module_id: Module ID
     """
-    logger.info(f"Module info requested for: {module_ref}")
+    logger.info(f"Module info requested for: {module_id}")
 
     try:
-        modules_service = get_modules_service()
-        module_class = modules_service.get_module_by_ref(module_ref)
+        module_info = modules_service.get_module_info(module_id)
 
-        if module_class is None:
-            raise HTTPException(status_code=404, detail=f"Module not found: {module_ref}")
+        if module_info is None:
+            raise HTTPException(status_code=404, detail=f"Module not found: {module_id}")
 
-        # Get detailed module information
-        meta = module_class.meta()
-
-        module_info = {
-            "module_ref": module_ref,
-            "id": module_class.id,
-            "version": module_class.version,
-            "title": module_class.title,
-            "description": module_class.description,
-            "kind": module_class.kind,
-            "meta": meta.model_dump(),
-            "config_schema": module_class.ConfigModel.model_json_schema()
+        # Convert to API response format
+        response = {
+            "module_ref": f"{module_info.id}:{module_info.version}",
+            "id": module_info.id,
+            "version": module_info.version,
+            "title": module_info.name,
+            "description": module_info.description,
+            "kind": module_info.module_kind,
+            "meta": module_info.meta if module_info.meta else {},
+            "config_schema": module_info.config_schema if module_info.config_schema else {},
+            "category": module_info.category if hasattr(module_info, 'category') else 'Processing',
+            "color": module_info.color if hasattr(module_info, 'color') else '#3B82F6',
+            "is_active": module_info.is_active
         }
 
-        logger.info(f"Module info retrieved for: {module_ref}")
-        return module_info
+        logger.info(f"Module info retrieved for: {module_id}")
+        return response
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get module info for {module_ref}: {e}")
+        logger.error(f"Failed to get module info for {module_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve module information")
 
 
-@router.post("/modules/execute", response_model=ModuleExecuteResponse)
-async def execute_module(request: ModuleExecuteRequest):
+@router.post("/execute", response_model=ModuleExecuteResponse)
+async def execute_module(
+    request: ModuleExecuteRequest,
+    modules_service: ModulesService = Depends(get_modules_service)
+):
     """
     Execute a module with given inputs and configuration
 
@@ -219,107 +143,54 @@ async def execute_module(request: ModuleExecuteRequest):
     start_time = time.time()
 
     try:
-        # Get registry directly for better control
-        from src.features.modules.core.registry import get_registry, ModuleCache
-        from ...shared.database.repositories.module_catalog import ModuleCatalogRepository
-        from ...shared.database import get_connection_manager
 
-        registry = get_registry()
+        # Execute module through service
+        outputs = modules_service.execute_module(
+            module_id=request.module_id,
+            inputs=request.inputs,
+            config=request.config,
+            context=None  # Service will create default context
+        )
 
-        # Try to get module from registry first (fast path)
-        module_class = registry.get(request.module_id)
-        cache_used = True
+        execution_time_ms = (time.time() - start_time) * 1000
 
-        if module_class is None and not request.use_cache:
-            # Clear cache and try again if requested
-            registry._cache = ModuleCache()
-            cache_used = False
+        response = ModuleExecuteResponse(
+            success=True,
+            module_id=request.module_id,
+            outputs=outputs,
+            error=None,
+            performance_ms=execution_time_ms,
+            cache_used=True  # Service handles caching internally
+        )
 
-        if module_class is None:
-            # Try to load from database
-            cache_used = False
-            connection_manager = get_connection_manager()
-            if connection_manager:
-                try:
-                    module_repo = ModuleCatalogRepository(connection_manager)
-                    catalog_entry = module_repo.get_by_id(request.module_id)
+        logger.info(
+            f"Module {request.module_id} executed successfully in {execution_time_ms:.2f}ms"
+        )
 
-                    if catalog_entry:
-                        # Try to resolve using handler_name if available
-                        handler_name = catalog_entry.handler_name
-                        if handler_name:
-                            module_class = registry.load_module_from_handler(handler_name)
-                except Exception as db_error:
-                    logger.warning(f"Could not load from database: {db_error}")
+        return response
 
-        if module_class is None:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Module '{request.module_id}' not found in registry or database"
-            )
+    except ModuleNotFoundError as e:
+        raise HTTPException(
+            status_code=404,
+            detail=str(e)
+        )
+    except ModuleLoadError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to load module: {str(e)}"
+        )
+    except ModuleExecutionError as e:
+        logger.error(f"Module execution failed: {e}")
+        execution_time_ms = (time.time() - start_time) * 1000
 
-        # Create module instance
-        try:
-            module_instance = module_class()
-        except Exception as e:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Failed to create module instance: {str(e)}"
-            )
-
-        # Validate configuration
-        try:
-            validated_config = module_class.ConfigModel(**request.config)
-        except Exception as e:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid configuration: {str(e)}"
-            )
-
-        # Execute module
-        try:
-            # Create a simple context for execution
-            context = type('Context', (), {
-                'instance_ordered_outputs': [{"node_id": "output_1"}],
-                'instance_ordered_inputs': [(k, v) for k, v in request.inputs.items()]
-            })()
-
-            outputs = module_instance.run(
-                inputs=request.inputs,
-                cfg=validated_config,
-                context=context
-            )
-
-            execution_time_ms = (time.time() - start_time) * 1000
-
-            response = ModuleExecuteResponse(
-                success=True,
-                module_id=request.module_id,
-                outputs=outputs,
-                error=None,
-                performance_ms=execution_time_ms,
-                cache_used=cache_used
-            )
-
-            logger.info(
-                f"Module {request.module_id} executed successfully in {execution_time_ms:.2f}ms "
-                f"(cache: {cache_used})"
-            )
-
-            return response
-
-        except Exception as e:
-            logger.error(f"Module execution failed: {e}")
-            execution_time_ms = (time.time() - start_time) * 1000
-
-            return ModuleExecuteResponse(
-                success=False,
-                module_id=request.module_id,
-                outputs={},
-                error=str(e),
-                performance_ms=execution_time_ms,
-                cache_used=cache_used
-            )
+        return ModuleExecuteResponse(
+            success=False,
+            module_id=request.module_id,
+            outputs={},
+            error=str(e),
+            performance_ms=execution_time_ms,
+            cache_used=False
+        )
 
     except HTTPException:
         raise

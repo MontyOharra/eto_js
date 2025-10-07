@@ -11,16 +11,10 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-# Add both src and current directory to Python path for proper module resolution
-project_root = str(Path(__file__).parent.parent.parent)
-src_path = os.path.join(project_root, 'src')
-sys.path.insert(0, src_path)
-sys.path.insert(0, project_root)
-
-from src.features.modules.core.registry import get_registry, auto_discover_modules, ModuleSecurityValidator
-from src.shared.database import DatabaseConnectionManager
-from src.shared.database.repositories.module_catalog import ModuleCatalogRepository
-from src.shared.models.module_catalog import ModuleCatalogCreate
+from shared.utils.registry import get_registry, auto_discover_modules, ModuleSecurityValidator
+from shared.database import DatabaseConnectionManager
+from shared.database.repositories.module_catalog import ModuleCatalogRepository
+from shared.models.module_catalog import ModuleCatalogCreate
 
 # Configure logging
 logging.basicConfig(

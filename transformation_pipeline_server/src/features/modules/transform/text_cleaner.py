@@ -6,8 +6,8 @@ import re
 from typing import Dict, Any
 from pydantic import BaseModel, Field
 
-from src.features.modules.core.contracts import TransformModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
-from src.features.modules.core.registry import register
+from shared.models import TransformModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
+from shared.utils.registry import register
 
 
 class TextCleanerConfig(BaseModel):
@@ -16,7 +16,6 @@ class TextCleanerConfig(BaseModel):
     normalize_spaces: bool = Field(True, description="Convert multiple spaces to single space")
     remove_empty_lines: bool = Field(False, description="Remove empty lines")
     to_lowercase: bool = Field(False, description="Convert text to lowercase")
-
 
 @register
 class BasicTextCleaner(TransformModule):

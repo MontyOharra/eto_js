@@ -8,14 +8,11 @@ from typing import Optional, List, Dict, Any, Type, TypeVar, Generic, Protocol
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
-from src.shared.database.connection import DatabaseConnectionManager
+from shared.database.connection import DatabaseConnectionManager
+from shared.exceptions.repository import RepositoryError
 
 logger = logging.getLogger(__name__)
 
-
-class RepositoryError(Exception):
-    """Base exception for repository-related errors"""
-    pass
 
 
 class HasId(Protocol):

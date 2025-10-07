@@ -7,32 +7,21 @@ import os
 import sys
 import time
 from datetime import datetime, timezone
-from typing import Dict, Any
-
 from fastapi import APIRouter
-from pydantic import BaseModel
+from api.schemas import HealthResponse
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
-
-
-class HealthResponse(BaseModel):
-    """Health check response model"""
-    status: str
-    message: str
-    timestamp: str
-    version: str
-    server: str
-    uptime_seconds: float
-    system: Dict[str, Any]
-
+router = APIRouter(
+    prefix="/health",
+    tags=["Health Check"]
+)
 
 # Track server start time for uptime calculation
 SERVER_START_TIME = time.time()
 
 
-@router.get("/health", response_model=HealthResponse)
+@router.get("/", response_model=HealthResponse)
 async def health_check():
     """
     Health check endpoint

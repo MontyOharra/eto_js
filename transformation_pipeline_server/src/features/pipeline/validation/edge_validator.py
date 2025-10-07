@@ -2,8 +2,10 @@
 Edge Validator
 Validates connections between pins (§2.3 from spec)
 """
+
 from typing import List
-from src.shared.models.pipeline import PipelineState
+from shared.models.pipeline import PipelineState
+
 from .errors import ValidationError, ValidationErrorCode
 from .index_builder import PipelineIndices
 

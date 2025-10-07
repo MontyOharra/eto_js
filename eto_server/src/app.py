@@ -17,10 +17,10 @@ import uvicorn
 
 from .shared.database import init_database_connection
 from .shared.utils.storage_config import get_storage_configuration
+from .shared.services.service_container import ServiceContainer
 
 # Add the src directory to Python path to enable absolute imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from shared.services.service_container import ServiceContainer
 
 logger = logging.getLogger(__name__)
 

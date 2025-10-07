@@ -5,14 +5,13 @@ All datetime comparison and boolean evaluation modules
 from typing import Dict, Any
 from pydantic import BaseModel, Field
 from datetime import datetime, date
-from src.features.modules.core.contracts import ComparatorModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
-from src.features.modules.core.registry import register
+from shared.models import ComparatorModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
+from shared.utils.registry import register
 
 
 # Date Before
 class DateBeforeConfig(BaseModel):
     compare_date: str = Field(..., description="Date to compare against (ISO format YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)")
-
 
 @register
 class DateBefore(ComparatorModule):
@@ -73,7 +72,6 @@ class DateBefore(ComparatorModule):
 # Date After
 class DateAfterConfig(BaseModel):
     compare_date: str = Field(..., description="Date to compare against (ISO format YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)")
-
 
 @register
 class DateAfter(ComparatorModule):
@@ -136,7 +134,6 @@ class DateInRangeConfig(BaseModel):
     start_date: str = Field(..., description="Start date (ISO format YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)")
     end_date: str = Field(..., description="End date (ISO format YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)")
     inclusive: bool = Field(True, description="Whether range bounds are inclusive")
-
 
 @register
 class DateInRange(ComparatorModule):
@@ -206,7 +203,6 @@ class DateInRange(ComparatorModule):
 # Date Is Today
 class DateIsTodayConfig(BaseModel):
     pass  # No configuration needed - will compare to current date
-
 
 @register
 class DateIsToday(ComparatorModule):

@@ -5,14 +5,13 @@ Infrastructure module for logical NOT operation
 from typing import Dict, Any
 from pydantic import BaseModel
 
-from src.features.modules.core.contracts import LogicModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
-from src.features.modules.core.registry import register
+from shared.models import LogicModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
+from shared.utils.registry import register
 
 
 class BooleanNotConfig(BaseModel):
     """Configuration for Boolean NOT - no configuration needed"""
     pass
-
 
 @register
 class BooleanNot(LogicModule):

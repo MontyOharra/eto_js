@@ -3,146 +3,76 @@ Pipeline Router - API endpoints for pipeline management
 Provides endpoints for pipeline upload, retrieval, and listing
 """
 import logging
-from typing import List
 from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel
 
-from src.features.pipeline import PipelineService
-from src.shared.database import get_connection_manager
-from src.shared.models.pipeline import Pipeline, PipelineCreate, PipelineSummary, PipelineState
-from src.shared.exceptions import RepositoryError, ObjectNotFoundError
-from src.features.pipeline.validation.errors import ValidationResult
+from shared.services import get_pipeline_service
+from features.pipeline import PipelineService
+from shared.models.pipeline import Pipeline, PipelineCreate, PipelineSummary, PipelineState
+from shared.exceptions import RepositoryError, ObjectNotFoundError
+from features.pipeline.validation.errors import ValidationResult
+from api.schemas import PipelineListResponse, PipelineSummaryListResponse, ValidatePipelineRequest, TestUploadResponse
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(
+    prefix="/pipelines",
+    tags=["Pipelines"]
+)
 
 
-class PipelineListResponse(BaseModel):
-    """Response model for pipeline listing"""
-    pipelines: List[Pipeline]
-    total_count: int
 
 
-class PipelineSummaryListResponse(BaseModel):
-    """Response model for pipeline summary listing"""
-    pipelines: List[PipelineSummary]
-    total_count: int
 
-
-class ValidatePipelineRequest(BaseModel):
-    """Request model for pipeline validation"""
-    pipeline_json: PipelineState
-
-
-class TestUploadResponse(BaseModel):
-    """Response model for test upload"""
-    success: bool
-    message: str
-
-
-def get_pipeline_service() -> PipelineService:
-    """Dependency injection for pipeline service"""
-    connection_manager = get_connection_manager()
-    if not connection_manager:
-        raise HTTPException(
-            status_code=500,
-            detail="Database connection not available"
-        )
-    return PipelineService(connection_manager)
-
-
-# NOTE: upload_pipeline route disabled - replaced by test_upload_pipeline during development
-# Keeping method available for future use, but not exposed as API endpoint
-# @router.post("/pipelines", response_model=Pipeline)
+@router.post("/upload", response_model=Pipeline)
 async def upload_pipeline(
     pipeline_create: PipelineCreate,
     pipeline_service: PipelineService = Depends(get_pipeline_service)
 ):
     """
-    Upload/create a new pipeline (DISABLED - use test_upload_pipeline instead)
+    TEST ENDPOINT: Create and compile pipeline with full compilation flow
 
-    Creates a new pipeline with the provided configuration.
-    Pipelines are immutable once created.
+    This endpoint implements the complete compilation pipeline:
+    1. Validate pipeline structure
+    2. Prune dead branches
+    3. Calculate ID-agnostic checksum
+    4. Check if compiled steps exist (cache)
+    5a. If cache hit: Create pipeline record referencing existing steps
+    5b. If cache miss: Compile steps, create pipeline, save steps
+    6. Return created Pipeline object
+
+    This will eventually replace the main /pipelines endpoint.
 
     Args:
         pipeline_create: Pipeline creation data
 
     Returns:
-        Created Pipeline object
+        Created Pipeline object with plan_checksum and compiled_at populated
 
     Raises:
-        400: Invalid pipeline data
+        400: Validation failed
         500: Internal server error
     """
-    logger.info(f"Pipeline upload requested: {pipeline_create.name}")
+    logger.info(f"[TEST_UPLOAD_API] Create pipeline requested: {pipeline_create.name}")
 
     try:
-        pipeline = pipeline_service.upload_pipeline(pipeline_create)
+        # Call the full create pipeline method with compilation
+        pipeline = pipeline_service.create_pipeline(pipeline_create)
 
-        logger.info(f"Pipeline uploaded successfully: {pipeline.id} - {pipeline.name}")
+        logger.info(f"[TEST_UPLOAD_API] ✅ Pipeline created: {pipeline.id} - {pipeline.name}")
+        logger.info(f"[TEST_UPLOAD_API]    Checksum: {pipeline.plan_checksum[:12] if pipeline.plan_checksum else 'none'}...")
+        logger.info(f"[TEST_UPLOAD_API]    Compiled: {pipeline.compiled_at}")
+
         return pipeline
-
-    except RepositoryError as e:
-        logger.error(f"Failed to upload pipeline: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    except Exception as e:
-        logger.error(f"Unexpected error uploading pipeline: {e}")
-        raise HTTPException(status_code=500, detail="Failed to upload pipeline")
-
-
-@router.post("/pipelines/test-upload", response_model=TestUploadResponse)
-async def test_upload_pipeline(
-    pipeline_create: PipelineCreate,
-    pipeline_service: PipelineService = Depends(get_pipeline_service)
-):
-    """
-    TEST ENDPOINT: Validate and prune pipeline (compilation in progress)
-
-    This endpoint is under development and will eventually replace /pipelines.
-    Currently it validates the pipeline and prunes dead branches, returning
-    success/failure status.
-
-    Future steps will add:
-    - Topological sorting
-    - Checksum calculation
-    - Compilation to execution steps
-    - Database persistence
-
-    Args:
-        pipeline_create: Pipeline creation data
-
-    Returns:
-        TestUploadResponse with success flag and message
-
-    Raises:
-        400: Invalid pipeline data
-        500: Internal server error
-    """
-    logger.info(f"[TEST_UPLOAD_API] Test upload requested: {pipeline_create.name}")
-
-    try:
-        # Call the test upload service method
-        success = pipeline_service.test_upload_pipeline(pipeline_create)
-
-        if success:
-            message = f"Pipeline '{pipeline_create.name}' validated and pruned successfully. Check server logs for details."
-            logger.info(f"[TEST_UPLOAD_API] ✅ Test upload succeeded: {pipeline_create.name}")
-            return TestUploadResponse(success=True, message=message)
-        else:
-            message = f"Pipeline '{pipeline_create.name}' validation or pruning failed. Check server logs for details."
-            logger.warning(f"[TEST_UPLOAD_API] ❌ Test upload failed: {pipeline_create.name}")
-            return TestUploadResponse(success=False, message=message)
 
     except ValueError as e:
         logger.error(f"[TEST_UPLOAD_API] Invalid pipeline data: {e}")
         raise HTTPException(status_code=400, detail=f"Invalid pipeline data: {str(e)}")
     except Exception as e:
-        logger.error(f"[TEST_UPLOAD_API] Unexpected error in test upload: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to process test upload")
+        logger.error(f"[TEST_UPLOAD_API] Unexpected error creating pipeline: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to create pipeline: {str(e)}")
 
 
-@router.get("/pipelines")
+@router.get("/")
 async def list_pipelines(
     include_inactive: bool = False,
     summary_only: bool = False,
@@ -166,6 +96,7 @@ async def list_pipelines(
     logger.info(f"Pipeline list requested (include_inactive={include_inactive}, summary_only={summary_only})")
 
     try:
+
         if summary_only:
             summaries = pipeline_service.list_pipeline_summaries(include_inactive=include_inactive)
 
@@ -195,7 +126,7 @@ async def list_pipelines(
         raise HTTPException(status_code=500, detail="Failed to retrieve pipelines")
 
 
-@router.get("/pipelines/{pipeline_id}", response_model=Pipeline)
+@router.get("/{pipeline_id}", response_model=Pipeline)
 async def get_pipeline(
     pipeline_id: str,
     pipeline_service: PipelineService = Depends(get_pipeline_service)
@@ -234,7 +165,7 @@ async def get_pipeline(
         raise HTTPException(status_code=500, detail="Failed to retrieve pipeline")
 
 
-@router.post("/pipelines/validate", response_model=ValidationResult)
+@router.post("/validate", response_model=ValidationResult)
 async def validate_pipeline(
     request: ValidatePipelineRequest,
     pipeline_service: PipelineService = Depends(get_pipeline_service)

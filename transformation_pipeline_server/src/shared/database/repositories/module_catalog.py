@@ -6,23 +6,11 @@ import logging
 from typing import Optional, List
 from sqlalchemy.exc import SQLAlchemyError
 
-from src.shared.database.models import ModuleCatalogModel
-from src.shared.models.module_catalog import ModuleCatalog, ModuleCatalogCreate, ModuleCatalogUpdate
+from shared.database.models import ModuleCatalogModel
+from shared.models.module_catalog import ModuleCatalog, ModuleCatalogCreate, ModuleCatalogUpdate
+from shared.exceptions.repository import RepositoryError, ObjectNotFoundError
 
 logger = logging.getLogger(__name__)
-
-
-class RepositoryError(Exception):
-    """Base exception for repository operations"""
-    pass
-
-
-class ObjectNotFoundError(RepositoryError):
-    """Raised when requested object is not found"""
-    def __init__(self, object_type: str, object_id: any):
-        super().__init__(f"{object_type} with ID {object_id} not found")
-        self.object_type = object_type
-        self.object_id = object_id
 
 
 class ModuleCatalogRepository:
