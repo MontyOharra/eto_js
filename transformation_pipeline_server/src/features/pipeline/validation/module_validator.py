@@ -2,11 +2,13 @@
 Module Validator
 Validates module constraints (§2.5 from spec)
 """
+
 from typing import List, Dict, Set
-from pydantic import ValidationError as PydanticValidationError
-from shared.models.pipeline import PipelineState
-from shared.database.repositories.module_catalog import ModuleCatalogRepository
-from .errors import ValidationError, ValidationErrorCode
+from shared.types import PipelineState
+
+from shared.database.repositories import ModuleCatalogRepository
+from shared.exceptions import PipelineValidationError, PipelineValidationErrorCode
+
 from .index_builder import PipelineIndices
 
 
@@ -28,7 +30,9 @@ class ModuleValidator:
         """
         self.module_catalog_repo = module_catalog_repo
 
-    def validate(self, pipeline_state: PipelineState, indices: PipelineIndices) -> List[ValidationError]:
+    def validate(
+        self, pipeline_state: PipelineState, indices: PipelineIndices
+    ) -> List[PipelineValidationError]:
         """
         Validate all module constraints
 
@@ -43,29 +47,33 @@ class ModuleValidator:
 
         for module in pipeline_state.modules:
             # Parse module_ref (format: "module_id:version")
-            if ':' not in module.module_ref:
+            if ":" not in module.module_ref:
                 # Should be caught by schema validator, but check anyway
-                errors.append(ValidationError(
-                    code=ValidationErrorCode.INVALID_TYPE,
-                    message=f"Invalid module_ref format: '{module.module_ref}' (expected 'id:version')",
-                    where={"module_instance_id": module.module_instance_id}
-                ))
+                errors.append(
+                    PipelineValidationError(
+                        code=PipelineValidationErrorCode.INVALID_TYPE,
+                        message=f"Invalid module_ref format: '{module.module_ref}' (expected 'id:version')",
+                        where={"module_instance_id": module.module_instance_id},
+                    )
+                )
                 continue
 
-            module_id, version = module.module_ref.split(':', 1)
+            module_id, version = module.module_ref.split(":", 1)
 
             # Fetch template from catalog
             template = self.module_catalog_repo.get_by_module_ref(module_id, version)
 
             if not template:
-                errors.append(ValidationError(
-                    code=ValidationErrorCode.MODULE_NOT_FOUND,
-                    message=f"Module '{module_id}:{version}' not found in catalog",
-                    where={
-                        "module_instance_id": module.module_instance_id,
-                        "module_ref": module.module_ref
-                    }
-                ))
+                errors.append(
+                    PipelineValidationError(
+                        code=PipelineValidationErrorCode.MODULE_NOT_FOUND,
+                        message=f"Module '{module_id}:{version}' not found in catalog",
+                        where={
+                            "module_instance_id": module.module_instance_id,
+                            "module_ref": module.module_ref,
+                        },
+                    )
+                )
                 continue
 
             # Validate group cardinalities
@@ -79,7 +87,9 @@ class ModuleValidator:
 
         return errors
 
-    def _validate_group_cardinality(self, module, template) -> List[ValidationError]:
+    def _validate_group_cardinality(
+        self, module, template
+    ) -> List[PipelineValidationError]:
         """
         Validate that pin counts match group cardinality constraints
 
@@ -99,32 +109,36 @@ class ModuleValidator:
             actual_count = len(actual_pins)
 
             if actual_count < group.min_count:
-                errors.append(ValidationError(
-                    code=ValidationErrorCode.GROUP_CARDINALITY,
-                    message=f"Input group {group_idx} '{group.label}' in module '{module.module_instance_id}' has {actual_count} pins (minimum: {group.min_count})",
-                    where={
-                        "module_instance_id": module.module_instance_id,
-                        "group_index": group_idx,
-                        "group_label": group.label,
-                        "actual_count": actual_count,
-                        "min_count": group.min_count,
-                        "direction": "input"
-                    }
-                ))
+                errors.append(
+                    PipelineValidationError(
+                        code=PipelineValidationErrorCode.GROUP_CARDINALITY,
+                        message=f"Input group {group_idx} '{group.label}' in module '{module.module_instance_id}' has {actual_count} pins (minimum: {group.min_count})",
+                        where={
+                            "module_instance_id": module.module_instance_id,
+                            "group_index": group_idx,
+                            "group_label": group.label,
+                            "actual_count": actual_count,
+                            "min_count": group.min_count,
+                            "direction": "input",
+                        },
+                    )
+                )
 
             if group.max_count is not None and actual_count > group.max_count:
-                errors.append(ValidationError(
-                    code=ValidationErrorCode.GROUP_CARDINALITY,
-                    message=f"Input group {group_idx} '{group.label}' in module '{module.module_instance_id}' has {actual_count} pins (maximum: {group.max_count})",
-                    where={
-                        "module_instance_id": module.module_instance_id,
-                        "group_index": group_idx,
-                        "group_label": group.label,
-                        "actual_count": actual_count,
-                        "max_count": group.max_count,
-                        "direction": "input"
-                    }
-                ))
+                errors.append(
+                    PipelineValidationError(
+                        code=PipelineValidationErrorCode.GROUP_CARDINALITY,
+                        message=f"Input group {group_idx} '{group.label}' in module '{module.module_instance_id}' has {actual_count} pins (maximum: {group.max_count})",
+                        where={
+                            "module_instance_id": module.module_instance_id,
+                            "group_index": group_idx,
+                            "group_label": group.label,
+                            "actual_count": actual_count,
+                            "max_count": group.max_count,
+                            "direction": "input",
+                        },
+                    )
+                )
 
         # Validate output groups
         for group_idx, group in enumerate(io_shape.outputs.nodes):
@@ -132,36 +146,42 @@ class ModuleValidator:
             actual_count = len(actual_pins)
 
             if actual_count < group.min_count:
-                errors.append(ValidationError(
-                    code=ValidationErrorCode.GROUP_CARDINALITY,
-                    message=f"Output group {group_idx} '{group.label}' in module '{module.module_instance_id}' has {actual_count} pins (minimum: {group.min_count})",
-                    where={
-                        "module_instance_id": module.module_instance_id,
-                        "group_index": group_idx,
-                        "group_label": group.label,
-                        "actual_count": actual_count,
-                        "min_count": group.min_count,
-                        "direction": "output"
-                    }
-                ))
+                errors.append(
+                    PipelineValidationError(
+                        code=PipelineValidationErrorCode.GROUP_CARDINALITY,
+                        message=f"Output group {group_idx} '{group.label}' in module '{module.module_instance_id}' has {actual_count} pins (minimum: {group.min_count})",
+                        where={
+                            "module_instance_id": module.module_instance_id,
+                            "group_index": group_idx,
+                            "group_label": group.label,
+                            "actual_count": actual_count,
+                            "min_count": group.min_count,
+                            "direction": "output",
+                        },
+                    )
+                )
 
             if group.max_count is not None and actual_count > group.max_count:
-                errors.append(ValidationError(
-                    code=ValidationErrorCode.GROUP_CARDINALITY,
-                    message=f"Output group {group_idx} '{group.label}' in module '{module.module_instance_id}' has {actual_count} pins (maximum: {group.max_count})",
-                    where={
-                        "module_instance_id": module.module_instance_id,
-                        "group_index": group_idx,
-                        "group_label": group.label,
-                        "actual_count": actual_count,
-                        "max_count": group.max_count,
-                        "direction": "output"
-                    }
-                ))
+                errors.append(
+                    PipelineValidationError(
+                        code=PipelineValidationErrorCode.GROUP_CARDINALITY,
+                        message=f"Output group {group_idx} '{group.label}' in module '{module.module_instance_id}' has {actual_count} pins (maximum: {group.max_count})",
+                        where={
+                            "module_instance_id": module.module_instance_id,
+                            "group_index": group_idx,
+                            "group_label": group.label,
+                            "actual_count": actual_count,
+                            "max_count": group.max_count,
+                            "direction": "output",
+                        },
+                    )
+                )
 
         return errors
 
-    def _validate_type_variables(self, module, template) -> List[ValidationError]:
+    def _validate_type_variables(
+        self, module, template
+    ) -> List[PipelineValidationError]:
         """
         Validate type variable unification
 
@@ -205,19 +225,21 @@ class ModuleValidator:
         # Check that each type variable has exactly one concrete type
         for type_var, types in type_var_bindings.items():
             if len(types) > 1:
-                errors.append(ValidationError(
-                    code=ValidationErrorCode.TYPEVAR_MISMATCH,
-                    message=f"Type variable '{type_var}' in module '{module.module_instance_id}' is used with conflicting types: {', '.join(sorted(types))}",
-                    where={
-                        "module_instance_id": module.module_instance_id,
-                        "type_var": type_var,
-                        "conflicting_types": list(types)
-                    }
-                ))
+                errors.append(
+                    PipelineValidationError(
+                        code=PipelineValidationErrorCode.TYPEVAR_MISMATCH,
+                        message=f"Type variable '{type_var}' in module '{module.module_instance_id}' is used with conflicting types: {', '.join(sorted(types))}",
+                        where={
+                            "module_instance_id": module.module_instance_id,
+                            "type_var": type_var,
+                            "conflicting_types": list(types),
+                        },
+                    )
+                )
 
         return errors
 
-    def _validate_config(self, module, template) -> List[ValidationError]:
+    def _validate_config(self, module, template) -> List[PipelineValidationError]:
         """
         Validate module config against Pydantic schema
 
@@ -236,16 +258,18 @@ class ModuleValidator:
 
         # Check if required fields are present (from schema)
         config_schema = template.config_schema
-        if 'required' in config_schema:
-            for required_field in config_schema['required']:
+        if "required" in config_schema:
+            for required_field in config_schema["required"]:
                 if required_field not in module.config:
-                    errors.append(ValidationError(
-                        code=ValidationErrorCode.INVALID_CONFIG,
-                        message=f"Required config field '{required_field}' missing in module '{module.module_instance_id}'",
-                        where={
-                            "module_instance_id": module.module_instance_id,
-                            "missing_field": required_field
-                        }
-                    ))
+                    errors.append(
+                        PipelineValidationError(
+                            code=PipelineValidationErrorCode.INVALID_CONFIG,
+                            message=f"Required config field '{required_field}' missing in module '{module.module_instance_id}'",
+                            where={
+                                "module_instance_id": module.module_instance_id,
+                                "missing_field": required_field,
+                            },
+                        )
+                    )
 
         return errors

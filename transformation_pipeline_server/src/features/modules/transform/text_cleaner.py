@@ -6,7 +6,7 @@ import re
 from typing import Dict, Any
 from pydantic import BaseModel, Field
 
-from shared.models import TransformModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
+from shared.types import TransformModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from shared.utils.registry import register
 
 

@@ -2,10 +2,14 @@
 Reachability Analyzer
 Analyzes which modules are reachable from action modules (§2.6 from spec)
 """
-from typing import Set, List, Tuple
+
 import networkx as nx
-from src.shared.models.pipeline import PipelineState
-from .errors import ValidationError, ValidationErrorCode
+
+from typing import Set, List, Tuple
+from shared.types import PipelineState
+
+from shared.exceptions import PipelineValidationError, PipelineValidationErrorCode
+
 from .index_builder import PipelineIndices
 
 
@@ -20,10 +24,8 @@ class ReachabilityAnalyzer:
 
     @staticmethod
     def analyze(
-        pipeline_state: PipelineState,
-        indices: PipelineIndices,
-        pin_graph: nx.DiGraph
-    ) -> Tuple[Set[str], List[ValidationError]]:
+        pipeline_state: PipelineState, indices: PipelineIndices, pin_graph: nx.DiGraph
+    ) -> Tuple[Set[str], List[PipelineValidationError]]:
         """
         Analyze action-reachability
 
@@ -40,16 +42,19 @@ class ReachabilityAnalyzer:
 
         # Step 1: Identify action modules
         action_modules = [
-            module for module in pipeline_state.modules
+            module
+            for module in pipeline_state.modules
             if module.module_kind == "action"
         ]
 
         if not action_modules:
-            errors.append(ValidationError(
-                code=ValidationErrorCode.NO_ACTIONS,
-                message="Pipeline must contain at least one action module",
-                where={"module_count": len(pipeline_state.modules)}
-            ))
+            errors.append(
+                PipelineValidationError(
+                    code=PipelineValidationErrorCode.NO_ACTIONS,
+                    message="Pipeline must contain at least one action module",
+                    where={"module_count": len(pipeline_state.modules)},
+                )
+            )
             return set(), errors
 
         # Step 2: Find all modules reachable from action inputs

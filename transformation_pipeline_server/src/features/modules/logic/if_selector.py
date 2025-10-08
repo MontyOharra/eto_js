@@ -5,7 +5,7 @@ Infrastructure module for conditional value selection
 from typing import Dict, Any
 from pydantic import BaseModel
 
-from shared.models import LogicModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
+from shared.types import LogicModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from shared.utils.registry import register
 
 

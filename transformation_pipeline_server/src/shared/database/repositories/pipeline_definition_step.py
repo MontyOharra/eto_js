@@ -3,18 +3,20 @@ Pipeline Step Repository
 Repository for compiled pipeline step operations
 """
 import logging
-from typing import List, Optional
 from sqlalchemy.exc import SQLAlchemyError
 
+from typing import List, Optional
+from shared.types import PipelineDefinitionStep, PipelineDefinitionStepCreate
+
 from .base import BaseRepository
-from src.shared.database.models import PipelineStepModel
-from src.shared.models import PipelineStep, PipelineStepCreate
-from src.shared.exceptions import RepositoryError
+
+from shared.database.models import PipelineDefinitionStepModel
+from shared.exceptions import RepositoryError
 
 logger = logging.getLogger(__name__)
 
 
-class PipelineStepRepository(BaseRepository[PipelineStepModel]):
+class PipelineDefinitionStepRepository(BaseRepository[PipelineDefinitionStepModel]):
     """
     Repository for pipeline step operations
     Manages compiled execution steps grouped by plan_checksum
@@ -22,15 +24,15 @@ class PipelineStepRepository(BaseRepository[PipelineStepModel]):
 
     @property
     def model_class(self):
-        return PipelineStepModel
+        return PipelineDefinitionStepModel
 
-    def _convert_to_domain_object(self, db_model: PipelineStepModel) -> PipelineStep:
+    def _convert_to_domain_object(self, db_model: PipelineDefinitionStepModel) -> PipelineDefinitionStep:
         """Convert SQLAlchemy model to domain object"""
-        return PipelineStep.from_db_model(db_model)
+        return PipelineDefinitionStep.from_db_model(db_model)
 
     # ========== Core Step Operations ==========
 
-    def get_steps_by_checksum(self, checksum: str) -> List[PipelineStep]:
+    def get_steps_by_checksum(self, checksum: str) -> List[PipelineDefinitionStep]:
         """
         Get all compiled steps for a given plan checksum
 
@@ -38,7 +40,7 @@ class PipelineStepRepository(BaseRepository[PipelineStepModel]):
             checksum: Plan checksum (SHA-256 hex string)
 
         Returns:
-            List of PipelineStep domain objects, ordered by step_number
+            List of PipelineDefinitionStep domain objects, ordered by step_number
             Empty list if no steps found for this checksum
         """
         try:
@@ -55,15 +57,15 @@ class PipelineStepRepository(BaseRepository[PipelineStepModel]):
             logger.error(f"Error getting steps for checksum {checksum}: {e}")
             raise RepositoryError(f"Failed to get steps: {e}") from e
 
-    def save_steps(self, steps: List[PipelineStepCreate]) -> List[PipelineStep]:
+    def save_steps(self, steps: List[PipelineDefinitionStepCreate]) -> List[PipelineDefinitionStep]:
         """
         Bulk save compiled pipeline steps
 
         Args:
-            steps: List of PipelineStepCreate domain objects to save
+            steps: List of PipelineDefinitionStepCreate domain objects to save
 
         Returns:
-            List of saved PipelineStep domain objects with IDs
+            List of saved PipelineDefinitionStep domain objects with IDs
 
         Raises:
             RepositoryError: If save fails

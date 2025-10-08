@@ -4,7 +4,7 @@ Builds lookup indices for efficient validation (§2.2 from spec)
 """
 from typing import Dict, List, Optional
 from pydantic import BaseModel
-from shared.models.pipeline import PipelineState, ModuleInstance
+from shared.types import PipelineState, ModuleInstance
 
 
 class PinInfo(BaseModel):

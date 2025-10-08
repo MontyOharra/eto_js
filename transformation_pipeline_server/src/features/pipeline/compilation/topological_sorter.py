@@ -2,10 +2,11 @@
 Topological Sorter
 Computes execution order by organizing modules into dependency layers
 """
+
 from typing import List, Dict
 import networkx as nx
 
-from shared.models.pipeline import PipelineState
+from shared.typespipeline_definitions import PipelineState
 
 
 class TopologicalSorter:

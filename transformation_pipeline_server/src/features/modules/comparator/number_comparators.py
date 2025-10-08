@@ -4,7 +4,7 @@ All number comparison and boolean evaluation modules
 """
 from typing import Dict, Any, Union
 from pydantic import BaseModel, Field
-from shared.models import ComparatorModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
+from shared.types import ComparatorModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from shared.utils.registry import register
 
 
@@ -95,9 +95,54 @@ class NumberGreaterThan(ComparatorModule):
         )
 
     def run(self, inputs: Dict[str, Any], cfg: NumberGreaterThanConfig, context: Any = None) -> Dict[str, Any]:
-        value = list(inputs.values())[0]
+        import math
+
+        # Get the single input value (there should be exactly one)
+        if not inputs:
+            raise ValueError("No input provided to number comparison")
+
+        # Get the input node_id and value
+        input_node_id = list(inputs.keys())[0]
+        value = inputs[input_node_id]
+
+        # Get the output node_id from context
+        if context and hasattr(context, 'outputs') and context.outputs:
+            output_node_id = context.outputs[0].node_id
+        else:
+            # Fallback to generic output key
+            output_node_id = "result"
+
+        # Handle None
+        if value is None:
+            # None is not greater than any number
+            return {output_node_id: False}
+
+        # Validate input is a number (should always be due to type constraints)
+        if not isinstance(value, (int, float)):
+            raise TypeError(f"Expected int or float, got {type(value).__name__}")
+
+        # Handle special float values
+        if math.isnan(value):
+            # NaN comparisons always return False
+            return {output_node_id: False}
+
+        if math.isinf(value):
+            # Positive infinity is greater than any finite threshold
+            # Negative infinity is not greater than any threshold
+            if value > 0:  # Positive infinity
+                return {output_node_id: not math.isinf(cfg.threshold) or cfg.threshold < 0}
+            else:  # Negative infinity
+                return {output_node_id: False}
+
+        # Handle threshold being infinity or NaN
+        if math.isnan(cfg.threshold):
+            # Comparison with NaN is always False
+            return {output_node_id: False}
+
+        # Perform the comparison
         result = value > cfg.threshold
-        return {"result": result}
+
+        return {output_node_id: result}
 
 
 # Number Less Than

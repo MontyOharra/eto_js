@@ -10,13 +10,13 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from .base import BaseRepository
 from src.shared.database.models import PipelineDefinitionModel
-from src.shared.models.pipeline import Pipeline, PipelineCreate, PipelineSummary
+from shared.types import PipelineDefinition, PipelineDefinitionCreate, PipelineDefinitionSummary
 from src.shared.exceptions import RepositoryError, ObjectNotFoundError
 
 logger = logging.getLogger(__name__)
 
 
-class PipelineRepository(BaseRepository[PipelineDefinitionModel]):
+class PipelineDefinitionRepository(BaseRepository[PipelineDefinitionModel]):
     """
     Repository for pipeline operations
     Manages pipelines with immutable design - only get, list, and create operations
@@ -30,24 +30,24 @@ class PipelineRepository(BaseRepository[PipelineDefinitionModel]):
         """Generate unique pipeline ID"""
         return f"pipeline_{uuid.uuid4().hex[:12]}"
 
-    def _convert_to_domain_object(self, db_model: PipelineDefinitionModel) -> Pipeline:
+    def _convert_to_domain_object(self, db_model: PipelineDefinitionModel) -> PipelineDefinition:
         """Convert SQLAlchemy model to domain object"""
-        return Pipeline.from_db_model(db_model)
+        return PipelineDefinition.from_db_model(db_model)
 
-    def _convert_to_summary(self, db_model: PipelineDefinitionModel) -> PipelineSummary:
+    def _convert_to_summary(self, db_model: PipelineDefinitionModel) -> PipelineDefinitionSummary:
         """Convert SQLAlchemy model to summary object"""
         pipeline = self._convert_to_domain_object(db_model)
-        return PipelineSummary.from_full_pipeline(pipeline)
+        return PipelineDefinitionSummary.from_full_pipeline_definition(pipeline)
 
     # ========== Required Operations (Get, List, Upload) ==========
 
-    def create(self, pipeline_create: PipelineCreate) -> Pipeline:
+    def create(self, pipeline_create: PipelineDefinitionCreate) -> PipelineDefinition:
         """
         Upload/create new pipeline from Pydantic model
         Pipelines are immutable once created
 
         Args:
-            pipeline_create: PipelineCreate model with pipeline data
+            pipeline_create: PipelineDefinitionCreate model with pipeline data
 
         Returns:
             Created Pipeline domain model
@@ -76,7 +76,7 @@ class PipelineRepository(BaseRepository[PipelineDefinitionModel]):
             logger.error(f"Error creating pipeline: {e}")
             raise RepositoryError(f"Failed to create pipeline: {e}") from e
 
-    def get_by_id(self, pipeline_id: str) -> Optional[Pipeline]:
+    def get_by_id(self, pipeline_id: str) -> Optional[PipelineDefinition]:
         """
         Get pipeline by ID
 
@@ -100,7 +100,7 @@ class PipelineRepository(BaseRepository[PipelineDefinitionModel]):
             logger.error(f"Error getting pipeline {pipeline_id}: {e}")
             raise RepositoryError(f"Failed to get pipeline: {e}") from e
 
-    def get_all(self, include_inactive: bool = False) -> List[Pipeline]:
+    def get_all(self, include_inactive: bool = False) -> List[PipelineDefinition]:
         """
         Get all pipelines (list operation)
 
@@ -130,7 +130,7 @@ class PipelineRepository(BaseRepository[PipelineDefinitionModel]):
             logger.error(f"Error getting all pipelines: {e}")
             raise RepositoryError(f"Failed to get pipelines: {e}") from e
 
-    def get_summaries(self, include_inactive: bool = False) -> List[PipelineSummary]:
+    def get_summaries(self, include_inactive: bool = False) -> List[PipelineDefinitionSummary]:
         """
         Get pipeline summaries for list views (lightweight)
 
@@ -138,7 +138,7 @@ class PipelineRepository(BaseRepository[PipelineDefinitionModel]):
             include_inactive: If True, include inactive pipelines
 
         Returns:
-            List of PipelineSummary objects
+            List of PipelineDefinitionSummary objects
         """
         try:
             with self.connection_manager.session_scope() as session:
@@ -160,7 +160,7 @@ class PipelineRepository(BaseRepository[PipelineDefinitionModel]):
             logger.error(f"Error getting pipeline summaries: {e}")
             raise RepositoryError(f"Failed to get pipeline summaries: {e}") from e
 
-    def create_with_checksum(self, data: dict) -> Pipeline:
+    def create_with_checksum(self, data: dict) -> PipelineDefinition:
         """
         Create pipeline with pre-calculated checksum
 
@@ -196,7 +196,7 @@ class PipelineRepository(BaseRepository[PipelineDefinitionModel]):
 
     # ========== Compilation-Related Operations ==========
 
-    def update_pipeline_checksum(self, pipeline_id: str, checksum: str, compiled_at: datetime) -> Pipeline:
+    def update_pipeline_checksum(self, pipeline_id: str, checksum: str, compiled_at: datetime) -> PipelineDefinition:
         """
         Update pipeline's plan_checksum and compiled_at timestamp
 

@@ -6,11 +6,12 @@ This implementation is ID-AGNOSTIC, meaning two pipelines with identical structu
 but different node IDs will produce the SAME checksum. This enables deduplication
 and caching of compiled steps across multiple pipelines.
 """
+
 import hashlib
 import json
 from typing import Dict, Any
 
-from shared.models.pipeline import PipelineState
+from shared.typespipeline_definitions import PipelineState
 
 
 class ChecksumCalculator:
@@ -70,8 +71,7 @@ class ChecksumCalculator:
 
         # Step 2: Build normalized structure using position IDs
         normalized_data = ChecksumCalculator._build_normalized_data(
-            pipeline_state,
-            id_to_position
+            pipeline_state, id_to_position
         )
 
         # Step 3: Serialize to deterministic JSON string
@@ -113,8 +113,7 @@ class ChecksumCalculator:
         #   - "or ''" handles None names (treats them as empty string)
         # Note: Entry points are always type "str" so no need to sort by type
         sorted_entries = sorted(
-            pipeline_state.entry_points,
-            key=lambda e: (e.name or "")
+            pipeline_state.entry_points, key=lambda e: (e.name or "")
         )
 
         # Assign position IDs: entry_0, entry_1, entry_2, ...
@@ -138,10 +137,12 @@ class ChecksumCalculator:
             key=lambda m: (
                 m.module_ref,
                 m.module_kind,
-                json.dumps(m.config, sort_keys=True),  # Convert dict to deterministic string
+                json.dumps(
+                    m.config, sort_keys=True
+                ),  # Convert dict to deterministic string
                 len(m.inputs),
-                len(m.outputs)
-            )
+                len(m.outputs),
+            ),
         )
 
         # Process each module and its pins
@@ -158,8 +159,7 @@ class ChecksumCalculator:
             # Example: group_index=0, position_index=0 comes before
             #          group_index=0, position_index=1
             sorted_inputs = sorted(
-                module.inputs,
-                key=lambda p: (p.group_index, p.position_index)
+                module.inputs, key=lambda p: (p.group_index, p.position_index)
             )
 
             # Assign input pin position IDs: mod_0_in_0, mod_0_in_1, ...
@@ -170,8 +170,7 @@ class ChecksumCalculator:
             # Sort output pins within this module
             # ------------------------------------------------------------
             sorted_outputs = sorted(
-                module.outputs,
-                key=lambda p: (p.group_index, p.position_index)
+                module.outputs, key=lambda p: (p.group_index, p.position_index)
             )
 
             # Assign output pin position IDs: mod_0_out_0, mod_0_out_1, ...
@@ -182,8 +181,7 @@ class ChecksumCalculator:
 
     @staticmethod
     def _build_normalized_data(
-        pipeline_state: PipelineState,
-        id_to_pos: Dict[str, str]
+        pipeline_state: PipelineState, id_to_pos: Dict[str, str]
     ) -> Dict[str, Any]:
         """
         Build normalized dictionary using position IDs instead of actual IDs
@@ -203,8 +201,7 @@ class ChecksumCalculator:
         # This ensures we process nodes in the same order
         # ============================================================
         sorted_entries = sorted(
-            pipeline_state.entry_points,
-            key=lambda e: (e.name or "")
+            pipeline_state.entry_points, key=lambda e: (e.name or "")
         )
 
         sorted_modules = sorted(
@@ -214,27 +211,28 @@ class ChecksumCalculator:
                 m.module_kind,
                 json.dumps(m.config, sort_keys=True),
                 len(m.inputs),
-                len(m.outputs)
-            )
+                len(m.outputs),
+            ),
         )
 
         # ============================================================
         # Build normalized structure
         # ============================================================
-        normalized = {
-            "entries": [],
-            "modules": [],
-            "connections": []
-        }
+        normalized = {"entries": [], "modules": [], "connections": []}
 
         # ------------------------------------------------------------
         # Add entry points with position IDs
         # ------------------------------------------------------------
         for entry in sorted_entries:
-            normalized["entries"].append({
-                "pos": id_to_pos[entry.node_id],  # Use position instead of actual ID
-                "name": entry.name or ""  # Entry points don't have type (always str)
-            })
+            normalized["entries"].append(
+                {
+                    "pos": id_to_pos[
+                        entry.node_id
+                    ],  # Use position instead of actual ID
+                    "name": entry.name
+                    or "",  # Entry points don't have type (always str)
+                }
+            )
 
         # ------------------------------------------------------------
         # Add modules with position IDs
@@ -242,12 +240,10 @@ class ChecksumCalculator:
         for module in sorted_modules:
             # Sort pins by structural position (same as in _build_id_mapping)
             sorted_inputs = sorted(
-                module.inputs,
-                key=lambda p: (p.group_index, p.position_index)
+                module.inputs, key=lambda p: (p.group_index, p.position_index)
             )
             sorted_outputs = sorted(
-                module.outputs,
-                key=lambda p: (p.group_index, p.position_index)
+                module.outputs, key=lambda p: (p.group_index, p.position_index)
             )
 
             module_data = {
@@ -256,19 +252,13 @@ class ChecksumCalculator:
                 "kind": module.module_kind,
                 "config": module.config,
                 "inputs": [
-                    {
-                        "pos": id_to_pos[pin.node_id],  # Pin position
-                        "type": pin.type
-                    }
+                    {"pos": id_to_pos[pin.node_id], "type": pin.type}  # Pin position
                     for pin in sorted_inputs
                 ],
                 "outputs": [
-                    {
-                        "pos": id_to_pos[pin.node_id],  # Pin position
-                        "type": pin.type
-                    }
+                    {"pos": id_to_pos[pin.node_id], "type": pin.type}  # Pin position
                     for pin in sorted_outputs
-                ]
+                ],
             }
             normalized["modules"].append(module_data)
 
@@ -281,15 +271,17 @@ class ChecksumCalculator:
             pipeline_state.connections,
             key=lambda c: (
                 id_to_pos[c.from_node_id],  # Sort by "from" position
-                id_to_pos[c.to_node_id]      # Then by "to" position
-            )
+                id_to_pos[c.to_node_id],  # Then by "to" position
+            ),
         )
 
         for connection in sorted_connections:
-            normalized["connections"].append({
-                "from": id_to_pos[connection.from_node_id],  # From position
-                "to": id_to_pos[connection.to_node_id]       # To position
-            })
+            normalized["connections"].append(
+                {
+                    "from": id_to_pos[connection.from_node_id],  # From position
+                    "to": id_to_pos[connection.to_node_id],  # To position
+                }
+            )
 
         return normalized
 
@@ -314,9 +306,9 @@ class ChecksumCalculator:
         """
         return json.dumps(
             data,
-            sort_keys=True,              # Always sort dict keys alphabetically
-            separators=(',', ':'),       # Compact format: no spaces
-            ensure_ascii=True            # Convert unicode to \uXXXX format
+            sort_keys=True,  # Always sort dict keys alphabetically
+            separators=(",", ":"),  # Compact format: no spaces
+            ensure_ascii=True,  # Convert unicode to \uXXXX format
         )
 
     @staticmethod
@@ -338,7 +330,7 @@ class ChecksumCalculator:
             '3d1a4f5e8b2c9d7a6e4f1b8c5a9d2e7f3b6c8a4d9e1f7a5b2c8d4e6f9a1b3c5d7e'
         """
         # Create hash object
-        hash_obj = hashlib.sha256(json_str.encode('utf-8'))
+        hash_obj = hashlib.sha256(json_str.encode("utf-8"))
 
         # Return hexadecimal string representation
         return hash_obj.hexdigest()

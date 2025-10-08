@@ -2,23 +2,31 @@
 Pipeline Compiler
 Orchestrates compilation: pruning, checksum calculation, topological sorting, and step building
 """
+
 import json
 from typing import List, Tuple, Dict
 
-from shared.models.pipeline import PipelineState, ModuleInstance, NodeConnection
-from shared.models.pipeline_step import PipelineStepCreate
+from shared.typespipeline_definitions import (
+    PipelineState,
+    ModuleInstance,
+    NodeConnection,
+)
+from shared.typespipeline_definition_steps import PipelineStepCreate
 
 from .topological_sorter import TopologicalSorter
 
 
 class CompilationResult:
     """Result of pipeline compilation"""
+
     def __init__(self, steps: List[PipelineStepCreate], checksum: str):
         self.steps = steps
         self.checksum = checksum
         self.step_count = len(steps)
         # Calculate layer count from step numbers
-        self.layer_count = max((s.step_number for s in steps), default=-1) + 1 if steps else 0
+        self.layer_count = (
+            max((s.step_number for s in steps), default=-1) + 1 if steps else 0
+        )
 
 
 class PipelineCompiler:
@@ -36,8 +44,7 @@ class PipelineCompiler:
 
     @staticmethod
     def compile(
-        pruned_pipeline: PipelineState,
-        checksum: str
+        pruned_pipeline: PipelineState, checksum: str
     ) -> List[PipelineStepCreate]:
         """
         Compile pruned pipeline to executable step domain objects
@@ -74,9 +81,7 @@ class PipelineCompiler:
 
     @staticmethod
     def _build_steps(
-        pipeline: PipelineState,
-        layers: List[List[str]],
-        checksum: str
+        pipeline: PipelineState, layers: List[List[str]], checksum: str
     ) -> List[PipelineStepCreate]:
         """
         Build PipelineStepCreate domain objects from topological layers
@@ -105,11 +110,15 @@ class PipelineCompiler:
 
                 # Build input/output mappings for this module
                 input_mappings = PipelineCompiler._build_input_mappings(
-                    module,
-                    pipeline.connections,
-                    pin_to_module
+                    module, pipeline.connections, pin_to_module
                 )
                 output_names = PipelineCompiler._build_output_names(module)
+
+                # Build node metadata from module's pin information
+                node_metadata = {
+                    "inputs": module.inputs,  # List[InstanceNodePin]
+                    "outputs": module.outputs,  # List[InstanceNodePin]
+                }
 
                 # Create PipelineStepCreate domain object
                 step = PipelineStepCreate(
@@ -120,7 +129,8 @@ class PipelineCompiler:
                     module_config=module.config,  # Dict (will be JSON-ified by model_dump_for_db)
                     input_field_mappings=input_mappings,  # Dict
                     output_display_names=output_names,  # Dict
-                    step_number=step_number
+                    node_metadata=node_metadata,  # NEW: Preserve complete pin metadata
+                    step_number=step_number,
                 )
                 steps.append(step)
                 step_number += 1
@@ -169,7 +179,7 @@ class PipelineCompiler:
     def _build_input_mappings(
         module: ModuleInstance,
         connections: List[NodeConnection],
-        pin_to_module: Dict[str, str]
+        pin_to_module: Dict[str, str],
     ) -> Dict[str, str]:
         """
         Build input field mappings for a module

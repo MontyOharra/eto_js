@@ -1,10 +1,71 @@
 # Implementation Tasks for Unified Execution with Node Metadata
 
+## 🔄 IMPLEMENTATION PROTOCOL - MUST READ BEFORE EACH PHASE
+**IMPORTANT: Read these instructions at the start of each phase and after completing each phase**
+
+### Step-by-Step Implementation Process:
+1. **PLAN**: Present a detailed plan for the current phase including:
+   - Exact files to be created/modified
+   - Specific code/functions to be written
+   - Location of each change
+   - Dependencies and imports needed
+
+2. **WAIT**: Wait for user confirmation before proceeding ("ok", "proceed", "go ahead", etc.)
+
+3. **CHECK**: After confirmation, read/check existing code that will be modified
+
+4. **IMPLEMENT**: Write the code according to the plan
+
+5. **TEST**: If testable, write and run unit tests for the new functionality
+
+6. **E2E READY**: Announce readiness for end-to-end testing by user
+
+7. **CONFIRM**: Wait for user's test results and final confirmation
+
+8. **UPDATE CHECKBOXES**: Mark completed items with [x] in the implementation tasks
+
+9. **NEXT**: Move to next phase and **RE-READ THESE INSTRUCTIONS**
+
+### Testing Priority:
+- Unit test individual functions where possible
+- Focus on domain model conversions
+- Test error cases and edge conditions
+- Repository methods can be tested with mock sessions
+
+### Recursive Instruction:
+**After completing each phase, return to read these implementation instructions again before starting the next phase.**
+
+---
+
 > This document outlines all changes and additions needed to implement the unified execution plan with node metadata support.
+
+## 📊 Implementation Progress
+
+### Phase Overview:
+- ✅ **Phase 1: Data Model Updates** - COMPLETE
+  - [x] 1.1 Update PipelineStep Model
+  - [x] 1.2 Update SQLAlchemy Model
+  - [x] 1.3 Update Repository
+- ✅ **Phase 2: Compilation Process Updates** - COMPLETE
+  - [x] 2.1 Update Compiler to Preserve Node Metadata
+- ✅ **Phase 3: Execution Context Implementation** - COMPLETE
+  - [x] 3.1 Create ExecutionContext Class
+  - [x] 3.2 Update Module Handler Base Class
+- ✅ **Phase 4: Dask Executor Implementation** - COMPLETE
+  - [x] 4.1 Add Execution Audit Trail (Database Persistence)
+  - [x] 4.2 Create Pipeline Executor
+  - [x] 4.3 Create Execution Models
+  - [x] 4.4 Sequential Fallback Executor (skipped - optional)
+- ✅ **Phase 5: API Endpoints** - COMPLETE
+  - [x] 5.1 Create Execution Endpoint
+- ⏳ **Phase 6: Frontend Updates** - NOT STARTED
+  - [ ] 6.1 Add Execution UI
+
+---
 
 ## Phase 1: Data Model Updates
 
-### 1.1 Update PipelineStep Model
+- [x] **1.1 Update PipelineStep Model**
 **File**: `transformation_pipeline_server/src/shared/models/pipeline_step.py`
 
 Add the following to `PipelineStepBase` class after the existing fields, and remove redundant field:
@@ -44,7 +105,7 @@ def model_dump_for_db(self) -> dict:
     return data
 ```
 
-### 1.2 Update SQLAlchemy Model
+- [x] **1.2 Update SQLAlchemy Model**
 **File**: `transformation_pipeline_server/src/shared/database/models.py`
 
 Update `PipelineStepModel` class to add new column and remove redundant one:
@@ -60,7 +121,7 @@ class PipelineStepModel(Base):
     node_metadata = Column(String, nullable=True, default='{}')  # JSON string storage
 ```
 
-### 1.3 Update Repository Layer
+- [x] **1.3 Update Repository** Layer
 **File**: `transformation_pipeline_server/src/shared/database/repositories/pipeline_step.py`
 
 In `PipelineStepRepository.create_steps()` method, ensure the node_metadata is included:
@@ -109,7 +170,7 @@ def get_steps_by_checksum(self, db: Session, checksum: str) -> List[PipelineStep
 
 ## Phase 2: Compilation Process Updates
 
-### 2.1 Update Compiler to Preserve Node Metadata
+- [x] **2.1 Update Compiler to Preserve Node Metadata**
 **File**: `transformation_pipeline_server/src/features/pipeline/compilation/compiler.py`
 
 Modify the `_build_steps()` static method to extract and include node metadata when creating PipelineStepCreate objects. Update lines 114-124:
@@ -199,7 +260,7 @@ The topological sorter already works with ModuleInstance objects and doesn't cre
 
 ## Phase 3: Execution Context Implementation
 
-### 3.1 Create ExecutionContext Class
+- [x] **3.1 Create ExecutionContext Class**
 **File**: New file `transformation_pipeline_server/src/shared/models/execution_context.py`
 
 ```python
@@ -279,7 +340,7 @@ class ExecutionContext(BaseModel):
         return groups
 ```
 
-### 3.2 Update Module Handler Base Class
+- [x] **3.2 Update Module Handler Base Class**
 **File**: `transformation_pipeline_server/src/features/modules/core/base.py`
 
 Add context parameter to the base class:
@@ -303,8 +364,8 @@ class BaseModule(ABC):
 
 ## Phase 4: Dask Executor Implementation
 
-### 4.1 Add Execution Audit Trail (Database Persistence)
-**File**: New file `transformation_pipeline_server/src/shared/database/models.py` (add to existing file)
+- [x] **4.1 Add Execution Audit Trail (Database Persistence)**
+**File**: `transformation_pipeline_server/src/shared/database/models.py` (add to existing file)
 
 Add execution tracking models:
 ```python
@@ -333,229 +394,380 @@ class ExecutionStepModel(Base):
     executed_at = Column(DateTime, nullable=False)
 ```
 
-**File**: New file `transformation_pipeline_server/src/shared/database/repositories/execution_history.py`
+**File**: New file `transformation_pipeline_server/src/shared/models/execution.py`
 
-Create repository for execution history:
+Create domain models for execution history:
 ```python
-from typing import List, Optional
-from sqlalchemy.orm import Session
-from shared.database.models import ExecutionRunModel, ExecutionStepModel
-
-class ExecutionHistoryRepository:
-    def __init__(self, connection_manager):
-        self.connection_manager = connection_manager
-
-    def create_run(self, db: Session, run_data: dict) -> ExecutionRunModel:
-        """Create a new execution run record"""
-        run = ExecutionRunModel(**run_data)
-        db.add(run)
-        db.commit()
-        return run
-
-    def add_step(self, db: Session, step_data: dict) -> ExecutionStepModel:
-        """Add an execution step to the history"""
-        step = ExecutionStepModel(**step_data)
-        db.add(step)
-        db.commit()
-        return step
-
-    def update_run_status(self, db: Session, run_id: str, status: str, completed_at: datetime):
-        """Update run status on completion"""
-        run = db.query(ExecutionRunModel).filter_by(run_id=run_id).first()
-        if run:
-            run.status = status
-            run.completed_at = completed_at
-            db.commit()
-
-    def get_run_history(self, db: Session, pipeline_id: str, limit: int = 10) -> List[ExecutionRunModel]:
-        """Get recent execution runs for a pipeline"""
-        return db.query(ExecutionRunModel).filter_by(
-            pipeline_id=pipeline_id
-        ).order_by(ExecutionRunModel.started_at.desc()).limit(limit).all()
-```
-
-**File**: New file `transformation_pipeline_server/src/features/pipeline/execution/tracker.py`
-
-Create execution tracker interface and implementation:
-```python
-from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional
-import json
+from pydantic import BaseModel, Field
+from typing import Optional, Dict, Any
 from datetime import datetime
-from shared.database.repositories.execution_history import ExecutionHistoryRepository
 
-class ExecutionTracker(ABC):
-    """Base class for execution tracking"""
+class ExecutionRun(BaseModel):
+    """Domain model for execution run"""
+    run_id: str
+    pipeline_id: str
+    status: str
+    started_at: datetime
+    completed_at: Optional[datetime] = None
+    entry_values: Dict[str, Any]
+    created_at: datetime
 
-    @abstractmethod
-    def start_run(self, run_id: str, pipeline_id: str, entry_values: Dict[str, Any]):
-        """Record the start of a pipeline run"""
-        pass
+    @classmethod
+    def from_db_model(cls, db_model) -> "ExecutionRun":
+        """Convert from SQLAlchemy model"""
+        return cls(
+            run_id=db_model.run_id,
+            pipeline_id=db_model.pipeline_id,
+            status=db_model.status,
+            started_at=db_model.started_at,
+            completed_at=db_model.completed_at,
+            entry_values=json.loads(db_model.entry_values) if db_model.entry_values else {},
+            created_at=db_model.created_at
+        )
 
-    @abstractmethod
-    def track_step(self, run_id: str, module_id: str, step_num: int,
-                   inputs: Dict[str, Any], outputs: Dict[str, Any],
-                   elapsed_ms: float, error: Optional[str] = None):
-        """Track a single step execution"""
-        pass
+class ExecutionStep(BaseModel):
+    """Domain model for execution step"""
+    id: int
+    run_id: str
+    module_instance_id: str
+    step_number: int
+    inputs: Dict[str, Any]
+    outputs: Dict[str, Any]
+    elapsed_ms: float
+    error: Optional[str] = None
+    executed_at: datetime
 
-    @abstractmethod
-    def complete_run(self, run_id: str, status: str):
-        """Mark a run as complete"""
-        pass
+    @classmethod
+    def from_db_model(cls, db_model) -> "ExecutionStep":
+        """Convert from SQLAlchemy model"""
+        return cls(
+            id=db_model.id,
+            run_id=db_model.run_id,
+            module_instance_id=db_model.module_instance_id,
+            step_number=db_model.step_number,
+            inputs=json.loads(db_model.inputs) if db_model.inputs else {},
+            outputs=json.loads(db_model.outputs) if db_model.outputs else {},
+            elapsed_ms=db_model.elapsed_ms,
+            error=db_model.error,
+            executed_at=db_model.executed_at
+        )
 
-class DatabaseTracker(ExecutionTracker):
-    """Persist execution history to database"""
+class ExecutionRunCreate(BaseModel):
+    """Model for creating execution run"""
+    run_id: str
+    pipeline_id: str
+    status: str = "running"
+    started_at: datetime
+    entry_values: Dict[str, Any]
 
-    def __init__(self, repo: ExecutionHistoryRepository):
-        self.repo = repo
+    def model_dump_for_db(self) -> dict:
+        """Convert to database format"""
+        data = self.model_dump()
+        data['entry_values'] = json.dumps(data['entry_values'])
+        return data
 
-    def start_run(self, run_id: str, pipeline_id: str, entry_values: Dict[str, Any]):
-        """Record the start of a pipeline run"""
-        with self.repo.connection_manager.get_session() as db:
-            run_data = {
-                "run_id": run_id,
-                "pipeline_id": pipeline_id,
-                "status": "running",
-                "started_at": datetime.utcnow(),
-                "entry_values": json.dumps(entry_values, default=str)
-            }
-            self.repo.create_run(db, run_data)
+class ExecutionStepCreate(BaseModel):
+    """Model for creating execution step"""
+    run_id: str
+    module_instance_id: str
+    step_number: int
+    inputs: Dict[str, Any]
+    outputs: Dict[str, Any]
+    elapsed_ms: float
+    error: Optional[str] = None
+    executed_at: datetime
 
-    def track_step(self, run_id: str, module_id: str, step_num: int,
-                   inputs: Dict[str, Any], outputs: Dict[str, Any],
-                   elapsed_ms: float, error: Optional[str] = None):
-        """Track a single step execution"""
-        with self.repo.connection_manager.get_session() as db:
-            step_data = {
-                "run_id": run_id,
-                "module_instance_id": module_id,
-                "step_number": step_num,
-                "inputs": self._serialize_data(inputs),
-                "outputs": self._serialize_data(outputs),
-                "elapsed_ms": elapsed_ms,
-                "error": error,
-                "executed_at": datetime.utcnow()
-            }
-            self.repo.add_step(db, step_data)
-
-    def complete_run(self, run_id: str, status: str):
-        """Mark a run as complete"""
-        with self.repo.connection_manager.get_session() as db:
-            self.repo.update_run_status(db, run_id, status, datetime.utcnow())
-
-    def _serialize_data(self, data: Dict[str, Any], max_size: int = 10000) -> str:
-        """Serialize data with size limits and type handling"""
-        try:
-            serialized = json.dumps(data, default=str)
-            if len(serialized) > max_size:
-                # Truncate large data with indicator
-                return json.dumps({"_truncated": True, "size": len(serialized)})
-            return serialized
-        except Exception as e:
-            return json.dumps({"_error": f"Serialization failed: {str(e)}"})
-
-class NoOpTracker(ExecutionTracker):
-    """No-op tracker for when tracking is disabled"""
-
-    def start_run(self, *args, **kwargs):
-        pass
-
-    def track_step(self, *args, **kwargs):
-        pass
-
-    def complete_run(self, *args, **kwargs):
-        pass
+    def model_dump_for_db(self) -> dict:
+        """Convert to database format"""
+        data = self.model_dump()
+        data['inputs'] = json.dumps(data['inputs'])
+        data['outputs'] = json.dumps(data['outputs'])
+        return data
 ```
 
-### 4.2 Create Pipeline Executor
+**File**: New file `transformation_pipeline_server/src/shared/database/repositories/execution_run.py`
+
+Create ExecutionRunRepository following current patterns:
+```python
+import logging
+import json
+from typing import List, Optional
+from datetime import datetime
+from sqlalchemy.exc import SQLAlchemyError
+
+from .base import BaseRepository
+from shared.database.models import ExecutionRunModel, ExecutionStepModel
+from shared.models.execution import (
+    ExecutionRun, ExecutionRunCreate,
+    ExecutionStep, ExecutionStepCreate
+)
+from shared.exceptions import RepositoryError, ObjectNotFoundError
+
+logger = logging.getLogger(__name__)
+
+class ExecutionRunRepository(BaseRepository[ExecutionRunModel]):
+    """Repository for execution run operations"""
+
+    @property
+    def model_class(self):
+        return ExecutionRunModel
+
+    def _convert_to_domain_object(self, db_model: ExecutionRunModel) -> ExecutionRun:
+        """Convert SQLAlchemy model to domain object"""
+        return ExecutionRun.from_db_model(db_model)
+
+    def create_run(self, run_create: ExecutionRunCreate) -> ExecutionRun:
+        """Create a new execution run"""
+        try:
+            with self.connection_manager.session_scope() as session:
+                data = run_create.model_dump_for_db()
+                model = self.model_class(**data)
+                session.add(model)
+                session.flush()
+                session.refresh(model)
+
+                logger.info(f"Created execution run: {run_create.run_id}")
+                return self._convert_to_domain_object(model)
+
+        except SQLAlchemyError as e:
+            logger.error(f"Error creating execution run: {e}")
+            raise RepositoryError(f"Failed to create execution run: {e}") from e
+
+    def update_run_status(self, run_id: str, status: str, completed_at: datetime) -> Optional[ExecutionRun]:
+        """Update run status on completion"""
+        try:
+            with self.connection_manager.session_scope() as session:
+                model = session.query(self.model_class).filter_by(run_id=run_id).first()
+
+                if not model:
+                    logger.warning(f"Execution run not found: {run_id}")
+                    return None
+
+                model.status = status
+                model.completed_at = completed_at
+                session.flush()
+                session.refresh(model)
+
+                logger.info(f"Updated execution run status: {run_id} -> {status}")
+                return self._convert_to_domain_object(model)
+
+        except SQLAlchemyError as e:
+            logger.error(f"Error updating execution run {run_id}: {e}")
+            raise RepositoryError(f"Failed to update execution run: {e}") from e
+
+    def get_run_by_id(self, run_id: str) -> Optional[ExecutionRun]:
+        """Get execution run by ID"""
+        try:
+            with self.connection_manager.session_scope() as session:
+                model = session.query(self.model_class).filter_by(run_id=run_id).first()
+
+                if not model:
+                    return None
+
+                return self._convert_to_domain_object(model)
+
+        except SQLAlchemyError as e:
+            logger.error(f"Error getting execution run {run_id}: {e}")
+            raise RepositoryError(f"Failed to get execution run: {e}") from e
+
+    def get_runs_by_pipeline(self, pipeline_id: str, limit: int = 10) -> List[ExecutionRun]:
+        """Get recent execution runs for a pipeline"""
+        try:
+            with self.connection_manager.session_scope() as session:
+                models = session.query(self.model_class).filter_by(
+                    pipeline_id=pipeline_id
+                ).order_by(
+                    self.model_class.started_at.desc()
+                ).limit(limit).all()
+
+                return [self._convert_to_domain_object(m) for m in models]
+
+        except SQLAlchemyError as e:
+            logger.error(f"Error getting runs for pipeline {pipeline_id}: {e}")
+            raise RepositoryError(f"Failed to get execution runs: {e}") from e
+
+```
+
+**File**: New file `transformation_pipeline_server/src/shared/database/repositories/execution_step.py`
+
+Create ExecutionStepRepository in separate file:
+```python
+import logging
+import json
+from typing import List, Optional
+from datetime import datetime
+from sqlalchemy.exc import SQLAlchemyError
+
+from .base import BaseRepository
+from shared.database.models import ExecutionStepModel
+from shared.models.execution import ExecutionStep, ExecutionStepCreate
+from shared.exceptions import RepositoryError
+
+logger = logging.getLogger(__name__)
+
+class ExecutionStepRepository(BaseRepository[ExecutionStepModel]):
+    """Repository for execution step operations"""
+
+    @property
+    def model_class(self):
+        return ExecutionStepModel
+
+    def _convert_to_domain_object(self, db_model: ExecutionStepModel) -> ExecutionStep:
+        """Convert SQLAlchemy model to domain object"""
+        return ExecutionStep.from_db_model(db_model)
+
+    def create_step(self, step_create: ExecutionStepCreate) -> ExecutionStep:
+        """Add an execution step to the history"""
+        try:
+            with self.connection_manager.session_scope() as session:
+                data = step_create.model_dump_for_db()
+                model = self.model_class(**data)
+                session.add(model)
+                session.flush()
+                session.refresh(model)
+
+                logger.debug(f"Created execution step for run: {step_create.run_id}")
+                return self._convert_to_domain_object(model)
+
+        except SQLAlchemyError as e:
+            logger.error(f"Error creating execution step: {e}")
+            raise RepositoryError(f"Failed to create execution step: {e}") from e
+
+    def get_steps_by_run(self, run_id: str) -> List[ExecutionStep]:
+        """Get all steps for an execution run"""
+        try:
+            with self.connection_manager.session_scope() as session:
+                models = session.query(self.model_class).filter_by(
+                    run_id=run_id
+                ).order_by(self.model_class.step_number).all()
+
+                return [self._convert_to_domain_object(m) for m in models]
+
+        except SQLAlchemyError as e:
+            logger.error(f"Error getting steps for run {run_id}: {e}")
+            raise RepositoryError(f"Failed to get execution steps: {e}") from e
+```
+
+- [x] **4.2 Create Pipeline Executor**
 **File**: New file `transformation_pipeline_server/src/features/pipeline/execution/executor.py`
 
+Create pipeline executor that works with domain objects:
 ```python
-import json
 import time
-import uuid
 from datetime import datetime
-from typing import Dict, Any, List, Literal, Optional
+from typing import Dict, Any, List, Literal, Optional, Tuple
 from dask import delayed, compute
 import logging
 
-from shared.services.service_container import ServiceContainer
 from shared.models.execution_result import RunResult, ExecutionError
 from shared.models.execution_context import ExecutionContext
-from shared.database.repositories.pipeline_step import PipelineStepRepository
-from shared.database.repositories.execution_history import ExecutionHistoryRepository
+from shared.models.execution import ExecutionRunCreate, ExecutionStepCreate
+from shared.models.pipeline_step import PipelineStep
+from shared.models.pipeline import InstanceNodePin
 from features.modules.core.registry import ModuleRegistry
-from .tracker import DatabaseTracker, NoOpTracker
 
 logger = logging.getLogger(__name__)
 
 class PipelineExecutor:
     """Executes compiled pipelines using Dask for parallel processing"""
 
-    def __init__(self, enable_tracking: bool = True):
-        self.step_repo = PipelineStepRepository(ServiceContainer.get_connection_manager())
+    def __init__(self):
+        # Only module registry needed, no repositories
         self.registry = ModuleRegistry()
-
-        # Initialize execution tracker
-        if enable_tracking:
-            history_repo = ExecutionHistoryRepository(ServiceContainer.get_connection_manager())
-            self.tracker = DatabaseTracker(history_repo)
-        else:
-            self.tracker = NoOpTracker()
 
     def run_pipeline(
         self,
         pipeline_id: str,
-        plan_checksum: str,
+        run_id: str,  # Generated by service layer
+        steps: List[PipelineStep],  # Domain objects from shared.models
         entry_values: Dict[str, Any],
         *,
         scheduler: Literal["threads", "processes", "distributed"] = "threads",
         max_workers: Optional[int] = None,
         fail_fast: bool = True
-    ) -> RunResult:
-        """Execute a compiled pipeline with entry values"""
+    ) -> Tuple[ExecutionRunCreate, List[ExecutionStepCreate], RunResult]:
+        """
+        Execute a compiled pipeline with entry values.
 
-        run_id = str(uuid.uuid4())
-        started_at = datetime.utcnow().isoformat()
+        Args:
+            pipeline_id: ID of the pipeline being executed
+            run_id: Pre-generated execution run ID
+            steps: List of PipelineStep domain objects
+            entry_values: Entry point values
+            scheduler: Dask scheduler type
+            max_workers: Maximum number of workers for parallel execution
+            fail_fast: Whether to stop on first error
+
+        Returns:
+            Tuple of:
+            - ExecutionRunCreate: For creating/updating the run record
+            - List[ExecutionStepCreate]: For creating step records
+            - RunResult: The execution result for API response
+        """
+        started_at = datetime.utcnow()
 
         try:
-            # 1. Load compiled steps
-            steps = self.step_repo.get_steps_by_checksum(plan_checksum)
-            if not steps:
-                raise ValueError(f"No compiled steps found for checksum {plan_checksum}")
-
-            # 2. Validate entry values
+            # 1. Validate entry values
             required_entries = self._get_required_entries(steps)
             missing = set(required_entries) - set(entry_values.keys())
             if missing:
                 raise ValueError(f"Missing required entry values: {missing}")
 
-            # 3. Start tracking the run
-            self.tracker.start_run(run_id, pipeline_id, entry_values)
-
-            # 4. Build Dask graph
+            # 2. Build Dask graph
             delayed_tasks, action_tasks = self._build_dask_graph(steps, entry_values, run_id)
 
-            # 5. Execute only action tasks
+            # 3. Execute only action tasks
             logger.info(f"Executing {len(action_tasks)} action tasks for run {run_id}")
             results = compute(*action_tasks, scheduler=scheduler)
 
-            # 6. Process results
-            result = self._process_results(results, run_id, started_at)
+            # 4. Process results into domain objects
+            step_creates, actions, errors, timings = self._process_results(results)
 
-            # 7. Complete tracking
-            self.tracker.complete_run(run_id, result.status)
+            completed_at = datetime.utcnow()
+            status = "failed" if errors else "success"
 
-            return result
+            # 5. Create domain objects for return
+            run_create = ExecutionRunCreate(
+                run_id=run_id,
+                pipeline_id=pipeline_id,
+                status=status,
+                started_at=started_at,
+                entry_values=entry_values
+                # completed_at will be set by service when persisting
+            )
+
+            run_result = RunResult(
+                status=status,
+                run_id=run_id,
+                started_at=started_at.isoformat(),
+                completed_at=completed_at.isoformat(),
+                actions=actions,
+                errors=errors,
+                timings=timings
+            )
+
+            return run_create, step_creates, run_result
 
         except Exception as e:
             logger.error(f"Pipeline execution failed: {e}")
-            return RunResult(
+
+            # Create minimal domain objects for failed execution
+            completed_at = datetime.utcnow()
+
+            run_create = ExecutionRunCreate(
+                run_id=run_id,
+                pipeline_id=pipeline_id,
+                status="failed",
+                started_at=started_at,
+                entry_values=entry_values
+                # completed_at will be set by service when persisting
+            )
+
+            run_result = RunResult(
                 status="failed",
                 run_id=run_id,
-                started_at=started_at,
-                completed_at=datetime.utcnow().isoformat(),
+                started_at=started_at.isoformat(),
+                completed_at=completed_at.isoformat(),
                 errors=[ExecutionError(
                     code="EXECUTION_FAILED",
                     message=str(e),
@@ -564,6 +776,8 @@ class PipelineExecutor:
                 actions=[],
                 timings={}
             )
+
+            return run_create, [], run_result
 
     def _build_dask_graph(self, steps, entry_values, run_id):
         """Build the Dask delayed task graph"""
@@ -617,6 +831,7 @@ class PipelineExecutor:
         @delayed(pure=(step.module_kind != "action"))
         def _run_instance(**upstream_outputs):
             t0 = time.perf_counter()
+            executed_at = datetime.utcnow()
 
             # Build inputs
             inputs = {
@@ -647,23 +862,17 @@ class PipelineExecutor:
             t1 = time.perf_counter()
             elapsed_ms = (t1 - t0) * 1000.0
 
-            # Track this step's execution
-            self.tracker.track_step(
-                run_id=run_id,
-                module_id=step.module_instance_id,
-                step_num=step.step_number,
-                inputs=inputs,
-                outputs=outputs,
-                elapsed_ms=elapsed_ms,
-                error=err
-            )
-
+            # Return all data needed for tracking
             return {
                 "__ok__": ok,
                 "__err__": err,
                 "__elapsed_ms__": elapsed_ms,
                 "__module_instance_id__": step.module_instance_id,
                 "__module_kind__": step.module_kind,
+                "__step_number__": step.step_number,
+                "__inputs__": inputs,  # Keep for tracking
+                "__executed_at__": executed_at,
+                "__run_id__": run_id,  # Pass through for ExecutionStepCreate
                 "outputs": outputs
             }
 
@@ -678,8 +887,18 @@ class PipelineExecutor:
                     required.add(mapping["source_field"])
         return required
 
-    def _process_results(self, results, run_id, started_at):
-        """Process execution results into RunResult"""
+    def _process_results(self, results) -> Tuple[List[ExecutionStepCreate], List[Dict], List[ExecutionError], Dict[str, float]]:
+        """
+        Process execution results into domain objects.
+
+        Returns:
+            Tuple of:
+            - List[ExecutionStepCreate]: Step execution records
+            - List[Dict]: Action outputs
+            - List[ExecutionError]: Execution errors
+            - Dict[str, float]: Timing information
+        """
+        step_creates = []
         actions = []
         errors = []
         timings = {}
@@ -687,6 +906,19 @@ class PipelineExecutor:
         for env in results:
             mid = env["__module_instance_id__"]
             timings[mid] = env["__elapsed_ms__"]
+
+            # Create ExecutionStepCreate domain object
+            step_create = ExecutionStepCreate(
+                run_id=env["__run_id__"],
+                module_instance_id=mid,
+                step_number=env["__step_number__"],
+                inputs=env["__inputs__"],
+                outputs=env["outputs"],
+                elapsed_ms=env["__elapsed_ms__"],
+                error=env["__err__"],
+                executed_at=env["__executed_at__"]
+            )
+            step_creates.append(step_create)
 
             if not env["__ok__"]:
                 errors.append(ExecutionError(
@@ -700,18 +932,10 @@ class PipelineExecutor:
                     "outputs": env["outputs"]
                 })
 
-        return RunResult(
-            status="failed" if errors else "success",
-            run_id=run_id,
-            started_at=started_at,
-            completed_at=datetime.utcnow().isoformat(),
-            actions=actions,
-            errors=errors,
-            timings=timings
-        )
+        return step_creates, actions, errors, timings
 ```
 
-### 4.3 Create Execution Models
+- [x] **4.3 Create Execution Models**
 **File**: New file `transformation_pipeline_server/src/shared/models/execution_result.py`
 
 ```python
@@ -757,13 +981,13 @@ class ExecutionResponse(BaseModel):
     pass
 ```
 
-### 4.4 Sequential Fallback Executor
+- [x] **4.4 Sequential Fallback Executor** (Skipped - Optional)
 
 The sequential executor is a simplified version for debugging that runs steps in order without Dask. It's useful for testing but not critical for the main implementation. We can implement this later if needed for debugging purposes.
 
 ## Phase 5: API Endpoints
 
-### 5.1 Create Execution Endpoint
+- [ ] **5.1 Create Execution Endpoint**
 **File**: `transformation_pipeline_server/src/api/routers/pipelines.py`
 
 Add the following endpoint to handle pipeline execution:
@@ -830,7 +1054,7 @@ async def execute_pipeline(
 
 ## Phase 6: Frontend Updates
 
-### 6.1 Add Execution UI
+- [ ] **6.1 Add Execution UI**
 **File**: New component `client/src/renderer/components/transformation-pipeline/ExecutePipelineModal.tsx`
 
 Create a modal component that:
@@ -937,23 +1161,13 @@ execution_logger.info(json.dumps({
 ```
 
 ### Recommended Approach
-Implement **Option 1** (in-memory) first with an interface that allows plugging in **Option 2** (database) later:
+We've implemented **Option 2** (database persistence) directly in the PipelineExecutor using repositories:
 
-```python
-class ExecutionTracker(ABC):
-    @abstractmethod
-    def track_step(self, run_id, module_id, inputs, outputs, elapsed_ms, error=None):
-        pass
-
-class InMemoryTracker(ExecutionTracker):
-    # Collect in memory, return with RunResult
-
-class DatabaseTracker(ExecutionTracker):
-    # Persist to database asynchronously
-
-# In executor:
-tracker = InMemoryTracker()  # or DatabaseTracker() based on config
-```
+- ExecutionRunRepository handles run-level tracking
+- ExecutionStepRepository handles step-level tracking
+- The `enable_tracking` flag controls whether tracking is performed
+- Repositories manage their own database sessions and error handling
+- No intermediate tracker abstraction needed
 
 ### Data Serialization Considerations
 - Large binary data: Store reference/hash, not full content

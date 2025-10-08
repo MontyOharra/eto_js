@@ -3,30 +3,28 @@ Module Catalog Repository
 Repository for managing module catalog database operations following ETO server patterns
 """
 import logging
-from typing import Optional, List
 from sqlalchemy.exc import SQLAlchemyError
 
+from typing import Optional, List
+from shared.types import ModuleCatalog, ModuleCatalogCreate, ModuleCatalogUpdate
+
 from shared.database.models import ModuleCatalogModel
-from shared.models.module_catalog import ModuleCatalog, ModuleCatalogCreate, ModuleCatalogUpdate
-from shared.exceptions.repository import RepositoryError, ObjectNotFoundError
+from shared.exceptions import RepositoryError, ObjectNotFoundError
+
+from .base import BaseRepository
 
 logger = logging.getLogger(__name__)
 
 
-class ModuleCatalogRepository:
+class ModuleCatalogRepository(BaseRepository[ModuleCatalogModel]):
     """
     Repository for module catalog operations
     Manages CRUD operations for transformation pipeline modules
     """
-
-    def __init__(self, connection_manager):
-        """Initialize repository with connection manager"""
-        if not connection_manager:
-            raise ValueError("DatabaseConnectionManager is required")
-
-        self.connection_manager = connection_manager
-        self.model_class = ModuleCatalogModel
-        logger.debug(f"Initialized {self.__class__.__name__}")
+    
+    @property
+    def model_class(self):
+        return ModuleCatalogModel
 
     def _convert_to_domain_object(self, db_model: ModuleCatalogModel) -> ModuleCatalog:
         """Convert SQLAlchemy model to domain object"""

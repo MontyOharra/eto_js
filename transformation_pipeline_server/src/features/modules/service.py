@@ -4,8 +4,8 @@ Handles module catalog queries and execution
 """
 import logging
 from typing import Dict, List, Optional, Type, Any
-from shared.models import BaseModule
-from shared.models.module_catalog import ModuleCatalog
+from shared.types import BaseModule
+from shared.types.module_catalog import ModuleCatalog
 from shared.database.repositories.module_catalog import ModuleCatalogRepository
 from shared.utils.registry import ModuleRegistry, get_registry
 from shared.exceptions import ObjectNotFoundError
@@ -53,7 +53,33 @@ class ModulesService:
         # Get singleton registry for class loading/caching
         self.registry = get_registry()
 
+        # Auto-discover and register all available modules
+        self._auto_discover_modules()
+
         logger.info("ModulesService initialized")
+
+    def _auto_discover_modules(self):
+        """Auto-discover and register all module classes at startup"""
+        from shared.utils.registry import auto_discover_modules
+
+        packages_to_scan = [
+            "src.features.modules.transform",
+            "src.features.modules.action",
+            "src.features.modules.logic",
+            "src.features.modules.comparator",
+        ]
+
+        try:
+            logger.info("Auto-discovering modules from packages...")
+            auto_discover_modules(packages_to_scan)
+
+            # Log how many modules were registered
+            registered_count = len(self.registry.get_all())
+            logger.info(f"Auto-discovery complete: {registered_count} modules registered")
+        except Exception as e:
+            logger.error(f"Error during module auto-discovery: {e}")
+            # Don't fail startup if auto-discovery fails
+            # Modules can still be loaded from database
 
     def get_module_catalog(self, only_active: bool = False) -> List[ModuleCatalog]:
         """

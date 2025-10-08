@@ -2,31 +2,40 @@
 Pipeline Router - API endpoints for pipeline management
 Provides endpoints for pipeline upload, retrieval, and listing
 """
+
 import logging
+from typing import Dict, Any
 from fastapi import APIRouter, HTTPException, Depends
 
 from shared.services.service_container import ServiceContainer
 from features.pipeline import PipelineService
-from shared.models.pipeline import Pipeline, PipelineCreate, PipelineSummary, PipelineState
+from shared.typespipeline_definitions import (
+    Pipeline,
+    PipelineCreate,
+    PipelineSummary,
+    PipelineState,
+)
+from shared.types.execution_result import RunResult
 from shared.exceptions import RepositoryError, ObjectNotFoundError
 from features.pipeline.validation.errors import ValidationResult
-from api.schemas import PipelineListResponse, PipelineSummaryListResponse, ValidatePipelineRequest, TestUploadResponse
+from api.schemas import (
+    PipelineListResponse,
+    PipelineSummaryListResponse,
+    ValidatePipelineRequest,
+    TestUploadResponse,
+)
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(
-    prefix="/pipelines",
-    tags=["Pipelines"]
-)
-
-
-
+router = APIRouter(prefix="/pipelines", tags=["Pipelines"])
 
 
 @router.post("/upload", response_model=Pipeline)
 async def upload_pipeline(
     pipeline_create: PipelineCreate,
-    pipeline_service: PipelineService = Depends(lambda: ServiceContainer.get_pipeline_service())
+    pipeline_service: PipelineService = Depends(
+        lambda: ServiceContainer.get_pipeline_service()
+    ),
 ):
     """
     TEST ENDPOINT: Create and compile pipeline with full compilation flow
@@ -58,8 +67,12 @@ async def upload_pipeline(
         # Call the full create pipeline method with compilation
         pipeline = pipeline_service.create_pipeline(pipeline_create)
 
-        logger.info(f"[TEST_UPLOAD_API] ✅ Pipeline created: {pipeline.id} - {pipeline.name}")
-        logger.info(f"[TEST_UPLOAD_API]    Checksum: {pipeline.plan_checksum[:12] if pipeline.plan_checksum else 'none'}...")
+        logger.info(
+            f"[TEST_UPLOAD_API] ✅ Pipeline created: {pipeline.id} - {pipeline.name}"
+        )
+        logger.info(
+            f"[TEST_UPLOAD_API]    Checksum: {pipeline.plan_checksum[:12] if pipeline.plan_checksum else 'none'}..."
+        )
         logger.info(f"[TEST_UPLOAD_API]    Compiled: {pipeline.compiled_at}")
 
         return pipeline
@@ -68,15 +81,21 @@ async def upload_pipeline(
         logger.error(f"[TEST_UPLOAD_API] Invalid pipeline data: {e}")
         raise HTTPException(status_code=400, detail=f"Invalid pipeline data: {str(e)}")
     except Exception as e:
-        logger.error(f"[TEST_UPLOAD_API] Unexpected error creating pipeline: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to create pipeline: {str(e)}")
+        logger.error(
+            f"[TEST_UPLOAD_API] Unexpected error creating pipeline: {e}", exc_info=True
+        )
+        raise HTTPException(
+            status_code=500, detail=f"Failed to create pipeline: {str(e)}"
+        )
 
 
 @router.get("/")
 async def list_pipelines(
     include_inactive: bool = False,
     summary_only: bool = False,
-    pipeline_service: PipelineService = Depends(lambda: ServiceContainer.get_pipeline_service())
+    pipeline_service: PipelineService = Depends(
+        lambda: ServiceContainer.get_pipeline_service()
+    ),
 ):
     """
     Get all pipelines
@@ -93,26 +112,30 @@ async def list_pipelines(
     Raises:
         500: Internal server error
     """
-    logger.info(f"Pipeline list requested (include_inactive={include_inactive}, summary_only={summary_only})")
+    logger.info(
+        f"Pipeline list requested (include_inactive={include_inactive}, summary_only={summary_only})"
+    )
 
     try:
 
         if summary_only:
-            summaries = pipeline_service.list_pipeline_summaries(include_inactive=include_inactive)
+            summaries = pipeline_service.list_pipeline_summaries(
+                include_inactive=include_inactive
+            )
 
             response = PipelineSummaryListResponse(
-                pipelines=summaries,
-                total_count=len(summaries)
+                pipelines=summaries, total_count=len(summaries)
             )
 
             logger.info(f"Retrieved {len(summaries)} pipeline summaries")
             return response
         else:
-            pipelines = pipeline_service.list_pipelines(include_inactive=include_inactive)
+            pipelines = pipeline_service.list_pipelines(
+                include_inactive=include_inactive
+            )
 
             response = PipelineListResponse(
-                pipelines=pipelines,
-                total_count=len(pipelines)
+                pipelines=pipelines, total_count=len(pipelines)
             )
 
             logger.info(f"Retrieved {len(pipelines)} pipelines")
@@ -129,7 +152,9 @@ async def list_pipelines(
 @router.get("/{pipeline_id}", response_model=Pipeline)
 async def get_pipeline(
     pipeline_id: str,
-    pipeline_service: PipelineService = Depends(lambda: ServiceContainer.get_pipeline_service())
+    pipeline_service: PipelineService = Depends(
+        lambda: ServiceContainer.get_pipeline_service()
+    ),
 ):
     """
     Get a specific pipeline by ID
@@ -168,7 +193,9 @@ async def get_pipeline(
 @router.post("/validate", response_model=ValidationResult)
 async def validate_pipeline(
     request: ValidatePipelineRequest,
-    pipeline_service: PipelineService = Depends(lambda: ServiceContainer.get_pipeline_service())
+    pipeline_service: PipelineService = Depends(
+        lambda: ServiceContainer.get_pipeline_service()
+    ),
 ):
     """
     Validate a pipeline state
@@ -195,7 +222,9 @@ async def validate_pipeline(
         if result.valid:
             logger.info("Pipeline validation passed")
         else:
-            logger.info(f"Pipeline validation failed with {len(result.errors)} error(s)")
+            logger.info(
+                f"Pipeline validation failed with {len(result.errors)} error(s)"
+            )
 
         return result
 
@@ -206,3 +235,58 @@ async def validate_pipeline(
     except Exception as e:
         logger.error(f"Unexpected error validating pipeline: {e}")
         raise HTTPException(status_code=500, detail="Failed to validate pipeline")
+
+
+@router.post("/{pipeline_id}/execute", response_model=RunResult)
+async def execute_pipeline(
+    pipeline_id: str,
+    entry_values: Dict[str, Any],
+    pipeline_service: PipelineService = Depends(
+        lambda: ServiceContainer.get_pipeline_service()
+    ),
+):
+    """
+    Execute a pipeline with given entry values.
+
+    Args:
+        pipeline_id: ID of the pipeline to execute
+        entry_values: Dictionary with entry point names as keys and their values.
+            Example: {"Input": "Hello World", "Config": {"setting": "value"}}
+        pipeline_service: Injected pipeline service
+
+    Returns:
+        RunResult with execution status and outputs
+
+    Raises:
+        404: If pipeline not found
+        400: If entry values are invalid or entry point names not found
+        500: If execution fails
+    """
+    try:
+        logger.info(f"Pipeline execution requested: {pipeline_id}")
+        logger.debug(f"Entry values: {entry_values}")
+
+        # Execute the pipeline
+        result = pipeline_service.execute_pipeline(pipeline_id, entry_values)
+
+        if result.status == "success":
+            logger.info(f"Pipeline {pipeline_id} executed successfully")
+        else:
+            logger.warning(
+                f"Pipeline {pipeline_id} execution failed with {len(result.errors)} error(s)"
+            )
+
+        return result
+
+    except ObjectNotFoundError as e:
+        logger.warning(f"Pipeline not found for execution: {pipeline_id}")
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        logger.warning(f"Invalid entry values for pipeline {pipeline_id}: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid entry values: {str(e)}")
+    except RepositoryError as e:
+        logger.error(f"Database error during pipeline execution: {e}")
+        raise HTTPException(status_code=500, detail="Pipeline execution failed")
+    except Exception as e:
+        logger.error(f"Unexpected error executing pipeline {pipeline_id}: {e}")
+        raise HTTPException(status_code=500, detail="Pipeline execution failed")

@@ -14,7 +14,7 @@ load_dotenv()
 from shared.utils.registry import get_registry, auto_discover_modules, ModuleSecurityValidator
 from shared.database import DatabaseConnectionManager
 from shared.database.repositories.module_catalog import ModuleCatalogRepository
-from shared.models.module_catalog import ModuleCatalogCreate
+from shared.types.module_catalog import ModuleCatalogCreate
 
 # Configure logging
 logging.basicConfig(

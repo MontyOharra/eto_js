@@ -4,9 +4,9 @@ Validates connections between pins (§2.3 from spec)
 """
 
 from typing import List
-from shared.models.pipeline import PipelineState
+from shared.types import PipelineState
 
-from .errors import ValidationError, ValidationErrorCode
+from shared.exceptions import PipelineValidationError, PipelineValidationErrorCode
 from .index_builder import PipelineIndices
 
 
@@ -19,7 +19,7 @@ class EdgeValidator:
     """
 
     @staticmethod
-    def validate(pipeline_state: PipelineState, indices: PipelineIndices) -> List[ValidationError]:
+    def validate(pipeline_state: PipelineState, indices: PipelineIndices) -> List[PipelineValidationError]:
         """
         Validate all edge constraints
 
@@ -40,7 +40,7 @@ class EdgeValidator:
         return errors
 
     @staticmethod
-    def _check_input_cardinality(pipeline_state: PipelineState, indices: PipelineIndices) -> List[ValidationError]:
+    def _check_input_cardinality(pipeline_state: PipelineState, indices: PipelineIndices) -> List[PipelineValidationError]:
         """
         Check that each input pin has exactly one upstream connection
 
@@ -64,8 +64,8 @@ class EdgeValidator:
 
             if upstream_count == 0:
                 # Missing upstream connection
-                errors.append(ValidationError(
-                    code=ValidationErrorCode.MISSING_UPSTREAM,
+                errors.append(PipelineValidationError(
+                    code=PipelineValidationErrorCode.MISSING_UPSTREAM,
                     message=f"Input pin '{pin_info.name}' in module '{pin_info.module_instance_id}' has no upstream connection",
                     where={
                         "node_id": pin_info.node_id,
@@ -85,8 +85,8 @@ class EdgeValidator:
         for node_id, count in input_connection_counts.items():
             if count > 1:
                 pin_info = indices.pin_by_id[node_id]
-                errors.append(ValidationError(
-                    code=ValidationErrorCode.MULTIPLE_UPSTREAMS,
+                errors.append(PipelineValidationError(
+                    code=PipelineValidationErrorCode.MULTIPLE_UPSTREAMS,
                     message=f"Input pin '{pin_info.name}' in module '{pin_info.module_instance_id}' has {count} upstream connections (expected 1)",
                     where={
                         "node_id": node_id,
@@ -99,7 +99,7 @@ class EdgeValidator:
         return errors
 
     @staticmethod
-    def _check_type_matching(pipeline_state: PipelineState, indices: PipelineIndices) -> List[ValidationError]:
+    def _check_type_matching(pipeline_state: PipelineState, indices: PipelineIndices) -> List[PipelineValidationError]:
         """
         Check that connected pins have matching types
 
@@ -121,8 +121,8 @@ class EdgeValidator:
                 continue
 
             if from_pin.type != to_pin.type:
-                errors.append(ValidationError(
-                    code=ValidationErrorCode.EDGE_TYPE_MISMATCH,
+                errors.append(PipelineValidationError(
+                    code=PipelineValidationErrorCode.EDGE_TYPE_MISMATCH,
                     message=f"Type mismatch: Cannot connect {from_pin.type} output '{from_pin.name}' to {to_pin.type} input '{to_pin.name}'",
                     where={
                         "from_node_id": conn.from_node_id,
@@ -137,7 +137,7 @@ class EdgeValidator:
         return errors
 
     @staticmethod
-    def _check_self_loops(pipeline_state: PipelineState) -> List[ValidationError]:
+    def _check_self_loops(pipeline_state: PipelineState) -> List[PipelineValidationError]:
         """
         Check that no pin connects to itself
 
@@ -151,8 +151,8 @@ class EdgeValidator:
 
         for conn in pipeline_state.connections:
             if conn.from_node_id == conn.to_node_id:
-                errors.append(ValidationError(
-                    code=ValidationErrorCode.SELF_LOOP,
+                errors.append(PipelineValidationError(
+                    code=PipelineValidationErrorCode.SELF_LOOP,
                     message=f"Self-loop detected: Pin '{conn.from_node_id}' connects to itself",
                     where={
                         "node_id": conn.from_node_id

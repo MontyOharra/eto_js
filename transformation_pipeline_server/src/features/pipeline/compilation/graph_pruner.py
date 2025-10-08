@@ -2,9 +2,10 @@
 Graph Pruner
 Prunes pipeline to action-reachable modules only (§3.1 from spec)
 """
+
 from typing import Set
 
-from shared.models.pipeline import PipelineState
+from shared.typespipeline_definitions import PipelineState
 
 
 class GraphPruner:
@@ -17,8 +18,7 @@ class GraphPruner:
 
     @staticmethod
     def prune(
-        pipeline_state: PipelineState,
-        reachable_modules: Set[str]
+        pipeline_state: PipelineState, reachable_modules: Set[str]
     ) -> PipelineState:
         """
         Prune pipeline to reachable modules only
@@ -56,13 +56,15 @@ class GraphPruner:
 
         # Step 2: Filter modules to reachable only
         pruned_modules = [
-            module for module in pipeline_state.modules
+            module
+            for module in pipeline_state.modules
             if module.module_instance_id in reachable_modules
         ]
 
         # Step 3: Filter connections to those between reachable pins
         pruned_connections = [
-            conn for conn in pipeline_state.connections
+            conn
+            for conn in pipeline_state.connections
             if conn.from_node_id in reachable_pins and conn.to_node_id in reachable_pins
         ]
 
@@ -73,5 +75,5 @@ class GraphPruner:
         return PipelineState(
             entry_points=pruned_entry_points,
             modules=pruned_modules,
-            connections=pruned_connections
+            connections=pruned_connections,
         )

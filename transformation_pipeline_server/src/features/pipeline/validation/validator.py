@@ -2,18 +2,21 @@
 Pipeline Validation Orchestrator
 Coordinates all validation stages (§2 from spec)
 """
-from typing import Optional, Set
+
 import networkx as nx
-from src.shared.models.pipeline import PipelineState
-from .errors import ValidationResult, ValidationError, ValidationErrorCode
+
+from typing import Optional, Set
+from shared.types import PipelineState, PipelineValidationResult
+
+from shared.exceptions import PipelineValidationError, PipelineValidationErrorCode
+from shared.database.repositories import ModuleCatalogRepository
+
 from .schema_validator import SchemaValidator
 from .index_builder import PipelineIndices
 from .graph_builder import GraphBuilder
 from .edge_validator import EdgeValidator
 from .module_validator import ModuleValidator
 from .reachability_analyzer import ReachabilityAnalyzer
-from src.shared.database.repositories.module_catalog import ModuleCatalogRepository
-
 
 class PipelineValidator:
     """
@@ -41,7 +44,7 @@ class PipelineValidator:
         self.pin_graph: Optional[nx.DiGraph] = None
         self.reachable_modules: Set[str] = set()
 
-    def validate(self, pipeline_state: PipelineState) -> ValidationResult:
+    def validate(self, pipeline_state: PipelineState) -> PipelineValidationResult:
         """
         Validate pipeline through all stages
 
@@ -60,7 +63,7 @@ class PipelineValidator:
 
         # Early exit if schema errors - prevents cascading errors
         if schema_errors:
-            return ValidationResult(valid=False, errors=errors)
+            return PipelineValidationResult(valid=False, errors=errors)
 
         # Stage 2: Build indices (§2.2)
         # Create lookup structures for efficient validation
@@ -79,14 +82,13 @@ class PipelineValidator:
                 cycle = cycles[0]
                 cycle_str = " -> ".join(cycle) + f" -> {cycle[0]}"
 
-                errors.append(ValidationError(
-                    code=ValidationErrorCode.CYCLE,
-                    message=f"Cycle detected in pipeline: {cycle_str}",
-                    where={
-                        "cycle": cycle,
-                        "cycle_length": len(cycle)
-                    }
-                ))
+                errors.append(
+                    PipelineValidationError(
+                        code=PipelineValidationErrorCode.CYCLE,
+                        message=f"Cycle detected in pipeline: {cycle_str}",
+                        where={"cycle": cycle, "cycle_length": len(cycle)},
+                    )
+                )
 
         # Stage 4: Edge validation - check cardinality and type matching (§2.3)
         edge_errors = EdgeValidator.validate(pipeline_state, self.indices)
@@ -105,4 +107,4 @@ class PipelineValidator:
         errors.extend(reachability_errors)
 
         # Return result
-        return ValidationResult(valid=len(errors) == 0, errors=errors)
+        return PipelineValidationResult(valid=len(errors) == 0, errors=errors)

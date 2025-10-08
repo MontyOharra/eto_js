@@ -5,7 +5,7 @@ Infrastructure module for duplicating input data to multiple outputs
 from typing import Dict, Any
 from pydantic import BaseModel
 
-from shared.models import TransformModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
+from shared.types import TransformModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from shared.utils.registry import register
 
 

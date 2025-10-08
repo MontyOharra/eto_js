@@ -2,24 +2,36 @@
 Pipeline Service
 Service for pipeline save and load operations following ETO server patterns
 """
-import logging
-from typing import Optional, List
 
+import logging
 from datetime import datetime
 
-from shared.database.repositories.pipeline import PipelineRepository
-from shared.database.repositories.pipeline_step import PipelineStepRepository
-from shared.database.repositories.module_catalog import ModuleCatalogRepository
-from shared.exceptions import RepositoryError, ObjectNotFoundError
-from shared.models.pipeline import Pipeline, PipelineCreate, PipelineSummary, PipelineState
-from features.pipeline.validation.validator import PipelineValidator
-from features.pipeline.validation.errors import ValidationResult
-from features.pipeline.compilation import (
+from typing import Optional, List, Dict, Any
+from shared.types import (
+    PipelineDefinition,
+    PipelineDefinitionCreate,
+    PipelineDefinitionSummary,
+    PipelineState,
+    PipelineValidationResult
+)
+
+from shared.database.repositories import (
+    ModuleCatalogRepository,
+    PipelineDefinitionStepRepository,
+    PipelineDefinitionRepository,
+    PipelineExecutionRunRepository,
+    PipelineExecutionStepRepository,
+)
+from shared.exceptions import RepositoryError, ObjectNotFoundError, PipelineValidationError
+
+from validation.validator import PipelineValidator
+from compilation import (
     GraphPruner,
     TopologicalSorter,
     ChecksumCalculator,
-    PipelineCompiler
+    PipelineCompiler,
 )
+from .execution.executor import PipelineExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -39,16 +51,21 @@ class PipelineService:
 
         self.connection_manager = connection_manager
 
-        # Repository layer - with explicit type annotations for IDE support
-        self.pipeline_repo: PipelineRepository = PipelineRepository(self.connection_manager)
-        self.step_repo: PipelineStepRepository = PipelineStepRepository(self.connection_manager)
-        self.module_catalog_repo: ModuleCatalogRepository = ModuleCatalogRepository(self.connection_manager)
+        self.pipeline_repo: PipelineDefinitionRepository = PipelineDefinitionRepository(
+            self.connection_manager
+        )
+        self.step_repo: PipelineDefinitionStepRepository = PipelineDefinitionStepRepository(
+            self.connection_manager
+        )
+        self.module_catalog_repo: ModuleCatalogRepository = ModuleCatalogRepository(
+            self.connection_manager
+        )
 
         logger.info("Pipeline Service initialized")
 
     # === Core Operations (Save/Load) ===
 
-    def create_pipeline(self, pipeline_create: PipelineCreate) -> Pipeline:
+    def create_pipeline(self, pipeline_create: PipelineDefinitionCreate) -> PipelineDefinition:
         """
         Create and compile a new pipeline with checksum-based caching
 
@@ -66,7 +83,7 @@ class PipelineService:
             6. Return Pipeline domain object
 
         Args:
-            pipeline_create: PipelineCreate model with pipeline data
+            pipeline_create: PipelineDefinitionCreate model with pipeline data
 
         Returns:
             Created Pipeline domain object (includes plan_checksum and compiled_at)
@@ -79,18 +96,26 @@ class PipelineService:
             logger.info(f"Creating pipeline: {pipeline_create.name}")
 
             # Step 1: Validate Pipeline
-            pipeline_state = pipeline_create.pipeline_json
+            pipeline_state = pipeline_create.pipeline_state
 
             validator = PipelineValidator(module_catalog_repo=self.module_catalog_repo)
             validation_result = validator.validate(pipeline_state)
 
             if not validation_result.valid:
-                logger.error(f"Pipeline validation failed with {len(validation_result.errors)} error(s)")
-                error_messages = [f"{err.code}: {err.message}" for err in validation_result.errors]
-                raise ValueError(f"Pipeline validation failed: {'; '.join(error_messages)}")
+                logger.error(
+                    f"Pipeline validation failed with {len(validation_result.errors)} error(s)"
+                )
+                error_messages = [
+                    f"{err.code}: {err.message}" for err in validation_result.errors
+                ]
+                raise ValueError(
+                    f"Pipeline validation failed: {'; '.join(error_messages)}"
+                )
 
             reachable_modules = validator.reachable_modules
-            logger.debug(f"Validation passed. {len(reachable_modules)} reachable modules")
+            logger.debug(
+                f"Validation passed. {len(reachable_modules)} reachable modules"
+            )
 
             # Step 2: Prune Graph
             pruned_pipeline = GraphPruner.prune(pipeline_state, reachable_modules)
@@ -109,17 +134,21 @@ class PipelineService:
 
             # Prepare pipeline data with checksum
             pipeline_data = pipeline_create.model_dump_for_db()
-            pipeline_data['plan_checksum'] = checksum
-            pipeline_data['compiled_at'] = compiled_at
+            pipeline_data["plan_checksum"] = checksum
+            pipeline_data["compiled_at"] = compiled_at
 
             if cache_hit:
                 # Step 5a: Cache Hit - Create Pipeline Only
-                logger.info(f"Cache HIT for checksum {checksum[:12]}... - reusing existing steps")
+                logger.info(
+                    f"Cache HIT for checksum {checksum[:12]}... - reusing existing steps"
+                )
                 pipeline = self.pipeline_repo.create_with_checksum(pipeline_data)
 
             else:
                 # Step 5b: Cache Miss - Compile and Create Everything
-                logger.info(f"Cache MISS for checksum {checksum[:12]}... - compiling new steps")
+                logger.info(
+                    f"Cache MISS for checksum {checksum[:12]}... - compiling new steps"
+                )
 
                 # Compile: generate List[PipelineStepCreate]
                 steps = PipelineCompiler.compile(pruned_pipeline, checksum)
@@ -130,13 +159,19 @@ class PipelineService:
 
                 # Save steps
                 saved_steps = self.step_repo.save_steps(steps)
-                logger.info(f"Saved {len(saved_steps)} pipeline steps for checksum {checksum[:12]}...")
+                logger.info(
+                    f"Saved {len(saved_steps)} pipeline steps for checksum {checksum[:12]}..."
+                )
 
-            logger.info(f"Successfully created pipeline: {pipeline.id} - {pipeline.name} (cache_hit={cache_hit})")
+            logger.info(
+                f"Successfully created pipeline: {pipeline.id} - {pipeline.name} (cache_hit={cache_hit})"
+            )
             return pipeline
 
         except ValueError as e:
-            logger.error(f"Failed to create pipeline: {pipeline_create.name} - validation failed")
+            logger.error(
+                f"Failed to create pipeline: {pipeline_create.name} - validation failed"
+            )
             raise
         except RepositoryError:
             logger.error(f"Failed to create pipeline: {pipeline_create.name}")
@@ -145,7 +180,7 @@ class PipelineService:
             logger.error(f"Unexpected error creating pipeline: {e}")
             raise RepositoryError(f"Failed to create pipeline: {e}") from e
 
-    def get_pipeline(self, pipeline_id: str) -> Pipeline:
+    def get_pipeline(self, pipeline_definition_id: str) -> PipelineDefinition:
         """
         Get a single pipeline by ID
 
@@ -160,13 +195,13 @@ class PipelineService:
             RepositoryError: If retrieval fails
         """
         try:
-            logger.debug(f"Getting pipeline: {pipeline_id}")
+            logger.debug(f"Getting pipeline: {pipeline_definition_id}")
 
-            pipeline = self.pipeline_repo.get_by_id(pipeline_id)
+            pipeline = self.pipeline_repo.get_by_id(pipeline_definition_id)
 
             if not pipeline:
-                logger.warning(f"Pipeline not found: {pipeline_id}")
-                raise ObjectNotFoundError("Pipeline", pipeline_id)
+                logger.warning(f"Pipeline not found: {pipeline_definition_id}")
+                raise ObjectNotFoundError("Pipeline", pipeline_definition_id)
 
             logger.debug(f"Retrieved pipeline: {pipeline.id} - {pipeline.name}")
             return pipeline
@@ -174,13 +209,13 @@ class PipelineService:
         except ObjectNotFoundError:
             raise
         except RepositoryError:
-            logger.error(f"Failed to get pipeline: {pipeline_id}")
+            logger.error(f"Failed to get pipeline: {pipeline_definition_id}")
             raise
         except Exception as e:
-            logger.error(f"Unexpected error getting pipeline {pipeline_id}: {e}")
+            logger.error(f"Unexpected error getting pipeline {pipeline_definition_id}: {e}")
             raise RepositoryError(f"Failed to get pipeline: {e}") from e
 
-    def list_pipelines(self, include_inactive: bool = False) -> List[Pipeline]:
+    def list_pipelines(self, include_inactive: bool = False) -> List[PipelineDefinition]:
         """
         Get all pipelines for selection
 
@@ -208,7 +243,9 @@ class PipelineService:
             logger.error(f"Unexpected error listing pipelines: {e}")
             raise RepositoryError(f"Failed to list pipelines: {e}") from e
 
-    def list_pipeline_summaries(self, include_inactive: bool = False) -> List[PipelineSummary]:
+    def list_pipeline_summaries(
+        self, include_inactive: bool = False
+    ) -> List[PipelineDefinitionSummary]:
         """
         Get pipeline summaries for lightweight UI operations (dropdowns, tables)
 
@@ -216,15 +253,19 @@ class PipelineService:
             include_inactive: If True, include inactive pipelines
 
         Returns:
-            List of PipelineSummary models
+            List of PipelineDefinitionSummary models
 
         Raises:
             RepositoryError: If retrieval fails
         """
         try:
-            logger.debug(f"Listing pipeline summaries (include_inactive={include_inactive})")
+            logger.debug(
+                f"Listing pipeline summaries (include_inactive={include_inactive})"
+            )
 
-            summaries = self.pipeline_repo.get_summaries(include_inactive=include_inactive)
+            summaries = self.pipeline_repo.get_summaries(
+                include_inactive=include_inactive
+            )
 
             logger.info(f"Retrieved {len(summaries)} pipeline summaries")
             return summaries
@@ -261,7 +302,9 @@ class PipelineService:
             if result.valid:
                 logger.debug("Pipeline validation passed")
             else:
-                logger.debug(f"Pipeline validation failed with {len(result.errors)} error(s)")
+                logger.debug(
+                    f"Pipeline validation failed with {len(result.errors)} error(s)"
+                )
 
             return result
 
@@ -297,5 +340,162 @@ class PipelineService:
             logger.error(f"Failed to check pipeline existence: {pipeline_id}")
             raise
         except Exception as e:
-            logger.error(f"Unexpected error checking pipeline existence {pipeline_id}: {e}")
+            logger.error(
+                f"Unexpected error checking pipeline existence {pipeline_id}: {e}"
+            )
             raise RepositoryError(f"Failed to check pipeline existence: {e}") from e
+
+    # === Execution Operations ===
+
+    def execute_pipeline(
+        self,
+        pipeline_id: str,
+        entry_values: Dict[str, Any],
+        enable_tracking: bool = True,
+    ) -> RunResult:
+        """
+        Execute a pipeline with given entry values.
+
+        Args:
+            pipeline_id: ID of the pipeline to execute
+            entry_values: Entry point values for the pipeline (can use either entry point names or node IDs as keys)
+            enable_tracking: Whether to persist execution history
+
+        Returns:
+            RunResult with execution status and outputs
+
+        Raises:
+            ObjectNotFoundError: If pipeline not found
+            ValueError: If entry values are invalid
+            RepositoryError: If database operations fail
+        """
+        try:
+            # 1. Generate run ID
+            run_id = str(uuid.uuid4())
+            logger.info(f"Starting pipeline execution: {pipeline_id}, run_id: {run_id}")
+
+            # 2. Get pipeline and verify it exists
+            pipeline = self.pipeline_repo.get_by_id(pipeline_id)
+            if not pipeline:
+                raise ObjectNotFoundError("Pipeline", pipeline_id)
+            if not pipeline.plan_checksum:
+                raise Exception(f"Pipeline: {pipeline_id} has not been compiled yet")
+
+            # 3. Get compiled steps
+            steps = self.step_repo.get_steps_by_checksum(pipeline.plan_checksum)
+            if not steps:
+                logger.error(f"No compiled steps found for pipeline {pipeline_id}")
+                raise RepositoryError(
+                    f"Pipeline {pipeline_id} is not properly compiled"
+                )
+
+            logger.info(f"Loaded {len(steps)} compiled steps for execution")
+
+            # 4. Map entry point names to node IDs if needed
+            mapped_entry_values = self._map_entry_values_to_node_ids(
+                entry_values, pipeline.pipeline_json
+            )
+            logger.debug(f"Mapped entry values: {mapped_entry_values}")
+
+            # 5. Create executor and run pipeline
+            executor = PipelineExecutor()
+            run_create, step_creates, run_result = executor.run_pipeline(
+                pipeline_id=pipeline_id,
+                run_id=run_id,
+                steps=steps,
+                entry_values=mapped_entry_values,
+                pipeline_state=pipeline.pipeline_json,  # Pass pipeline state (it's actually a PipelineState object, not JSON)
+            )
+
+            # 5. Persist execution history if tracking enabled
+            if enable_tracking:
+                try:
+                    # Initialize repositories
+                    run_repo = ExecutionRunRepository(self.connection_manager)
+                    step_repo = ExecutionStepRepository(self.connection_manager)
+
+                    # Create run record
+                    run_repo.create_run(run_create)
+
+                    # Create step records
+                    for step_create in step_creates:
+                        step_repo.create_step(step_create)
+
+                    # Update run status to completed
+                    run_repo.update_run_status(
+                        run_id,
+                        run_result.status,
+                        datetime.fromisoformat(run_result.completed_at),
+                    )
+
+                    logger.info(f"Execution history persisted for run {run_id}")
+
+                except Exception as e:
+                    # Log but don't fail the execution if tracking fails
+                    logger.error(f"Failed to persist execution history: {e}")
+
+            logger.info(
+                f"Pipeline execution completed: {run_id}, status: {run_result.status}"
+            )
+            return run_result
+
+        except (ObjectNotFoundError, ValueError):
+            # Re-raise business logic exceptions
+            raise
+        except Exception as e:
+            logger.error(
+                f"Unexpected error executing pipeline {pipeline_id}: {e}", exc_info=True
+            )
+            raise RepositoryError(f"Failed to execute pipeline: {e}") from e
+
+    def _map_entry_values_to_node_ids(
+        self, entry_values: Dict[str, Any], pipeline_state: PipelineState
+    ) -> Dict[str, Any]:
+        """
+        Map entry point names to node IDs in entry values.
+
+        The API expects entry values with entry point NAMES as keys:
+        {"Input": "Hello World", "Config": {"setting": "value"}}
+
+        This method maps those names to the internal node IDs used by the executor.
+
+        Args:
+            entry_values: Dictionary with entry point names as keys
+            pipeline_state: Pipeline state containing entry point definitions
+
+        Returns:
+            Dictionary with node IDs as keys (for internal use by executor)
+
+        Raises:
+            ValueError: If an entry point name is not found
+        """
+        # Create mapping from name to node_id
+        name_to_node_id = {}
+        node_id_set = set()
+
+        for entry_point in pipeline_state.entry_points:
+            name_to_node_id[entry_point.name] = entry_point.node_id
+            node_id_set.add(entry_point.node_id)
+
+        # Map the entry values
+        mapped_values = {}
+
+        for key, value in entry_values.items():
+            if key in node_id_set:
+                # Already a node ID (for backward compatibility)
+                mapped_values[key] = value
+                logger.debug(f"Using node ID directly: '{key}'")
+            elif key in name_to_node_id:
+                # It's an entry point name, map to node ID
+                node_id = name_to_node_id[key]
+                mapped_values[node_id] = value
+                logger.debug(f"Mapped entry point name '{key}' to node ID '{node_id}'")
+            else:
+                # Key not found as either name or node ID
+                available_names = list(name_to_node_id.keys())
+                raise ValueError(
+                    f"Entry point '{key}' not found. "
+                    f"Available entry points: {available_names}"
+                )
+
+        return mapped_values

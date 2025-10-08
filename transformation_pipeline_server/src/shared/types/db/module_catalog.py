@@ -7,7 +7,9 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime
 import json
 
-from .modules import ModuleKind, ModuleMeta
+from shared.database.models import ModuleCatalogModel
+
+from ..modules import ModuleKind, ModuleMeta
 
 
 class ModuleCatalogCreate(BaseModel):
@@ -80,7 +82,7 @@ class ModuleCatalog(BaseModel):
     updated_at: datetime
 
     @classmethod
-    def from_db_model(cls, db_model) -> "ModuleCatalog":
+    def from_db_model(cls, db_model : ModuleCatalogModel) -> "ModuleCatalog":
         """
         Convert SQLAlchemy model to Pydantic model
 
@@ -91,15 +93,15 @@ class ModuleCatalog(BaseModel):
             ModuleCatalog Pydantic model
         """
         # Parse JSON fields back to Python objects
-        meta_data = json.loads(db_model.meta) if isinstance(db_model.meta, str) else db_model.meta
-        config_schema_data = json.loads(db_model.config_schema) if isinstance(db_model.config_schema, str) else db_model.config_schema
+        meta_data = json.loads(db_model.meta)
+        config_schema_data = json.loads(db_model.config_schema)
 
         return cls(
             id=db_model.id,
             version=db_model.version,
             name=db_model.name,
             description=db_model.description,
-            module_kind=db_model.module_kind,
+            module_kind=db_model.module_kind, # type: ignore
             meta=ModuleMeta.model_validate(meta_data),  # Use model_validate for new IOShape structure
             config_schema=config_schema_data,
             handler_name=db_model.handler_name,

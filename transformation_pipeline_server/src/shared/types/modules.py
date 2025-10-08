@@ -1,12 +1,18 @@
 """
 Shared module type definitions and base classes
 """
-from typing import Optional, List, Dict, Literal, Type, Any
+from typing import Optional, List, Dict, Literal, Type, Any, TYPE_CHECKING
 from abc import ABC, abstractmethod
 from pydantic import BaseModel, Field
 
+from shared.exceptions.module_definitions import NotImplementedError
+
+if TYPE_CHECKING:
+    from .execution_context import ExecutionContext
+
 # Type definitions
 Scalar = Literal["str", "float", "datetime", "bool", "int"]
+ModuleKind = Literal["transform", "action", "logic", "comparator"]
 
 
 class NodeTypeRule(BaseModel):
@@ -33,17 +39,12 @@ class IOShape(BaseModel):
     """Complete I/O shape definition for a module"""
     inputs: IOSideShape = IOSideShape()
     outputs: IOSideShape = IOSideShape()
-    # declare domains for type variables (if any are used in pins)
     type_params: Dict[str, List[Scalar]] = Field(default_factory=dict)
 
 
 class ModuleMeta(BaseModel):
     """Metadata defining I/O constraints for a module"""
     io_shape: IOShape = IOShape()
-
-# Module kind type - centralized definition for all valid module types
-# Similar to TypeScript: type ModuleKind = "transform" | "action" | "logic" | "comparator"
-ModuleKind = Literal["transform", "action", "logic", "comparator"]
 
 
 class BaseModule(ABC):
@@ -103,14 +104,14 @@ class BaseModule(ABC):
     def run(self,
            inputs: Dict[str, Any],
            cfg: BaseModel,
-           context: Any = None) -> Dict[str, Any]:
+           context: Optional['ExecutionContext'] = None) -> Dict[str, Any]:
         """
         Execute the module with given inputs and configuration
 
         Args:
             inputs: Input values keyed by node ID
             cfg: Validated configuration model instance
-            context: Execution context with ordered inputs/outputs and other runtime info
+            context: ExecutionContext with node metadata and helper methods
 
         Returns:
             Output values keyed by node ID

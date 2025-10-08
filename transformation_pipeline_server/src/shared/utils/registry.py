@@ -11,7 +11,7 @@ from datetime import datetime
 import importlib
 import pkgutil
 
-from shared.models import BaseModule
+from shared.types import BaseModule
 
 logger = logging.getLogger(__name__)
 
@@ -24,8 +24,6 @@ class ModuleSecurityValidator:
         "src.features.modules.action",
         "src.features.modules.logic",
         "src.features.modules.comparator",
-        "user_modules",
-        "custom_modules",
     ]
 
     BLOCKED_PATTERNS = [

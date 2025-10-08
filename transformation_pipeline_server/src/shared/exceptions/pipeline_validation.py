@@ -7,7 +7,7 @@ from typing import List, Dict, Any
 from pydantic import BaseModel, Field
 
 
-class ValidationErrorCode(str, Enum):
+class PipelineValidationErrorCode(str, Enum):
     """Error codes for pipeline validation"""
 
     # Schema errors (§2.1)
@@ -37,17 +37,11 @@ class ValidationErrorCode(str, Enum):
     RUNTIME_ERROR = "RUNTIME_ERROR"
 
 
-class ValidationError(BaseModel):
+class PipelineValidationError(BaseModel):
     """Validation error with location information"""
-    code: ValidationErrorCode
+    code: PipelineValidationErrorCode
     message: str
     where: Dict[str, Any] = Field(default_factory=dict)
 
     class Config:
         use_enum_values = True
-
-
-class ValidationResult(BaseModel):
-    """Result of pipeline validation"""
-    valid: bool
-    errors: List[ValidationError] = Field(default_factory=list)
