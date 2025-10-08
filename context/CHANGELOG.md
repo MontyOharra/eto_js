@@ -5,6 +5,51 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-10-07 17:00] — Pipeline Execution Architecture & Service Container Fix
+
+### Spec / Intent
+- Fixed ServiceContainer initialization issues where API routers couldn't access services
+- Designed unified execution architecture with node metadata for type-aware module execution
+- Created comprehensive implementation plan for Dask-based pipeline execution
+- Added execution audit trail for debugging and production monitoring
+
+### Changes Made
+**Files Modified:**
+- `transformation_pipeline_server/src/app.py` - Fixed import paths for ServiceContainer
+- `transformation_pipeline_server/src/shared/services/service_container.py` - Pure class-based singleton
+- `transformation_pipeline_server/src/api/routers/modules.py` - Updated to use ServiceContainer directly
+- `transformation_pipeline_server/src/api/routers/pipelines.py` - Updated service access pattern
+- `.gitignore` - Added .env files to ignore list
+
+**Docs Created:**
+- `context/unified_execution_plan.md` - Complete execution engine specification
+- `context/implementation_tasks.md` - Detailed implementation roadmap
+
+### Key Technical Decisions
+1. **ServiceContainer Fix**: Resolved Python module import path issues by ensuring consistent imports
+2. **Node Metadata**: Using `List[InstanceNodePin]` for strongly-typed pin information
+3. **ExecutionContext**: Pydantic model with helper methods for modules
+4. **Audit Trail**: Database persistence (Option 2) for complete execution history
+5. **Removed Redundancy**: Eliminated `output_display_names` field in favor of node_metadata
+
+### Commits This Session
+- `e7beb97` - chore: Add .env files to .gitignore and remove from tracking
+- `8fcb851` - fix: Resolve ServiceContainer initialization issue with Python imports
+
+### Next Actions
+- Implement Phase 1: Update PipelineStep model with node_metadata
+- Implement Phase 2: Update compiler to preserve node metadata
+- Implement Phase 3: Create ExecutionContext class
+- Implement Phase 4: Build Dask executor with audit trail
+- Implement Phase 5: Add execution API endpoint
+
+### Notes
+- Frontend pipeline viewing still needs EntryPoint type field fix
+- Sequential executor (Phase 4.4) is optional for now
+- Module updates deferred until core structure is ready
+
+---
+
 ## [2025-10-03 01:00] — Click-to-Connect Connection Creation Implementation
 
 ### Spec / Intent
