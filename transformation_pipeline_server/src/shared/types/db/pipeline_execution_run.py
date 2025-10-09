@@ -24,7 +24,7 @@ class PipelineExecutionRun(PipelineExecutionRunBase):
         """Convert from SQLAlchemy model"""
         return cls(
             id=db_model.id,
-            pipeline_definition_id=db_model.pipeline_defintion_id,
+            pipeline_definition_id=db_model.pipeline_definition_id,
             status=db_model.status,
             entry_values=json.loads(db_model.entry_values) if db_model.entry_values else {},
         )

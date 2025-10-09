@@ -5,7 +5,7 @@ Prunes pipeline to action-reachable modules only (§3.1 from spec)
 
 from typing import Set
 
-from shared.typespipeline_definitions import PipelineState
+from shared.types import PipelineState
 
 
 class GraphPruner:

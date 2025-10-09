@@ -6,11 +6,9 @@ Analyzes which modules are reachable from action modules (§2.6 from spec)
 import networkx as nx
 
 from typing import Set, List, Tuple
-from shared.types import PipelineState
+from shared.types import PipelineState, PipelineIndices
 
 from shared.exceptions import PipelineValidationError, PipelineValidationErrorCode
-
-from .index_builder import PipelineIndices
 
 
 class ReachabilityAnalyzer:
@@ -23,9 +21,7 @@ class ReachabilityAnalyzer:
     """
 
     @staticmethod
-    def analyze(
-        pipeline_state: PipelineState, indices: PipelineIndices, pin_graph: nx.DiGraph
-    ) -> Tuple[Set[str], List[PipelineValidationError]]:
+    def analyze(pipeline_state: PipelineState, indices: PipelineIndices, pin_graph: nx.DiGraph) -> Tuple[Set[str], List[PipelineValidationError]]:
         """
         Analyze action-reachability
 
@@ -38,7 +34,7 @@ class ReachabilityAnalyzer:
             Tuple of (reachable_module_ids, validation_errors)
         """
         errors = []
-        reachable_modules = set()
+        reachable_module_ids = set()
 
         # Step 1: Identify action modules
         action_modules = [
@@ -78,7 +74,7 @@ class ReachabilityAnalyzer:
             # Get pin info to find its module
             pin_info = indices.pin_by_id.get(pin_id)
             if pin_info and pin_info.module_instance_id:
-                reachable_modules.add(pin_info.module_instance_id)
+                reachable_module_ids.add(pin_info.module_instance_id)
 
             # Find upstream pins (predecessors in the graph)
             if pin_id in pin_graph:
@@ -87,6 +83,6 @@ class ReachabilityAnalyzer:
 
         # Add action modules themselves to reachable set
         for action_module in action_modules:
-            reachable_modules.add(action_module.module_instance_id)
+            reachable_module_ids.add(action_module.module_instance_id)
 
-        return reachable_modules, errors
+        return reachable_module_ids, errors

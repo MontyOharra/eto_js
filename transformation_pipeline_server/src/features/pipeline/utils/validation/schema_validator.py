@@ -4,19 +4,20 @@ Validates basic schema and presence requirements (§2.1 from spec)
 """
 
 from collections import Counter
+from typing import List, Set, Dict, get_args
 
-from typing import List, Set, Dict
-from shared.types import PipelineState
-
+from shared.types import PipelineState, AllowedModuleTypes
 from shared.exceptions import PipelineValidationError, PipelineValidationErrorCode
 
 
 class SchemaValidator:
     """Validates basic schema and presence requirements (§2.1)"""
 
-    ALLOWED_TYPES = {"str", "int", "float", "bool", "datetime"}
+    # Extract allowed types from the Literal type definition
+    ALLOWED_TYPES = set(get_args(AllowedModuleTypes))
 
-    def validate(self, pipeline_state: PipelineState) -> List[PipelineValidationError]:
+    @staticmethod
+    def validate(pipeline_state: PipelineState) -> List[PipelineValidationError]:
         """
         Run all schema validations
 
@@ -28,14 +29,15 @@ class SchemaValidator:
         """
         errors = []
 
-        errors.extend(self._check_node_id_uniqueness(pipeline_state))
-        errors.extend(self._check_pin_types(pipeline_state))
-        errors.extend(self._check_module_refs(pipeline_state))
+        errors.extend(SchemaValidator._check_node_id_uniqueness(pipeline_state))
+        errors.extend(SchemaValidator._check_pin_types(pipeline_state))
+        errors.extend(SchemaValidator._check_module_refs(pipeline_state))
 
         return errors
 
+    @staticmethod
     def _check_node_id_uniqueness(
-        self, pipeline_state: PipelineState
+        pipeline_state: PipelineState
     ) -> List[PipelineValidationError]:
         """
         Check all node IDs are globally unique across entry points and all module pins
@@ -86,7 +88,8 @@ class SchemaValidator:
 
         return errors
 
-    def _check_pin_types(self, pipeline_state: PipelineState) -> List[PipelineValidationError]:
+    @staticmethod
+    def _check_pin_types(pipeline_state: PipelineState) -> List[PipelineValidationError]:
         """
         Check all module pin types are in the allowed set
 
@@ -101,11 +104,11 @@ class SchemaValidator:
         for module in pipeline_state.modules:
             # Check input pins
             for pin in module.inputs:
-                if pin.type not in self.ALLOWED_TYPES:
+                if pin.type not in SchemaValidator.ALLOWED_TYPES:
                     errors.append(
                         PipelineValidationError(
                             code=PipelineValidationErrorCode.INVALID_TYPE,
-                            message=f"Invalid type '{pin.type}' for input pin '{pin.node_id}' in module '{module.module_instance_id}'. Allowed types: {', '.join(sorted(self.ALLOWED_TYPES))}",
+                            message=f"Invalid type '{pin.type}' for input pin '{pin.node_id}' in module '{module.module_instance_id}'. Allowed types: {', '.join(sorted(SchemaValidator.ALLOWED_TYPES))}",
                             where={
                                 "module_instance_id": module.module_instance_id,
                                 "node_id": pin.node_id,
@@ -115,11 +118,11 @@ class SchemaValidator:
 
             # Check output pins
             for pin in module.outputs:
-                if pin.type not in self.ALLOWED_TYPES:
+                if pin.type not in SchemaValidator.ALLOWED_TYPES:
                     errors.append(
                         PipelineValidationError(
                             code=PipelineValidationErrorCode.INVALID_TYPE,
-                            message=f"Invalid type '{pin.type}' for output pin '{pin.node_id}' in module '{module.module_instance_id}'. Allowed types: {', '.join(sorted(self.ALLOWED_TYPES))}",
+                            message=f"Invalid type '{pin.type}' for output pin '{pin.node_id}' in module '{module.module_instance_id}'. Allowed types: {', '.join(sorted(SchemaValidator.ALLOWED_TYPES))}",
                             where={
                                 "module_instance_id": module.module_instance_id,
                                 "node_id": pin.node_id,
@@ -129,8 +132,9 @@ class SchemaValidator:
 
         return errors
 
+    @staticmethod
     def _check_module_refs(
-        self, pipeline_state: PipelineState
+        pipeline_state: PipelineState
     ) -> List[PipelineValidationError]:
         """
         Check module_ref format is valid (should contain ':' for "module_id:version")

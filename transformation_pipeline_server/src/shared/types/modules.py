@@ -11,14 +11,14 @@ if TYPE_CHECKING:
     from .execution_context import ExecutionContext
 
 # Type definitions
-Scalar = Literal["str", "float", "datetime", "bool", "int"]
+AllowedModuleTypes = Literal["str", "float", "datetime", "bool", "int"]
 ModuleKind = Literal["transform", "action", "logic", "comparator"]
 
 
 class NodeTypeRule(BaseModel):
     """Type rule for a node group - either allowed_types list or type_var"""
-    # exactly one of these is used
-    allowed_types: Optional[List[Scalar]] = None  # per-pin whitelist; user picks independently
+    # exactly one of these is AllowedModuleTypes
+    allowed_types: Optional[List[AllowedModuleTypes]] = None  # per-pin whitelist; user picks independently
     type_var: Optional[str] = None             # e.g., "T" (unifies across pins)
 
 
@@ -39,7 +39,7 @@ class IOShape(BaseModel):
     """Complete I/O shape definition for a module"""
     inputs: IOSideShape = IOSideShape()
     outputs: IOSideShape = IOSideShape()
-    type_params: Dict[str, List[Scalar]] = Field(default_factory=dict)
+    type_params: Dict[str, List[AllowedModuleTypes]] = Field(default_factory=dict)
 
 
 class ModuleMeta(BaseModel):

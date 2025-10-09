@@ -6,7 +6,7 @@ Computes execution order by organizing modules into dependency layers
 from typing import List, Dict
 import networkx as nx
 
-from shared.typespipeline_definitions import PipelineState
+from shared.types import PipelineState
 
 
 class TopologicalSorter:

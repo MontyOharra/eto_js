@@ -37,7 +37,7 @@ from .execution_result import (
 )
 
 from .modules import (
-    Scalar,
+    AllowedModuleTypes,
     ModuleKind,
     NodeTypeRule,
     NodeGroup,
@@ -62,7 +62,9 @@ from .pipeline_state import (
 )
 
 from .pipeline_validation import (
-    PipelineValidationResult
+    PipelineValidationResult,
+    PinInfo,
+    PipelineIndices
 )
 
 
@@ -101,7 +103,7 @@ __all__ = [
     'RunResult',
 
     # Modules
-    'Scalar',
+    'AllowedModuleTypes',
     'ModuleKind',
     'NodeTypeRule',
     'NodeGroup',
@@ -125,4 +127,6 @@ __all__ = [
 
     # Pipeline Validation
     'PipelineValidationResult',
+    'PinInfo',
+    'PipelineIndices'
 ]

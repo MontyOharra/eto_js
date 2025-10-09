@@ -6,17 +6,12 @@ Coordinates all validation stages (§2 from spec)
 import networkx as nx
 
 from typing import Optional, Set
-from shared.types import PipelineState, PipelineValidationResult
+from shared.types import PipelineState, PipelineValidationResult, PipelineIndices
 
 from shared.exceptions import PipelineValidationError, PipelineValidationErrorCode
 from shared.database.repositories import ModuleCatalogRepository
 
-from .schema_validator import SchemaValidator
-from .index_builder import PipelineIndices
-from .graph_builder import GraphBuilder
-from .edge_validator import EdgeValidator
-from .module_validator import ModuleValidator
-from .reachability_analyzer import ReachabilityAnalyzer
+from validation import (SchemaValidator, IndexBuilder, GraphBuilder, EdgeValidator, ModuleValidator, ReachabilityAnalyzer)
 
 class PipelineValidator:
     """
@@ -38,11 +33,9 @@ class PipelineValidator:
         Args:
             module_catalog_repo: Repository for fetching module templates (optional for basic validation)
         """
-        self.schema_validator = SchemaValidator()
         self.module_catalog_repo = module_catalog_repo
         self.indices: Optional[PipelineIndices] = None
         self.pin_graph: Optional[nx.DiGraph] = None
-        self.reachable_modules: Set[str] = set()
 
     def validate(self, pipeline_state: PipelineState) -> PipelineValidationResult:
         """
@@ -58,7 +51,7 @@ class PipelineValidator:
 
         # Stage 1: Schema validation (§2.1)
         # Check basic structure, uniqueness, types, format
-        schema_errors = self.schema_validator.validate(pipeline_state)
+        schema_errors = SchemaValidator.validate(pipeline_state)
         errors.extend(schema_errors)
 
         # Early exit if schema errors - prevents cascading errors
@@ -67,7 +60,7 @@ class PipelineValidator:
 
         # Stage 2: Build indices (§2.2)
         # Create lookup structures for efficient validation
-        self.indices = PipelineIndices(pipeline_state)
+        self.indices = IndexBuilder.build_indices(pipeline_state)
 
         # Stage 3: Graph validation - check for cycles (§2.4)
         self.pin_graph = GraphBuilder.build_pin_graph(pipeline_state, self.indices)
@@ -97,14 +90,14 @@ class PipelineValidator:
         # Stage 5: Module validation - check templates, type vars, config (§2.5)
         if self.module_catalog_repo:
             module_validator = ModuleValidator(self.module_catalog_repo)
-            module_errors = module_validator.validate(pipeline_state, self.indices)
+            module_errors = module_validator.validate(pipeline_state)
             errors.extend(module_errors)
 
         # Stage 6: Reachability analysis - check for actions and find reachable modules (§2.6)
-        self.reachable_modules, reachability_errors = ReachabilityAnalyzer.analyze(
+        reachable_modules, reachability_errors = ReachabilityAnalyzer.analyze(
             pipeline_state, self.indices, self.pin_graph
         )
         errors.extend(reachability_errors)
 
         # Return result
-        return PipelineValidationResult(valid=len(errors) == 0, errors=errors)
+        return PipelineValidationResult(valid=len(errors) == 0, errors=errors, reachable_modules=reachable_modules)

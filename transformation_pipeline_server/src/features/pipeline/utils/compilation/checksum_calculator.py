@@ -11,7 +11,7 @@ import hashlib
 import json
 from typing import Dict, Any
 
-from shared.typespipeline_definitions import PipelineState
+from shared.types import PipelineState
 
 
 class ChecksumCalculator:

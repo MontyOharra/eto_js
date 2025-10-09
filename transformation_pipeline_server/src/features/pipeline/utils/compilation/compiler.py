@@ -6,12 +6,12 @@ Orchestrates compilation: pruning, checksum calculation, topological sorting, an
 import json
 from typing import List, Tuple, Dict
 
-from shared.typespipeline_definitions import (
+from shared.types import (
     PipelineState,
+    PipelineDefinitionStepCreate,
     ModuleInstance,
     NodeConnection,
 )
-from shared.typespipeline_definition_steps import PipelineStepCreate
 
 from .topological_sorter import TopologicalSorter
 
@@ -19,7 +19,7 @@ from .topological_sorter import TopologicalSorter
 class CompilationResult:
     """Result of pipeline compilation"""
 
-    def __init__(self, steps: List[PipelineStepCreate], checksum: str):
+    def __init__(self, steps: List[PipelineDefinitionStepCreate], checksum: str):
         self.steps = steps
         self.checksum = checksum
         self.step_count = len(steps)
@@ -45,7 +45,7 @@ class PipelineCompiler:
     @staticmethod
     def compile(
         pruned_pipeline: PipelineState, checksum: str
-    ) -> List[PipelineStepCreate]:
+    ) -> List[PipelineDefinitionStepCreate]:
         """
         Compile pruned pipeline to executable step domain objects
 
@@ -82,7 +82,7 @@ class PipelineCompiler:
     @staticmethod
     def _build_steps(
         pipeline: PipelineState, layers: List[List[str]], checksum: str
-    ) -> List[PipelineStepCreate]:
+    ) -> List[PipelineDefinitionStepCreate]:
         """
         Build PipelineStepCreate domain objects from topological layers
 
@@ -121,14 +121,13 @@ class PipelineCompiler:
                 }
 
                 # Create PipelineStepCreate domain object
-                step = PipelineStepCreate(
+                step = PipelineDefinitionStepCreate(
                     plan_checksum=checksum,
                     module_instance_id=module.module_instance_id,
                     module_ref=module.module_ref,
                     module_kind=module.module_kind,
                     module_config=module.config,  # Dict (will be JSON-ified by model_dump_for_db)
                     input_field_mappings=input_mappings,  # Dict
-                    output_display_names=output_names,  # Dict
                     node_metadata=node_metadata,  # NEW: Preserve complete pin metadata
                     step_number=step_number,
                 )

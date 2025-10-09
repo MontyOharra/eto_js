@@ -45,7 +45,7 @@ class PipelineExecutionRunRepository(BaseRepository[PipelineExecutionRunModel]):
             logger.error(f"Error creating execution run: {e}")
             raise RepositoryError(f"Failed to create execution run: {e}") from e
 
-    def update_run_status(self, run_id: str, status: str) -> Optional[PipelineExecutionRun]:
+    def update_run_status(self, run_id: int, status: str) -> Optional[PipelineExecutionRun]:
         """Update run status on completion"""
         try:
             with self.connection_manager.session_scope() as session:
@@ -81,7 +81,7 @@ class PipelineExecutionRunRepository(BaseRepository[PipelineExecutionRunModel]):
             logger.error(f"Error getting execution run {id}: {e}")
             raise RepositoryError(f"Failed to get execution run: {e}") from e
 
-    def get_runs_by_pipeline(self, pipeline_id: str, limit: int = 10) -> List[PipelineExecutionRun]:
+    def get_runs_by_pipeline(self, pipeline_id: int, limit: int = 10) -> List[PipelineExecutionRun]:
         """Get recent execution runs for a pipeline"""
         try:
             with self.connection_manager.session_scope() as session:

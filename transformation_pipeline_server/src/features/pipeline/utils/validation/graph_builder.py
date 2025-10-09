@@ -4,9 +4,7 @@ Builds NetworkX graph from pipeline state for cycle detection and topological so
 """
 import networkx as nx
 
-from shared.types import PipelineState
-
-from .index_builder import PipelineIndices
+from shared.types import PipelineState, PipelineIndices
 
 
 class GraphBuilder:

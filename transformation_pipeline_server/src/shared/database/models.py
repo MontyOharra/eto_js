@@ -103,14 +103,14 @@ class PipelineDefinitionStepModel(BaseModel):
 
     # Validated configuration and mappings
     module_config: Mapped[str] = mapped_column(Text, nullable=False)  # JSON
-    input_field_mappings: Mapped[str] = mapped_column(Text, nullable=False)  # JSON: {this_input_node_id: upstream_node_id}
+    input_field_mappings: Mapped[str] = mapped_column(Text, nullable=False)  # JSON: {downstream_node_id: upstream_node_id}
 
     # Node metadata and execution order
     node_metadata: Mapped[str] = mapped_column(Text)  # JSON: {"inputs": [InstanceNodePin], "outputs": [InstanceNodePin]}
     step_number: Mapped[int] = mapped_column(Integer)
 
     __table_args__ = (
-        Index('idx_pipeline_steps_checksum', 'plan_checksum'),
+        Index('idx_pipeline_steps_checksum', 'plan_checksum', 'step_number', 'id'),
         Index('idx_pipeline_steps_module_ref', 'module_ref'),
         Index('idx_pipeline_steps_kind', 'module_kind'),
     )
@@ -124,7 +124,7 @@ class PipelineExecutionRunModel(BaseModel):
     __tablename__ = 'pipeline_execution_runs'
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    pipeline_defintion_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    pipeline_definition_id: Mapped[str] = mapped_column(String(100), nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="running", nullable=False)
     entry_values: Mapped[str] = mapped_column(Text, nullable=False)  # JSON
 
@@ -145,7 +145,7 @@ class PipelineExecutionStepModel(BaseModel):
     __tablename__ = 'pipeline_execution_steps'
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    run_id: Mapped[int] = mapped_column(String(100), ForeignKey("pipeline_execution_runs.id"), nullable=False)
+    run_id: Mapped[int] = mapped_column(Integer, ForeignKey("pipeline_execution_runs.id"), nullable=False)
     module_instance_id: Mapped[str] = mapped_column(String(100), nullable=False)
     step_number: Mapped[int] = mapped_column(Integer, nullable=False)
     inputs: Mapped[str] = mapped_column(Text)  # JSON - serialized inputs
@@ -153,7 +153,7 @@ class PipelineExecutionStepModel(BaseModel):
     error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Relationship to execution run
-    run = relationship("ExecutionRunModel", back_populates="steps")
+    run = relationship("run", back_populates="steps")
 
     __table_args__ = (
         Index('idx_execution_steps_run', 'run_id'),

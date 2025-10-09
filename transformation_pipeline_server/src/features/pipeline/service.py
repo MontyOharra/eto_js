@@ -24,13 +24,14 @@ from shared.database.repositories import (
 )
 from shared.exceptions import RepositoryError, ObjectNotFoundError, PipelineValidationError
 
-from validation.validator import PipelineValidator
-from compilation import (
+from .utils.validation_orchestrator import PipelineValidator
+from .utils.compilation import (
     GraphPruner,
     TopologicalSorter,
     ChecksumCalculator,
     PipelineCompiler,
 )
+
 from .execution.executor import PipelineExecutor
 
 logger = logging.getLogger(__name__)
@@ -95,24 +96,15 @@ class PipelineService:
         try:
             logger.info(f"Creating pipeline: {pipeline_create.name}")
 
-            # Step 1: Validate Pipeline
             pipeline_state = pipeline_create.pipeline_state
 
-            validator = PipelineValidator(module_catalog_repo=self.module_catalog_repo)
-            validation_result = validator.validate(pipeline_state)
+            try:
+                validation_result = self.validate_pipeline(pipeline_state)
+            except ValueError as e:
+                raise e
 
-            if not validation_result.valid:
-                logger.error(
-                    f"Pipeline validation failed with {len(validation_result.errors)} error(s)"
-                )
-                error_messages = [
-                    f"{err.code}: {err.message}" for err in validation_result.errors
-                ]
-                raise ValueError(
-                    f"Pipeline validation failed: {'; '.join(error_messages)}"
-                )
+            reachable_modules = validation_result.reachable_modules
 
-            reachable_modules = validator.reachable_modules
             logger.debug(
                 f"Validation passed. {len(reachable_modules)} reachable modules"
             )
@@ -279,7 +271,7 @@ class PipelineService:
 
     # === Validation Operations ===
 
-    def validate_pipeline(self, pipeline_state: PipelineState) -> ValidationResult:
+    def validate_pipeline(self, pipeline_state: PipelineState) -> PipelineValidationResult:
         """
         Validate a pipeline state
 
@@ -298,52 +290,23 @@ class PipelineService:
             # Create validator with module catalog repository and run validation
             validator = PipelineValidator(module_catalog_repo=self.module_catalog_repo)
             result = validator.validate(pipeline_state)
-
-            if result.valid:
-                logger.debug("Pipeline validation passed")
-            else:
-                logger.debug(
+            
+            if not result.valid:
+                logger.info(
                     f"Pipeline validation failed with {len(result.errors)} error(s)"
                 )
-
+                error_messages = [
+                    f"{err.code}: {err.message}" for err in result.errors
+                ]
+                raise ValueError(
+                    f"Pipeline validation failed: {'; '.join(error_messages)}"
+                )
             return result
 
         except Exception as e:
             logger.error(f"Unexpected error during pipeline validation: {e}")
             # Re-raise to let caller handle it
             raise
-
-    # === Utility Operations ===
-
-    def pipeline_exists(self, pipeline_id: str) -> bool:
-        """
-        Check if a pipeline exists
-
-        Args:
-            pipeline_id: Pipeline ID to check
-
-        Returns:
-            True if pipeline exists, False otherwise
-
-        Raises:
-            RepositoryError: If check operation fails
-        """
-        try:
-            logger.debug(f"Checking pipeline existence: {pipeline_id}")
-
-            exists = self.pipeline_repo.get_by_id(pipeline_id) is not None
-
-            logger.debug(f"Pipeline {pipeline_id} exists: {exists}")
-            return exists
-
-        except RepositoryError:
-            logger.error(f"Failed to check pipeline existence: {pipeline_id}")
-            raise
-        except Exception as e:
-            logger.error(
-                f"Unexpected error checking pipeline existence {pipeline_id}: {e}"
-            )
-            raise RepositoryError(f"Failed to check pipeline existence: {e}") from e
 
     # === Execution Operations ===
 
@@ -371,8 +334,7 @@ class PipelineService:
         """
         try:
             # 1. Generate run ID
-            run_id = str(uuid.uuid4())
-            logger.info(f"Starting pipeline execution: {pipeline_id}, run_id: {run_id}")
+            logger.info(f"Starting pipeline execution: {pipeline_id}")
 
             # 2. Get pipeline and verify it exists
             pipeline = self.pipeline_repo.get_by_id(pipeline_id)

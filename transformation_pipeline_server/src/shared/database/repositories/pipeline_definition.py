@@ -76,7 +76,7 @@ class PipelineDefinitionRepository(BaseRepository[PipelineDefinitionModel]):
             logger.error(f"Error creating pipeline: {e}")
             raise RepositoryError(f"Failed to create pipeline: {e}") from e
 
-    def get_by_id(self, pipeline_id: str) -> Optional[PipelineDefinition]:
+    def get_by_id(self, pipeline_id: int) -> Optional[PipelineDefinition]:
         """
         Get pipeline by ID
 
@@ -196,7 +196,7 @@ class PipelineDefinitionRepository(BaseRepository[PipelineDefinitionModel]):
 
     # ========== Compilation-Related Operations ==========
 
-    def update_pipeline_checksum(self, pipeline_id: str, checksum: str, compiled_at: datetime) -> PipelineDefinition:
+    def update_pipeline_checksum(self, pipeline_id: int, checksum: str, compiled_at: datetime) -> PipelineDefinition:
         """
         Update pipeline's plan_checksum and compiled_at timestamp
 

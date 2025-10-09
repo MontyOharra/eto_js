@@ -4,12 +4,10 @@ Validates module constraints (§2.5 from spec)
 """
 
 from typing import List, Dict, Set
-from shared.types import PipelineState
+from shared.types import PipelineState, PipelineIndices
 
 from shared.database.repositories import ModuleCatalogRepository
 from shared.exceptions import PipelineValidationError, PipelineValidationErrorCode
-
-from .index_builder import PipelineIndices
 
 
 class ModuleValidator:
@@ -30,9 +28,7 @@ class ModuleValidator:
         """
         self.module_catalog_repo = module_catalog_repo
 
-    def validate(
-        self, pipeline_state: PipelineState, indices: PipelineIndices
-    ) -> List[PipelineValidationError]:
+    def validate(self, pipeline_state: PipelineState) -> List[PipelineValidationError]:
         """
         Validate all module constraints
 
