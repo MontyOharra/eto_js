@@ -18,9 +18,7 @@ from shared.types import (
 from shared.database.repositories import (
     ModuleCatalogRepository,
     PipelineDefinitionStepRepository,
-    PipelineDefinitionRepository,
-    PipelineExecutionRunRepository,
-    PipelineExecutionStepRepository,
+    PipelineDefinitionRepository
 )
 from shared.exceptions import RepositoryError, ObjectNotFoundError, PipelineValidationError
 
@@ -31,8 +29,6 @@ from .utils.compilation import (
     ChecksumCalculator,
     PipelineCompiler,
 )
-
-from .execution.executor import PipelineExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -172,7 +168,7 @@ class PipelineService:
             logger.error(f"Unexpected error creating pipeline: {e}")
             raise RepositoryError(f"Failed to create pipeline: {e}") from e
 
-    def get_pipeline(self, pipeline_definition_id: str) -> PipelineDefinition:
+    def get_pipeline(self, pipeline_definition_id: int) -> PipelineDefinition:
         """
         Get a single pipeline by ID
 
@@ -307,157 +303,3 @@ class PipelineService:
             logger.error(f"Unexpected error during pipeline validation: {e}")
             # Re-raise to let caller handle it
             raise
-
-    # === Execution Operations ===
-
-    def execute_pipeline(
-        self,
-        pipeline_id: str,
-        entry_values: Dict[str, Any],
-        enable_tracking: bool = True,
-    ) -> RunResult:
-        """
-        Execute a pipeline with given entry values.
-
-        Args:
-            pipeline_id: ID of the pipeline to execute
-            entry_values: Entry point values for the pipeline (can use either entry point names or node IDs as keys)
-            enable_tracking: Whether to persist execution history
-
-        Returns:
-            RunResult with execution status and outputs
-
-        Raises:
-            ObjectNotFoundError: If pipeline not found
-            ValueError: If entry values are invalid
-            RepositoryError: If database operations fail
-        """
-        try:
-            # 1. Generate run ID
-            logger.info(f"Starting pipeline execution: {pipeline_id}")
-
-            # 2. Get pipeline and verify it exists
-            pipeline = self.pipeline_repo.get_by_id(pipeline_id)
-            if not pipeline:
-                raise ObjectNotFoundError("Pipeline", pipeline_id)
-            if not pipeline.plan_checksum:
-                raise Exception(f"Pipeline: {pipeline_id} has not been compiled yet")
-
-            # 3. Get compiled steps
-            steps = self.step_repo.get_steps_by_checksum(pipeline.plan_checksum)
-            if not steps:
-                logger.error(f"No compiled steps found for pipeline {pipeline_id}")
-                raise RepositoryError(
-                    f"Pipeline {pipeline_id} is not properly compiled"
-                )
-
-            logger.info(f"Loaded {len(steps)} compiled steps for execution")
-
-            # 4. Map entry point names to node IDs if needed
-            mapped_entry_values = self._map_entry_values_to_node_ids(
-                entry_values, pipeline.pipeline_json
-            )
-            logger.debug(f"Mapped entry values: {mapped_entry_values}")
-
-            # 5. Create executor and run pipeline
-            executor = PipelineExecutor()
-            run_create, step_creates, run_result = executor.run_pipeline(
-                pipeline_id=pipeline_id,
-                run_id=run_id,
-                steps=steps,
-                entry_values=mapped_entry_values,
-                pipeline_state=pipeline.pipeline_json,  # Pass pipeline state (it's actually a PipelineState object, not JSON)
-            )
-
-            # 5. Persist execution history if tracking enabled
-            if enable_tracking:
-                try:
-                    # Initialize repositories
-                    run_repo = ExecutionRunRepository(self.connection_manager)
-                    step_repo = ExecutionStepRepository(self.connection_manager)
-
-                    # Create run record
-                    run_repo.create_run(run_create)
-
-                    # Create step records
-                    for step_create in step_creates:
-                        step_repo.create_step(step_create)
-
-                    # Update run status to completed
-                    run_repo.update_run_status(
-                        run_id,
-                        run_result.status,
-                        datetime.fromisoformat(run_result.completed_at),
-                    )
-
-                    logger.info(f"Execution history persisted for run {run_id}")
-
-                except Exception as e:
-                    # Log but don't fail the execution if tracking fails
-                    logger.error(f"Failed to persist execution history: {e}")
-
-            logger.info(
-                f"Pipeline execution completed: {run_id}, status: {run_result.status}"
-            )
-            return run_result
-
-        except (ObjectNotFoundError, ValueError):
-            # Re-raise business logic exceptions
-            raise
-        except Exception as e:
-            logger.error(
-                f"Unexpected error executing pipeline {pipeline_id}: {e}", exc_info=True
-            )
-            raise RepositoryError(f"Failed to execute pipeline: {e}") from e
-
-    def _map_entry_values_to_node_ids(
-        self, entry_values: Dict[str, Any], pipeline_state: PipelineState
-    ) -> Dict[str, Any]:
-        """
-        Map entry point names to node IDs in entry values.
-
-        The API expects entry values with entry point NAMES as keys:
-        {"Input": "Hello World", "Config": {"setting": "value"}}
-
-        This method maps those names to the internal node IDs used by the executor.
-
-        Args:
-            entry_values: Dictionary with entry point names as keys
-            pipeline_state: Pipeline state containing entry point definitions
-
-        Returns:
-            Dictionary with node IDs as keys (for internal use by executor)
-
-        Raises:
-            ValueError: If an entry point name is not found
-        """
-        # Create mapping from name to node_id
-        name_to_node_id = {}
-        node_id_set = set()
-
-        for entry_point in pipeline_state.entry_points:
-            name_to_node_id[entry_point.name] = entry_point.node_id
-            node_id_set.add(entry_point.node_id)
-
-        # Map the entry values
-        mapped_values = {}
-
-        for key, value in entry_values.items():
-            if key in node_id_set:
-                # Already a node ID (for backward compatibility)
-                mapped_values[key] = value
-                logger.debug(f"Using node ID directly: '{key}'")
-            elif key in name_to_node_id:
-                # It's an entry point name, map to node ID
-                node_id = name_to_node_id[key]
-                mapped_values[node_id] = value
-                logger.debug(f"Mapped entry point name '{key}' to node ID '{node_id}'")
-            else:
-                # Key not found as either name or node ID
-                available_names = list(name_to_node_id.keys())
-                raise ValueError(
-                    f"Entry point '{key}' not found. "
-                    f"Available entry points: {available_names}"
-                )
-
-        return mapped_values

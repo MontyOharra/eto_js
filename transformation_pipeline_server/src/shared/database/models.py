@@ -124,7 +124,7 @@ class PipelineExecutionRunModel(BaseModel):
     __tablename__ = 'pipeline_execution_runs'
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    pipeline_definition_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    pipeline_definition_id: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="running", nullable=False)
     entry_values: Mapped[str] = mapped_column(Text, nullable=False)  # JSON
 

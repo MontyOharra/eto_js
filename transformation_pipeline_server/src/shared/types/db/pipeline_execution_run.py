@@ -11,7 +11,7 @@ from shared.database.models import PipelineExecutionRunModel
 
 class PipelineExecutionRunBase(BaseModel):
     """Base fields for pipeline execution run"""
-    pipeline_definition_id: str = Field(..., description="Pipeline definition ID")
+    pipeline_definition_id: int = Field(..., description="Pipeline definition ID")
     entry_values: Dict[str, Any] = Field(..., description="Entry values")
 
 class PipelineExecutionRun(PipelineExecutionRunBase):

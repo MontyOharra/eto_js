@@ -79,9 +79,8 @@ class PipelineExecutionService:
 
     def execute_pipeline(
         self,
-        pipeline_definition_id: str,
+        pipeline_definition_id: int,
         entry_values_by_name: Dict[str, Any],
-        persist_history: bool = True,
     ) -> PipelineExecutionRun:
         """
         Execute a compiled pipeline with the provided entry values (keyed by entry *names*).
@@ -98,6 +97,13 @@ class PipelineExecutionService:
         # 1) Load pipeline and compiled steps
         pipeline = self._require_pipeline(pipeline_definition_id)
         steps = self._require_compiled_steps(pipeline)
+        
+        run = self.run_repo.create(
+            PipelineExecutionRunCreate(
+                pipeline_definition_id=pipeline.id,
+                entry_values=entry_values_by_name,
+            )
+        )
 
         # 2) Build entry name -> pin id map from the pipeline's entry_points (lean, no giant JSON scan)
         entry_name_to_ids = self._map_entry_names_to_pin_ids(pipeline)
@@ -106,17 +112,14 @@ class PipelineExecutionService:
         producer_of_pin, missing, extras = self._seed_entry_values(entry_values_by_name, entry_name_to_ids)
         if missing:
             msg = f"Missing required entry names: {', '.join(missing)}"
-            if persist_history:
-                run = self._create_run(pipeline, entry_values_by_name, status="failed")
+            run = self.run_repo.update_run_status(pipeline_definition_id, status="failed")
             logger.error(msg)
             raise ValueError(msg)
 
         if extras:
             logger.warning("Ignoring extra entry names not used by this pipeline: %s", ", ".join(extras))
 
-        # 4) Create run row (status=running)
-        run = self._create_run(pipeline, entry_values_by_name, status="running") if persist_history else None
-        run_id = run.id if run else None
+        run_id = run.id
 
         # 5) Build Dask graph
         task_of_step: Dict[str, Any] = {}
@@ -172,7 +175,7 @@ class PipelineExecutionService:
 
     # ------------------------- Internals -------------------------------------
 
-    def _require_pipeline(self, pipeline_definition_id: str) -> PipelineDefinition:
+    def _require_pipeline(self, pipeline_definition_id: int) -> PipelineDefinition:
         pipeline = self.pipeline_repo.get_by_id(pipeline_definition_id)
         if not pipeline:
             from shared.exceptions import ObjectNotFoundError
@@ -182,6 +185,7 @@ class PipelineExecutionService:
         return pipeline  # :contentReference[oaicite:8]{index=8}
 
     def _require_compiled_steps(self, pipeline: PipelineDefinition) -> List[PipelineDefinitionStep]:
+        assert pipeline.plan_checksum is not None
         steps = self.step_repo.get_steps_by_checksum(pipeline.plan_checksum)  # ordered by step_number
         if not steps:
             from shared.exceptions import RepositoryError
@@ -320,21 +324,13 @@ class PipelineExecutionService:
         we split that dict into individual delayed futures so downstream inputs can depend on the specific pin.
         """
 
-        output_pins: List[dict] = step.node_metadata.get("outputs") or []
+        output_pins: List[InstanceNodePin] = step.node_metadata.get("outputs") or []
 
         for pin in output_pins:
-            node_id = pin["node_id"]
+            node_id = pin.node_id
 
             @delayed(pure=True)
             def _select(outputs: Dict[str, Any], key: str):
                 return outputs.get(key)
 
             producer_of_pin[node_id] = _select(task, node_id)
-
-    def _create_run(self, pipeline: PipelineDefinition, entry_values_by_name: Dict[str, Any], status: str) -> PipelineExecutionRun:
-        return self.run_repo.create(
-            PipelineExecutionRunCreate(
-                pipeline_definition_id=pipeline.id,
-                entry_values=entry_values_by_name,
-            )
-        )

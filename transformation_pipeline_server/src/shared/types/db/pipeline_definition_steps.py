@@ -19,7 +19,7 @@ class PipelineDefinitionStepBase(BaseModel):
     module_kind: ModuleKind = Field(..., description="Module type")
     module_config: Dict[str, Any] = Field(..., description="Module configuration")
     input_field_mappings: Dict[str, str] = Field(..., description="Maps input pin IDs to source node IDs")
-    node_metadata: Optional[Dict[str, List[InstanceNodePin]]] = Field(None, description="Node metadata with input/output pin information")
+    node_metadata: Dict[str, List[InstanceNodePin]] = Field(None, description="Node metadata with input/output pin information")
     step_number: int = Field(..., description="Execution order (topological layer)")
 
     class Config:
