@@ -11,7 +11,7 @@ from shared.types import PipelineState, PipelineValidationResult, PipelineIndice
 from shared.exceptions import PipelineValidationError, PipelineValidationErrorCode
 from shared.database.repositories import ModuleCatalogRepository
 
-from validation import (SchemaValidator, IndexBuilder, GraphBuilder, EdgeValidator, ModuleValidator, ReachabilityAnalyzer)
+from .validation import (SchemaValidator, IndexBuilder, GraphBuilder, EdgeValidator, ModuleValidator, ReachabilityAnalyzer)
 
 class PipelineValidator:
     """

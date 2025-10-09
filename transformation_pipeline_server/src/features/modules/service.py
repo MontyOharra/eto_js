@@ -4,8 +4,7 @@ Handles module catalog queries and execution
 """
 import logging
 from typing import Dict, List, Optional, Type, Any
-from shared.types import BaseModule
-from shared.types.module_catalog import ModuleCatalog
+from shared.types import BaseModule, ModuleCatalog
 from shared.database.repositories.module_catalog import ModuleCatalogRepository
 from shared.utils.registry import ModuleRegistry, get_registry
 from shared.exceptions import ObjectNotFoundError

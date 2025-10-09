@@ -9,15 +9,17 @@ from fastapi import APIRouter, HTTPException, Depends
 
 from shared.services.service_container import ServiceContainer
 from features.pipeline import PipelineService
-from shared.typespipeline_definitions import (
-    Pipeline,
-    PipelineCreate,
-    PipelineSummary,
+from features.pipeline_execution.service import PipelineExecutionService
+from shared.types import (
+    PipelineDefinition,
+    PipelineDefinitionCreate,
+    PipelineDefinitionSummary,
     PipelineState,
+    PipelineValidationResult,
+    PipelineExecutionRun,
 )
-from shared.types.execution_result import RunResult
 from shared.exceptions import RepositoryError, ObjectNotFoundError
-from features.pipeline.validation.errors import ValidationResult
+
 from api.schemas import (
     PipelineListResponse,
     PipelineSummaryListResponse,
@@ -30,9 +32,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/pipelines", tags=["Pipelines"])
 
 
-@router.post("/upload", response_model=Pipeline)
+@router.post("/upload", response_model=PipelineDefinition)
 async def upload_pipeline(
-    pipeline_create: PipelineCreate,
+    pipeline_create: PipelineDefinitionCreate,
     pipeline_service: PipelineService = Depends(
         lambda: ServiceContainer.get_pipeline_service()
     ),
@@ -149,9 +151,9 @@ async def list_pipelines(
         raise HTTPException(status_code=500, detail="Failed to retrieve pipelines")
 
 
-@router.get("/{pipeline_id}", response_model=Pipeline)
+@router.get("/{pipeline_id}", response_model=PipelineDefinition)
 async def get_pipeline(
-    pipeline_id: str,
+    pipeline_id: int,
     pipeline_service: PipelineService = Depends(
         lambda: ServiceContainer.get_pipeline_service()
     ),
@@ -190,7 +192,7 @@ async def get_pipeline(
         raise HTTPException(status_code=500, detail="Failed to retrieve pipeline")
 
 
-@router.post("/validate", response_model=ValidationResult)
+@router.post("/validate", response_model=PipelineValidationResult)
 async def validate_pipeline(
     request: ValidatePipelineRequest,
     pipeline_service: PipelineService = Depends(
@@ -237,25 +239,25 @@ async def validate_pipeline(
         raise HTTPException(status_code=500, detail="Failed to validate pipeline")
 
 
-@router.post("/{pipeline_id}/execute", response_model=RunResult)
+@router.post("/{pipeline_id}/execute", response_model=PipelineExecutionRun)
 async def execute_pipeline(
-    pipeline_id: str,
+    pipeline_id: int,
     entry_values: Dict[str, Any],
-    pipeline_service: PipelineService = Depends(
-        lambda: ServiceContainer.get_pipeline_service()
+    execution_service: PipelineExecutionService = Depends(
+        lambda: ServiceContainer.get_pipeline_execution_service()
     ),
 ):
     """
     Execute a pipeline with given entry values.
 
     Args:
-        pipeline_id: ID of the pipeline to execute
-        entry_values: Dictionary with entry point names as keys and their values.
+        pipeline_id: ID of the pipeline to execute (integer)
+        entry_values: Dictionary with entry point NAMES as keys and their values.
             Example: {"Input": "Hello World", "Config": {"setting": "value"}}
-        pipeline_service: Injected pipeline service
+        execution_service: Injected pipeline execution service
 
     Returns:
-        RunResult with execution status and outputs
+        PipelineExecutionRun with execution status and entry values
 
     Raises:
         404: If pipeline not found
@@ -266,17 +268,14 @@ async def execute_pipeline(
         logger.info(f"Pipeline execution requested: {pipeline_id}")
         logger.debug(f"Entry values: {entry_values}")
 
-        # Execute the pipeline
-        result = pipeline_service.execute_pipeline(pipeline_id, entry_values)
+        # Execute the pipeline using the new execution service
+        run = execution_service.execute_pipeline(
+            pipeline_definition_id=pipeline_id,
+            entry_values_by_name=entry_values
+        )
 
-        if result.status == "success":
-            logger.info(f"Pipeline {pipeline_id} executed successfully")
-        else:
-            logger.warning(
-                f"Pipeline {pipeline_id} execution failed with {len(result.errors)} error(s)"
-            )
-
-        return result
+        logger.info(f"Pipeline {pipeline_id} executed successfully: run_id={run.id}, status={run.status}")
+        return run
 
     except ObjectNotFoundError as e:
         logger.warning(f"Pipeline not found for execution: {pipeline_id}")
@@ -284,9 +283,10 @@ async def execute_pipeline(
     except ValueError as e:
         logger.warning(f"Invalid entry values for pipeline {pipeline_id}: {e}")
         raise HTTPException(status_code=400, detail=f"Invalid entry values: {str(e)}")
-    except RepositoryError as e:
-        logger.error(f"Database error during pipeline execution: {e}")
-        raise HTTPException(status_code=500, detail="Pipeline execution failed")
+    except RuntimeError as e:
+        # Handles "Pipeline not compiled" errors
+        logger.error(f"Pipeline execution error: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"Unexpected error executing pipeline {pipeline_id}: {e}")
+        logger.error(f"Unexpected error executing pipeline {pipeline_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Pipeline execution failed")

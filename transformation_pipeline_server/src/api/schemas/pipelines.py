@@ -1,10 +1,10 @@
 from typing import List
 from pydantic import BaseModel
 
-from shared.typespipeline_definitions import (
-    Pipeline,
-    PipelineCreate,
-    PipelineSummary,
+from shared.types import (
+    PipelineDefinition,
+    PipelineDefinitionCreate,
+    PipelineDefinitionSummary,
     PipelineState,
 )
 
@@ -12,14 +12,14 @@ from shared.typespipeline_definitions import (
 class PipelineListResponse(BaseModel):
     """Response model for pipeline listing"""
 
-    pipelines: List[Pipeline]
+    pipelines: List[PipelineDefinition]
     total_count: int
 
 
 class PipelineSummaryListResponse(BaseModel):
     """Response model for pipeline summary listing"""
 
-    pipelines: List[PipelineSummary]
+    pipelines: List[PipelineDefinitionSummary]
     total_count: int
 
 

@@ -8,6 +8,8 @@ from typing import Dict, Any, Optional, List, TYPE_CHECKING
 if TYPE_CHECKING:
     from features.modules.service import ModulesService
     from features.pipeline import PipelineService
+    from features.pipeline_execution.service import PipelineExecutionService
+    from shared.utils.registry import ModuleRegistry
     from shared.database.connection import DatabaseConnectionManager
 
 logger = logging.getLogger(__name__)
@@ -100,6 +102,18 @@ class ServiceContainer:
                 'args': [cls._connection_manager],
                 'singleton': True,
                 'description': 'Pipeline creation and management service'
+            },
+            'module_registry': {
+                'class': 'shared.utils.registry.ModuleRegistry',
+                'args': [],
+                'singleton': True,
+                'description': 'Module handler registry'
+            },
+            'pipeline_execution': {
+                'class': 'features.pipeline_execution.service.PipelineExecutionService',
+                'args': [cls._connection_manager, '_service:module_registry'],
+                'singleton': True,
+                'description': 'Pipeline execution service with Dask orchestration'
             },
             # Add more services here as needed
         }
@@ -214,6 +228,16 @@ class ServiceContainer:
     def get_pipeline_service(cls) -> 'PipelineService':
         """Get the pipeline service"""
         return cls.get('pipeline')
+
+    @classmethod
+    def get_pipeline_execution_service(cls) -> 'PipelineExecutionService':
+        """Get the pipeline execution service"""
+        return cls.get('pipeline_execution')
+
+    @classmethod
+    def get_module_registry(cls) -> 'ModuleRegistry':
+        """Get the module registry"""
+        return cls.get('module_registry')
 
     @classmethod
     def get_connection_manager(cls) -> 'DatabaseConnectionManager':

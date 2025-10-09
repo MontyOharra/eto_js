@@ -74,9 +74,6 @@ class PipelineDefinitionModel(BaseModel):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
-    # Relationships
-    execution_logs = relationship("PipelineExecutionLogModel", back_populates="pipeline_definition")
-
     __table_args__ = (
         Index('idx_pipeline_definitions_name', 'name'),
         Index('idx_pipeline_definitions_checksum', 'plan_checksum'),
@@ -108,6 +105,7 @@ class PipelineDefinitionStepModel(BaseModel):
     # Node metadata and execution order
     node_metadata: Mapped[str] = mapped_column(Text)  # JSON: {"inputs": [InstanceNodePin], "outputs": [InstanceNodePin]}
     step_number: Mapped[int] = mapped_column(Integer)
+    
 
     __table_args__ = (
         Index('idx_pipeline_steps_checksum', 'plan_checksum', 'step_number', 'id'),
@@ -129,10 +127,10 @@ class PipelineExecutionRunModel(BaseModel):
     entry_values: Mapped[str] = mapped_column(Text, nullable=False)  # JSON
 
     # Relationship to execution steps
-    steps = relationship("ExecutionStepModel", back_populates="run", cascade="all, delete-orphan")
+    steps = relationship("PipelineExecutionStepModel", back_populates="run", cascade="all, delete-orphan")
 
     __table_args__ = (
-        Index('idx_execution_runs_pipeline', 'pipeline_defintion_id'),
+        Index('idx_execution_runs_pipeline', 'pipeline_definition_id'),
         Index('idx_execution_runs_status', 'status'),
     )
 
@@ -153,7 +151,7 @@ class PipelineExecutionStepModel(BaseModel):
     error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Relationship to execution run
-    run = relationship("run", back_populates="steps")
+    run = relationship("PipelineExecutionRunModel", back_populates="steps")
 
     __table_args__ = (
         Index('idx_execution_steps_run', 'run_id'),
