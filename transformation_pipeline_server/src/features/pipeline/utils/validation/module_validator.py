@@ -4,10 +4,14 @@ Validates module constraints (§2.5 from spec)
 """
 
 from typing import List, Dict, Set
-from shared.types import PipelineState, PipelineIndices
+from shared.types import (
+    PipelineState,
+    PipelineIndices,
+    PipelineValidationError,
+    PipelineValidationErrorCode
+)
 
 from shared.database.repositories import ModuleCatalogRepository
-from shared.exceptions import PipelineValidationError, PipelineValidationErrorCode
 
 
 class ModuleValidator:

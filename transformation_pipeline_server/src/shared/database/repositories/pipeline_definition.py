@@ -175,8 +175,6 @@ class PipelineDefinitionRepository(BaseRepository[PipelineDefinitionModel]):
         try:
             with self.connection_manager.session_scope() as session:
                 # Generate ID if not present
-                if 'id' not in data:
-                    data['id'] = self._generate_pipeline_id()
 
                 # Create model instance
                 model = self.model_class(**data)
@@ -186,7 +184,7 @@ class PipelineDefinitionRepository(BaseRepository[PipelineDefinitionModel]):
 
                 checksum_preview = data.get('plan_checksum', 'none')
                 checksum_str = checksum_preview[:8] + "..." if checksum_preview and checksum_preview != 'none' else 'none'
-                logger.info(f"Created pipeline: {data['id']} - {data.get('name')} with checksum {checksum_str}")
+                logger.info(f"Created pipeline: {model.id} - {model.name} with checksum {checksum_str}")
 
                 return self._convert_to_domain_object(model)
 

@@ -6,9 +6,14 @@ Coordinates all validation stages (§2 from spec)
 import networkx as nx
 
 from typing import Optional, Set
-from shared.types import PipelineState, PipelineValidationResult, PipelineIndices
+from shared.types import (
+    PipelineState,
+    PipelineValidationResult,
+    PipelineIndices,
+    PipelineValidationError,
+    PipelineValidationErrorCode
+)
 
-from shared.exceptions import PipelineValidationError, PipelineValidationErrorCode
 from shared.database.repositories import ModuleCatalogRepository
 
 from .validation import (SchemaValidator, IndexBuilder, GraphBuilder, EdgeValidator, ModuleValidator, ReachabilityAnalyzer)

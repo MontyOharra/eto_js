@@ -77,8 +77,8 @@ export function serializeVisualState(visualState: VisualState): VisualState {
 export interface BackendPipelineData {
   name?: string;
   description?: string;
-  pipeline_json: BackendPipelineState;
-  visual_json: VisualState;
+  pipeline_state: BackendPipelineState;
+  visual_state: VisualState;
 }
 
 export function serializePipelineData(
@@ -90,7 +90,7 @@ export function serializePipelineData(
   return {
     name,
     description,
-    pipeline_json: serializePipelineState(pipelineState),
-    visual_json: serializeVisualState(visualState)
+    pipeline_state: serializePipelineState(pipelineState),
+    visual_state: serializeVisualState(visualState)
   };
 }

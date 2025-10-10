@@ -3,16 +3,12 @@ Shared module type definitions and base classes
 """
 from typing import Optional, List, Dict, Literal, Type, Any, TYPE_CHECKING
 from abc import ABC, abstractmethod
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
-from shared.exceptions.module_definitions import NotImplementedError
+from .pipeline_state import InstanceNodePin
+from .enums import AllowedModuleTypes, ModuleKind
 
-if TYPE_CHECKING:
-    from .execution_context import ExecutionContext
-
-# Type definitions
-AllowedModuleTypes = Literal["str", "float", "datetime", "bool", "int"]
-ModuleKind = Literal["transform", "action", "logic", "comparator"]
+from shared.exceptions import NotImplementedError
 
 
 class NodeTypeRule(BaseModel):
@@ -47,6 +43,80 @@ class ModuleMeta(BaseModel):
     io_shape: IOShape = IOShape()
 
 
+class ModuleExecutionContext(BaseModel):
+    """Context passed to module handlers with node metadata and helpers"""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    inputs: List[InstanceNodePin]      # Input pins metadata
+    outputs: List[InstanceNodePin]     # Output pins metadata
+    module_instance_id: str             # For debugging/logging
+    services: Optional[Any] = None      # Access to service container (ServiceContainer type)
+
+    def get_input_type(self, index: int = 0) -> str:
+        """Get type of input at given index"""
+        if not self.inputs:
+            raise IndexError("No inputs in context")
+        if index >= len(self.inputs):
+            raise IndexError(f"Input index {index} out of range")
+        return self.inputs[index].type
+
+    def get_output_type(self, index: int = 0) -> str:
+        """Get type of output at given index"""
+        if not self.outputs:
+            raise IndexError("No outputs in context")
+        if index >= len(self.outputs):
+            raise IndexError(f"Output index {index} out of range")
+        return self.outputs[index].type
+
+    def get_input_names(self) -> Dict[str, str]:
+        """Get mapping of node_id to user-assigned names"""
+        return {pin.node_id: pin.name for pin in self.inputs}
+
+    def get_output_names(self) -> Dict[str, str]:
+        """Get mapping of node_id to user-assigned names"""
+        return {pin.node_id: pin.name for pin in self.outputs}
+
+    def resolve_placeholders(self, template: str, inputs: Dict[str, Any]) -> str:
+        """Replace {name} placeholders with actual values"""
+        result = template
+        # Replace input placeholders
+        for pin in self.inputs:
+            placeholder = f"{{{pin.name}}}"
+            value = inputs.get(pin.node_id, "")
+            result = result.replace(placeholder, str(value))
+        # Also support output placeholders for prompts
+        for pin in self.outputs:
+            placeholder = f"{{{pin.name}}}"
+            # Keep output placeholders as-is for LLM to understand
+            result = result.replace(placeholder, f"[{pin.name}]")
+        return result
+
+    def get_input_by_name(self, name: str, inputs: Dict[str, Any]) -> Any:
+        """Get input value by user-assigned name"""
+        for pin in self.inputs:
+            if pin.name == name:
+                return inputs.get(pin.node_id)
+        raise KeyError(f"No input with name '{name}'")
+
+    def get_input_groups(self) -> Dict[int, List[InstanceNodePin]]:
+        """Get inputs organized by group"""
+        groups: Dict[int, List[InstanceNodePin]] = {}
+        for pin in self.inputs:
+            if pin.group_index not in groups:
+                groups[pin.group_index] = []
+            groups[pin.group_index].append(pin)
+        return groups
+
+    def get_output_groups(self) -> Dict[int, List[InstanceNodePin]]:
+        """Get outputs organized by group"""
+        groups: Dict[int, List[InstanceNodePin]] = {}
+        for pin in self.outputs:
+            if pin.group_index not in groups:
+                groups[pin.group_index] = []
+            groups[pin.group_index].append(pin)
+        return groups
+
+
 class BaseModule(ABC):
     """
     Shared core functionality for all module types
@@ -77,6 +147,13 @@ class BaseModule(ABC):
         Generated from the ConfigModel Pydantic model
         """
         return cls.ConfigModel.model_json_schema()
+    
+    @classmethod
+    def config_class(cls) -> Type[BaseModel]:
+        """
+        Return the ConfigModel class for this module
+        """
+        return cls.ConfigModel
 
     @classmethod
     def validate_wiring(cls,
@@ -100,11 +177,10 @@ class BaseModule(ABC):
         """
         return []
 
-    @abstractmethod
     def run(self,
            inputs: Dict[str, Any],
            cfg: BaseModel,
-           context: Optional['ExecutionContext'] = None) -> Dict[str, Any]:
+           context: Optional['ModuleExecutionContext'] = None) -> Dict[str, Any]:
         """
         Execute the module with given inputs and configuration
 
@@ -116,7 +192,10 @@ class BaseModule(ABC):
         Returns:
             Output values keyed by node ID
         """
-        raise NotImplementedError
+        # Provide helpful error message with module information
+        module_id = f"{self.id}:{self.version}"
+        module_class_name = self.__class__.__name__
+        raise NotImplementedError(module_id=module_id, module_class_name=module_class_name)
 
 
 class TransformModule(BaseModule):
@@ -149,3 +228,4 @@ class ComparatorModule(BaseModule):
     Comparator modules produce boolean outputs based on comparing inputs to config values
     """
     kind: ModuleKind = "comparator"
+    

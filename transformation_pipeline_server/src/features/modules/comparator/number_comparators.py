@@ -46,15 +46,25 @@ class NumberEquals(ComparatorModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: NumberEqualsConfig, context: Any = None) -> Dict[str, Any]:
-        value = list(inputs.values())[0]
+    def run(self, inputs: Dict[str, Any], cfg: NumberEqualsConfig, context: Any) -> Dict[str, Any]:
+        # Extract input
+        input_node_id = list(inputs.keys())[0]
+        value = inputs[input_node_id]
 
+        # Get output node_id from context
+        output_node_id = context.outputs[0].node_id
+
+        # Validate input type
+        if not isinstance(value, (int, float)):
+            raise TypeError(f"Expected int or float, got {type(value).__name__}")
+
+        # Perform comparison
         if isinstance(value, float) or isinstance(cfg.compare_value, float):
             result = abs(value - cfg.compare_value) <= cfg.tolerance
         else:
             result = value == cfg.compare_value
 
-        return {"result": result}
+        return {output_node_id: result}
 
 
 # Number Greater Than
@@ -182,10 +192,42 @@ class NumberLessThan(ComparatorModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: NumberLessThanConfig, context: Any = None) -> Dict[str, Any]:
-        value = list(inputs.values())[0]
+    def run(self, inputs: Dict[str, Any], cfg: NumberLessThanConfig, context: Any) -> Dict[str, Any]:
+        import math
+
+        # Extract input
+        input_node_id = list(inputs.keys())[0]
+        value = inputs[input_node_id]
+
+        # Get output node_id from context
+        output_node_id = context.outputs[0].node_id
+
+        # Handle None
+        if value is None:
+            return {output_node_id: False}
+
+        # Validate input type
+        if not isinstance(value, (int, float)):
+            raise TypeError(f"Expected int or float, got {type(value).__name__}")
+
+        # Handle special float values
+        if math.isnan(value):
+            return {output_node_id: False}
+
+        if math.isinf(value):
+            if value < 0:  # Negative infinity
+                return {output_node_id: not (math.isinf(cfg.threshold) and cfg.threshold < 0)}
+            else:  # Positive infinity
+                return {output_node_id: False}
+
+        # Handle threshold being infinity or NaN
+        if math.isnan(cfg.threshold):
+            return {output_node_id: False}
+
+        # Perform the comparison
         result = value < cfg.threshold
-        return {"result": result}
+
+        return {output_node_id: result}
 
 
 # Number In Range
@@ -227,15 +269,48 @@ class NumberInRange(ComparatorModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: NumberInRangeConfig, context: Any = None) -> Dict[str, Any]:
-        value = list(inputs.values())[0]
+    def run(self, inputs: Dict[str, Any], cfg: NumberInRangeConfig, context: Any) -> Dict[str, Any]:
+        import math
 
+        # Extract input
+        input_node_id = list(inputs.keys())[0]
+        value = inputs[input_node_id]
+
+        # Get output node_id from context
+        output_node_id = context.outputs[0].node_id
+
+        # Handle None
+        if value is None:
+            return {output_node_id: False}
+
+        # Validate input type
+        if not isinstance(value, (int, float)):
+            raise TypeError(f"Expected int or float, got {type(value).__name__}")
+
+        # Handle NaN - always outside any range
+        if math.isnan(value):
+            return {output_node_id: False}
+
+        # Handle infinity
+        if math.isinf(value):
+            if math.isinf(cfg.min) or math.isinf(cfg.max):
+                # Special case: if range bounds include infinity
+                if cfg.inclusive:
+                    result = cfg.min <= value <= cfg.max
+                else:
+                    result = cfg.min < value < cfg.max
+            else:
+                # Finite range, infinite value = not in range
+                result = False
+            return {output_node_id: result}
+
+        # Normal range check
         if cfg.inclusive:
             result = cfg.min <= value <= cfg.max
         else:
             result = cfg.min < value < cfg.max
 
-        return {"in_range": result}
+        return {output_node_id: result}
 
 
 # Number Is Even
@@ -275,10 +350,20 @@ class NumberIsEven(ComparatorModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: NumberIsEvenConfig, context: Any = None) -> Dict[str, Any]:
-        number = list(inputs.values())[0]
+    def run(self, inputs: Dict[str, Any], cfg: NumberIsEvenConfig, context: Any) -> Dict[str, Any]:
+        # Extract input
+        input_node_id = list(inputs.keys())[0]
+        number = inputs[input_node_id]
+
+        # Get output node_id from context
+        output_node_id = context.outputs[0].node_id
+
+        # Validate input type
+        if not isinstance(number, int):
+            raise TypeError(f"Expected int, got {type(number).__name__}")
+
         result = number % 2 == 0
-        return {"is_even": result}
+        return {output_node_id: result}
 
 
 # Number Is Odd
@@ -318,7 +403,17 @@ class NumberIsOdd(ComparatorModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: NumberIsOddConfig, context: Any = None) -> Dict[str, Any]:
-        number = list(inputs.values())[0]
+    def run(self, inputs: Dict[str, Any], cfg: NumberIsOddConfig, context: Any) -> Dict[str, Any]:
+        # Extract input
+        input_node_id = list(inputs.keys())[0]
+        number = inputs[input_node_id]
+
+        # Get output node_id from context
+        output_node_id = context.outputs[0].node_id
+
+        # Validate input type
+        if not isinstance(number, int):
+            raise TypeError(f"Expected int, got {type(number).__name__}")
+
         result = number % 2 != 0
-        return {"is_odd": result}
+        return {output_node_id: result}

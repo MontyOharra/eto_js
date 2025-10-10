@@ -45,25 +45,25 @@ class PipelineExecutionRunRepository(BaseRepository[PipelineExecutionRunModel]):
             logger.error(f"Error creating execution run: {e}")
             raise RepositoryError(f"Failed to create execution run: {e}") from e
 
-    def update_run_status(self, run_id: int, status: str) -> Optional[PipelineExecutionRun]:
+    def update_run_status(self, id: int, status: str) -> Optional[PipelineExecutionRun]:
         """Update run status on completion"""
         try:
             with self.connection_manager.session_scope() as session:
-                model = session.query(self.model_class).filter_by(run_id=run_id).first()
+                model = session.query(self.model_class).filter_by(id=id).first()
 
                 if not model:
-                    logger.warning(f"Execution run not found: {run_id}")
+                    logger.warning(f"Execution run not found: {id}")
                     return None
 
                 model.status = status
                 session.flush()
                 session.refresh(model)
 
-                logger.info(f"Updated execution run status: {run_id} -> {status}")
+                logger.info(f"Updated execution run status: {id} -> {status}")
                 return self._convert_to_domain_object(model)
 
         except SQLAlchemyError as e:
-            logger.error(f"Error updating execution run {run_id}: {e}")
+            logger.error(f"Error updating execution run {id}: {e}")
             raise RepositoryError(f"Failed to update execution run: {e}") from e
 
     def get_run_by_id(self, id: int) -> Optional[PipelineExecutionRun]:

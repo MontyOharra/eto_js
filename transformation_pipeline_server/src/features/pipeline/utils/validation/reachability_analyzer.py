@@ -6,9 +6,12 @@ Analyzes which modules are reachable from action modules (§2.6 from spec)
 import networkx as nx
 
 from typing import Set, List, Tuple
-from shared.types import PipelineState, PipelineIndices
-
-from shared.exceptions import PipelineValidationError, PipelineValidationErrorCode
+from shared.types import (
+    PipelineState,
+    PipelineIndices,
+    PipelineValidationError,
+    PipelineValidationErrorCode
+)
 
 
 class ReachabilityAnalyzer:

@@ -65,17 +65,37 @@ class BooleanOr(LogicModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: BooleanOrConfig, context: Any = None) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: BooleanOrConfig, context: Any) -> Dict[str, Any]:
         """
-        Execute Boolean OR operation (not implemented yet)
+        Execute boolean OR operation
 
         Args:
-            inputs: Dictionary with two boolean inputs
+            inputs: Dictionary with two boolean inputs (keyed by node_id)
             cfg: Validated configuration (empty)
-            context: Execution context
+            context: Execution context with input/output metadata
 
         Returns:
-            Dictionary with boolean result
+            Dictionary with OR result
         """
-        # TODO: Implement execution logic
-        raise NotImplementedError("Execution not implemented yet")
+        # Get output node_id from context
+        output_node_id = context.outputs[0].node_id
+
+        # Map input node_ids using context metadata
+        # The inputs are ordered: [A, B] based on meta() definition
+        a_input = context.inputs[0]  # First input group is "A"
+        b_input = context.inputs[1]  # Second input group is "B"
+
+        # Extract values from inputs dict
+        a_value = inputs[a_input.node_id]
+        b_value = inputs[b_input.node_id]
+
+        # Validate inputs are boolean
+        if not isinstance(a_value, bool):
+            raise TypeError(f"Input A must be bool, got {type(a_value).__name__}")
+        if not isinstance(b_value, bool):
+            raise TypeError(f"Input B must be bool, got {type(b_value).__name__}")
+
+        # Perform OR operation
+        result = a_value or b_value
+
+        return {output_node_id: result}

@@ -71,7 +71,7 @@ def setup_custom_log_levels():
 
 
 class ColoredFormatter(logging.Formatter):
-    """Custom formatter with color support for different log levels"""
+    """Custom formatter with color support for different log levels and automatic traceback inclusion"""
 
     # ANSI color codes
     COLORS = {
@@ -85,17 +85,27 @@ class ColoredFormatter(logging.Formatter):
         'RESET': '\033[0m'        # Reset
     }
 
-    def __init__(self, fmt=None, datefmt=None, use_colors=True):
+    def __init__(self, fmt=None, datefmt=None, use_colors=True, include_traceback_on_error=True):
         super().__init__(fmt, datefmt)
         self.use_colors = use_colors
+        self.include_traceback_on_error = include_traceback_on_error
 
     def format(self, record):
+        # Automatically add exc_info for ERROR and CRITICAL levels if an exception is present
+        if self.include_traceback_on_error and record.levelno >= logging.ERROR:
+            # Check if there's an exception available but exc_info wasn't explicitly set
+            if not record.exc_info and hasattr(record, 'exc_text') and record.exc_text is None:
+                # Try to get the current exception from sys
+                import sys
+                if sys.exc_info()[0] is not None:
+                    record.exc_info = sys.exc_info()
+
         if self.use_colors:
             # Get color for this log level
             color = self.COLORS.get(record.levelname, self.COLORS['RESET'])
             reset = self.COLORS['RESET']
 
-            # Format the message normally first
+            # Format the message normally first (this will include traceback if exc_info is set)
             formatted = super().format(record)
 
             # Check if the formatted message contains the separator between header and content
@@ -121,6 +131,7 @@ def configure_logging():
     )
     date_format = os.getenv('LOG_DATE_FORMAT', '%Y-%m-%d %H:%M:%S')
     use_colors = os.getenv('LOG_COLORS', 'true').lower() == 'true'
+    include_traceback = os.getenv('LOG_TRACEBACKS', 'true').lower() == 'true'
 
     # Create logs directory if it doesn't exist
     logs_dir = os.getenv('LOGS_DIR', 'logs')
@@ -140,18 +151,21 @@ def configure_logging():
     console_formatter = ColoredFormatter(
         fmt=log_format,
         datefmt=date_format,
-        use_colors=use_colors
+        use_colors=use_colors,
+        include_traceback_on_error=include_traceback
     )
     console_handler.setFormatter(console_formatter)
     root_logger.addHandler(console_handler)
 
-    # File handler (always without colors)
+    # File handler (always without colors, but with tracebacks)
     log_file = os.path.join(logs_dir, 'transformation_pipeline.log')
     file_handler = logging.FileHandler(log_file, encoding='utf-8')
     file_handler.setLevel(log_level)
-    file_formatter = logging.Formatter(
+    file_formatter = ColoredFormatter(
         fmt=log_format,
-        datefmt=date_format
+        datefmt=date_format,
+        use_colors=False,
+        include_traceback_on_error=include_traceback
     )
     file_handler.setFormatter(file_formatter)
     root_logger.addHandler(file_handler)
@@ -166,6 +180,7 @@ def configure_logging():
     logger.info("Logging configured successfully")
     logger.info(f"Log level: {logging.getLevelName(log_level)}")
     logger.info(f"Console colors: {use_colors}")
+    logger.info(f"Full tracebacks: {include_traceback}")
     logger.info(f"Log file: {log_file}")
 
 
@@ -183,7 +198,7 @@ async def initialize_database_connection() -> None:
         logger.info("Database connection established and verified")
 
     except Exception as e:
-        logger.error(f"Failed to initialize database: {e}")
+        logger.error(f"Failed to initialize database: {e}", exc_info=True)
         raise DatabaseConnectionError(f"Database initialization failed: {e}")
 
 
@@ -212,7 +227,7 @@ async def initialize_services_app() -> None:
             logger.warning(f"Module service initialization warning: {service_error}")
 
     except Exception as e:
-        logger.error(f"Failed to initialize services: {e}")
+        logger.error(f"Failed to initialize services: {e}", exc_info=True)
         # Don't re-raise - allow app to continue with limited functionality
         logger.info("Application will continue with limited functionality")
 
@@ -232,7 +247,7 @@ async def cleanup_services() -> None:
             # _connection_manager.close()
 
     except Exception as e:
-        logger.error(f"Error during cleanup: {e}")
+        logger.error(f"Error during cleanup: {e}", exc_info=True)
 
 
 @asynccontextmanager
@@ -247,7 +262,7 @@ async def lifespan(app: FastAPI):
         await initialize_services_app()
         logger.info("Application startup completed successfully")
     except Exception as e:
-        logger.error(f"Application startup failed: {e}")
+        logger.error(f"Application startup failed: {e}", exc_info=True)
         raise
 
     yield
@@ -316,7 +331,7 @@ def setup_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(500)
     async def internal_server_error_handler(request: Request, exc):
         """Handle 500 errors with consistent JSON response"""
-        logger.error(f"Internal server error: {exc}")
+        logger.error(f"Internal server error: {exc}", exc_info=True)
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={
@@ -352,7 +367,7 @@ def register_routers(app: FastAPI) -> None:
     except ImportError as e:
         logger.warning(f"Could not import health router: {e}")
     except Exception as e:
-        logger.error(f"Error registering health router: {e}")
+        logger.error(f"Error registering health router: {e}", exc_info=True)
 
     # Register modules router
     try:
@@ -362,7 +377,7 @@ def register_routers(app: FastAPI) -> None:
     except ImportError as e:
         logger.warning(f"Could not import modules router: {e}")
     except Exception as e:
-        logger.error(f"Error registering modules router: {e}")
+        logger.error(f"Error registering modules router: {e}", exc_info=True)
 
     # Register pipelines router
     try:
@@ -372,7 +387,7 @@ def register_routers(app: FastAPI) -> None:
     except ImportError as e:
         logger.warning(f"Could not import pipelines router: {e}")
     except Exception as e:
-        logger.error(f"Error registering pipelines router: {e}")
+        logger.error(f"Error registering pipelines router: {e}", exc_info=True)
 
 
 def create_app() -> FastAPI:

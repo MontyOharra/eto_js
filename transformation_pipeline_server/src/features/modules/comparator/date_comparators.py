@@ -46,8 +46,17 @@ class DateBefore(ComparatorModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: DateBeforeConfig, context: Any = None) -> Dict[str, Any]:
-        input_date = list(inputs.values())[0]
+    def run(self, inputs: Dict[str, Any], cfg: DateBeforeConfig, context: Any) -> Dict[str, Any]:
+        # Extract input
+        input_node_id = list(inputs.keys())[0]
+        input_date = inputs[input_node_id]
+
+        # Get output node_id from context
+        output_node_id = context.outputs[0].node_id
+
+        # Handle None
+        if input_date is None:
+            return {output_node_id: False}
 
         # Parse compare_date
         try:
@@ -55,18 +64,20 @@ class DateBefore(ComparatorModule):
                 compare_date = datetime.fromisoformat(cfg.compare_date)
             else:
                 compare_date = datetime.strptime(cfg.compare_date, "%Y-%m-%d")
-        except ValueError:
-            return {"is_before": False}
+        except ValueError as e:
+            raise ValueError(f"Invalid compare_date format '{cfg.compare_date}': {str(e)}")
 
         # Ensure input_date is datetime
         if isinstance(input_date, str):
             try:
                 input_date = datetime.fromisoformat(input_date)
-            except ValueError:
-                return {"is_before": False}
+            except ValueError as e:
+                raise ValueError(f"Invalid input date format: {str(e)}")
+        elif not isinstance(input_date, datetime):
+            raise TypeError(f"Expected datetime or str, got {type(input_date).__name__}")
 
         result = input_date < compare_date
-        return {"is_before": result}
+        return {output_node_id: result}
 
 
 # Date After
@@ -106,8 +117,17 @@ class DateAfter(ComparatorModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: DateAfterConfig, context: Any = None) -> Dict[str, Any]:
-        input_date = list(inputs.values())[0]
+    def run(self, inputs: Dict[str, Any], cfg: DateAfterConfig, context: Any) -> Dict[str, Any]:
+        # Extract input
+        input_node_id = list(inputs.keys())[0]
+        input_date = inputs[input_node_id]
+
+        # Get output node_id from context
+        output_node_id = context.outputs[0].node_id
+
+        # Handle None
+        if input_date is None:
+            return {output_node_id: False}
 
         # Parse compare_date
         try:
@@ -115,18 +135,20 @@ class DateAfter(ComparatorModule):
                 compare_date = datetime.fromisoformat(cfg.compare_date)
             else:
                 compare_date = datetime.strptime(cfg.compare_date, "%Y-%m-%d")
-        except ValueError:
-            return {"is_after": False}
+        except ValueError as e:
+            raise ValueError(f"Invalid compare_date format '{cfg.compare_date}': {str(e)}")
 
         # Ensure input_date is datetime
         if isinstance(input_date, str):
             try:
                 input_date = datetime.fromisoformat(input_date)
-            except ValueError:
-                return {"is_after": False}
+            except ValueError as e:
+                raise ValueError(f"Invalid input date format: {str(e)}")
+        elif not isinstance(input_date, datetime):
+            raise TypeError(f"Expected datetime or str, got {type(input_date).__name__}")
 
         result = input_date > compare_date
-        return {"is_after": result}
+        return {output_node_id: result}
 
 
 # Date In Range
@@ -168,8 +190,17 @@ class DateInRange(ComparatorModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: DateInRangeConfig, context: Any = None) -> Dict[str, Any]:
-        input_date = list(inputs.values())[0]
+    def run(self, inputs: Dict[str, Any], cfg: DateInRangeConfig, context: Any) -> Dict[str, Any]:
+        # Extract input
+        input_node_id = list(inputs.keys())[0]
+        input_date = inputs[input_node_id]
+
+        # Get output node_id from context
+        output_node_id = context.outputs[0].node_id
+
+        # Handle None
+        if input_date is None:
+            return {output_node_id: False}
 
         # Parse dates
         try:
@@ -182,22 +213,29 @@ class DateInRange(ComparatorModule):
                 end_date = datetime.fromisoformat(cfg.end_date)
             else:
                 end_date = datetime.strptime(cfg.end_date, "%Y-%m-%d")
-        except ValueError:
-            return {"in_range": False}
+        except ValueError as e:
+            raise ValueError(f"Invalid date range format: {str(e)}")
+
+        # Validate range
+        if start_date > end_date:
+            raise ValueError(f"Invalid date range: start_date ({cfg.start_date}) is after end_date ({cfg.end_date})")
 
         # Ensure input_date is datetime
         if isinstance(input_date, str):
             try:
                 input_date = datetime.fromisoformat(input_date)
-            except ValueError:
-                return {"in_range": False}
+            except ValueError as e:
+                raise ValueError(f"Invalid input date format: {str(e)}")
+        elif not isinstance(input_date, datetime):
+            raise TypeError(f"Expected datetime or str, got {type(input_date).__name__}")
 
+        # Check range
         if cfg.inclusive:
             result = start_date <= input_date <= end_date
         else:
             result = start_date < input_date < end_date
 
-        return {"in_range": result}
+        return {output_node_id: result}
 
 
 # Date Is Today
@@ -237,15 +275,26 @@ class DateIsToday(ComparatorModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: DateIsTodayConfig, context: Any = None) -> Dict[str, Any]:
-        input_date = list(inputs.values())[0]
+    def run(self, inputs: Dict[str, Any], cfg: DateIsTodayConfig, context: Any) -> Dict[str, Any]:
+        # Extract input
+        input_node_id = list(inputs.keys())[0]
+        input_date = inputs[input_node_id]
+
+        # Get output node_id from context
+        output_node_id = context.outputs[0].node_id
+
+        # Handle None
+        if input_date is None:
+            return {output_node_id: False}
 
         # Ensure input_date is datetime
         if isinstance(input_date, str):
             try:
                 input_date = datetime.fromisoformat(input_date)
-            except ValueError:
-                return {"is_today": False}
+            except ValueError as e:
+                raise ValueError(f"Invalid input date format: {str(e)}")
+        elif not isinstance(input_date, (datetime, date)):
+            raise TypeError(f"Expected datetime, date, or str, got {type(input_date).__name__}")
 
         # Get today's date
         today = date.today()
@@ -257,4 +306,4 @@ class DateIsToday(ComparatorModule):
             input_date_only = input_date
 
         result = input_date_only == today
-        return {"is_today": result}
+        return {output_node_id: result}

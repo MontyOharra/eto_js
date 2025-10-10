@@ -9,7 +9,8 @@ import json
 
 from shared.database.models import ModuleCatalogModel
 
-from ..modules import ModuleKind, ModuleMeta
+from ..enums import ModuleKind
+from ..modules import ModuleMeta
 
 
 class ModuleCatalogCreate(BaseModel):

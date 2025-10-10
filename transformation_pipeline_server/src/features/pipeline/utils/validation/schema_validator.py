@@ -6,8 +6,12 @@ Validates basic schema and presence requirements (§2.1 from spec)
 from collections import Counter
 from typing import List, Set, Dict, get_args
 
-from shared.types import PipelineState, AllowedModuleTypes
-from shared.exceptions import PipelineValidationError, PipelineValidationErrorCode
+from shared.types import (
+    PipelineState,
+    AllowedModuleTypes,
+    PipelineValidationError,
+    PipelineValidationErrorCode
+)
 
 
 class SchemaValidator:

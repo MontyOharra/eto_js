@@ -9,17 +9,15 @@ Usage:
 
 from __future__ import annotations
 from typing import Dict, Any, List, Tuple, Optional
-from dataclasses import dataclass
 
 import json
 import logging
+from datetime import datetime, date
 from dask.delayed import delayed
 from dask.base import compute
 
-from shared.database.repositories.pipeline_definition import PipelineDefinitionRepository
-from shared.database.repositories.pipeline_definition_step import PipelineDefinitionStepRepository
-from shared.database.repositories.pipeline_execution_run import PipelineExecutionRunRepository
-from shared.database.repositories.pipeline_execution_step import PipelineExecutionStepRepository
+from shared.database.repositories import PipelineDefinitionRepository, PipelineDefinitionStepRepository, PipelineExecutionRunRepository, PipelineExecutionStepRepository
+from shared.utils.registry import ModuleRegistry
 
 from shared.types import (
     PipelineDefinition,
@@ -27,45 +25,58 @@ from shared.types import (
     PipelineExecutionRun,
     PipelineExecutionRunCreate,
     PipelineExecutionStepCreate,
+    ModuleExecutionContext,
+    InstanceNodePin
 )
-
-# Domain enums and node shapes
-from shared.types.modules import ModuleKind  # "transform" | "action" | "logic"
-from shared.types.pipeline_state import InstanceNodePin  # for context
 
 logger = logging.getLogger(__name__)
 
 
-# ---- Lightweight runtime context we hand to handlers ------------------------
+# === Serialization Utilities for Audit Trail ===
 
-@dataclass(frozen=True)
-class RuntimeContext:
-    """Minimal, stable context for handler.run(...)"""
-    module_instance_id: str
-    module_ref: str
-    module_kind: str
-    # ordered inputs/outputs (as InstanceNodePin dicts) in the instance order compiled
-    instance_inputs: List[dict]
-    instance_outputs: List[dict]
+def _serialize_value(value: Any, type_hint: str) -> Any:
+    """Serialize a value to JSON-compatible format for audit storage"""
+    if type_hint == "datetime":
+        if isinstance(value, (datetime, date)):
+            return value.isoformat()
+    return value
 
 
-# ---- Module registry protocol ------------------------------------------------
-# Expect: module_registry.get("name:version") -> handler instance
-# Handler interface: handler.run(inputs: Dict[str,Any], cfg: Dict[str,Any], context: RuntimeContext) -> Dict[str,Any]
+def _serialize_io_for_audit(io_dict: Dict[str, Any], pins: List[InstanceNodePin]) -> Dict[str, Dict[str, Any]]:
+    """
+    Transform {node_id: value} to {node_name: {value, type}} for audit persistence
+
+    Args:
+        io_dict: Raw I/O from module execution {node_id: value}
+        pins: Pin metadata with node_id, name, and type
+
+    Returns:
+        {node_name: {value: serialized_value, type: type_hint}}
+    """
+    result = {}
+    for pin in pins:
+        if pin.node_id in io_dict:
+            raw_value = io_dict[pin.node_id]
+            result[pin.name] = {
+                "value": _serialize_value(raw_value, pin.type),
+                "type": pin.type
+            }
+    return result
 
 
 class PipelineExecutionService:
-    def __init__(self, connection_manager, module_registry):
+    def __init__(self, connection_manager, services=None):
         """
         Dependencies:
           - connection_manager: provides session_scope()
-          - module_registry: resolves module handlers by module_ref (e.g. "basic_text_cleaner:1.0.0")
+          - services: ServiceContainer for accessing other services (optional, will be set if not provided)
         """
         if not connection_manager:
             raise RuntimeError("Database connection manager is required")
 
         self.connection_manager = connection_manager
-        self.module_registry = module_registry
+        self.module_registry = ModuleRegistry()
+        self.services = services  # Store services reference
 
         # Repos
         self.pipeline_repo = PipelineDefinitionRepository(self.connection_manager)
@@ -138,7 +149,7 @@ class PipelineExecutionService:
             non_action_tasks.append(task)
 
         # Barrier: actions depend on all non-actions AND their own upstreams
-        barrier = delayed.delayed(lambda *args: True, pure=True)(*non_action_tasks) if non_action_tasks else delayed(lambda: True, pure=True)()
+        barrier = delayed(lambda *args: True, pure=True)(*non_action_tasks) if non_action_tasks else delayed(lambda: True, pure=True)()
 
         for step in action_steps:
             task = self._make_step_task(step, producer_of_pin, run_id, extra_dependencies=[barrier])
@@ -243,24 +254,28 @@ class PipelineExecutionService:
         """
 
         # Resolve handler
-        handler = self.module_registry.get(step.module_ref)
+        # module_ref format is "module_id:version", but registry stores by module_id only
+        module_id = step.module_ref.split(":")[0] if ":" in step.module_ref else step.module_ref
+        handler = self.module_registry.get(module_id)
         if not handler:
             raise RuntimeError(f"Module handler not found for {step.module_ref}")
+
+        ConfigModel = handler.config_class()
+        handlerInstance = handler()
 
         # Gather upstream producers for each input pin id
         input_ids = list(step.input_field_mappings.keys())
         upstream_ids = [step.input_field_mappings[iid] for iid in input_ids]
 
         # Convert InstanceNodePin to plain dict for stable JSON context
-        inputs_meta = [pin.model_dump() if hasattr(pin, "model_dump") else dict(pin) for pin in (step.node_metadata.get("inputs") or [])]
-        outputs_meta = [pin.model_dump() if hasattr(pin, "model_dump") else dict(pin) for pin in (step.node_metadata.get("outputs") or [])]
-
-        ctx = RuntimeContext(
+        inputs = step.node_metadata.get("inputs") or []
+        outputs = step.node_metadata.get("outputs") or []
+        
+        ctx = ModuleExecutionContext(
             module_instance_id=step.module_instance_id,
-            module_ref=step.module_ref,
-            module_kind=str(step.module_kind),
-            instance_inputs=inputs_meta,
-            instance_outputs=outputs_meta,
+            inputs=inputs,
+            outputs=outputs,
+            services=self.services,
         )
 
         # Collect the upstream delayed values in order of input_ids
@@ -282,7 +297,7 @@ class PipelineExecutionService:
 
             # 2) Run handler
             try:
-                outputs = handler.run(inputs=inputs, cfg=step.module_config, context=ctx)
+                outputs = handlerInstance.run(inputs=inputs, cfg=ConfigModel(**step.module_config), context=ctx)
                 error = None
             except Exception as e:
                 outputs = {}
@@ -292,19 +307,23 @@ class PipelineExecutionService:
             # 3) Persist audit row
             if run_id is not None:
                 try:
+                    # Serialize I/O for audit trail: {node_id: value} -> {node_name: {value, type}}
+                    audit_inputs = _serialize_io_for_audit(inputs, ctx.inputs)
+                    audit_outputs = _serialize_io_for_audit(outputs, ctx.outputs) if outputs else {}
+
                     self.exec_step_repo.create(
                         PipelineExecutionStepCreate(
                             run_id=run_id,
                             module_instance_id=step.module_instance_id,
                             step_number=step.step_number,
-                            inputs=inputs,
-                            outputs=outputs,
+                            inputs=audit_inputs,
+                            outputs=audit_outputs,
                             error=error,
                         )
                     )
                 except Exception as pe:
                     # Persistence must not hide the original failure
-                    logger.error("Failed to persist execution step for %s: %s", step.module_instance_id, pe)
+                    logger.exception("Failed to persist execution step for %s: %s", step.module_instance_id, pe)
 
             # 4) On error, raise to stop the whole run
             if error:

@@ -60,18 +60,3 @@ class LlmParser(TransformModule):
                 )
             )
         )
-
-    def run(self, inputs: Dict[str, Any], cfg: LlmParserConfig, context: Any = None) -> Dict[str, Any]:
-        """
-        Execute LLM parsing (not implemented yet)
-
-        Args:
-            inputs: Dictionary with text inputs
-            cfg: Validated configuration with model and prompt
-            context: Execution context
-
-        Returns:
-            Dictionary with parsed outputs
-        """
-        # TODO: Implement execution logic
-        raise NotImplementedError("Execution not implemented yet")

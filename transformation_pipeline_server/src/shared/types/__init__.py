@@ -27,23 +27,23 @@ from .db.pipeline_execution_step import (
     PipelineExecutionStep
 )
 
-from .execution_context import (
-    ExecutionContext
+from .enums import (
+    AllowedModuleTypes,
+    ModuleKind
 )
 
-from .execution_result import (
-    ExecutionError,
-    RunResult
+from .pipeline_execution import (
+    PipelineExecutionError,
+    PipelineExecutionRunResult
 )
 
 from .modules import (
-    AllowedModuleTypes,
-    ModuleKind,
     NodeTypeRule,
     NodeGroup,
     IOSideShape,
     IOShape,
     ModuleMeta,
+    ModuleExecutionContext,
     BaseModule,
     TransformModule,
     ActionModule,
@@ -62,6 +62,8 @@ from .pipeline_state import (
 )
 
 from .pipeline_validation import (
+    PipelineValidationErrorCode,
+    PipelineValidationError,
     PipelineValidationResult,
     PinInfo,
     PipelineIndices
@@ -95,12 +97,8 @@ __all__ = [
 
     # === GENERAL DOMAIN TYPES ===
     
-    # Execution Context
-    'ExecutionContext',
-
-    # Execution Result
-    'ExecutionError', 
-    'RunResult',
+    'PipelineExecutionError',
+    'PipelineExecutionRunResult',
 
     # Modules
     'AllowedModuleTypes',
@@ -109,6 +107,7 @@ __all__ = [
     'NodeGroup',
     'IOSideShape',
     'IOShape',
+    'ModuleExecutionContext',
     'ModuleMeta',
     'BaseModule',
     'TransformModule',
@@ -126,6 +125,8 @@ __all__ = [
     'VisualState',
 
     # Pipeline Validation
+    'PipelineValidationErrorCode',
+    'PipelineValidationError',
     'PipelineValidationResult',
     'PinInfo',
     'PipelineIndices'

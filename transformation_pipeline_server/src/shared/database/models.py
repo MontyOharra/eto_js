@@ -12,6 +12,19 @@ from datetime import datetime
 class BaseModel(DeclarativeBase):
     pass
 
+class OrderModel(BaseModel):
+    """
+    Orders - populated by action module
+    Stores order data for external database
+    """
+    __tablename__ = 'orders'
+    
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    mawb: Mapped[str] = mapped_column(String(100), nullable=False)
+    hawb: Mapped[str] = mapped_column(String(100), nullable=False)
+    pu_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
 class ModuleCatalogModel(BaseModel):
     """
     Module catalog - populated by dev "sync" for builder + validator

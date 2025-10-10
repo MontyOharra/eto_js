@@ -58,18 +58,3 @@ class TextSplitter(TransformModule):
                 )
             )
         )
-
-    def run(self, inputs: Dict[str, Any], cfg: TextSplitterConfig, context: Any = None) -> Dict[str, Any]:
-        """
-        Execute text splitting (not implemented yet)
-
-        Args:
-            inputs: Dictionary with one text input
-            cfg: Validated configuration with split character
-            context: Execution context
-
-        Returns:
-            Dictionary with split text outputs
-        """
-        # TODO: Implement execution logic
-        raise NotImplementedError("Execution not implemented yet")

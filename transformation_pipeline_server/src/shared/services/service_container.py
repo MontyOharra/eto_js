@@ -104,16 +104,22 @@ class ServiceContainer:
                 'description': 'Pipeline creation and management service'
             },
             'module_registry': {
-                'class': 'shared.utils.registry.ModuleRegistry',
+                'factory': 'shared.utils.registry.get_registry',
                 'args': [],
                 'singleton': True,
-                'description': 'Module handler registry'
+                'description': 'Module handler registry (singleton)'
             },
             'pipeline_execution': {
                 'class': 'features.pipeline_execution.service.PipelineExecutionService',
-                'args': [cls._connection_manager, '_service:module_registry'],
+                'args': [cls._connection_manager],
                 'singleton': True,
                 'description': 'Pipeline execution service with Dask orchestration'
+            },
+            'database_pool': {
+                'class': 'shared.services.database_connection_pool.DatabaseConnectionPool',
+                'args': [],
+                'singleton': True,
+                'description': 'External database connection pool for action modules'
             },
             # Add more services here as needed
         }
@@ -177,45 +183,89 @@ class ServiceContainer:
     def _create_service(cls, service_name: str) -> Any:
         """
         Create a service instance with dependency resolution.
+        Supports both 'class' (constructor) and 'factory' (function) patterns.
         """
         definition = cls._service_definitions[service_name]
 
-        # Import the class dynamically
-        module_path, class_name = definition['class'].rsplit('.', 1)
-        try:
-            # Handle both absolute and relative imports
-            if module_path.startswith('.'):
-                from importlib import import_module
-                module = import_module(module_path, package='src')
-            else:
-                # Absolute import
-                module = __import__(f'src.{module_path}', fromlist=[class_name])
+        # Check if this is a factory function or a class constructor
+        if 'factory' in definition:
+            # Factory pattern - call a function to get the service
+            factory_path = definition['factory']
+            module_path, function_name = factory_path.rsplit('.', 1)
+            try:
+                # Import the module
+                if module_path.startswith('.'):
+                    from importlib import import_module
+                    module = import_module(module_path, package='src')
+                else:
+                    module = __import__(f'src.{module_path}', fromlist=[function_name])
 
-            service_class = getattr(module, class_name)
-        except (ImportError, AttributeError) as e:
-            logger.error(f"Failed to import service class {definition['class']}: {e}")
-            raise RuntimeError(f"Cannot create service '{service_name}': {e}")
+                factory_func = getattr(module, function_name)
+            except (ImportError, AttributeError) as e:
+                logger.error(f"Failed to import factory function {factory_path}: {e}")
+                raise RuntimeError(f"Cannot create service '{service_name}': {e}")
 
-        # Resolve arguments
-        resolved_args = []
-        for arg in definition.get('args', []):
-            if isinstance(arg, str) and arg.startswith('_service:'):
-                # This is a service dependency
-                dep_service_name = arg.replace('_service:', '')
-                # Use ServiceProxy for lazy resolution
-                resolved_args.append(ServiceProxy(dep_service_name))
-            else:
-                # Direct argument
-                resolved_args.append(arg)
+            # Resolve arguments
+            resolved_args = []
+            for arg in definition.get('args', []):
+                if isinstance(arg, str) and arg.startswith('_service:'):
+                    dep_service_name = arg.replace('_service:', '')
+                    resolved_args.append(ServiceProxy(dep_service_name))
+                else:
+                    resolved_args.append(arg)
 
-        # Create the service instance
-        try:
-            service = service_class(*resolved_args)
-            logger.debug(f"Successfully created service '{service_name}'")
-            return service
-        except Exception as e:
-            logger.error(f"Failed to create service '{service_name}': {e}")
-            raise RuntimeError(f"Cannot create service '{service_name}': {e}")
+            # Call factory function
+            try:
+                service = factory_func(*resolved_args)
+                logger.debug(f"Successfully created service '{service_name}' via factory")
+                return service
+            except Exception as e:
+                logger.error(f"Failed to create service '{service_name}' via factory: {e}")
+                raise RuntimeError(f"Cannot create service '{service_name}': {e}")
+
+        else:
+            # Class constructor pattern
+            module_path, class_name = definition['class'].rsplit('.', 1)
+            try:
+                # Handle both absolute and relative imports
+                if module_path.startswith('.'):
+                    from importlib import import_module
+                    module = import_module(module_path, package='src')
+                else:
+                    # Absolute import
+                    module = __import__(f'src.{module_path}', fromlist=[class_name])
+
+                service_class = getattr(module, class_name)
+            except (ImportError, AttributeError) as e:
+                logger.error(f"Failed to import service class {definition['class']}: {e}")
+                raise RuntimeError(f"Cannot create service '{service_name}': {e}")
+
+            # Resolve arguments
+            resolved_args = []
+            for arg in definition.get('args', []):
+                if isinstance(arg, str) and arg.startswith('_service:'):
+                    # This is a service dependency
+                    dep_service_name = arg.replace('_service:', '')
+                    # Use ServiceProxy for lazy resolution
+                    resolved_args.append(ServiceProxy(dep_service_name))
+                else:
+                    # Direct argument
+                    resolved_args.append(arg)
+
+            # Create the service instance
+            try:
+                service = service_class(*resolved_args)
+
+                # Post-creation hook: inject ServiceContainer reference for specific services
+                if service_name == 'pipeline_execution' and hasattr(service, 'services'):
+                    service.services = cls
+                    logger.debug(f"Injected ServiceContainer reference into '{service_name}'")
+
+                logger.debug(f"Successfully created service '{service_name}'")
+                return service
+            except Exception as e:
+                logger.error(f"Failed to create service '{service_name}': {e}")
+                raise RuntimeError(f"Cannot create service '{service_name}': {e}")
 
     # === Convenience Methods ===
 

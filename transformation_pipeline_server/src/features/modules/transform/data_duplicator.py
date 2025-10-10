@@ -60,18 +60,26 @@ class DataDuplicator(TransformModule):
                 type_params={"T": []}  # Domain for TypeVar T
             )
         )
-
-    def run(self, inputs: Dict[str, Any], cfg: DataDuplicatorConfig, context: Any = None) -> Dict[str, Any]:
+        
+    def run(self, inputs: Dict[str, Any], cfg: DataDuplicatorConfig, context: Any) -> Dict[str, Any]:
         """
-        Execute data duplication (not implemented yet)
+        Duplicate input value to all output pins
 
         Args:
-            inputs: Dictionary with one input value
-            cfg: Validated configuration (empty)
-            context: Execution context
+            inputs: Dictionary with single input value (keyed by node_id)
+            cfg: Empty configuration
+            context: Execution context with output metadata
 
         Returns:
-            Dictionary with duplicated values
+            Dictionary with duplicated value for each output pin
         """
-        # TODO: Implement execution logic
-        raise NotImplementedError("Execution not implemented yet")
+        # Get the single input value
+        input_node_id = list(inputs.keys())[0]
+        input_value = inputs[input_node_id]
+
+        # Duplicate to all outputs using context
+        outputs = {}
+        for output_pin in context.outputs:
+            outputs[output_pin.node_id] = input_value
+
+        return outputs

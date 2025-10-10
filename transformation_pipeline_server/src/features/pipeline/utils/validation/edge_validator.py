@@ -4,9 +4,12 @@ Validates connections between pins (§2.3 from spec)
 """
 
 from typing import List
-from shared.types import PipelineState, PipelineIndices
-
-from shared.exceptions import PipelineValidationError, PipelineValidationErrorCode
+from shared.types import (
+    PipelineState,
+    PipelineIndices,
+    PipelineValidationError,
+    PipelineValidationErrorCode
+)
 
 
 class EdgeValidator:

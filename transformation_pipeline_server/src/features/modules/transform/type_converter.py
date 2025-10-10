@@ -72,32 +72,14 @@ class TypeConverter(TransformModule):
         Returns:
             Dictionary with converted value
         """
-        from datetime import datetime
-        import json
-
-        # Get the single input value (there should be exactly one)
-        if not inputs:
-            raise ValueError("No input provided to type converter")
-
         # Get the input value (first and only value in the dict)
         input_node_id = list(inputs.keys())[0]
         input_value = inputs[input_node_id]
 
-        # Get the output type from context
-        if context and hasattr(context, 'get_output_type'):
-            output_type = context.get_output_type(0)  # Get type of first (and only) output
-        else:
-            # Fallback to string if no context
-            output_type = "str"
+        output_type = context.get_output_type(0)
+        output_node_id = context.outputs[0].node_id
 
-        # Get the output node_id from context
-        if context and hasattr(context, 'outputs') and context.outputs:
-            output_node_id = context.outputs[0].node_id
-        else:
-            # Fallback to generic output key
-            output_node_id = "converted_value"
 
-        # Perform the type conversion
         try:
             converted_value = self._convert_value(input_value, output_type)
         except Exception as e:

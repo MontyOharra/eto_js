@@ -73,17 +73,37 @@ class IfSelector(LogicModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: IfSelectorConfig, context: Any = None) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: IfSelectorConfig, context: Any) -> Dict[str, Any]:
         """
-        Execute if selector operation (not implemented yet)
+        Execute if selector operation
 
         Args:
-            inputs: Dictionary with condition and two value inputs
+            inputs: Dictionary with condition and two value inputs (keyed by node_id)
             cfg: Validated configuration (empty)
-            context: Execution context
+            context: Execution context with input/output metadata
 
         Returns:
             Dictionary with selected value
         """
-        # TODO: Implement execution logic
-        raise NotImplementedError("Execution not implemented yet")
+        # Get output node_id from context
+        output_node_id = context.outputs[0].node_id
+
+        # Map input node_ids to their values using context metadata
+        # The inputs are ordered: [Condition, False, True] based on meta() definition
+        condition_input = context.inputs[0]  # First input group is "Condition"
+        false_input = context.inputs[1]      # Second input group is "False"
+        true_input = context.inputs[2]       # Third input group is "True"
+
+        # Extract values from inputs dict
+        condition = inputs[condition_input.node_id]
+        false_value = inputs[false_input.node_id]
+        true_value = inputs[true_input.node_id]
+
+        # Validate condition is boolean
+        if not isinstance(condition, bool):
+            raise TypeError(f"Condition must be bool, got {type(condition).__name__}")
+
+        # Select value based on condition
+        selected_value = true_value if condition else false_value
+
+        return {output_node_id: selected_value}

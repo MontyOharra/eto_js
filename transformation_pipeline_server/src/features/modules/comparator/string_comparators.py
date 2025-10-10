@@ -47,15 +47,29 @@ class StringEquals(ComparatorModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: StringEqualsConfig, context: Any = None) -> Dict[str, Any]:
-        value = list(inputs.values())[0]
+    def run(self, inputs: Dict[str, Any], cfg: StringEqualsConfig, context: Any) -> Dict[str, Any]:
+        # Extract input
+        input_node_id = list(inputs.keys())[0]
+        value = inputs[input_node_id]
 
+        # Get output node_id from context
+        output_node_id = context.outputs[0].node_id
+
+        # Handle None
+        if value is None:
+            return {output_node_id: False}
+
+        # Validate input type
+        if not isinstance(value, str):
+            raise TypeError(f"Expected str, got {type(value).__name__}")
+
+        # Perform comparison
         if cfg.case_sensitive:
             result = value == cfg.compare_value
         else:
             result = value.lower() == cfg.compare_value.lower()
 
-        return {"result": result}
+        return {output_node_id: result}
 
 
 # String Contains
@@ -96,15 +110,29 @@ class StringContains(ComparatorModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: StringContainsConfig, context: Any = None) -> Dict[str, Any]:
-        text = list(inputs.values())[0]
+    def run(self, inputs: Dict[str, Any], cfg: StringContainsConfig, context: Any) -> Dict[str, Any]:
+        # Extract input
+        input_node_id = list(inputs.keys())[0]
+        text = inputs[input_node_id]
 
+        # Get output node_id from context
+        output_node_id = context.outputs[0].node_id
+
+        # Handle None
+        if text is None:
+            return {output_node_id: False}
+
+        # Validate input type
+        if not isinstance(text, str):
+            raise TypeError(f"Expected str, got {type(text).__name__}")
+
+        # Perform contains check
         if cfg.case_sensitive:
             result = cfg.substring in text
         else:
             result = cfg.substring.lower() in text.lower()
 
-        return {"contains": result}
+        return {output_node_id: result}
 
 
 # String Starts With
@@ -145,15 +173,29 @@ class StringStartsWith(ComparatorModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: StringStartsWithConfig, context: Any = None) -> Dict[str, Any]:
-        text = list(inputs.values())[0]
+    def run(self, inputs: Dict[str, Any], cfg: StringStartsWithConfig, context: Any) -> Dict[str, Any]:
+        # Extract input
+        input_node_id = list(inputs.keys())[0]
+        text = inputs[input_node_id]
 
+        # Get output node_id from context
+        output_node_id = context.outputs[0].node_id
+
+        # Handle None
+        if text is None:
+            return {output_node_id: False}
+
+        # Validate input type
+        if not isinstance(text, str):
+            raise TypeError(f"Expected str, got {type(text).__name__}")
+
+        # Perform starts with check
         if cfg.case_sensitive:
             result = text.startswith(cfg.prefix)
         else:
             result = text.lower().startswith(cfg.prefix.lower())
 
-        return {"starts_with": result}
+        return {output_node_id: result}
 
 
 # String Ends With
@@ -194,15 +236,29 @@ class StringEndsWith(ComparatorModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: StringEndsWithConfig, context: Any = None) -> Dict[str, Any]:
-        text = list(inputs.values())[0]
+    def run(self, inputs: Dict[str, Any], cfg: StringEndsWithConfig, context: Any) -> Dict[str, Any]:
+        # Extract input
+        input_node_id = list(inputs.keys())[0]
+        text = inputs[input_node_id]
 
+        # Get output node_id from context
+        output_node_id = context.outputs[0].node_id
+
+        # Handle None
+        if text is None:
+            return {output_node_id: False}
+
+        # Validate input type
+        if not isinstance(text, str):
+            raise TypeError(f"Expected str, got {type(text).__name__}")
+
+        # Perform ends with check
         if cfg.case_sensitive:
             result = text.endswith(cfg.suffix)
         else:
             result = text.lower().endswith(cfg.suffix.lower())
 
-        return {"ends_with": result}
+        return {output_node_id: result}
 
 
 # String Regex Match
@@ -242,15 +298,29 @@ class StringMatchesRegex(ComparatorModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: StringMatchesRegexConfig, context: Any = None) -> Dict[str, Any]:
-        text = list(inputs.values())[0]
+    def run(self, inputs: Dict[str, Any], cfg: StringMatchesRegexConfig, context: Any) -> Dict[str, Any]:
+        # Extract input
+        input_node_id = list(inputs.keys())[0]
+        text = inputs[input_node_id]
 
+        # Get output node_id from context
+        output_node_id = context.outputs[0].node_id
+
+        # Handle None
+        if text is None:
+            return {output_node_id: False}
+
+        # Validate input type
+        if not isinstance(text, str):
+            raise TypeError(f"Expected str, got {type(text).__name__}")
+
+        # Perform regex match
         try:
             result = bool(re.match(cfg.pattern, text))
-        except re.error:
-            result = False
+        except re.error as e:
+            raise ValueError(f"Invalid regex pattern '{cfg.pattern}': {str(e)}")
 
-        return {"matches": result}
+        return {output_node_id: result}
 
 
 # String Is Empty
@@ -290,12 +360,26 @@ class StringIsEmpty(ComparatorModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: StringIsEmptyConfig, context: Any = None) -> Dict[str, Any]:
-        text = list(inputs.values())[0]
+    def run(self, inputs: Dict[str, Any], cfg: StringIsEmptyConfig, context: Any) -> Dict[str, Any]:
+        # Extract input
+        input_node_id = list(inputs.keys())[0]
+        text = inputs[input_node_id]
 
+        # Get output node_id from context
+        output_node_id = context.outputs[0].node_id
+
+        # Handle None - None is considered "empty"
+        if text is None:
+            return {output_node_id: True}
+
+        # Validate input type
+        if not isinstance(text, str):
+            raise TypeError(f"Expected str, got {type(text).__name__}")
+
+        # Check if empty
         if cfg.trim_whitespace:
             result = len(text.strip()) == 0
         else:
             result = len(text) == 0
 
-        return {"is_empty": result}
+        return {output_node_id: result}

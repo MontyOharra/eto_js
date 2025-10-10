@@ -150,20 +150,37 @@ function PipelineCreatePage() {
       });
 
       if (!response.ok) {
+        // Parse error response
         const errorData = await response.json().catch(() => ({ detail: "Unknown error" }));
+
+        // Debug: Log the full error response
+        console.log("📦 Full error response:", errorData);
+        console.log("   Status:", response.status);
+        console.log("   Has detail.errors?", !!errorData.detail?.errors);
+
+        // Handle 422 validation errors with structured error array
+        if (response.status === 422 && errorData.detail?.errors) {
+          console.error("❌ Pipeline validation failed:");
+          console.error(`   ${errorData.detail.message} (${errorData.detail.error_count} error(s))`);
+          console.error("\n📋 Validation Errors:");
+          errorData.detail.errors.forEach((error: any, index: number) => {
+            console.error(`   ${index + 1}. [${error.code}] ${error.message}`);
+            if (error.where && Object.keys(error.where).length > 0) {
+              console.error(`      Location:`, error.where);
+            }
+          });
+
+          alert(`❌ Pipeline validation failed with ${errorData.detail.error_count} error(s).\n\nCheck the browser console for details.`);
+          return;
+        }
+
+        // Handle other errors
         throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
       }
 
       const result = await response.json();
-      console.log("Test upload result:", result);
-
-      if (result.success) {
-        // Show success message
-        alert(`✅ ${result.message}\n\nCheck the server console for detailed pruning information.`);
-      } else {
-        // Show failure message
-        alert(`❌ ${result.message}`);
-      }
+      console.log("✅ Pipeline created successfully:", result);
+      alert(`✅ Pipeline "${result.name}" created successfully!\n\nID: ${result.id}\nChecksum: ${result.plan_checksum?.substring(0, 12)}...`);
     } catch (err) {
       console.error("Failed to process pipeline:", err);
       alert(`Failed to process pipeline: ${err instanceof Error ? err.message : "Unknown error"}`);

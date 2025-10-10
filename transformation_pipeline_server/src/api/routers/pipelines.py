@@ -18,7 +18,7 @@ from shared.types import (
     PipelineValidationResult,
     PipelineExecutionRun,
 )
-from shared.exceptions import RepositoryError, ObjectNotFoundError
+from shared.exceptions import RepositoryError, ObjectNotFoundError, PipelineValidationFailedException
 
 from api.schemas import (
     PipelineListResponse,
@@ -79,6 +79,26 @@ async def upload_pipeline(
 
         return pipeline
 
+    except PipelineValidationFailedException as e:
+        # Return structured validation errors to frontend
+        logger.warning(f"⚠️  Validation failed for '{pipeline_create.name}' with {len(e.errors)} error(s)")
+
+        # Return 422 Unprocessable Entity with structured errors
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "Pipeline validation failed",
+                "error_count": len(e.errors),
+                "errors": [
+                    {
+                        "code": err.code,
+                        "message": err.message,
+                        "where": err.where or {}
+                    }
+                    for err in e.errors
+                ]
+            }
+        )
     except ValueError as e:
         logger.error(f"[TEST_UPLOAD_API] Invalid pipeline data: {e}")
         raise HTTPException(status_code=400, detail=f"Invalid pipeline data: {str(e)}")

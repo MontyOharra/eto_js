@@ -12,7 +12,8 @@ from shared.types import (
     PipelineDefinitionCreate,
     PipelineDefinitionSummary,
     PipelineState,
-    PipelineValidationResult
+    PipelineValidationResult,
+    PipelineValidationError
 )
 
 from shared.database.repositories import (
@@ -20,7 +21,7 @@ from shared.database.repositories import (
     PipelineDefinitionStepRepository,
     PipelineDefinitionRepository
 )
-from shared.exceptions import RepositoryError, ObjectNotFoundError, PipelineValidationError
+from shared.exceptions import RepositoryError, ObjectNotFoundError, PipelineValidationFailedException
 
 from .utils.validation_orchestrator import PipelineValidator
 from .utils.compilation import (
@@ -94,10 +95,8 @@ class PipelineService:
 
             pipeline_state = pipeline_create.pipeline_state
 
-            try:
-                validation_result = self.validate_pipeline(pipeline_state)
-            except ValueError as e:
-                raise e
+            # Validate pipeline - let PipelineValidationFailedException propagate
+            validation_result = self.validate_pipeline(pipeline_state)
 
             reachable_modules = validation_result.reachable_modules
 
@@ -156,10 +155,8 @@ class PipelineService:
             )
             return pipeline
 
-        except ValueError as e:
-            logger.error(
-                f"Failed to create pipeline: {pipeline_create.name} - validation failed"
-            )
+        except PipelineValidationFailedException:
+            # Let validation errors propagate to API layer - not a service error
             raise
         except RepositoryError:
             logger.error(f"Failed to create pipeline: {pipeline_create.name}")
@@ -280,26 +277,23 @@ class PipelineService:
         Raises:
             Exception: If validation process fails unexpectedly
         """
-        try:
-            logger.debug("Validating pipeline state")
+        logger.debug("Validating pipeline state")
 
-            # Create validator with module catalog repository and run validation
-            validator = PipelineValidator(module_catalog_repo=self.module_catalog_repo)
-            result = validator.validate(pipeline_state)
-            
-            if not result.valid:
-                logger.info(
-                    f"Pipeline validation failed with {len(result.errors)} error(s)"
-                )
-                error_messages = [
-                    f"{err.code}: {err.message}" for err in result.errors
-                ]
-                raise ValueError(
-                    f"Pipeline validation failed: {'; '.join(error_messages)}"
-                )
-            return result
+        # Create validator with module catalog repository and run validation
+        validator = PipelineValidator(module_catalog_repo=self.module_catalog_repo)
+        result = validator.validate(pipeline_state)
 
-        except Exception as e:
-            logger.error(f"Unexpected error during pipeline validation: {e}")
-            # Re-raise to let caller handle it
-            raise
+        if not result.valid:
+            logger.warning(
+                f"⚠️  Pipeline validation failed with {len(result.errors)} error(s)"
+            )
+            # Log error summary (not full details - API will return structured errors)
+            for err in result.errors:
+                # Truncate long messages for logging
+                msg_preview = err.message[:80] + "..." if len(err.message) > 80 else err.message
+                logger.warning(f"   • {err.code}: {msg_preview}")
+
+            # Raise structured exception (API will catch and format for response)
+            raise PipelineValidationFailedException(result)
+
+        return result
