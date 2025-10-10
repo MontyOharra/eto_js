@@ -92,6 +92,9 @@ from .email_integration import (
 from .enums import (
     AllowedModuleTypes,
     ModuleKind,
+    EtoRunStatus,
+    EtoProcessingStep,
+    EtoErrorType
 )
 
 from .modules import (
@@ -230,6 +233,9 @@ __all__ = [
     # Enums
     'AllowedModuleTypes',
     'ModuleKind',
+    'EtoRunStatus',
+    'EtoProcessingStep',
+    'EtoErrorType',
     
     # Modules
     'NodeTypeRule',
