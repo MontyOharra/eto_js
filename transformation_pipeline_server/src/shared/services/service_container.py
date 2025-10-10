@@ -54,10 +54,11 @@ class ServiceContainer:
     _services: Dict[str, Any] = {}
     _service_definitions: Dict[str, Dict[str, Any]] = {}
     _connection_manager: Optional['DatabaseConnectionManager'] = None
+    _pdf_storage_path: Optional[str] = None
     _resolving: List[str] = []
 
     @classmethod
-    def initialize(cls, connection_manager: 'DatabaseConnectionManager', **kwargs) -> None:
+    def initialize(cls, connection_manager: 'DatabaseConnectionManager', pdf_storage_path: str, **kwargs) -> None:
         """
         Initialize the service container.
         Can be called multiple times safely (will only initialize once).
@@ -74,6 +75,7 @@ class ServiceContainer:
 
         # Store core dependencies
         cls._connection_manager = connection_manager
+        cls._pdf_storage_path = pdf_storage_path
 
         # Store any additional configuration
         for key, value in kwargs.items():

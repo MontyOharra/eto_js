@@ -31,17 +31,7 @@ setup: install-deps create-dirs ## Complete development setup (install deps + cr
 	@echo "Development environment setup complete!"
 	@echo "Run 'make dev' to start the development server"
 
-dev: $(VENV_DIR) logs storage ## Start FastAPI development server (setup only if needed)
-	@echo "Starting Transformation Pipeline Server..."
-	set DEBUG=true && set RELOAD=true && $(PYTHON) main.py
-
-logs:
-	@mkdir -p logs
-
-storage:
-	@mkdir -p storage
-
-clean-data: ## Clean up logs and storage data (keep venv)
+reset: ## Clean up logs and storage data (keep venv)
 	@rm -rf logs/* storage/*
 	@echo "Cleaned up logs and storage data (virtual environment preserved)"
 	@./scripts/database/manage-database.sh reset --confirm
@@ -51,28 +41,12 @@ clean: ## Clean up virtual environment and generated files
 	@rm -rf $(VENV_DIR) logs storage
 	@echo "Cleaned up virtual environment and directories"
 
-reset-all: clean-data ## Reset and clear storage/logs completely
-	@echo "Storage/logs cleared successfully!"
-
 # Module Management Commands
 modules-sync: $(VENV_DIR) ## Sync all registered modules to database catalog
 	@echo "Syncing modules to database catalog..."
 	$(PYTHON) -m src.cli.sync_modules sync
 
-modules-list: $(VENV_DIR) ## List all discoverable modules (without DB interaction)
-	@echo "Listing all discoverable modules..."
-	$(PYTHON) -m src.cli.sync_modules list
+dev: $(VENV_DIR) ## Start FastAPI development server (setup only if needed)
+	@echo "Starting Transformation Pipeline Server..."
+	set DEBUG=true && set RELOAD=true && $(PYTHON) main.py
 
-modules-clear: $(VENV_DIR) ## Clear all modules from database catalog
-	@echo "Clearing module catalog..."
-	$(PYTHON) -m src.cli.sync_modules clear
-
-modules-refresh: $(VENV_DIR) ## Clear and re-sync all modules (fresh refresh)
-	@echo "Refreshing module catalog (clear + sync)..."
-	$(PYTHON) -m src.cli.sync_modules sync --refresh
-
-modules-watch: $(VENV_DIR) ## Watch module files and auto-sync on changes (dev mode)
-	@echo "Starting module file watcher..."
-	$(PYTHON) -m src.cli.watch_modules
-
-dev-modules: clean-data modules-sync dev

@@ -29,8 +29,8 @@ def main():
         print("Starting Transformation Pipeline Server (FastAPI)...")  # Use print for initial startup
 
         # Get configuration from environment
-        port = int(os.getenv('PIPELINE_PORT', 8090))
-        host = os.getenv('PIPELINE_HOST', '0.0.0.0')
+        port = int(os.getenv('PORT', 8090))
+        host = os.getenv('HOST', '0.0.0.0')
         debug = os.getenv('DEBUG', 'false').lower() == 'true'
         reload = os.getenv('RELOAD', str(debug)).lower() == 'true'
         workers = int(os.getenv('WORKERS', 1))

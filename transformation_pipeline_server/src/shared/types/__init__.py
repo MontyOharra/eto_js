@@ -1,40 +1,97 @@
 """Shared Pydantic models for domain objects"""
 
+from .db.email_config import (
+    EmailFilterRule,
+    EmailConfigCreate,
+    EmailConfigUpdate,
+    EmailConfig,
+    EmailConfigSummary
+)
+
+from db.email import (
+    Email,
+    EmailCreate,
+    EmailSummary,
+)
+
+from db.eto_run import (
+    EtoRunCreate,
+    EtoDataExtractionResult,
+    EtoTransformationResult,
+    EtoRun,
+    EtoEmailInfo,
+    EtoRunSummary,
+    EtoRunWithPdfData,
+    EtoRunStatusUpdate,
+    EtoRunTemplateMatchUpdate,
+    EtoRunDataExtractionUpdate,
+    EtoRunTransformationUpdate,
+    EtoRunOrderUpdate,
+    EtoRunResetResult,
+)
+
 from .db.module_catalog import (
+    ModuleCatalog,
     ModuleCatalogCreate,
     ModuleCatalogUpdate,
-    ModuleCatalog
+)
+
+from .db.pdf_file import (
+    PdfFile,
+    PdfFileCreate,
+    PdfDetailData,
+)
+
+from .db.pdf_template_version import (
+    PdfTemplateVersion,
+    PdfTemplateVersionCreate,
+)
+
+from .db.pdf_template import (
+    PdfTemplate,
+    PdfTemplateCreate,
+    PdfTemplateUpdate,
 )
 
 from .db.pipeline_definition_steps import (
+    PipelineDefinitionStep,
     PipelineDefinitionStepCreate,
-    PipelineDefinitionStep
 )
 
 from .db.pipeline_definitions import (
-    PipelineDefinitionCreate,
     PipelineDefinition,
-    PipelineDefinitionSummary
+    PipelineDefinitionCreate,
+    PipelineDefinitionSummary,
 )
 
 from .db.pipeline_execution_run import (
+    PipelineExecutionRun,
     PipelineExecutionRunCreate,
-    PipelineExecutionRun
 )
 
 from .db.pipeline_execution_step import (
+    PipelineExecutionStep,
     PipelineExecutionStepCreate,
-    PipelineExecutionStep
+)
+
+from .email_integration import (
+    EmailProvider,
+    EmailMessage,
+    EmailAttachment,
+    EmailFolder,
+    EmailAccount,
+    EmailSearchCriteria,
+    EmailIntegrationConfig,
+    OutlookComConfig,
+    GmailApiConfig,
+    ImapConfig,
+    ConnectionTestResult,
+    ProviderInfo,
 )
 
 from .enums import (
     AllowedModuleTypes,
-    ModuleKind
-)
-
-from .pipeline_execution import (
-    PipelineExecutionError,
-    PipelineExecutionRunResult
+    ModuleKind,
 )
 
 from .modules import (
@@ -51,6 +108,25 @@ from .modules import (
     ComparatorModule,
 )
 
+from .pdf_processing import (
+    BasePdfObject,
+    TextWordPdfObject,
+    TextLinePdfObject,
+    GraphicRectPdfObject,
+    GraphicLinePdfObject,
+    GraphicCurvePdfObject,
+    ImagePdfObject,
+    TablePdfObject,
+    PdfObjects,
+    ExtractionField,
+    PdfTemplateMatchResult
+)
+
+from .pipeline_execution import (
+    PipelineExecutionError,
+    PipelineExecutionRunResult,
+)
+
 from .pipeline_state import (
     InstanceNodePin,
     ModuleInstance,
@@ -58,7 +134,7 @@ from .pipeline_state import (
     EntryPoint,
     PipelineState,
     ModulePosition,
-    VisualState
+    VisualState,
 )
 
 from .pipeline_validation import (
@@ -66,12 +142,52 @@ from .pipeline_validation import (
     PipelineValidationError,
     PipelineValidationResult,
     PinInfo,
-    PipelineIndices
+    PipelineIndices,
 )
-
 
 __all__ = [
     # === DB TYPES ===
+    
+    # Email Config
+    'EmailFilterRule',
+    'EmailConfigCreate',
+    'EmailConfigUpdate',
+    'EmailConfig',
+    'EmailConfigSummary',
+    
+    # Email
+    'Email',
+    'EmailCreate',
+    'EmailSummary',
+    
+    # Eto Run
+    'EtoRunCreate',
+    'EtoDataExtractionResult',
+    'EtoTransformationResult',
+    'EtoRun',
+    'EtoEmailInfo',
+    'EtoRunSummary',
+    'EtoRunWithPdfData',
+    'EtoRunStatusUpdate',
+    'EtoRunTemplateMatchUpdate',
+    'EtoRunDataExtractionUpdate',
+    'EtoRunTransformationUpdate',
+    'EtoRunOrderUpdate',
+    'EtoRunResetResult',
+    
+    # PDF File
+    'PdfFile',
+    'PdfFileCreate',
+    'PdfDetailData',
+    
+    # PDF Template Version
+    'PdfTemplateVersionCreate',
+    'PdfTemplateVersion',
+    
+    # PDF Template
+    'PdfTemplate',
+    'PdfTemplateCreate',
+    'PdfTemplateUpdate',
     
     # Module Catalog
     'ModuleCatalogCreate',
@@ -97,12 +213,25 @@ __all__ = [
 
     # === GENERAL DOMAIN TYPES ===
     
-    'PipelineExecutionError',
-    'PipelineExecutionRunResult',
-
-    # Modules
+    # Email Integration
+    'EmailProvider',
+    'EmailMessage',
+    'EmailAttachment',
+    'EmailFolder',
+    'EmailAccount',
+    'EmailSearchCriteria',
+    'EmailIntegrationConfig',
+    'OutlookComConfig',
+    'GmailApiConfig',
+    'ImapConfig',
+    'ConnectionTestResult',
+    'ProviderInfo',
+    
+    # Enums
     'AllowedModuleTypes',
     'ModuleKind',
+    
+    # Modules
     'NodeTypeRule',
     'NodeGroup',
     'IOSideShape',
@@ -114,6 +243,23 @@ __all__ = [
     'ActionModule',
     'LogicModule',
     'ComparatorModule',
+
+    # PDF Processing
+    'BasePdfObject',
+    'TextWordPdfObject',
+    'TextLinePdfObject',
+    'GraphicRectPdfObject',
+    'GraphicLinePdfObject',
+    'GraphicCurvePdfObject',
+    'ImagePdfObject',
+    'TablePdfObject',
+    'PdfObjects',
+    'ExtractionField',
+    'PdfTemplateMatchResult',
+
+    # Pipeline Execution
+    'PipelineExecutionError',
+    'PipelineExecutionRunResult',
 
     # Pipeline State
     'InstanceNodePin',

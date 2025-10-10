@@ -24,21 +24,6 @@ class PipelineDefinitionBase(BaseModel):
         from_attributes = True
 
 
-class PipelineDefinitionCreate(PipelineDefinitionBase):
-    """Model for creating new pipeline - pipelines are immutable, no updates allowed"""
-
-    def model_dump_for_db(self) -> Dict[str, Any]:
-        """Convert to database-ready dictionary with JSON serialization"""
-        data = self.model_dump()
-        # Convert complex objects to JSON strings for database storage
-        data['pipeline_state'] = json.dumps(data['pipeline_state'])
-        data['visual_state'] = json.dumps(data['visual_state'])
-        return data
-
-    class Config:
-        from_attributes = True
-
-
 class PipelineDefinition(PipelineDefinitionBase):
     """Full pipeline model retrieved from database - immutable once created"""
     id: int = Field(..., description="Pipeline ID")
@@ -82,6 +67,21 @@ class PipelineDefinition(PipelineDefinitionBase):
             connection_count=len(pipeline_state.connections),
             entry_point_count=len(pipeline_state.entry_points)
         )
+
+    class Config:
+        from_attributes = True
+
+
+class PipelineDefinitionCreate(PipelineDefinitionBase):
+    """Model for creating new pipeline - pipelines are immutable, no updates allowed"""
+
+    def model_dump_for_db(self) -> Dict[str, Any]:
+        """Convert to database-ready dictionary with JSON serialization"""
+        data = self.model_dump()
+        # Convert complex objects to JSON strings for database storage
+        data['pipeline_state'] = json.dumps(data['pipeline_state'])
+        data['visual_state'] = json.dumps(data['visual_state'])
+        return data
 
     class Config:
         from_attributes = True

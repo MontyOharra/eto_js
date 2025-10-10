@@ -10,17 +10,16 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from contextlib import asynccontextmanager
-from typing import Optional, Dict, Any
 
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError, HTTPException as FastAPIHTTPException
-from pydantic import ValidationError
 import uvicorn
 
 from shared.database import init_database_connection
 from shared.services.service_container import ServiceContainer
+from shared.utils.storage_config import get_storage_configuration
 
 logger = logging.getLogger(__name__)
 
@@ -177,6 +176,26 @@ def configure_logging():
     logging.getLogger('uvicorn.access').setLevel(logging.INFO)
     logging.getLogger('fastapi').setLevel(logging.INFO)
 
+    third_party_loggers = [
+        'pdfminer',
+        'pdfminer.cmapdb',
+        'pdfminer.pdfparser',
+        'pdfminer.pdfdocument',
+        'pdfminer.pdfinterp',
+        'pdfminer.converter',
+        'pdfminer.layout',
+        'urllib3',
+        'requests',
+        'matplotlib',
+        'PIL'
+    ]
+
+    third_party_level = os.getenv('THIRD_PARTY_LOG_LEVEL', 'WARNING').upper()
+    third_party_log_level = logging.getLevelName(third_party_level)
+    if isinstance(third_party_log_level, int):
+        for logger_name in third_party_loggers:
+            logging.getLogger(logger_name).setLevel(third_party_log_level)
+
     logger.info("Logging configured successfully")
     logger.info(f"Log level: {logging.getLevelName(log_level)}")
     logger.info(f"Console colors: {use_colors}")
@@ -202,7 +221,7 @@ async def initialize_database_connection() -> None:
         raise DatabaseConnectionError(f"Database initialization failed: {e}")
 
 
-async def initialize_services_app() -> None:
+async def initialize_services() -> None:
     """Initialize all services using the ServiceContainer singleton"""
     global _connection_manager
 
@@ -212,9 +231,10 @@ async def initialize_services_app() -> None:
         if not _connection_manager:
             raise ServiceInitializationError("Database connection manager not available")
 
-        # Initialize the ServiceContainer directly
-        logger.info("Initializing ServiceContainer...")
-        ServiceContainer.initialize(_connection_manager)
+        pdf_storage_path = get_storage_configuration()
+
+        logger.debug("Initializing ServiceContainer...")
+        ServiceContainer.initialize(_connection_manager, pdf_storage_path)
         logger.info("ServiceContainer initialized successfully")
 
         logger.info("All services initialized successfully via ServiceContainer")
@@ -259,7 +279,7 @@ async def lifespan(app: FastAPI):
 
     try:
         await initialize_database_connection()
-        await initialize_services_app()
+        await initialize_services()
         logger.info("Application startup completed successfully")
     except Exception as e:
         logger.error(f"Application startup failed: {e}", exc_info=True)
@@ -356,7 +376,6 @@ def setup_exception_handlers(app: FastAPI) -> None:
         )
 
 
-
 def register_routers(app: FastAPI) -> None:
     """Register FastAPI routers"""
     # Register health router first
@@ -390,6 +409,38 @@ def register_routers(app: FastAPI) -> None:
         logger.error(f"Error registering pipelines router: {e}", exc_info=True)
 
 
+def register_info_endpoint(app: FastAPI) -> None:
+    """Register application info endpoint"""
+
+    @app.get("/", tags=["info"])
+    async def app_info() -> Dict[str, Any]:
+        """Application information endpoint"""
+        return {
+            "service": "Unified ETO Server",
+            "description": "Email-to-Order processing system with feature-based architecture",
+            "version": "2.0.0",
+            "architecture": "feature-based",
+            "framework": "FastAPI",
+            "api_prefix": "/api",
+            "endpoints": {
+                "health": "/api/health",
+                "email_configuration": "/api/email-configs",
+                "eto_processing": "/api/eto-runs",
+                "eto_worker": "/api/eto-runs/worker",
+                "pdf_templates": "/api/pdf_templates"
+            },
+            "documentation": {
+                "health": "Service health and status monitoring",
+                "email_configuration": "Email ingestion configuration management",
+                "eto_processing": "ETO processing run management and background processing",
+                "eto_worker": "Background worker management (start/stop/pause/resume)",
+                "pdf_templates": "PDF template creation and versioning"
+            },
+            "interactive_docs": "/docs",
+            "openapi_schema": "/openapi.json"
+        }
+
+
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application"""
     # Note: Logging is now configured in lifespan startup
@@ -401,13 +452,15 @@ def create_app() -> FastAPI:
         version="1.0.0",
         docs_url="/docs",
         redoc_url="/redoc",
-        lifespan=lifespan
+        openapi_url="/openapi.json",
+        lifespan=lifespan,
     )
 
     
     setup_cors_middleware(app)
     setup_exception_handlers(app)
     register_routers(app)
+    register_info_endpoint(app)
 
     logger.info("FastAPI application created and configured")
 
