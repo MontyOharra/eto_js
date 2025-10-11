@@ -149,7 +149,7 @@ export interface EmailIngestionConfigSummary {
 
 
 // API Configuration - Updated for unified ETO server
-const API_BASE_URL = 'http://localhost:8080';
+const API_BASE_URL = 'http://localhost:8090';
 
 class ApiClient {
   private baseUrl: string;

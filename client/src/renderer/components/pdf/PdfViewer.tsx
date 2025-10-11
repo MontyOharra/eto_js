@@ -162,7 +162,7 @@ export function PdfViewer({
   const pageRefs = useRef<{ [key: number]: HTMLDivElement }>({});
 
   // Determine the PDF URL to use
-  const effectivePdfUrl = pdfUrl || (pdfId ? `http://localhost:8080/api/pdf-files/${pdfId}/download` : null);
+  const effectivePdfUrl = pdfUrl || (pdfId ? `http://localhost:8090/api/pdf-files/${pdfId}/download` : null);
 
   // ===== OBJECT FLATTENING =====
 

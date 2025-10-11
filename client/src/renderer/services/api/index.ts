@@ -57,7 +57,7 @@ export class EtoApiClient {
   public emailConfigs: EmailConfigsApiClient;
   public pdfTemplates: PdfTemplatesApiClient;
 
-  constructor(baseUrl: string = 'http://localhost:8080') {
+  constructor(baseUrl: string = 'http://localhost:8090') {
     this.health = new HealthApiClient(baseUrl);
     this.emailConfigs = new EmailConfigsApiClient(baseUrl);
     this.pdfTemplates = new PdfTemplatesApiClient(baseUrl);

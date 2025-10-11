@@ -29,7 +29,7 @@ export interface ApiResponse<T> {
 export class BaseApiClient {
   private baseUrl: string;
 
-  constructor(baseUrl: string = 'http://localhost:8080') {
+  constructor(baseUrl: string = 'http://localhost:8090') {
     this.baseUrl = baseUrl;
   }
 

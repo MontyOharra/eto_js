@@ -21,7 +21,7 @@ function DashboardLayout() {
   const tabs = [
     { name: "ETO Information", href: "/dashboard/eto-info" },
     { name: "Templates", href: "/dashboard/templates" },
-    { name: "Transformation Pipeline", href: "/transformation_pipeline" },
+    { name: "Transformation Pipeline", href: "/dashboard/pipelines" },
   ];
 
   return (
@@ -29,13 +29,15 @@ function DashboardLayout() {
       <div className="flex-1 flex flex-col">
         {/* Tab Navigation */}
         <div
-          className={`sticky top-0 z-20 bg-gray-800 ${location.pathname === "/dashboard/eto-info" || location.pathname === "/dashboard/templates" || location.pathname === "/transformation_pipeline" ? "" : "border-b border-gray-600"}`}
+          className={`sticky top-0 z-20 bg-gray-800 ${location.pathname === "/dashboard/eto-info" || location.pathname === "/dashboard/templates" || location.pathname.startsWith("/dashboard/pipelines") ? "" : "border-b border-gray-600"}`}
           style={{ marginTop: "8px" }}
         >
           <div className="flex items-end justify-between px-2">
             <div className="flex">
               {tabs.map((tab, index) => {
-                const isActive = location.pathname === tab.href;
+                const isActive = tab.href === "/dashboard/pipelines"
+                  ? location.pathname.startsWith("/dashboard/pipelines")
+                  : location.pathname === tab.href;
                 return (
                   <Link
                     key={tab.name}
