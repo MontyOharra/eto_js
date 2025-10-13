@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { apiClient, ApiError, type ApiEtoRunSummary } from '../services/api';
+import { apiClient as newApiClient } from '../services/api/index';
 import type {
   EtoRun,
   EtoRunSummary,
@@ -279,21 +280,25 @@ export function useTemplates(params?: {
     try {
       setState(prev => ({ ...prev, loading: true, error: null }));
 
-      const response = await apiClient.getTemplates({ status, limit });
+      const templates = await newApiClient.pdfTemplates.getTemplates({
+        template_status: status as 'active' | 'inactive' | undefined,
+        limit
+      });
 
       // Transform API data to frontend format
-      const templates = response.templates.map(template => {
+      const summaries = templates.map(template => {
         const fullTemplate = EtoDataTransforms.templateApiToFrontend(template);
         return EtoDataTransforms.templateToSummary(fullTemplate);
       });
 
       setState({
-        data: templates,
+        data: summaries,
         loading: false,
         error: null,
         lastFetch: new Date(),
       });
     } catch (error) {
+      console.error('Error fetching templates:', error);
       const errorMessage = error instanceof ApiError ? error.message : 'Unknown error occurred';
       setState(prev => ({
         ...prev,

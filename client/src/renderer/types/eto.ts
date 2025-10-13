@@ -54,7 +54,7 @@ export interface Template {
   name: string;
   customer_name?: string;
   description?: string;
-  status: "active" | "archived" | "draft";
+  status: "active" | "inactive" | "archived" | "draft";
   is_complete: boolean;
   coverage_threshold: number;
   usage_count: number;
@@ -74,7 +74,7 @@ export interface TemplateSummary {
   name: string;
   customer_name?: string;
   description?: string;
-  status: "active" | "archived" | "draft";
+  status: "active" | "inactive" | "archived" | "draft";
   is_complete: boolean;
   usage_count: number;
   success_rate?: number;
@@ -252,18 +252,18 @@ export class EtoDataTransforms {
       name: apiTemplate.name,
       customer_name: apiTemplate.customer_name,
       description: apiTemplate.description,
-      status: apiTemplate.status,
-      is_complete: apiTemplate.is_complete,
-      coverage_threshold: apiTemplate.coverage_threshold,
-      usage_count: apiTemplate.usage_count,
+      status: apiTemplate.status || 'active',
+      is_complete: apiTemplate.is_complete ?? false,
+      coverage_threshold: apiTemplate.coverage_threshold ?? 0.8,
+      usage_count: apiTemplate.usage_count ?? 0,
       last_used_at: apiTemplate.last_used_at ? new Date(apiTemplate.last_used_at) : undefined,
       success_rate: apiTemplate.success_rate,
-      version: apiTemplate.version,
+      version: apiTemplate.version ?? 1,
       created_by: apiTemplate.created_by,
       created_at: apiTemplate.created_at ? new Date(apiTemplate.created_at) : undefined,
       updated_at: apiTemplate.updated_at ? new Date(apiTemplate.updated_at) : undefined,
-      extraction_rules_count: apiTemplate.extraction_rules_count,
-      signature_object_count: apiTemplate.signature_object_count,
+      extraction_rules_count: apiTemplate.extraction_rules_count ?? 0,
+      signature_object_count: apiTemplate.signature_object_count ?? 0,
     };
   }
 
@@ -294,6 +294,8 @@ export class EtoDataTransforms {
     switch (status) {
       case 'active':
         return 'text-green-400';
+      case 'inactive':
+        return 'text-orange-400';
       case 'draft':
         return 'text-yellow-400';
       case 'archived':

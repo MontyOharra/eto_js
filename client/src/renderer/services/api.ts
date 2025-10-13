@@ -415,7 +415,7 @@ class ApiClient {
       searchParams.append('limit', params.limit.toString());
     }
 
-    const endpoint = `/api/templates/${searchParams.toString() ? `?${searchParams}` : ''}`;
+    const endpoint = `/api/pdf_templates/${searchParams.toString() ? `?${searchParams}` : ''}`;
     return this.fetchApi<ApiTemplatesResponse>(endpoint);
   }
 
@@ -550,7 +550,7 @@ class ApiClient {
       error?: string;
     };
   }> {
-    return this.fetchApi('/api/templates/reprocess', {
+    return this.fetchApi('/api/pdf_templates/reprocess', {
       method: 'POST',
     });
   }
@@ -767,7 +767,7 @@ class ApiClient {
     };
     error?: string;
   }> {
-    return this.fetchApi(`/api/templates/${templateId}/view`);
+    return this.fetchApi(`/api/pdf_templates/${templateId}/view`);
   }
 
   /**

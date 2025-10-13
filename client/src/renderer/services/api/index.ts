@@ -6,10 +6,12 @@
 // Base client and utilities
 export { BaseApiClient, ApiError } from './base/apiClient';
 
-// Domain-specific API clients
-export { HealthApiClient } from './domains/health';
-export { EmailConfigsApiClient } from './domains/emailConfigs';
-export { PdfTemplatesApiClient } from './domains/pdfTemplates';
+// Domain-specific API clients - import for use and re-export
+import { HealthApiClient } from './domains/health';
+import { EmailConfigsApiClient } from './domains/emailConfigs';
+import { PdfTemplatesApiClient } from './domains/pdfTemplates';
+
+export { HealthApiClient, EmailConfigsApiClient, PdfTemplatesApiClient };
 
 // Type exports for convenience
 export type {

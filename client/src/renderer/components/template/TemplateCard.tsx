@@ -4,19 +4,21 @@ interface TemplateCardProps {
   template: TemplateSummary;
   onEdit: (template: TemplateSummary) => void;
   onView: (template: TemplateSummary) => void;
-  onDelete: (template: TemplateSummary) => void;
+  onSetInactive: (template: TemplateSummary) => void;
 }
 
 export function TemplateCard({
   template,
   onEdit,
   onView,
-  onDelete,
+  onSetInactive,
 }: TemplateCardProps) {
   const getStatusColor = (status: TemplateSummary["status"]) => {
     switch (status) {
       case "active":
         return "bg-green-600";
+      case "inactive":
+        return "bg-orange-600";
       case "draft":
         return "bg-yellow-600";
       case "archived":
@@ -111,18 +113,14 @@ export function TemplateCard({
           >
             View
           </button>
-          <button
-            onClick={() => onEdit(template)}
-            className="px-3 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors"
-          >
-            Edit
-          </button>
-          <button
-            onClick={() => onDelete(template)}
-            className="px-3 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
-          >
-            Delete
-          </button>
+          {template.status !== 'inactive' && (
+            <button
+              onClick={() => onSetInactive(template)}
+              className="px-3 py-1 text-xs bg-orange-600 hover:bg-orange-700 text-white rounded transition-colors"
+            >
+              Set Inactive
+            </button>
+          )}
         </div>
       </div>
     </div>

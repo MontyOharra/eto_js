@@ -31,7 +31,7 @@ router = APIRouter(
 )
 
 
-@router.post("/",
+@router.post("",
              response_model=PdfTemplate,
              status_code=status.HTTP_201_CREATED,
              summary="Create a new PDF template",
@@ -159,7 +159,7 @@ def create_template_version(
         )
 
 
-@router.get("/",
+@router.get("",
             response_model=List[PdfTemplate],
             summary="List PDF templates",
             description="List PDF templates with filtering and pagination")

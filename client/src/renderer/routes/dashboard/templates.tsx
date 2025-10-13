@@ -6,6 +6,7 @@ import { TemplateViewerModal } from "../../components/template/TemplateViewerMod
 import { useTemplates, useServerHealth } from "../../hooks/useApi";
 import { TemplateSummary } from "../../types/eto";
 import { apiClient } from "../../services/api";
+import { apiClient as newApiClient } from "../../services/api/index";
 
 export const Route = createFileRoute("/dashboard/templates")({
   component: TemplatesPage,
@@ -36,9 +37,25 @@ function TemplatesPage() {
     setViewingTemplateId(template.id);
   };
 
-  const handleDelete = (template: TemplateSummary) => {
-    console.log("Delete template:", template);
-    // TODO: Show confirmation dialog
+  const handleSetInactive = async (template: TemplateSummary) => {
+    if (!confirm(`Are you sure you want to set "${template.name}" as inactive?`)) {
+      return;
+    }
+
+    console.log('Attempting to set template inactive:', template.id, { status: 'inactive' });
+
+    try {
+      const result = await newApiClient.pdfTemplates.updateTemplate(template.id, { status: 'inactive' });
+      console.log('Update successful:', result);
+      // Refresh the templates list to show the updated status
+      refetch();
+    } catch (err: any) {
+      console.error('Error setting template inactive - Full error:', err);
+      console.error('Error message:', err.message);
+      console.error('Error response:', err.response);
+      console.error('Error data:', err.response?.data);
+      alert(`Failed to set template inactive: ${err.response?.data?.detail || err.message || 'Unknown error'}`);
+    }
   };
 
   const handleCreateTemplate = () => {
@@ -182,7 +199,7 @@ function TemplatesPage() {
         templates={templates || []}
         onEdit={handleEdit}
         onView={handleView}
-        onDelete={handleDelete}
+        onSetInactive={handleSetInactive}
         onCreateTemplate={handleCreateTemplate}
       />
       

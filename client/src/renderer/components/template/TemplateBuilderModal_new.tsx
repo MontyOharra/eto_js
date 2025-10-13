@@ -2,6 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { PdfViewer_new } from '../pdf/PdfViewer_new';
 import { apiClient } from '../../services/api';
+import { ModuleSelectorPane } from '../transformation-pipeline/ModuleSelectorPane';
+import { PipelineGraph, PipelineGraphRef } from '../transformation-pipeline/PipelineGraph';
+import { ModuleTemplate } from '../../types/moduleTypes';
+import { EntryPoint } from '../../types/pipelineTypes';
+import { serializePipelineData } from '../../utils/pipelineSerializer';
 
 interface TemplateBuilderModalProps {
   runId: string | null;
@@ -145,7 +150,7 @@ const OBJECT_TYPE_CONFIGS = {
   }
 } as const;
 
-type TemplateBuilderStep = 'object-selection' | 'field-labels';
+type TemplateBuilderStep = 'object-selection' | 'field-labels' | 'transformation-pipeline';
 
 export function TemplateBuilderModal_new({ runId, onClose, onSave }: TemplateBuilderModalProps) {
   const [pdfData, setPdfData] = useState<EtoRunPdfData | null>(null);
@@ -195,6 +200,14 @@ export function TemplateBuilderModal_new({ runId, onClose, onSave }: TemplateBui
   // Confirmation dialog state
   const [showCloseConfirmation, setShowCloseConfirmation] = useState(false);
 
+  // Pipeline builder state (Step 3)
+  const [moduleTemplates, setModuleTemplates] = useState<ModuleTemplate[]>([]);
+  const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null);
+  const [entryPoints, setEntryPoints] = useState<EntryPoint[]>([]);
+  const [pipelineLoading, setPipelineLoading] = useState(false);
+  const [pipelineError, setPipelineError] = useState<string | null>(null);
+  const pipelineGraphRef = useRef<PipelineGraphRef>(null);
+
   // Auto-focus field label input when editing starts
   useEffect(() => {
     if (editingField && fieldLabelInputRef.current) {
@@ -233,7 +246,45 @@ export function TemplateBuilderModal_new({ runId, onClose, onSave }: TemplateBui
 
   useEffect(() => {
     clearStepTransitionState();
+
+    // Load modules when entering pipeline builder step
+    if (currentStep === 'transformation-pipeline' && moduleTemplates.length === 0) {
+      loadModuleTemplates();
+    }
+
+    // Create entry points from extraction fields when entering step 3
+    if (currentStep === 'transformation-pipeline' && entryPoints.length === 0) {
+      createEntryPointsFromFields();
+    }
   }, [currentStep]);
+
+  const loadModuleTemplates = async () => {
+    setPipelineLoading(true);
+    setPipelineError(null);
+    try {
+      const response = await fetch("http://localhost:8090/api/modules");
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      setModuleTemplates(data.modules || []);
+    } catch (err) {
+      console.error("Failed to load module templates:", err);
+      setPipelineError(err instanceof Error ? err.message : "Failed to load modules");
+    } finally {
+      setPipelineLoading(false);
+    }
+  };
+
+  const createEntryPointsFromFields = () => {
+    // Create entry points from extraction fields
+    const newEntryPoints: EntryPoint[] = extractionFields.map(field => ({
+      node_id: crypto.randomUUID(),
+      name: field.label,
+      type: 'str'
+    }));
+    setEntryPoints(newEntryPoints);
+  };
 
   const clearStepTransitionState = () => {
     setIsDrawingMode(false);
@@ -601,6 +652,15 @@ export function TemplateBuilderModal_new({ runId, onClose, onSave }: TemplateBui
 
       setCurrentStep('field-labels');
       setError(null);
+    } else if (currentStep === 'field-labels') {
+      // Validate that at least one extraction field is defined
+      if (extractionFields.length === 0) {
+        setError('Please define at least one extraction field before proceeding to the pipeline builder');
+        return;
+      }
+
+      setCurrentStep('transformation-pipeline');
+      setError(null);
     }
   };
 
@@ -608,16 +668,42 @@ export function TemplateBuilderModal_new({ runId, onClose, onSave }: TemplateBui
     if (currentStep === 'field-labels') {
       setCurrentStep('object-selection');
       setError(null);
+    } else if (currentStep === 'transformation-pipeline') {
+      setCurrentStep('field-labels');
+      setError(null);
+      setPipelineError(null);
     }
+  };
+
+  const handleModuleSelect = (moduleId: string | null) => {
+    setSelectedModuleId(moduleId);
+  };
+
+  const handleModulePlaced = () => {
+    setSelectedModuleId(null);
   };
 
   const handleSave = async () => {
     if (!pdfData) return;
 
+    // Validate that we have a pipeline graph reference in step 3
+    if (currentStep === 'transformation-pipeline' && !pipelineGraphRef.current) {
+      setError('Pipeline graph not available');
+      return;
+    }
+
     setSaving(true);
     setError(null);
 
     try {
+      // Extract pipeline state if in step 3
+      let pipelineState = null;
+      let visualState = null;
+      if (currentStep === 'transformation-pipeline' && pipelineGraphRef.current) {
+        pipelineState = pipelineGraphRef.current.getPipelineState();
+        visualState = pipelineGraphRef.current.getVisualState();
+      }
+
       // Create the nested PdfObjects structure expected by backend
       const initial_signature_objects = {
         text_words: [] as any[],
@@ -702,13 +788,30 @@ export function TemplateBuilderModal_new({ runId, onClose, onSave }: TemplateBui
         validation_regex: undefined // We removed this from frontend, set as undefined
       }));
 
-      const templateData = {
+      // Prepare template data
+      const templateData: any = {
         name: templateName,
         description: templateDescription,
         source_pdf_id: pdfData.pdf_id,
         initial_signature_objects,
         initial_extraction_fields
       };
+
+      // Add pipeline data if in step 3
+      if (pipelineState && visualState) {
+        // Serialize pipeline using the helper function (Note: we don't need name/description here as it's in the template)
+        const pipelineData = serializePipelineData(
+          pipelineState,
+          visualState,
+          '', // Empty name - will use template name
+          '' // Empty description - will use template description
+        );
+
+        templateData.transformation_pipeline = {
+          pipeline_json: pipelineData.pipeline_json,
+          visual_state: pipelineData.visual_state
+        };
+      }
 
       const result = await apiClient.createTemplate(templateData);
 
@@ -1028,7 +1131,7 @@ export function TemplateBuilderModal_new({ runId, onClose, onSave }: TemplateBui
 
   const modalContent = (
     <div
-      className="fixed inset-0 flex items-center justify-center z-[9999] p-4"
+      className="fixed inset-0 flex items-center justify-center z-[9999] p-2"
       style={{
         backgroundColor: 'rgba(0, 0, 0, 0.6)',
         backdropFilter: 'blur(1px)'
@@ -1039,7 +1142,7 @@ export function TemplateBuilderModal_new({ runId, onClose, onSave }: TemplateBui
         }
       }}
     >
-      <div className="bg-gray-800 rounded-lg w-full h-full max-w-7xl max-h-[90vh] flex flex-col shadow-2xl border border-gray-600">
+      <div className="bg-gray-800 rounded-lg w-full h-full max-w-[98vw] max-h-[98vh] flex flex-col shadow-2xl border border-gray-600">
         {/* Header */}
         <div className="flex items-start justify-between p-3 border-b border-gray-700">
           <div className="flex-1 min-w-0">
@@ -1048,7 +1151,11 @@ export function TemplateBuilderModal_new({ runId, onClose, onSave }: TemplateBui
                 Template Builder NEW - {pdfData?.original_filename || 'Loading...'}
               </h2>
               <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-900 text-blue-300">
-                {currentStep === 'object-selection' ? 'Step 1: Select Objects' : 'Step 2: Assign Field Labels'}
+                {currentStep === 'object-selection'
+                  ? 'Step 1: Select Objects'
+                  : currentStep === 'field-labels'
+                    ? 'Step 2: Assign Field Labels'
+                    : 'Step 3: Build Transformation Pipeline'}
               </span>
             </div>
             {pdfData && (
@@ -1072,9 +1179,10 @@ export function TemplateBuilderModal_new({ runId, onClose, onSave }: TemplateBui
         </div>
 
         <div className="flex flex-1 overflow-hidden" style={{ minHeight: 0, minWidth: 0 }}>
-          {/* Left Sidebar */}
-          <div className="w-80 flex-shrink-0 bg-gray-900 border-r border-gray-700 p-4 overflow-y-auto">
-            {currentStep === 'object-selection' && (
+          {/* Left Sidebar - Only show in steps 1 and 2 */}
+          {currentStep !== 'transformation-pipeline' && (
+            <div className="w-96 flex-shrink-0 bg-gray-900 border-r border-gray-700 p-4 overflow-y-auto">
+              {currentStep === 'object-selection' && (
               <>
                 {/* Template Information */}
                 <div className="mb-6">
@@ -1196,9 +1304,10 @@ export function TemplateBuilderModal_new({ runId, onClose, onSave }: TemplateBui
                 )}
               </div>
             )}
-          </div>
+            </div>
+          )}
 
-          {/* Main Content - PDF Viewer */}
+          {/* Main Content - PDF Viewer or Pipeline Builder */}
           <div className="flex-1 flex flex-col overflow-hidden" style={{ minWidth: 0 }}>
             {loading && (
               <div className="flex-1 flex items-center justify-center">
@@ -1221,7 +1330,59 @@ export function TemplateBuilderModal_new({ runId, onClose, onSave }: TemplateBui
               </div>
             )}
 
-            {pdfData && pdfUrl && (
+            {/* Show Pipeline Builder in step 3 */}
+            {currentStep === 'transformation-pipeline' && (
+              <>
+                {pipelineLoading && (
+                  <div className="flex-1 flex items-center justify-center">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                      <p className="text-gray-400">Loading pipeline modules...</p>
+                    </div>
+                  </div>
+                )}
+
+                {pipelineError && (
+                  <div className="flex-1 flex items-center justify-center">
+                    <div className="text-center">
+                      <div className="text-red-400 mb-4">
+                        <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <h3 className="text-lg font-medium text-gray-300 mb-2">Failed to load modules</h3>
+                      <p className="text-gray-500">{pipelineError}</p>
+                    </div>
+                  </div>
+                )}
+
+                {!pipelineLoading && !pipelineError && (
+                  <div className="flex flex-1 overflow-hidden">
+                    {/* Module Selector Pane */}
+                    <ModuleSelectorPane
+                      modules={moduleTemplates}
+                      selectedModuleId={selectedModuleId}
+                      onModuleSelect={handleModuleSelect}
+                    />
+
+                    {/* Pipeline Graph */}
+                    <div className="flex-1">
+                      <PipelineGraph
+                        ref={pipelineGraphRef}
+                        moduleTemplates={moduleTemplates}
+                        selectedModuleId={selectedModuleId}
+                        onModulePlaced={handleModulePlaced}
+                        viewOnly={false}
+                        entryPoints={entryPoints}
+                      />
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Show PDF Viewer in steps 1 and 2 */}
+            {currentStep !== 'transformation-pipeline' && pdfData && pdfUrl && (
               <PdfViewer_new
                 key={`pdf-new-${pdfData.pdf_id}-${pdfData.run_id}`}
                 pdfUrl={pdfUrl}
@@ -1283,17 +1444,19 @@ export function TemplateBuilderModal_new({ runId, onClose, onSave }: TemplateBui
           <div className="text-sm text-gray-400">
             {currentStep === 'object-selection'
               ? `Click on objects in the PDF to select them for your template. Selected: ${selectedObjects.size} objects`
-              : `Draw areas on the PDF to create extraction fields. Click existing purple fields to view/edit. Fields defined: ${extractionFields.length}`
+              : currentStep === 'field-labels'
+                ? `Draw areas on the PDF to create extraction fields. Click existing purple fields to view/edit. Fields defined: ${extractionFields.length}`
+                : `Build your transformation pipeline using the entry points from your extraction fields. Entry points: ${entryPoints.length}`
             }
           </div>
           <div className="flex space-x-3">
-            {currentStep === 'field-labels' && (
+            {(currentStep === 'field-labels' || currentStep === 'transformation-pipeline') && (
               <button
                 onClick={handlePreviousStep}
                 disabled={saving}
                 className="px-4 py-2 text-sm bg-gray-600 hover:bg-gray-700 disabled:bg-gray-500 disabled:cursor-not-allowed text-white rounded"
               >
-                ← Back to Object Selection
+                ← Back to {currentStep === 'field-labels' ? 'Object Selection' : 'Field Labels'}
               </button>
             )}
             <button
@@ -1303,7 +1466,7 @@ export function TemplateBuilderModal_new({ runId, onClose, onSave }: TemplateBui
             >
               Cancel
             </button>
-            {currentStep === 'object-selection' ? (
+            {currentStep === 'object-selection' && (
               <div className="relative group">
                 {/* Warning Speech Bubble - only show on hover when button is disabled */}
                 {(!templateName.trim() || selectedObjects.size === 0) && (
@@ -1334,7 +1497,35 @@ export function TemplateBuilderModal_new({ runId, onClose, onSave }: TemplateBui
                   Next: Assign Labels →
                 </button>
               </div>
-            ) : (
+            )}
+            {currentStep === 'field-labels' && (
+              <div className="relative group">
+                {/* Warning for no extraction fields */}
+                {extractionFields.length === 0 && (
+                  <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 z-50 opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none">
+                    <div className="bg-amber-100 border border-amber-300 text-amber-800 px-3 py-2 rounded-lg shadow-lg text-xs font-medium whitespace-nowrap relative">
+                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-amber-300"></div>
+                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 translate-y-[-1px] w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-amber-100"></div>
+                      <div className="flex items-center space-x-1">
+                        <svg className="w-4 h-4 text-amber-600" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                        <span>Define at least one extraction field</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  onClick={handleNextStep}
+                  disabled={extractionFields.length === 0}
+                  className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded"
+                >
+                  Next: Build Pipeline →
+                </button>
+              </div>
+            )}
+            {currentStep === 'transformation-pipeline' && (
               <button
                 onClick={handleSave}
                 disabled={saving}

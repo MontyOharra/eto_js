@@ -6,7 +6,7 @@ interface TemplatesListProps {
   templates: TemplateSummary[];
   onEdit: (template: TemplateSummary) => void;
   onView: (template: TemplateSummary) => void;
-  onDelete: (template: TemplateSummary) => void;
+  onSetInactive: (template: TemplateSummary) => void;
   onCreateTemplate?: () => void;
 }
 
@@ -23,7 +23,7 @@ export function TemplatesList({
   templates,
   onEdit,
   onView,
-  onDelete,
+  onSetInactive,
   onCreateTemplate,
 }: TemplatesListProps) {
   const [searchTerm, setSearchTerm] = useState("");
@@ -170,6 +170,7 @@ export function TemplatesList({
           >
             <option value="all">All Status</option>
             <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
             <option value="draft">Draft</option>
             <option value="archived">Archived</option>
           </select>
@@ -224,7 +225,7 @@ export function TemplatesList({
               template={template}
               onEdit={onEdit}
               onView={onView}
-              onDelete={onDelete}
+              onSetInactive={onSetInactive}
             />
           ))}
         </div>
