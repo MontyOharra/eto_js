@@ -143,10 +143,10 @@ class EtoRunExtractionModel(BaseModel):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     eto_run_id: Mapped[int] = mapped_column(ForeignKey('eto_runs.id'), nullable=False, index=True)
 
-    status: Mapped[Optional[str]] = mapped_column(String(50), default='processing')  # ETO_STATUS
+    status: Mapped[str] = mapped_column(String(50), default='processing')  # ETO_STATUS
     extracted_data: Mapped[Optional[str]] = mapped_column(Text)  # JSON
 
-    started_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
+    started_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate())
     completed_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
 
     # Relationships
@@ -183,7 +183,7 @@ class EtoRunPipelineExecutionStepModel(BaseModel):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     run_id: Mapped[int] = mapped_column(
-        ForeignKey('eto_pipeline_execution_runs.id'), nullable=False, index=True
+        ForeignKey('eto_run_pipeline_executions.id'), nullable=False, index=True
     )
 
     module_instance_id: Mapped[str] = mapped_column(String(100), nullable=False)

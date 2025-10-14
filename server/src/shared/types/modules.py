@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from pydantic import BaseModel, Field
 from enum import Enum
 
-class AllowedModuleTypes(str, Enum):
+class AllowedModuleNodeTypes(str, Enum):
     """Allowed module types"""
     STR = "str"
     FLOAT = "float"
@@ -21,10 +21,11 @@ class ModuleKind(str, Enum):
     LOGIC = "logic"
     COMPARATOR = "comparator"
 
+
 class NodeTypeRule(BaseModel):
     """Type rule for a node group - either allowed_types list or type_var"""
-    # exactly one of these is AllowedModuleTypes
-    allowed_types: Optional[List[AllowedModuleTypes]] = None  # per-pin whitelist; user picks independently
+    # exactly one of these is AllowedModuleNodeTypes
+    allowed_types: Optional[List[AllowedModuleNodeTypes]] = None  # per-pin whitelist; user picks independently
     type_var: Optional[str] = None             # e.g., "T" (unifies across pins)
 
 
@@ -45,7 +46,7 @@ class IOShape(BaseModel):
     """Complete I/O shape definition for a module"""
     inputs: IOSideShape = IOSideShape()
     outputs: IOSideShape = IOSideShape()
-    type_params: Dict[str, List[AllowedModuleTypes]] = Field(default_factory=dict)
+    type_params: Dict[str, List[AllowedModuleNodeTypes]] = Field(default_factory=dict)
 
 
 class ModuleMeta(BaseModel):

@@ -4,10 +4,7 @@ All datetime operations should use timezone-aware UTC for consistency
 """
 from datetime import datetime, timezone
 
-
 class DateTimeUtils:
-    """Centralized datetime utilities for timezone-aware operations"""
-
     @staticmethod
     def utc_now() -> datetime:
         """

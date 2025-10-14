@@ -8,7 +8,7 @@ from typing import List, Set, Dict, get_args
 
 from shared.types import (
     PipelineState,
-    AllowedModuleTypes,
+    AllowedModuleNodeTypes,
     PipelineValidationError,
     PipelineValidationErrorCode
 )
@@ -18,7 +18,7 @@ class SchemaValidator:
     """Validates basic schema and presence requirements (§2.1)"""
 
     # Extract allowed types from the Literal type definition
-    ALLOWED_TYPES = set(get_args(AllowedModuleTypes))
+    ALLOWED_TYPES = set(get_args(AllowedModuleNodeTypes))
 
     @staticmethod
     def validate(pipeline_state: PipelineState) -> List[PipelineValidationError]:
