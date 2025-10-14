@@ -2,7 +2,7 @@
 Transformation Pipeline Database Models
 Based on the transformation pipeline design document
 """
-from typing import Optional
+from typing import Optional, List
 from sqlalchemy import String, Integer, DateTime, BigInteger, Boolean, Text, ForeignKey, Index, UniqueConstraint
 from sqlalchemy.dialects.mssql import DATETIME2
 from sqlalchemy.orm import DeclarativeBase, relationship, Mapped, mapped_column
@@ -35,8 +35,8 @@ class EmailModel(BaseModel):
     created_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate())
     
     # Relationships
-    config = relationship("EmailConfigModel", back_populates="emails")
-    pdf_files = relationship("PdfFileModel", back_populates="email")
+    config: Mapped['EmailConfigModel'] = relationship(back_populates="emails")
+    pdf_files: Mapped[List['PdfFileModel']] =  relationship(back_populates="email") 
     
     __table_args__ = (
         UniqueConstraint('config_id', 'message_id', name='uix_config_message'),
@@ -87,7 +87,7 @@ class EmailConfigModel(BaseModel):
     total_pdfs_found: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     
     # Relationships
-    emails = relationship("EmailModel", back_populates="config")
+    emails: Mapped[List['EmailModel']] = relationship(back_populates="config")
 
     __table_args__ = (
         Index('idx_email_config_active', 'is_active'),
@@ -96,106 +96,167 @@ class EmailConfigModel(BaseModel):
 
 
 class EtoRunModel(BaseModel):
-    """ETO processing runs - tracks PDF processing workflow"""
+    """High-level ETO run; per-stage details live in stage tables"""
     __tablename__ = 'eto_runs'
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    pdf_file_id: Mapped[int] = mapped_column(ForeignKey('pdf_files.id'), index=True)
+    pdf_file_id: Mapped[int] = mapped_column(ForeignKey('pdf_files.id'), nullable=False, index=True)
 
-    # Overall processing status
-    status: Mapped[str] = mapped_column(String(50), index=True, default="not_started")  # 'not_started', 'processing', 'success', 'failure', 'needs_template', 'skipped'
+    status: Mapped[Optional[str]] = mapped_column(String(50), default='not_started')  # ETO_STATUS
+    processing_step: Mapped[Optional[str]] = mapped_column(String(50))               # ETO_STAGE
 
-    # Current processing step (only populated when status='processing')
-    processing_step: Mapped[Optional[str]] = mapped_column(String(50), default=None)  # 'template_matching', 'extracting_data', 'transforming_data'
+    error_type: Mapped[Optional[str]] = mapped_column(String(50))
+    error_message: Mapped[Optional[str]] = mapped_column(Text)
+    error_details: Mapped[Optional[str]] = mapped_column(Text)  # JSON
 
-    # Error tracking (for status='failure')
-    error_type: Mapped[Optional[str]] = mapped_column(String(50), default=None)  # 'template_matching_error', 'data_extraction_error', 'transformation_error'
-    error_message: Mapped[Optional[str]] = mapped_column(Text, default=None)
-    error_details: Mapped[Optional[str]] = mapped_column(Text, default=None)  # JSON: detailed error info including which step failed
+    started_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
+    processing_duration_ms: Mapped[Optional[int]] = mapped_column(Integer)
 
-    # Template matching results
-    matched_template_id: Mapped[Optional[int]] = mapped_column(ForeignKey('pdf_templates.id'), default=None)
-    matched_template_version: Mapped[Optional[int]] = mapped_column(Integer, default=None)  # Which version was used
+    order_id: Mapped[Optional[int]] = mapped_column(Integer)
 
-    # Data extraction results (populated during 'extracting_data' step)
-    extracted_data: Mapped[Optional[str]] = mapped_column(Text, default=None)  # JSON: base extracted field values from bounding boxes
-
-    # Data transformation audit trail (populated during 'transforming_data' step)
-    transformation_audit: Mapped[Optional[str]] = mapped_column(Text, default=None)  # JSON: step-by-step transformation inputs/outputs with rule IDs
-
-    # Final transformed data (populated after successful transformation)
-    target_data: Mapped[Optional[str]] = mapped_column(Text, default=None)  # JSON: final transformed data ready for order creation
-
-    # Pipeline execution tracking
-    step_execution_log: Mapped[Optional[str]] = mapped_column(Text, default=None)  # JSON: step-by-step execution details
-
-    # Processing timeline
-    started_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2, default=None)
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2, default=None)
-    processing_duration_ms: Mapped[Optional[int]] = mapped_column(Integer, default=None)
-
-    # Order integration
-    order_id: Mapped[Optional[int]] = mapped_column(Integer, default=None)  # References orders table (assumed to exist)
-
-    # Audit
-    created_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate(), index=True)
+    created_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate())
     updated_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate())
-    
+
     # Relationships
-    pdf_file = relationship("PdfFileModel", back_populates="eto_runs")
-    template = relationship("PdfTemplateModel", back_populates="eto_runs")
+    pdf_file: Mapped['PdfFileModel'] = relationship(back_populates='eto_runs')
+    template_matching_runs: Mapped[List['EtoRunTemplateMatchingModel']] = relationship(
+        back_populates='run', cascade='all, delete-orphan'
+    )
+    extraction_runs: Mapped[List['EtoRunExtractionModel']] = relationship(
+        back_populates='run', cascade='all, delete-orphan'
+    )
+    pipeline_execution_runs: Mapped[List['EtoRunPipelineExecutionModel']] = relationship(
+        back_populates='run', cascade='all, delete-orphan'
+    )
+
+    __table_args__ = (
+        Index('idx_eto_runs_status', 'status'),
+        Index('idx_eto_runs_processing_step', 'processing_step'),
+    )
+
+
+class EtoRunExtractionModel(BaseModel):
+    """Per-run record for the Data Extraction stage"""
+    __tablename__ = 'eto_run_extractions'
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    eto_run_id: Mapped[int] = mapped_column(ForeignKey('eto_runs.id'), nullable=False, index=True)
+
+    status: Mapped[Optional[str]] = mapped_column(String(50), default='processing')  # ETO_STATUS
+    extracted_data: Mapped[Optional[str]] = mapped_column(Text)  # JSON
+
+    started_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
+
+    # Relationships
+    run: Mapped['EtoRunModel'] = relationship(back_populates='extraction_runs')
+
+    __table_args__ = (
+        Index('idx_eto_extraction_runs_status', 'status'),
+    )
+
+
+class EtoRunPipelineExecutionModel(BaseModel):
+    """Per-run record for the Pipeline Execution stage (transform + action)"""
+    __tablename__ = 'eto_run_pipeline_executions'
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    eto_run_id: Mapped[int] = mapped_column(ForeignKey('eto_runs.id'), nullable=False, index=True)
+
+    status: Mapped[Optional[str]] = mapped_column(String(50), default='processing')  # ETO_STATUS
+    executed_actions: Mapped[Optional[str]] = mapped_column(Text)  # JSON
+
+    started_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
+
+    # Relationships
+    run: Mapped['EtoRunModel'] = relationship(back_populates='pipeline_execution_runs')
+    steps: Mapped[List['EtoRunPipelineExecutionStepModel']] = relationship(
+        back_populates='run', cascade='all, delete-orphan'
+    )
+    
+    
+class EtoRunPipelineExecutionStepModel(BaseModel):
+    """Recorded execution steps for a single ETO pipeline execution run"""
+    __tablename__ = 'eto_run_pipeline_execution_steps'
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    run_id: Mapped[int] = mapped_column(
+        ForeignKey('eto_pipeline_execution_runs.id'), nullable=False, index=True
+    )
+
+    module_instance_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    step_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    inputs: Mapped[Optional[str]] = mapped_column(Text)    # JSON
+    outputs: Mapped[Optional[str]] = mapped_column(Text)   # JSON
+    error: Mapped[Optional[str]] = mapped_column(Text)
+
+    # Relationships
+    run: Mapped['EtoRunPipelineExecutionModel'] = relationship(back_populates='steps')
+
+    __table_args__ = (
+        Index('idx_execution_steps_module', 'module_instance_id'),
+    )
+
+
+class EtoRunTemplateMatchingModel(BaseModel):
+    """Per-run record for the Template Matching stage"""
+    __tablename__ = 'eto_run_template_matchings'
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    eto_run_id: Mapped[int] = mapped_column(ForeignKey('eto_runs.id'), nullable=False, index=True)
+
+    status: Mapped[Optional[str]] = mapped_column(String(50), default='processing')  # ETO_STATUS
+    matched_template_version_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey('pdf_template_versions.id'), nullable=True, index=True
+    )
+
+    started_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
+
+    # Relationships
+    run: Mapped['EtoRunModel'] = relationship(back_populates='template_matching_runs')
+    matched_template_version: Mapped[Optional['PdfTemplateVersionModel']] = relationship(
+        back_populates='template_matching_runs'
+    )
+
+    __table_args__ = (
+        Index('idx_eto_template_matching_runs_status', 'status'),
+    )
 
 
 class ModuleCatalogModel(BaseModel):
-    """
-    Module catalog - populated by dev "sync" for builder + validator
-    Stores module metadata for discovery and validation
-    """
+    """Catalog of available modules (metadata)"""
     __tablename__ = 'module_catalog'
 
-    id: Mapped[str] = mapped_column(String(100), primary_key=True)  # module name
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)  # module id (name)
     version: Mapped[str] = mapped_column(String(50), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text)
     color: Mapped[str] = mapped_column(String(50), default='#3B82F6')
     category: Mapped[str] = mapped_column(String(100), default='Processing')
-
-    # Module type and behavior
     module_kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    meta: Mapped[str] = mapped_column(Text, nullable=False)  # JSON
+    config_schema: Mapped[str] = mapped_column(Text)
+    handler_name: Mapped[str] = mapped_column(String(255), nullable=False)
 
-    # Dynamic side rules and configuration schemas (JSON)
-    meta: Mapped[str] = mapped_column(Text, nullable=False)  # JSON: ModuleMeta with dynamic side rules
-    config_schema: Mapped[str] = mapped_column(Text)  # JSON: Pydantic JSON Schema
-    
-    # Handler information
-    handler_name: Mapped[str] = mapped_column(String(255), nullable=False)  # "python.module.path:ClassName"
-
-    # Status and audit
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    created_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate())
+    updated_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate())
+
+    # (Optional) relationship to steps that reference this module by id
+    steps: Mapped[List['PipelineDefinitionStepModel']] = relationship(
+        back_populates='module', cascade='all, delete-orphan', passive_deletes=True
+    )
 
     __table_args__ = (
-        UniqueConstraint('id', 'version', name='uq_module_catalog_id_version'),
         Index('idx_module_catalog_name', 'name'),
         Index('idx_module_catalog_kind', 'module_kind'),
         Index('idx_module_catalog_active', 'is_active'),
         Index('idx_module_catalog_category', 'category'),
+        Index('uq_module_catalog_id_version', 'id', 'version'),
     )
-
-
-class OrderModel(BaseModel):
-    """
-    Orders - populated by action module
-    Stores order data for external database
-    """
-    __tablename__ = 'orders'
-    
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    mawb: Mapped[str] = mapped_column(String(100), nullable=False)
-    hawb: Mapped[str] = mapped_column(String(100), nullable=False)
-    pu_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
 class PdfFileModel(BaseModel):
@@ -203,161 +264,135 @@ class PdfFileModel(BaseModel):
     __tablename__ = 'pdf_files'
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    email_id: Mapped[int] = mapped_column(ForeignKey('emails.id'), index=True)
-    filename: Mapped[str] = mapped_column(String(255))
+    email_id: Mapped[int] = mapped_column(ForeignKey('emails.id'), nullable=False, index=True)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
     original_filename: Mapped[Optional[str]] = mapped_column(String(255))
-    relative_path: Mapped[str] = mapped_column(String(512))
+    relative_path: Mapped[str] = mapped_column(String(512), nullable=False)
     file_size: Mapped[Optional[int]] = mapped_column(BigInteger)
-    file_hash: Mapped[str] = mapped_column(String(64), index=True)
+    file_hash: Mapped[Optional[str]] = mapped_column(String(64), index=True)
     page_count: Mapped[Optional[int]] = mapped_column(Integer)
-    objects_json: Mapped[Optional[str]] = mapped_column(Text)  # PDF objects for template matching
+    objects_json: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate())
     updated_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate())
-    
+
     # Relationships
-    email = relationship("EmailModel", back_populates="pdf_files")
-    eto_runs = relationship("EtoRunModel", back_populates="pdf_file")
+    email: Mapped['EmailModel'] = relationship(back_populates='pdf_files')
+    eto_runs: Mapped[List['EtoRunModel']] = relationship(back_populates='pdf_file', cascade='all, delete-orphan')
+    source_for_templates: Mapped[List['PdfTemplateModel']] = relationship(
+        back_populates='source_pdf', cascade='all, delete-orphan', foreign_keys='PdfTemplateModel.source_pdf_id'
+    )
 
 
 class PdfTemplateModel(BaseModel):
-    """PDF templates for pattern matching and field extraction"""
+    """PDF templates (logical family)"""
     __tablename__ = 'pdf_templates'
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(255))
-    description: Mapped[Optional[str]] = mapped_column(Text)
-    source_pdf_id: Mapped[int] = mapped_column(ForeignKey('pdf_files.id'), index=True)
-    status: Mapped[str] = mapped_column(String(50), default='active')
-    current_version_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('pdf_template_versions.id'), default=None)
-    created_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate())
-    updated_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate())
-
-    # Relationships
-    eto_runs = relationship("EtoRunModel", back_populates="template")
-    pdf_template_versions = relationship("PdfTemplateVersionModel", back_populates="pdf_template", foreign_keys="PdfTemplateVersionModel.pdf_template_id")
-
-
-class PdfTemplateVersionModel(BaseModel):
-    """PDF template versions"""
-    __tablename__ = 'pdf_template_versions'
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    pdf_template_id: Mapped[int] = mapped_column(ForeignKey('pdf_templates.id'), index=True)
-    version_num: Mapped[int] = mapped_column(Integer, default=1)
-    signature_objects: Mapped[str] = mapped_column(Text)
-    extraction_fields: Mapped[str] = mapped_column(Text)
-    usage_count: Mapped[int] = mapped_column(default=0)
-    last_used_at: Mapped[datetime] = mapped_column(DATETIME2, default=DateTimeUtils.utc_now)
-    created_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate())
-
-    # Relationships
-    pdf_template = relationship("PdfTemplateModel", back_populates="pdf_template_versions", foreign_keys=[pdf_template_id])
-
-
-class PipelineDefinitionModel(BaseModel):
-    """
-    Pipeline definitions - canonical pipeline JSON storage
-    Stores the source of truth for pipeline configuration with checksums
-    Pipelines are immutable once created (no updates allowed)
-    """
-    __tablename__ = 'pipeline_definitions'
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text)
+    source_pdf_id: Mapped[int] = mapped_column(ForeignKey('pdf_files.id'), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(50), default='active')
+    current_version_id: Mapped[Optional[int]] = mapped_column(ForeignKey('pdf_template_versions.id'), nullable=True)
 
-    # Canonical pipeline JSON (modules, pins, connections, configs) - always required
+    created_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate())
+    updated_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate())
+
+    # Relationships
+    source_pdf: Mapped['PdfFileModel'] = relationship(back_populates='source_for_templates', foreign_keys=[source_pdf_id])
+    versions: Mapped[List['PdfTemplateVersionModel']] = relationship(
+        back_populates='pdf_template', cascade='all, delete-orphan', foreign_keys='PdfTemplateVersionModel.pdf_template_id'
+    )
+    current_version: Mapped[Optional['PdfTemplateVersionModel']] = relationship(
+        foreign_keys=[current_version_id]
+    )
+
+
+class PdfTemplateVersionModel(BaseModel):
+    """Concrete version of a PDF template (signature + fields + linked pipeline)"""
+    __tablename__ = 'pdf_template_versions'
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    pdf_template_id: Mapped[int] = mapped_column(ForeignKey('pdf_templates.id'), nullable=False, index=True)
+    version_num: Mapped[int] = mapped_column(Integer, default=1)
+    signature_objects: Mapped[str] = mapped_column(Text)
+    extraction_fields: Mapped[str] = mapped_column(Text)
+    pipeline_definition_id: Mapped[int] = mapped_column(ForeignKey('pipeline_definitions.id'), nullable=False, index=True)
+    usage_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
+    created_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate())
+
+    # Relationships
+    pdf_template: Mapped['PdfTemplateModel'] = relationship(back_populates='versions', foreign_keys=[pdf_template_id])
+    pipeline_definition: Mapped['PipelineDefinitionModel'] = relationship(back_populates='template_versions')
+    template_matching_runs: Mapped[List['EtoRunTemplateMatchingModel']] = relationship(
+        back_populates='matched_template_version'
+    )
+
+
+class PipelineCompiledPlanModel(BaseModel):
+    """Compiled plan identity (dedup via checksum)"""
+    __tablename__ = 'pipeline_compiled_plans'
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    plan_checksum: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    compiled_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
+
+    # Relationships
+    definitions: Mapped[List['PipelineDefinitionModel']] = relationship(
+        back_populates='compiled_plan', cascade='all, delete-orphan'
+    )
+    steps: Mapped[List['PipelineDefinitionStepModel']] = relationship(
+        back_populates='compiled_plan', cascade='all, delete-orphan'
+    )
+
+
+class PipelineDefinitionModel(BaseModel):
+    """Canonical pipeline JSON (source of truth)"""
+    __tablename__ = 'pipeline_definitions'
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     pipeline_state: Mapped[str] = mapped_column(Text, nullable=False)
     visual_state: Mapped[str] = mapped_column(Text, nullable=False)
 
-    # Checksum for compiled plan integrity
-    plan_checksum: Mapped[Optional[str]] = mapped_column(String(64))
-    compiled_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
-
-    # Audit fields (no updated_at since pipelines are immutable)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    compiled_plan_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey('pipeline_compiled_plans.id'), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DATETIME2, server_default=func.getutcdate())
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
+    # Relationships
+    compiled_plan: Mapped[Optional['PipelineCompiledPlanModel']] = relationship(back_populates='definitions')
+    template_versions: Mapped[List['PdfTemplateVersionModel']] = relationship(
+        back_populates='pipeline_definition'
+    )
+
     __table_args__ = (
-        Index('idx_pipeline_definitions_name', 'name'),
-        Index('idx_pipeline_definitions_checksum', 'plan_checksum'),
         Index('idx_pipeline_definitions_active', 'is_active'),
     )
 
 
 class PipelineDefinitionStepModel(BaseModel):
-    """
-    Pipeline steps - compiled cache for execution
-    Stores compiled execution steps shared across pipelines via checksum
-    Steps are grouped by plan_checksum, not by pipeline_id
-    Multiple pipelines with identical structure share the same compiled steps
-    """
+    """Compiled steps that belong to a compiled plan"""
     __tablename__ = 'pipeline_definition_steps'
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    plan_checksum: Mapped[str] = mapped_column(String(64), nullable=False)
-
-    # Module instance information
-    module_instance_id: Mapped[str] = mapped_column(String(100), nullable=False)
-    module_ref: Mapped[str] = mapped_column(String(100), nullable=False)  # "name:version"
-    module_kind: Mapped[str] = mapped_column(String(20), nullable=False)  # "transform"|"action"|"logic"
-
-    # Validated configuration and mappings
-    module_config: Mapped[str] = mapped_column(Text, nullable=False)  # JSON
-    input_field_mappings: Mapped[str] = mapped_column(Text, nullable=False)  # JSON: {downstream_node_id: upstream_node_id}
-
-    # Node metadata and execution order
-    node_metadata: Mapped[str] = mapped_column(Text)  # JSON: {"inputs": [InstanceNodePin], "outputs": [InstanceNodePin]}
-    step_number: Mapped[int] = mapped_column(Integer)
-    
-
-    __table_args__ = (
-        Index('idx_pipeline_steps_checksum', 'plan_checksum', 'step_number', 'id'),
-        Index('idx_pipeline_steps_module_ref', 'module_ref'),
-        Index('idx_pipeline_steps_kind', 'module_kind'),
+    pipeline_compiled_plan_id: Mapped[int] = mapped_column(
+        ForeignKey('pipeline_compiled_plans.id'), nullable=False, index=True
     )
 
-
-class PipelineExecutionRunModel(BaseModel):
-    """
-    Execution runs - track pipeline execution history
-    Records each run of a pipeline with its entry values and status
-    """
-    __tablename__ = 'pipeline_execution_runs'
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    pipeline_definition_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    status: Mapped[str] = mapped_column(String(20), default="running", nullable=False)
-    entry_values: Mapped[str] = mapped_column(Text, nullable=False)  # JSON
-
-    # Relationship to execution steps
-    steps = relationship("PipelineExecutionStepModel", back_populates="run", cascade="all, delete-orphan")
-
-    __table_args__ = (
-        Index('idx_execution_runs_pipeline', 'pipeline_definition_id'),
-        Index('idx_execution_runs_status', 'status'),
-    )
-
-
-class PipelineExecutionStepModel(BaseModel):
-    """
-    Execution steps - track individual module executions within a run
-    Records inputs, outputs, timing, and errors for each module
-    """
-    __tablename__ = 'pipeline_execution_steps'
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    run_id: Mapped[int] = mapped_column(Integer, ForeignKey("pipeline_execution_runs.id"), nullable=False)
     module_instance_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    module_ref: Mapped[str] = mapped_column(ForeignKey('module_catalog.id', ondelete='CASCADE'), nullable=False, index=True)
+
+    module_config: Mapped[str] = mapped_column(Text, nullable=False)            # JSON
+    input_field_mappings: Mapped[str] = mapped_column(Text, nullable=False)     # JSON
+    node_metadata: Mapped[str] = mapped_column(Text, nullable=False)  # JSON: {"inputs": [InstanceNodePin], "outputs": [InstanceNodePin]}
     step_number: Mapped[int] = mapped_column(Integer, nullable=False)
-    inputs: Mapped[str] = mapped_column(Text)  # JSON - serialized inputs
-    outputs: Mapped[str] = mapped_column(Text)  # JSON - serialized outputs
-    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    # Relationship to execution run
-    run = relationship("PipelineExecutionRunModel", back_populates="steps")
+    # Relationships
+    compiled_plan: Mapped['PipelineCompiledPlanModel'] = relationship(back_populates='steps')
+    module: Mapped['ModuleCatalogModel'] = relationship(back_populates='steps')
 
     __table_args__ = (
-        Index('idx_execution_steps_run', 'run_id'),
-        Index('idx_execution_steps_module', 'module_instance_id'),
+        Index('idx_pipeline_compiled_plan_id', 'pipeline_compiled_plan_id'),
+        Index('idx_pipeline_step_number', 'step_number', 'id')
     )

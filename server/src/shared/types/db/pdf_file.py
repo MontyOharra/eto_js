@@ -4,16 +4,13 @@ Domain models for PDF file storage and management with structured object types
 """
 
 import json
-import logging
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Dict, Any, Union
 from datetime import datetime
 
-from ..pdf_processing import PdfObjects
+from ..pdfs import PdfObjects
 from shared.utils import DateTimeUtils
 from shared.database.models import PdfFileModel
-
-logger = logging.getLogger(__name__)
 
 class PdfFileBase(BaseModel):
     """Core fields for any PDF file"""

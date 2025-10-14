@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 import json
 
 from shared.utils import DateTimeUtils
-from ..pdf_processing import PdfObjects
+from ..pdfs import PdfObjects
 from ..enums import EtoRunStatus, EtoProcessingStep, EtoErrorType
 
 from shared.database.models import EtoRunModel
@@ -30,33 +30,6 @@ class EtoRunCreate(EtoRunBase):
     """Model for creating new ETO runs - only requires pdf_file_id"""
     # All database fields have defaults, so no additional fields needed
     pass
-
-
-class EtoDataExtractionResult(BaseModel):
-    """Data extraction results from template"""
-    extracted_data: Optional[Dict[str, Any]] = Field(None, description="Raw extracted field values")
-
-    def has_extracted_data(self) -> bool:
-        """Check if data extraction was successful"""
-        return self.extracted_data is not None and len(self.extracted_data) > 0
-
-    class Config:
-        arbitrary_types_allowed = True
-
-
-class EtoTransformationResult(BaseModel):
-    """Data transformation pipeline results"""
-    transformation_audit: Optional[Dict[str, Any]] = Field(None, description="Step-by-step transformation audit trail")
-    target_data: Optional[Dict[str, Any]] = Field(None, description="Final transformed data ready for order creation")
-    step_execution_log: Optional[Dict[str, Any]] = Field(None, description="Detailed pipeline execution log")
-
-    def has_transformed_data(self) -> bool:
-        """Check if transformation was successful"""
-        return self.target_data is not None and len(self.target_data) > 0
-
-    class Config:
-        arbitrary_types_allowed = True
-
 
 # ========== Complete Domain Model ==========
 

@@ -111,7 +111,7 @@ from .modules import (
     ComparatorModule,
 )
 
-from .pdf_processing import (
+from .pdfs import (
     BasePdfObject,
     TextWordPdfObject,
     TextLinePdfObject,
@@ -130,7 +130,7 @@ from .pipeline_execution import (
     PipelineExecutionRunResult,
 )
 
-from .pipeline_state import (
+from .pipelines import (
     InstanceNodePin,
     ModuleInstance,
     NodeConnection,

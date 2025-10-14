@@ -1,8 +1,4 @@
-from typing import Literal
 from enum import Enum
-
-AllowedModuleTypes = Literal["str", "float", "datetime", "bool", "int"]
-ModuleKind = Literal["transform", "action", "logic", "comparator"]
 
 class EtoRunStatus(str, Enum):
     """ETO run status states"""

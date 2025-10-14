@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from datetime import datetime
 
-from ..pdf_processing import PdfObjects, ExtractionField
+from ..pdfs import PdfObjects, ExtractionField
 from shared.utils import DateTimeUtils
 from shared.database.models import PdfTemplateModel
 

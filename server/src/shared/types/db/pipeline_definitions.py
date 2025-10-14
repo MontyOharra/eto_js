@@ -9,7 +9,7 @@ import json
 
 from shared.database.models import PipelineDefinitionModel
 
-from ..pipeline_state import PipelineState, VisualState
+from ..pipelines import PipelineState, VisualState
 
 # CRUD Models for Pipeline Operations
 

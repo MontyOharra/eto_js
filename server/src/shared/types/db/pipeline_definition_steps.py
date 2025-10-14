@@ -9,7 +9,7 @@ import json
 from shared.database.models import PipelineDefinitionStepModel
 
 from ..modules import ModuleKind
-from ..pipeline_state import InstanceNodePin
+from ..pipelines import InstanceNodePin
 
 class PipelineDefinitionStepBase(BaseModel):
     """Base fields for a compiled pipeline step"""

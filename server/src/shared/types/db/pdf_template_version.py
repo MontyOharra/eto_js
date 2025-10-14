@@ -8,7 +8,7 @@ from typing import Optional, List
 from datetime import datetime
 import json
 
-from ..pdf_processing import PdfObjects, ExtractionField
+from ..pdfs import PdfObjects, ExtractionField
 from shared.utils import DateTimeUtils
 from shared.database.models import PdfTemplateVersionModel
         
