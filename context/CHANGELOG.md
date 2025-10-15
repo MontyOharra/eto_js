@@ -5,6 +5,77 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-10-15 15:00] — Complete API Endpoint Specification (Phase 3 Complete)
+
+### Spec / Intent
+- Complete Phase 3 of server redesign: define all HTTP endpoints for 7 routers
+- Design stateless template wizard approach with simulate endpoint (no draft versions)
+- Specify 35 total endpoints with request/response structures, query parameters, and error handling
+- Document complete API surface before implementation begins
+
+### Changes Made
+**Router 1: `/email-configs`** (10 endpoints)
+- CRUD operations for email ingestion configurations
+- Discovery endpoints for accounts and folders
+- Validation endpoint for config testing
+- Activation/deactivation lifecycle management
+
+**Router 2: `/eto-runs`** (6 endpoints)
+- List and detail views with status filtering
+- Manual PDF upload for ETO processing
+- Bulk operations: reprocess, skip, delete with atomic validation
+
+**Router 3: `/pdf-files`** (3 endpoints)
+- PDF metadata retrieval
+- PDF download/streaming with proper MIME types
+- PDF object extraction (7 types: text, graphics, images, tables)
+
+**Router 4: `/pdf-templates`** (10 endpoints)
+- Template CRUD with versioning system
+- Stateless simulation endpoint for testing (no DB persistence)
+- Version history and management
+- Activation/deactivation for template matching
+
+**Router 5: `/modules`** (1 endpoint)
+- Complete module catalog for pipeline builder
+- Read-only with filtering and search
+
+**Router 6: `/pipelines`** (5 endpoints)
+- Full CRUD for standalone pipeline testing (dev only)
+- Will be removed when standalone testing page removed
+
+**Router 7: `/health`** (1 endpoint)
+- System health monitoring with per-service status
+- Used for frontend health checks and polling
+
+**Key Design Decisions:**
+- Eliminated draft versions - frontend maintains wizard state
+- Stateless `POST /pdf-templates/simulate` for testing without persistence
+- Bulk operations use `204 No Content` for mutation triggers
+- PDF objects grouped by type (7 types) for type safety
+- Direct responses (FastAPI style, no wrapper objects)
+
+**Files Modified:**
+- `context/server_redesign/API_ENDPOINTS.md` - Complete 35-endpoint specification (1900 lines)
+- `context/server_redesign/CONTINUITY.md` - Updated progress tracking, marked Phase 3 complete
+
+### Next Actions
+- Phase 4: Schema Definitions (Pydantic request/response models)
+- Phase 5: Service Layer Design (business logic orchestration)
+- Phase 6: Repository Layer Design (data access patterns)
+- Phase 7: Type System Unification (DTOs connecting all layers)
+- Phase 8: Implementation (actual code)
+
+### Notes
+- **No Draft Versions**: Simplified template creation - wizard state lives in frontend only
+- **Stateless Simulation**: `POST /pdf-templates/simulate` runs full ETO process without DB writes
+- **Atomic Bulk Operations**: Reprocess/skip/delete validate all runs before executing
+- **Frontend-First Design**: All endpoints designed based on actual frontend needs
+- **Type Safety**: Explicit structures with proper TypeScript-style response definitions
+- **35 Total Endpoints**: Complete API surface documented before implementation
+
+---
+
 ## [2025-10-07 17:00] — Pipeline Execution Architecture & Service Container Fix
 
 ### Spec / Intent

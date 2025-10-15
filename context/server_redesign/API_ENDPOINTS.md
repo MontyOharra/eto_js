@@ -883,6 +883,1017 @@ Return data directly (no `success` wrapper):
 
 > See `API_DESIGN.md` Domain 3 for business rules and requirements.
 
-**To be continued...**
+### Endpoints Overview
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/pdf-templates` | List all templates (summary with pagination) |
+| GET | `/pdf-templates/{id}` | Get full template details (with current version data) |
+| POST | `/pdf-templates` | Create new template (accepts pdf_file_id + wizard data) |
+| PUT | `/pdf-templates/{id}` | Update template (creates new version from wizard data) |
+| DELETE | `/pdf-templates/{id}` | Delete template (conditional - only inactive/unused) |
+| POST | `/pdf-templates/{id}/activate` | Set template status to active |
+| POST | `/pdf-templates/{id}/deactivate` | Set template status to inactive |
+| GET | `/pdf-templates/{id}/versions` | List all versions for a template |
+| GET | `/pdf-templates/{id}/versions/{version_id}` | Get specific version details |
+| POST | `/pdf-templates/simulate` | Simulate full ETO process without DB persistence |
+
+---
+
+### `GET /pdf-templates`
+
+**Description:** List all templates with summary information including version counts and usage statistics.
+
+**Query Parameters:**
+- `status` (optional): `draft` | `active` | `inactive` (default: all statuses)
+- `sort_by` (optional): `name` | `status` | `usage_count` (default: `name`)
+- `sort_order` (optional): `asc` | `desc` (default: `asc`)
+- `limit` (optional): number (default: 50, max: 200)
+- `offset` (optional): number (default: 0)
+
+**Response:** `200 OK`
+```typescript
+{
+  "items": [
+    {
+      "id": number,
+      "name": string,
+      "description": string | null,
+      "status": "draft" | "active" | "inactive",
+      "source_pdf_id": number,
+
+      // Current version summary
+      "current_version": {
+        "version_id": number,
+        "version_num": number,
+        "usage_count": number  // ETO runs that used this version
+      },
+
+      "total_versions": number  // Count of all versions for this template
+    }
+  ],
+  "total": number,
+  "limit": number,
+  "offset": number
+}
+```
+
+**Notes:**
+- `status` will be `draft` during initial creation (after POST /pdf-templates), becomes `active` after activation
+- `current_version` represents the version currently used for template matching
+- `total_versions` includes all finalized versions
+
+**Errors:**
+- `400`: `{"detail": "Invalid query parameters"}`
+- `500`: `{"detail": "Database error"}`
+
+---
+
+### `GET /pdf-templates/{id}`
+
+**Description:** Get full template details including current version's signature objects, extraction fields, and pipeline reference.
+
+**Path Parameters:**
+- `id`: Template ID (integer)
+
+**Response:** `200 OK`
+```typescript
+{
+  // Template metadata
+  "id": number,
+  "name": string,
+  "description": string | null,
+  "source_pdf_id": number,
+  "status": "draft" | "active" | "inactive",
+  "current_version_id": number,
+
+  // Current version details (denormalized for convenience)
+  "current_version": {
+    "version_id": number,
+    "version_num": number,
+    "usage_count": number,
+    "last_used_at": string | null,  // ISO 8601
+
+    // Signature objects (from Step 1 of wizard)
+    "signature_objects": [
+      {
+        "object_type": "text_word" | "text_line" | "graphic_rect" | "graphic_line" | "graphic_curve" | "image" | "table",
+        "page": number,
+        "bbox": [number, number, number, number],  // [x0, y0, x1, y1]
+        // Additional properties vary by object_type (matching /pdf-files/{id}/objects structure)
+      }
+    ],
+
+    // Extraction fields (from Step 2 of wizard)
+    "extraction_fields": [
+      {
+        "field_id": string,           // unique identifier
+        "label": string,               // e.g., "hawb", "customer_name"
+        "description": string | null,
+        "page": number,
+        "bbox": [number, number, number, number],  // [x0, y0, x1, y1]
+        "required": boolean,
+        "validation_regex": string | null
+      }
+    ],
+
+    // Pipeline reference (from Step 3 of wizard)
+    "pipeline_definition_id": number
+  },
+
+  // Version history summary
+  "total_versions": number
+}
+```
+
+**Notes:**
+- Current version data is denormalized into response for convenience
+- To view different version, use `GET /pdf-templates/{id}/versions/{version_id}`
+- Pipeline details retrieved via pipelines endpoints (if needed)
+
+**Errors:**
+- `404`: `{"detail": "Template not found"}`
+- `500`: `{"detail": "Database error"}`
+
+---
+
+### `POST /pdf-templates`
+
+**Description:** Create new template from wizard data (final save). Creates template + version 1 atomically. Sets status to `draft` initially (user must activate).
+
+**Request Body:**
+```typescript
+{
+  "name": string,                    // required, 1-255 chars
+  "description"?: string,             // optional, max 1000 chars
+  "source_pdf_id": number,            // required, from POST /pdf-files
+
+  // Step 1: Signature objects
+  "signature_objects": [
+    {
+      "object_type": "text_word" | "text_line" | "graphic_rect" | "graphic_line" | "graphic_curve" | "image" | "table",
+      "page": number,
+      "bbox": [number, number, number, number],
+      // Additional properties matching object type from PDF extraction
+    }
+  ],  // required, min: 1 object
+
+  // Step 2: Extraction fields
+  "extraction_fields": [
+    {
+      "field_id": string,              // required, unique within template
+      "label": string,                 // required, will be key in extracted_data
+      "description"?: string,
+      "page": number,
+      "bbox": [number, number, number, number],
+      "required": boolean,             // default: false
+      "validation_regex"?: string      // optional regex pattern
+    }
+  ],  // required, min: 1 field
+
+  // Step 3: Pipeline definition
+  "pipeline_state": {
+    "entry_points": [...],   // See pipeline structure in API_DESIGN.md Domain 5
+    "modules": [...],
+    "connections": [...]
+  },
+  "visual_state": {
+    "positions": {...}
+  }
+}
+```
+
+**Response:** `201 Created`
+```typescript
+{
+  "id": number,                       // Created template ID
+  "name": string,
+  "status": "draft",                  // Always starts as draft
+  "current_version_id": number,       // Version 1 ID
+  "current_version_num": 1,
+  "pipeline_definition_id": number    // Created pipeline ID
+}
+```
+
+**Notes:**
+- Creates template + version 1 + pipeline definition atomically
+- Template starts with `status = "draft"` (must call activate to use for matching)
+- Pipeline compilation happens during this operation (transparent to frontend)
+- Backend may deduplicate compiled plan if identical pipeline already exists
+- PDF must already exist (created via POST /pdf-files or from ETO run)
+
+**Errors:**
+- `400`: Business logic errors
+  - `{"detail": "Source PDF not found or not accessible"}`
+  - `{"detail": "Signature objects must reference valid PDF objects"}`
+  - `{"detail": "Extraction field bboxes must be within PDF page bounds"}`
+  - `{"detail": "Pipeline validation failed: [specific error]"}`
+- `422`: Pydantic validation error (missing/invalid fields)
+- `500`: `{"detail": "Database error or pipeline compilation error"}`
+
+---
+
+### `PUT /pdf-templates/{id}`
+
+**Description:** Update template by creating new version. Increments version number, updates current_version_id. Template can be active or inactive during update.
+
+**Path Parameters:**
+- `id`: Template ID (integer)
+
+**Request Body:**
+```typescript
+{
+  // Optional: Update template metadata
+  "name"?: string,                    // optional, 1-255 chars
+  "description"?: string,             // optional, max 1000 chars
+
+  // Required: New version data (all 3 wizard steps)
+  "signature_objects": [
+    {
+      "object_type": "text_word" | "text_line" | "graphic_rect" | "graphic_line" | "graphic_curve" | "image" | "table",
+      "page": number,
+      "bbox": [number, number, number, number],
+      // Additional properties matching object type
+    }
+  ],  // required, min: 1 object
+
+  "extraction_fields": [
+    {
+      "field_id": string,
+      "label": string,
+      "description"?: string,
+      "page": number,
+      "bbox": [number, number, number, number],
+      "required": boolean,
+      "validation_regex"?: string
+    }
+  ],  // required, min: 1 field
+
+  "pipeline_state": {
+    "entry_points": [...],
+    "modules": [...],
+    "connections": [...]
+  },
+  "visual_state": {
+    "positions": {...}
+  }
+}
+```
+
+**Response:** `200 OK`
+```typescript
+{
+  "id": number,
+  "name": string,
+  "status": "draft" | "active" | "inactive",  // Status unchanged
+  "current_version_id": number,               // Updated to new version ID
+  "current_version_num": number,              // Incremented version number
+  "pipeline_definition_id": number            // New pipeline ID
+}
+```
+
+**Notes:**
+- Creates new version with incremented version_num (e.g., 1 → 2)
+- Updates template's current_version_id to new version
+- Old version preserved for historical ETO runs
+- Template status unchanged (active templates remain active)
+- Pipeline compilation happens during update
+
+**Errors:**
+- `404`: `{"detail": "Template not found"}`
+- `400`: Business logic errors (same as POST /pdf-templates)
+- `422`: Pydantic validation error
+- `500`: `{"detail": "Database error or pipeline compilation error"}`
+
+---
+
+### `DELETE /pdf-templates/{id}`
+
+**Description:** Delete template. Only allowed if template has never been used for ETO matching (usage_count = 0 on all versions) or if status is `draft`.
+
+**Path Parameters:**
+- `id`: Template ID (integer)
+
+**Response:** `204 No Content`
+
+*(No response body)*
+
+**Deletion Rules:**
+- Can delete if: `status = "draft"` (newly created, never activated)
+- Can delete if: All versions have `usage_count = 0` (never matched any ETO run)
+- Cannot delete if: Any version has `usage_count > 0` (historical integrity)
+
+**Errors:**
+- `404`: `{"detail": "Template not found"}`
+- `409`: `{"detail": "Cannot delete template with usage history. Deactivate instead."}`
+- `500`: `{"detail": "Database error"}`
+
+---
+
+### `POST /pdf-templates/{id}/activate`
+
+**Description:** Set template status to `active`. Makes template available for ETO run template matching.
+
+**Path Parameters:**
+- `id`: Template ID (integer)
+
+**Response:** `200 OK`
+```typescript
+{
+  "id": number,
+  "status": "active",
+  "current_version_id": number
+}
+```
+
+**Notes:**
+- Template must have at least one finalized version
+- Only active templates are considered during ETO template matching
+
+**Errors:**
+- `404`: `{"detail": "Template not found"}`
+- `400`: `{"detail": "Template has no finalized versions"}`
+- `500`: `{"detail": "Database error"}`
+
+---
+
+### `POST /pdf-templates/{id}/deactivate`
+
+**Description:** Set template status to `inactive`. Removes template from ETO run template matching (archived).
+
+**Path Parameters:**
+- `id`: Template ID (integer)
+
+**Response:** `200 OK`
+```typescript
+{
+  "id": number,
+  "status": "inactive",
+  "current_version_id": number
+}
+```
+
+**Notes:**
+- Inactive templates are not considered during template matching
+- Historical ETO runs that used this template are unaffected
+- Can be reactivated at any time
+
+**Errors:**
+- `404`: `{"detail": "Template not found"}`
+- `500`: `{"detail": "Database error"}`
+
+---
+
+### `GET /pdf-templates/{id}/versions`
+
+**Description:** List all versions for a template, ordered by version_num descending (newest first).
+
+**Path Parameters:**
+- `id`: Template ID (integer)
+
+**Response:** `200 OK`
+```typescript
+[
+  {
+    "version_id": number,
+    "version_num": number,
+    "usage_count": number,           // ETO runs that used this version
+    "last_used_at": string | null,   // ISO 8601
+    "is_current": boolean            // true if this is current_version_id
+  }
+]
+```
+
+**Notes:**
+- Ordered by version_num DESC (newest first)
+- `is_current` indicates which version is actively used for matching
+- To view full version details, use `GET /pdf-templates/{id}/versions/{version_id}`
+
+**Errors:**
+- `404`: `{"detail": "Template not found"}`
+- `500`: `{"detail": "Database error"}`
+
+---
+
+### `GET /pdf-templates/{id}/versions/{version_id}`
+
+**Description:** Get full details for a specific template version including signature objects, extraction fields, and pipeline definition.
+
+**Path Parameters:**
+- `id`: Template ID (integer)
+- `version_id`: Version ID (integer)
+
+**Response:** `200 OK`
+```typescript
+{
+  "version_id": number,
+  "template_id": number,
+  "version_num": number,
+  "usage_count": number,
+  "last_used_at": string | null,  // ISO 8601
+  "is_current": boolean,          // true if this is template's current_version_id
+
+  // Full version data (all 3 wizard steps)
+  "signature_objects": [
+    {
+      "object_type": "text_word" | "text_line" | "graphic_rect" | "graphic_line" | "graphic_curve" | "image" | "table",
+      "page": number,
+      "bbox": [number, number, number, number],
+      // Additional properties matching object type
+    }
+  ],
+
+  "extraction_fields": [
+    {
+      "field_id": string,
+      "label": string,
+      "description": string | null,
+      "page": number,
+      "bbox": [number, number, number, number],
+      "required": boolean,
+      "validation_regex": string | null
+    }
+  ],
+
+  "pipeline_definition_id": number
+}
+```
+
+**Notes:**
+- Returns complete version data for viewing or editing
+- Frontend can use this to populate wizard when editing from specific version
+- Pipeline details retrieved separately via pipelines router if needed
+
+**Errors:**
+- `404`: `{"detail": "Template or version not found"}`
+- `500`: `{"detail": "Database error"}`
+
+---
+
+### `POST /pdf-templates/simulate`
+
+**Description:** Simulate full ETO process (template matching → data extraction → pipeline execution) without database persistence. Used for testing during template creation/editing. Action modules simulate only (no actual execution).
+
+**Request Body:**
+```typescript
+{
+  "pdf_file_id": number,              // required
+
+  // Template definition to test (all 3 wizard steps)
+  "signature_objects": [
+    {
+      "object_type": string,
+      "page": number,
+      "bbox": [number, number, number, number],
+      // Additional properties
+    }
+  ],
+
+  "extraction_fields": [
+    {
+      "field_id": string,
+      "label": string,
+      "description"?: string,
+      "page": number,
+      "bbox": [number, number, number, number],
+      "required": boolean,
+      "validation_regex"?: string
+    }
+  ],
+
+  "pipeline_state": {
+    "entry_points": [...],
+    "modules": [...],
+    "connections": [...]
+  }
+}
+```
+
+**Response:** `200 OK`
+```typescript
+{
+  // Stage 1: Template Matching (always succeeds in simulation)
+  "template_matching": {
+    "status": "success",
+    "message": "Simulation mode - template matching skipped"
+  },
+
+  // Stage 2: Data Extraction
+  "data_extraction": {
+    "status": "success" | "failure",
+    "extracted_data": {
+      // Key-value pairs matching extraction field labels
+      [field_label: string]: string  // Extracted text from bounding boxes
+    } | null,
+    "error_message": string | null,
+    "validation_results": [
+      {
+        "field_label": string,
+        "required": boolean,
+        "has_value": boolean,
+        "regex_valid": boolean | null,  // null if no regex
+        "error": string | null
+      }
+    ]
+  },
+
+  // Stage 3: Pipeline Execution
+  "pipeline_execution": {
+    "status": "success" | "failure",
+    "error_message": string | null,
+
+    // Transformation steps with data flow
+    "steps": [
+      {
+        "step_number": number,
+        "module_instance_id": string,
+        "module_name": string,          // Human-readable module name
+        "inputs": {
+          [node_name: string]: {
+            "value": any,
+            "type": string
+          }
+        },
+        "outputs": {
+          [node_name: string]: {
+            "value": any,
+            "type": string
+          }
+        },
+        "error": object | null
+      }
+    ],
+
+    // Simulated actions (not actually executed)
+    "simulated_actions": [
+      {
+        "action_module_name": string,
+        "inputs": {
+          [input_name: string]: any
+        },
+        "simulation_note": "Action not executed - simulation mode"
+      }
+    ]
+  }
+}
+```
+
+**Notes:**
+- **No database persistence** - pure computation
+- Template matching always succeeds (testing extraction/transformation only)
+- Extraction validation runs (required fields, regex patterns)
+- Pipeline executes with actual transformation logic
+- Action modules simulate (return what would be executed, but don't execute)
+- Can be called repeatedly during wizard (modify and re-test)
+- Pipeline compilation happens in-memory (not saved)
+
+**Errors:**
+- `404`: `{"detail": "PDF file not found"}`
+- `400`: Validation errors
+  - `{"detail": "Signature objects must reference valid PDF objects"}`
+  - `{"detail": "Extraction field bboxes must be within PDF page bounds"}`
+  - `{"detail": "Pipeline validation failed: [specific error]"}`
+- `422`: Pydantic validation error
+- `500`: `{"detail": "Simulation error: [specific error]"}`
+
+---
+
+## Router 5: `/modules` - Module Catalog Viewing
+
+> See `API_DESIGN.md` Domain 4 for business rules and requirements.
+
+### Endpoints Overview
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/modules` | List all active modules (complete catalog for pipeline builder) |
+
+---
+
+### `GET /modules`
+
+**Description:** List all active modules for pipeline builder. Returns complete module catalog with metadata, I/O definitions, and configuration schemas. No pagination - returns all active modules in single request for frontend caching.
+
+**Query Parameters:**
+- `module_kind` (optional): `transform` | `action` | `logic` | `entry_point` (default: all kinds)
+- `category` (optional): string - Filter by category (e.g., "Text Processing", "Data Validation")
+- `search` (optional): string - Text search on name and description
+
+**Response:** `200 OK`
+```typescript
+[
+  {
+    "id": string,                     // Module identifier
+    "version": string,                // Module version (e.g., "1.0.0")
+    "name": string,                   // Display name
+    "description": string,            // User-facing description
+    "color": string,                  // UI display color (hex code)
+    "category": string,               // e.g., "Text Processing", "Actions", "Logic"
+    "module_kind": "transform" | "action" | "logic" | "entry_point",
+
+    // I/O node definitions and metadata
+    "meta": {
+      "inputs": [
+        {
+          "id": string,
+          "name": string,
+          "type": string[],           // Allowed types (e.g., ["string", "number"])
+          "required": boolean,
+          "description": string
+        }
+      ],
+      "outputs": [
+        {
+          "id": string,
+          "name": string,
+          "type": string[],           // Output types
+          "description": string
+        }
+      ]
+      // Future: additional metadata fields
+    },
+
+    // JSON Schema for configuration UI (dynamic form generation)
+    "config_schema": {
+      "type": "object",
+      "properties": {
+        // JSON Schema definition
+      }
+    }
+  }
+]
+```
+
+**Notes:**
+- Returns **all active modules** (`is_active = true`) in single request
+- Frontend caches for offline pipeline building
+- No pagination needed (catalog size: ~20-50 modules)
+- Frontend groups/sorts by `module_kind` and `category`
+- Excludes: `handler_name` (backend execution only), `created_at`, `updated_at` (audit only)
+- Filtering/search applied server-side to reduce payload if needed
+
+**Errors:**
+- `500`: `{"detail": "Database error"}`
+
+---
+
+## Router 6: `/pipelines` - Pipeline Management (Development/Testing)
+
+> See `API_DESIGN.md` Domain 5 for business rules and requirements.
+
+**Note:** This router is primarily for standalone pipeline testing during development. Pipelines are typically accessed via templates in production. This router may be removed when the standalone pipeline testing page is removed.
+
+### Endpoints Overview
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/pipelines` | List all pipelines (with pagination) |
+| GET | `/pipelines/{id}` | Get pipeline definition (pipeline_state, visual_state) |
+| POST | `/pipelines` | Create standalone pipeline |
+| PUT | `/pipelines/{id}` | Update pipeline definition |
+| DELETE | `/pipelines/{id}` | Delete pipeline |
+
+---
+
+### `GET /pipelines`
+
+**Description:** List all pipeline definitions with summary information. Useful for managing standalone test pipelines.
+
+**Query Parameters:**
+- `sort_by` (optional): `id` | `created_at` (default: `created_at`)
+- `sort_order` (optional): `asc` | `desc` (default: `desc`)
+- `limit` (optional): number (default: 50, max: 200)
+- `offset` (optional): number (default: 0)
+
+**Response:** `200 OK`
+```typescript
+{
+  "items": [
+    {
+      "id": number,
+      "compiled_plan_id": number | null,  // null if not yet compiled
+      "created_at": string,                // ISO 8601 (included for dev convenience)
+      "updated_at": string                 // ISO 8601 (included for dev convenience)
+    }
+  ],
+  "total": number,
+  "limit": number,
+  "offset": number
+}
+```
+
+**Notes:**
+- **Dev/Testing only** - This endpoint is for standalone pipeline testing
+- Will be removed when standalone pipeline page is removed from production
+- Includes `created_at`/`updated_at` for dev convenience (normally excluded)
+- Minimal data - just IDs and timestamps for browsing
+
+**Errors:**
+- `400`: `{"detail": "Invalid query parameters"}`
+- `500`: `{"detail": "Database error"}`
+
+---
+
+### `GET /pipelines/{id}`
+
+**Description:** Get complete pipeline definition including pipeline_state (logical structure) and visual_state (UI layout).
+
+**Path Parameters:**
+- `id`: Pipeline definition ID (integer)
+
+**Response:** `200 OK`
+```typescript
+{
+  "id": number,
+  "compiled_plan_id": number | null,  // Reference to compiled execution plan (if compiled)
+
+  // Logical pipeline structure
+  "pipeline_state": {
+    "entry_points": [
+      {
+        "id": string,
+        "label": string,
+        "field_reference": string  // For templates, references extraction field label
+      }
+    ],
+    "modules": [
+      {
+        "instance_id": string,
+        "module_id": string,          // Reference to module_catalog
+        "config": object,             // Module-specific configuration
+        "inputs": [
+          {
+            "node_id": string,
+            "name": string,
+            "type": string[]
+          }
+        ],
+        "outputs": [
+          {
+            "node_id": string,
+            "name": string,
+            "type": string[]
+          }
+        ]
+      }
+    ],
+    "connections": [
+      {
+        "from_node_id": string,      // Entry point or module output node
+        "to_node_id": string         // Module input node
+      }
+    ]
+  },
+
+  // Visual layout for graph builder
+  "visual_state": {
+    "positions": {
+      // entry_point_id or module_instance_id → position
+      [key: string]: {
+        "x": number,
+        "y": number
+      }
+    }
+  }
+}
+```
+
+**Notes:**
+- Returns complete pipeline data for visualization/editing
+- `compiled_plan_id` is null for new pipelines (compilation happens on first use)
+- Frontend uses this to reconstruct visual graph builder
+- Entry points may reference extraction fields (for template pipelines) or be standalone (for test pipelines)
+
+**Errors:**
+- `404`: `{"detail": "Pipeline not found"}`
+- `500`: `{"detail": "Database error"}`
+
+---
+
+### `POST /pipelines`
+
+**Description:** Create new standalone pipeline for testing. Creates pipeline definition without template association.
+
+**Request Body:**
+```typescript
+{
+  "pipeline_state": {
+    "entry_points": [
+      {
+        "id": string,
+        "label": string,
+        "field_reference": string  // Can be arbitrary for standalone testing
+      }
+    ],
+    "modules": [
+      {
+        "instance_id": string,
+        "module_id": string,
+        "config": object,
+        "inputs": [
+          {
+            "node_id": string,
+            "name": string,
+            "type": string[]
+          }
+        ],
+        "outputs": [
+          {
+            "node_id": string,
+            "name": string,
+            "type": string[]
+          }
+        ]
+      }
+    ],
+    "connections": [
+      {
+        "from_node_id": string,
+        "to_node_id": string
+      }
+    ]
+  },
+  "visual_state": {
+    "positions": {
+      [key: string]: {
+        "x": number,
+        "y": number
+      }
+    }
+  }
+}
+```
+
+**Response:** `201 Created`
+```typescript
+{
+  "id": number,                    // Created pipeline ID
+  "compiled_plan_id": number | null  // null initially, set on first compilation
+}
+```
+
+**Notes:**
+- **Dev/Testing only** - Creates pipeline without template
+- Pipeline compilation may happen during creation (validation)
+- Backend may deduplicate compiled plan if identical pipeline exists
+- No template association - standalone pipeline
+
+**Errors:**
+- `400`: Business logic errors
+  - `{"detail": "Pipeline validation failed: [specific error]"}`
+  - `{"detail": "Invalid module references: [module IDs]"}`
+  - `{"detail": "Invalid connections: [connection details]"}`
+- `422`: Pydantic validation error (missing/invalid fields)
+- `500`: `{"detail": "Database error or pipeline compilation error"}`
+
+---
+
+### `PUT /pipelines/{id}`
+
+**Description:** Update existing pipeline definition. Replaces pipeline_state and visual_state.
+
+**Path Parameters:**
+- `id`: Pipeline definition ID (integer)
+
+**Request Body:**
+```typescript
+{
+  "pipeline_state": {
+    "entry_points": [...],
+    "modules": [...],
+    "connections": [...]
+  },
+  "visual_state": {
+    "positions": {...}
+  }
+}
+```
+
+**Response:** `200 OK`
+```typescript
+{
+  "id": number,
+  "compiled_plan_id": number | null  // May change if pipeline logic changed
+}
+```
+
+**Notes:**
+- Replaces entire pipeline definition
+- Recompilation may occur if pipeline logic changed
+- `compiled_plan_id` may update to point to different compiled plan
+- Cannot update pipelines associated with finalized template versions (returns 409)
+
+**Errors:**
+- `404`: `{"detail": "Pipeline not found"}`
+- `400`: Business logic errors (same as POST)
+- `409`: `{"detail": "Cannot update pipeline associated with finalized template version"}`
+- `422`: Pydantic validation error
+- `500`: `{"detail": "Database error or pipeline compilation error"}`
+
+---
+
+### `DELETE /pipelines/{id}`
+
+**Description:** Delete pipeline definition. **Only allowed for standalone pipelines** (not associated with any template version).
+
+**Path Parameters:**
+- `id`: Pipeline definition ID (integer)
+
+**Response:** `204 No Content`
+
+*(No response body)*
+
+**Deletion Rules:**
+- Can delete: Standalone pipelines (not referenced by any template version)
+- Cannot delete: Pipelines referenced by template versions (historical integrity)
+
+**Errors:**
+- `404`: `{"detail": "Pipeline not found"}`
+- `409`: `{"detail": "Cannot delete pipeline associated with template versions"}`
+- `500`: `{"detail": "Database error"}`
+
+---
+
+## Router 7: `/health` - System Health Monitoring
+
+> See `API_DESIGN.md` Domain 6 for business rules and requirements.
+
+### Endpoints Overview
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/health` | Get system health status (server + all services) |
+
+---
+
+### `GET /health`
+
+**Description:** Get overall system health and individual service statuses. Used by frontend for pre-load health checks and periodic monitoring. No authentication required.
+
+**Response:** `200 OK`
+```typescript
+{
+  "status": "healthy" | "degraded" | "unhealthy",
+
+  "server": {
+    "status": "up"  // If server responds, always "up"
+  },
+
+  "services": {
+    "email_ingestion": {
+      "status": "healthy" | "unhealthy",
+      "message"?: string  // Optional error message if unhealthy
+    },
+    "eto_processing": {
+      "status": "healthy" | "unhealthy",
+      "message"?: string
+    },
+    "pdf_processing": {
+      "status": "healthy" | "unhealthy",
+      "message"?: string
+    },
+    "database": {
+      "status": "healthy" | "unhealthy",
+      "message"?: string
+    }
+    // Additional services from service container
+  }
+}
+```
+
+**Overall Status Logic:**
+- `healthy`: All services are healthy
+- `degraded`: One or more services unhealthy, but server is functional
+- `unhealthy`: Server down or critical services down (rare - server won't respond)
+
+**Notes:**
+- **No authentication required** - Public health check endpoint
+- Used by frontend before application load (blocks if server down)
+- Used for periodic polling to detect service failures
+- If server is completely down, browser shows native connection error (no 200 response)
+- Individual service failures return 200 with `degraded` status
+- Services checked: All services registered in service container
+- Lightweight operation - simple boolean checks, no detailed diagnostics
+- Detailed diagnostics available in server logs (not exposed via API)
+
+**Errors:**
+- No error responses - if server can respond, returns 200 with status
+- If server cannot respond, browser handles connection error
+
+---
+
+## Phase 3 Complete! 🎉
+
+All 7 routers have been fully specified with **35 total endpoints**:
+
+- ✅ Router 1: `/email-configs` - 10 endpoints
+- ✅ Router 2: `/eto-runs` - 6 endpoints
+- ✅ Router 3: `/pdf-files` - 3 endpoints
+- ✅ Router 4: `/pdf-templates` - 10 endpoints
+- ✅ Router 5: `/modules` - 1 endpoint
+- ✅ Router 6: `/pipelines` - 5 endpoints (dev/testing)
+- ✅ Router 7: `/health` - 1 endpoint
+
+**Next Phase:** Phase 4 - Schema Definitions (detailed request/response types with Pydantic)
 
 ---

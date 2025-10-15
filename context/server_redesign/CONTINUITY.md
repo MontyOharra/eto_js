@@ -2,19 +2,19 @@
 
 ## Current Status
 
-**Phase:** Phase 3 - Endpoint Definitions (In Progress)
+**Phase:** Phase 3 - Endpoint Definitions ✅ **COMPLETE**
 
 **Completed Work:**
 - ✅ Phase 1: Domain & Router Segmentation (6 routers identified)
 - ✅ Phase 2: Per-Domain Analysis (All 6 domains fully analyzed in API_DESIGN.md)
-- ✅ Phase 3: Endpoint Definitions (Partial)
+- ✅ Phase 3: Endpoint Definitions **COMPLETE** (35 total endpoints)
   - ✅ Router 1: `/email-configs` - Complete (10 endpoints)
   - ✅ Router 2: `/eto-runs` - Complete (6 endpoints)
   - ✅ Router 3: `/pdf-files` - Complete (3 endpoints)
-  - 🚧 Router 4: `/pdf-templates` - **IN PROGRESS**
-  - ⏳ Router 5: `/modules` - Not started
-  - ⏳ Router 6: `/pipelines` - Not started (accessed via templates, may not need dedicated router)
-  - ⏳ Router 7: `/health` - Not started
+  - ✅ Router 4: `/pdf-templates` - Complete (10 endpoints)
+  - ✅ Router 5: `/modules` - Complete (1 endpoint)
+  - ✅ Router 6: `/pipelines` - Complete (5 endpoints - dev/testing)
+  - ✅ Router 7: `/health` - Complete (1 endpoint)
 
 **Documents Created:**
 - `context/server_redesign/INSTRUCTIONS.md` - Design methodology (front-end-first, top-down)
@@ -24,157 +24,66 @@
 
 ---
 
-## Current Work: Router 4 - `/pdf-templates` Endpoint Design
+## Router 4 Complete: `/pdf-templates` - Stateless Wizard with Simulation
 
-### Context
+### Final Design Summary
 
-We are designing the PDF Templates router endpoints. This is the most complex router involving:
-- Template creation wizard (3 steps: signature objects, extraction fields, pipeline building)
-- Template versioning system (draft versions, numbered versions, current_version_id)
-- Optional testing (simulate ETO run without creating records)
-- Template activation/deactivation
-- Version history viewing
+Router 4 is now complete with 10 endpoints using a **stateless wizard approach**:
 
-### Key Design Decisions Made
+#### Key Design Decisions
 
-#### 1. Response Format
-- **Decision**: Use direct responses (no wrapper objects) - FastAPI style
-- All successful operations return data directly
-- HTTP status codes indicate success/failure
-- Pagination uses `{items: [], total, limit, offset}` format
+**1. No Draft Versions in Database**
+- **Decision**: Frontend maintains wizard state, no DB persistence during creation/editing
+- Wizard state is ephemeral (lives in frontend memory only)
+- No `is_draft` field needed in database
+- Simplified template versioning (only finalized versions exist)
 
-#### 2. Bulk Operations (ETO Runs)
-- **Decision**: Use `204 No Content` for mutation operations that trigger frontend table refresh
-- Examples: POST /eto-runs/reprocess, POST /eto-runs/skip, DELETE /eto-runs
-- Frontend refreshes all tables on success, so returning data is redundant
+**2. Stateless Simulation Endpoint**
+- **Decision**: `POST /pdf-templates/simulate` for testing without DB persistence
+- Runs full ETO process (extraction → transformation) without creating records
+- Action modules simulate (no actual execution)
+- Can be called repeatedly during wizard (modify and re-test)
+- Pure computation, no side effects
 
-#### 3. PDF Objects Response Type
-- **Decision**: Use grouped/typed structure (not raw JSON array)
-- Return objects grouped by type for type safety and easier frontend consumption
-- 7 object types: text_words, text_lines, graphic_rects, graphic_lines, graphic_curves, images, tables
-- Trade-off: 5-200ms overhead for grouping vs better DX and type safety
-- Acceptable because this is infrequent operation (template wizard initialization)
+**3. PDF Management Separation**
+- **Decision**: Removed `POST /pdf-templates/from-upload` and `from-eto-run`
+- PDF creation is separate concern (handled by `/pdf-files` endpoints)
+- Template creation accepts `pdf_file_id` reference (no PDF upload)
+- Frontend workflow:
+  - Option A: Upload PDF via `/pdf-files` → Get `pdf_file_id` + objects → Use in wizard
+  - Option B: Get `pdf_file_id` from existing ETO run → Get objects → Use in wizard
 
-#### 4. Template Creation Entry Points
-- **Decision**: Two separate endpoints for clarity and type safety
-  - `POST /pdf-templates/from-upload` - Create from new PDF upload
-  - `POST /pdf-templates/from-eto-run` - Create from existing ETO run's PDF
+**4. Atomic Template Creation**
+- **Decision**: `POST /pdf-templates` creates template + version 1 atomically
+- All 3 wizard steps provided in single request (signature objects, extraction fields, pipeline)
+- Template starts with `status = "draft"`
+- Must call `POST /pdf-templates/{id}/activate` to use for matching
+- No finalization endpoint needed (POST is the finalization)
 
-**Reasoning:**
-- Frontend knows context (template page vs ETO run page)
-- Type-safe payloads (can't send wrong data)
-- Avoids multipart/form-data complexity with discriminated unions
-- Clearer error messages per endpoint
+**5. Version Management**
+- **Decision**: `PUT /pdf-templates/{id}` creates new version (increments version_num)
+- No draft versions stored between edits
+- Frontend loads existing version, modifies in memory, saves new version
+- Old versions preserved for historical ETO runs
 
-**Endpoint Specifications:**
+#### Template Creation Flow
 
-```
-POST /pdf-templates/from-upload
-Content-Type: multipart/form-data
+**New Template:**
+1. Frontend gets PDF (upload or from ETO run)
+2. Frontend gets objects via `GET /pdf-files/{id}/objects`
+3. User completes 3-step wizard (frontend state only)
+4. Optional: `POST /pdf-templates/simulate` (test repeatedly)
+5. Final: `POST /pdf-templates` (creates template + version 1)
+6. Activate: `POST /pdf-templates/{id}/activate`
 
-Request:
-- name: string (required)
-- description: string (optional)
-- pdf_file: File (required, PDF only)
+**Editing Template:**
+1. Frontend gets version data via `GET /pdf-templates/{id}/versions/{version_id}`
+2. User modifies wizard steps (frontend state only)
+3. Optional: `POST /pdf-templates/simulate` (test modifications)
+4. Final: `PUT /pdf-templates/{id}` (creates new version)
 
-Response: 201 Created
-{
-  "template_id": number,
-  "draft_version_id": number,
-  "pdf_file_id": number,
-  "name": string,
-  "status": "draft"
-}
-```
-
-```
-POST /pdf-templates/from-eto-run
-Content-Type: application/json
-
-Request:
-{
-  "name": string,
-  "description"?: string,
-  "eto_run_id": number
-}
-
-Response: 201 Created
-{
-  "template_id": number,
-  "draft_version_id": number,
-  "pdf_file_id": number,
-  "name": string,
-  "status": "draft"
-}
-```
-
-**Backend Logic:**
-- `from-upload`: Creates PDF record, extracts objects, creates template + draft version
-- `from-eto-run`: Looks up ETO run, gets existing pdf_file_id (objects already extracted), creates template + draft version
-
-**Both return same response structure** - frontend proceeds to wizard using template_id and draft_version_id.
-
----
-
-## Next Steps - Questions to Answer
-
-### 1. Progressive Saving vs Single Save
-**Question:** Should the wizard save after each step, or only at the end?
-
-**Options:**
-- **Progressive**: `PUT /pdf-templates/{id}/versions/{version_id}/signature`, `PUT .../extraction`, `PUT .../pipeline`
-  - Pros: User can close browser and resume, data persisted incrementally
-  - Cons: More API calls, partial state possible
-- **Single Save**: All 3 steps saved at once when user clicks "Finalize"
-  - Pros: Atomic operation, simpler state management
-  - Cons: Lost progress if browser closes, larger payload
-
-**User's question to address:** Do we want state persistence across browser sessions?
-
-### 2. Draft Version Lifecycle
-**Question:** When is the draft version created?
-
-**Options:**
-- Immediately when `POST /pdf-templates/from-*` is called (template + draft created together)
-- After Step 1 completion
-- Only when user saves
-
-**Recommendation:** Create draft immediately when template is created (during POST /pdf-templates/from-*), so user always has a draft to work with.
-
-### 3. Pipeline Compilation Timing
-**Question:** When does pipeline compilation happen?
-
-**Options:**
-- During Step 3 save (immediate validation)
-- During testing (lazy compilation)
-- During final save/finalization (latest possible)
-
-**Consideration:** Compilation includes deduplication (checking if compiled plan already exists), which affects pipeline_definition_id.
-
-### 4. Finalization Process
-**Question:** How does the user finalize the template?
-
-**Likely approach:**
-- User completes Steps 1-3 (optionally tests)
-- User clicks "Save Template"
-- Backend:
-  - Converts draft version: `version_num = 0 → 1`, `is_draft = true → false`
-  - Updates template: `current_version_id = draft_version_id`, `status = draft → active`
-  - Returns finalized template
-
-**API:** `POST /pdf-templates/{id}/finalize` or similar?
-
-### 5. Cancellation Process
-**Question:** How does user cancel template creation?
-
-**Likely approach:**
-- User clicks "Cancel" in wizard
-- Backend:
-  - If new template: Delete template + draft version + PDF (if uploaded)
-  - If editing: Delete draft version only
-  - Returns success
-
-**API:** `DELETE /pdf-templates/{id}` (if new) or `DELETE /pdf-templates/{id}/versions/{draft_id}` (if editing)?
+**Cancellation:**
+- Just discard frontend state (nothing in DB to clean up)
 
 ---
 
@@ -244,31 +153,31 @@ Response: 201 Created
 
 ---
 
-## Open Questions for Next Session
+## Phase 3 Complete! 🎉
 
-1. Should we use progressive saving (PUT after each step) or single save at end?
-2. When exactly should pipeline compilation happen?
-3. What should the finalization endpoint look like?
-4. How should cancellation be handled (one endpoint or two)?
-5. Should we allow editing active templates, or require deactivation first?
-6. What endpoints are needed for version history viewing?
-
----
+**All 7 routers fully specified with 35 total endpoints:**
+- ✅ Router 1: `/email-configs` - 10 endpoints
+- ✅ Router 2: `/eto-runs` - 6 endpoints
+- ✅ Router 3: `/pdf-files` - 3 endpoints
+- ✅ Router 4: `/pdf-templates` - 10 endpoints
+- ✅ Router 5: `/modules` - 1 endpoint
+- ✅ Router 6: `/pipelines` - 5 endpoints (dev/testing)
+- ✅ Router 7: `/health` - 1 endpoint
 
 ## Recommended Next Actions
 
-1. **Answer open questions** about template creation workflow
-2. **Design remaining template endpoints**:
-   - Template finalization
-   - Template cancellation
-   - Template version management (create new version for editing)
-   - Template activation/deactivation
-   - Template deletion (draft only)
-   - Version history viewing
-3. **Continue with Router 5**: `/modules` (simple read-only catalog)
-4. **Design Router 7**: `/health` (single endpoint)
-5. **Complete Phase 3** endpoint definitions
-6. **Move to Phase 4**: Schema definitions (detailed request/response types)
+1. **Move to Phase 4**: Schema Definitions
+   - Define detailed Pydantic request/response schemas
+   - Create validation rules and constraints
+   - Document all field types and formats
+2. **Move to Phase 5**: Service Layer Design
+   - Define service methods for business logic
+   - Identify transaction boundaries
+   - Plan cross-domain orchestration
+3. **Move to Phase 6**: Repository Layer Design
+   - Define data access patterns
+   - Plan query methods and optimizations
+   - Design JSON serialization strategies
 
 ---
 
