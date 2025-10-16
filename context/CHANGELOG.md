@@ -5,6 +5,75 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-10-16 16:30] — Frontend: Phase 4 & 5 Complete - IPC Foundation & Infrastructure
+
+### Spec / Intent
+- Complete Phase 4: Implement type-safe Electron IPC for file operations
+- Complete Phase 5: Build out shared infrastructure and feature directories
+- Test IPC communication with interactive UI
+- Establish API layer foundation (Axios, React Query, interceptors)
+- Create all feature modules with proper directory structure
+
+### Changes Made
+**Phase 4: Electron API Foundation**
+- `@types/global.d.ts` - Type-safe IPC mappings for 4 operations:
+  - `file:select` - File picker dialog with filters
+  - `file:read` - Read file content with error handling
+  - `file:save` - Save file dialog
+  - `dialog:confirm` - Confirmation dialog
+- `preload/index.ts` - Exposed IPC methods to renderer via contextBridge
+- `main/helpers/ipcHandlers.ts` - Implemented all IPC handlers with Electron dialog API
+- `pages/index.tsx` - Created interactive test page with 4 buttons to test file operations
+- **Tested successfully**: File selection, reading, save dialog, confirm dialog all working
+
+**Phase 5: Complete Directory Structure & Infrastructure**
+- `shared/api/config.ts` - API configuration with base URL and endpoints
+- `shared/api/client.ts` - Axios instance with interceptors
+- `shared/api/interceptors/` - Auth, error, and logging interceptors
+- `app/queryClient.ts` - React Query configuration with caching defaults
+- `app/router.tsx` - TanStack Router setup (hash history for Electron)
+- `app/providers.tsx` - Global provider wrapper with React Query DevTools
+
+**Feature Directories Created (5 modules):**
+- `features/email-configs/` (api, components, hooks, mocks)
+- `features/templates/` (api, components, hooks, mocks)
+- `features/pipelines/` (api, components, hooks, mocks)
+- `features/pdf-files/` (api, components, hooks, mocks)
+- `features/eto-runs/` (api, components, hooks, mocks)
+
+**Page Files Created (5 routes):**
+- `pages/email-configs/index.tsx`
+- `pages/templates/index.tsx`
+- `pages/pipelines/index.tsx`
+- `pages/pdf-files.tsx`
+- `pages/eto-runs/index.tsx`
+
+### Next Actions
+**Phase 6: Types and Mock Data**
+- [ ] Define TypeScript interfaces for all features (matching backend Pydantic models)
+- [ ] Create mock data for development/testing
+- [ ] Set up MSW (Mock Service Worker) for API mocking
+
+**Phase 7: Basic Page Structure**
+- [ ] Create root layout with sidebar navigation
+- [ ] Implement page shells with consistent layout
+- [ ] Set up routing between pages
+
+**Phase 8: Component Implementation**
+- [ ] Implement feature components one by one
+- [ ] Wire up React Query hooks
+- [ ] Test with mock data
+
+### Notes
+- Phase 4 testing revealed file filter issue - fixed to show all files including PDFs
+- All IPC operations working with full type safety and autocomplete
+- Infrastructure follows best practices: interceptors, error handling, logging
+- Feature-Sliced Design architecture fully implemented
+- Ready for Phase 6: Type definitions and mock data
+- Phases 1-5 complete (5 out of 10 phases done)
+
+---
+
 ## [2025-10-16 15:45] — Frontend: Complete Agnostic Directory Structure
 
 ### Spec / Intent
