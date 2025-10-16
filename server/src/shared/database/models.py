@@ -171,7 +171,6 @@ class PdfFileModel(BaseModel):
 class PdfTemplateStatus(StrEnum):
     ACTIVE = "active"
     INACTIVE = "inactive"
-    DRAFT = "draft"
 
 class PdfTemplateModel(BaseModel):
     __tablename__ = "pdf_templates"
@@ -185,7 +184,7 @@ class PdfTemplateModel(BaseModel):
     status: Mapped[PdfTemplateStatus] = mapped_column(
         SAEnum(PdfTemplateStatus, native_enum=False, validate_strings=True, name="pdf_template_status"),
         nullable=False,
-        default=PdfTemplateStatus.DRAFT,
+        default=PdfTemplateStatus.ACTIVE,
     )
     current_version_id: Mapped[Optional[int]] = mapped_column(ForeignKey("pdf_template_versions.id"))
 
@@ -213,7 +212,6 @@ class PdfTemplateVersionModel(BaseModel):
 
     pdf_template_id: Mapped[int] = mapped_column(ForeignKey("pdf_templates.id"), nullable=False, index=True)
     version_num: Mapped[int] = mapped_column(Integer, nullable=False)
-    is_draft: Mapped[bool] = mapped_column(Boolean, default=True)
     signature_objects: Mapped[str] = mapped_column(Text, nullable=False)
     extraction_fields: Mapped[str] = mapped_column(Text, nullable=False)
     pipeline_definition_id: Mapped[int] = mapped_column(ForeignKey("pipeline_definitions.id"), nullable=False, index=True)

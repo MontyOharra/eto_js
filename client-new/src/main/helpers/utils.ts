@@ -75,25 +75,3 @@ export function getPythonScriptPath(scriptDirStructure: string) {
     );
   }
 }
-
-export function getPrismaQueryEnginePath() {
-  if (isDev()) {
-    // Development: Use the query engine from build directory
-    return path.join(
-      process.cwd(),
-      "build",
-      "dist-electron",
-      "main",
-      "query_engine-windows.dll.node"
-    );
-  } else if (app.isPackaged) {
-    // Packaged app: Query engine is in the resources directory
-    return path.join(process.resourcesPath, "query_engine-windows.dll.node");
-  } else {
-    // Production build (not packaged): Query engine is in the same directory as the main process
-    return path.join(
-      path.dirname(process.execPath),
-      "query_engine-windows.dll.node"
-    );
-  }
-}

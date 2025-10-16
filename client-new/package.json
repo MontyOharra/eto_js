@@ -9,12 +9,13 @@
   "scripts": {
     "typecheck": "tsc -p src",
     "build:main": "node scripts/build-main.mjs",
+    "build:preload": "node scripts/build-preload.mjs",
+    "build:electron": "npm run build:main && npm run build:preload",
     "dev": "rm -rf build && npm-run-all --parallel dev:react dev:electron",
     "dev:react": "vite",
-    "dev:electron": "cross-env NODE_ENV=development npm run build:main && node scripts/build-preload.mjs && electron .",
-    "build": "rm -rf build && cross-env NODE_ENV=production npm run build:react && npm run build:electron",
+    "dev:electron": "cross-env NODE_ENV=development npm run build:electron && electron .",
+    "build": "rm -rf build && cross-env NODE_ENV=production npm run build:react && cross-env NODE_ENV=production npm run build:electron",
     "build:react": "vite build",
-    "build:electron": "cross-env NODE_ENV=production npm run build:main && node scripts/build-preload.mjs",
     "dist:win": "rm -rf dist && npm run build && electron-builder --windows"
   },
   "dependencies": {

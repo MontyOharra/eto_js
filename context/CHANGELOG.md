@@ -5,6 +5,48 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-10-16 15:45] — Frontend: Complete Agnostic Directory Structure
+
+### Spec / Intent
+- Build out complete agnostic folder structure for client-new based on FRONTEND_DESIGN.md
+- Create all project-agnostic directories (main/window, renderer/app, renderer/shared, renderer/features)
+- Establish proper folder hierarchy with placeholders for future implementation
+- Do NOT create application-specific feature folders yet (like features/email-configs)
+
+### Changes Made
+**Directory Structure Created:**
+- `client-new/src/main/window/` - Window management and creation (placeholder)
+- `client-new/src/renderer/app/` - App-level configuration (router, queryClient, providers)
+- `client-new/src/renderer/shared/api/` - Shared API infrastructure
+  - `client-new/src/renderer/shared/api/interceptors/` - Auth, error, logging interceptors
+- `client-new/src/renderer/shared/ui/` - Primitive UI components (Button, Input, Modal, etc.)
+- `client-new/src/renderer/shared/hooks/` - Shared React hooks (useDebounce, useLocalStorage, etc.)
+- `client-new/src/renderer/shared/types/` - Global TypeScript types
+- `client-new/src/renderer/shared/utils/` - Utility functions (date, validation, format)
+- `client-new/src/renderer/features/` - Business feature modules (empty placeholder)
+
+**Files Added:**
+- `.gitkeep` files in all new directories to ensure they're tracked by git
+
+### Next Actions
+- Implement core shared infrastructure:
+  - [ ] `shared/api/client.ts` - Axios instance configuration
+  - [ ] `shared/api/config.ts` - API base URL and environment config
+  - [ ] `shared/api/interceptors/` - Auth, error handling, logging
+  - [ ] `app/queryClient.ts` - React Query configuration
+  - [ ] `app/router.tsx` - TanStack Router setup
+  - [ ] `app/providers.tsx` - Global provider composition
+  - [ ] `main/window/mainWindow.ts` - Main window creation logic
+- Begin implementing first feature module (likely email-configs) as reference implementation
+
+### Notes
+- All folders now match FRONTEND_DESIGN.md specification
+- Structure follows Feature-Sliced Design and Bulletproof React patterns
+- Ready for Phase 2: Core infrastructure implementation
+- Features folder intentionally left empty - will be populated per-feature as needed
+
+---
+
 ## [2025-10-15 20:30] — Frontend Redesign: Architecture & Phase 1 Complete
 
 ### Spec / Intent
