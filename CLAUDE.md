@@ -76,3 +76,4 @@ If changes are **not** substantial, you may batch them until they are, but alway
 
 ### Notes
 - <open questions, risks, TODOs>
+- Never look in apps/eto/server you are looking the wrong dir. You should look in eto_js/server/

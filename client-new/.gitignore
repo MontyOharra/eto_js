@@ -1,0 +1,72 @@
+# Node / Electron
+node_modules/
+build/
+dist/
+dist-electron/
+dist-react/
+release/
+out/
+*.asar
+
+# Vite / bundlers / caches
+.vite/
+.cache/
+.parcel-cache/
+.turbo/
+.esbuild/
+.eslintcache
+
+# Tests / coverage
+coverage/
+.jest/
+.nyc_output/
+test-results/
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Editors / IDE
+.vscode/
+.idea/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Python virtualenvs and artifacts
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Prisma generated (if present in this folder)
+prisma/generated/
+/prisma/generated/
+/resources/
+
+node_modules
+dist
+dist-react
+dist-electron
+dist-ssr
+build
+*.local
+
+.tanstack/

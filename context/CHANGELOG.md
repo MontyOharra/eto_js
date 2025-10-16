@@ -5,6 +5,119 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-10-15 20:30] — Frontend Redesign: Architecture & Phase 1 Complete
+
+### Spec / Intent
+- Design comprehensive frontend application architecture for Electron + React client
+- Establish industry-standard project structure based on Feature-Sliced Design and Bulletproof React
+- Create detailed implementation plan with 10 phases for complete frontend rebuild
+- Complete Phase 1: Boilerplate setup with hello world application
+- Critique and improve existing TypeScript configuration and build scripts
+
+### Changes Made
+**Design Documentation:**
+- `context/client_redesign/FRONTEND_DESIGN.md` - Complete 1900+ line specification document covering:
+  - Full project structure with feature-based organization
+  - Electron architecture (main/preload/renderer separation)
+  - Type-safe IPC system extending existing pattern
+  - Three-layer API architecture (types → api → queries)
+  - React Query for server state, TanStack Router for routing
+  - Complete examples for email configs, templates, pipelines, PDF files, ETO runs
+- `context/client_redesign/IMPLEMENTATION_PLAN.md` - 10-phase implementation roadmap with detailed checklists and timeline estimates
+
+**Client-New Directory (Phase 1 Complete):**
+- Created `client-new/` with complete boilerplate:
+  - Copied config files: tsconfig, vite, electron-builder, eslint
+  - Copied build scripts: esbuild scripts for main/preload
+  - Copied main/preload infrastructure with type-safe IPC wrappers
+  - Created hello world React app with TanStack Router
+  - Removed Prisma dependencies (no local database)
+  - Added React Query and axios to package.json
+- Directory structure:
+  ```
+  client-new/src/
+  ├── @types/global.d.ts          # IPC type mappings
+  ├── main/                       # Electron main process
+  ├── preload/                    # Security bridge
+  └── renderer/
+      ├── pages/
+      │   ├── __root.tsx         # Root layout
+      │   └── index.tsx          # Hello world page
+      ├── app/                    # Future: router config
+      ├── features/               # Future: feature modules
+      └── shared/                 # Future: shared utilities
+  ```
+
+**TypeScript Configuration Review:**
+- Analyzed existing client/ tsconfig setup
+- Identified improvements: add `noEmit: true` to clarify type-check-only configs
+- Confirmed esbuild approach is correct (faster than tsc)
+- Recommended simplifying tsconfig.vite.json
+- Suggested updating target from node16 to node20
+
+### Key Design Decisions
+**Architecture:**
+- **No Local Database** - Pure HTTP client to FastAPI server
+- **Feature-Sliced Design** - Organize by business domains, not technical layers
+- **React Query** - Server state management with caching, no Redux/Zustand needed
+- **Type-Safe IPC** - Extends existing InputPayloadMapping/OutputPayloadMapping pattern
+- **Mock API Support** - MSW for development without backend
+
+**Three-Layer API:**
+1. `types.ts` - TypeScript interfaces matching backend Pydantic models
+2. `{feature}Api.ts` - Raw axios calls
+3. `{feature}Queries.ts` - React Query hooks with caching/mutations
+
+**Electron Security:**
+- `contextIsolation: true`, `nodeIntegration: false`
+- Minimal main process (file system, dialogs only)
+- Explicit API surface via preload
+
+### Next Actions
+**Phase 2: Development Testing**
+- [ ] Run `npm install` in client-new (partially complete)
+- [ ] Test `npm run dev` - verify Electron opens with hello world
+- [ ] Test hot reload functionality
+- [ ] Verify no console errors
+
+**Phase 3: Production Build Testing**
+- [ ] Run `npm run build`
+- [ ] Run `npm run dist:win`
+- [ ] Test packaged .exe application
+
+**Phase 4-10:** (See IMPLEMENTATION_PLAN.md)
+- File operations and type-safe IPC
+- Complete directory structure
+- Types and mock data
+- Page layouts
+- Component implementation
+- API foundation
+- Backend integration
+
+### Notes
+**Phase 1 Status:** ✅ Complete
+- Directory created with boilerplate
+- Hello world React app ready
+- Dependencies installed (2m timeout, but node_modules created)
+- Package.json cleaned (no Prisma, added axios + React Query)
+- Vite config updated (routes → pages directory)
+
+**Design Quality:**
+- All patterns reference real projects (electron-react-boilerplate, FSD, Bulletproof React)
+- Type-safe IPC extends user's existing pattern
+- Complete examples for all features
+- Security-first Electron architecture
+
+**TypeScript Config:**
+- Existing setup is solid (B+ / A- grade)
+- Uses project references correctly
+- esbuild for compilation is the right choice
+- Minor improvements suggested for clarity
+
+**Timeline:** 11-19 hours estimated for complete rebuild (Phases 1-10)
+
+---
+
 ## [2025-10-15 15:00] — Complete API Endpoint Specification (Phase 3 Complete)
 
 ### Spec / Intent
