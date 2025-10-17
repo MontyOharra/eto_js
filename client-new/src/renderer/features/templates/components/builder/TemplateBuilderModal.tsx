@@ -150,8 +150,38 @@ export function TemplateBuilderModal({
           onClose={handleClose}
         />
 
-        {/* Stepper with Navigation Buttons */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700">
+        {/* Main Content */}
+        <div className="flex-1 overflow-hidden">
+          {currentStep === 'signature-objects' && (
+            <SignatureObjectsStep
+              pdfFileId={pdfFileId}
+              templateName={templateName}
+              templateDescription={templateDescription}
+              signatureObjects={signatureObjects}
+              onTemplateNameChange={setTemplateName}
+              onTemplateDescriptionChange={setTemplateDescription}
+              onSignatureObjectsChange={setSignatureObjects}
+            />
+          )}
+          {currentStep === 'extraction-fields' && (
+            <ExtractionFieldsStep
+              pdfFileId={pdfFileId}
+              extractionFields={extractionFields}
+              onExtractionFieldsChange={setExtractionFields}
+            />
+          )}
+          {currentStep === 'pipeline' && (
+            <PipelineBuilderStep
+              pipelineState={pipelineState}
+              visualState={visualState}
+              onPipelineStateChange={setPipelineState}
+              onVisualStateChange={setVisualState}
+            />
+          )}
+        </div>
+
+        {/* Footer - Stepper with Navigation Buttons */}
+        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-700 bg-gray-900">
           <TemplateBuilderStepper
             currentStep={currentStep}
             completedSteps={completedSteps}
@@ -198,36 +228,6 @@ export function TemplateBuilderModal({
               </button>
             )}
           </div>
-        </div>
-
-        {/* Main Content */}
-        <div className="flex-1 overflow-hidden">
-          {currentStep === 'signature-objects' && (
-            <SignatureObjectsStep
-              pdfFileId={pdfFileId}
-              templateName={templateName}
-              templateDescription={templateDescription}
-              signatureObjects={signatureObjects}
-              onTemplateNameChange={setTemplateName}
-              onTemplateDescriptionChange={setTemplateDescription}
-              onSignatureObjectsChange={setSignatureObjects}
-            />
-          )}
-          {currentStep === 'extraction-fields' && (
-            <ExtractionFieldsStep
-              pdfFileId={pdfFileId}
-              extractionFields={extractionFields}
-              onExtractionFieldsChange={setExtractionFields}
-            />
-          )}
-          {currentStep === 'pipeline' && (
-            <PipelineBuilderStep
-              pipelineState={pipelineState}
-              visualState={visualState}
-              onPipelineStateChange={setPipelineState}
-              onVisualStateChange={setVisualState}
-            />
-          )}
         </div>
       </div>
     </div>
