@@ -5,16 +5,10 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Document, Page, pdfjs } from 'react-pdf';
+import { PdfViewer } from '../../../../shared/components/pdf';
 import { useMockEtoApi } from '../../hooks/useMockEtoApi';
 import { StatusBadge } from '../ui/StatusBadge';
 import type { EtoRunDetail } from '../../types';
-
-// Configure PDF.js worker - use local worker from node_modules
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url
-).toString();
 
 interface RunDetailModalProps {
   isOpen: boolean;
@@ -22,16 +16,14 @@ interface RunDetailModalProps {
   onClose: () => void;
 }
 
+type ViewMode = 'summary' | 'detail';
+
 export function RunDetailModal({ isOpen, runId, onClose }: RunDetailModalProps) {
   const { getEtoRunDetail, getPdfDownloadUrl, isLoading } = useMockEtoApi();
   const [runDetail, setRunDetail] = useState<EtoRunDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  // PDF viewer state
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [numPages, setNumPages] = useState<number | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [scale, setScale] = useState(1.0);
+  const [viewMode, setViewMode] = useState<ViewMode>('summary');
 
   // Fetch run details when modal opens
   useEffect(() => {
@@ -44,27 +36,9 @@ export function RunDetailModal({ isOpen, runId, onClose }: RunDetailModalProps) 
   useEffect(() => {
     if (runDetail?.pdf.id) {
       const url = getPdfDownloadUrl(runDetail.pdf.id);
-      console.log(url);
       setPdfUrl(url);
-      console.log('PDF URL set:', url);
-      console.log('Expected file location: client-new/public' + url);
-
-      // Test if file exists by attempting to fetch it
-      fetch(url, { method: 'HEAD' })
-        .then(response => {
-          console.log('PDF file check:', {
-            url,
-            status: response.status,
-            statusText: response.statusText,
-            contentType: response.headers.get('Content-Type')
-          });
-          if (!response.ok) {
-            console.error(`PDF file not found at ${url}. Please add a PDF file named "${runDetail.pdf.id}.pdf" to client-new/public/data/pdfs/`);
-          }
-        })
-        .catch(err => console.error('PDF file check failed:', err));
     }
-  }, [runDetail?.pdf.id]);
+  }, [runDetail?.pdf.id, getPdfDownloadUrl]);
 
   const loadRunDetail = async () => {
     if (!runId) return;
@@ -79,16 +53,9 @@ export function RunDetailModal({ isOpen, runId, onClose }: RunDetailModalProps) 
     }
   };
 
-  // PDF document handlers
-  const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
-    setNumPages(numPages);
-    setCurrentPage(1);
-    console.log('PDF loaded successfully, pages:', numPages);
-  };
-
-  const onDocumentLoadError = (error: Error) => {
-    console.error('PDF load error:', error);
-    setError(`Failed to load PDF: ${error.message}`);
+  const handlePdfError = (pdfError: Error) => {
+    console.error('PDF load error:', pdfError);
+    setError(`Failed to load PDF: ${pdfError.message}`);
   };
 
   // Format file size
@@ -134,11 +101,67 @@ export function RunDetailModal({ isOpen, runId, onClose }: RunDetailModalProps) 
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
       <div className="bg-gray-900 rounded-lg shadow-xl w-full max-w-[95vw] h-[95vh] overflow-hidden border border-gray-700 flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-700 flex-shrink-0">
-          <div className="flex items-center space-x-3">
-            <h2 className="text-xl font-semibold text-white">ETO Run Details</h2>
-            {runDetail && <StatusBadge status={runDetail.status} />}
+        <div className="flex items-center justify-between p-3 border-b border-gray-700 flex-shrink-0">
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-3">
+              <h2 className="text-xl font-semibold text-white">ETO Run Details</h2>
+              {runDetail && <StatusBadge status={runDetail.status} />}
+            </div>
+
+            {/* View Mode Toggle */}
+            <div className="flex items-center bg-gray-800 rounded-lg p-1 border-l border-gray-600 ml-4">
+              <button
+                onClick={() => setViewMode('summary')}
+                className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                  viewMode === 'summary'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                Summary
+              </button>
+              <button
+                onClick={() => setViewMode('detail')}
+                className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                  viewMode === 'detail'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                Detail
+              </button>
+            </div>
+
+            {runDetail && (
+              <>
+                {/* Source */}
+                <div className="text-sm text-gray-300 border-l border-gray-600 pl-4">
+                  <span className="text-gray-400">Source:</span>{' '}
+                  {runDetail.source.type === 'email' ? (
+                    <span className="font-mono">{runDetail.source.sender_email}</span>
+                  ) : (
+                    'Manual Upload'
+                  )}
+                </div>
+
+                {/* Template */}
+                {runDetail.matched_template && (
+                  <div className="text-sm text-gray-300 border-l border-gray-600 pl-4">
+                    <span className="text-gray-400">Template:</span>{' '}
+                    {runDetail.matched_template.template_name}{' '}
+                    <span className="text-gray-500">(v{runDetail.matched_template.version_num})</span>
+                  </div>
+                )}
+
+                {/* Duration */}
+                <div className="text-sm text-gray-300 border-l border-gray-600 pl-4">
+                  <span className="text-gray-400">Duration:</span>{' '}
+                  <span className="font-mono">{formatDuration(runDetail.started_at, runDetail.completed_at)}</span>
+                </div>
+              </>
+            )}
           </div>
+
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-200 transition-colors"
@@ -171,218 +194,96 @@ export function RunDetailModal({ isOpen, runId, onClose }: RunDetailModalProps) 
           )}
 
           {!isLoading && !error && runDetail && (
-            <div className="p-4 flex gap-4 h-full">
-              {/* Left Column - Metadata and Specifics */}
-              <div className="w-2/5 flex flex-col gap-3">
-                {/* Run Metadata Section */}
-                <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-                  <h3 className="text-lg font-semibold text-white mb-3">Run Information</h3>
+            <>
+              {viewMode === 'summary' ? (
+                /* Summary View */
+                <div className="p-4 flex gap-4 h-full">
+                  {/* Left Column - Specifics Only */}
+                  <div className="w-2/5 flex flex-col">
+                    {/* Specifics Section - Full Height */}
+                    <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 flex flex-col flex-1 overflow-hidden">
+                      <h3 className="text-lg font-semibold text-white mb-3">
+                        {runDetail.status === 'success' ? 'Actions Executed' : 'Error Details'}
+                      </h3>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    {/* Left Column */}
-                    <div className="space-y-3">
-                      {/* PDF Info */}
-                      <div>
-                        <label className="block text-xs font-medium text-gray-400 mb-1">
-                          PDF Filename
-                        </label>
-                        <p className="text-white font-mono text-sm">
-                          {runDetail.pdf.original_filename}
-                        </p>
+                      {/* Scrollable content area */}
+                      <div className="flex-1 overflow-auto bg-gray-900 rounded p-3 font-mono text-xs">
+                        {runDetail.status === 'success' && runDetail.pipeline_execution?.executed_actions ? (
+                          <pre className="text-gray-300 whitespace-pre-wrap break-words">
+                            {JSON.stringify(runDetail.pipeline_execution.executed_actions, null, 2)}
+                          </pre>
+                        ) : runDetail.status === 'failure' ? (
+                          <div className="text-red-300">
+                            <p className="font-bold mb-2">Error Type: {runDetail.error_type || 'Unknown'}</p>
+                            <p className="mb-2">Message: {runDetail.error_message || 'No error message available'}</p>
+                            {runDetail.pipeline_execution?.error_message && (
+                              <>
+                                <p className="font-bold mb-2 mt-4">Pipeline Error:</p>
+                                <p>{runDetail.pipeline_execution.error_message}</p>
+                              </>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-gray-400">No details available</p>
+                        )}
                       </div>
-
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-xs font-medium text-gray-400 mb-1">
-                            File Size
-                          </label>
-                          <p className="text-white text-sm">
-                            {formatFileSize(runDetail.pdf.file_size)}
-                          </p>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-400 mb-1">
-                            Pages
-                          </label>
-                          <p className="text-white text-sm">
-                            {runDetail.pdf.page_count ?? 'Unknown'}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Source Info */}
-                      <div>
-                        <label className="block text-xs font-medium text-gray-400 mb-1">
-                          Source
-                        </label>
-                        <p className="text-white text-sm">
-                          {runDetail.source.type === 'email' ? (
-                            <>
-                              Email from{' '}
-                              <span className="font-mono">
-                                {runDetail.source.sender_email || 'Unknown'}
-                              </span>
-                            </>
-                          ) : (
-                            'Manual Upload'
-                          )}
-                        </p>
-                      </div>
-
-                      {/* Email-specific fields */}
-                      {runDetail.source.type === 'email' && runDetail.source.subject && (
-                        <div>
-                          <label className="block text-xs font-medium text-gray-400 mb-1">
-                            Email Subject
-                          </label>
-                          <p className="text-white text-sm">{runDetail.source.subject}</p>
-                        </div>
-                      )}
                     </div>
+                  </div>
 
-                    {/* Right Column */}
-                    <div className="space-y-3">
-                      {/* Execution Times */}
-                      <div>
-                        <label className="block text-xs font-medium text-gray-400 mb-1">
-                          Started At
-                        </label>
-                        <p className="text-white text-sm font-mono">
-                          {formatTimestamp(runDetail.started_at)}
-                        </p>
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-medium text-gray-400 mb-1">
-                          Completed At
-                        </label>
-                        <p className="text-white text-sm font-mono">
-                          {formatTimestamp(runDetail.completed_at)}
-                        </p>
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-medium text-gray-400 mb-1">
-                          Total Duration
-                        </label>
-                        <p className="text-white text-sm font-mono">
-                          {formatDuration(runDetail.started_at, runDetail.completed_at)}
-                        </p>
-                      </div>
-
-                      {/* Matched Template */}
-                      {runDetail.matched_template && (
-                        <div>
-                          <label className="block text-xs font-medium text-gray-400 mb-1">
-                            Matched Template
-                          </label>
-                          <p className="text-white text-sm">
-                            {runDetail.matched_template.template_name}
-                            <span className="text-gray-400 ml-2">
-                              (v{runDetail.matched_template.version_num})
-                            </span>
-                          </p>
+                  {/* Right Column - PDF Viewer */}
+                  <div className="w-3/5 flex flex-col">
+                    <div className="bg-gray-800 border border-gray-700 rounded-lg flex-1 overflow-hidden relative p-4">
+                      {pdfUrl ? (
+                        <PdfViewer pdfUrl={pdfUrl} onError={handlePdfError}>
+                          <PdfViewer.Canvas pdfUrl={pdfUrl} onError={handlePdfError} />
+                          <PdfViewer.InfoPanel
+                            position="top-right"
+                            filename={runDetail.pdf.original_filename}
+                            fileSize={runDetail.pdf.file_size}
+                          />
+                          <PdfViewer.Controls position="bottom-center" />
+                        </PdfViewer>
+                      ) : (
+                        <div className="flex items-center justify-center h-full">
+                          <p className="text-gray-400">No PDF available</p>
                         </div>
                       )}
                     </div>
                   </div>
                 </div>
-
-                {/* Specifics Section Placeholder */}
-                <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 flex items-center justify-center flex-1">
-                  <p className="text-gray-400 text-lg font-medium">SPECIFICS</p>
-                </div>
-              </div>
-
-              {/* Right Column - PDF Viewer */}
-              <div className="w-3/5 flex flex-col gap-3">
-                {/* PDF Controls */}
-                <div className="bg-gray-800 border border-gray-700 rounded-lg p-2 flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                      disabled={currentPage <= 1}
-                      className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:bg-gray-900 disabled:text-gray-500 disabled:cursor-not-allowed text-white rounded transition-colors"
-                    >
-                      ← Prev
-                    </button>
-                    <span className="text-sm text-gray-300">
-                      Page {currentPage} of {numPages || '?'}
-                    </span>
-                    <button
-                      onClick={() => setCurrentPage((prev) => Math.min(numPages || prev, prev + 1))}
-                      disabled={currentPage >= (numPages || 0)}
-                      className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 disabled:bg-gray-900 disabled:text-gray-500 disabled:cursor-not-allowed text-white rounded transition-colors"
-                    >
-                      Next →
-                    </button>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => setScale((prev) => Math.max(0.5, prev - 0.25))}
-                      className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors"
-                    >
-                      Zoom Out
-                    </button>
-                    <span className="text-sm text-gray-300 min-w-[60px] text-center">
-                      {Math.round(scale * 100)}%
-                    </span>
-                    <button
-                      onClick={() => setScale((prev) => Math.min(2.0, prev + 0.25))}
-                      className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors"
-                    >
-                      Zoom In
-                    </button>
+              ) : (
+                /* Detail View - Placeholder */
+                <div className="p-4 h-full flex items-center justify-center">
+                  <div className="text-center">
+                    <h3 className="text-xl font-semibold text-white mb-2">Detail View</h3>
+                    <p className="text-gray-400">Coming soon: Extraction & Transformation details</p>
                   </div>
                 </div>
-
-                {/* PDF Document */}
-                <div className="bg-gray-800 border border-gray-700 rounded-lg flex-1 overflow-auto">
-                  {pdfUrl ? (
-                    <div className="flex justify-center p-2">
-                      <Document
-                        file={pdfUrl}
-                        onLoadSuccess={onDocumentLoadSuccess}
-                        onLoadError={onDocumentLoadError}
-                        loading={
-                          <div className="flex items-center justify-center h-96">
-                            <p className="text-gray-400">Loading PDF...</p>
-                          </div>
-                        }
-                        error={
-                          <div className="flex items-center justify-center h-96">
-                            <p className="text-red-400">Failed to load PDF</p>
-                          </div>
-                        }
-                      >
-                        <Page
-                          pageNumber={currentPage}
-                          scale={scale}
-                          renderTextLayer={false}
-                          renderAnnotationLayer={false}
-                          loading=""
-                          error=""
-                        />
-                      </Document>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-center h-96">
-                      <p className="text-gray-400">No PDF available</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
+              )}
+            </>
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end space-x-3 p-4 border-t border-gray-700 flex-shrink-0">
+        <div className="flex items-center justify-between p-3 border-t border-gray-700 flex-shrink-0">
+          {runDetail && (
+            <div className="flex items-center space-x-4 text-xs text-gray-400">
+              <div>
+                <span className="text-gray-500">Started:</span>{' '}
+                <span className="font-mono">{formatTimestamp(runDetail.started_at)}</span>
+              </div>
+              {runDetail.completed_at && (
+                <div>
+                  <span className="text-gray-500">Completed:</span>{' '}
+                  <span className="font-mono">{formatTimestamp(runDetail.completed_at)}</span>
+                </div>
+              )}
+            </div>
+          )}
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 border border-gray-600 text-gray-300 rounded hover:bg-gray-800 transition-colors"
+            className="px-4 py-2 border border-gray-600 text-gray-300 rounded hover:bg-gray-800 transition-colors text-sm"
           >
             Close
           </button>
