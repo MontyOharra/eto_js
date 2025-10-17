@@ -55,8 +55,9 @@ export function TemplateBuilderModal({
   const [pdfUrl, setPdfUrl] = useState<string>('');
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [pdfDataLoaded, setPdfDataLoaded] = useState(false);
 
-  // Load PDF data when modal opens
+  // Load PDF data when modal opens (only once per pdfFileId)
   useEffect(() => {
     if (!pdfFileId) return;
 
@@ -70,6 +71,7 @@ export function TemplateBuilderModal({
 
         const url = useMockPdfApi.getPdfDownloadUrl(pdfFileId);
         setPdfUrl(url);
+        setPdfDataLoaded(true);
       } catch (err) {
         console.error('Failed to load PDF data:', err);
         setPdfError(err instanceof Error ? err.message : 'Failed to load PDF data');
@@ -156,6 +158,7 @@ export function TemplateBuilderModal({
     setPdfObjects(null);
     setPdfUrl('');
     setPdfError(null);
+    setPdfDataLoaded(false);
     onClose();
   };
 
@@ -189,15 +192,15 @@ export function TemplateBuilderModal({
 
         {/* Main Content */}
         <div className="flex-1 overflow-hidden">
-          {/* Loading State */}
-          {pdfLoading && (
+          {/* Loading State - only show during initial load */}
+          {!pdfDataLoaded && pdfLoading && (
             <div className="h-full flex items-center justify-center">
               <div className="text-white text-lg">Loading PDF...</div>
             </div>
           )}
 
           {/* Error State */}
-          {pdfError && !pdfLoading && (
+          {pdfError && (
             <div className="h-full flex items-center justify-center">
               <div className="text-center">
                 <div className="text-red-400 mb-4">{pdfError}</div>
@@ -211,8 +214,8 @@ export function TemplateBuilderModal({
             </div>
           )}
 
-          {/* Steps - only render when PDF is loaded */}
-          {!pdfLoading && !pdfError && pdfObjects && pdfUrl && (
+          {/* Steps - render when PDF data is loaded */}
+          {pdfDataLoaded && !pdfError && (
             <>
               {currentStep === 'signature-objects' && (
                 <SignatureObjectsStep
