@@ -94,6 +94,42 @@ export function SignatureObjectsStep({
     };
   };
 
+  // Flatten PDF objects for overlay rendering
+  const getFlattenedObjects = () => {
+    if (!pdfObjects) return [];
+
+    const flatObjects: Array<{
+      type: string;
+      page: number;
+      bbox: [number, number, number, number];
+      text?: string;
+    }> = [];
+
+    // Helper to add objects with their type
+    const addObjects = (objects: any[] | undefined, type: string) => {
+      if (!objects) return;
+      objects.forEach((obj) => {
+        flatObjects.push({
+          type,
+          page: obj.page || 1,
+          bbox: obj.bbox,
+          text: obj.text,
+        });
+      });
+    };
+
+    // Add all object types
+    addObjects(pdfObjects.objects.text_words, 'text_word');
+    addObjects(pdfObjects.objects.text_lines, 'text_line');
+    addObjects(pdfObjects.objects.graphic_rects, 'graphic_rect');
+    addObjects(pdfObjects.objects.graphic_lines, 'graphic_line');
+    addObjects(pdfObjects.objects.graphic_curves, 'graphic_curve');
+    addObjects(pdfObjects.objects.images, 'image');
+    addObjects(pdfObjects.objects.tables, 'table');
+
+    return flatObjects;
+  };
+
   // Loading state
   if (loading) {
     return (
@@ -134,7 +170,12 @@ export function SignatureObjectsStep({
         onShowAll={handleShowAll}
         onHideAll={handleHideAll}
       />
-      <PdfViewerSection pdfUrl={pdfUrl} pdfFileId={pdfFileId} />
+      <PdfViewerSection
+        pdfUrl={pdfUrl}
+        pdfFileId={pdfFileId}
+        pdfObjects={getFlattenedObjects()}
+        selectedTypes={selectedTypes}
+      />
     </div>
   );
 }
