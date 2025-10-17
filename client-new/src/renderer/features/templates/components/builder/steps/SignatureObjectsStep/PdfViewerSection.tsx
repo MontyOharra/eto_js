@@ -18,6 +18,8 @@ interface PdfViewerSectionProps {
   pdfFileId: number;
   pdfObjects: PdfObject[];
   selectedTypes: Set<string>;
+  selectedObjects: Set<string>;
+  onObjectClick: (objectId: string) => void;
 }
 
 export function PdfViewerSection({
@@ -25,12 +27,19 @@ export function PdfViewerSection({
   pdfFileId,
   pdfObjects,
   selectedTypes,
+  selectedObjects,
+  onObjectClick,
 }: PdfViewerSectionProps) {
   return (
     <div className="flex-1 overflow-hidden bg-gray-800">
       <PdfViewer pdfUrl={pdfUrl}>
         <PdfViewer.Canvas pdfUrl={pdfUrl}>
-          <PdfObjectOverlay objects={pdfObjects} selectedTypes={selectedTypes} />
+          <PdfObjectOverlay
+            objects={pdfObjects}
+            selectedTypes={selectedTypes}
+            selectedObjects={selectedObjects}
+            onObjectClick={onObjectClick}
+          />
         </PdfViewer.Canvas>
         <PdfViewer.InfoPanel
           position="top-right"

@@ -26,11 +26,14 @@ export function SignatureObjectsStep({
   templateDescription,
   onTemplateNameChange,
   onTemplateDescriptionChange,
+  signatureObjects,
+  onSignatureObjectsChange,
 }: SignatureObjectsStepProps) {
   const [pdfObjects, setPdfObjects] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
+  const [selectedObjectIds, setSelectedObjectIds] = useState<Set<string>>(new Set());
   const [pdfUrl, setPdfUrl] = useState<string>('');
 
   // Load PDF objects on mount
@@ -77,6 +80,38 @@ export function SignatureObjectsStep({
 
   const handleHideAll = () => {
     setSelectedTypes(new Set());
+  };
+
+  const handleObjectClick = (objectId: string) => {
+    setSelectedObjectIds((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(objectId)) {
+        newSet.delete(objectId);
+      } else {
+        newSet.add(objectId);
+      }
+
+      // Convert selected IDs to SignatureObject format
+      const flatObjects = getFlattenedObjects();
+      const selectedSignatureObjects = flatObjects
+        .map((obj, idx) => {
+          const id = `${obj.type}-${obj.page}-${obj.bbox.join('-')}-${idx}`;
+          if (newSet.has(id)) {
+            return {
+              type: obj.type,
+              page: obj.page,
+              bbox: obj.bbox,
+              text: obj.text,
+            };
+          }
+          return null;
+        })
+        .filter((obj): obj is SignatureObject => obj !== null);
+
+      onSignatureObjectsChange(selectedSignatureObjects);
+
+      return newSet;
+    });
   };
 
   // Get counts for each type
@@ -175,6 +210,8 @@ export function SignatureObjectsStep({
         pdfFileId={pdfFileId}
         pdfObjects={getFlattenedObjects()}
         selectedTypes={selectedTypes}
+        selectedObjects={selectedObjectIds}
+        onObjectClick={handleObjectClick}
       />
     </div>
   );
