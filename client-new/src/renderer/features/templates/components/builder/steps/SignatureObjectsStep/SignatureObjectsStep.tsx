@@ -6,7 +6,6 @@
 
 import { useState, useEffect } from 'react';
 import { SignatureObject } from '../../../../types';
-import { useMockPdfApi } from '../../../../../pdf-files/mocks/useMockPdfApi';
 import { ObjectTypesSidebar } from './ObjectTypesSidebar';
 import { PdfViewerSection } from './PdfViewerSection';
 
@@ -16,6 +15,8 @@ interface SignatureObjectsStepProps {
   templateDescription: string;
   signatureObjects: SignatureObject[];
   selectedObjectTypes?: string[]; // Persisted visible types
+  pdfObjects: any; // PDF objects data (loaded by parent)
+  pdfUrl: string; // PDF URL (loaded by parent)
   onTemplateNameChange: (name: string) => void;
   onTemplateDescriptionChange: (description: string) => void;
   onSignatureObjectsChange: (objects: SignatureObject[]) => void;
@@ -32,20 +33,13 @@ export function SignatureObjectsStep({
   onSignatureObjectsChange,
   selectedObjectTypes = [],
   onSelectedTypesChange,
+  pdfObjects,
+  pdfUrl,
 }: SignatureObjectsStepProps) {
-  const [pdfObjects, setPdfObjects] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [selectedTypes, setSelectedTypes] = useState<Set<string>>(
     new Set(selectedObjectTypes)
   );
   const [selectedObjectIds, setSelectedObjectIds] = useState<Set<string>>(new Set());
-  const [pdfUrl, setPdfUrl] = useState<string>('');
-
-  // Load PDF objects on mount
-  useEffect(() => {
-    loadPdfObjects();
-  }, [pdfFileId]);
 
   // Sync selectedObjectIds from signatureObjects when they change (e.g., navigating back to this step)
   useEffect(() => {
@@ -76,24 +70,6 @@ export function SignatureObjectsStep({
 
     setSelectedObjectIds(idsToSelect);
   }, [signatureObjects, pdfObjects]);
-
-  const loadPdfObjects = async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const objectsData = await useMockPdfApi.getPdfObjects(pdfFileId);
-      setPdfObjects(objectsData);
-
-      const url = useMockPdfApi.getPdfDownloadUrl(pdfFileId);
-      setPdfUrl(url);
-    } catch (err) {
-      console.error('Failed to load PDF objects:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load PDF objects');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleTypeToggle = (type: string) => {
     const newSelected = new Set(selectedTypes);
@@ -204,32 +180,6 @@ export function SignatureObjectsStep({
 
     return flatObjects;
   };
-
-  // Loading state
-  if (loading) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <div className="text-white">Loading PDF objects...</div>
-      </div>
-    );
-  }
-
-  // Error state
-  if (error) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-red-400 mb-4">{error}</div>
-          <button
-            onClick={loadPdfObjects}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   // Main UI
   return (

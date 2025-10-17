@@ -3,10 +3,11 @@
  * 3-step wizard for creating PDF templates
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { SignatureObject, ExtractionField, PipelineState, VisualState } from '../../types';
 import { SignatureObjectsStep, ExtractionFieldsStep, PipelineBuilderStep } from './steps';
 import { TemplateBuilderHeader, TemplateBuilderStepper } from './components';
+import { useMockPdfApi } from '../../../pdf-files/mocks/useMockPdfApi';
 
 interface TemplateBuilderModalProps {
   isOpen: boolean;
@@ -48,6 +49,37 @@ export function TemplateBuilderModal({
     positions: {},
   });
   const [isSaving, setIsSaving] = useState(false);
+
+  // PDF data - loaded once and shared across steps
+  const [pdfObjects, setPdfObjects] = useState<any>(null);
+  const [pdfUrl, setPdfUrl] = useState<string>('');
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+
+  // Load PDF data when modal opens
+  useEffect(() => {
+    if (!pdfFileId) return;
+
+    const loadPdfData = async () => {
+      setPdfLoading(true);
+      setPdfError(null);
+
+      try {
+        const objectsData = await useMockPdfApi.getPdfObjects(pdfFileId);
+        setPdfObjects(objectsData);
+
+        const url = useMockPdfApi.getPdfDownloadUrl(pdfFileId);
+        setPdfUrl(url);
+      } catch (err) {
+        console.error('Failed to load PDF data:', err);
+        setPdfError(err instanceof Error ? err.message : 'Failed to load PDF data');
+      } finally {
+        setPdfLoading(false);
+      }
+    };
+
+    loadPdfData();
+  }, [pdfFileId]);
 
   // Calculate completed steps
   const completedSteps = useMemo(() => {
@@ -121,6 +153,9 @@ export function TemplateBuilderModal({
     setExtractionFields([]);
     setPipelineState({ entry_points: [], modules: [], connections: [] });
     setVisualState({ positions: {} });
+    setPdfObjects(null);
+    setPdfUrl('');
+    setPdfError(null);
     onClose();
   };
 
@@ -154,33 +189,62 @@ export function TemplateBuilderModal({
 
         {/* Main Content */}
         <div className="flex-1 overflow-hidden">
-          {currentStep === 'signature-objects' && (
-            <SignatureObjectsStep
-              pdfFileId={pdfFileId}
-              templateName={templateName}
-              templateDescription={templateDescription}
-              signatureObjects={signatureObjects}
-              selectedObjectTypes={selectedObjectTypes}
-              onTemplateNameChange={setTemplateName}
-              onTemplateDescriptionChange={setTemplateDescription}
-              onSignatureObjectsChange={setSignatureObjects}
-              onSelectedTypesChange={setSelectedObjectTypes}
-            />
+          {/* Loading State */}
+          {pdfLoading && (
+            <div className="h-full flex items-center justify-center">
+              <div className="text-white text-lg">Loading PDF...</div>
+            </div>
           )}
-          {currentStep === 'extraction-fields' && (
-            <ExtractionFieldsStep
-              pdfFileId={pdfFileId}
-              extractionFields={extractionFields}
-              onExtractionFieldsChange={setExtractionFields}
-            />
+
+          {/* Error State */}
+          {pdfError && !pdfLoading && (
+            <div className="h-full flex items-center justify-center">
+              <div className="text-center">
+                <div className="text-red-400 mb-4">{pdfError}</div>
+                <button
+                  onClick={handleClose}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
           )}
-          {currentStep === 'pipeline' && (
-            <PipelineBuilderStep
-              pipelineState={pipelineState}
-              visualState={visualState}
-              onPipelineStateChange={setPipelineState}
-              onVisualStateChange={setVisualState}
-            />
+
+          {/* Steps - only render when PDF is loaded */}
+          {!pdfLoading && !pdfError && pdfObjects && pdfUrl && (
+            <>
+              {currentStep === 'signature-objects' && (
+                <SignatureObjectsStep
+                  pdfFileId={pdfFileId}
+                  templateName={templateName}
+                  templateDescription={templateDescription}
+                  signatureObjects={signatureObjects}
+                  selectedObjectTypes={selectedObjectTypes}
+                  pdfObjects={pdfObjects}
+                  pdfUrl={pdfUrl}
+                  onTemplateNameChange={setTemplateName}
+                  onTemplateDescriptionChange={setTemplateDescription}
+                  onSignatureObjectsChange={setSignatureObjects}
+                  onSelectedTypesChange={setSelectedObjectTypes}
+                />
+              )}
+              {currentStep === 'extraction-fields' && (
+                <ExtractionFieldsStep
+                  pdfFileId={pdfFileId}
+                  extractionFields={extractionFields}
+                  onExtractionFieldsChange={setExtractionFields}
+                />
+              )}
+              {currentStep === 'pipeline' && (
+                <PipelineBuilderStep
+                  pipelineState={pipelineState}
+                  visualState={visualState}
+                  onPipelineStateChange={setPipelineState}
+                  onVisualStateChange={setVisualState}
+                />
+              )}
+            </>
           )}
         </div>
 
