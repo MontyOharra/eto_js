@@ -22,6 +22,10 @@ interface SignatureObjectsStepProps {
 
 export function SignatureObjectsStep({
   pdfFileId,
+  templateName,
+  templateDescription,
+  onTemplateNameChange,
+  onTemplateDescriptionChange,
 }: SignatureObjectsStepProps) {
   const [pdfObjects, setPdfObjects] = useState<any>(null);
   const [loading, setLoading] = useState(false);

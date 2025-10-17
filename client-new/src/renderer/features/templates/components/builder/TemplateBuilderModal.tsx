@@ -146,32 +146,31 @@ export function TemplateBuilderModal({
       <div className="bg-gray-900 rounded-lg w-full h-full max-w-[95vw] max-h-[95vh] flex flex-col shadow-2xl border border-gray-700">
         {/* Header */}
         <TemplateBuilderHeader
-          templateName={templateName || 'Template Builder'}
           pdfFileName={`${pdfFileId}.pdf`}
           onClose={handleClose}
         />
 
         {/* Stepper with Navigation Buttons */}
-        <div className="border-b border-gray-700">
-          <div className="flex items-center justify-between px-6 py-4">
-            <TemplateBuilderStepper
-              currentStep={currentStep}
-              completedSteps={completedSteps}
-            />
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700">
+          <TemplateBuilderStepper
+            currentStep={currentStep}
+            completedSteps={completedSteps}
+          />
 
-            {/* Navigation Buttons */}
-            <div className="flex items-center space-x-3">
-              {currentStep !== 'signature-objects' && (
-                <button
-                  onClick={handleBack}
-                  disabled={isSaving}
-                  className="px-4 py-2 text-sm bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
-                >
-                  ← Back
-                </button>
-              )}
+          {/* Navigation Buttons */}
+          <div className="flex items-center space-x-3">
+            {currentStep !== 'signature-objects' && (
+              <button
+                onClick={handleBack}
+                disabled={isSaving}
+                className="px-4 py-2 text-sm bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+              >
+                ← Back
+              </button>
+            )}
 
-              {currentStep !== 'pipeline' ? (
+            {currentStep !== 'pipeline' ? (
+              <div className="relative group">
                 <button
                   onClick={handleNext}
                   disabled={!canProceed}
@@ -179,24 +178,26 @@ export function TemplateBuilderModal({
                 >
                   Next →
                 </button>
-              ) : (
-                <button
-                  onClick={handleSave}
-                  disabled={!canProceed || isSaving}
-                  className="px-6 py-2 text-sm bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
-                >
-                  {isSaving ? 'Saving...' : 'Save Template'}
-                </button>
-              )}
-            </div>
+                {/* Tooltip on hover when disabled */}
+                {!canProceed && validationMessage && (
+                  <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block z-10">
+                    <div className="bg-gray-800 text-amber-400 text-xs px-3 py-2 rounded shadow-lg whitespace-nowrap border border-amber-400/30">
+                      {validationMessage}
+                      <div className="absolute top-full right-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-gray-800"></div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button
+                onClick={handleSave}
+                disabled={!canProceed || isSaving}
+                className="px-6 py-2 text-sm bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
+              >
+                {isSaving ? 'Saving...' : 'Save Template'}
+              </button>
+            )}
           </div>
-
-          {/* Validation Message */}
-          {validationMessage && !canProceed && (
-            <div className="px-6 pb-3">
-              <span className="text-sm text-amber-400">{validationMessage}</span>
-            </div>
-          )}
         </div>
 
         {/* Main Content */}

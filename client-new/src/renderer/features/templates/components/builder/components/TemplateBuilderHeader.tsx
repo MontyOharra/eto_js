@@ -1,24 +1,22 @@
 /**
  * TemplateBuilderHeader
- * Header section with template info and close button
+ * Header section with static title and close button
  */
 
 interface TemplateBuilderHeaderProps {
-  templateName: string;
   pdfFileName: string;
   onClose: () => void;
 }
 
 export function TemplateBuilderHeader({
-  templateName,
   pdfFileName,
   onClose,
 }: TemplateBuilderHeaderProps) {
   return (
     <div className="flex items-center justify-between p-4 border-b border-gray-700 flex-shrink-0">
       <div className="flex-1 min-w-0">
-        <h2 className="text-xl font-semibold text-white truncate">
-          {templateName || 'New Template'}
+        <h2 className="text-xl font-semibold text-white">
+          Template Builder
         </h2>
         <p className="text-sm text-gray-400 truncate">{pdfFileName}</p>
       </div>
