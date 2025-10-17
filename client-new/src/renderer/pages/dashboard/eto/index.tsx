@@ -1,0 +1,212 @@
+import { createFileRoute } from '@tanstack/react-router';
+import { useEffect, useState } from 'react';
+import { useMockEtoApi } from '../../../features/eto/hooks';
+import { EtoRunsTable, RunDetailModal } from '../../../features/eto/components';
+import { EtoRunListItem, EtoRunStatus } from '../../../features/eto/types';
+
+export const Route = createFileRoute('/dashboard/eto/')({
+  component: EtoPage,
+});
+
+function EtoPage() {
+  const {
+    getEtoRuns,
+    reprocessRuns,
+    skipRuns,
+    deleteRuns,
+    isLoading,
+    error,
+  } = useMockEtoApi();
+
+  // State to hold runs grouped by status
+  const [runsByStatus, setRunsByStatus] = useState<
+    Record<EtoRunStatus, EtoRunListItem[]>
+  >({
+    not_started: [],
+    processing: [],
+    success: [],
+    failure: [],
+    needs_template: [],
+    skipped: [],
+  });
+
+  // State for run detail modal
+  const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
+
+  // Fetch runs on mount
+  useEffect(() => {
+    loadRuns();
+  }, []);
+
+  const loadRuns = async () => {
+    try {
+      const response = await getEtoRuns();
+
+      // Group runs by status
+      const grouped: Record<EtoRunStatus, EtoRunListItem[]> = {
+        not_started: [],
+        processing: [],
+        success: [],
+        failure: [],
+        needs_template: [],
+        skipped: [],
+      };
+
+      response.items.forEach((run) => {
+        grouped[run.status].push(run);
+      });
+
+      setRunsByStatus(grouped);
+    } catch (err) {
+      console.error('Failed to load ETO runs:', err);
+    }
+  };
+
+  // ==========================================================================
+  // Button Handlers
+  // ==========================================================================
+
+  const handleView = (runId: number) => {
+    setSelectedRunId(runId);
+  };
+
+  const handleReview = (runId: number) => {
+    console.log('Review run:', runId);
+    // TODO: Open review modal or navigate to review page
+  };
+
+  const handleSkip = async (runId: number) => {
+    try {
+      await skipRuns({ run_ids: [runId] });
+      // Reload runs after successful skip
+      await loadRuns();
+    } catch (err) {
+      console.error('Failed to skip run:', err);
+    }
+  };
+
+  const handleBuildTemplate = (runId: number) => {
+    console.log('Build template for run:', runId);
+    // TODO: Navigate to template builder with this PDF
+    // navigate({ to: '/dashboard/templates/create', search: { pdfId: runId } });
+  };
+
+  const handleReprocess = async (runId: number) => {
+    try {
+      await reprocessRuns({ run_ids: [runId] });
+      // Reload runs after successful reprocess
+      await loadRuns();
+    } catch (err) {
+      console.error('Failed to reprocess run:', err);
+    }
+  };
+
+  const handleDelete = async (runId: number) => {
+    try {
+      await deleteRuns({ run_ids: [runId] });
+      // Reload runs after successful delete
+      await loadRuns();
+    } catch (err) {
+      console.error('Failed to delete run:', err);
+    }
+  };
+
+  // ==========================================================================
+  // Render
+  // ==========================================================================
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="bg-red-900 border border-red-700 rounded-lg p-4">
+          <h2 className="text-xl font-bold text-red-300 mb-2">Error</h2>
+          <p className="text-red-200">{error}</p>
+          <button
+            onClick={loadRuns}
+            className="mt-4 px-4 py-2 bg-red-700 hover:bg-red-600 text-white rounded transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6">
+      {/* Header */}
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold text-white">ETO Runs</h1>
+        <p className="text-gray-400 mt-2">
+          Monitor and manage extraction, transformation, and orchestration runs
+        </p>
+      </div>
+
+      {/* Loading State */}
+      {isLoading && (
+        <div className="mb-6 bg-blue-900 border border-blue-700 rounded-lg p-4">
+          <p className="text-blue-200">Loading ETO runs...</p>
+        </div>
+      )}
+
+
+      {/* Tables - One for each status */}
+      <div className="space-y-4">
+  
+        {/* Success Runs */}
+        <EtoRunsTable
+          title="Successful"
+          status="success"
+          runs={runsByStatus.success}
+          onView={handleView}
+        />
+
+        {/* Failed Runs */}
+        <EtoRunsTable
+          title="Failed"
+          status="failure"
+          runs={runsByStatus.failure}
+          onView={handleView}
+          onReview={handleReview}
+          onSkip={handleSkip}
+        />
+
+        {/* Needs Template Runs */}
+        <EtoRunsTable
+          title="Needs Template"
+          status="needs_template"
+          runs={runsByStatus.needs_template}
+          onBuildTemplate={handleBuildTemplate}
+          onSkip={handleSkip}
+        />
+        {/* Processing Runs */}
+        <EtoRunsTable
+          title="Processing"
+          status="processing"
+          runs={runsByStatus.processing}
+        />
+        {/* Skipped Runs */}
+        <EtoRunsTable
+          title="Skipped"
+          status="skipped"
+          runs={runsByStatus.skipped}
+          onReprocess={handleReprocess}
+          onDelete={handleDelete}
+        />
+        {/* Not Started Runs */}
+        <EtoRunsTable
+          title="Not Started"
+          status="not_started"
+          runs={runsByStatus.not_started}
+        />
+      </div>
+
+      {/* Run Detail Modal */}
+      <RunDetailModal
+        isOpen={selectedRunId !== null}
+        runId={selectedRunId}
+        onClose={() => setSelectedRunId(null)}
+      />
+    </div>
+  );
+}

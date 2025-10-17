@@ -1,24 +1,11 @@
 import { StrictMode } from "react";
 import ReactDOM from "react-dom/client";
-import { RouterProvider, createRouter } from "@tanstack/react-router";
-import { createHashHistory } from "@tanstack/react-router";
+import { RouterProvider } from "@tanstack/react-router";
 import "./styles.css";
 
-// Import the generated route tree
-import { routeTree } from "./routeTree.gen";
-
-// Create a new router instance with hash history for Electron
-const router = createRouter({
-  routeTree,
-  history: createHashHistory()
-});
-
-// Register the router instance for type safety
-declare module "@tanstack/react-router" {
-  interface Register {
-    router: typeof router;
-  }
-}
+// Import router and providers
+import { router } from "./app/router";
+import { AppProviders } from "./app/providers";
 
 // Render the app
 const rootElement = document.getElementById("root")!;
@@ -26,7 +13,9 @@ if (!rootElement.innerHTML) {
   const root = ReactDOM.createRoot(rootElement);
   root.render(
     <StrictMode>
-      <RouterProvider router={router} />
+      <AppProviders>
+        <RouterProvider router={router} />
+      </AppProviders>
     </StrictMode>
   );
 }

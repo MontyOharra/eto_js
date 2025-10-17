@@ -23,6 +23,7 @@ export default defineConfig({
   ],
   base: "./",
   root: "./src/renderer",
+  publicDir: path.resolve(__dirname, 'public'),  // Point to client-new/public/
   build: {
     outDir: "../../build/dist-react",
   },

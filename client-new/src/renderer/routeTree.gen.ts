@@ -9,16 +9,23 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './pages/__root'
-import { Route as PdfFilesRouteImport } from './pages/pdf-files'
+import { Route as LoginRouteImport } from './pages/login'
+import { Route as DashboardRouteRouteImport } from './pages/dashboard/route'
 import { Route as IndexRouteImport } from './pages/index'
-import { Route as TemplatesIndexRouteImport } from './pages/templates/index'
-import { Route as PipelinesIndexRouteImport } from './pages/pipelines/index'
-import { Route as EtoRunsIndexRouteImport } from './pages/eto-runs/index'
-import { Route as EmailConfigsIndexRouteImport } from './pages/email-configs/index'
+import { Route as DashboardIndexRouteImport } from './pages/dashboard/index'
+import { Route as DashboardPipelinesIndexRouteImport } from './pages/dashboard/pipelines/index'
+import { Route as DashboardPdfTemplatesIndexRouteImport } from './pages/dashboard/pdf-templates/index'
+import { Route as DashboardEtoIndexRouteImport } from './pages/dashboard/eto/index'
+import { Route as DashboardConfigsIndexRouteImport } from './pages/dashboard/configs/index'
 
-const PdfFilesRoute = PdfFilesRouteImport.update({
-  id: '/pdf-files',
-  path: '/pdf-files',
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardRouteRoute = DashboardRouteRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -26,95 +33,115 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const TemplatesIndexRoute = TemplatesIndexRouteImport.update({
-  id: '/templates/',
-  path: '/templates/',
-  getParentRoute: () => rootRouteImport,
+const DashboardIndexRoute = DashboardIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DashboardRouteRoute,
 } as any)
-const PipelinesIndexRoute = PipelinesIndexRouteImport.update({
+const DashboardPipelinesIndexRoute = DashboardPipelinesIndexRouteImport.update({
   id: '/pipelines/',
   path: '/pipelines/',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => DashboardRouteRoute,
 } as any)
-const EtoRunsIndexRoute = EtoRunsIndexRouteImport.update({
-  id: '/eto-runs/',
-  path: '/eto-runs/',
-  getParentRoute: () => rootRouteImport,
+const DashboardPdfTemplatesIndexRoute =
+  DashboardPdfTemplatesIndexRouteImport.update({
+    id: '/pdf-templates/',
+    path: '/pdf-templates/',
+    getParentRoute: () => DashboardRouteRoute,
+  } as any)
+const DashboardEtoIndexRoute = DashboardEtoIndexRouteImport.update({
+  id: '/eto/',
+  path: '/eto/',
+  getParentRoute: () => DashboardRouteRoute,
 } as any)
-const EmailConfigsIndexRoute = EmailConfigsIndexRouteImport.update({
-  id: '/email-configs/',
-  path: '/email-configs/',
-  getParentRoute: () => rootRouteImport,
+const DashboardConfigsIndexRoute = DashboardConfigsIndexRouteImport.update({
+  id: '/configs/',
+  path: '/configs/',
+  getParentRoute: () => DashboardRouteRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/pdf-files': typeof PdfFilesRoute
-  '/email-configs': typeof EmailConfigsIndexRoute
-  '/eto-runs': typeof EtoRunsIndexRoute
-  '/pipelines': typeof PipelinesIndexRoute
-  '/templates': typeof TemplatesIndexRoute
+  '/dashboard': typeof DashboardRouteRouteWithChildren
+  '/login': typeof LoginRoute
+  '/dashboard/': typeof DashboardIndexRoute
+  '/dashboard/configs': typeof DashboardConfigsIndexRoute
+  '/dashboard/eto': typeof DashboardEtoIndexRoute
+  '/dashboard/pdf-templates': typeof DashboardPdfTemplatesIndexRoute
+  '/dashboard/pipelines': typeof DashboardPipelinesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/pdf-files': typeof PdfFilesRoute
-  '/email-configs': typeof EmailConfigsIndexRoute
-  '/eto-runs': typeof EtoRunsIndexRoute
-  '/pipelines': typeof PipelinesIndexRoute
-  '/templates': typeof TemplatesIndexRoute
+  '/login': typeof LoginRoute
+  '/dashboard': typeof DashboardIndexRoute
+  '/dashboard/configs': typeof DashboardConfigsIndexRoute
+  '/dashboard/eto': typeof DashboardEtoIndexRoute
+  '/dashboard/pdf-templates': typeof DashboardPdfTemplatesIndexRoute
+  '/dashboard/pipelines': typeof DashboardPipelinesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/pdf-files': typeof PdfFilesRoute
-  '/email-configs/': typeof EmailConfigsIndexRoute
-  '/eto-runs/': typeof EtoRunsIndexRoute
-  '/pipelines/': typeof PipelinesIndexRoute
-  '/templates/': typeof TemplatesIndexRoute
+  '/dashboard': typeof DashboardRouteRouteWithChildren
+  '/login': typeof LoginRoute
+  '/dashboard/': typeof DashboardIndexRoute
+  '/dashboard/configs/': typeof DashboardConfigsIndexRoute
+  '/dashboard/eto/': typeof DashboardEtoIndexRoute
+  '/dashboard/pdf-templates/': typeof DashboardPdfTemplatesIndexRoute
+  '/dashboard/pipelines/': typeof DashboardPipelinesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/pdf-files'
-    | '/email-configs'
-    | '/eto-runs'
-    | '/pipelines'
-    | '/templates'
+    | '/dashboard'
+    | '/login'
+    | '/dashboard/'
+    | '/dashboard/configs'
+    | '/dashboard/eto'
+    | '/dashboard/pdf-templates'
+    | '/dashboard/pipelines'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/pdf-files'
-    | '/email-configs'
-    | '/eto-runs'
-    | '/pipelines'
-    | '/templates'
+    | '/login'
+    | '/dashboard'
+    | '/dashboard/configs'
+    | '/dashboard/eto'
+    | '/dashboard/pdf-templates'
+    | '/dashboard/pipelines'
   id:
     | '__root__'
     | '/'
-    | '/pdf-files'
-    | '/email-configs/'
-    | '/eto-runs/'
-    | '/pipelines/'
-    | '/templates/'
+    | '/dashboard'
+    | '/login'
+    | '/dashboard/'
+    | '/dashboard/configs/'
+    | '/dashboard/eto/'
+    | '/dashboard/pdf-templates/'
+    | '/dashboard/pipelines/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  PdfFilesRoute: typeof PdfFilesRoute
-  EmailConfigsIndexRoute: typeof EmailConfigsIndexRoute
-  EtoRunsIndexRoute: typeof EtoRunsIndexRoute
-  PipelinesIndexRoute: typeof PipelinesIndexRoute
-  TemplatesIndexRoute: typeof TemplatesIndexRoute
+  DashboardRouteRoute: typeof DashboardRouteRouteWithChildren
+  LoginRoute: typeof LoginRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/pdf-files': {
-      id: '/pdf-files'
-      path: '/pdf-files'
-      fullPath: '/pdf-files'
-      preLoaderRoute: typeof PdfFilesRouteImport
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -124,44 +151,68 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/templates/': {
-      id: '/templates/'
-      path: '/templates'
-      fullPath: '/templates'
-      preLoaderRoute: typeof TemplatesIndexRouteImport
-      parentRoute: typeof rootRouteImport
+    '/dashboard/': {
+      id: '/dashboard/'
+      path: '/'
+      fullPath: '/dashboard/'
+      preLoaderRoute: typeof DashboardIndexRouteImport
+      parentRoute: typeof DashboardRouteRoute
     }
-    '/pipelines/': {
-      id: '/pipelines/'
+    '/dashboard/pipelines/': {
+      id: '/dashboard/pipelines/'
       path: '/pipelines'
-      fullPath: '/pipelines'
-      preLoaderRoute: typeof PipelinesIndexRouteImport
-      parentRoute: typeof rootRouteImport
+      fullPath: '/dashboard/pipelines'
+      preLoaderRoute: typeof DashboardPipelinesIndexRouteImport
+      parentRoute: typeof DashboardRouteRoute
     }
-    '/eto-runs/': {
-      id: '/eto-runs/'
-      path: '/eto-runs'
-      fullPath: '/eto-runs'
-      preLoaderRoute: typeof EtoRunsIndexRouteImport
-      parentRoute: typeof rootRouteImport
+    '/dashboard/pdf-templates/': {
+      id: '/dashboard/pdf-templates/'
+      path: '/pdf-templates'
+      fullPath: '/dashboard/pdf-templates'
+      preLoaderRoute: typeof DashboardPdfTemplatesIndexRouteImport
+      parentRoute: typeof DashboardRouteRoute
     }
-    '/email-configs/': {
-      id: '/email-configs/'
-      path: '/email-configs'
-      fullPath: '/email-configs'
-      preLoaderRoute: typeof EmailConfigsIndexRouteImport
-      parentRoute: typeof rootRouteImport
+    '/dashboard/eto/': {
+      id: '/dashboard/eto/'
+      path: '/eto'
+      fullPath: '/dashboard/eto'
+      preLoaderRoute: typeof DashboardEtoIndexRouteImport
+      parentRoute: typeof DashboardRouteRoute
+    }
+    '/dashboard/configs/': {
+      id: '/dashboard/configs/'
+      path: '/configs'
+      fullPath: '/dashboard/configs'
+      preLoaderRoute: typeof DashboardConfigsIndexRouteImport
+      parentRoute: typeof DashboardRouteRoute
     }
   }
 }
 
+interface DashboardRouteRouteChildren {
+  DashboardIndexRoute: typeof DashboardIndexRoute
+  DashboardConfigsIndexRoute: typeof DashboardConfigsIndexRoute
+  DashboardEtoIndexRoute: typeof DashboardEtoIndexRoute
+  DashboardPdfTemplatesIndexRoute: typeof DashboardPdfTemplatesIndexRoute
+  DashboardPipelinesIndexRoute: typeof DashboardPipelinesIndexRoute
+}
+
+const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
+  DashboardIndexRoute: DashboardIndexRoute,
+  DashboardConfigsIndexRoute: DashboardConfigsIndexRoute,
+  DashboardEtoIndexRoute: DashboardEtoIndexRoute,
+  DashboardPdfTemplatesIndexRoute: DashboardPdfTemplatesIndexRoute,
+  DashboardPipelinesIndexRoute: DashboardPipelinesIndexRoute,
+}
+
+const DashboardRouteRouteWithChildren = DashboardRouteRoute._addFileChildren(
+  DashboardRouteRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  PdfFilesRoute: PdfFilesRoute,
-  EmailConfigsIndexRoute: EmailConfigsIndexRoute,
-  EtoRunsIndexRoute: EtoRunsIndexRoute,
-  PipelinesIndexRoute: PipelinesIndexRoute,
-  TemplatesIndexRoute: TemplatesIndexRoute,
+  DashboardRouteRoute: DashboardRouteRouteWithChildren,
+  LoginRoute: LoginRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
