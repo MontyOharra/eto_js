@@ -236,6 +236,8 @@ export function TemplateBuilderModal({
                 <ExtractionFieldsStep
                   pdfFileId={pdfFileId}
                   extractionFields={extractionFields}
+                  pdfObjects={pdfObjects}
+                  pdfUrl={pdfUrl}
                   onExtractionFieldsChange={setExtractionFields}
                 />
               )}
