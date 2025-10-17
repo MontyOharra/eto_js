@@ -149,12 +149,15 @@ export function useMockEtoApi() {
         throw new Error('Invalid file type. Only PDF files are allowed.');
       }
 
-      // Return mock upload response with incremented ID
+      // Cycle through actual PDF IDs (2, 3, 4, 103)
+      const availablePdfIds = [2, 3, 4, 103];
+      const randomPdfId = availablePdfIds[Math.floor(Math.random() * availablePdfIds.length)];
+
+      // Return mock upload response with realistic PDF ID
       return {
         ...mockUploadResponse,
         id: mockUploadResponse.id + Math.floor(Math.random() * 1000),
-        pdf_file_id:
-          mockUploadResponse.pdf_file_id + Math.floor(Math.random() * 1000),
+        pdf_file_id: randomPdfId,
       };
     } catch (err) {
       const errorMessage =

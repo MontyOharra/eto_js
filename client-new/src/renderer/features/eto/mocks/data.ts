@@ -16,10 +16,18 @@ import {
 // Helper Functions
 // =============================================================================
 
+// Actual file sizes from client-new/public/data/pdfs/
+const actualFileSizes: Record<number, number> = {
+  2: 93748,    // 2.pdf
+  3: 174689,   // 3.pdf
+  4: 205522,   // 4.pdf
+  103: 112450, // 103.pdf
+};
+
 const createMockPdfInfo = (id: number, filename: string) => ({
   id,
   original_filename: filename,
-  file_size: Math.floor(Math.random() * 5000000) + 100000, // 100KB - 5MB
+  file_size: actualFileSizes[id] || Math.floor(Math.random() * 200000) + 100000,
 });
 
 const createMockEmailSource = (senderEmail: string) => ({
@@ -45,6 +53,8 @@ const createMockTemplate = (id: number, name: string) => ({
 // Mock List Items (one for each status)
 // =============================================================================
 
+// Use actual PDF IDs from client-new/public/data/pdfs/ (2.pdf, 3.pdf, 4.pdf, 103.pdf)
+
 export const mockNotStartedRun: EtoRunListItem = {
   id: 1,
   status: 'not_started',
@@ -53,7 +63,7 @@ export const mockNotStartedRun: EtoRunListItem = {
   completed_at: null,
   error_type: null,
   error_message: null,
-  pdf: createMockPdfInfo(101, 'hawb_2024_001.pdf'),
+  pdf: createMockPdfInfo(2, '2.pdf'),
   source: createMockEmailSource('sender1@example.com'),
   matched_template: null,
 };
@@ -66,7 +76,7 @@ export const mockProcessingRun: EtoRunListItem = {
   completed_at: null,
   error_type: null,
   error_message: null,
-  pdf: createMockPdfInfo(102, 'hawb_2024_002.pdf'),
+  pdf: createMockPdfInfo(3, '3.pdf'),
   source: createMockEmailSource('sender2@example.com'),
   matched_template: createMockTemplate(1, 'Standard HAWB Template'),
 };
@@ -79,7 +89,7 @@ export const mockSuccessRun: EtoRunListItem = {
   completed_at: new Date(Date.now() - 50 * 60 * 1000).toISOString(), // 50 mins ago
   error_type: null,
   error_message: null,
-  pdf: createMockPdfInfo(103, 'hawb_2024_003.pdf'),
+  pdf: createMockPdfInfo(103, '103.pdf'),
   source: createMockEmailSource('sender3@example.com'),
   matched_template: createMockTemplate(1, 'Standard HAWB Template'),
 };
@@ -92,7 +102,7 @@ export const mockFailureRun: EtoRunListItem = {
   completed_at: new Date(Date.now() - 2 * 60 * 60 * 1000 + 30000).toISOString(),
   error_type: 'ExtractionError',
   error_message: 'Failed to extract required field: customer_name',
-  pdf: createMockPdfInfo(104, 'hawb_2024_004.pdf'),
+  pdf: createMockPdfInfo(4, '4.pdf'),
   source: createMockManualSource(),
   matched_template: createMockTemplate(2, 'Alternative HAWB Template'),
 };
@@ -105,7 +115,7 @@ export const mockNeedsTemplateRun: EtoRunListItem = {
   completed_at: new Date(Date.now() - 3 * 60 * 60 * 1000 + 5000).toISOString(),
   error_type: 'TemplateMatchingError',
   error_message: 'No matching template found for this PDF',
-  pdf: createMockPdfInfo(105, 'unknown_format.pdf'),
+  pdf: createMockPdfInfo(2, '2.pdf'),
   source: createMockEmailSource('sender5@example.com'),
   matched_template: null,
 };
@@ -118,7 +128,7 @@ export const mockSkippedRun: EtoRunListItem = {
   completed_at: null,
   error_type: null,
   error_message: null,
-  pdf: createMockPdfInfo(106, 'invalid_document.pdf'),
+  pdf: createMockPdfInfo(3, '3.pdf'),
   source: createMockEmailSource('sender6@example.com'),
   matched_template: null,
 };
@@ -132,7 +142,7 @@ export const mockSuccessRun2: EtoRunListItem = {
   completed_at: new Date(Date.now() - 3.5 * 60 * 60 * 1000).toISOString(),
   error_type: null,
   error_message: null,
-  pdf: createMockPdfInfo(107, 'hawb_2024_007.pdf'),
+  pdf: createMockPdfInfo(4, '4.pdf'),
   source: createMockManualSource(),
   matched_template: createMockTemplate(1, 'Standard HAWB Template'),
 };
@@ -145,7 +155,7 @@ export const mockFailureRun2: EtoRunListItem = {
   completed_at: new Date(Date.now() - 4.8 * 60 * 60 * 1000).toISOString(),
   error_type: 'PipelineExecutionError',
   error_message: 'Pipeline execution failed at step 3: Invalid data format',
-  pdf: createMockPdfInfo(108, 'hawb_2024_008.pdf'),
+  pdf: createMockPdfInfo(103, '103.pdf'),
   source: createMockEmailSource('sender8@example.com'),
   matched_template: createMockTemplate(2, 'Alternative HAWB Template'),
 };
@@ -158,7 +168,7 @@ export const mockNotStartedRun2: EtoRunListItem = {
   completed_at: null,
   error_type: null,
   error_message: null,
-  pdf: createMockPdfInfo(109, 'hawb_2024_009.pdf'),
+  pdf: createMockPdfInfo(2, '2.pdf'),
   source: createMockManualSource(),
   matched_template: null,
 };
@@ -171,7 +181,7 @@ export const mockSkippedRun2: EtoRunListItem = {
   completed_at: null,
   error_type: null,
   error_message: null,
-  pdf: createMockPdfInfo(110, 'corrupted_file.pdf'),
+  pdf: createMockPdfInfo(3, '3.pdf'),
   source: createMockEmailSource('sender10@example.com'),
   matched_template: null,
 };
@@ -309,7 +319,7 @@ export const mockSuccessRunDetail: EtoRunDetail = {
 
 export const mockUploadResponse: PostEtoRunUploadResponse = {
   id: 11,
-  pdf_file_id: 111,
+  pdf_file_id: 4, // Use actual PDF ID
   status: 'not_started',
   processing_step: null,
   started_at: null,
