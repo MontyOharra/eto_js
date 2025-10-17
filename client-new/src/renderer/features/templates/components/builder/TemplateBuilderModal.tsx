@@ -6,7 +6,7 @@
 import { useState, useMemo } from 'react';
 import { SignatureObject, ExtractionField, PipelineState, VisualState } from '../../types';
 import { SignatureObjectsStep, ExtractionFieldsStep, PipelineBuilderStep } from './steps';
-import { TemplateBuilderHeader, TemplateBuilderStepper, TemplateBuilderFooter } from './components';
+import { TemplateBuilderHeader, TemplateBuilderStepper } from './components';
 
 interface TemplateBuilderModalProps {
   isOpen: boolean;
@@ -47,8 +47,6 @@ export function TemplateBuilderModal({
     positions: {},
   });
   const [isSaving, setIsSaving] = useState(false);
-
-  if (!isOpen || !pdfFileId) return null;
 
   // Calculate completed steps
   const completedSteps = useMemo(() => {
@@ -140,6 +138,9 @@ export function TemplateBuilderModal({
     }
   };
 
+  // Early return after all hooks are defined
+  if (!isOpen || !pdfFileId) return null;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="bg-gray-900 rounded-lg w-full h-full max-w-[95vw] max-h-[95vh] flex flex-col shadow-2xl border border-gray-700">
@@ -150,45 +151,53 @@ export function TemplateBuilderModal({
           onClose={handleClose}
         />
 
-        {/* Stepper */}
-        <TemplateBuilderStepper
-          currentStep={currentStep}
-          completedSteps={completedSteps}
-        />
+        {/* Stepper with Navigation Buttons */}
+        <div className="border-b border-gray-700">
+          <div className="flex items-center justify-between px-6 py-4">
+            <TemplateBuilderStepper
+              currentStep={currentStep}
+              completedSteps={completedSteps}
+            />
 
-        {/* Template Name Input - Only on Step 1 */}
-        {currentStep === 'signature-objects' && (
-          <div className="px-6 py-4 border-b border-gray-700">
-            <div className="space-y-3">
-              <div>
-                <label htmlFor="template-name" className="block text-sm font-medium text-gray-300 mb-2">
-                  Template Name *
-                </label>
-                <input
-                  id="template-name"
-                  type="text"
-                  value={templateName}
-                  onChange={(e) => setTemplateName(e.target.value)}
-                  placeholder="Enter template name..."
-                  className="w-full px-4 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label htmlFor="template-description" className="block text-sm font-medium text-gray-300 mb-2">
-                  Description
-                </label>
-                <textarea
-                  id="template-description"
-                  value={templateDescription}
-                  onChange={(e) => setTemplateDescription(e.target.value)}
-                  placeholder="Enter template description (optional)..."
-                  rows={2}
-                  className="w-full px-4 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-none"
-                />
-              </div>
+            {/* Navigation Buttons */}
+            <div className="flex items-center space-x-3">
+              {currentStep !== 'signature-objects' && (
+                <button
+                  onClick={handleBack}
+                  disabled={isSaving}
+                  className="px-4 py-2 text-sm bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+                >
+                  ← Back
+                </button>
+              )}
+
+              {currentStep !== 'pipeline' ? (
+                <button
+                  onClick={handleNext}
+                  disabled={!canProceed}
+                  className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
+                >
+                  Next →
+                </button>
+              ) : (
+                <button
+                  onClick={handleSave}
+                  disabled={!canProceed || isSaving}
+                  className="px-6 py-2 text-sm bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
+                >
+                  {isSaving ? 'Saving...' : 'Save Template'}
+                </button>
+              )}
             </div>
           </div>
-        )}
+
+          {/* Validation Message */}
+          {validationMessage && !canProceed && (
+            <div className="px-6 pb-3">
+              <span className="text-sm text-amber-400">{validationMessage}</span>
+            </div>
+          )}
+        </div>
 
         {/* Main Content */}
         <div className="flex-1 overflow-hidden">
@@ -219,18 +228,6 @@ export function TemplateBuilderModal({
             />
           )}
         </div>
-
-        {/* Footer */}
-        <TemplateBuilderFooter
-          currentStep={currentStep}
-          canProceed={canProceed}
-          validationMessage={validationMessage}
-          isSaving={isSaving}
-          onBack={handleBack}
-          onNext={handleNext}
-          onSave={handleSave}
-          onCancel={handleClose}
-        />
       </div>
     </div>
   );

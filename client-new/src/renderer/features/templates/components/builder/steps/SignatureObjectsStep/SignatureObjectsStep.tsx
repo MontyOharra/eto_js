@@ -120,6 +120,10 @@ export function SignatureObjectsStep({
   return (
     <div className="h-full flex">
       <ObjectTypesSidebar
+        templateName={templateName}
+        templateDescription={templateDescription}
+        onTemplateNameChange={onTemplateNameChange}
+        onTemplateDescriptionChange={onTemplateDescriptionChange}
         typeCounts={getTypeCounts()}
         selectedTypes={selectedTypes}
         onTypeToggle={handleTypeToggle}

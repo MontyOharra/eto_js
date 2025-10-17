@@ -27,6 +27,10 @@ const OBJECT_TYPE_COLORS: Record<string, string> = {
 };
 
 interface ObjectTypesSidebarProps {
+  templateName: string;
+  templateDescription: string;
+  onTemplateNameChange: (name: string) => void;
+  onTemplateDescriptionChange: (description: string) => void;
   typeCounts: Record<string, number>;
   selectedTypes: Set<string>;
   onTypeToggle: (type: string) => void;
@@ -35,6 +39,10 @@ interface ObjectTypesSidebarProps {
 }
 
 export function ObjectTypesSidebar({
+  templateName,
+  templateDescription,
+  onTemplateNameChange,
+  onTemplateDescriptionChange,
   typeCounts,
   selectedTypes,
   onTypeToggle,
@@ -43,6 +51,40 @@ export function ObjectTypesSidebar({
 }: ObjectTypesSidebarProps) {
   return (
     <div className="w-80 flex-shrink-0 bg-gray-900 border-r border-gray-700 p-4 overflow-y-auto">
+      {/* Template Name & Description */}
+      <div className="mb-6">
+        <h3 className="text-sm font-semibold text-white mb-3">Template Information</h3>
+        <div className="space-y-3">
+          <div>
+            <label htmlFor="template-name" className="block text-xs font-medium text-gray-300 mb-1.5">
+              Template Name *
+            </label>
+            <input
+              id="template-name"
+              type="text"
+              value={templateName}
+              onChange={(e) => onTemplateNameChange(e.target.value)}
+              placeholder="Enter template name..."
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label htmlFor="template-description" className="block text-xs font-medium text-gray-300 mb-1.5">
+              Description
+            </label>
+            <textarea
+              id="template-description"
+              value={templateDescription}
+              onChange={(e) => onTemplateDescriptionChange(e.target.value)}
+              placeholder="Enter description (optional)..."
+              rows={3}
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-none"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Object Visibility Section */}
       <h3 className="text-sm font-semibold text-white mb-3">Object Visibility</h3>
 
       {/* Show/Hide All Buttons */}

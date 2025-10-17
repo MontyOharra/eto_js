@@ -29,7 +29,7 @@ export function TemplateBuilderStepper({
   const currentStepNumber = STEPS.find((s) => s.id === currentStep)?.number || 1;
 
   return (
-    <div className="flex items-center justify-center space-x-4 p-4 border-b border-gray-700">
+    <div className="flex items-center space-x-3">
       {STEPS.map((step, index) => {
         const isActive = step.id === currentStep;
         const isCompleted = completedSteps.has(step.id);
@@ -40,7 +40,7 @@ export function TemplateBuilderStepper({
             {/* Step Circle */}
             <div className="flex items-center">
               <div
-                className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold transition-colors ${
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-colors ${
                   isActive
                     ? 'bg-blue-600 text-white'
                     : isCompleted || isPast
@@ -49,7 +49,7 @@ export function TemplateBuilderStepper({
                 }`}
               >
                 {isCompleted || isPast ? (
-                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                     <path
                       fillRule="evenodd"
                       d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
@@ -61,7 +61,7 @@ export function TemplateBuilderStepper({
                 )}
               </div>
               <span
-                className={`ml-3 text-sm font-medium ${
+                className={`ml-2 text-sm font-medium ${
                   isActive ? 'text-white' : 'text-gray-400'
                 }`}
               >
@@ -71,7 +71,7 @@ export function TemplateBuilderStepper({
 
             {/* Divider */}
             {index < STEPS.length - 1 && (
-              <div className="w-16 h-0.5 bg-gray-700 mx-4"></div>
+              <div className="w-12 h-0.5 bg-gray-700 mx-3"></div>
             )}
           </div>
         );
