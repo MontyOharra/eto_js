@@ -115,13 +115,55 @@ export function useMockEtoApi() {
     try {
       await simulateDelay();
 
-      // Return mock detail if exists, otherwise return default success detail
-      const detail = mockRunDetailsById[runId] || mockSuccessRunDetail;
+      // Find the run in the list
+      const run = allMockRuns.find((r) => r.id === runId);
 
       // If not found, throw 404
-      if (!allMockRuns.find((r) => r.id === runId)) {
+      if (!run) {
         throw new Error('Run not found');
       }
+
+      // Return specific mock detail if exists
+      if (mockRunDetailsById[runId]) {
+        return mockRunDetailsById[runId];
+      }
+
+      // Otherwise, generate a generic detail based on the run's actual data
+      const detail: GetEtoRunDetailResponse = {
+        ...run,
+        pdf: {
+          ...run.pdf,
+          page_count: 2, // Default page count
+        },
+        template_matching: run.matched_template ? {
+          status: 'success',
+          started_at: run.started_at,
+          completed_at: run.started_at,
+          error_message: null,
+          matched_template: run.matched_template,
+        } : {
+          status: run.status === 'needs_template' ? 'failure' : 'not_started',
+          started_at: run.started_at,
+          completed_at: run.completed_at,
+          error_message: run.status === 'needs_template' ? run.error_message : null,
+          matched_template: null,
+        },
+        data_extraction: {
+          status: run.status === 'success' ? 'success' : 'not_started',
+          started_at: run.started_at,
+          completed_at: run.completed_at,
+          error_message: null,
+          extracted_data: run.status === 'success' ? { placeholder: 'data' } : null,
+        },
+        pipeline_execution: {
+          status: run.status === 'success' ? 'success' : 'not_started',
+          started_at: run.started_at,
+          completed_at: run.completed_at,
+          error_message: null,
+          executed_actions: run.status === 'success' ? [] : null,
+          steps: run.status === 'success' ? [] : null,
+        },
+      };
 
       return detail;
     } catch (err) {

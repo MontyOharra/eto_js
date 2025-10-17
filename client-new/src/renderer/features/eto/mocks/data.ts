@@ -327,10 +327,150 @@ export const mockUploadResponse: PostEtoRunUploadResponse = {
 };
 
 // =============================================================================
+// Mock Detail Response for Second Success Run
+// =============================================================================
+
+export const mockSuccessRun2Detail: EtoRunDetail = {
+  ...mockSuccessRun2,
+  pdf: {
+    ...mockSuccessRun2.pdf,
+    page_count: 2,
+  },
+  template_matching: {
+    status: 'success',
+    started_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+    completed_at: new Date(Date.now() - 3.95 * 60 * 60 * 1000).toISOString(),
+    error_message: null,
+    matched_template: createMockTemplate(1, 'Standard HAWB Template'),
+  },
+  data_extraction: {
+    status: 'success',
+    started_at: new Date(Date.now() - 3.95 * 60 * 60 * 1000).toISOString(),
+    completed_at: new Date(Date.now() - 3.7 * 60 * 60 * 1000).toISOString(),
+    error_message: null,
+    extracted_data: {
+      hawb_number: 'HAWB-2024-67890',
+      customer_name: 'Global Logistics Inc',
+      origin: 'SFO',
+      destination: 'ORD',
+      weight: '245.8',
+      pieces: '15',
+      date: '2024-10-16',
+    },
+  },
+  pipeline_execution: {
+    status: 'success',
+    started_at: new Date(Date.now() - 3.7 * 60 * 60 * 1000).toISOString(),
+    completed_at: new Date(Date.now() - 3.5 * 60 * 60 * 1000).toISOString(),
+    error_message: null,
+    executed_actions: [
+      {
+        action_module_name: 'Send Email',
+        inputs: {
+          to: 'dispatch@globallogistics.com',
+          subject: 'HAWB-2024-67890 Processed',
+          body: 'HAWB document has been successfully processed',
+        },
+      },
+    ],
+    steps: [
+      {
+        id: 401,
+        step_number: 1,
+        module_instance_id: 'transform_2',
+        inputs: {
+          input_data: {
+            value: { hawb_number: 'HAWB-2024-67890' },
+            type: 'object',
+          },
+        },
+        outputs: {
+          transformed_data: {
+            value: { hawb: 'HAWB-2024-67890' },
+            type: 'object',
+          },
+        },
+        error: null,
+      },
+    ],
+  },
+};
+
+// =============================================================================
+// Mock Detail Response for Processing Run
+// =============================================================================
+
+export const mockProcessingRunDetail: EtoRunDetail = {
+  ...mockProcessingRun,
+  pdf: {
+    ...mockProcessingRun.pdf,
+    page_count: 4,
+  },
+  template_matching: {
+    status: 'success',
+    started_at: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+    completed_at: new Date(Date.now() - 4.5 * 60 * 1000).toISOString(),
+    error_message: null,
+    matched_template: createMockTemplate(1, 'Standard HAWB Template'),
+  },
+  data_extraction: {
+    status: 'processing',
+    started_at: new Date(Date.now() - 4.5 * 60 * 1000).toISOString(),
+    completed_at: null,
+    error_message: null,
+    extracted_data: null,
+  },
+  pipeline_execution: {
+    status: 'not_started',
+    started_at: null,
+    completed_at: null,
+    error_message: null,
+    executed_actions: null,
+    steps: null,
+  },
+};
+
+// =============================================================================
+// Mock Detail Response for Failure Run
+// =============================================================================
+
+export const mockFailureRunDetail: EtoRunDetail = {
+  ...mockFailureRun,
+  pdf: {
+    ...mockFailureRun.pdf,
+    page_count: 2,
+  },
+  template_matching: {
+    status: 'success',
+    started_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    completed_at: new Date(Date.now() - 2 * 60 * 60 * 1000 + 5000).toISOString(),
+    error_message: null,
+    matched_template: createMockTemplate(2, 'Alternative HAWB Template'),
+  },
+  data_extraction: {
+    status: 'failure',
+    started_at: new Date(Date.now() - 2 * 60 * 60 * 1000 + 5000).toISOString(),
+    completed_at: new Date(Date.now() - 2 * 60 * 60 * 1000 + 30000).toISOString(),
+    error_message: 'Failed to extract required field: customer_name',
+    extracted_data: null,
+  },
+  pipeline_execution: {
+    status: 'not_started',
+    started_at: null,
+    completed_at: null,
+    error_message: null,
+    executed_actions: null,
+    steps: null,
+  },
+};
+
+// =============================================================================
 // Mock Detail Responses by ID
 // =============================================================================
 
 export const mockRunDetailsById: Record<number, EtoRunDetail> = {
-  3: mockSuccessRunDetail,
-  // Add more as needed
+  2: mockProcessingRunDetail, // Processing run with PDF ID 3
+  3: mockSuccessRunDetail,     // Success run with PDF ID 103
+  4: mockFailureRunDetail,     // Failure run with PDF ID 4
+  7: mockSuccessRun2Detail,    // Second success run with PDF ID 4
 };
