@@ -3,7 +3,7 @@
  * Wraps react-pdf Document and Page components, handles rendering and reports dimensions
  */
 
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, useEffect } from 'react';
 import { Document, Page } from 'react-pdf';
 import { usePdfViewer } from './PdfViewerContext';
 
@@ -23,6 +23,11 @@ export function PdfCanvas({ pdfUrl, onError, children }: PdfCanvasProps) {
   } = usePdfViewer();
 
   const [isDocumentLoaded, setIsDocumentLoaded] = useState(false);
+
+  // Reset document loaded state when PDF URL changes
+  useEffect(() => {
+    setIsDocumentLoaded(false);
+  }, [pdfUrl]);
 
   const handleDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
     setIsDocumentLoaded(true);
@@ -46,11 +51,29 @@ export function PdfCanvas({ pdfUrl, onError, children }: PdfCanvasProps) {
     onPageRenderSuccess({ width: viewport.width, height: viewport.height });
   };
 
+  // Don't render if no PDF URL
+  if (!pdfUrl) {
+    return (
+      <div className="flex-1 overflow-auto bg-gray-800">
+        <div className="flex items-center justify-center h-96">
+          <p className="text-gray-400">No PDF selected</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 overflow-auto bg-gray-800">
-      <div className="min-h-full min-w-full flex items-center justify-center p-4">
-        <div className="relative">
+      <div className="p-4" style={{ minHeight: '100%', minWidth: '100%' }}>
+        <div
+          className="relative"
+          style={{
+            width: 'fit-content',
+            margin: '0 auto' // Centers when content is smaller than container
+          }}
+        >
           <Document
+            key={pdfUrl} // Force remount when URL changes
             file={pdfUrl}
             onLoadSuccess={handleDocumentLoadSuccess}
             onLoadError={handleDocumentLoadError}
