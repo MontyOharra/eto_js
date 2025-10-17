@@ -48,8 +48,8 @@ export function PdfCanvas({ pdfUrl, onError, children }: PdfCanvasProps) {
 
   return (
     <div className="flex-1 overflow-auto bg-gray-800">
-      <div className="min-h-full flex items-center justify-center">
-        <div className="relative inline-block">
+      <div className="min-h-full min-w-full flex items-center justify-center p-4">
+        <div className="relative">
           <Document
             file={pdfUrl}
             onLoadSuccess={handleDocumentLoadSuccess}
