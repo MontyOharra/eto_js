@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useMockEtoApi } from '../../../features/eto/hooks';
 import { EtoRunsTable, RunDetailModal } from '../../../features/eto/components';
 import { EtoRunListItem, EtoRunStatus } from '../../../features/eto/types';
+import { TemplateBuilderModal } from '../../../features/templates/components';
 
 export const Route = createFileRoute('/dashboard/eto/')({
   component: EtoPage,
@@ -32,6 +33,9 @@ function EtoPage() {
 
   // State for run detail modal
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
+
+  // State for template builder modal
+  const [templateBuilderPdfId, setTemplateBuilderPdfId] = useState<number | null>(null);
 
   // Fetch runs on mount
   useEffect(() => {
@@ -86,9 +90,16 @@ function EtoPage() {
   };
 
   const handleBuildTemplate = (runId: number) => {
-    console.log('Build template for run:', runId);
-    // TODO: Navigate to template builder with this PDF
-    // navigate({ to: '/dashboard/templates/create', search: { pdfId: runId } });
+    // Find the run and get its PDF ID
+    const run = Object.values(runsByStatus)
+      .flat()
+      .find((r) => r.id === runId);
+
+    if (run) {
+      setTemplateBuilderPdfId(run.pdf.id);
+    } else {
+      console.error('Run not found:', runId);
+    }
   };
 
   const handleReprocess = async (runId: number) => {
@@ -109,6 +120,18 @@ function EtoPage() {
     } catch (err) {
       console.error('Failed to delete run:', err);
     }
+  };
+
+  const handleSaveTemplate = async (templateData: any) => {
+    console.log('Saving template:', templateData);
+    // TODO: Call API to save template
+    // await createTemplate(templateData);
+
+    // Close modal
+    setTemplateBuilderPdfId(null);
+
+    // Reload runs to update status
+    await loadRuns();
   };
 
   // ==========================================================================
@@ -206,6 +229,14 @@ function EtoPage() {
         isOpen={selectedRunId !== null}
         runId={selectedRunId}
         onClose={() => setSelectedRunId(null)}
+      />
+
+      {/* Template Builder Modal */}
+      <TemplateBuilderModal
+        isOpen={templateBuilderPdfId !== null}
+        pdfFileId={templateBuilderPdfId}
+        onClose={() => setTemplateBuilderPdfId(null)}
+        onSave={handleSaveTemplate}
       />
     </div>
   );
