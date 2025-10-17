@@ -5,6 +5,100 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-10-17 14:00] — PDF Object Extraction & Mock API with Real Data
+
+### Spec / Intent
+- Extract real PDF objects from test PDFs using backend extraction algorithm
+- Generate mock API data in format matching API endpoint specification
+- Create mock PDF Files API that serves real extracted object data
+- Enable frontend development and testing with actual PDF object structures
+
+### Changes Made
+**Backend Extraction Script:**
+- `server/extract_test_pdfs.py` - Standalone script to extract objects from test PDFs
+  - Loads pdf_extractor module directly without database dependencies
+  - Processes all PDFs in `client-new/public/data/pdfs/`
+  - Groups flat object list into API-compliant structure (by type)
+  - Outputs JSON files matching `GET /pdf-files/{id}/objects` response format
+  - Handles Windows console encoding issues (removed emoji characters)
+
+**Extracted Real Data (4 PDFs):**
+- `103_objects.json` - 11 pages, 6,595 objects (mostly text words and lines)
+- `2_objects.json` - 2 pages, 709 objects (includes curves, images, tables)
+- `3_objects.json` - 2 pages, 735 objects (many graphic rects, images, tables)
+- `4_objects.json` - 18 pages, 8,434 objects (large document with table)
+
+**Frontend Mock API:**
+- `client-new/src/renderer/features/pdf-files/mocks/useMockPdfApi.ts` - Complete mock API implementation
+  - Imports real extracted JSON data files
+  - Three endpoints implemented:
+    - `getPdfMetadata(id)` - Returns file metadata with page counts
+    - `getPdfDownloadUrl(id)` - Returns URL to PDF in public directory
+    - `getPdfObjects(id)` - Returns real extracted objects grouped by type
+  - Console logging for debugging object counts
+  - Helper method `getAvailablePdfIds()` to list available test data
+- `client-new/src/renderer/features/pdf-files/mocks/data/README.md` - Documentation for extracted data
+  - Format specification
+  - Regeneration instructions
+  - Usage examples
+
+**Files Moved:**
+- Extracted JSON files moved from `server/extracted_objects/` to `client-new/src/renderer/features/pdf-files/mocks/data/`
+- Proper frontend integration ready for import and use
+
+### Key Technical Decisions
+**Backend Extraction Process:**
+- Used existing `pdf_extractor.py` from `server/src/features/pdf_processing/utils/`
+- Confirmed extraction algorithm matches API endpoint design
+- Transformation needed: flat list → grouped by type (simple mapping)
+- Direct module import to avoid database/enum dependencies
+
+**Object Type Mapping:**
+```
+Backend type field    → API group name
+------------------      ---------------
+"text_word"          → text_words
+"text_line"          → text_lines
+"graphic_rect"       → graphic_rects
+"graphic_line"       → graphic_lines
+"graphic_curve"      → graphic_curves
+"image"              → images
+"table"              → tables
+```
+
+**Mock API Design:**
+- Real data imported as static JSON modules
+- Simulates network delay (100-200ms) for realistic testing
+- Matches API endpoint specification exactly
+- Type-safe with existing DTO interfaces
+- Ready for UI component development
+
+### Extraction Results Summary
+
+| PDF ID | Pages | Total Objects | Notable Types |
+|--------|-------|---------------|---------------|
+| 103    | 11    | 6,595        | 5,909 text words, 469 lines |
+| 2      | 2     | 709          | 130 curves, 2 images, 3 tables |
+| 3      | 2     | 735          | 165 rects, 2 images, 3 tables |
+| 4      | 18    | 8,434        | 7,437 words, 905 lines, 1 table |
+
+### Next Actions
+- Build PDF object viewer component to display extracted objects
+- Create template wizard Step 1: signature object selection
+- Implement PDF overlay visualization showing object bounding boxes
+- Test object selection UI with real extracted data
+- Build template extraction field selector (Step 2)
+
+### Notes
+- Backend extraction algorithm confirmed working and accurate
+- Object structures match API specification exactly
+- Frontend now has real test data for development
+- No need for MSW - direct JSON imports sufficient for mock API
+- Can regenerate data anytime by running extraction script
+- Windows console encoding issue resolved (Unicode emojis removed)
+
+---
+
 ## [2025-10-17 01:30] — ETO Runs: PDF Viewer Integration Complete
 
 ### Spec / Intent
