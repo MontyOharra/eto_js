@@ -37,6 +37,7 @@ export function TemplateBuilderModal({
   const [templateName, setTemplateName] = useState('');
   const [templateDescription, setTemplateDescription] = useState('');
   const [signatureObjects, setSignatureObjects] = useState<SignatureObject[]>([]);
+  const [selectedObjectTypes, setSelectedObjectTypes] = useState<string[]>([]); // Step 1 state persistence
   const [extractionFields, setExtractionFields] = useState<ExtractionField[]>([]);
   const [pipelineState, setPipelineState] = useState<PipelineState>({
     entry_points: [],
@@ -116,6 +117,7 @@ export function TemplateBuilderModal({
     setTemplateName('');
     setTemplateDescription('');
     setSignatureObjects([]);
+    setSelectedObjectTypes([]);
     setExtractionFields([]);
     setPipelineState({ entry_points: [], modules: [], connections: [] });
     setVisualState({ positions: {} });
@@ -158,9 +160,11 @@ export function TemplateBuilderModal({
               templateName={templateName}
               templateDescription={templateDescription}
               signatureObjects={signatureObjects}
+              selectedObjectTypes={selectedObjectTypes}
               onTemplateNameChange={setTemplateName}
               onTemplateDescriptionChange={setTemplateDescription}
               onSignatureObjectsChange={setSignatureObjects}
+              onSelectedTypesChange={setSelectedObjectTypes}
             />
           )}
           {currentStep === 'extraction-fields' && (

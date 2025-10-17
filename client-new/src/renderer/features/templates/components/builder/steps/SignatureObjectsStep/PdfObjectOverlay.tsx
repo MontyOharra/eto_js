@@ -95,27 +95,39 @@ export function PdfObjectOverlay({
     const [x0, y0, x1, y1] = obj.bbox;
 
     // Coordinate transformation
-    // Text objects (text_word, text_line) need Y-axis flipping
-    // Graphics/tables/curves use direct coordinates
+    // Text objects, tables, and curves don't need Y-axis flipping
+    // Graphics (rects, lines) and images need flipping
     let screenY0: number, screenY1: number;
 
-    // List of types that need Y-axis flipping (PDF origin is bottom-left)
-    const needsFlipping = obj.type === 'text_word' || obj.type === 'text_line';
+    // List of types that DON'T need Y-axis flipping
+    const noFlipping = obj.type === 'text_word' ||
+                       obj.type === 'text_line' ||
+                       obj.type === 'table' ||
+                       obj.type === 'graphic_curve';
 
-    if (needsFlipping) {
-      // Flip Y coordinates for text objects
-      screenY0 = pageHeight - y1;
-      screenY1 = pageHeight - y0;
-    } else {
-      // Don't flip for graphics, tables, curves, images
+    if (noFlipping) {
+      // Don't flip Y coordinates for text, table, and curve objects
       screenY0 = y0;
       screenY1 = y1;
+    } else {
+      // Flip Y coordinates for graphic objects (rects, lines) and images
+      screenY0 = pageHeight - y1;
+      screenY1 = pageHeight - y0;
     }
 
     const isSelected = selectedObjects.has(objectId);
     const isHovered = hoveredObjectId === objectId;
     const isTypeVisible = selectedTypes.has(obj.type);
     const isHiddenSelected = isSelected && !isTypeVisible;
+
+    // Helper function to increase opacity of rgba color
+    const increaseOpacity = (rgbaColor: string): string => {
+      const match = rgbaColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)/);
+      if (!match) return rgbaColor;
+      const [, r, g, b, a] = match;
+      const newAlpha = Math.min(parseFloat(a) + 0.15, 0.6); // Increase by 0.15, max 0.6
+      return `rgba(${r}, ${g}, ${b}, ${newAlpha})`;
+    };
 
     // Determine colors
     let backgroundColor: string;
@@ -126,9 +138,10 @@ export function PdfObjectOverlay({
       // Gray for selected objects with hidden type
       backgroundColor = HIDDEN_SELECTED_COLOR;
       borderColor = HIDDEN_SELECTED_BORDER;
-      borderWidth = isSelected ? '3px' : '1px';
+      borderWidth = '3px';
     } else {
-      backgroundColor = OBJECT_COLORS[obj.type] || 'rgba(128, 128, 128, 0.2)';
+      const baseColor = OBJECT_COLORS[obj.type] || 'rgba(128, 128, 128, 0.2)';
+      backgroundColor = isSelected ? increaseOpacity(baseColor) : baseColor;
       borderColor = OBJECT_BORDER_COLORS[obj.type] || 'rgba(128, 128, 128, 0.6)';
       borderWidth = isSelected ? '3px' : '1px';
     }

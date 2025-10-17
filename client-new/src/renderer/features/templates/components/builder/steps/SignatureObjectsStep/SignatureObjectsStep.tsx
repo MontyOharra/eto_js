@@ -15,9 +15,11 @@ interface SignatureObjectsStepProps {
   templateName: string;
   templateDescription: string;
   signatureObjects: SignatureObject[];
+  selectedObjectTypes?: string[]; // Persisted visible types
   onTemplateNameChange: (name: string) => void;
   onTemplateDescriptionChange: (description: string) => void;
   onSignatureObjectsChange: (objects: SignatureObject[]) => void;
+  onSelectedTypesChange?: (types: string[]) => void; // Save visible types
 }
 
 export function SignatureObjectsStep({
@@ -28,11 +30,15 @@ export function SignatureObjectsStep({
   onTemplateDescriptionChange,
   signatureObjects,
   onSignatureObjectsChange,
+  selectedObjectTypes = [],
+  onSelectedTypesChange,
 }: SignatureObjectsStepProps) {
   const [pdfObjects, setPdfObjects] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
+  const [selectedTypes, setSelectedTypes] = useState<Set<string>>(
+    new Set(selectedObjectTypes)
+  );
   const [selectedObjectIds, setSelectedObjectIds] = useState<Set<string>>(new Set());
   const [pdfUrl, setPdfUrl] = useState<string>('');
 
@@ -40,6 +46,36 @@ export function SignatureObjectsStep({
   useEffect(() => {
     loadPdfObjects();
   }, [pdfFileId]);
+
+  // Sync selectedObjectIds from signatureObjects when they change (e.g., navigating back to this step)
+  useEffect(() => {
+    if (!pdfObjects || signatureObjects.length === 0) {
+      setSelectedObjectIds(new Set());
+      return;
+    }
+
+    const flatObjects = getFlattenedObjects();
+    const idsToSelect = new Set<string>();
+
+    // Find IDs that match the signatureObjects
+    signatureObjects.forEach((sigObj) => {
+      flatObjects.forEach((obj, idx) => {
+        if (
+          obj.type === sigObj.type &&
+          obj.page === sigObj.page &&
+          obj.bbox[0] === sigObj.bbox[0] &&
+          obj.bbox[1] === sigObj.bbox[1] &&
+          obj.bbox[2] === sigObj.bbox[2] &&
+          obj.bbox[3] === sigObj.bbox[3]
+        ) {
+          const id = `${obj.type}-${obj.page}-${obj.bbox.join('-')}-${idx}`;
+          idsToSelect.add(id);
+        }
+      });
+    });
+
+    setSelectedObjectIds(idsToSelect);
+  }, [signatureObjects, pdfObjects]);
 
   const loadPdfObjects = async () => {
     setLoading(true);
@@ -67,6 +103,7 @@ export function SignatureObjectsStep({
       newSelected.add(type);
     }
     setSelectedTypes(newSelected);
+    onSelectedTypesChange?.(Array.from(newSelected));
   };
 
   const handleShowAll = () => {
@@ -75,11 +112,14 @@ export function SignatureObjectsStep({
     const allTypes = Object.keys(getTypeCounts()).filter(
       (type) => getTypeCounts()[type] > 0
     );
-    setSelectedTypes(new Set(allTypes));
+    const newSelected = new Set(allTypes);
+    setSelectedTypes(newSelected);
+    onSelectedTypesChange?.(Array.from(newSelected));
   };
 
   const handleHideAll = () => {
     setSelectedTypes(new Set());
+    onSelectedTypesChange?.([]);
   };
 
   const handleObjectClick = (objectId: string) => {
