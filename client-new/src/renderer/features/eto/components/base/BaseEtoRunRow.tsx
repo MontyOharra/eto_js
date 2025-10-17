@@ -44,7 +44,7 @@ export function BaseEtoRunRow({ run, children }: BaseEtoRunRowProps) {
                 {run.pdf.original_filename}
               </h4>
               <StatusBadge status={run.status} />
-              {run.processing_step && ['processing, 'failure']run.status === 'processing' | 'failure' && (
+              {run.processing_step && ['processing', 'failure'].includes(run.status) && (
                 <ProcessingStepBadge step={run.processing_step} />
               )}
             </div>
