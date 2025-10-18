@@ -18,7 +18,8 @@ export interface PdfPoint {
 
 export interface PdfViewerContextValue {
   // State
-  scale: number;
+  scale: number; // User's zoom level (0.5 - 3.0)
+  renderScale: number; // Fixed scale PDF is rendered at (for overlay calculations)
   currentPage: number;
   numPages: number | null;
   pdfDimensions: PdfDimensions | null;

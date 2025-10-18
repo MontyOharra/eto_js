@@ -51,7 +51,7 @@
  * - Result: Overlays stay perfectly aligned during zoom and scroll
  */
 
-import { useState, useCallback, ReactNode } from 'react';
+import { useState, useCallback, useEffect, ReactNode } from 'react';
 import { pdfjs } from 'react-pdf';
 import {
   PdfViewerContext,
@@ -61,8 +61,7 @@ import {
 } from './PdfViewerContext';
 import { PdfCanvas } from './PdfCanvas';
 import { PdfOverlay } from './PdfOverlay';
-import { PdfControls } from './PdfControls';
-import { PdfInfoPanel } from './PdfInfoPanel';
+import { PdfControlsSidebar } from './PdfControlsSidebar';
 
 // Configure PDF.js worker
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -73,6 +72,7 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 export interface PdfViewerProps {
   pdfUrl: string;
   initialScale?: number;
+  initialPage?: number;
   minScale?: number;
   maxScale?: number;
   scaleStep?: number;
@@ -82,39 +82,71 @@ export interface PdfViewerProps {
    */
   children: ReactNode;
   onError?: (error: Error) => void;
+  /** Callback when scale changes (for controlled state) */
+  onScaleChange?: (scale: number) => void;
+  /** Callback when page changes (for controlled state) */
+  onPageChange?: (page: number) => void;
 }
 
 export function PdfViewer({
   pdfUrl,
   initialScale = 1.0,
+  initialPage = 1,
   minScale = 0.5,
-  maxScale = 2.0,
+  maxScale = 3.0,
   scaleStep = 0.25,
   children,
   onError,
+  onScaleChange,
+  onPageChange,
 }: PdfViewerProps) {
   // State
   const [scale, setScaleState] = useState(initialScale);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPageState] = useState(initialPage);
   const [numPages, setNumPages] = useState<number | null>(null);
   const [pdfDimensions, setPdfDimensions] = useState<PdfDimensions | null>(null);
   const [scrollPosition] = useState<PdfPoint>({ x: 0, y: 0 });
 
+  // Fixed high-quality render scale (matches PdfCanvas)
+  const RENDER_SCALE = 3.0;
+
+  // Sync with external state (controlled component)
+  useEffect(() => {
+    if (initialScale !== scale) {
+      setScaleState(initialScale);
+    }
+  }, [initialScale]);
+
+  useEffect(() => {
+    if (initialPage !== currentPage) {
+      setCurrentPageState(initialPage);
+    }
+  }, [initialPage]);
+
   // Scale control with bounds
   const setScale = useCallback((newScale: number) => {
-    setScaleState(Math.max(minScale, Math.min(maxScale, newScale)));
-  }, [minScale, maxScale]);
+    const clampedScale = Math.max(minScale, Math.min(maxScale, newScale));
+    setScaleState(clampedScale);
+    onScaleChange?.(clampedScale);
+  }, [minScale, maxScale, onScaleChange]);
+
+  const setCurrentPage = useCallback((newPage: number) => {
+    setCurrentPageState(newPage);
+    onPageChange?.(newPage);
+  }, [onPageChange]);
 
   // Page navigation
   const goToNextPage = useCallback(() => {
-    if (numPages) {
-      setCurrentPage(prev => Math.min(numPages, prev + 1));
+    if (numPages && currentPage < numPages) {
+      setCurrentPage(currentPage + 1);
     }
-  }, [numPages]);
+  }, [numPages, currentPage, setCurrentPage]);
 
   const goToPreviousPage = useCallback(() => {
-    setCurrentPage(prev => Math.max(1, prev - 1));
-  }, []);
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  }, [currentPage, setCurrentPage]);
 
   // Zoom controls
   const zoomIn = useCallback(() => {
@@ -145,7 +177,7 @@ export function PdfViewer({
   // Callbacks for Canvas component
   const onDocumentLoadSuccess = useCallback((loadedNumPages: number) => {
     setNumPages(loadedNumPages);
-    setCurrentPage(1); // Reset to first page
+    // Don't reset to first page - preserve user's current page
   }, []);
 
   const onPageRenderSuccess = useCallback((dimensions: PdfDimensions) => {
@@ -155,6 +187,7 @@ export function PdfViewer({
   // Context value
   const contextValue: PdfViewerContextValue = {
     scale,
+    renderScale: RENDER_SCALE, // Fixed render scale for overlay calculations
     currentPage,
     numPages,
     pdfDimensions,
@@ -173,7 +206,7 @@ export function PdfViewer({
 
   return (
     <PdfViewerContext.Provider value={contextValue}>
-      <div className="relative w-full h-full flex flex-col p-4">
+      <div className="relative w-full h-full flex">
         {children}
       </div>
     </PdfViewerContext.Provider>
@@ -183,5 +216,4 @@ export function PdfViewer({
 // Compound component exports
 PdfViewer.Canvas = PdfCanvas;
 PdfViewer.Overlay = PdfOverlay;
-PdfViewer.Controls = PdfControls;
-PdfViewer.InfoPanel = PdfInfoPanel;
+PdfViewer.ControlsSidebar = PdfControlsSidebar;

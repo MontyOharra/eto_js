@@ -59,8 +59,12 @@ export function PdfObjectOverlay({
   onObjectClick,
 }: PdfObjectOverlayProps) {
   // Get PDF viewer context
-  const { scale, currentPage, pdfDimensions } = usePdfViewer();
+  const { renderScale, currentPage, pdfDimensions } = usePdfViewer();
   const [hoveredObjectId, setHoveredObjectId] = useState<string | null>(null);
+
+  console.log('[PdfObjectOverlay] Received objects:', objects.length);
+  console.log('[PdfObjectOverlay] Selected types:', Array.from(selectedTypes));
+  console.log('[PdfObjectOverlay] Current page:', currentPage);
 
   // Objects to render: visible (selected types) + hidden selected
   const objectsToRender = useMemo(() => {
@@ -151,15 +155,15 @@ export function PdfObjectOverlay({
 
     const style: React.CSSProperties = {
       position: 'absolute',
-      left: `${x0 * scale}px`,
-      top: `${screenY0 * scale}px`,
-      width: `${(x1 - x0) * scale}px`,
-      height: `${(screenY1 - screenY0) * scale}px`,
+      left: `${x0 * renderScale}px`,
+      top: `${screenY0 * renderScale}px`,
+      width: `${(x1 - x0) * renderScale}px`,
+      height: `${(screenY1 - screenY0) * renderScale}px`,
       backgroundColor,
       border: `${borderWidth} solid ${borderColor}`,
       pointerEvents: isHiddenSelected ? 'none' : 'auto', // Hidden selected not clickable
       cursor: isHiddenSelected ? 'default' : 'pointer',
-      transition: 'all 0.15s ease-in-out',
+      transition: 'transform 0.15s ease-in-out', // Only transition the hover scale, not position/size
       transform,
       zIndex: isSelected ? 10 : 1,
     };

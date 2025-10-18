@@ -21,6 +21,10 @@ interface SignatureObjectsStepProps {
   onTemplateDescriptionChange: (description: string) => void;
   onSignatureObjectsChange: (objects: SignatureObject[]) => void;
   onSelectedTypesChange?: (types: string[]) => void; // Save visible types
+  pdfScale: number; // Persisted PDF zoom level
+  pdfCurrentPage: number; // Persisted PDF page number
+  onPdfScaleChange: (scale: number) => void;
+  onPdfCurrentPageChange: (page: number) => void;
 }
 
 export function SignatureObjectsStep({
@@ -35,6 +39,10 @@ export function SignatureObjectsStep({
   onSelectedTypesChange,
   pdfObjects,
   pdfUrl,
+  pdfScale,
+  pdfCurrentPage,
+  onPdfScaleChange,
+  onPdfCurrentPageChange,
 }: SignatureObjectsStepProps) {
   const [selectedTypes, setSelectedTypes] = useState<Set<string>>(
     new Set(selectedObjectTypes)
@@ -183,7 +191,7 @@ export function SignatureObjectsStep({
 
   // Main UI
   return (
-    <div className="h-full flex">
+    <div className="h-full w-full flex">
       <ObjectTypesSidebar
         templateName={templateName}
         templateDescription={templateDescription}
@@ -202,6 +210,10 @@ export function SignatureObjectsStep({
         selectedTypes={selectedTypes}
         selectedObjects={selectedObjectIds}
         onObjectClick={handleObjectClick}
+        pdfScale={pdfScale}
+        pdfCurrentPage={pdfCurrentPage}
+        onPdfScaleChange={onPdfScaleChange}
+        onPdfCurrentPageChange={onPdfCurrentPageChange}
       />
     </div>
   );

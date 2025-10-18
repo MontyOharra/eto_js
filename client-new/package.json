@@ -25,6 +25,7 @@
     "dotenv": "^17.0.1",
     "keytar": "^7.9.0",
     "pdfjs-dist": "^5.3.31",
+    "rc-slider": "^11.1.9",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-pdf": "^10.0.1",

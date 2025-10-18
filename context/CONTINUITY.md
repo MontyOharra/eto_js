@@ -2,6 +2,39 @@
 
 ## Current Status
 
+**Phase:** Frontend Development - Template Builder & Pipeline Integration
+
+**Latest Work (2025-10-18):**
+- ✅ Pipeline builder (step 3) integrated into template builder
+- ✅ Entry points auto-generated from extraction fields
+- ✅ Pipelines page created with mock API
+- ⚠️ **CRITICAL DISCOVERY**: Pipeline types don't match backend schema
+
+**Frontend Pipeline Types Issue:**
+
+The pipelines feature was implemented with types based on assumptions that don't match the actual database:
+
+**Incorrect Frontend Assumptions:**
+- Pipelines have name, description, status fields
+- Pipelines have versions and usage counts
+- Pipelines are standalone manageable entities
+
+**Actual Backend Structure (from models.py):**
+- `pipeline_definitions`: id, pipeline_state (JSON), visual_state (JSON), compiled_plan_id, timestamps
+- `pipeline_compiled_plans`: id, plan_checksum, compiled_at
+- `pipeline_definition_steps`: execution plan steps
+- Pipelines are PURE graph definitions, no metadata
+- Templates own the name/description/status via `pdf_template_versions.pipeline_definition_id`
+
+**Required Fixes:**
+1. Remove name, description, status from pipeline types
+2. Update PipelineListItem to match actual schema
+3. Update mock API to return realistic data
+4. Redesign PipelineCard for inspection view (show ID, timestamps, compiled plan info)
+5. Update page to be "Pipeline Inspector" for dev/testing
+6. Add template reference information to show which templates use each pipeline
+
+**Backend Redesign Status:**
 **Phase:** Phase 5 - Service Layer Design ✅ **COMPLETE**
 
 **Completed Work:**

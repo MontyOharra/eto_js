@@ -3,11 +3,11 @@
  * 3-step wizard for creating PDF templates
  */
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { SignatureObject, ExtractionField, PipelineState, VisualState } from '../../types';
 import { SignatureObjectsStep, ExtractionFieldsStep, PipelineBuilderStep } from './steps';
 import { TemplateBuilderHeader, TemplateBuilderStepper } from './components';
-import { useMockPdfApi } from '../../../pdf-files/mocks/useMockPdfApi';
+import { usePdfData } from '../../../pdf-files/hooks/usePdfData';
 
 interface TemplateBuilderModalProps {
   isOpen: boolean;
@@ -50,38 +50,17 @@ export function TemplateBuilderModal({
   });
   const [isSaving, setIsSaving] = useState(false);
 
-  // PDF data - loaded once and shared across steps
-  const [pdfObjects, setPdfObjects] = useState<any>(null);
-  const [pdfUrl, setPdfUrl] = useState<string>('');
-  const [pdfLoading, setPdfLoading] = useState(false);
-  const [pdfError, setPdfError] = useState<string | null>(null);
-  const [pdfDataLoaded, setPdfDataLoaded] = useState(false);
+  // PDF viewer state persistence across steps
+  const [pdfScale, setPdfScale] = useState<number>(1.0);
+  const [pdfCurrentPage, setPdfCurrentPage] = useState<number>(1);
 
-  // Load PDF data when modal opens (only once per pdfFileId)
-  useEffect(() => {
-    if (!pdfFileId) return;
+  // Use React Query to fetch and cache PDF data
+  const { data: pdfData, isLoading: pdfLoading, error: pdfError } = usePdfData(pdfFileId);
 
-    const loadPdfData = async () => {
-      setPdfLoading(true);
-      setPdfError(null);
-
-      try {
-        const objectsData = await useMockPdfApi.getPdfObjects(pdfFileId);
-        setPdfObjects(objectsData);
-
-        const url = useMockPdfApi.getPdfDownloadUrl(pdfFileId);
-        setPdfUrl(url);
-        setPdfDataLoaded(true);
-      } catch (err) {
-        console.error('Failed to load PDF data:', err);
-        setPdfError(err instanceof Error ? err.message : 'Failed to load PDF data');
-      } finally {
-        setPdfLoading(false);
-      }
-    };
-
-    loadPdfData();
-  }, [pdfFileId]);
+  // Extract PDF data from query result
+  const pdfObjects = pdfData?.objectsData;
+  const pdfUrl = pdfData?.url || '';
+  const pdfDataLoaded = !!pdfData;
 
   // Calculate completed steps
   const completedSteps = useMemo(() => {
@@ -146,7 +125,7 @@ export function TemplateBuilderModal({
   };
 
   const handleClose = () => {
-    // Reset all state
+    // Reset all state (PDF data is cached by React Query, no need to reset)
     setCurrentStep('signature-objects');
     setTemplateName('');
     setTemplateDescription('');
@@ -155,25 +134,31 @@ export function TemplateBuilderModal({
     setExtractionFields([]);
     setPipelineState({ entry_points: [], modules: [], connections: [] });
     setVisualState({ positions: {} });
-    setPdfObjects(null);
-    setPdfUrl('');
-    setPdfError(null);
-    setPdfDataLoaded(false);
+    setPdfScale(1.0);
+    setPdfCurrentPage(1);
     onClose();
   };
 
   const handleNext = () => {
+    console.log('[TemplateBuilderModal] handleNext called, current step:', currentStep);
+    console.log('[TemplateBuilderModal] Current signature objects count:', signatureObjects.length);
+    console.log('[TemplateBuilderModal] Signature objects:', signatureObjects);
     if (currentStep === 'signature-objects') {
+      console.log('[TemplateBuilderModal] Moving to extraction-fields');
       setCurrentStep('extraction-fields');
     } else if (currentStep === 'extraction-fields') {
+      console.log('[TemplateBuilderModal] Moving to pipeline');
       setCurrentStep('pipeline');
     }
   };
 
   const handleBack = () => {
+    console.log('[TemplateBuilderModal] handleBack called, current step:', currentStep);
     if (currentStep === 'extraction-fields') {
+      console.log('[TemplateBuilderModal] Moving back to signature-objects');
       setCurrentStep('signature-objects');
     } else if (currentStep === 'pipeline') {
+      console.log('[TemplateBuilderModal] Moving back to extraction-fields');
       setCurrentStep('extraction-fields');
     }
   };
@@ -203,7 +188,9 @@ export function TemplateBuilderModal({
           {pdfError && (
             <div className="h-full flex items-center justify-center">
               <div className="text-center">
-                <div className="text-red-400 mb-4">{pdfError}</div>
+                <div className="text-red-400 mb-4">
+                  {pdfError instanceof Error ? pdfError.message : 'Failed to load PDF data'}
+                </div>
                 <button
                   onClick={handleClose}
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded"
@@ -214,10 +201,13 @@ export function TemplateBuilderModal({
             </div>
           )}
 
-          {/* Steps - render when PDF data is loaded */}
+          {/* Steps - render all but show only active one (keeps PdfCanvas mounted) */}
           {pdfDataLoaded && !pdfError && (
             <>
-              {currentStep === 'signature-objects' && (
+              <div
+                className="h-full w-full"
+                style={{ display: currentStep === 'signature-objects' ? 'flex' : 'none' }}
+              >
                 <SignatureObjectsStep
                   pdfFileId={pdfFileId}
                   templateName={templateName}
@@ -230,25 +220,45 @@ export function TemplateBuilderModal({
                   onTemplateDescriptionChange={setTemplateDescription}
                   onSignatureObjectsChange={setSignatureObjects}
                   onSelectedTypesChange={setSelectedObjectTypes}
+                  pdfScale={pdfScale}
+                  pdfCurrentPage={pdfCurrentPage}
+                  onPdfScaleChange={setPdfScale}
+                  onPdfCurrentPageChange={setPdfCurrentPage}
                 />
-              )}
-              {currentStep === 'extraction-fields' && (
+              </div>
+              <div
+                className="h-full w-full"
+                style={{ display: currentStep === 'extraction-fields' ? 'flex' : 'none' }}
+              >
                 <ExtractionFieldsStep
                   pdfFileId={pdfFileId}
+                  templateName={templateName}
+                  templateDescription={templateDescription}
                   extractionFields={extractionFields}
+                  signatureObjects={signatureObjects}
                   pdfObjects={pdfObjects}
                   pdfUrl={pdfUrl}
+                  onTemplateNameChange={setTemplateName}
+                  onTemplateDescriptionChange={setTemplateDescription}
                   onExtractionFieldsChange={setExtractionFields}
+                  pdfScale={pdfScale}
+                  pdfCurrentPage={pdfCurrentPage}
+                  onPdfScaleChange={setPdfScale}
+                  onPdfCurrentPageChange={setPdfCurrentPage}
                 />
-              )}
-              {currentStep === 'pipeline' && (
+              </div>
+              <div
+                className="h-full w-full"
+                style={{ display: currentStep === 'pipeline' ? 'flex' : 'none' }}
+              >
                 <PipelineBuilderStep
+                  extractionFields={extractionFields}
                   pipelineState={pipelineState}
                   visualState={visualState}
                   onPipelineStateChange={setPipelineState}
                   onVisualStateChange={setVisualState}
                 />
-              )}
+              </div>
             </>
           )}
         </div>

@@ -3,7 +3,7 @@
  * Wraps react-pdf Document and Page components, handles rendering and reports dimensions
  */
 
-import { ReactNode, useState, useEffect } from 'react';
+import { ReactNode, useState, useEffect, useRef } from 'react';
 import { Document, Page } from 'react-pdf';
 import { usePdfViewer } from './PdfViewerContext';
 
@@ -11,25 +11,48 @@ export interface PdfCanvasProps {
   pdfUrl: string;
   onError?: (error: Error) => void;
   children?: ReactNode;
+  // Optional mouse event handlers for drawing mode
+  onMouseDown?: (e: React.MouseEvent, pageElement: HTMLElement, currentPage: number, scale: number, pageHeight: number) => void;
+  onMouseMove?: (e: React.MouseEvent, pageElement: HTMLElement, currentPage: number, scale: number, pageHeight: number) => void;
+  onMouseUp?: (e: React.MouseEvent, pageElement: HTMLElement, currentPage: number, scale: number, pageHeight: number) => void;
+  onClick?: (e: React.MouseEvent, pageElement: HTMLElement, currentPage: number, scale: number, pageHeight: number) => void;
 }
 
-export function PdfCanvas({ pdfUrl, onError, children }: PdfCanvasProps) {
+export function PdfCanvas({ pdfUrl, onError, children, onMouseDown, onMouseMove, onMouseUp, onClick }: PdfCanvasProps) {
   const {
-    scale,
+    scale, // User's zoom level
     currentPage,
     pdfDimensions,
+    setScale,
     onDocumentLoadSuccess,
     onPageRenderSuccess,
   } = usePdfViewer();
 
   const [isDocumentLoaded, setIsDocumentLoaded] = useState(false);
+  const pageWrapperRef = useRef<HTMLDivElement>(null);
+
+  // Fixed high-quality render scale
+  // By rendering at max quality (3.0) and CSS scaling down, we avoid blur entirely
+  // CSS scaling down (or 1:1) is always sharp; only scaling up causes blur
+  const RENDER_SCALE = 3.0;
+
+  // Log when component mounts
+  useEffect(() => {
+    console.log('[PdfCanvas] Component mounted, pdfUrl:', pdfUrl);
+    return () => {
+      console.log('[PdfCanvas] Component unmounting');
+    };
+  }, []);
 
   // Reset document loaded state when PDF URL changes
   useEffect(() => {
+    console.log('[PdfCanvas] PDF URL changed to:', pdfUrl);
+    console.log('[PdfCanvas] Resetting isDocumentLoaded to false');
     setIsDocumentLoaded(false);
   }, [pdfUrl]);
 
   const handleDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
+    console.log('[PdfCanvas] Document loaded successfully, numPages:', numPages);
     setIsDocumentLoaded(true);
     onDocumentLoadSuccess(numPages);
   };
@@ -51,6 +74,19 @@ export function PdfCanvas({ pdfUrl, onError, children }: PdfCanvasProps) {
     onPageRenderSuccess({ width: viewport.width, height: viewport.height });
   };
 
+  const handleWheel = (e: React.WheelEvent) => {
+    // Only handle Ctrl+Scroll for zoom
+    if (e.ctrlKey) {
+      e.preventDefault();
+
+      // Calculate zoom delta (negative deltaY = zoom in, positive = zoom out)
+      const zoomDelta = -e.deltaY * 0.001; // Adjust sensitivity
+      const newScale = Math.max(0.5, Math.min(3.0, scale + zoomDelta));
+
+      setScale(newScale);
+    }
+  };
+
   // Don't render if no PDF URL
   if (!pdfUrl) {
     return (
@@ -63,13 +99,13 @@ export function PdfCanvas({ pdfUrl, onError, children }: PdfCanvasProps) {
   }
 
   return (
-    <div className="flex-1 overflow-auto bg-gray-800">
+    <div className="flex-1 flex flex-col overflow-auto bg-gray-800 relative" onWheel={handleWheel}>
       <div className="p-4" style={{ minHeight: '100%', minWidth: '100%' }}>
         <div
           className="relative"
           style={{
             width: 'fit-content',
-            margin: '0 auto' // Centers when content is smaller than container
+            margin: '0 auto', // Centers when small, allows full scroll when large
           }}
         >
           <Document
@@ -89,27 +125,65 @@ export function PdfCanvas({ pdfUrl, onError, children }: PdfCanvasProps) {
             }
           >
             {isDocumentLoaded && (
-              <div className="relative">
-                <Page
-                  pageNumber={currentPage}
-                  scale={scale}
-                  renderTextLayer={false}
-                  renderAnnotationLayer={false}
-                  loading=""
-                  error=""
-                  onLoadSuccess={handlePageLoadSuccess}
-                />
-                {/* Overlay container - positioned absolutely over the PDF */}
-                {pdfDimensions && children && (
-                  <div
-                    className="absolute top-0 left-0 w-full h-full"
-                    style={{
-                      pointerEvents: 'none',
-                    }}
-                  >
-                    {children}
-                  </div>
-                )}
+              // Wrapper with explicit dimensions for proper scrollbar behavior
+              // CSS transforms don't affect layout, so we need this wrapper to tell
+              // the browser the actual visual size for scrolling
+              <div
+                style={{
+                  width: pdfDimensions ? `${pdfDimensions.width * scale}px` : 'auto',
+                  height: pdfDimensions ? `${pdfDimensions.height * scale}px` : 'auto',
+                  position: 'relative',
+                  overflow: 'hidden', // Clip the scaled content to wrapper bounds
+                }}
+              >
+                <div
+                  ref={pageWrapperRef}
+                  className="relative"
+                  style={{
+                    transform: `scale(${scale / RENDER_SCALE})`,
+                    transformOrigin: 'top left',
+                    width: pdfDimensions ? `${pdfDimensions.width * RENDER_SCALE}px` : 'auto',
+                    height: pdfDimensions ? `${pdfDimensions.height * RENDER_SCALE}px` : 'auto',
+                  }}
+                >
+                  <Page
+                    pageNumber={currentPage}
+                    scale={RENDER_SCALE}
+                    renderTextLayer={false}
+                    renderAnnotationLayer={false}
+                    loading=""
+                    error=""
+                    onLoadSuccess={handlePageLoadSuccess}
+                  />
+                  {/* Overlay container - positioned absolutely over the PDF */}
+                  {pdfDimensions && children && (
+                    <div
+                      className="absolute top-0 left-0 w-full h-full"
+                      onMouseDown={(e) => {
+                        if (onMouseDown && pageWrapperRef.current) {
+                          onMouseDown(e, pageWrapperRef.current, currentPage, scale, pdfDimensions.height);
+                        }
+                      }}
+                      onMouseMove={(e) => {
+                        if (onMouseMove && pageWrapperRef.current) {
+                          onMouseMove(e, pageWrapperRef.current, currentPage, scale, pdfDimensions.height);
+                        }
+                      }}
+                      onMouseUp={(e) => {
+                        if (onMouseUp && pageWrapperRef.current) {
+                          onMouseUp(e, pageWrapperRef.current, currentPage, scale, pdfDimensions.height);
+                        }
+                      }}
+                      onClick={(e) => {
+                        if (onClick && pageWrapperRef.current) {
+                          onClick(e, pageWrapperRef.current, currentPage, scale, pdfDimensions.height);
+                        }
+                      }}
+                    >
+                      {children}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </Document>

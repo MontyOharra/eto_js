@@ -236,12 +236,7 @@ export function RunDetailModal({ isOpen, runId, onClose }: RunDetailModalProps) 
                       {pdfUrl ? (
                         <PdfViewer pdfUrl={pdfUrl} onError={handlePdfError}>
                           <PdfViewer.Canvas pdfUrl={pdfUrl} onError={handlePdfError} />
-                          <PdfViewer.InfoPanel
-                            position="top-right"
-                            filename={runDetail.pdf.original_filename}
-                            fileSize={runDetail.pdf.file_size}
-                          />
-                          <PdfViewer.Controls position="bottom-center" />
+                          <PdfViewer.ControlsSidebar position="right" />
                         </PdfViewer>
                       ) : (
                         <div className="flex items-center justify-center h-full">

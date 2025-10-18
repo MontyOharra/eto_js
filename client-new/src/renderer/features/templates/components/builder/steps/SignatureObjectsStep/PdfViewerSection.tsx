@@ -20,6 +20,10 @@ interface PdfViewerSectionProps {
   selectedTypes: Set<string>;
   selectedObjects: Set<string>;
   onObjectClick: (objectId: string) => void;
+  pdfScale: number;
+  pdfCurrentPage: number;
+  onPdfScaleChange: (scale: number) => void;
+  onPdfCurrentPageChange: (page: number) => void;
 }
 
 export function PdfViewerSection({
@@ -29,10 +33,20 @@ export function PdfViewerSection({
   selectedTypes,
   selectedObjects,
   onObjectClick,
+  pdfScale,
+  pdfCurrentPage,
+  onPdfScaleChange,
+  onPdfCurrentPageChange,
 }: PdfViewerSectionProps) {
   return (
     <div className="flex-1 overflow-hidden bg-gray-800">
-      <PdfViewer pdfUrl={pdfUrl}>
+      <PdfViewer
+        pdfUrl={pdfUrl}
+        initialScale={pdfScale}
+        initialPage={pdfCurrentPage}
+        onScaleChange={onPdfScaleChange}
+        onPageChange={onPdfCurrentPageChange}
+      >
         <PdfViewer.Canvas pdfUrl={pdfUrl}>
           <PdfObjectOverlay
             objects={pdfObjects}
@@ -41,11 +55,7 @@ export function PdfViewerSection({
             onObjectClick={onObjectClick}
           />
         </PdfViewer.Canvas>
-        <PdfViewer.InfoPanel
-          position="top-right"
-          filename={`${pdfFileId}.pdf`}
-        />
-        <PdfViewer.Controls position="bottom-center" />
+        <PdfViewer.ControlsSidebar position="right" />
       </PdfViewer>
     </div>
   );

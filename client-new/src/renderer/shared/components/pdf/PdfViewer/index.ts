@@ -3,20 +3,17 @@
  *
  * Usage:
  * <PdfViewer pdfUrl={url}>
- *   <PdfViewer.Canvas pdfUrl={url} />
- *   <PdfViewer.Controls position="bottom-center" />
- *   <PdfViewer.InfoPanel position="top-right" filename="doc.pdf" fileSize={1024000} />
- *   <PdfViewer.Overlay>
+ *   <PdfViewer.Canvas pdfUrl={url}>
  *     // Custom overlay components
- *   </PdfViewer.Overlay>
+ *   </PdfViewer.Canvas>
+ *   <PdfViewer.ControlsSidebar position="right" />
  * </PdfViewer>
  */
 
 export { PdfViewer } from './PdfViewer';
 export { PdfCanvas } from './PdfCanvas';
 export { PdfOverlay } from './PdfOverlay';
-export { PdfControls } from './PdfControls';
-export { PdfInfoPanel } from './PdfInfoPanel';
+export { PdfControlsSidebar } from './PdfControlsSidebar';
 export { usePdfViewer } from './PdfViewerContext';
 export type {
   PdfViewerProps,

@@ -5,6 +5,286 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-10-18 20:00] — Pipeline Builder Integration & Pipelines Page with Mock API
+
+### Spec / Intent
+- Copy transformation pipeline components from old client to new client template builder
+- Remove entry point modal, auto-generate entry points from extraction fields (step 2)
+- Build standalone pipelines page with card-based layout and mock API
+- Simplify pipelines page to view-only (no activation/editing) for dev/testing purposes
+- Discover mismatch between frontend pipeline types and actual backend database schema
+
+### Changes Made
+
+**Pipeline Components Migration (Step 3 of Template Builder):**
+- Copied 6 main files from `client/src/renderer/components/transformation-pipeline/` to `client-new/`:
+  - `PipelineGraph.tsx` - Main React Flow pipeline builder (1744 lines)
+  - `ModuleSelectorPane.tsx` - Sidebar for module selection with search/filter
+  - `EntryPointNode.tsx` - Entry point node visualization
+  - `ModuleNodeNew.tsx` - Module nodes with configurable inputs/outputs
+  - `ConfigSection.tsx` - Dynamic form rendering for module config
+  - `ModuleSelectorPane.tsx` - Draggable module catalog
+- Created type definitions:
+  - `moduleTypes.ts` - Module and node type definitions
+  - `pipelineTypes.ts` - Pipeline and connection types
+- Integrated with PipelineBuilderStep.tsx for API module loading
+
+**Entry Point Integration:**
+- Removed EntryPointModal completely (state, handlers, modal JSX)
+- Added `extractionFields` prop to PipelineBuilderStep
+- Created useMemo to auto-convert extraction fields to entry points:
+  - Format: `{ node_id: 'entry_${field_id}', name: field.label, type: 'str' }`
+- Added useEffect for auto-positioning entry points (x: 50, y: 50 + index * 120)
+- Changed PipelineGraph to use prop-driven entry points (not internal state)
+- Passed extractionFields through TemplateBuilderModal → PipelineBuilderStep → PipelineGraph
+
+**Hook Order Fix:**
+- Fixed `ReferenceError: Cannot access 'handleHandleClick' before initialization`
+- Root cause: useMemo for `nodes` referenced callbacks defined after it
+- Solution: Moved ALL useCallback definitions before useMemo
+- Removed duplicate callback definitions (lines 422-695 were duplicates)
+
+**Pipelines Feature - Initial Implementation:**
+- Created `client-new/src/renderer/features/pipelines/types.ts`:
+  - PipelineStatus ('draft' | 'active' | 'inactive')
+  - PipelineListItem (id, name, description, status, versions, timestamps)
+  - PipelineDetail (extends ListItem with graph structure)
+  - API response types (PipelinesListResponse, PipelineDetailResponse, etc.)
+- Created `client-new/src/renderer/features/pipelines/hooks/useMockPipelinesApi.ts`:
+  - Mock data for 4 pipelines (Standard Data Extraction, Advanced Field Processing, etc.)
+  - Full CRUD API: getPipelines, getPipeline, createPipeline, updatePipeline
+  - Lifecycle methods: activatePipeline, deactivatePipeline, deletePipeline
+  - Loading/error state management with simulated delays (200-500ms)
+- Created `client-new/src/renderer/features/pipelines/components/`:
+  - `PipelineStatusBadge.tsx` - Status indicator (draft/active/inactive)
+  - `PipelineCard.tsx` - Card layout with version info, usage count, actions
+  - `index.ts` - Component exports
+- Updated `client-new/src/renderer/pages/dashboard/pipelines/index.tsx`:
+  - Full page implementation with filter/sort controls
+  - Status filter (All, Active, Inactive, Draft)
+  - Sort by name/status/usage_count with asc/desc toggle
+  - Card grid layout (responsive 1/2/3 columns)
+  - Loading, error, and empty states
+  - Create button placeholder
+
+**Simplification to View-Only:**
+- Removed Edit, Activate, Deactivate, Delete functionality from PipelineCard
+- Removed corresponding handlers and API calls from pipelines page
+- Simplified to only View and Create actions
+- Justification: Pipelines are linked to templates, standalone management not needed
+
+**Database Schema Discovery:**
+- Analyzed `server/src/shared/database/models.py` to understand actual structure:
+  - `pipeline_definitions` table: id, pipeline_state (JSON), visual_state (JSON), compiled_plan_id
+  - `pipeline_compiled_plans` table: id, plan_checksum, compiled_at
+  - `pipeline_definition_steps` table: module instances with execution metadata
+- **CRITICAL FINDING**: Pipelines have NO name, description, or status fields
+- Pipelines are pure graph definitions, templates own the metadata
+- Templates link to pipelines via `pdf_template_versions.pipeline_definition_id`
+
+### Key Technical Decisions
+
+**Entry Point Auto-Generation:**
+- Entry points driven by extraction fields (step 2 state)
+- One entry point per extraction field with matching label
+- All entry points output type 'str' (extraction always produces strings)
+- Automatic positioning on left side of canvas, vertically stacked
+
+**Hook Ordering Rules:**
+- ALL callbacks (useCallback) must be defined before memoized values (useMemo)
+- Memoized values that reference callbacks can't be placed before their definitions
+- React hook initialization order is critical for avoiding reference errors
+
+**Pipelines Page Purpose:**
+- Dev/testing tool only (not production feature)
+- Allows testing transformation graphs without full template workflow
+- Will be removed once template builder is mature
+- View-only display prevents inconsistencies with template-managed pipelines
+
+### Debugging Journey
+
+1. **Entry Points Not Showing**: Added extractionFields prop, created conversion useMemo
+2. **Hook Order Error**: `handleHandleClick` accessed before initialization → moved callbacks up
+3. **Duplicate Callbacks**: Found identical callback definitions after useMemo → removed duplicates
+4. **Wrong Pipeline Structure**: Created types with name/description/status that don't exist in DB
+
+### Database Schema Mismatch Analysis
+
+**What Frontend Has (INCORRECT):**
+- name: string
+- description: string | null
+- status: 'draft' | 'active' | 'inactive'
+- current_version: { version_id, version_num, usage_count }
+- total_versions: number
+
+**What Backend Has (ACTUAL):**
+- id: int
+- pipeline_state: Text (JSON) - graph structure
+- visual_state: Text (JSON) - node positions
+- compiled_plan_id: int | null
+- created_at, updated_at: timestamps
+- NO name, description, or status
+
+**What Needs to Be Fixed:**
+1. Remove name, description, status from pipeline types
+2. Update PipelineListItem to match actual schema (id, timestamps, compiled_plan_id)
+3. Update mock API to return realistic data
+4. Update PipelineCard to show: ID, created date, compiled plan status, template references
+5. Remove status filter, add "has compiled plan" filter
+6. Change display from "pipeline management" to "pipeline inspection"
+
+### Next Actions
+- Fix pipeline types to match actual database schema
+- Update mock API data to reflect real structure
+- Redesign PipelineCard for inspection view (not management)
+- Update page filters and sort options for new structure
+- Add template reference information to pipeline details
+- Consider renaming "Pipelines" page to "Pipeline Definitions" or "Pipeline Inspector"
+
+### Notes
+- Template builder step 3 (pipeline builder) now fully integrated
+- Entry points auto-sync with extraction fields
+- Pipelines feature discovered to be fundamentally different than expected
+- Need to align frontend types with backend schema before continuing
+- Pipeline page is dev tool, not production feature
+- Never look in apps/eto/server - always use eto_js/server/
+
+---
+
+## [2025-10-17 18:30] — Template Builder: PDF Controls Redesign & Extraction Fields Step Complete
+
+### Spec / Intent
+- Redesign PDF controls from overlay buttons to vertical sidebar with native slider
+- Fix PDF zoom rendering issues (glitches, blur, scrollbar behavior)
+- Implement zoom/pan state persistence across template builder steps
+- Display signature objects from step 1 as gray overlays in step 2
+- Build complete extraction fields step (step 2) with drawing functionality and field management
+
+### Changes Made
+
+**PDF Controls Redesign:**
+- `PdfControlsSidebar.tsx` - Complete rewrite using rc-slider library
+  - Replaced CSS rotation hack with native vertical slider
+  - Added fit-to-width button with viewport calculation
+  - Reorganized layout: zoom % → fit button → + icon → slider → - icon
+  - Continuous zooming (1% increments instead of 5%)
+  - Removed percentage labels, added +/- icons for min/max
+- Deleted old components: `PdfControls.tsx`, `PdfInfoPanel.tsx`
+- Installed rc-slider: `npm install rc-slider`
+
+**PDF Rendering Engine Overhaul:**
+- `PdfCanvas.tsx` - Fixed zoom quality and scrollbar behavior
+  - Implemented hybrid approach: fixed RENDER_SCALE=3.0, CSS scaling for user zoom
+  - Added wrapper div with explicit dimensions for proper scrollbar behavior
+  - Changed transform origin from 'center center' to 'top left' for correct positioning
+  - Added `overflow: hidden` to clip scaled content to bounds
+  - Removed CSS transitions to eliminate wiggling/flashing
+  - Added mouse event handlers (onMouseDown, onMouseMove, onMouseUp) for drawing mode
+  - Added pageWrapperRef for coordinate calculations
+- `PdfViewer.tsx` - Implemented controlled component pattern
+  - Added initialScale, initialPage, onScaleChange, onPageChange props
+  - Removed page reset on document load to preserve state
+  - Fixed renderScale at 3.0 in context
+  - Added useEffect sync for controlled component behavior
+
+**State Persistence:**
+- `TemplateBuilderModal.tsx` - Lifted zoom/pan state to parent
+  - Added pdfScale and pdfCurrentPage state
+  - Passed state and callbacks to both step 1 and step 2
+  - Reset zoom/pan on modal close
+  - Passed templateName and templateDescription to ExtractionFieldsStep
+
+**Extraction Fields Step (Step 2) - Complete Implementation:**
+- `ExtractionFieldsStep.tsx` - Main orchestration component (complete rewrite)
+  - Drawing state: isDrawing, drawingBox (anchor point + width/height)
+  - Staging state: stagedFieldId, tempFieldData
+  - Form state: fieldLabel, fieldDescription, fieldRequired, fieldValidationRegex
+  - Mouse handlers with anchor point logic (width/height can be negative)
+  - Y-axis coordinate flipping (PDF bottom-left origin → screen top-left origin)
+  - Minimum box size check (10px absolute width/height)
+  - Integration of all subcomponents and signature object overlays
+
+- `ExtractionFieldsSidebar.tsx` - **NEW** Three-mode sidebar component
+  - **List Mode**: Scrollable field list with name, page, required status
+  - **Create Mode**: Form with auto-focus label input, Enter key to save
+  - **Detail Mode**: Read-only field details with delete button
+  - Template name/description always at top (read-only)
+  - Mode determination: tempFieldData → 'create', stagedFieldId → 'detail', else → 'list'
+
+- `ExtractionFieldOverlay.tsx` - **NEW** PDF overlay rendering component
+  - Renders saved fields as purple boxes (z-index 5)
+  - Staged field with thicker border (z-index 10)
+  - Temporary field after drawing (z-index 10)
+  - Active drawing box as blue dashed line (z-index 15)
+  - Hover labels above/below boxes
+  - Handles negative width/height for any-direction drawing
+  - Uses renderScale from PdfViewerContext
+
+**Signature Object Integration:**
+- Modified `ExtractionFieldsStep.tsx` to show signature objects as gray overlays
+- Reused `PdfObjectOverlay` with: selectedTypes=empty, selectedObjects=all, onObjectClick=empty
+- Provides visual reference without interactivity
+
+### Key Technical Decisions
+
+**Zoom Quality Solution:**
+- **Problem**: Direct scale changes = sharp but flashing; CSS transform = smooth but blurry
+- **Solution**: Fixed render at 3.0x (always sharp), CSS scale down for zoom, no re-renders
+- **Result**: Sharp PDF at all zoom levels with smooth scrolling
+
+**Coordinate System Handling:**
+- PDF coordinates: bottom-left origin (0,0 at bottom-left)
+- Screen coordinates: top-left origin (0,0 at top-left)
+- Y-axis flip formula: `pdfY = pageHeight - screenY`
+- Applied correctly in both directions for field creation and rendering
+
+**Drawing UX:**
+- Anchor point stays fixed, width/height can be negative
+- Normalize coordinates before saving to PDF format
+- Blue dashed box during drawing, purple solid after saving
+- Minimum 10px box size to prevent accidental clicks
+
+**State Management:**
+- Zoom/pan lifted to TemplateBuilderModal for cross-step persistence
+- Controlled component pattern with callbacks for PdfViewer
+- Three-mode sidebar determined by current interaction state
+- Form state separate from field data for clean reset
+
+**Z-Index Layering:**
+- Signature objects (gray overlays): z-index 1-2
+- Saved extraction fields: z-index 5
+- Staged/temp fields: z-index 10
+- Active drawing box: z-index 15
+- Hover labels: z-index 20
+
+### Debugging Journey
+
+1. **Vertical Slider**: CSS rotation hack didn't fill space → replaced with rc-slider library
+2. **Slider Direction**: Upside down → removed `reverse` prop
+3. **PDF Glitches**: Text flipping, PDF disappearing → hybrid render scale approach
+4. **Blur on Zoom**: CSS transform at variable scale → fixed RENDER_SCALE=3.0
+5. **Scrollbar Issues**: CSS transforms don't affect layout → explicit dimension wrapper
+6. **Content Outside Bounds**: center transform origin → top-left origin + overflow hidden
+7. **Wiggling**: CSS transition lag → removed transitions completely
+
+### Next Actions
+- Test extraction fields step with various box sizes and positions
+- Implement pipeline builder step (step 3) with React Flow integration
+- Wire up template save functionality with all three steps
+- Add validation for extraction field bounding boxes
+- Consider adding field editing/moving functionality
+
+### Notes
+- PDF viewer now production-quality with sharp rendering at all zoom levels
+- Extraction fields step fully functional with all requested UX features
+- State persistence working across steps (zoom, pan, signature objects)
+- Y-axis coordinate conversion properly implemented and tested
+- Template builder steps 1 and 2 complete, ready for step 3 (pipeline builder)
+- All components properly typed with TypeScript
+- Never look in apps/eto/server - always use eto_js/server/
+
+---
+
 ## [2025-10-17 14:00] — PDF Object Extraction & Mock API with Real Data
 
 ### Spec / Intent
