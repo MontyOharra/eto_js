@@ -1,8 +1,10 @@
-import { useCallback, useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { PipelineState, VisualState, ExtractionField } from '../../../types';
-import { PipelineGraph } from './PipelineBuilderStep/PipelineGraph';
-import type { ModuleTemplate } from '../../../../types/moduleTypes';
-import type { EntryPoint } from '../../../../types/pipelineTypes';
+import { PipelineGraph, PipelineGraphRef } from '../../../../pipelines/components/PipelineGraph';
+import { ModuleSelectorPane } from '../../../../pipelines/components/ModuleSelectorPane';
+import { useMockModulesApi } from '../../../../../features/modules/hooks';
+import type { ModuleTemplate } from '../../../../../types/moduleTypes';
+import type { EntryPoint } from '../../../../../types/pipelineTypes';
 
 interface PipelineBuilderStepProps {
   extractionFields: ExtractionField[];
@@ -19,8 +21,10 @@ export function PipelineBuilderStep({
   onPipelineStateChange,
   onVisualStateChange,
 }: PipelineBuilderStepProps) {
+  const { getModules, isLoading: isLoadingModules } = useMockModulesApi();
   const [modules, setModules] = useState<ModuleTemplate[]>([]);
-  const [isLoadingModules, setIsLoadingModules] = useState(true);
+  const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null);
+  const pipelineGraphRef = useRef<PipelineGraphRef>(null);
 
   // Convert extraction fields to entry points
   const entryPoints: EntryPoint[] = useMemo(() => {
@@ -31,60 +35,53 @@ export function PipelineBuilderStep({
     }));
   }, [extractionFields]);
 
-  // Update entry point positions when new fields are added
+  // Load modules from mock API
   useEffect(() => {
-    const newPositions = { ...visualState.positions };
-    let hasNewPositions = false;
-
-    entryPoints.forEach((ep, index) => {
-      if (!newPositions[ep.node_id]) {
-        // Position entry points vertically on the left side
-        newPositions[ep.node_id] = { x: 50, y: 50 + index * 120 };
-        hasNewPositions = true;
-      }
-    });
-
-    if (hasNewPositions) {
-      onVisualStateChange({ positions: newPositions });
-    }
-  }, [entryPoints, visualState.positions, onVisualStateChange]);
-
-  // Load modules from API
-  useEffect(() => {
-    const fetchModules = async () => {
+    async function loadModules() {
       try {
-        setIsLoadingModules(true);
-        const response = await fetch('http://localhost:8000/api/modules');
-        const data = await response.json();
-        setModules(data.modules || []);
+        const response = await getModules();
+        setModules(response.modules);
       } catch (error) {
         console.error('Failed to load modules:', error);
         setModules([]);
-      } finally {
-        setIsLoadingModules(false);
+      }
+    }
+    loadModules();
+  }, []);
+
+  // Sync graph state changes back to parent
+  useEffect(() => {
+    if (!pipelineGraphRef.current) return;
+
+    // Set up a periodic sync or use a callback mechanism
+    const syncState = () => {
+      if (!pipelineGraphRef.current) return;
+
+      try {
+        const currentPipelineState = pipelineGraphRef.current.getPipelineState();
+        const currentVisualState = pipelineGraphRef.current.getVisualState();
+
+        // Update parent state
+        onPipelineStateChange(currentPipelineState);
+        onVisualStateChange(currentVisualState);
+      } catch (error) {
+        // Graph might not be ready yet
+        console.debug('Graph state not ready for sync');
       }
     };
 
-    fetchModules();
-  }, []);
-
-  // Handle state changes from PipelineGraph
-  const handleStateChange = useCallback((state: {
-    moduleInstances: any[];
-    entryPoints: any[];
-    connections: any[];
-    positions: Record<string, { x: number; y: number }>;
-  }) => {
-    onPipelineStateChange({
-      entry_points: state.entryPoints,
-      modules: state.moduleInstances,
-      connections: state.connections,
-    });
-
-    onVisualStateChange({
-      positions: state.positions,
-    });
+    // Sync on a timer (this could be optimized with callbacks from the graph)
+    const interval = setInterval(syncState, 1000);
+    return () => clearInterval(interval);
   }, [onPipelineStateChange, onVisualStateChange]);
+
+  const handleModuleSelect = (moduleId: string | null) => {
+    setSelectedModuleId(moduleId);
+  };
+
+  const handleModulePlaced = () => {
+    setSelectedModuleId(null);
+  };
 
   if (isLoadingModules) {
     return (
@@ -98,15 +95,25 @@ export function PipelineBuilderStep({
   }
 
   return (
-    <div className="h-full w-full">
-      <PipelineGraph
+    <div className="h-full w-full flex overflow-hidden">
+      {/* Module Selector Pane */}
+      <ModuleSelectorPane
         modules={modules}
-        initialModuleInstances={pipelineState.modules}
-        initialEntryPoints={entryPoints}
-        initialConnections={pipelineState.connections}
-        initialPositions={visualState.positions}
-        onStateChange={handleStateChange}
+        selectedModuleId={selectedModuleId}
+        onModuleSelect={handleModuleSelect}
       />
+
+      {/* Pipeline Graph */}
+      <div className="flex-1">
+        <PipelineGraph
+          ref={pipelineGraphRef}
+          moduleTemplates={modules}
+          selectedModuleId={selectedModuleId}
+          onModulePlaced={handleModulePlaced}
+          viewOnly={false}
+          entryPoints={entryPoints}
+        />
+      </div>
     </div>
   );
 }

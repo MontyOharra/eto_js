@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, Link } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { useMockPipelinesApi } from '../../../features/pipelines/hooks/useMockPipelinesApi';
 import { PipelineCard } from '../../../features/pipelines/components';
@@ -90,11 +90,6 @@ function PipelinesPage() {
     // navigate({ to: `/dashboard/pipelines/${pipelineId}` });
   };
 
-  const handleCreatePipeline = () => {
-    console.log('Create new pipeline');
-    // TODO: Navigate to pipeline builder
-    // navigate({ to: '/dashboard/pipelines/create' });
-  };
 
   // ==========================================================================
   // Render
@@ -127,12 +122,12 @@ function PipelinesPage() {
             Manage data transformation pipelines for document processing
           </p>
         </div>
-        <button
+        <Link
+          to="/dashboard/pipelines/create"
           className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
-          onClick={handleCreatePipeline}
         >
           + Create Pipeline
-        </button>
+        </Link>
       </div>
 
       {/* Loading State */}
@@ -254,12 +249,12 @@ function PipelinesPage() {
               ? 'Get started by creating your first transformation pipeline'
               : `Try adjusting your filters or create a new pipeline`}
           </p>
-          <button
+          <Link
+            to="/dashboard/pipelines/create"
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
-            onClick={handleCreatePipeline}
           >
             Create Pipeline
-          </button>
+          </Link>
         </div>
       )}
     </div>

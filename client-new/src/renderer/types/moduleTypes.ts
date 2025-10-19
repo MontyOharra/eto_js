@@ -1,6 +1,6 @@
 /**
  * Module type system with unified NodeGroup structure
- * Adapted from client/src/renderer/types/moduleTypes.ts
+ * Matches backend contracts.py structure
  */
 
 // Node type system
@@ -16,9 +16,7 @@ export interface NodeGroup {
   label: string;
   min_count: number;
   max_count?: number;        // null/undefined = unlimited
-  default_type?: string;     // default type for new nodes
-  allowed_types?: string[];  // allowed types
-  type_var?: string;         // type variable name
+  typing: NodeTypeRule;
 }
 
 // I/O shape definitions
@@ -29,19 +27,21 @@ export interface IOSideShape {
 export interface IOShape {
   inputs: IOSideShape;
   outputs: IOSideShape;
-  type_params?: Record<string, string[]>; // declare domains for type variables
+  type_params: Record<string, string[]>; // declare domains for type variables
 }
 
 export interface ModuleMeta {
-  io_shape?: IOShape;
+  io_shape: IOShape;
 }
 
 // Runtime instance of a pin in a module instance
 export interface NodePin {
   node_id: string;
+  direction: 'in' | 'out';
   type: string;
   name: string;              // user-editable name
-  label?: string;            // from NodeGroup.label
+  label: string;             // from NodeGroup.label
+  position_index: number;    // position within the group
   group_index: number;       // index in meta.io_shape.inputs.nodes or outputs.nodes
   type_var?: string;         // type variable name if applicable
   allowed_types?: string[];  // allowed types for this node (from template)
@@ -50,7 +50,8 @@ export interface NodePin {
 // Module instance structure
 export interface ModuleInstance {
   module_instance_id: string;
-  module_id: string;         // reference to ModuleTemplate.id
+  module_ref: string;
+  module_kind: string;
   config: Record<string, any>;
   inputs: NodePin[];         // Flat array, grouped by group_index
   outputs: NodePin[];
@@ -59,13 +60,12 @@ export interface ModuleInstance {
 // Module template structure
 export interface ModuleTemplate {
   id: string;
-  version?: string;
+  version: string;
   title: string;
-  description?: string;
+  description: string;
   kind: string;
-  category?: string;
-  color?: string;
-  meta?: ModuleMeta;
+  color: string;
+  meta: ModuleMeta;
   config_schema: any;
 }
 

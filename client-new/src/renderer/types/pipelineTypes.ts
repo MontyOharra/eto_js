@@ -1,36 +1,31 @@
 /**
  * Type definitions for the Transformation Pipeline system
- * Adapted from client/src/renderer/types/pipelineTypes.ts
  */
 
-import type {
-  NodeTypeRule,
-  NodeGroup,
-  IOSideShape,
-  IOShape,
-  ModuleTemplate,
-  ModuleInstance,
-  NodePin
+import {
+  NodeTypeRule as _NodeTypeRule,
+  NodeGroup as _NodeGroup,
+  IOSideShape as _IOSideShape,
+  IOShape as _IOShape,
+  ModuleTemplate as _ModuleTemplate,
+  ModuleInstance as _ModuleInstance,
+  NodePin as _NodePin
 } from './moduleTypes';
 
 // Re-export module type definitions
-export type {
-  NodeTypeRule,
-  NodeGroup,
-  IOSideShape,
-  IOShape,
-  ModuleTemplate,
-  ModuleInstance,
-  NodePin
-};
+export type NodeTypeRule = _NodeTypeRule;
+export type NodeGroup = _NodeGroup;
+export type IOSideShape = _IOSideShape;
+export type IOShape = _IOShape;
+export type ModuleTemplate = _ModuleTemplate;
+export type ModuleInstance = _ModuleInstance;
+export type NodePin = _NodePin;
 
-// Connection between nodes (for pipeline graph)
-export interface PipelineConnection {
-  connection_id: string;
-  source_node_id: string;    // module instance ID or entry point node ID
-  target_node_id: string;    // module instance ID
-  source_pin_id: string;     // output pin node_id
-  target_pin_id: string;     // input pin node_id
+
+// Connection between nodes
+export interface NodeConnection {
+  from_node_id: string;
+  to_node_id: string;
 }
 
 // Entry point for pipeline (frontend - includes type for UI)
@@ -40,16 +35,31 @@ export interface EntryPoint {
   type: string;
 }
 
+// Backend-compatible types for serialization
+export interface InstanceNodePin {
+  node_id: string;
+  type: string;
+  name: string;
+  position_index: number;
+  group_index: number;
+}
+
+export interface BackendEntryPoint {
+  node_id: string;
+  name: string;
+}
+
 // Pipeline state (execution data)
 export interface PipelineState {
   entry_points: EntryPoint[];
   modules: ModuleInstance[];
-  connections: PipelineConnection[];
+  connections: NodeConnection[];
 }
 
 // Visual state (UI positioning)
 export interface VisualState {
-  positions: Record<string, { x: number; y: number }>;
+  modules: Record<string, { x: number; y: number }>;
+  entryPoints?: Record<string, { x: number; y: number }>;
 }
 
 // Complete pipeline data (for saving/loading)
@@ -57,15 +67,15 @@ export interface PipelineData {
   schema_version?: string;
   name?: string;
   description?: string;
-  pipeline_state: PipelineState;
-  visual_state: VisualState;
+  pipeline_json: PipelineState;
+  visual_json: VisualState;
 }
 
 // API response for modules endpoint
 export interface ModulesResponse {
   modules: ModuleTemplate[];
   total_count: number;
-  stats?: {
+  stats: {
     total_modules: number;
     transform_modules: number;
     action_modules: number;
@@ -73,3 +83,6 @@ export interface ModulesResponse {
     module_refs: string[];
   };
 }
+
+// Type alias for compatibility
+export type Connection = NodeConnection;
