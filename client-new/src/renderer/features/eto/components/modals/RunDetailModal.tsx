@@ -245,32 +245,36 @@ export function RunDetailModal({ isOpen, runId, onClose }: RunDetailModalProps) 
                   </h3>
 
                   {/* Scrollable content area */}
-                  <div className="flex-1 overflow-auto bg-gray-900 rounded p-3">
-                    {viewMode === 'summary' ? (
-                      /* Summary View - Actions/Errors */
-                      <div className="font-mono text-xs">
-                        {runDetail.status === 'success' && runDetail.pipeline_execution?.executed_actions ? (
-                          <pre className="text-gray-300 whitespace-pre-wrap break-words">
-                            {JSON.stringify(runDetail.pipeline_execution.executed_actions, null, 2)}
-                          </pre>
-                        ) : runDetail.status === 'failure' ? (
-                          <div className="text-red-300">
-                            <p className="font-bold mb-2">Error Type: {runDetail.error_type || 'Unknown'}</p>
-                            <p className="mb-2">Message: {runDetail.error_message || 'No error message available'}</p>
-                            {runDetail.pipeline_execution?.error_message && (
-                              <>
-                                <p className="font-bold mb-2 mt-4">Pipeline Error:</p>
-                                <p>{runDetail.pipeline_execution.error_message}</p>
-                              </>
-                            )}
-                          </div>
-                        ) : (
-                          <p className="text-gray-400">No details available</p>
-                        )}
-                      </div>
-                    ) : (
-                      /* Detail View - Pipeline Visualization */
-                      runDetail.pipeline_execution?.pipeline_definition_id ? (
+                  <div className="flex-1 overflow-auto bg-gray-900 rounded p-3 relative">
+                    {/* Summary View - Actions/Errors (keep mounted, toggle visibility) */}
+                    <div
+                      className={`font-mono text-xs ${viewMode === 'summary' ? '' : 'hidden'}`}
+                    >
+                      {runDetail.status === 'success' && runDetail.pipeline_execution?.executed_actions ? (
+                        <pre className="text-gray-300 whitespace-pre-wrap break-words">
+                          {JSON.stringify(runDetail.pipeline_execution.executed_actions, null, 2)}
+                        </pre>
+                      ) : runDetail.status === 'failure' ? (
+                        <div className="text-red-300">
+                          <p className="font-bold mb-2">Error Type: {runDetail.error_type || 'Unknown'}</p>
+                          <p className="mb-2">Message: {runDetail.error_message || 'No error message available'}</p>
+                          {runDetail.pipeline_execution?.error_message && (
+                            <>
+                              <p className="font-bold mb-2 mt-4">Pipeline Error:</p>
+                              <p>{runDetail.pipeline_execution.error_message}</p>
+                            </>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-gray-400">No details available</p>
+                      )}
+                    </div>
+
+                    {/* Detail View - Pipeline Visualization (keep mounted, toggle visibility) */}
+                    <div
+                      className={`absolute inset-0 ${viewMode === 'detail' ? '' : 'hidden'}`}
+                    >
+                      {runDetail.pipeline_execution?.pipeline_definition_id ? (
                         <ExecutedPipelineViewer
                           pipelineDefinitionId={runDetail.pipeline_execution.pipeline_definition_id}
                           executionData={{
@@ -283,8 +287,8 @@ export function RunDetailModal({ isOpen, runId, onClose }: RunDetailModalProps) 
                         <div className="flex items-center justify-center h-full">
                           <p className="text-gray-400">No pipeline data available</p>
                         </div>
-                      )
-                    )}
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
