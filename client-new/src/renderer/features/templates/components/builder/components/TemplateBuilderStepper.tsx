@@ -3,7 +3,7 @@
  * Progress indicator showing current step in template building process
  */
 
-type BuilderStep = 'signature-objects' | 'extraction-fields' | 'pipeline';
+type BuilderStep = 'signature-objects' | 'extraction-fields' | 'pipeline' | 'testing';
 
 interface StepConfig {
   id: BuilderStep;
@@ -15,6 +15,7 @@ const STEPS: StepConfig[] = [
   { id: 'signature-objects', number: 1, label: 'Signature Objects' },
   { id: 'extraction-fields', number: 2, label: 'Extraction Fields' },
   { id: 'pipeline', number: 3, label: 'Pipeline' },
+  { id: 'testing', number: 4, label: 'Testing' },
 ];
 
 interface TemplateBuilderStepperProps {

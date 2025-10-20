@@ -26,7 +26,7 @@ export interface TemplateData {
   visual_state: VisualState;
 }
 
-type BuilderStep = 'signature-objects' | 'extraction-fields' | 'pipeline';
+type BuilderStep = 'signature-objects' | 'extraction-fields' | 'pipeline' | 'testing';
 
 export function TemplateBuilderModal({
   isOpen,
@@ -48,6 +48,8 @@ export function TemplateBuilderModal({
   const [visualState, setVisualState] = useState<VisualState>({
     positions: {},
   });
+  const [testResults, setTestResults] = useState<any>(null); // Results from template simulation
+  const [isTesting, setIsTesting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   // PDF viewer state persistence across steps
@@ -79,10 +81,12 @@ export function TemplateBuilderModal({
         return extractionFields.length > 0;
       case 'pipeline':
         return true;
+      case 'testing':
+        return testResults !== null;
       default:
         return false;
     }
-  }, [currentStep, signatureObjects.length, templateName, extractionFields.length]);
+  }, [currentStep, signatureObjects.length, templateName, extractionFields.length, testResults]);
 
   // Get validation message for current step
   const validationMessage = useMemo(() => {
@@ -124,6 +128,28 @@ export function TemplateBuilderModal({
     }
   };
 
+  const handleTest = async () => {
+    setIsTesting(true);
+    try {
+      // TODO: Call simulate API endpoint with template data and PDF
+      // For now, simulate a successful test
+      await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate API call
+
+      // Mock test results - in production this would come from the API
+      setTestResults({
+        status: 'success',
+        // Add mock execution data here
+      });
+
+      // Navigate to testing step
+      setCurrentStep('testing');
+    } catch (error) {
+      console.error('Failed to test template:', error);
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
   const handleClose = () => {
     // Reset all state (PDF data is cached by React Query, no need to reset)
     setCurrentStep('signature-objects');
@@ -134,6 +160,7 @@ export function TemplateBuilderModal({
     setExtractionFields([]);
     setPipelineState({ entry_points: [], modules: [], connections: [] });
     setVisualState({ positions: {} });
+    setTestResults(null);
     setPdfScale(1.0);
     setPdfCurrentPage(1);
     onClose();
@@ -160,6 +187,9 @@ export function TemplateBuilderModal({
     } else if (currentStep === 'pipeline') {
       console.log('[TemplateBuilderModal] Moving back to extraction-fields');
       setCurrentStep('extraction-fields');
+    } else if (currentStep === 'testing') {
+      console.log('[TemplateBuilderModal] Moving back to pipeline');
+      setCurrentStep('pipeline');
     }
   };
 
@@ -259,6 +289,24 @@ export function TemplateBuilderModal({
                   onVisualStateChange={setVisualState}
                 />
               </div>
+              <div
+                className="h-full w-full"
+                style={{ display: currentStep === 'testing' ? 'flex' : 'none' }}
+              >
+                {/* Testing Step - shows simulation results like ETO RunDetailModal */}
+                <div className="flex-1 flex items-center justify-center bg-gray-900">
+                  {testResults ? (
+                    <div className="text-white">
+                      <h3 className="text-xl font-semibold mb-4">Template Test Results</h3>
+                      <pre className="bg-gray-800 p-4 rounded">
+                        {JSON.stringify(testResults, null, 2)}
+                      </pre>
+                    </div>
+                  ) : (
+                    <div className="text-gray-400">No test results available</div>
+                  )}
+                </div>
+              </div>
             </>
           )}
         </div>
@@ -275,14 +323,30 @@ export function TemplateBuilderModal({
             {currentStep !== 'signature-objects' && (
               <button
                 onClick={handleBack}
-                disabled={isSaving}
+                disabled={isSaving || isTesting}
                 className="px-4 py-2 text-sm bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
               >
                 ← Back
               </button>
             )}
 
-            {currentStep !== 'pipeline' ? (
+            {currentStep === 'pipeline' ? (
+              <button
+                onClick={handleTest}
+                disabled={!canProceed || isTesting}
+                className="px-6 py-2 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
+              >
+                {isTesting ? 'Testing...' : 'Test Template →'}
+              </button>
+            ) : currentStep === 'testing' ? (
+              <button
+                onClick={handleSave}
+                disabled={!canProceed || isSaving}
+                className="px-6 py-2 text-sm bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
+              >
+                {isSaving ? 'Saving...' : 'Save Template'}
+              </button>
+            ) : (
               <div className="relative group">
                 <button
                   onClick={handleNext}
@@ -301,14 +365,6 @@ export function TemplateBuilderModal({
                   </div>
                 )}
               </div>
-            ) : (
-              <button
-                onClick={handleSave}
-                disabled={!canProceed || isSaving}
-                className="px-6 py-2 text-sm bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
-              >
-                {isSaving ? 'Saving...' : 'Save Template'}
-              </button>
             )}
           </div>
         </div>
