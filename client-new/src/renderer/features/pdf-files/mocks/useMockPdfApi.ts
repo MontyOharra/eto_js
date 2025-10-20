@@ -134,6 +134,67 @@ export const useMockPdfApi = {
   },
 
   /**
+   * Process uploaded PDF file and extract objects (no persistence)
+   * Endpoint: POST /pdf-files/process
+   * Simulates PDF processing for manually uploaded files
+   */
+  processPdf: async (pdfFile: File): Promise<PdfObjectsResponseDTO> => {
+    await new Promise((resolve) => setTimeout(resolve, 800)); // Simulate processing time
+
+    console.log('[Mock API] Processing uploaded PDF:', pdfFile.name);
+
+    // For mock purposes, return a sample objects structure
+    // In production, this would actually process the PDF
+    const mockObjects: PdfObjectsResponseDTO = {
+      page_count: 1,
+      objects: {
+        text_words: [
+          {
+            page: 0,
+            bbox: [100, 100, 150, 120],
+            text: 'Sample',
+            fontname: 'Helvetica',
+            fontsize: 12,
+          },
+          {
+            page: 0,
+            bbox: [160, 100, 210, 120],
+            text: 'Text',
+            fontname: 'Helvetica',
+            fontsize: 12,
+          },
+        ],
+        text_lines: [
+          {
+            page: 0,
+            bbox: [100, 100, 210, 120],
+          },
+        ],
+        graphic_rects: [
+          {
+            page: 0,
+            bbox: [50, 50, 250, 150],
+            linewidth: 1,
+          },
+        ],
+        graphic_lines: [],
+        graphic_curves: [],
+        images: [],
+        tables: [],
+      },
+    };
+
+    console.log('[Mock API] Extracted objects from uploaded PDF:', {
+      page_count: mockObjects.page_count,
+      text_words: mockObjects.objects.text_words.length,
+      text_lines: mockObjects.objects.text_lines.length,
+      graphic_rects: mockObjects.objects.graphic_rects.length,
+    });
+
+    return mockObjects;
+  },
+
+  /**
    * Get list of available test PDFs
    */
   getAvailablePdfIds: (): number[] => {

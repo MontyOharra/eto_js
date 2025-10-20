@@ -9,6 +9,7 @@ import { SignatureObjectsStep, ExtractionFieldsStep, PipelineBuilderStep, Testin
 import { TemplateBuilderHeader, TemplateBuilderStepper } from './components';
 import { usePdfData } from '../../../pdf-files/hooks/usePdfData';
 import { useMockModulesApi } from '../../../modules/hooks';
+import { useMockPdfApi } from '../../../pdf-files/mocks/useMockPdfApi';
 import type { ModuleTemplate } from '../../../../types/moduleTypes';
 
 interface TemplateBuilderModalProps {
@@ -99,48 +100,51 @@ export function TemplateBuilderModal({
       return;
     }
 
-    setIsProcessingUpload(true);
+    async function processUploadedPdf() {
+      setIsProcessingUpload(true);
 
-    // Create blob URL for PDF viewer
-    const blobUrl = URL.createObjectURL(pdfFile);
-    setUploadedPdfUrl(blobUrl);
+      try {
+        // Create blob URL for PDF viewer
+        const blobUrl = URL.createObjectURL(pdfFile);
+        setUploadedPdfUrl(blobUrl);
 
-    // TODO: In production, extract PDF objects via API call
-    // For now, create mock PDF objects data
-    // This would normally be done by sending the file to a processing endpoint
-    const mockObjectsData = {
-      pages: [
-        {
-          page_num: 0,
-          objects: [
-            // Mock objects will be populated when user draws them
-          ],
-        },
-      ],
-    };
+        // Process PDF to extract objects via mock API
+        const objectsData = await useMockPdfApi.processPdf(pdfFile);
 
-    const mockMetadata = {
-      id: -1, // Temporary ID for uploaded file
-      filename: pdfFile.name,
-      file_size: pdfFile.size,
-      num_pages: 1, // Will be updated when PDF loads
-      upload_timestamp: new Date().toISOString(),
-      email_id: null,
-      eto_run_id: null,
-    };
+        const mockMetadata = {
+          id: -1, // Temporary ID for uploaded file
+          filename: pdfFile.name,
+          file_size: pdfFile.size,
+          num_pages: objectsData.page_count,
+          upload_timestamp: new Date().toISOString(),
+          email_id: null,
+          eto_run_id: null,
+        };
 
-    setUploadedPdfData({
-      objectsData: mockObjectsData,
-      url: blobUrl,
-      metadata: mockMetadata,
-      emailData: null,
-    });
+        setUploadedPdfData({
+          objectsData: objectsData,
+          url: blobUrl,
+          metadata: mockMetadata,
+          emailData: null,
+        });
+      } catch (error) {
+        console.error('[TemplateBuilderModal] Failed to process uploaded PDF:', error);
+        // Keep URL but show empty objects on error
+        const blobUrl = URL.createObjectURL(pdfFile);
+        setUploadedPdfUrl(blobUrl);
+        setUploadedPdfData(null);
+      } finally {
+        setIsProcessingUpload(false);
+      }
+    }
 
-    setIsProcessingUpload(false);
+    processUploadedPdf();
 
     // Cleanup blob URL on unmount
     return () => {
-      URL.revokeObjectURL(blobUrl);
+      if (uploadedPdfUrl) {
+        URL.revokeObjectURL(uploadedPdfUrl);
+      }
     };
   }, [pdfFile]);
 

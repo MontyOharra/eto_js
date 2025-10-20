@@ -766,6 +766,7 @@ Return data directly (no `success` wrapper):
 | GET | `/pdf-files/{id}` | Get PDF file metadata |
 | GET | `/pdf-files/{id}/download` | Download/stream PDF file bytes |
 | GET | `/pdf-files/{id}/objects` | Get extracted PDF objects (for template building) |
+| POST | `/pdf-files/process` | Process uploaded PDF and extract objects (no persistence) |
 
 ---
 
@@ -899,6 +900,99 @@ Return data directly (no `success` wrapper):
 **Errors:**
 - `404`: `{"detail": "PDF file not found"}`
 - `500`: `{"detail": "Database error or invalid objects data"}`
+
+---
+
+### `POST /pdf-files/process`
+
+**Description:** Process uploaded PDF file and extract objects without database persistence. Used during template creation with manual PDF upload. Returns same object structure as `GET /pdf-files/{id}/objects` but for temporary files.
+
+**Request:** `multipart/form-data`
+- `pdf_file`: File (required, PDF only)
+
+**Response:** `200 OK`
+```typescript
+{
+  "page_count": number,
+  "objects": {
+    "text_words": [
+      {
+        "page": number,
+        "bbox": [number, number, number, number], // [x0, y0, x1, y1]
+        "text": string,
+        "fontname": string,
+        "fontsize": number
+      }
+    ],
+    "text_lines": [
+      {
+        "page": number,
+        "bbox": [number, number, number, number]  // [x0, y0, x1, y1]
+      }
+    ],
+    "graphic_rects": [
+      {
+        "page": number,
+        "bbox": [number, number, number, number], // [x0, y0, x1, y1]
+        "linewidth": number
+      }
+    ],
+    "graphic_lines": [
+      {
+        "page": number,
+        "bbox": [number, number, number, number], // [x0, y0, x1, y1]
+        "linewidth": number
+      }
+    ],
+    "graphic_curves": [
+      {
+        "page": number,
+        "bbox": [number, number, number, number], // [x0, y0, x1, y1]
+        "points": [[number, number], [number, number], ...], // Array of [x, y] coordinate pairs
+        "linewidth": number
+      }
+    ],
+    "images": [
+      {
+        "page": number,
+        "bbox": [number, number, number, number], // [x0, y0, x1, y1]
+        "format": string,      // e.g., "JPEG", "PNG"
+        "colorspace": string,  // e.g., "RGB", "CMYK"
+        "bits": number         // Bit depth
+      }
+    ],
+    "tables": [
+      {
+        "page": number,
+        "bbox": [number, number, number, number], // [x0, y0, x1, y1]
+        "rows": number,
+        "cols": number
+      }
+    ]
+  }
+}
+```
+
+**Notes:**
+- **No database persistence** - Pure PDF processing operation
+- PDF is not stored on server - processed in-memory and discarded
+- Used when creating templates from manually uploaded PDFs
+- Returns same object structure as `GET /pdf-files/{id}/objects` for consistency
+- Objects grouped by type (7 types total)
+- Coordinates are rounded to 3 decimal places
+- Each array can be empty if no objects of that type were found
+
+**Usage Flow:**
+1. User uploads PDF in template builder
+2. Frontend calls this endpoint to extract objects
+3. Objects displayed in signature object step
+4. PDF and objects kept in browser until template save
+5. On save, PDF uploaded again (via POST /pdf-templates with multipart)
+
+**Errors:**
+- `400`: `{"detail": "Missing PDF file or invalid file type"}`
+- `422`: `{"detail": "Invalid PDF file - corrupted or unreadable"}`
+- `500`: `{"detail": "PDF processing error: [specific error]"}`
 
 ---
 
@@ -1907,11 +2001,11 @@ Return data directly (no `success` wrapper):
 
 ## Phase 3 Complete! 🎉
 
-All 7 routers have been fully specified with **35 total endpoints**:
+All 7 routers have been fully specified with **36 total endpoints**:
 
 - ✅ Router 1: `/email-configs` - 10 endpoints
 - ✅ Router 2: `/eto-runs` - 6 endpoints
-- ✅ Router 3: `/pdf-files` - 3 endpoints
+- ✅ Router 3: `/pdf-files` - 4 endpoints
 - ✅ Router 4: `/pdf-templates` - 10 endpoints
 - ✅ Router 5: `/modules` - 1 endpoint
 - ✅ Router 6: `/pipelines` - 5 endpoints (dev/testing)
