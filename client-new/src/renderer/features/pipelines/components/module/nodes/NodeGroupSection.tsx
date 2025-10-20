@@ -29,6 +29,8 @@ export interface NodeGroupSectionProps {
     handleType: 'source' | 'target';
   } | null;
   getEffectiveAllowedTypes?: (moduleId: string, pinId: string, baseAllowedTypes: string[]) => string[];
+  executionMode?: boolean;
+  executionValues?: Map<string, { value: any; type: string; name: string }>;
 }
 
 export function NodeGroupSection({
@@ -50,6 +52,8 @@ export function NodeGroupSection({
   onHandleClick,
   pendingConnection,
   getEffectiveAllowedTypes,
+  executionMode = false,
+  executionValues,
 }: NodeGroupSectionProps) {
   // Get the NodeGroup from template
   const ioShape = direction === 'input' ? template.meta?.io_shape?.inputs : template.meta?.io_shape?.outputs;
@@ -91,11 +95,13 @@ export function NodeGroupSection({
             onHandleClick={onHandleClick}
             pendingConnection={pendingConnection}
             getEffectiveAllowedTypes={getEffectiveAllowedTypes}
+            executionMode={executionMode}
+            executionValue={executionValues?.get(node.node_id)}
           />
         ))}
 
         {/* Add Node Button */}
-        {canAdd && onAddNode && (
+        {canAdd && onAddNode && !executionMode && (
           <div className="relative flex items-center gap-2 py-1.5 group">
             <button
               onClick={() => onAddNode(moduleId, direction, groupIndex)}

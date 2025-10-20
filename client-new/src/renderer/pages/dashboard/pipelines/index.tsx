@@ -2,13 +2,14 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { useMockPipelinesApi } from '../../../features/pipelines/hooks/useMockPipelinesApi';
 import { PipelineCard } from '../../../features/pipelines/components';
-import { PipelineListItem, PipelineStatus } from '../../../features/pipelines/types';
+import { TestExecutedPipelineModal } from '../../../features/pipelines/components/TestExecutedPipelineModal';
+import { PipelineListItem } from '../../../features/pipelines/types';
 
 export const Route = createFileRoute('/dashboard/pipelines/')({
   component: PipelinesPage,
 });
 
-type SortBy = 'name' | 'status' | 'usage_count';
+type SortBy = 'id' | 'created_at' | 'updated_at';
 type SortOrder = 'asc' | 'desc';
 
 function PipelinesPage() {
@@ -19,9 +20,9 @@ function PipelinesPage() {
   } = useMockPipelinesApi();
 
   const [allPipelines, setAllPipelines] = useState<PipelineListItem[]>([]);
-  const [statusFilter, setStatusFilter] = useState<PipelineStatus | 'all'>('all');
-  const [sortBy, setSortBy] = useState<SortBy>('name');
-  const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
+  const [sortBy, setSortBy] = useState<SortBy>('created_at');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+  const [isTestModalOpen, setIsTestModalOpen] = useState(false);
 
   // Fetch pipelines on mount
   useEffect(() => {
@@ -37,31 +38,24 @@ function PipelinesPage() {
     }
   };
 
-  // Filter and sort pipelines
-  const getFilteredAndSortedPipelines = (): PipelineListItem[] => {
-    // Filter by status
-    let filtered =
-      statusFilter === 'all'
-        ? allPipelines
-        : allPipelines.filter((p) => p.status === statusFilter);
-
-    // Sort
-    const sorted = [...filtered].sort((a, b) => {
+  // Sort pipelines
+  const getSortedPipelines = (): PipelineListItem[] => {
+    const sorted = [...allPipelines].sort((a, b) => {
       let aValue: any;
       let bValue: any;
 
       switch (sortBy) {
-        case 'name':
-          aValue = a.name.toLowerCase();
-          bValue = b.name.toLowerCase();
+        case 'id':
+          aValue = a.id;
+          bValue = b.id;
           break;
-        case 'status':
-          aValue = a.status;
-          bValue = b.status;
+        case 'created_at':
+          aValue = new Date(a.created_at).getTime();
+          bValue = new Date(b.created_at).getTime();
           break;
-        case 'usage_count':
-          aValue = a.current_version.usage_count;
-          bValue = b.current_version.usage_count;
+        case 'updated_at':
+          aValue = new Date(a.updated_at).getTime();
+          bValue = new Date(b.updated_at).getTime();
           break;
         default:
           aValue = a.id;
@@ -78,7 +72,7 @@ function PipelinesPage() {
     return sorted;
   };
 
-  const filteredPipelines = getFilteredAndSortedPipelines();
+  const sortedPipelines = getSortedPipelines();
 
   // ==========================================================================
   // Button Handlers
@@ -119,15 +113,23 @@ function PipelinesPage() {
         <div>
           <h1 className="text-3xl font-bold text-white">Transformation Pipelines</h1>
           <p className="text-gray-400 mt-2">
-            Manage data transformation pipelines for document processing
+            Development/Testing tool for pipeline creation - In production, pipelines are embedded in templates
           </p>
         </div>
-        <Link
-          to="/dashboard/pipelines/create"
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
-        >
-          + Create Pipeline
-        </Link>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsTestModalOpen(true)}
+            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors font-medium"
+          >
+            Test Executed Pipeline View
+          </button>
+          <Link
+            to="/dashboard/pipelines/create"
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
+          >
+            + Create Pipeline
+          </Link>
+        </div>
       </div>
 
       {/* Loading State */}
@@ -137,28 +139,9 @@ function PipelinesPage() {
         </div>
       )}
 
-      {/* Filter and Sort Controls */}
+      {/* Sort Controls */}
       <div className="mb-6 bg-gray-800 border border-gray-700 rounded-lg p-4">
         <div className="flex flex-wrap items-center gap-4">
-          {/* Status Filter */}
-          <div className="flex items-center space-x-2">
-            <label className="text-sm font-medium text-gray-300">
-              Status:
-            </label>
-            <select
-              value={statusFilter}
-              onChange={(e) =>
-                setStatusFilter(e.target.value as PipelineStatus | 'all')
-              }
-              className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="all">All</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-              <option value="draft">Draft</option>
-            </select>
-          </div>
-
           {/* Sort By */}
           <div className="flex items-center space-x-2">
             <label className="text-sm font-medium text-gray-300">
@@ -169,9 +152,9 @@ function PipelinesPage() {
               onChange={(e) => setSortBy(e.target.value as SortBy)}
               className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
             >
-              <option value="name">Name</option>
-              <option value="status">Status</option>
-              <option value="usage_count">Usage Count</option>
+              <option value="id">Pipeline ID</option>
+              <option value="created_at">Created Date</option>
+              <option value="updated_at">Updated Date</option>
             </select>
           </div>
 
@@ -203,8 +186,8 @@ function PipelinesPage() {
 
           {/* Results Count */}
           <div className="ml-auto text-sm text-gray-400">
-            {filteredPipelines.length} pipeline
-            {filteredPipelines.length !== 1 ? 's' : ''}
+            {sortedPipelines.length} pipeline
+            {sortedPipelines.length !== 1 ? 's' : ''}
           </div>
         </div>
       </div>
@@ -212,7 +195,7 @@ function PipelinesPage() {
       {/* Pipelines Display */}
       <div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredPipelines.map((pipeline) => (
+          {sortedPipelines.map((pipeline) => (
             <PipelineCard
               key={pipeline.id}
               pipeline={pipeline}
@@ -222,7 +205,7 @@ function PipelinesPage() {
         </div>
 
       {/* Empty State */}
-      {filteredPipelines.length === 0 && !isLoading && (
+      {sortedPipelines.length === 0 && !isLoading && (
         <div className="bg-gray-800 border border-gray-700 rounded-lg p-12 text-center">
           <div className="text-gray-400 mb-4">
             <svg
@@ -240,14 +223,10 @@ function PipelinesPage() {
             </svg>
           </div>
           <h3 className="text-lg font-medium text-white mb-2">
-            {statusFilter === 'all'
-              ? 'No pipelines yet'
-              : `No ${statusFilter} pipelines`}
+            No pipelines yet
           </h3>
           <p className="text-gray-400 mb-4">
-            {statusFilter === 'all'
-              ? 'Get started by creating your first transformation pipeline'
-              : `Try adjusting your filters or create a new pipeline`}
+            Get started by creating your first transformation pipeline for testing
           </p>
           <Link
             to="/dashboard/pipelines/create"
@@ -258,6 +237,12 @@ function PipelinesPage() {
         </div>
       )}
     </div>
+
+      {/* Test Modal */}
+      <TestExecutedPipelineModal
+        isOpen={isTestModalOpen}
+        onClose={() => setIsTestModalOpen(false)}
+      />
     </div>
   );
 }

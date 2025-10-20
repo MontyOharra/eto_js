@@ -8,6 +8,8 @@ import { useState, useEffect } from 'react';
 import { PdfViewer } from '../../../../shared/components/pdf';
 import { useMockEtoApi } from '../../hooks/useMockEtoApi';
 import { StatusBadge } from '../ui/StatusBadge';
+import { ExtractedFieldsOverlay } from '../overlays/ExtractedFieldsOverlay';
+import { ExecutedPipelineViewer } from '../../../pipelines/components/ExecutedPipelineViewer';
 import type { EtoRunDetail } from '../../types';
 
 interface RunDetailModalProps {
@@ -24,6 +26,8 @@ export function RunDetailModal({ isOpen, runId, onClose }: RunDetailModalProps) 
   const [error, setError] = useState<string | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('summary');
+  const [specificsWidth, setSpecificsWidth] = useState(60); // Percentage
+  const [isDragging, setIsDragging] = useState(false);
 
   // Fetch run details when modal opens
   useEffect(() => {
@@ -57,6 +61,42 @@ export function RunDetailModal({ isOpen, runId, onClose }: RunDetailModalProps) 
     console.error('PDF load error:', pdfError);
     setError(`Failed to load PDF: ${pdfError.message}`);
   };
+
+  // Resizable divider handlers
+  const handleMouseDown = () => {
+    setIsDragging(true);
+  };
+
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!isDragging) return;
+
+    const modal = document.querySelector('.resize-container');
+    if (!modal) return;
+
+    const rect = modal.getBoundingClientRect();
+    const offsetX = e.clientX - rect.left;
+    const percentage = (offsetX / rect.width) * 100;
+
+    // Constrain between 20% and 80%
+    const constrainedPercentage = Math.min(Math.max(percentage, 20), 80);
+    setSpecificsWidth(constrainedPercentage);
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  // Attach/detach mouse event listeners
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDragging]);
 
   // Format file size
   const formatFileSize = (bytes: number | null): string => {
@@ -194,20 +234,21 @@ export function RunDetailModal({ isOpen, runId, onClose }: RunDetailModalProps) 
           )}
 
           {!isLoading && !error && runDetail && (
-            <>
-              {viewMode === 'summary' ? (
-                /* Summary View */
-                <div className="p-4 flex gap-4 h-full">
-                  {/* Left Column - Specifics Only */}
-                  <div className="w-2/5 flex flex-col">
-                    {/* Specifics Section - Full Height */}
-                    <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 flex flex-col flex-1 overflow-hidden">
-                      <h3 className="text-lg font-semibold text-white mb-3">
-                        {runDetail.status === 'success' ? 'Actions Executed' : 'Error Details'}
-                      </h3>
+            <div className="p-4 flex h-full resize-container">
+              {/* Left Column - Specifics */}
+              <div className="flex flex-col" style={{ width: `${specificsWidth}%` }}>
+                <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 flex flex-col flex-1 overflow-hidden">
+                  <h3 className="text-lg font-semibold text-white mb-3">
+                    {viewMode === 'summary'
+                      ? (runDetail.status === 'success' ? 'Actions Executed' : 'Error Details')
+                      : 'Transformation Pipeline'}
+                  </h3>
 
-                      {/* Scrollable content area */}
-                      <div className="flex-1 overflow-auto bg-gray-900 rounded p-3 font-mono text-xs">
+                  {/* Scrollable content area */}
+                  <div className="flex-1 overflow-auto bg-gray-900 rounded p-3">
+                    {viewMode === 'summary' ? (
+                      /* Summary View - Actions/Errors */
+                      <div className="font-mono text-xs">
                         {runDetail.status === 'success' && runDetail.pipeline_execution?.executed_actions ? (
                           <pre className="text-gray-300 whitespace-pre-wrap break-words">
                             {JSON.stringify(runDetail.pipeline_execution.executed_actions, null, 2)}
@@ -227,35 +268,59 @@ export function RunDetailModal({ isOpen, runId, onClose }: RunDetailModalProps) 
                           <p className="text-gray-400">No details available</p>
                         )}
                       </div>
-                    </div>
-                  </div>
-
-                  {/* Right Column - PDF Viewer */}
-                  <div className="w-3/5 flex flex-col">
-                    <div className="bg-gray-800 border border-gray-700 rounded-lg flex-1 overflow-hidden relative p-4">
-                      {pdfUrl ? (
-                        <PdfViewer pdfUrl={pdfUrl} onError={handlePdfError}>
-                          <PdfViewer.Canvas pdfUrl={pdfUrl} onError={handlePdfError} />
-                          <PdfViewer.ControlsSidebar position="right" />
-                        </PdfViewer>
+                    ) : (
+                      /* Detail View - Pipeline Visualization */
+                      runDetail.pipeline_execution?.pipeline_definition_id ? (
+                        <ExecutedPipelineViewer
+                          pipelineDefinitionId={runDetail.pipeline_execution.pipeline_definition_id}
+                          executionData={{
+                            steps: runDetail.pipeline_execution.steps,
+                            executed_actions: runDetail.pipeline_execution.executed_actions || undefined,
+                          }}
+                        />
                       ) : (
                         <div className="flex items-center justify-center h-full">
-                          <p className="text-gray-400">No PDF available</p>
+                          <p className="text-gray-400">No pipeline data available</p>
                         </div>
-                      )}
+                      )
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Resizable Divider */}
+              <div
+                className="w-1 bg-gray-700 hover:bg-blue-500 cursor-col-resize transition-colors flex-shrink-0 mx-1"
+                onMouseDown={handleMouseDown}
+                style={{
+                  userSelect: 'none',
+                  backgroundColor: isDragging ? '#3B82F6' : undefined,
+                }}
+              />
+
+              {/* Right Column - PDF Viewer */}
+              <div className="flex flex-col" style={{ width: `${100 - specificsWidth}%` }}>
+                <div className="bg-gray-800 border border-gray-700 rounded-lg flex-1 overflow-hidden relative p-4">
+                  {pdfUrl ? (
+                    <PdfViewer pdfUrl={pdfUrl} onError={handlePdfError}>
+                      <PdfViewer.Canvas pdfUrl={pdfUrl} onError={handlePdfError}>
+                        {/* Show extraction field overlay in detail view */}
+                        {viewMode === 'detail' && runDetail.data_extraction?.extracted_fields_with_boxes && (
+                          <ExtractedFieldsOverlay
+                            fields={runDetail.data_extraction.extracted_fields_with_boxes}
+                          />
+                        )}
+                      </PdfViewer.Canvas>
+                      <PdfViewer.ControlsSidebar position="right" />
+                    </PdfViewer>
+                  ) : (
+                    <div className="flex items-center justify-center h-full">
+                      <p className="text-gray-400">No PDF available</p>
                     </div>
-                  </div>
+                  )}
                 </div>
-              ) : (
-                /* Detail View - Placeholder */
-                <div className="p-4 h-full flex items-center justify-center">
-                  <div className="text-center">
-                    <h3 className="text-xl font-semibold text-white mb-2">Detail View</h3>
-                    <p className="text-gray-400">Coming soon: Extraction & Transformation details</p>
-                  </div>
-                </div>
-              )}
-            </>
+              </div>
+            </div>
           )}
         </div>
 

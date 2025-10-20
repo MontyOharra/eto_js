@@ -16,6 +16,7 @@ import {
   mockPipeline2SuccessExecution,
   mockPipeline3FailureExecution,
   mockPipeline1FailureExecution,
+  mockPipeline4SuccessExecution,
 } from '../../pipelines/mocks/pipelineExecutionMock';
 
 // =============================================================================
@@ -192,6 +193,19 @@ export const mockSkippedRun2: EtoRunListItem = {
   matched_template: null,
 };
 
+export const mockSuccessRun3: EtoRunListItem = {
+  id: 11,
+  status: 'success',
+  processing_step: null,
+  started_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
+  completed_at: new Date(Date.now() - 5.8 * 60 * 60 * 1000).toISOString(),
+  error_type: null,
+  error_message: null,
+  pdf: createMockPdfInfo(103, '103.pdf'),
+  source: createMockManualSource(),
+  matched_template: createMockTemplate(4, 'Complex Order Processing Template'),
+};
+
 // =============================================================================
 // Grouped Mock Data by Status
 // =============================================================================
@@ -199,7 +213,7 @@ export const mockSkippedRun2: EtoRunListItem = {
 export const mockRunsByStatus: Record<EtoRunStatus, EtoRunListItem[]> = {
   not_started: [mockNotStartedRun, mockNotStartedRun2],
   processing: [mockProcessingRun],
-  success: [mockSuccessRun, mockSuccessRun2],
+  success: [mockSuccessRun, mockSuccessRun2, mockSuccessRun3],
   failure: [mockFailureRun, mockFailureRun2],
   needs_template: [mockNeedsTemplateRun],
   skipped: [mockSkippedRun, mockSkippedRun2],
@@ -216,6 +230,7 @@ export const allMockRuns: EtoRunListItem[] = [
   mockFailureRun2,
   mockNotStartedRun2,
   mockSkippedRun2,
+  mockSuccessRun3,
 ];
 
 // =============================================================================
@@ -506,6 +521,100 @@ export const mockFailureRun2Detail: EtoRunDetail = {
 };
 
 // =============================================================================
+// Mock Detail Response for Third Success Run (Complex Multi-Type Pipeline)
+// =============================================================================
+
+export const mockSuccessRun3Detail: EtoRunDetail = {
+  ...mockSuccessRun3,
+  pdf: {
+    ...mockSuccessRun3.pdf,
+    page_count: 3,
+  },
+  template_matching: {
+    status: 'success',
+    started_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
+    completed_at: new Date(Date.now() - 5.95 * 60 * 60 * 1000).toISOString(),
+    error_message: null,
+    matched_template: createMockTemplate(4, 'Complex Order Processing Template'),
+  },
+  data_extraction: {
+    status: 'success',
+    started_at: new Date(Date.now() - 5.95 * 60 * 60 * 1000).toISOString(),
+    completed_at: new Date(Date.now() - 5.85 * 60 * 60 * 1000).toISOString(),
+    error_message: null,
+    // Matches pipeline #4 entry points (e1: order_id, e2: quantity, e3: unit_price, e4: is_expedited, e5: order_date)
+    extracted_data: {
+      order_id: 'ORD-2025-001',
+      quantity: 5,
+      unit_price: 29.99,
+      is_expedited: true,
+      order_date: '2025-10-17T10:30:00Z',
+    },
+    extracted_fields_with_boxes: [
+      {
+        field_id: 'order_id',
+        label: 'order_id',
+        value: 'ORD-2025-001',
+        page: 0,
+        bbox: [100, 50, 300, 70],
+      },
+      {
+        field_id: 'quantity',
+        label: 'quantity',
+        value: 5,
+        page: 0,
+        bbox: [100, 100, 200, 120],
+      },
+      {
+        field_id: 'unit_price',
+        label: 'unit_price',
+        value: 29.99,
+        page: 0,
+        bbox: [100, 150, 250, 170],
+      },
+      {
+        field_id: 'is_expedited',
+        label: 'is_expedited',
+        value: true,
+        page: 0,
+        bbox: [100, 200, 300, 220],
+      },
+      {
+        field_id: 'order_date',
+        label: 'order_date',
+        value: '2025-10-17T10:30:00Z',
+        page: 0,
+        bbox: [100, 250, 400, 270],
+      },
+    ],
+  },
+  pipeline_execution: {
+    status: 'success',
+    started_at: new Date(Date.now() - 5.85 * 60 * 60 * 1000).toISOString(),
+    completed_at: new Date(Date.now() - 5.8 * 60 * 60 * 1000).toISOString(),
+    error_message: null,
+    pipeline_definition_id: 4,  // Pipeline #4 (Complex Multi-Type)
+    executed_actions: [
+      {
+        action_module_name: 'Send Email',
+        inputs: {
+          invoice_id: 'INV-2025-10-17-001',
+          order_details: 'ORD-2025-001 | 2025-10-20 | $25.99 | $0.00',
+        },
+      },
+      {
+        action_module_name: 'Log Action',
+        inputs: {
+          message: 'INV-2025-10-17-001',
+          success: true,
+        },
+      },
+    ],
+    steps: mockPipeline4SuccessExecution,
+  },
+};
+
+// =============================================================================
 // Mock Detail Responses by ID
 // =============================================================================
 
@@ -515,4 +624,5 @@ export const mockRunDetailsById: Record<number, EtoRunDetail> = {
   4: mockFailureRunDetail,     // Failure run with PDF ID 4 (pipeline #3 failure)
   7: mockSuccessRun2Detail,    // Second success run with PDF ID 4 (pipeline #2 success)
   8: mockFailureRun2Detail,    // Second failure run with PDF ID 103 (pipeline #1 failure)
+  11: mockSuccessRun3Detail,   // Third success run with PDF ID 103 (pipeline #4 success)
 };

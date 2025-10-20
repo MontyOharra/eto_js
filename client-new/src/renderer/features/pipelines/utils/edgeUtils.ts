@@ -143,3 +143,64 @@ export function removePinEdges(edges: Edge[], moduleId: string, pinId: string): 
       !(edge.target === moduleId && edge.targetHandle === pinId)
   );
 }
+
+/**
+ * Create React Flow edges from pipeline connections
+ * Handles entry points (prefixed with 'entry-') and module instances
+ */
+export function createEdgesFromConnections(
+  connections: Array<{ from_node_id: string; to_node_id: string }>,
+  modules: any[],
+  entryPoints: any[]
+): Edge[] {
+  const edges: Edge[] = [];
+
+  connections.forEach((conn) => {
+    // Determine source and target module IDs
+    // Entry points in React Flow have 'entry-' prefix
+    const sourceIsEntryPoint = entryPoints.some((ep: any) => ep.node_id === conn.from_node_id);
+    const sourceModuleId = sourceIsEntryPoint ? `entry-${conn.from_node_id}` : conn.from_node_id;
+
+    const targetIsEntryPoint = entryPoints.some((ep: any) => ep.node_id === conn.to_node_id);
+    const targetModuleId = targetIsEntryPoint ? `entry-${conn.to_node_id}` : conn.to_node_id;
+
+    // Find which module contains the source and target nodes
+    let sourceNodeModuleId = sourceModuleId;
+    let targetNodeModuleId = targetModuleId;
+
+    // For non-entry-point nodes, find the module that contains this node
+    if (!sourceIsEntryPoint) {
+      const sourceModule = modules.find((m: any) =>
+        [...m.inputs, ...m.outputs].some((node: any) => node.node_id === conn.from_node_id)
+      );
+      if (sourceModule) {
+        // Use module_instance_id (ModuleInstance property)
+        sourceNodeModuleId = sourceModule.module_instance_id;
+      }
+    }
+
+    if (!targetIsEntryPoint) {
+      const targetModule = modules.find((m: any) =>
+        [...m.inputs, ...m.outputs].some((node: any) => node.node_id === conn.to_node_id)
+      );
+      if (targetModule) {
+        // Use module_instance_id (ModuleInstance property)
+        targetNodeModuleId = targetModule.module_instance_id;
+      }
+    }
+
+    edges.push({
+      id: `${conn.from_node_id}-${conn.to_node_id}`,
+      source: sourceNodeModuleId,
+      sourceHandle: conn.from_node_id,
+      target: targetNodeModuleId,
+      targetHandle: conn.to_node_id,
+      style: {
+        stroke: '#6B7280',
+        strokeWidth: 2,
+      },
+    });
+  });
+
+  return edges;
+}

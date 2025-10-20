@@ -117,21 +117,48 @@ export function getEffectiveAllowedTypes(
 }
 
 /**
- * Validate if two pins can be connected based on type constraints
+ * Validate if two pins can be connected based on type constraints.
+ * Uses effective allowed types which account for existing connections and typevars.
  *
+ * @param nodes - All nodes in the graph
+ * @param edges - All edges in the graph
+ * @param sourceModuleId - ID of source module
+ * @param sourcePin - Source pin to connect from
+ * @param targetModuleId - ID of target module
+ * @param targetPin - Target pin to connect to
  * @returns Object with validation result and suggested type if valid
  */
 export function validateConnection(
+  nodes: Node[],
+  edges: Edge[],
+  sourceModuleId: string,
   sourcePin: NodePin,
+  targetModuleId: string,
   targetPin: NodePin
 ): {
   valid: boolean;
   suggestedType?: string;
   typeIntersection?: string[];
 } {
-  const sourceAllowedTypes = sourcePin.allowed_types || ['str'];
-  const targetAllowedTypes = targetPin.allowed_types || ['str'];
-  const typeIntersection = getTypeIntersection(sourceAllowedTypes, targetAllowedTypes);
+  // Calculate effective allowed types for both pins based on graph context
+  const sourceEffectiveTypes = getEffectiveAllowedTypes(
+    nodes,
+    edges,
+    sourceModuleId,
+    sourcePin.node_id,
+    sourcePin.allowed_types || ['str']
+  );
+
+  const targetEffectiveTypes = getEffectiveAllowedTypes(
+    nodes,
+    edges,
+    targetModuleId,
+    targetPin.node_id,
+    targetPin.allowed_types || ['str']
+  );
+
+  // Find intersection of effective types
+  const typeIntersection = getTypeIntersection(sourceEffectiveTypes, targetEffectiveTypes);
 
   if (typeIntersection.length === 0) {
     return { valid: false };

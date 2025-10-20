@@ -22,6 +22,7 @@
     "@tanstack/react-router-devtools": "^1.124.0",
     "@xyflow/react": "^12.8.6",
     "axios": "^1.7.2",
+    "dagre": "^0.8.5",
     "dotenv": "^17.0.1",
     "keytar": "^7.9.0",
     "pdfjs-dist": "^5.3.31",

@@ -1,123 +1,158 @@
 // Domain types for Pipelines feature
-
-export type PipelineStatus = 'draft' | 'active' | 'inactive';
-
-// =============================================================================
-// Nested Types
-// =============================================================================
-
-export interface PipelineVersionSummary {
-  version_id: number;
-  version_num: number;
-  usage_count: number; // ETO runs that used this version
-}
+// Note: Pipelines are dev/testing only - no name/description/status
+// In production, pipelines are embedded in PDF templates
 
 // =============================================================================
-// List/Summary View
+// List/Summary View (matches GET /pipelines backend response)
 // =============================================================================
 
 export interface PipelineListItem {
   id: number;
-  name: string;
-  description: string | null;
-  status: PipelineStatus;
-  current_version: PipelineVersionSummary;
-  total_versions: number; // Count of all versions for this pipeline
+  compiled_plan_id: number | null;
   created_at: string; // ISO 8601
   updated_at: string; // ISO 8601
 }
 
 // =============================================================================
-// Detail View
+// Detail View (matches GET /pipelines/{id} backend response)
 // =============================================================================
 
 export interface PipelineDetail extends PipelineListItem {
-  // Pipeline state (execution data)
-  entry_points: Array<{
-    node_id: string;
-    name: string;
-    type: string;
-  }>;
-  modules: Array<{
-    module_instance_id: string;
-    module_id: string;
-    config: Record<string, any>;
-    inputs: Array<{
+  // Pipeline state (logical structure)
+  pipeline_state: {
+    entry_points: Array<{
       node_id: string;
       name: string;
-      type: string;
     }>;
-    outputs: Array<{
-      node_id: string;
-      name: string;
-      type: string;
+    modules: Array<{
+      module_instance_id: string;
+      module_ref: string; // e.g., "trim_text:1.0.0"
+      module_kind: string; // "transform" | "action" | "logic"
+      config: Record<string, any>;
+      inputs: Array<{
+        node_id: string;
+        name: string;
+        type: string;
+        position_index: number;
+        group_index: number;
+      }>;
+      outputs: Array<{
+        node_id: string;
+        name: string;
+        type: string;
+        position_index: number;
+        group_index: number;
+      }>;
     }>;
-  }>;
-  connections: Array<{
-    connection_id: string;
-    source_node_id: string;
-    target_node_id: string;
-    source_pin_id: string;
-    target_pin_id: string;
-  }>;
+    connections: Array<{
+      from_node_id: string;
+      to_node_id: string;
+    }>;
+  };
   // Visual state (UI positioning)
   visual_state: {
-    positions: Record<string, { x: number; y: number }>;
+    modules: Record<string, { x: number; y: number }>;
+    entryPoints?: Record<string, { x: number; y: number }>;
   };
 }
 
 // =============================================================================
-// API Response Types
+// API Response Types (matches backend API_ENDPOINTS.md)
 // =============================================================================
 
 export interface PipelinesListResponse {
   items: PipelineListItem[];
   total: number;
-  page: number;
-  page_size: number;
+  limit: number;
+  offset: number;
 }
 
-export interface PipelineDetailResponse {
-  pipeline: PipelineDetail;
-}
+export interface PipelineDetailResponse extends PipelineDetail {}
+
+// =============================================================================
+// API Request Types (matches POST /pipelines backend)
+// =============================================================================
 
 export interface CreatePipelineRequest {
-  name: string;
-  description?: string;
-  entry_points: Array<{
-    node_id: string;
-    name: string;
-    type: string;
-  }>;
-  modules: Array<{
-    module_instance_id: string;
-    module_id: string;
-    config: Record<string, any>;
-    inputs: Array<{
+  pipeline_state: {
+    entry_points: Array<{
       node_id: string;
       name: string;
-      type: string;
     }>;
-    outputs: Array<{
-      node_id: string;
-      name: string;
-      type: string;
+    modules: Array<{
+      module_instance_id: string;
+      module_ref: string;
+      module_kind: string;
+      config: Record<string, any>;
+      inputs: Array<{
+        node_id: string;
+        name: string;
+        type: string;
+        position_index: number;
+        group_index: number;
+      }>;
+      outputs: Array<{
+        node_id: string;
+        name: string;
+        type: string;
+        position_index: number;
+        group_index: number;
+      }>;
     }>;
-  }>;
-  connections: Array<{
-    connection_id: string;
-    source_node_id: string;
-    target_node_id: string;
-    source_pin_id: string;
-    target_pin_id: string;
-  }>;
+    connections: Array<{
+      from_node_id: string;
+      to_node_id: string;
+    }>;
+  };
   visual_state: {
-    positions: Record<string, { x: number; y: number }>;
+    modules: Record<string, { x: number; y: number }>;
+    entryPoints?: Record<string, { x: number; y: number }>;
   };
 }
 
+export interface CreatePipelineResponse {
+  id: number;
+  compiled_plan_id: number | null;
+}
+
 export interface UpdatePipelineRequest {
-  name?: string;
-  description?: string;
-  status?: PipelineStatus;
+  pipeline_state: {
+    entry_points: Array<{
+      node_id: string;
+      name: string;
+    }>;
+    modules: Array<{
+      module_instance_id: string;
+      module_ref: string;
+      module_kind: string;
+      config: Record<string, any>;
+      inputs: Array<{
+        node_id: string;
+        name: string;
+        type: string;
+        position_index: number;
+        group_index: number;
+      }>;
+      outputs: Array<{
+        node_id: string;
+        name: string;
+        type: string;
+        position_index: number;
+        group_index: number;
+      }>;
+    }>;
+    connections: Array<{
+      from_node_id: string;
+      to_node_id: string;
+    }>;
+  };
+  visual_state: {
+    modules: Record<string, { x: number; y: number }>;
+    entryPoints?: Record<string, { x: number; y: number }>;
+  };
+}
+
+export interface UpdatePipelineResponse {
+  id: number;
+  compiled_plan_id: number | null;
 }

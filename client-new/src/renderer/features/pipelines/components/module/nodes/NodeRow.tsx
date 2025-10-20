@@ -29,6 +29,8 @@ export interface NodeRowProps {
     handleType: 'source' | 'target';
   } | null;
   getEffectiveAllowedTypes?: (moduleId: string, pinId: string, baseAllowedTypes: string[]) => string[];
+  executionMode?: boolean;
+  executionValue?: { value: any; type: string; name: string };
 }
 
 export function NodeRow({
@@ -47,9 +49,22 @@ export function NodeRow({
   onHandleClick,
   pendingConnection,
   getEffectiveAllowedTypes,
+  executionMode = false,
+  executionValue,
 }: NodeRowProps) {
   const isHighlighted = node.type_var && node.type_var === highlightedTypeVar;
   const handleColor = TYPE_COLORS[node.type] || '#6B7280';
+
+  // Format execution value for display
+  const formatExecutionValue = (value: any): string => {
+    if (value === null) return 'null';
+    if (value === undefined) return 'undefined';
+    if (typeof value === 'string') return `"${value.length > 20 ? value.substring(0, 20) + '...' : value}"`;
+    if (typeof value === 'number') return value.toString();
+    if (typeof value === 'boolean') return value.toString();
+    if (typeof value === 'object') return JSON.stringify(value).substring(0, 20) + '...';
+    return String(value);
+  };
 
   // Check if this handle is the source of the pending connection
   const isPendingSource = pendingConnection?.sourceHandleId === node.node_id;
@@ -127,14 +142,14 @@ export function NodeRow({
           </div>
           <div className="flex-shrink-0">
             <button
-              onClick={canRemove && onRemove ? onRemove : undefined}
+              onClick={canRemove && onRemove && !executionMode ? onRemove : undefined}
               className={`p-0.5 rounded transition-colors ${
-                canRemove && onRemove
+                canRemove && onRemove && !executionMode
                   ? 'text-gray-500 hover:text-red-400 hover:bg-red-900 cursor-pointer'
                   : 'invisible cursor-default'
               }`}
-              title={canRemove ? 'Remove node' : ''}
-              disabled={!canRemove || !onRemove}
+              title={canRemove && !executionMode ? 'Remove node' : ''}
+              disabled={!canRemove || !onRemove || executionMode}
             >
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -147,14 +162,14 @@ export function NodeRow({
         <div className="flex items-center w-full gap-2">
           <div className="flex-shrink-0">
             <button
-              onClick={canRemove && onRemove ? onRemove : undefined}
+              onClick={canRemove && onRemove && !executionMode ? onRemove : undefined}
               className={`p-0.5 rounded transition-colors ${
-                canRemove && onRemove
+                canRemove && onRemove && !executionMode
                   ? 'text-gray-500 hover:text-red-400 hover:bg-red-900 cursor-pointer'
                   : 'invisible cursor-default'
               }`}
-              title={canRemove ? 'Remove node' : ''}
-              disabled={!canRemove || !onRemove}
+              title={canRemove && !executionMode ? 'Remove node' : ''}
+              disabled={!canRemove || !onRemove || executionMode}
             >
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

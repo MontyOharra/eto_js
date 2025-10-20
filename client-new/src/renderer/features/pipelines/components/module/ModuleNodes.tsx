@@ -25,6 +25,8 @@ export interface ModuleNodesProps {
   getConnectedOutputName?: (moduleId: string, inputPinId: string) => string | undefined;
   highlightedTypeVar: string | null;
   onTypeVarFocus: (typeVar: string | null) => void;
+  executionMode?: boolean;
+  executionValues?: Map<string, { value: any; type: string; name: string }>;
 }
 
 export function ModuleNodes({
@@ -41,6 +43,8 @@ export function ModuleNodes({
   getConnectedOutputName,
   highlightedTypeVar,
   onTypeVarFocus,
+  executionMode = false,
+  executionValues,
 }: ModuleNodesProps) {
   // Group inputs and outputs
   const inputGroups = groupNodesByIndex(moduleInstance.inputs);
@@ -105,6 +109,8 @@ export function ModuleNodes({
             onHandleClick={onHandleClick}
             pendingConnection={pendingConnection}
             getEffectiveAllowedTypes={getEffectiveAllowedTypes}
+            executionMode={executionMode}
+            executionValues={executionValues}
           />
         ))}
       </div>
@@ -131,6 +137,8 @@ export function ModuleNodes({
             onHandleClick={onHandleClick}
             pendingConnection={pendingConnection}
             getEffectiveAllowedTypes={getEffectiveAllowedTypes}
+            executionMode={executionMode}
+            executionValues={executionValues}
           />
         ))}
       </div>

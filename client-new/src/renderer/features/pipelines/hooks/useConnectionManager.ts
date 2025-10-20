@@ -78,8 +78,15 @@ export function useConnectionManager({
         return false;
       }
 
-      // Validate connection
-      const validation = validateConnection(sourcePin, targetPin);
+      // Validate connection using effective types from graph context
+      const validation = validateConnection(
+        nodes,
+        edges,
+        sourceModuleId,
+        sourcePin,
+        targetModuleId,
+        targetPin
+      );
       if (!validation.valid || !validation.suggestedType) {
         console.warn('Cannot connect: No shared types between nodes');
         return false;

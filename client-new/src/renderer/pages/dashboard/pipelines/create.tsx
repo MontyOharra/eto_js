@@ -19,8 +19,6 @@ function PipelineCreatePage() {
   // Page state
   const [moduleTemplates, setModuleTemplates] = useState<ModuleTemplate[]>([]);
   const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null);
-  const [pipelineName, setPipelineName] = useState('Untitled Pipeline');
-  const [pipelineDescription, setPipelineDescription] = useState('');
 
   // Entry points state
   const [showEntryPointModal, setShowEntryPointModal] = useState(true);
@@ -110,12 +108,6 @@ function PipelineCreatePage() {
       return;
     }
 
-    // Validate pipeline name
-    if (!pipelineName || pipelineName.trim() === '') {
-      alert('Please provide a pipeline name');
-      return;
-    }
-
     // Extract current state from graph
     const pipelineState = pipelineGraphRef.current.getPipelineState();
     const visualState = pipelineGraphRef.current.getVisualState();
@@ -123,9 +115,7 @@ function PipelineCreatePage() {
     // Serialize to backend format
     const backendData = serializePipelineData(
       pipelineState,
-      visualState,
-      pipelineName,
-      pipelineDescription
+      visualState
     );
 
     // Log to console for verification
@@ -170,7 +160,7 @@ function PipelineCreatePage() {
 
       const result = await response.json();
       console.log('✅ Pipeline created successfully:', result);
-      alert(`✅ Pipeline "${result.name}" created successfully!\n\nID: ${result.id}`);
+      alert(`✅ Pipeline created successfully!\n\nID: ${result.id}`);
 
       // Navigate back to pipelines list
       navigate({ to: '/dashboard/pipelines' });
@@ -251,20 +241,7 @@ function PipelineCreatePage() {
       <div className="bg-gray-800 border-b border-gray-600 px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4 flex-1">
-            <input
-              type="text"
-              value={pipelineName}
-              onChange={(e) => setPipelineName(e.target.value)}
-              className="text-xl font-semibold bg-transparent text-white border-none focus:outline-none focus:ring-2 focus:ring-blue-500 px-2 py-1 rounded"
-              placeholder="Pipeline Name"
-            />
-            <input
-              type="text"
-              value={pipelineDescription}
-              onChange={(e) => setPipelineDescription(e.target.value)}
-              className="text-sm bg-transparent text-gray-400 border-none focus:outline-none focus:ring-2 focus:ring-blue-500 px-2 py-1 rounded flex-1"
-              placeholder="Description (optional)"
-            />
+            <h1 className="text-xl font-semibold text-white">Create Pipeline</h1>
           </div>
           <div className="flex items-center space-x-2">
             <button

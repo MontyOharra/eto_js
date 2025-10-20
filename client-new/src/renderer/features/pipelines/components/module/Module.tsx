@@ -28,6 +28,9 @@ export interface ModuleProps {
     } | null;
     getEffectiveAllowedTypes?: (moduleId: string, pinId: string, baseAllowedTypes: string[]) => string[];
     getConnectedOutputName?: (moduleId: string, inputPinId: string) => string | undefined;
+    failedModuleIds?: string[];  // For execution visualization - highlight failed modules
+    executionMode?: boolean;  // When true, hides all editing controls (add/remove/delete buttons)
+    executionValues?: Map<string, { value: any; type: string; name: string }>;  // Execution data for each pin
   };
 }
 
@@ -46,9 +49,15 @@ export function Module({ data }: ModuleProps) {
     pendingConnection,
     getEffectiveAllowedTypes,
     getConnectedOutputName,
+    failedModuleIds = [],
+    executionMode = false,
+    executionValues,
   } = data;
 
   const [highlightedTypeVar, setHighlightedTypeVar] = useState<string | null>(null);
+
+  // Check if this module has failed
+  const hasFailed = failedModuleIds.includes(moduleInstance.module_instance_id);
 
   // Auto-correct types when effective allowed types change and current type becomes invalid
   useEffect(() => {
@@ -67,8 +76,13 @@ export function Module({ data }: ModuleProps) {
   }, [moduleInstance, getEffectiveAllowedTypes, onUpdateNode]);
 
   return (
-    <div className="bg-gray-800 rounded-lg border-2 border-gray-600 min-w-[400px] w-min">
-      <ModuleHeader moduleInstance={moduleInstance} template={template} onDeleteModule={onDeleteModule} />
+    <div className={`bg-gray-800 rounded-lg border-2 ${hasFailed ? 'border-red-600' : 'border-gray-600'} min-w-[400px] w-min`}>
+      <ModuleHeader
+        moduleInstance={moduleInstance}
+        template={template}
+        onDeleteModule={onDeleteModule}
+        executionMode={executionMode}
+      />
 
       <ModuleNodes
         moduleInstance={moduleInstance}
@@ -84,9 +98,16 @@ export function Module({ data }: ModuleProps) {
         getConnectedOutputName={getConnectedOutputName}
         highlightedTypeVar={highlightedTypeVar}
         onTypeVarFocus={setHighlightedTypeVar}
+        executionMode={executionMode}
+        executionValues={executionValues}
       />
 
-      <ModuleConfig moduleInstance={moduleInstance} template={template} onConfigChange={onConfigChange} />
+      <ModuleConfig
+        moduleInstance={moduleInstance}
+        template={template}
+        onConfigChange={onConfigChange}
+        executionMode={executionMode}
+      />
     </div>
   );
 }

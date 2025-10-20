@@ -1,14 +1,14 @@
 /**
  * ExecutedPipelineViewer
  * Read-only pipeline visualization with execution data overlay
- * Reuses existing PipelineGraph component with auto-layout
+ * Uses dedicated ExecutedPipelineGraph component
  */
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { useMockPipelinesApi } from '../hooks/useMockPipelinesApi';
-import { PipelineGraph } from './PipelineGraph';
-import { applyAutoLayout } from '../utils/autoLayout';
-import type { PipelineState, VisualState, ModuleTemplate, ModuleInstance, EntryPoint } from '../../../types/pipelineTypes';
+import { ExecutedPipelineGraph } from './ExecutedPipelineGraph';
+import { applyLayeredLayout } from '../utils/layeredLayout';
+import type { PipelineState, VisualState, ModuleTemplate } from '../../../types/pipelineTypes';
 import type { EtoPipelineExecutionStep } from '../../eto/types';
 
 export interface ExecutedPipelineViewerProps {
@@ -64,6 +64,8 @@ export function ExecutedPipelineViewer({ pipelineDefinitionId, executionData }: 
   const [pipelineState, setPipelineState] = useState<PipelineState | null>(null);
   const [visualState, setVisualState] = useState<VisualState | null>(null);
   const [moduleTemplates, setModuleTemplates] = useState<ModuleTemplate[]>([]);
+  const [failedModuleIds, setFailedModuleIds] = useState<string[]>([]);
+  const [executionValues, setExecutionValues] = useState<Map<string, { value: any; type: string; name: string }>>(new Map());
 
   // Fetch pipeline definition
   useEffect(() => {
@@ -72,6 +74,50 @@ export function ExecutedPipelineViewer({ pipelineDefinitionId, executionData }: 
         console.log('[ExecutedPipelineViewer] Fetching pipeline:', pipelineDefinitionId);
         const pipeline = await getPipeline(pipelineDefinitionId);
         console.log('[ExecutedPipelineViewer] Pipeline loaded:', pipeline);
+
+        // Extract all node IDs that have execution data and build value map
+        const executedNodeIds = new Set<string>();
+        const failedModules: string[] = [];
+        const executionValues = new Map<string, { value: any; type: string; name: string }>();
+
+        if (executionData?.steps) {
+          executionData.steps.forEach(step => {
+            // Collect all input node IDs and values
+            if (step.inputs) {
+              Object.entries(step.inputs).forEach(([nodeId, data]) => {
+                executedNodeIds.add(nodeId);
+                executionValues.set(nodeId, {
+                  value: data.value,
+                  type: data.type,
+                  name: data.name,
+                });
+              });
+            }
+
+            // Collect all output node IDs and values
+            if (step.outputs) {
+              Object.entries(step.outputs).forEach(([nodeId, data]) => {
+                executedNodeIds.add(nodeId);
+                executionValues.set(nodeId, {
+                  value: data.value,
+                  type: data.type,
+                  name: data.name,
+                });
+              });
+            }
+
+            // Track failed modules
+            if (step.error) {
+              failedModules.push(step.module_instance_id);
+            }
+          });
+        }
+
+        console.log('[ExecutedPipelineViewer] Executed node IDs:', Array.from(executedNodeIds));
+        console.log('[ExecutedPipelineViewer] Failed modules:', failedModules);
+        console.log('[ExecutedPipelineViewer] Execution values:', Array.from(executionValues.entries()));
+        setFailedModuleIds(failedModules);
+        setExecutionValues(executionValues);
 
         // Convert API format to PipelineGraph format
         const apiState = pipeline.pipeline_state as any;
@@ -103,11 +149,16 @@ export function ExecutedPipelineViewer({ pipelineDefinitionId, executionData }: 
         setModuleTemplates(templates);
 
         // Convert entry points
-        const entryPoints: EntryPoint[] = apiState.entry_points.map((ep: any) => ({
-          node_id: ep.id,
-          name: ep.label,
-          type: 'str', // Default type for entry points
-        }));
+        const entryPoints: EntryPoint[] = apiState.entry_points.map((ep: any) => {
+          // Entry points are always "executed" - they provide the initial data
+          executedNodeIds.add(ep.id);
+
+          return {
+            node_id: ep.id,
+            name: ep.label,
+            type: 'str', // Default type for entry points
+          };
+        });
 
         // Convert modules to ModuleInstance format
         const modules: ModuleInstance[] = apiState.modules.map((module: any) => {
@@ -141,24 +192,40 @@ export function ExecutedPipelineViewer({ pipelineDefinitionId, executionData }: 
           return converted;
         });
 
-        // Convert connections
-        const connections = apiState.connections.map((conn: any) => ({
-          from_node_id: conn.source_handle_id,
-          to_node_id: conn.target_handle_id,
-        }));
+        // Convert connections - only show connections where both endpoints have execution data
+        const connections = apiState.connections
+          .filter((conn: any) => {
+            const sourceExists = executedNodeIds.has(conn.source_handle_id);
+            const targetExists = executedNodeIds.has(conn.target_handle_id);
+            const shouldShow = sourceExists && targetExists;
 
-        // Apply auto-layout
-        const autoPositions = applyAutoLayout(
-          apiState.entry_points,
-          apiState.modules,
-          apiState.connections
-        );
+            if (!shouldShow) {
+              console.log('[ExecutedPipelineViewer] Hiding connection:', conn.source_handle_id, '→', conn.target_handle_id,
+                `(source: ${sourceExists}, target: ${targetExists})`);
+            }
+
+            return shouldShow;
+          })
+          .map((conn: any) => ({
+            from_node_id: conn.source_handle_id,
+            to_node_id: conn.target_handle_id,
+          }));
+
+        console.log('[ExecutedPipelineViewer] Showing', connections.length, 'of', apiState.connections.length, 'connections');
 
         const convertedState: PipelineState = {
           entry_points: entryPoints,
           modules,
           connections,
         };
+
+        // Apply layered layout (left-to-right by execution order)
+        // Must be done AFTER converting to PipelineState format
+        const autoPositions = applyLayeredLayout(
+          entryPoints,
+          modules,
+          connections
+        );
 
         const convertedVisual: VisualState = {
           modules: {},
@@ -226,12 +293,12 @@ export function ExecutedPipelineViewer({ pipelineDefinitionId, executionData }: 
 
   return (
     <div className="w-full h-full">
-      <PipelineGraph
-        viewOnly={true}
+      <ExecutedPipelineGraph
         moduleTemplates={moduleTemplates}
-        initialPipelineState={pipelineState}
-        initialVisualState={visualState}
-        entryPoints={pipelineState.entry_points}
+        pipelineState={pipelineState}
+        visualState={visualState}
+        failedModuleIds={failedModuleIds}
+        executionValues={executionValues}
       />
     </div>
   );

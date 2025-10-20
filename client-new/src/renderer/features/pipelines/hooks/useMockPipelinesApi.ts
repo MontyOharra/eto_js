@@ -9,6 +9,7 @@ import {
   mockPipelineDefinition,
   mockComplexPipelineDefinition,
   mockSimplePipelineDefinition,
+  mockComplexTypePipelineDefinition,
 } from '../mocks/pipelineDefinitionMock';
 import type {
   PipelineListItem,
@@ -100,6 +101,9 @@ export function useMockPipelinesApi() {
       }
       if (id === 3) {
         return mockSimplePipelineDefinition as PipelineDetailResponse;
+      }
+      if (id === 4) {
+        return mockComplexTypePipelineDefinition as PipelineDetailResponse;
       }
 
       // For other IDs, check if pipeline exists in list

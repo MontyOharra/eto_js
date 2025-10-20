@@ -17,6 +17,7 @@ import { Route as DashboardPipelinesIndexRouteImport } from './pages/dashboard/p
 import { Route as DashboardPdfTemplatesIndexRouteImport } from './pages/dashboard/pdf-templates/index'
 import { Route as DashboardEtoIndexRouteImport } from './pages/dashboard/eto/index'
 import { Route as DashboardConfigsIndexRouteImport } from './pages/dashboard/configs/index'
+import { Route as DashboardPipelinesCreateRouteImport } from './pages/dashboard/pipelines/create'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -59,12 +60,19 @@ const DashboardConfigsIndexRoute = DashboardConfigsIndexRouteImport.update({
   path: '/configs/',
   getParentRoute: () => DashboardRouteRoute,
 } as any)
+const DashboardPipelinesCreateRoute =
+  DashboardPipelinesCreateRouteImport.update({
+    id: '/pipelines/create',
+    path: '/pipelines/create',
+    getParentRoute: () => DashboardRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRouteRouteWithChildren
   '/login': typeof LoginRoute
   '/dashboard/': typeof DashboardIndexRoute
+  '/dashboard/pipelines/create': typeof DashboardPipelinesCreateRoute
   '/dashboard/configs': typeof DashboardConfigsIndexRoute
   '/dashboard/eto': typeof DashboardEtoIndexRoute
   '/dashboard/pdf-templates': typeof DashboardPdfTemplatesIndexRoute
@@ -74,6 +82,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/dashboard': typeof DashboardIndexRoute
+  '/dashboard/pipelines/create': typeof DashboardPipelinesCreateRoute
   '/dashboard/configs': typeof DashboardConfigsIndexRoute
   '/dashboard/eto': typeof DashboardEtoIndexRoute
   '/dashboard/pdf-templates': typeof DashboardPdfTemplatesIndexRoute
@@ -85,6 +94,7 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRouteRouteWithChildren
   '/login': typeof LoginRoute
   '/dashboard/': typeof DashboardIndexRoute
+  '/dashboard/pipelines/create': typeof DashboardPipelinesCreateRoute
   '/dashboard/configs/': typeof DashboardConfigsIndexRoute
   '/dashboard/eto/': typeof DashboardEtoIndexRoute
   '/dashboard/pdf-templates/': typeof DashboardPdfTemplatesIndexRoute
@@ -97,6 +107,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/login'
     | '/dashboard/'
+    | '/dashboard/pipelines/create'
     | '/dashboard/configs'
     | '/dashboard/eto'
     | '/dashboard/pdf-templates'
@@ -106,6 +117,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/dashboard'
+    | '/dashboard/pipelines/create'
     | '/dashboard/configs'
     | '/dashboard/eto'
     | '/dashboard/pdf-templates'
@@ -116,6 +128,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/login'
     | '/dashboard/'
+    | '/dashboard/pipelines/create'
     | '/dashboard/configs/'
     | '/dashboard/eto/'
     | '/dashboard/pdf-templates/'
@@ -186,11 +199,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardConfigsIndexRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
+    '/dashboard/pipelines/create': {
+      id: '/dashboard/pipelines/create'
+      path: '/pipelines/create'
+      fullPath: '/dashboard/pipelines/create'
+      preLoaderRoute: typeof DashboardPipelinesCreateRouteImport
+      parentRoute: typeof DashboardRouteRoute
+    }
   }
 }
 
 interface DashboardRouteRouteChildren {
   DashboardIndexRoute: typeof DashboardIndexRoute
+  DashboardPipelinesCreateRoute: typeof DashboardPipelinesCreateRoute
   DashboardConfigsIndexRoute: typeof DashboardConfigsIndexRoute
   DashboardEtoIndexRoute: typeof DashboardEtoIndexRoute
   DashboardPdfTemplatesIndexRoute: typeof DashboardPdfTemplatesIndexRoute
@@ -199,6 +220,7 @@ interface DashboardRouteRouteChildren {
 
 const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
   DashboardIndexRoute: DashboardIndexRoute,
+  DashboardPipelinesCreateRoute: DashboardPipelinesCreateRoute,
   DashboardConfigsIndexRoute: DashboardConfigsIndexRoute,
   DashboardEtoIndexRoute: DashboardEtoIndexRoute,
   DashboardPdfTemplatesIndexRoute: DashboardPdfTemplatesIndexRoute,

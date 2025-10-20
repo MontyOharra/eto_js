@@ -11,9 +11,10 @@ export interface ModuleConfigProps {
   moduleInstance: ModuleInstance;
   template: ModuleTemplate;
   onConfigChange?: (moduleId: string, configKey: string, value: any) => void;
+  executionMode?: boolean;
 }
 
-export function ModuleConfig({ moduleInstance, template, onConfigChange }: ModuleConfigProps) {
+export function ModuleConfig({ moduleInstance, template, onConfigChange, executionMode = false }: ModuleConfigProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const handleConfigChange = (configKey: string, value: any) => {
@@ -21,6 +22,11 @@ export function ModuleConfig({ moduleInstance, template, onConfigChange }: Modul
       onConfigChange(moduleInstance.module_instance_id, configKey, value);
     }
   };
+
+  // Don't show config section in execution mode
+  if (executionMode) {
+    return null;
+  }
 
   return (
     <div className="border-t border-gray-600">

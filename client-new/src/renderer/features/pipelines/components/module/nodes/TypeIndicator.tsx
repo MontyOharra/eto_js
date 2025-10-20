@@ -5,6 +5,7 @@
 
 import { useState } from 'react';
 import { NodePin } from '../../../../../types/moduleTypes';
+import { getTypeColor } from '../../../utils/edgeUtils';
 
 export interface TypeIndicatorProps {
   node: NodePin;
@@ -58,8 +59,8 @@ export function TypeIndicator({
       <div
         className="w-full text-[9px] px-0.5 py-0.5 rounded border border-gray-600 min-h-[24px] flex items-center justify-center"
         style={{
-          backgroundColor: '#374151',
-          color: '#D1D5DB',
+          backgroundColor: getTypeColor(node.type),
+          color: '#FFFFFF',
           ...highlightStyle,
         }}
       >
@@ -75,8 +76,11 @@ export function TypeIndicator({
       onChange={(e) => onTypeChange(node.node_id, e.target.value)}
       onClick={handleClick}
       onBlur={handleBlur}
-      className="w-full text-[9px] bg-gray-700 text-gray-300 px-0.5 py-0.5 rounded border border-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500 min-h-[24px]"
-      style={highlightStyle}
+      className="w-full text-[9px] text-white px-0.5 py-0.5 rounded border border-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500 min-h-[24px]"
+      style={{
+        backgroundColor: getTypeColor(node.type),
+        ...highlightStyle,
+      }}
     >
       {availableTypes.map((type) => {
         const isDisabled = !effectiveTypes.includes(type);

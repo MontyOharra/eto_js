@@ -10,9 +10,10 @@ export interface ModuleHeaderProps {
   moduleInstance: ModuleInstance;
   template: ModuleTemplate;
   onDeleteModule?: (moduleId: string) => void;
+  executionMode?: boolean;
 }
 
-export function ModuleHeader({ moduleInstance, template, onDeleteModule }: ModuleHeaderProps) {
+export function ModuleHeader({ moduleInstance, template, onDeleteModule, executionMode = false }: ModuleHeaderProps) {
   const headerColor = template.color || '#4B5563';
   const textColor = getTextColor(headerColor);
 
@@ -35,15 +36,17 @@ export function ModuleHeader({ moduleInstance, template, onDeleteModule }: Modul
           {moduleInstance.module_instance_id}
         </div>
       </div>
-      <button
-        onClick={handleDelete}
-        className="p-1 rounded hover:bg-red-500 transition-colors"
-        title="Delete module"
-      >
-        <svg className="w-4 h-4" style={{ color: textColor }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
+      {!executionMode && (
+        <button
+          onClick={handleDelete}
+          className="p-1 rounded hover:bg-red-500 transition-colors"
+          title="Delete module"
+        >
+          <svg className="w-4 h-4" style={{ color: textColor }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      )}
     </div>
   );
 }
