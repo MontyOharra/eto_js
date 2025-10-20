@@ -12,6 +12,7 @@ export const Route = createFileRoute('/dashboard/eto/')({
 function EtoPage() {
   const {
     getEtoRuns,
+    uploadPdf,
     reprocessRuns,
     skipRuns,
     deleteRuns,
@@ -134,6 +135,40 @@ function EtoPage() {
     await loadRuns();
   };
 
+  const handleManualUpload = () => {
+    // Create a hidden file input element
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/pdf';
+
+    input.onchange = async (e: Event) => {
+      const target = e.target as HTMLInputElement;
+      const file = target.files?.[0];
+
+      if (file) {
+        // Validate file type
+        if (file.type !== 'application/pdf') {
+          alert('Please select a PDF file');
+          return;
+        }
+
+        try {
+          // Upload PDF and create ETO run
+          await uploadPdf(file);
+
+          // Reload runs to show the new run
+          await loadRuns();
+        } catch (err) {
+          console.error('Failed to upload PDF:', err);
+          alert('Failed to upload PDF. Please try again.');
+        }
+      }
+    };
+
+    // Trigger the file picker
+    input.click();
+  };
+
   // ==========================================================================
   // Render
   // ==========================================================================
@@ -158,11 +193,20 @@ function EtoPage() {
   return (
     <div className="p-6">
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-white">ETO Runs</h1>
-        <p className="text-gray-400 mt-2">
-          Monitor and manage extraction, transformation, and orchestration runs
-        </p>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-white">ETO Runs</h1>
+          <p className="text-gray-400 mt-2">
+            Monitor and manage extraction, transformation, and orchestration runs
+          </p>
+        </div>
+        <button
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
+          onClick={handleManualUpload}
+          disabled={isLoading}
+        >
+          + Upload PDF
+        </button>
       </div>
 
       {/* Loading State */}
@@ -235,6 +279,7 @@ function EtoPage() {
       <TemplateBuilderModal
         isOpen={templateBuilderPdfId !== null}
         pdfFileId={templateBuilderPdfId}
+        pdfFile={null}
         onClose={() => setTemplateBuilderPdfId(null)}
         onSave={handleSaveTemplate}
       />
