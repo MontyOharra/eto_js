@@ -11,6 +11,12 @@ import {
   GetEtoRunsResponse,
   PostEtoRunUploadResponse,
 } from '../api/types';
+import {
+  mockPipeline1SuccessExecution,
+  mockPipeline2SuccessExecution,
+  mockPipeline3FailureExecution,
+  mockPipeline1FailureExecution,
+} from '../../pipelines/mocks/pipelineExecutionMock';
 
 // =============================================================================
 // Helper Functions
@@ -89,7 +95,7 @@ export const mockSuccessRun: EtoRunListItem = {
   completed_at: new Date(Date.now() - 50 * 60 * 1000).toISOString(), // 50 mins ago
   error_type: null,
   error_message: null,
-  pdf: createMockPdfInfo(103, '103.pdf'),
+  pdf: createMockPdfInfo(2, '2.pdf'),
   source: createMockEmailSource('sender3@example.com'),
   matched_template: createMockTemplate(1, 'Standard HAWB Template'),
 };
@@ -97,14 +103,14 @@ export const mockSuccessRun: EtoRunListItem = {
 export const mockFailureRun: EtoRunListItem = {
   id: 4,
   status: 'failure',
-  processing_step: 'data_extraction',
+  processing_step: 'data_transformation',
   started_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
   completed_at: new Date(Date.now() - 2 * 60 * 60 * 1000 + 30000).toISOString(),
-  error_type: 'ExtractionError',
-  error_message: 'Failed to extract required field: customer_name',
+  error_type: 'PipelineExecutionError',
+  error_message: 'Pipeline execution failed: PermissionError - Unable to write to output stream: permission denied',
   pdf: createMockPdfInfo(4, '4.pdf'),
   source: createMockManualSource(),
-  matched_template: createMockTemplate(2, 'Alternative HAWB Template'),
+  matched_template: createMockTemplate(3, 'Minimal Text Template'),
 };
 
 export const mockNeedsTemplateRun: EtoRunListItem = {
@@ -154,10 +160,10 @@ export const mockFailureRun2: EtoRunListItem = {
   started_at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
   completed_at: new Date(Date.now() - 4.8 * 60 * 60 * 1000).toISOString(),
   error_type: 'PipelineExecutionError',
-  error_message: 'Pipeline execution failed at step 3: Invalid data format',
+  error_message: 'Pipeline execution failed: TypeError - Expected \'str\' but received \'NoneType\' for parameter \'text\'',
   pdf: createMockPdfInfo(103, '103.pdf'),
   source: createMockEmailSource('sender8@example.com'),
-  matched_template: createMockTemplate(2, 'Alternative HAWB Template'),
+  matched_template: createMockTemplate(1, 'Simple Text Processing Template'),
 };
 
 export const mockNotStartedRun2: EtoRunListItem = {
@@ -231,85 +237,50 @@ export const mockSuccessRunDetail: EtoRunDetail = {
   ...mockSuccessRun,
   pdf: {
     ...mockSuccessRun.pdf,
-    page_count: 3,
+    page_count: 1,
   },
   template_matching: {
     status: 'success',
     started_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
     completed_at: new Date(Date.now() - 59 * 60 * 1000).toISOString(),
     error_message: null,
-    matched_template: createMockTemplate(1, 'Standard HAWB Template'),
+    matched_template: createMockTemplate(1, 'Simple Text Processing Template'),
   },
   data_extraction: {
     status: 'success',
     started_at: new Date(Date.now() - 59 * 60 * 1000).toISOString(),
     completed_at: new Date(Date.now() - 55 * 60 * 1000).toISOString(),
     error_message: null,
+    // Matches pipeline #1 entry point (e1: input_text)
     extracted_data: {
-      hawb_number: 'HAWB-2024-12345',
-      customer_name: 'Acme Corporation',
-      origin: 'LAX',
-      destination: 'JFK',
-      weight: '150.5',
-      pieces: '10',
-      date: '2024-10-15',
+      input_text: '  Hello World  ',
     },
+    extracted_fields_with_boxes: [
+      {
+        field_id: 'input_text',
+        label: 'input_text',
+        value: '  Hello World  ',
+        page: 0,
+        bbox: [250, 50, 400, 70],
+      },
+    ],
   },
   pipeline_execution: {
     status: 'success',
     started_at: new Date(Date.now() - 55 * 60 * 1000).toISOString(),
     completed_at: new Date(Date.now() - 50 * 60 * 1000).toISOString(),
     error_message: null,
+    pipeline_definition_id: 1,  // Pipeline #1 (Simple)
     executed_actions: [
       {
-        action_module_name: 'Send Email',
+        action_module_name: 'Print Action',
         inputs: {
-          to: 'warehouse@acme.com',
-          subject: 'New HAWB Received',
-          body: 'HAWB-2024-12345 has been processed',
-        },
-      },
-      {
-        action_module_name: 'Create File',
-        inputs: {
-          filename: 'hawb_2024_12345.json',
-          content: '{"hawb": "HAWB-2024-12345", "customer": "Acme Corporation"}',
+          message: 'HELLO WORLD',
+          prefix: 'Result: ',
         },
       },
     ],
-    steps: [
-      {
-        id: 301,
-        step_number: 1,
-        module_instance_id: 'transform_1',
-        inputs: {
-          input_data: {
-            value: { hawb_number: 'HAWB-2024-12345' },
-            type: 'object',
-          },
-        },
-        outputs: {
-          transformed_data: {
-            value: { hawb: 'HAWB-2024-12345' },
-            type: 'object',
-          },
-        },
-        error: null,
-      },
-      {
-        id: 302,
-        step_number: 2,
-        module_instance_id: 'action_email_1',
-        inputs: {
-          recipient: { value: 'warehouse@acme.com', type: 'string' },
-          message: { value: 'New HAWB Received', type: 'string' },
-        },
-        outputs: {
-          success: { value: true, type: 'boolean' },
-        },
-        error: null,
-      },
-    ],
+    steps: mockPipeline1SuccessExecution,
   },
 };
 
@@ -341,58 +312,67 @@ export const mockSuccessRun2Detail: EtoRunDetail = {
     started_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
     completed_at: new Date(Date.now() - 3.95 * 60 * 60 * 1000).toISOString(),
     error_message: null,
-    matched_template: createMockTemplate(1, 'Standard HAWB Template'),
+    matched_template: createMockTemplate(2, 'Complex Multi-Branch HAWB Template'),
   },
   data_extraction: {
     status: 'success',
     started_at: new Date(Date.now() - 3.95 * 60 * 60 * 1000).toISOString(),
     completed_at: new Date(Date.now() - 3.7 * 60 * 60 * 1000).toISOString(),
     error_message: null,
+    // Matches pipeline #2 entry points (e1: hawb, e2: customer, e3: weight, e4: dimensions)
     extracted_data: {
-      hawb_number: 'HAWB-2024-67890',
-      customer_name: 'Global Logistics Inc',
-      origin: 'SFO',
-      destination: 'ORD',
-      weight: '245.8',
-      pieces: '15',
-      date: '2024-10-16',
+      hawb: '  HAWB-2024-12345  ',
+      customer: '  Acme Corporation  ',
+      weight: '250.5',
+      dimensions: '  48x40x36  ',
     },
+    extracted_fields_with_boxes: [
+      {
+        field_id: 'hawb',
+        label: 'hawb',
+        value: '  HAWB-2024-12345  ',
+        page: 0,
+        bbox: [250, 50, 400, 70],
+      },
+      {
+        field_id: 'customer',
+        label: 'customer',
+        value: '  Acme Corporation  ',
+        page: 0,
+        bbox: [250, 100, 500, 120],
+      },
+      {
+        field_id: 'weight',
+        label: 'weight',
+        value: '250.5',
+        page: 0,
+        bbox: [250, 150, 350, 170],
+      },
+      {
+        field_id: 'dimensions',
+        label: 'dimensions',
+        value: '  48x40x36  ',
+        page: 0,
+        bbox: [250, 200, 400, 220],
+      },
+    ],
   },
   pipeline_execution: {
     status: 'success',
     started_at: new Date(Date.now() - 3.7 * 60 * 60 * 1000).toISOString(),
     completed_at: new Date(Date.now() - 3.5 * 60 * 60 * 1000).toISOString(),
     error_message: null,
+    pipeline_definition_id: 2,  // Pipeline #2 (Complex)
     executed_actions: [
       {
-        action_module_name: 'Send Email',
+        action_module_name: 'Print Action',
         inputs: {
-          to: 'dispatch@globallogistics.com',
-          subject: 'HAWB-2024-67890 Processed',
-          body: 'HAWB document has been successfully processed',
+          message: 'HAWB-2024-12345250.5ACME CORPORATION250.548x40x36  Acme Corporation    HAWB-2024-12345  ',
+          prefix: 'Final: ',
         },
       },
     ],
-    steps: [
-      {
-        id: 401,
-        step_number: 1,
-        module_instance_id: 'transform_2',
-        inputs: {
-          input_data: {
-            value: { hawb_number: 'HAWB-2024-67890' },
-            type: 'object',
-          },
-        },
-        outputs: {
-          transformed_data: {
-            value: { hawb: 'HAWB-2024-67890' },
-            type: 'object',
-          },
-        },
-        error: null,
-      },
-    ],
+    steps: mockPipeline2SuccessExecution,
   },
 };
 
@@ -425,8 +405,9 @@ export const mockProcessingRunDetail: EtoRunDetail = {
     started_at: null,
     completed_at: null,
     error_message: null,
+    pipeline_definition_id: 1,
     executed_actions: null,
-    steps: null,
+    steps: [],
   },
 };
 
@@ -445,22 +426,82 @@ export const mockFailureRunDetail: EtoRunDetail = {
     started_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
     completed_at: new Date(Date.now() - 2 * 60 * 60 * 1000 + 5000).toISOString(),
     error_message: null,
-    matched_template: createMockTemplate(2, 'Alternative HAWB Template'),
+    matched_template: createMockTemplate(3, 'Minimal Text Template'),
   },
   data_extraction: {
-    status: 'failure',
+    status: 'success',
     started_at: new Date(Date.now() - 2 * 60 * 60 * 1000 + 5000).toISOString(),
-    completed_at: new Date(Date.now() - 2 * 60 * 60 * 1000 + 30000).toISOString(),
-    error_message: 'Failed to extract required field: customer_name',
-    extracted_data: null,
+    completed_at: new Date(Date.now() - 2 * 60 * 60 * 1000 + 15000).toISOString(),
+    error_message: null,
+    // Matches pipeline #3 entry point (e1: text)
+    extracted_data: {
+      text: 'test input',
+    },
+    extracted_fields_with_boxes: [
+      {
+        field_id: 'text',
+        label: 'text',
+        value: 'test input',
+        page: 0,
+        bbox: [250, 50, 400, 70],
+      },
+    ],
   },
   pipeline_execution: {
-    status: 'not_started',
-    started_at: null,
-    completed_at: null,
-    error_message: null,
+    status: 'failure',
+    started_at: new Date(Date.now() - 2 * 60 * 60 * 1000 + 15000).toISOString(),
+    completed_at: new Date(Date.now() - 2 * 60 * 60 * 1000 + 30000).toISOString(),
+    error_message: 'PermissionError at module m2 (Print Result): Unable to write to output stream: permission denied',
+    pipeline_definition_id: 3,  // Pipeline #3 (Minimal - Failure)
     executed_actions: null,
-    steps: null,
+    steps: mockPipeline3FailureExecution,
+  },
+};
+
+// =============================================================================
+// Mock Detail Response for Second Failure Run
+// =============================================================================
+
+export const mockFailureRun2Detail: EtoRunDetail = {
+  ...mockFailureRun2,
+  pdf: {
+    ...mockFailureRun2.pdf,
+    page_count: 11,
+  },
+  template_matching: {
+    status: 'success',
+    started_at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+    completed_at: new Date(Date.now() - 5 * 60 * 60 * 1000 + 5000).toISOString(),
+    error_message: null,
+    matched_template: createMockTemplate(1, 'Simple Text Processing Template'),
+  },
+  data_extraction: {
+    status: 'success',
+    started_at: new Date(Date.now() - 5 * 60 * 60 * 1000 + 5000).toISOString(),
+    completed_at: new Date(Date.now() - 5 * 60 * 60 * 1000 + 15000).toISOString(),
+    error_message: null,
+    // Matches pipeline #1 entry point (e1: input_text) - but extracted null
+    extracted_data: {
+      input_text: null,
+    },
+    extracted_fields_with_boxes: [
+      {
+        field_id: 'input_text',
+        label: 'input_text',
+        value: null,
+        page: 0,
+        bbox: [250, 50, 400, 70],
+      },
+    ],
+  },
+  pipeline_execution: {
+    status: 'failure',
+    started_at: new Date(Date.now() - 5 * 60 * 60 * 1000 + 15000).toISOString(),
+    completed_at: new Date(Date.now() - 5 * 60 * 60 * 1000 + 20000).toISOString(),
+    error_message: 'TypeError at module m1 (Trim): Expected \'str\' but received \'NoneType\' for parameter \'text\'',
+    pipeline_definition_id: 1,  // Pipeline #1 (Simple - Failure at first module)
+    executed_actions: null,
+    steps: mockPipeline1FailureExecution,
   },
 };
 
@@ -470,7 +511,8 @@ export const mockFailureRunDetail: EtoRunDetail = {
 
 export const mockRunDetailsById: Record<number, EtoRunDetail> = {
   2: mockProcessingRunDetail, // Processing run with PDF ID 3
-  3: mockSuccessRunDetail,     // Success run with PDF ID 103
-  4: mockFailureRunDetail,     // Failure run with PDF ID 4
-  7: mockSuccessRun2Detail,    // Second success run with PDF ID 4
+  3: mockSuccessRunDetail,     // Success run with PDF ID 2 (pipeline #1 success)
+  4: mockFailureRunDetail,     // Failure run with PDF ID 4 (pipeline #3 failure)
+  7: mockSuccessRun2Detail,    // Second success run with PDF ID 4 (pipeline #2 success)
+  8: mockFailureRun2Detail,    // Second failure run with PDF ID 103 (pipeline #1 failure)
 };

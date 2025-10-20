@@ -75,8 +75,8 @@ function EtoPage() {
   };
 
   const handleReview = (runId: number) => {
-    console.log('Review run:', runId);
-    // TODO: Open review modal or navigate to review page
+    // Open detail modal - user can switch to Detail tab to review pipeline execution
+    setSelectedRunId(runId);
   };
 
   const handleSkip = async (runId: number) => {
