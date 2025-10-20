@@ -90,7 +90,7 @@ export function ModuleNodes({
 
   return (
     <div
-      className="flex relative nodrag nopan"
+      className={`flex relative ${executionMode ? 'nodrag nopan' : ''}`}
       style={{ pointerEvents: 'auto' }}
       onMouseEnter={() => onModuleMouseEnter?.(moduleInstance.module_instance_id)}
       onMouseLeave={() => onModuleMouseLeave?.()}

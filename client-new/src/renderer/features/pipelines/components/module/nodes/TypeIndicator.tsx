@@ -76,9 +76,12 @@ export function TypeIndicator({
       onChange={(e) => onTypeChange(node.node_id, e.target.value)}
       onClick={handleClick}
       onBlur={handleBlur}
-      className="w-full text-[9px] text-white px-0.5 py-0.5 rounded border border-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500 min-h-[24px]"
+      className="w-full text-[9px] text-white px-0.5 py-0.5 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 min-h-[24px] bg-gray-700"
       style={{
-        backgroundColor: getTypeColor(node.type),
+        borderLeft: `4px solid ${getTypeColor(node.type)}`,
+        borderTop: `1px solid #4B5563`,
+        borderRight: `1px solid #4B5563`,
+        borderBottom: `1px solid #4B5563`,
         ...highlightStyle,
       }}
     >
@@ -89,7 +92,8 @@ export function TypeIndicator({
             key={type}
             value={type}
             disabled={isDisabled}
-            className={isDisabled ? 'text-gray-500' : ''}
+            className={isDisabled ? 'text-gray-500' : 'text-white'}
+            style={{ backgroundColor: '#374151' }}
           >
             {type}
           </option>
