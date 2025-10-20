@@ -617,35 +617,28 @@ export const mockSimplePipelineDefinition = {
 
 /**
  * Pipeline #4: Complex Multi-Type Data Processing
- * Highly complex pipeline with 15 modules showcasing:
+ * Complex pipeline with 12 modules showcasing:
  * - All type variations (str, int, float, bool, datetime)
  * - Different module kinds (transform, action, logic)
- * - Complex branching and merging patterns
+ * - Strict one-to-one connections (no output reuse)
  * - Multiple configurations
  *
- * Flow:
- * e1 (order_id: str) ──┐
- * e2 (quantity: int) ──┼→ m1 (validate_order) → m2 (calculate_subtotal: float) ──┐
- * e3 (unit_price: float) ┘                                                        │
- *                                                                                  │
- * e4 (is_expedited: bool) → m3 (get_shipping_cost) → m4 (format_currency) ───────┤
- *                                                                                  │
- * e5 (order_date: datetime) → m5 (add_days) → m6 (is_weekend) ──┐                │
- *                                              m7 (parse_date) ──┤                │
- *                                                                 │                │
- *                                           ┌──────────────────────┘               │
- *                                           ↓                                      │
- * m8 (apply_weekend_discount: logic) ← m6 (bool) ← e3 (float) ──────────────────┘
- *                                           ↓
- *                                      m9 (format_discount) → m10 (concat_details)
- *                                                                     ↓
- * m11 (calculate_total: float) ← m2 + m3 + m8 ──────────────────────┤
- *                                           ↓                         │
- *                                    m12 (round_to_cents) → m13 (create_invoice) ┤
- *                                                                     ↓            │
- *                                                       m14 (send_notification) ←─┘
- *                                                                     ↓
- *                                                              m15 (log_action)
+ * Flow (one-to-one only):
+ * e1 (order_id: str) → m1 (validate_order) → m2 (format_order_id) ──┐
+ * e2 (quantity: int) ─────────────────────────────────────────────┐  │
+ * e3 (unit_price: float) ─────────────────────────────────────┐   │  │
+ *                                                              │   │  │
+ * e4 (is_expedited: bool) → m3 (get_shipping) → m4 (format) ─┐│   │  │
+ *                                                              ││   │  │
+ * e5 (order_date: datetime) → m5 (add_days) → m6 (format) ───┤│   │  │
+ *                                                              ││   │  │
+ *                                      m7 (calc_subtotal) ←───┴┼───┘  │
+ *                                                ↓             │       │
+ *                                      m8 (calc_total) ←──────┘       │
+ *                                                ↓                     │
+ *                                      m9 (round) → m10 (invoice) ←───┘
+ *                                                        ↓
+ *                                                   m11 (notify) → m12 (log)
  */
 export const mockComplexTypePipelineDefinition = {
   id: 4,
@@ -681,26 +674,16 @@ export const mockComplexTypePipelineDefinition = {
     ],
 
     modules: [
-      // m1: Validate order (transform)
+      // m1: Validate order ID (transform)
       {
         instance_id: 'm1',
-        module_id: 'order_validator:1.0.0',
-        config: { min_quantity: 1, max_quantity: 1000 },
+        module_id: 'string_validate:1.0.0',
+        config: { pattern: 'ORD-' },
         inputs: [
           {
             node_id: 'i1',
             name: 'order_id',
             type: ['str'],
-          },
-          {
-            node_id: 'i2',
-            name: 'quantity',
-            type: ['int'],
-          },
-          {
-            node_id: 'i3',
-            name: 'unit_price',
-            type: ['float'],
           },
         ],
         outputs: [
@@ -708,11 +691,6 @@ export const mockComplexTypePipelineDefinition = {
             node_id: 'o1',
             name: 'is_valid',
             type: ['bool'],
-          },
-          {
-            node_id: 'o2',
-            name: 'validated_order_id',
-            type: ['str'],
           },
         ],
       },

@@ -46,10 +46,11 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'LR') => 
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
 
-  const nodeWidth = 400;
+  const nodeWidth = 280;  // Reduced from 400 (no delete buttons or type indicators in execution mode)
   const nodeHeight = 200;
 
-  dagreGraph.setGraph({ rankdir: direction, ranksep: 300, nodesep: 100 });
+  // Increased spacing: nodesep=200 for vertical separation, ranksep=450 for horizontal module spacing
+  dagreGraph.setGraph({ rankdir: direction, ranksep: 450, nodesep: 200 });
 
   nodes.forEach((node) => {
     dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });
@@ -180,28 +181,18 @@ function ExecutedPipelineGraphInner({
       pipelineState.entry_points
     );
 
-    // Add execution data to edges
+    // Add execution data to edges (without offsets yet - we need layout positions first)
     const edgesWithData = baseEdges.map((edge) => {
-      // The edge sourceHandle is the node_id of the output pin
       const executionData = executionValues.get(edge.sourceHandle || '');
-
-      console.log('[ExecutedPipelineGraph] Edge:', {
-        id: edge.id,
-        source: edge.source,
-        sourceHandle: edge.sourceHandle,
-        target: edge.target,
-        targetHandle: edge.targetHandle,
-        hasExecutionData: !!executionData,
-        executionData: executionData,
-      });
 
       return {
         ...edge,
-        type: 'execution', // Use custom edge component
+        type: 'execution',
         data: {
           value: executionData?.value,
           type: executionData?.type,
-          sourceHandle: edge.sourceHandle, // Pass for debugging
+          sourceHandle: edge.sourceHandle,
+          offset: 0, // Will be calculated after layout
         },
       };
     });
@@ -209,8 +200,64 @@ function ExecutedPipelineGraphInner({
     // Apply dagre auto-layout
     const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(newNodes, edgesWithData);
 
+    // NOW calculate offsets based on actual layouted positions
+    const nodePositions = new Map<string, { x: number; y: number }>();
+    layoutedNodes.forEach((node) => {
+      nodePositions.set(node.id, node.position);
+    });
+
+    // Group edges by their X column positions (vertical alignment)
+    const edgesByColumn = new Map<string, typeof layoutedEdges>();
+    layoutedEdges.forEach((edge) => {
+      const sourcePos = nodePositions.get(edge.source);
+      const targetPos = nodePositions.get(edge.target);
+
+      if (sourcePos && targetPos) {
+        // Round X positions to nearest 100px to group edges in the same vertical column
+        const sourceCol = Math.round(sourcePos.x / 100) * 100;
+        const targetCol = Math.round(targetPos.x / 100) * 100;
+        const columnKey = `${sourceCol}-${targetCol}`;
+
+        if (!edgesByColumn.has(columnKey)) {
+          edgesByColumn.set(columnKey, []);
+        }
+        edgesByColumn.get(columnKey)!.push(edge);
+      }
+    });
+
+    // Apply offsets to edges that share the same vertical column
+    const edgesWithOffsets = layoutedEdges.map((edge) => {
+      const sourcePos = nodePositions.get(edge.source);
+      const targetPos = nodePositions.get(edge.target);
+
+      let offset = 0;
+      if (sourcePos && targetPos) {
+        const sourceCol = Math.round(sourcePos.x / 100) * 100;
+        const targetCol = Math.round(targetPos.x / 100) * 100;
+        const columnKey = `${sourceCol}-${targetCol}`;
+        const parallelEdges = edgesByColumn.get(columnKey) || [];
+        const edgeIndex = parallelEdges.indexOf(edge);
+        const totalEdges = parallelEdges.length;
+
+        // Spread parallel edges horizontally (12px spacing between each)
+        if (totalEdges > 1) {
+          const spacing = 12;
+          const totalWidth = (totalEdges - 1) * spacing;
+          offset = (edgeIndex * spacing) - (totalWidth / 2);
+        }
+      }
+
+      return {
+        ...edge,
+        data: {
+          ...edge.data,
+          offset,
+        },
+      };
+    });
+
     setNodes(layoutedNodes);
-    setEdges(layoutedEdges);
+    setEdges(edgesWithOffsets);
   }, [pipelineState, visualState, moduleTemplates, failedModuleIds, executionValues]);
 
   return (

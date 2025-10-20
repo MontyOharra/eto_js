@@ -277,6 +277,7 @@ export function RunDetailModal({ isOpen, runId, onClose }: RunDetailModalProps) 
                             steps: runDetail.pipeline_execution.steps,
                             executed_actions: runDetail.pipeline_execution.executed_actions || undefined,
                           }}
+                          extractedData={runDetail.data_extraction?.extracted_data || undefined}
                         />
                       ) : (
                         <div className="flex items-center justify-center h-full">

@@ -3,7 +3,7 @@
  * Functions for edge creation, coloring, and management
  */
 
-import { Node, Edge } from '@xyflow/react';
+import { Node, Edge, Position } from '@xyflow/react';
 import { ModuleInstance } from '../../../types/moduleTypes';
 import { findPin } from './typeSystem';
 
@@ -195,6 +195,8 @@ export function createEdgesFromConnections(
       sourceHandle: conn.from_node_id,
       target: targetNodeModuleId,
       targetHandle: conn.to_node_id,
+      sourcePosition: Position.Right,  // Always right for LR layout
+      targetPosition: Position.Left,   // Always left for LR layout
       style: {
         stroke: '#6B7280',
         strokeWidth: 2,

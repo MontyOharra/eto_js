@@ -20,6 +20,7 @@ export interface ExecutedPipelineViewerProps {
       inputs: Record<string, any>;
     }>;
   };
+  extractedData?: Record<string, any>;
 }
 
 // Minimal module templates for executed pipeline viewer
@@ -59,7 +60,7 @@ const getModuleColor = (moduleId: string): string => {
   return '#3B82F6'; // Blue for transforms
 };
 
-export function ExecutedPipelineViewer({ pipelineDefinitionId, executionData }: ExecutedPipelineViewerProps) {
+export function ExecutedPipelineViewer({ pipelineDefinitionId, executionData, extractedData }: ExecutedPipelineViewerProps) {
   const { getPipeline, isLoading, error } = useMockPipelinesApi();
   const [pipelineState, setPipelineState] = useState<PipelineState | null>(null);
   const [visualState, setVisualState] = useState<VisualState | null>(null);
@@ -113,15 +114,38 @@ export function ExecutedPipelineViewer({ pipelineDefinitionId, executionData }: 
           });
         }
 
+        // Convert API format to PipelineGraph format
+        const apiState = pipeline.pipeline_state as any;
+        const apiVisual = pipeline.visual_state as any;
+
+        // Add entry point values from extracted data
+        if (extractedData && apiState.entry_points) {
+          apiState.entry_points.forEach((ep: any) => {
+            const fieldValue = extractedData[ep.field_reference];
+            if (fieldValue !== undefined) {
+              executedNodeIds.add(ep.id);
+              // Determine type from the value
+              let valueType = typeof fieldValue;
+              if (valueType === 'object' && fieldValue instanceof Date) {
+                valueType = 'datetime';
+              } else if (valueType === 'number') {
+                valueType = Number.isInteger(fieldValue) ? 'int' : 'float';
+              }
+
+              executionValues.set(ep.id, {
+                value: fieldValue,
+                type: valueType,
+                name: ep.label,
+              });
+            }
+          });
+        }
+
         console.log('[ExecutedPipelineViewer] Executed node IDs:', Array.from(executedNodeIds));
         console.log('[ExecutedPipelineViewer] Failed modules:', failedModules);
         console.log('[ExecutedPipelineViewer] Execution values:', Array.from(executionValues.entries()));
         setFailedModuleIds(failedModules);
         setExecutionValues(executionValues);
-
-        // Convert API format to PipelineGraph format
-        const apiState = pipeline.pipeline_state as any;
-        const apiVisual = pipeline.visual_state as any;
 
         // Create module templates from module IDs
         // Module ID format: "string_uppercase:1.0.0"

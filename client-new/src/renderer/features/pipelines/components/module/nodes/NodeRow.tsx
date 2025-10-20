@@ -116,7 +116,7 @@ export function NodeRow({
 
       {/* Node Content - Mirrored layout based on direction */}
       {direction === 'input' ? (
-        // Input layout: [handle] name - type - delete
+        // Input layout: [handle] name - type - delete (type and delete only show in edit mode)
         <div className="flex items-center w-full gap-2">
           <div className="flex-[2] min-w-0 nodrag flex items-center">
             <textarea
@@ -130,62 +130,70 @@ export function NodeRow({
               }}
             />
           </div>
-          <div className="flex-shrink-0 w-12 flex items-center">
-            <TypeIndicator
-              node={node}
-              onTypeChange={onTypeChange}
-              onFocus={() => onTypeVarFocus(node.type_var || null)}
-              onBlur={() => onTypeVarFocus(null)}
-              isHighlighted={!!isHighlighted}
-              effectiveAllowedTypes={getEffectiveAllowedTypes?.(moduleId, node.node_id, node.allowed_types || [])}
-            />
-          </div>
-          <div className="flex-shrink-0">
-            <button
-              onClick={canRemove && onRemove && !executionMode ? onRemove : undefined}
-              className={`p-0.5 rounded transition-colors ${
-                canRemove && onRemove && !executionMode
-                  ? 'text-gray-500 hover:text-red-400 hover:bg-red-900 cursor-pointer'
-                  : 'invisible cursor-default'
-              }`}
-              title={canRemove && !executionMode ? 'Remove node' : ''}
-              disabled={!canRemove || !onRemove || executionMode}
-            >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
+          {!executionMode && (
+            <div className="flex-shrink-0 w-12 flex items-center">
+              <TypeIndicator
+                node={node}
+                onTypeChange={onTypeChange}
+                onFocus={() => onTypeVarFocus(node.type_var || null)}
+                onBlur={() => onTypeVarFocus(null)}
+                isHighlighted={!!isHighlighted}
+                effectiveAllowedTypes={getEffectiveAllowedTypes?.(moduleId, node.node_id, node.allowed_types || [])}
+              />
+            </div>
+          )}
+          {!executionMode && (
+            <div className="flex-shrink-0">
+              <button
+                onClick={canRemove && onRemove ? onRemove : undefined}
+                className={`p-0.5 rounded transition-colors ${
+                  canRemove && onRemove
+                    ? 'text-gray-500 hover:text-red-400 hover:bg-red-900 cursor-pointer'
+                    : 'invisible cursor-default'
+                }`}
+                title={canRemove ? 'Remove node' : ''}
+                disabled={!canRemove || !onRemove}
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          )}
         </div>
       ) : (
-        // Output layout: delete - type - name [handle]
+        // Output layout: delete - type - name [handle] (type and delete only show in edit mode)
         <div className="flex items-center w-full gap-2">
-          <div className="flex-shrink-0">
-            <button
-              onClick={canRemove && onRemove && !executionMode ? onRemove : undefined}
-              className={`p-0.5 rounded transition-colors ${
-                canRemove && onRemove && !executionMode
-                  ? 'text-gray-500 hover:text-red-400 hover:bg-red-900 cursor-pointer'
-                  : 'invisible cursor-default'
-              }`}
-              title={canRemove && !executionMode ? 'Remove node' : ''}
-              disabled={!canRemove || !onRemove || executionMode}
-            >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-          <div className="flex-shrink-0 w-12 flex items-center">
-            <TypeIndicator
-              node={node}
-              onTypeChange={onTypeChange}
-              onFocus={() => onTypeVarFocus(node.type_var || null)}
-              onBlur={() => onTypeVarFocus(null)}
-              isHighlighted={!!isHighlighted}
-              effectiveAllowedTypes={getEffectiveAllowedTypes?.(moduleId, node.node_id, node.allowed_types || [])}
-            />
-          </div>
+          {!executionMode && (
+            <div className="flex-shrink-0">
+              <button
+                onClick={canRemove && onRemove ? onRemove : undefined}
+                className={`p-0.5 rounded transition-colors ${
+                  canRemove && onRemove
+                    ? 'text-gray-500 hover:text-red-400 hover:bg-red-900 cursor-pointer'
+                    : 'invisible cursor-default'
+                }`}
+                title={canRemove ? 'Remove node' : ''}
+                disabled={!canRemove || !onRemove}
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          )}
+          {!executionMode && (
+            <div className="flex-shrink-0 w-12 flex items-center">
+              <TypeIndicator
+                node={node}
+                onTypeChange={onTypeChange}
+                onFocus={() => onTypeVarFocus(node.type_var || null)}
+                onBlur={() => onTypeVarFocus(null)}
+                isHighlighted={!!isHighlighted}
+                effectiveAllowedTypes={getEffectiveAllowedTypes?.(moduleId, node.node_id, node.allowed_types || [])}
+              />
+            </div>
+          )}
           <div className="flex-[2] min-w-0 nodrag flex items-center">
             <textarea
               value={node.name}
