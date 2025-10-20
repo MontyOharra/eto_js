@@ -61,8 +61,14 @@ export function PipelineBuilderStep({
         const currentPipelineState = pipelineGraphRef.current.getPipelineState();
         const currentVisualState = pipelineGraphRef.current.getVisualState();
 
+        // Include entry points in the pipeline state
+        const stateWithEntryPoints = {
+          ...currentPipelineState,
+          entry_points: entryPoints,
+        };
+
         // Update parent state
-        onPipelineStateChange(currentPipelineState);
+        onPipelineStateChange(stateWithEntryPoints);
         onVisualStateChange(currentVisualState);
       } catch (error) {
         // Graph might not be ready yet
@@ -73,7 +79,7 @@ export function PipelineBuilderStep({
     // Sync on a timer (this could be optimized with callbacks from the graph)
     const interval = setInterval(syncState, 1000);
     return () => clearInterval(interval);
-  }, [onPipelineStateChange, onVisualStateChange]);
+  }, [onPipelineStateChange, onVisualStateChange, entryPoints]);
 
   const handleModuleSelect = (moduleId: string | null) => {
     setSelectedModuleId(moduleId);

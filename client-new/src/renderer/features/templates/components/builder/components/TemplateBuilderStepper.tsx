@@ -4,6 +4,7 @@
  */
 
 type BuilderStep = 'signature-objects' | 'extraction-fields' | 'pipeline' | 'testing';
+type TestStatus = 'success' | 'failure' | null;
 
 interface StepConfig {
   id: BuilderStep;
@@ -21,11 +22,13 @@ const STEPS: StepConfig[] = [
 interface TemplateBuilderStepperProps {
   currentStep: BuilderStep;
   completedSteps: Set<BuilderStep>;
+  testStatus?: TestStatus;
 }
 
 export function TemplateBuilderStepper({
   currentStep,
   completedSteps,
+  testStatus = null,
 }: TemplateBuilderStepperProps) {
   const currentStepNumber = STEPS.find((s) => s.id === currentStep)?.number || 1;
 
@@ -68,6 +71,16 @@ export function TemplateBuilderStepper({
               >
                 {step.label}
               </span>
+              {/* Show status badge for testing step when test has run */}
+              {step.id === 'testing' && testStatus && (
+                <span
+                  className={`ml-2 text-xs font-medium ${
+                    testStatus === 'success' ? 'text-green-400' : 'text-red-400'
+                  }`}
+                >
+                  {testStatus === 'success' ? 'Success' : 'Failed'}
+                </span>
+              )}
             </div>
 
             {/* Divider */}

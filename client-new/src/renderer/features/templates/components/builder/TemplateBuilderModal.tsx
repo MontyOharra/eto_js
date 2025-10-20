@@ -3,11 +3,13 @@
  * 3-step wizard for creating PDF templates
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { SignatureObject, ExtractionField, PipelineState, VisualState } from '../../types';
-import { SignatureObjectsStep, ExtractionFieldsStep, PipelineBuilderStep } from './steps';
+import { SignatureObjectsStep, ExtractionFieldsStep, PipelineBuilderStep, TestingStep, TemplateSimulationResult } from './steps';
 import { TemplateBuilderHeader, TemplateBuilderStepper } from './components';
 import { usePdfData } from '../../../pdf-files/hooks/usePdfData';
+import { useMockModulesApi } from '../../../modules/hooks';
+import type { ModuleTemplate } from '../../../../types/moduleTypes';
 
 interface TemplateBuilderModalProps {
   isOpen: boolean;
@@ -48,9 +50,15 @@ export function TemplateBuilderModal({
   const [visualState, setVisualState] = useState<VisualState>({
     positions: {},
   });
-  const [testResults, setTestResults] = useState<any>(null); // Results from template simulation
+  const [testResults, setTestResults] = useState<TemplateSimulationResult | null>(null);
   const [isTesting, setIsTesting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [testViewMode, setTestViewMode] = useState<'summary' | 'detail'>('summary');
+  const [moduleTemplates, setModuleTemplates] = useState<ModuleTemplate[]>([]);
+
+  // Snapshot of pipeline/visual state when test is run (frozen for testing view)
+  const [testedPipelineState, setTestedPipelineState] = useState<PipelineState | null>(null);
+  const [testedVisualState, setTestedVisualState] = useState<VisualState | null>(null);
 
   // PDF viewer state persistence across steps
   const [pdfScale, setPdfScale] = useState<number>(1.0);
@@ -58,6 +66,22 @@ export function TemplateBuilderModal({
 
   // Use React Query to fetch and cache PDF data
   const { data: pdfData, isLoading: pdfLoading, error: pdfError } = usePdfData(pdfFileId);
+  const { getModules } = useMockModulesApi();
+
+  // Load module templates for pipeline execution visualization
+  useEffect(() => {
+    async function loadModules() {
+      try {
+        const response = await getModules();
+        setModuleTemplates(response.modules);
+      } catch (error) {
+        console.error('Failed to load modules:', error);
+        setModuleTemplates([]);
+      }
+    }
+    loadModules();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only load once on mount
 
   // Extract PDF data from query result
   const pdfObjects = pdfData?.objectsData;
@@ -130,16 +154,76 @@ export function TemplateBuilderModal({
 
   const handleTest = async () => {
     setIsTesting(true);
+
+    // Snapshot the current pipeline state (frozen for the test)
+    const pipelineSnapshot = JSON.parse(JSON.stringify(pipelineState)) as PipelineState;
+    const visualSnapshot = JSON.parse(JSON.stringify(visualState)) as VisualState;
+    setTestedPipelineState(pipelineSnapshot);
+    setTestedVisualState(visualSnapshot);
+
     try {
       // TODO: Call simulate API endpoint with template data and PDF
       // For now, simulate a successful test
       await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate API call
 
       // Mock test results - in production this would come from the API
-      setTestResults({
-        status: 'success',
-        // Add mock execution data here
+      // This format matches ETO run detail but without template/pipeline IDs
+
+      // Create mock extracted data keyed by field_id
+      const mockExtractedData: Record<string, any> = {};
+      extractionFields.forEach(field => {
+        mockExtractedData[field.field_id] = '  Hello World  ';
       });
+
+      const mockSimulationResult: TemplateSimulationResult = {
+        status: 'success',
+        data_extraction: {
+          extracted_data: mockExtractedData,
+          extracted_fields_with_boxes: extractionFields.map((field, idx) => ({
+            field_id: field.field_id,
+            label: field.label,
+            value: '  Hello World  ',
+            page: 0,
+            bbox: [250, 50 + idx * 50, 400, 70 + idx * 50] as [number, number, number, number],
+          })),
+        },
+        pipeline_execution: {
+          status: 'success',
+          executed_actions: [
+            {
+              action_module_name: 'Print Action',
+              inputs: {
+                message: 'HELLO WORLD',
+                prefix: 'Result: ',
+              },
+            },
+          ],
+          steps: pipelineState.modules.map((module, idx) => ({
+            id: idx + 1,
+            step_number: idx + 1,
+            module_instance_id: module.module_instance_id,
+            inputs: module.inputs.reduce((acc, input) => {
+              acc[input.node_id] = {
+                name: input.name,
+                value: '  Hello World  ',
+                type: input.type,
+              };
+              return acc;
+            }, {} as Record<string, { name: string; value: any; type: string }>),
+            outputs: module.outputs.reduce((acc, output) => {
+              acc[output.node_id] = {
+                name: output.name,
+                value: 'HELLO WORLD',
+                type: output.type,
+              };
+              return acc;
+            }, {} as Record<string, { name: string; value: any; type: string }>),
+            error: null,
+          })),
+        },
+      };
+
+      setTestResults(mockSimulationResult);
 
       // Navigate to testing step
       setCurrentStep('testing');
@@ -189,6 +273,10 @@ export function TemplateBuilderModal({
       setCurrentStep('extraction-fields');
     } else if (currentStep === 'testing') {
       console.log('[TemplateBuilderModal] Moving back to pipeline');
+      // Clear test snapshots when leaving testing step
+      setTestedPipelineState(null);
+      setTestedVisualState(null);
+      setTestResults(null);
       setCurrentStep('pipeline');
     }
   };
@@ -198,15 +286,16 @@ export function TemplateBuilderModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-gray-900 rounded-lg w-full h-full max-w-[95vw] max-h-[95vh] flex flex-col shadow-2xl border border-gray-700">
+      <div className="bg-gray-900 rounded-lg w-full max-w-[95vw] h-[95vh] overflow-hidden flex flex-col shadow-2xl border border-gray-700">
         {/* Header */}
         <TemplateBuilderHeader
-          pdfFileName={`${pdfFileId}.pdf`}
+          pdfMetadata={pdfData?.metadata ?? null}
+          emailData={pdfData?.emailData}
           onClose={handleClose}
         />
 
         {/* Main Content */}
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-y-auto">
           {/* Loading State - only show during initial load */}
           {!pdfDataLoaded && pdfLoading && (
             <div className="h-full flex items-center justify-center">
@@ -234,10 +323,7 @@ export function TemplateBuilderModal({
           {/* Steps - render all but show only active one (keeps PdfCanvas mounted) */}
           {pdfDataLoaded && !pdfError && (
             <>
-              <div
-                className="h-full w-full"
-                style={{ display: currentStep === 'signature-objects' ? 'flex' : 'none' }}
-              >
+              {currentStep === 'signature-objects' && (
                 <SignatureObjectsStep
                   pdfFileId={pdfFileId}
                   templateName={templateName}
@@ -255,11 +341,8 @@ export function TemplateBuilderModal({
                   onPdfScaleChange={setPdfScale}
                   onPdfCurrentPageChange={setPdfCurrentPage}
                 />
-              </div>
-              <div
-                className="h-full w-full"
-                style={{ display: currentStep === 'extraction-fields' ? 'flex' : 'none' }}
-              >
+              )}
+              {currentStep === 'extraction-fields' && (
                 <ExtractionFieldsStep
                   pdfFileId={pdfFileId}
                   templateName={templateName}
@@ -276,11 +359,8 @@ export function TemplateBuilderModal({
                   onPdfScaleChange={setPdfScale}
                   onPdfCurrentPageChange={setPdfCurrentPage}
                 />
-              </div>
-              <div
-                className="h-full w-full"
-                style={{ display: currentStep === 'pipeline' ? 'flex' : 'none' }}
-              >
+              )}
+              {currentStep === 'pipeline' && (
                 <PipelineBuilderStep
                   extractionFields={extractionFields}
                   pipelineState={pipelineState}
@@ -288,35 +368,62 @@ export function TemplateBuilderModal({
                   onPipelineStateChange={setPipelineState}
                   onVisualStateChange={setVisualState}
                 />
-              </div>
-              <div
-                className="h-full w-full"
-                style={{ display: currentStep === 'testing' ? 'flex' : 'none' }}
-              >
-                {/* Testing Step - shows simulation results like ETO RunDetailModal */}
-                <div className="flex-1 flex items-center justify-center bg-gray-900">
-                  {testResults ? (
-                    <div className="text-white">
-                      <h3 className="text-xl font-semibold mb-4">Template Test Results</h3>
-                      <pre className="bg-gray-800 p-4 rounded">
-                        {JSON.stringify(testResults, null, 2)}
-                      </pre>
-                    </div>
-                  ) : (
+              )}
+              {currentStep === 'testing' && (
+                testResults && pdfUrl && testedPipelineState && testedVisualState ? (
+                  <TestingStep
+                    pdfUrl={pdfUrl}
+                    viewMode={testViewMode}
+                    simulationResult={testResults}
+                    pipelineState={testedPipelineState}
+                    visualState={testedVisualState}
+                    moduleTemplates={moduleTemplates}
+                  />
+                ) : (
+                  <div className="flex items-center justify-center py-12">
                     <div className="text-gray-400">No test results available</div>
-                  )}
-                </div>
-              </div>
+                  </div>
+                )
+              )}
             </>
           )}
         </div>
 
         {/* Footer - Stepper with Navigation Buttons */}
         <div className="flex items-center justify-between px-6 py-4 border-t border-gray-700 bg-gray-900">
-          <TemplateBuilderStepper
-            currentStep={currentStep}
-            completedSteps={completedSteps}
-          />
+          <div className="flex items-center space-x-4">
+            <TemplateBuilderStepper
+              currentStep={currentStep}
+              completedSteps={completedSteps}
+              testStatus={testResults?.status === 'success' ? 'success' : testResults?.status === 'failure' ? 'failure' : null}
+            />
+
+            {/* View Mode Toggle - Only show in testing step */}
+            {currentStep === 'testing' && testResults && (
+              <div className="flex items-center bg-gray-800 rounded-lg p-1 border-l border-gray-600 ml-4">
+                <button
+                  onClick={() => setTestViewMode('summary')}
+                  className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                    testViewMode === 'summary'
+                      ? 'bg-blue-600 text-white'
+                      : 'text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  Summary
+                </button>
+                <button
+                  onClick={() => setTestViewMode('detail')}
+                  className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                    testViewMode === 'detail'
+                      ? 'bg-blue-600 text-white'
+                      : 'text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  Detail
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* Navigation Buttons */}
           <div className="flex items-center space-x-3">

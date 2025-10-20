@@ -1,24 +1,67 @@
 /**
  * TemplateBuilderHeader
- * Header section with static title and close button
+ * Header section with title, PDF info, and close button
  */
 
+import { PdfFileMetadataDTO } from '../../../../pdf-files/api/types';
+import { EmailData } from '../../../../emails/mocks/useMockEmailApi';
+
 interface TemplateBuilderHeaderProps {
-  pdfFileName: string;
+  pdfMetadata: PdfFileMetadataDTO | null;
+  emailData?: EmailData | null;
   onClose: () => void;
 }
 
 export function TemplateBuilderHeader({
-  pdfFileName,
+  pdfMetadata,
+  emailData,
   onClose,
 }: TemplateBuilderHeaderProps) {
+  // Format file size
+  const formatFileSize = (bytes: number | null): string => {
+    if (!bytes) return 'Unknown';
+    const mb = bytes / (1024 * 1024);
+    return `${mb.toFixed(2)} MB`;
+  };
+
   return (
     <div className="flex items-center justify-between p-4 border-b border-gray-700 flex-shrink-0">
-      <div className="flex-1 min-w-0">
-        <h2 className="text-xl font-semibold text-white">
-          Template Builder
-        </h2>
-        <p className="text-sm text-gray-400 truncate">{pdfFileName}</p>
+      <div className="flex items-center space-x-4">
+        <h2 className="text-xl font-semibold text-white">Template Builder</h2>
+
+        {pdfMetadata && (
+          <>
+            {/* Source */}
+            <div className="text-sm text-gray-300 border-l border-gray-600 pl-4">
+              <span className="text-gray-400">Source:</span>{' '}
+              {pdfMetadata.email_id !== null && emailData ? (
+                <span className="font-mono">{emailData.sender_email}</span>
+              ) : pdfMetadata.email_id !== null ? (
+                <span className="font-mono">Email (ID: {pdfMetadata.email_id})</span>
+              ) : (
+                'Manual Upload'
+              )}
+            </div>
+
+            {/* PDF Filename */}
+            <div className="text-sm text-gray-300 border-l border-gray-600 pl-4">
+              <span className="text-gray-400">PDF:</span>{' '}
+              <span className="font-mono">{pdfMetadata.original_filename}</span>
+            </div>
+
+            {/* File Size */}
+            <div className="text-sm text-gray-300 border-l border-gray-600 pl-4">
+              <span className="text-gray-400">Size:</span>{' '}
+              <span className="font-mono">{formatFileSize(pdfMetadata.file_size)}</span>
+            </div>
+
+            {/* Page Count */}
+            <div className="text-sm text-gray-300 border-l border-gray-600 pl-4">
+              <span className="text-gray-400">Pages:</span>{' '}
+              <span className="font-mono">{pdfMetadata.page_count ?? 'Unknown'}</span>
+            </div>
+          </>
+        )}
       </div>
 
       <button
