@@ -93,6 +93,16 @@ function ExecutedPipelineGraphInner({
 }: ExecutedPipelineGraphProps) {
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
+  const [hoveredModuleId, setHoveredModuleId] = useState<string | null>(null);
+
+  // Hover callbacks for highlighting connected edges
+  const handleModuleMouseEnter = (moduleId: string) => {
+    setHoveredModuleId(moduleId);
+  };
+
+  const handleModuleMouseLeave = () => {
+    setHoveredModuleId(null);
+  };
 
   // Convert pipeline state to React Flow nodes and edges
   useEffect(() => {
@@ -140,6 +150,8 @@ function ExecutedPipelineGraphInner({
           executionMode: true,  // Execution view mode
           failedModuleIds,
           executionValues,  // Pass execution data for value display
+          onModuleMouseEnter: handleModuleMouseEnter,
+          onModuleMouseLeave: handleModuleMouseLeave,
         },
         draggable: false,
         selectable: false,
@@ -168,6 +180,8 @@ function ExecutedPipelineGraphInner({
           executionMode: true,  // Execution view mode
           failedModuleIds,
           executionValues,  // Pass execution data for value display
+          onModuleMouseEnter: handleModuleMouseEnter,
+          onModuleMouseLeave: handleModuleMouseLeave,
         },
         draggable: false,
         selectable: false,
@@ -259,6 +273,19 @@ function ExecutedPipelineGraphInner({
     setNodes(layoutedNodes);
     setEdges(edgesWithOffsets);
   }, [pipelineState, visualState, moduleTemplates, failedModuleIds, executionValues]);
+
+  // Update edge data when hoveredModuleId changes (without recalculating layout)
+  useEffect(() => {
+    setEdges((currentEdges) =>
+      currentEdges.map((edge) => ({
+        ...edge,
+        data: {
+          ...edge.data,
+          hoveredModuleId,
+        },
+      }))
+    );
+  }, [hoveredModuleId]);
 
   return (
     <div className="w-full h-full bg-gray-900">

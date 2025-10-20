@@ -31,6 +31,8 @@ export interface ModuleProps {
     failedModuleIds?: string[];  // For execution visualization - highlight failed modules
     executionMode?: boolean;  // When true, hides all editing controls (add/remove/delete buttons)
     executionValues?: Map<string, { value: any; type: string; name: string }>;  // Execution data for each pin
+    onModuleMouseEnter?: (moduleId: string) => void;  // For highlighting connected edges
+    onModuleMouseLeave?: () => void;  // For removing edge highlights
   };
 }
 
@@ -52,6 +54,8 @@ export function Module({ data }: ModuleProps) {
     failedModuleIds = [],
     executionMode = false,
     executionValues,
+    onModuleMouseEnter,
+    onModuleMouseLeave,
   } = data;
 
   const [highlightedTypeVar, setHighlightedTypeVar] = useState<string | null>(null);
@@ -76,7 +80,11 @@ export function Module({ data }: ModuleProps) {
   }, [moduleInstance, getEffectiveAllowedTypes, onUpdateNode]);
 
   return (
-    <div className={`bg-gray-800 rounded-lg border-2 ${hasFailed ? 'border-red-600' : 'border-gray-600'} min-w-[400px] w-min`}>
+    <div
+      className={`bg-gray-800 rounded-lg border-2 ${hasFailed ? 'border-red-600' : 'border-gray-600'} min-w-[400px] w-min`}
+      onMouseEnter={() => onModuleMouseEnter?.(moduleInstance.module_instance_id)}
+      onMouseLeave={() => onModuleMouseLeave?.()}
+    >
       <ModuleHeader
         moduleInstance={moduleInstance}
         template={template}

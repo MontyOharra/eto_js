@@ -17,6 +17,7 @@ export interface ExecutionEdgeData {
   value?: any;
   type?: string;
   offset?: number;
+  hoveredModuleId?: string | null;
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -44,6 +45,8 @@ const formatValue = (value: any, truncate: boolean = true): string => {
 
 export function ExecutionEdge({
   id,
+  source,
+  target,
   sourceX,
   sourceY,
   targetX,
@@ -57,10 +60,15 @@ export function ExecutionEdge({
   const [isLabelHovered, setIsLabelHovered] = useState(false);
   const [isEdgeHovered, setIsEdgeHovered] = useState(false);
 
-  // Combined hover state - true if either label or edge is hovered
-  const isHovered = isLabelHovered || isEdgeHovered;
-
   const executionData = data as ExecutionEdgeData;
+
+  // Check if connected module is hovered
+  const isModuleHovered = executionData?.hoveredModuleId &&
+    (source === executionData.hoveredModuleId || target === executionData.hoveredModuleId);
+
+  // Combined hover state - true if label, edge, or connected module is hovered
+  const isHovered = isLabelHovered || isEdgeHovered || isModuleHovered;
+
   const typeColor = executionData?.type ? TYPE_COLORS[executionData.type] || '#6B7280' : '#6B7280';
 
   // Apply horizontal offset for parallel edges - only to the middle vertical section
