@@ -90,6 +90,24 @@ export interface PdfObjectsResponseDTO {
 }
 
 // ============================================================================
+// PDF Processing (POST /pdf-files/process)
+// ============================================================================
+
+// Response for processing uploaded PDFs (no pdf_file_id since not stored)
+export interface PdfProcessResponseDTO {
+  page_count: number;
+  objects: {
+    text_words: TextWordObjectDTO[];
+    text_lines: TextLineObjectDTO[];
+    graphic_rects: GraphicRectObjectDTO[];
+    graphic_lines: GraphicLineObjectDTO[];
+    graphic_curves: GraphicCurveObjectDTO[];
+    images: ImageObjectDTO[];
+    tables: TableObjectDTO[];
+  };
+}
+
+// ============================================================================
 // PDF Download (GET /pdf-files/{id}/download)
 // ============================================================================
 

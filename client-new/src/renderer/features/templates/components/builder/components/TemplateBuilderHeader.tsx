@@ -54,12 +54,6 @@ export function TemplateBuilderHeader({
               <span className="text-gray-400">Size:</span>{' '}
               <span className="font-mono">{formatFileSize(pdfMetadata.file_size)}</span>
             </div>
-
-            {/* Page Count */}
-            <div className="text-sm text-gray-300 border-l border-gray-600 pl-4">
-              <span className="text-gray-400">Pages:</span>{' '}
-              <span className="font-mono">{pdfMetadata.page_count ?? 'Unknown'}</span>
-            </div>
           </>
         )}
       </div>

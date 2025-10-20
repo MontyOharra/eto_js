@@ -3,7 +3,7 @@
  * Returns real extracted PDF object data from test PDFs
  */
 
-import { PdfFileMetadataDTO, PdfObjectsResponseDTO } from '../api/types';
+import { PdfFileMetadataDTO, PdfObjectsResponseDTO, PdfProcessResponseDTO } from '../api/types';
 
 // Import extracted PDF object data
 import pdf2Objects from './data/2_objects.json';
@@ -138,14 +138,14 @@ export const useMockPdfApi = {
    * Endpoint: POST /pdf-files/process
    * Simulates PDF processing for manually uploaded files
    */
-  processPdf: async (pdfFile: File): Promise<PdfObjectsResponseDTO> => {
+  processPdf: async (pdfFile: File): Promise<PdfProcessResponseDTO> => {
     await new Promise((resolve) => setTimeout(resolve, 800)); // Simulate processing time
 
     console.log('[Mock API] Processing uploaded PDF:', pdfFile.name);
 
     // For mock purposes, return a sample objects structure
     // In production, this would actually process the PDF
-    const mockObjects: PdfObjectsResponseDTO = {
+    const mockObjects: PdfProcessResponseDTO = {
       page_count: 1,
       objects: {
         text_words: [

@@ -113,12 +113,13 @@ export function TemplateBuilderModal({
 
         const mockMetadata = {
           id: -1, // Temporary ID for uploaded file
-          filename: pdfFile.name,
-          file_size: pdfFile.size,
-          num_pages: objectsData.page_count,
-          upload_timestamp: new Date().toISOString(),
           email_id: null,
-          eto_run_id: null,
+          filename: pdfFile.name,
+          original_filename: pdfFile.name,
+          relative_path: '', // No path for uploaded files
+          file_size: pdfFile.size,
+          file_hash: null, // Not calculated for uploaded files
+          page_count: objectsData.page_count,
         };
 
         setUploadedPdfData({
