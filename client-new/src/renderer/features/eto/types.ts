@@ -70,12 +70,21 @@ export interface EtoStageTemplateMatching {
 }
 
 // Stage 2: Data Extraction
+export interface ExtractedFieldWithBox {
+  field_id: string;
+  label: string;
+  value: string;
+  page: number;
+  bbox: [number, number, number, number]; // [x1, y1, x2, y2]
+}
+
 export interface EtoStageDataExtraction {
   status: 'not_started' | 'success' | 'failure' | 'skipped';
   started_at: string | null;
   completed_at: string | null;
   error_message: string | null;
   extracted_data: Record<string, any> | null;
+  extracted_fields_with_boxes?: ExtractedFieldWithBox[]; // For overlay display
 }
 
 // Stage 3: Pipeline Execution
@@ -84,6 +93,7 @@ export interface EtoStagePipelineExecution {
   started_at: string | null;
   completed_at: string | null;
   error_message: string | null;
+  pipeline_definition_id: number;  // Reference to pipeline definition for lazy loading
   executed_actions: Array<{
     action_module_name: string;
     inputs: Record<string, any>;
@@ -95,7 +105,13 @@ export interface EtoPipelineExecutionStep {
   id: number;
   step_number: number;
   module_instance_id: string;
-  inputs: Record<string, { value: any; type: string }> | null;
-  outputs: Record<string, { value: any; type: string }> | null;
-  error: Record<string, any> | null;
+  // Keys are node_ids from pipeline definition (e.g., "i1", "i2", "o1")
+  inputs: Record<string, { name: string; value: any; type: string }> | null;
+  outputs: Record<string, { name: string; value: any; type: string }> | null;
+  // Structured error object
+  error: {
+    type: string;
+    message: string;
+    details?: any;
+  } | null;
 }

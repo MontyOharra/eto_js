@@ -554,6 +554,10 @@ Return data directly (no `success` wrapper):
     "completed_at": string | null,
     "error_message": string | null,
 
+    // Pipeline definition reference (from matched template version)
+    // Enables lazy-loading full pipeline graph via GET /pipelines/{id}
+    "pipeline_definition_id": number,
+
     // Pipeline-level summary of executed actions (JSON from eto_run_pipeline_executions.executed_actions)
     // List of action modules executed with their input data
     "executed_actions": [
@@ -572,24 +576,32 @@ Return data directly (no `success` wrapper):
         "step_number": number,           // Execution order (1-based)
         "module_instance_id": string,    // Module instance identifier
 
-        // Step inputs: node name → { value, type }
+        // Step inputs: node_id → { name, value, type }
+        // Keys are node_ids from pipeline definition (e.g., "i1", "i2")
+        // Enables frontend to map values to specific pins on graph visualization
         "inputs": {
-          [node_name: string]: {
-            "value": any,
-            "type": string               // Type of the value (e.g., "string", "number", "object")
+          [node_id: string]: {
+            "name": string,              // Pin name (e.g., "text", "separator")
+            "value": any,                // Actual value passed to this input pin
+            "type": string               // Runtime type (e.g., "str", "int", "bool")
           }
         } | null,
 
-        // Step outputs: node name → { value, type }
+        // Step outputs: node_id → { name, value, type }
+        // Keys are node_ids from pipeline definition (e.g., "o1", "o2")
         "outputs": {
-          [node_name: string]: {
-            "value": any,
-            "type": string               // Type of the value
+          [node_id: string]: {
+            "name": string,              // Pin name (e.g., "result", "success")
+            "value": any,                // Actual value produced by this output pin
+            "type": string               // Runtime type
           }
         } | null,
 
+        // Structured error object (only present if step failed)
         "error": {
-          [key: string]: any             // Error details if step failed
+          "type": string,                // Error class name (e.g., "ValidationError", "TypeError")
+          "message": string,             // Human-readable error message
+          "details"?: any                // Optional structured error details
         } | null
       }
     ]
@@ -605,12 +617,23 @@ Return data directly (no `success` wrapper):
 - `executed_actions` is the JSON field from `eto_run_pipeline_executions` table - duplicates step information as a summary
 - `steps` array corresponds to `eto_run_pipeline_execution_steps` table records
 - `steps` array is empty if pipeline execution hasn't started or was skipped
-- `steps` are ordered by `step_number` (execution order)
+- `steps` are ordered by `step_number` (execution order determined by Dask DAG)
 - Steps do not have individual status/timestamps - error presence indicates failure
+- **Step Input/Output Structure:**
+  - Uses `node_id` as dictionary key (matches pipeline definition node IDs)
+  - Each entry includes `name` (pin label), `value` (actual data), and `type` (runtime type)
+  - Enables frontend to map execution data directly to pins on graph visualization
+  - When execution fails at module M: inputs are recorded, outputs are null, error is present
+  - All subsequent modules after failure are NOT recorded (execution stops)
+- **Pipeline Visualization:** `pipeline_definition_id` enables lazy-loading of full pipeline graph:
+  - Initial load: Get run details (~100KB) with pipeline reference
+  - On-demand: Fetch `GET /pipelines/{pipeline_definition_id}` only when user views Detail tab (~50KB)
+  - Avoids embedding full pipeline_state in every ETO run response
+  - Same pipeline definition can be cached and reused across multiple runs
 - **Response Size Warning:** This endpoint can return large payloads (>1MB) for runs with:
   - Large extracted_data (100+ fields from complex PDFs)
   - Long pipelines (20+ steps with detailed inputs/outputs)
-  - Consider splitting into separate endpoints if performance issues arise
+  - Lazy-loading architecture helps mitigate this issue
 
 **Errors:**
 - `404`: `{"detail": "Run not found"}`
