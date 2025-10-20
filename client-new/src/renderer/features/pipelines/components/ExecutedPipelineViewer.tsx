@@ -4,9 +4,9 @@
  * Uses dedicated ExecutedPipelineGraph component
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, forwardRef, useImperativeHandle, useRef } from 'react';
 import { useMockPipelinesApi } from '../hooks/useMockPipelinesApi';
-import { ExecutedPipelineGraph } from './ExecutedPipelineGraph';
+import { ExecutedPipelineGraph, ExecutedPipelineGraphRef } from './ExecutedPipelineGraph';
 import { applyLayeredLayout } from '../utils/layeredLayout';
 import type { PipelineState, VisualState, ModuleTemplate } from '../../../types/pipelineTypes';
 import type { EtoPipelineExecutionStep } from '../../eto/types';
@@ -21,6 +21,10 @@ export interface ExecutedPipelineViewerProps {
     }>;
   };
   extractedData?: Record<string, any>;
+}
+
+export interface ExecutedPipelineViewerRef {
+  fitView: () => void;
 }
 
 // Minimal module templates for executed pipeline viewer
@@ -60,13 +64,21 @@ const getModuleColor = (moduleId: string): string => {
   return '#3B82F6'; // Blue for transforms
 };
 
-export function ExecutedPipelineViewer({ pipelineDefinitionId, executionData, extractedData }: ExecutedPipelineViewerProps) {
+export const ExecutedPipelineViewer = forwardRef<ExecutedPipelineViewerRef, ExecutedPipelineViewerProps>(({ pipelineDefinitionId, executionData, extractedData }, ref) => {
   const { getPipeline, isLoading, error } = useMockPipelinesApi();
   const [pipelineState, setPipelineState] = useState<PipelineState | null>(null);
   const [visualState, setVisualState] = useState<VisualState | null>(null);
   const [moduleTemplates, setModuleTemplates] = useState<ModuleTemplate[]>([]);
   const [failedModuleIds, setFailedModuleIds] = useState<string[]>([]);
   const [executionValues, setExecutionValues] = useState<Map<string, { value: any; type: string; name: string }>>(new Map());
+  const graphRef = useRef<ExecutedPipelineGraphRef>(null);
+
+  // Expose fitView to parent component
+  useImperativeHandle(ref, () => ({
+    fitView: () => {
+      graphRef.current?.fitView();
+    },
+  }), []);
 
   // Fetch pipeline definition
   useEffect(() => {
@@ -318,6 +330,7 @@ export function ExecutedPipelineViewer({ pipelineDefinitionId, executionData, ex
   return (
     <div className="w-full h-full">
       <ExecutedPipelineGraph
+        ref={graphRef}
         moduleTemplates={moduleTemplates}
         pipelineState={pipelineState}
         visualState={visualState}
@@ -326,4 +339,4 @@ export function ExecutedPipelineViewer({ pipelineDefinitionId, executionData, ex
       />
     </div>
   );
-}
+});

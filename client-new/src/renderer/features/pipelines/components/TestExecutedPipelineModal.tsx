@@ -5,7 +5,7 @@
  */
 
 import { ExecutedPipelineViewer } from './ExecutedPipelineViewer';
-import { mockPipelineExecutionData } from '../mocks/pipelineDefinitionMock';
+import { mockPipeline1SuccessExecution } from '../mocks/pipelineExecutionMock';
 
 interface TestExecutedPipelineModalProps {
   isOpen: boolean;
@@ -47,8 +47,8 @@ export function TestExecutedPipelineModal({ isOpen, onClose }: TestExecutedPipel
           <ExecutedPipelineViewer
             pipelineDefinitionId={1}
             executionData={{
-              steps: mockPipelineExecutionData.steps,
-              executed_actions: mockPipelineExecutionData.executed_actions,
+              steps: mockPipeline1SuccessExecution,
+              executed_actions: [],
             }}
           />
         </div>
@@ -57,8 +57,8 @@ export function TestExecutedPipelineModal({ isOpen, onClose }: TestExecutedPipel
         <div className="flex items-center justify-between p-4 border-t border-gray-700 flex-shrink-0">
           <div className="text-sm text-gray-400">
             <span className="font-semibold">Pipeline ID:</span> 1 |{' '}
-            <span className="font-semibold">Execution Steps:</span> {mockPipelineExecutionData.steps.length} |{' '}
-            <span className="font-semibold">Actions:</span> {mockPipelineExecutionData.executed_actions.length}
+            <span className="font-semibold">Execution Steps:</span> {mockPipeline1SuccessExecution.length} |{' '}
+            <span className="font-semibold">Actions:</span> 0
           </div>
 
           <button

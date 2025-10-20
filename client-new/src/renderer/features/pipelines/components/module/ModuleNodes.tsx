@@ -27,6 +27,8 @@ export interface ModuleNodesProps {
   onTypeVarFocus: (typeVar: string | null) => void;
   executionMode?: boolean;
   executionValues?: Map<string, { value: any; type: string; name: string }>;
+  onModuleMouseEnter?: (moduleId: string) => void;
+  onModuleMouseLeave?: () => void;
 }
 
 export function ModuleNodes({
@@ -45,6 +47,8 @@ export function ModuleNodes({
   onTypeVarFocus,
   executionMode = false,
   executionValues,
+  onModuleMouseEnter,
+  onModuleMouseLeave,
 }: ModuleNodesProps) {
   // Group inputs and outputs
   const inputGroups = groupNodesByIndex(moduleInstance.inputs);
@@ -85,7 +89,12 @@ export function ModuleNodes({
   };
 
   return (
-    <div className="flex relative">
+    <div
+      className="flex relative nodrag nopan"
+      style={{ pointerEvents: 'auto' }}
+      onMouseEnter={() => onModuleMouseEnter?.(moduleInstance.module_instance_id)}
+      onMouseLeave={() => onModuleMouseLeave?.()}
+    >
       {/* Inputs Section */}
       <div className="w-1/2 p-3 border-r border-gray-600">
         {Array.from(inputGroups.entries()).map(([groupIndex, nodes]) => (

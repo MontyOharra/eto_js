@@ -11,9 +11,11 @@ export interface ModuleHeaderProps {
   template: ModuleTemplate;
   onDeleteModule?: (moduleId: string) => void;
   executionMode?: boolean;
+  onModuleMouseEnter?: (moduleId: string) => void;
+  onModuleMouseLeave?: () => void;
 }
 
-export function ModuleHeader({ moduleInstance, template, onDeleteModule, executionMode = false }: ModuleHeaderProps) {
+export function ModuleHeader({ moduleInstance, template, onDeleteModule, executionMode = false, onModuleMouseEnter, onModuleMouseLeave }: ModuleHeaderProps) {
   const headerColor = template.color || '#4B5563';
   const textColor = getTextColor(headerColor);
 
@@ -25,8 +27,10 @@ export function ModuleHeader({ moduleInstance, template, onDeleteModule, executi
 
   return (
     <div
-      className="px-3 py-2 rounded-t-lg border-b border-gray-600 flex items-center justify-between"
-      style={{ backgroundColor: headerColor }}
+      className="px-3 py-2 rounded-t-lg border-b border-gray-600 flex items-center justify-between nodrag nopan"
+      style={{ backgroundColor: headerColor, pointerEvents: 'auto' }}
+      onMouseEnter={() => onModuleMouseEnter?.(moduleInstance.module_instance_id)}
+      onMouseLeave={() => onModuleMouseLeave?.()}
     >
       <div>
         <div className="font-medium text-sm" style={{ color: textColor }}>

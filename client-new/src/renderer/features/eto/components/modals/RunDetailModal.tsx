@@ -4,12 +4,12 @@
  * execution details, and allows viewing the PDF and specifics
  */
 
-import { useState, useEffect } from 'react';
-import { PdfViewer } from '../../../../shared/components/pdf';
+import { useState, useEffect, useRef } from 'react';
+import { PdfViewer, usePdfViewer } from '../../../../shared/components/pdf';
 import { useMockEtoApi } from '../../hooks/useMockEtoApi';
 import { StatusBadge } from '../ui/StatusBadge';
 import { ExtractedFieldsOverlay } from '../overlays/ExtractedFieldsOverlay';
-import { ExecutedPipelineViewer } from '../../../pipelines/components/ExecutedPipelineViewer';
+import { ExecutedPipelineViewer, ExecutedPipelineViewerRef } from '../../../pipelines/components/ExecutedPipelineViewer';
 import type { EtoRunDetail } from '../../types';
 
 interface RunDetailModalProps {
@@ -20,6 +20,62 @@ interface RunDetailModalProps {
 
 type ViewMode = 'summary' | 'detail';
 
+// Helper component to trigger fit-to-width on resize (only during divider drag)
+function AutoFitOnResize({ isDragging }: { isDragging: boolean }) {
+  const { fitToWidth, pdfDimensions } = usePdfViewer();
+  const pdfViewerRef = useRef<HTMLDivElement>(null);
+  const hasAutoFittedOnLoad = useRef(false);
+
+  // Auto-fit when PDF first loads
+  useEffect(() => {
+    if (!pdfDimensions || !pdfViewerRef.current || hasAutoFittedOnLoad.current) {
+      return;
+    }
+
+    const pdfViewerContainer = pdfViewerRef.current.parentElement;
+    if (!pdfViewerContainer) {
+      return;
+    }
+
+    // Trigger fit-to-width on initial load
+    const containerWidth = pdfViewerContainer.clientWidth;
+    const sidebarWidth = 64; // w-16 = 64px
+    fitToWidth(containerWidth, sidebarWidth);
+    hasAutoFittedOnLoad.current = true;
+  }, [pdfDimensions, fitToWidth]);
+
+  // Trigger fit-to-width on resize, but ONLY when dragging the divider
+  useEffect(() => {
+    if (!isDragging || !pdfViewerRef.current || !pdfDimensions) {
+      return;
+    }
+
+    // Get the actual PdfViewer container (same element the fit button measures)
+    const pdfViewerContainer = pdfViewerRef.current.parentElement;
+    if (!pdfViewerContainer) {
+      return;
+    }
+
+    const resizeObserver = new ResizeObserver(() => {
+      if (!pdfViewerContainer || !isDragging) {
+        return;
+      }
+
+      const containerWidth = pdfViewerContainer.clientWidth;
+      const sidebarWidth = 64; // w-16 = 64px
+      fitToWidth(containerWidth, sidebarWidth);
+    });
+
+    resizeObserver.observe(pdfViewerContainer);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [fitToWidth, pdfDimensions, isDragging]);
+
+  return <div ref={pdfViewerRef} style={{ display: 'none' }} />;
+}
+
 export function RunDetailModal({ isOpen, runId, onClose }: RunDetailModalProps) {
   const { getEtoRunDetail, getPdfDownloadUrl, isLoading } = useMockEtoApi();
   const [runDetail, setRunDetail] = useState<EtoRunDetail | null>(null);
@@ -28,6 +84,15 @@ export function RunDetailModal({ isOpen, runId, onClose }: RunDetailModalProps) 
   const [viewMode, setViewMode] = useState<ViewMode>('summary');
   const [specificsWidth, setSpecificsWidth] = useState(60); // Percentage
   const [isDragging, setIsDragging] = useState(false);
+  const pdfContainerRef = useRef<HTMLDivElement>(null);
+  const pipelineViewerRef = useRef<ExecutedPipelineViewerRef>(null);
+
+  // Reset to summary view when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setViewMode('summary');
+    }
+  }, [isOpen]);
 
   // Fetch run details when modal opens
   useEffect(() => {
@@ -97,6 +162,36 @@ export function RunDetailModal({ isOpen, runId, onClose }: RunDetailModalProps) 
       };
     }
   }, [isDragging]);
+
+  // Fit pipeline view when switching to detail mode
+  useEffect(() => {
+    if (viewMode === 'detail' && pipelineViewerRef.current) {
+      // Delay to ensure the pipeline is rendered
+      setTimeout(() => {
+        pipelineViewerRef.current?.fitView();
+      }, 100);
+    }
+  }, [viewMode]);
+
+  // Auto-fit pipeline viewer when its container is resized (e.g., dragging divider)
+  useEffect(() => {
+    if (viewMode !== 'detail') return;
+
+    const specificsContainer = document.querySelector('.resize-container .specifics-panel');
+    if (!specificsContainer) return;
+
+    const resizeObserver = new ResizeObserver(() => {
+      if (pipelineViewerRef.current) {
+        pipelineViewerRef.current.fitView();
+      }
+    });
+
+    resizeObserver.observe(specificsContainer);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [viewMode]);
 
   // Format file size
   const formatFileSize = (bytes: number | null): string => {
@@ -234,9 +329,9 @@ export function RunDetailModal({ isOpen, runId, onClose }: RunDetailModalProps) 
           )}
 
           {!isLoading && !error && runDetail && (
-            <div className="p-4 flex h-full resize-container">
+            <div className="pr-4 pl-2 py-4 flex h-full resize-container">
               {/* Left Column - Specifics */}
-              <div className="flex flex-col" style={{ width: `${specificsWidth}%` }}>
+              <div className="flex flex-col specifics-panel" style={{ width: `${specificsWidth}%` }}>
                 <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 flex flex-col flex-1 overflow-hidden">
                   <h3 className="text-lg font-semibold text-white mb-3">
                     {viewMode === 'summary'
@@ -276,6 +371,7 @@ export function RunDetailModal({ isOpen, runId, onClose }: RunDetailModalProps) 
                     >
                       {runDetail.pipeline_execution?.pipeline_definition_id ? (
                         <ExecutedPipelineViewer
+                          ref={pipelineViewerRef}
                           pipelineDefinitionId={runDetail.pipeline_execution.pipeline_definition_id}
                           executionData={{
                             steps: runDetail.pipeline_execution.steps,
@@ -304,10 +400,11 @@ export function RunDetailModal({ isOpen, runId, onClose }: RunDetailModalProps) 
               />
 
               {/* Right Column - PDF Viewer */}
-              <div className="flex flex-col" style={{ width: `${100 - specificsWidth}%` }}>
-                <div className="bg-gray-800 border border-gray-700 rounded-lg flex-1 overflow-hidden relative p-4">
+              <div className="flex flex-col" style={{ width: `${100 - specificsWidth}%` }} ref={pdfContainerRef}>
+                <div className="bg-gray-800 border border-gray-700 rounded-lg flex-1 overflow-hidden relative pr-4 pl-1 py-4">
                   {pdfUrl ? (
                     <PdfViewer pdfUrl={pdfUrl} onError={handlePdfError}>
+                      <AutoFitOnResize isDragging={isDragging} />
                       <PdfViewer.Canvas pdfUrl={pdfUrl} onError={handlePdfError}>
                         {/* Show extraction field overlay in detail view */}
                         {viewMode === 'detail' && runDetail.data_extraction?.extracted_fields_with_boxes && (

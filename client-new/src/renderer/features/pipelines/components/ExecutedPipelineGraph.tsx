@@ -4,7 +4,7 @@
  * Purpose-built for viewing pipeline execution results (not for editing)
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useImperativeHandle, forwardRef } from 'react';
 import {
   ReactFlow,
   Node,
@@ -31,6 +31,10 @@ export interface ExecutedPipelineGraphProps {
   visualState: VisualState;
   failedModuleIds: string[];
   executionValues?: Map<string, { value: any; type: string; name: string }>;
+}
+
+export interface ExecutedPipelineGraphRef {
+  fitView: () => void;
 }
 
 const nodeTypes = {
@@ -76,24 +80,32 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'LR') => 
   return { nodes: layoutedNodes, edges };
 };
 
-export function ExecutedPipelineGraph(props: ExecutedPipelineGraphProps) {
+export const ExecutedPipelineGraph = forwardRef<ExecutedPipelineGraphRef, ExecutedPipelineGraphProps>((props, ref) => {
   return (
     <ReactFlowProvider>
-      <ExecutedPipelineGraphInner {...props} />
+      <ExecutedPipelineGraphInner {...props} ref={ref} />
     </ReactFlowProvider>
   );
-}
+});
 
-function ExecutedPipelineGraphInner({
+const ExecutedPipelineGraphInner = forwardRef<ExecutedPipelineGraphRef, ExecutedPipelineGraphProps>(({
   moduleTemplates,
   pipelineState,
   visualState,
   failedModuleIds,
   executionValues = new Map(),
-}: ExecutedPipelineGraphProps) {
+}, ref) => {
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [hoveredModuleId, setHoveredModuleId] = useState<string | null>(null);
+  const { fitView } = useReactFlow();
+
+  // Expose fitView to parent component
+  useImperativeHandle(ref, () => ({
+    fitView: () => {
+      fitView({ padding: 0.2, maxZoom: 1 });
+    },
+  }), [fitView]);
 
   // Hover callbacks for highlighting connected edges
   const handleModuleMouseEnter = (moduleId: string) => {
@@ -312,4 +324,4 @@ function ExecutedPipelineGraphInner({
       </ReactFlow>
     </div>
   );
-}
+});

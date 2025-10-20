@@ -32,6 +32,7 @@ export interface PdfViewerContextValue {
   goToPreviousPage: () => void;
   zoomIn: () => void;
   zoomOut: () => void;
+  fitToWidth: (containerWidth: number, sidebarWidth: number) => void;
 
   // Coordinate transformation
   pdfToScreen: (point: PdfPoint) => PdfPoint;

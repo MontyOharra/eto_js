@@ -174,6 +174,29 @@ export function PdfViewer({
     };
   }, [scale, pdfDimensions]);
 
+  // Fit PDF to width
+  const fitToWidth = useCallback((containerWidth: number, sidebarWidth: number) => {
+    console.log('[fitToWidth] Called with:', { containerWidth, sidebarWidth, pdfDimensions });
+    if (!pdfDimensions) {
+      console.log('[fitToWidth] No PDF dimensions, returning');
+      return;
+    }
+
+    // Calculate available width for PDF (container width - sidebar width - padding)
+    const padding = 32; // px-4 on PdfCanvas = 16px on each side
+    const availableWidth = containerWidth - sidebarWidth - padding;
+    console.log('[fitToWidth] Available width:', availableWidth);
+
+    // Calculate scale to fit PDF width
+    const newScale = availableWidth / pdfDimensions.width;
+    console.log('[fitToWidth] Calculated scale:', newScale);
+
+    // Clamp to min/max zoom
+    const clampedScale = Math.max(minScale, Math.min(maxScale, newScale));
+    console.log('[fitToWidth] Clamped scale:', clampedScale);
+    setScale(clampedScale);
+  }, [pdfDimensions, minScale, maxScale, setScale]);
+
   // Callbacks for Canvas component
   const onDocumentLoadSuccess = useCallback((loadedNumPages: number) => {
     setNumPages(loadedNumPages);
@@ -198,6 +221,7 @@ export function PdfViewer({
     goToPreviousPage,
     zoomIn,
     zoomOut,
+    fitToWidth,
     pdfToScreen,
     screenToPdf,
     onDocumentLoadSuccess,

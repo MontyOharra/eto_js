@@ -99,8 +99,8 @@ export function PdfCanvas({ pdfUrl, onError, children, onMouseDown, onMouseMove,
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-auto bg-gray-800 relative" onWheel={handleWheel}>
-      <div className="p-4" style={{ minHeight: '100%', minWidth: '100%' }}>
+    <div className="flex-1 flex flex-col overflow-auto bg-gray-800 relative px-4" onWheel={handleWheel}>
+      <div className="pb-4" style={{ minHeight: '100%', minWidth: '100%' }}>
         <div
           className="relative"
           style={{

@@ -28,6 +28,7 @@ export function PdfControlsSidebar({
     goToPreviousPage,
     setScale,
     pdfDimensions,
+    fitToWidth,
   } = usePdfViewer();
 
   const sidebarRef = useRef<HTMLDivElement>(null);
@@ -44,24 +45,24 @@ export function PdfControlsSidebar({
 
   // Fit PDF width to viewport
   const handleFitToWidth = () => {
-    if (!pdfDimensions || !sidebarRef.current) return;
+    console.log('[PdfControlsSidebar] Fit to width button clicked');
+    if (!pdfDimensions || !sidebarRef.current) {
+      console.log('[PdfControlsSidebar] Missing pdfDimensions or sidebarRef');
+      return;
+    }
 
     // Get the parent container (the flex container with PDF canvas + sidebar)
     const parentContainer = sidebarRef.current.parentElement;
-    if (!parentContainer) return;
+    if (!parentContainer) {
+      console.log('[PdfControlsSidebar] No parent container');
+      return;
+    }
 
-    // Calculate available width for PDF (container width - sidebar width - padding)
+    // Use the context's fitToWidth function
     const containerWidth = parentContainer.clientWidth;
     const sidebarWidth = sidebarRef.current.clientWidth;
-    const padding = 32; // 16px padding on each side (from p-4)
-    const availableWidth = containerWidth - sidebarWidth - padding;
-
-    // Calculate scale to fit PDF width
-    const newScale = availableWidth / pdfDimensions.width;
-
-    // Clamp to min/max zoom
-    const clampedScale = Math.max(MIN_ZOOM / 100, Math.min(MAX_ZOOM / 100, newScale));
-    setScale(clampedScale);
+    console.log('[PdfControlsSidebar] Calling fitToWidth with containerWidth:', containerWidth, 'sidebarWidth:', sidebarWidth);
+    fitToWidth(containerWidth, sidebarWidth);
   };
 
   return (

@@ -206,6 +206,32 @@ export const mockSuccessRun3: EtoRunListItem = {
   matched_template: createMockTemplate(4, 'Complex Order Processing Template'),
 };
 
+export const mockDataExtractionFailureRun: EtoRunListItem = {
+  id: 12,
+  status: 'failure',
+  processing_step: 'data_extraction',
+  started_at: new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString(), // 7 hours ago
+  completed_at: new Date(Date.now() - 7 * 60 * 60 * 1000 + 45000).toISOString(),
+  error_type: 'DataExtractionError',
+  error_message: 'OCR service returned corrupted data: confidence score too low (12%) for reliable extraction',
+  pdf: createMockPdfInfo(2, '2.pdf'),
+  source: createMockEmailSource('sender12@example.com'),
+  matched_template: createMockTemplate(1, 'Standard HAWB Template'),
+};
+
+export const mockTemplateMatchingFailureRun: EtoRunListItem = {
+  id: 13,
+  status: 'failure',
+  processing_step: 'template_matching',
+  started_at: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(), // 8 hours ago
+  completed_at: new Date(Date.now() - 8 * 60 * 60 * 1000 + 35000).toISOString(),
+  error_type: 'TemplateMatchingServiceError',
+  error_message: 'Template matching service error: database connection timeout after 30s',
+  pdf: createMockPdfInfo(4, '4.pdf'),
+  source: createMockEmailSource('sender13@example.com'),
+  matched_template: null,
+};
+
 // =============================================================================
 // Grouped Mock Data by Status
 // =============================================================================
@@ -214,7 +240,7 @@ export const mockRunsByStatus: Record<EtoRunStatus, EtoRunListItem[]> = {
   not_started: [mockNotStartedRun, mockNotStartedRun2],
   processing: [mockProcessingRun],
   success: [mockSuccessRun, mockSuccessRun2, mockSuccessRun3],
-  failure: [mockFailureRun, mockFailureRun2],
+  failure: [mockFailureRun, mockFailureRun2, mockDataExtractionFailureRun, mockTemplateMatchingFailureRun],
   needs_template: [mockNeedsTemplateRun],
   skipped: [mockSkippedRun, mockSkippedRun2],
 };
@@ -231,6 +257,8 @@ export const allMockRuns: EtoRunListItem[] = [
   mockNotStartedRun2,
   mockSkippedRun2,
   mockSuccessRun3,
+  mockDataExtractionFailureRun,
+  mockTemplateMatchingFailureRun,
 ];
 
 // =============================================================================

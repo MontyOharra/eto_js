@@ -81,15 +81,18 @@ export function Module({ data }: ModuleProps) {
 
   return (
     <div
-      className={`bg-gray-800 rounded-lg border-2 ${hasFailed ? 'border-red-600' : 'border-gray-600'} min-w-[400px] w-min`}
+      className={`bg-gray-800 rounded-lg border-2 ${hasFailed ? 'border-red-600' : 'border-gray-600'} min-w-[400px] w-min nodrag nopan`}
       onMouseEnter={() => onModuleMouseEnter?.(moduleInstance.module_instance_id)}
       onMouseLeave={() => onModuleMouseLeave?.()}
+      style={{ pointerEvents: 'auto' }}
     >
       <ModuleHeader
         moduleInstance={moduleInstance}
         template={template}
         onDeleteModule={onDeleteModule}
         executionMode={executionMode}
+        onModuleMouseEnter={onModuleMouseEnter}
+        onModuleMouseLeave={onModuleMouseLeave}
       />
 
       <ModuleNodes
@@ -108,6 +111,8 @@ export function Module({ data }: ModuleProps) {
         onTypeVarFocus={setHighlightedTypeVar}
         executionMode={executionMode}
         executionValues={executionValues}
+        onModuleMouseEnter={onModuleMouseEnter}
+        onModuleMouseLeave={onModuleMouseLeave}
       />
 
       <ModuleConfig
