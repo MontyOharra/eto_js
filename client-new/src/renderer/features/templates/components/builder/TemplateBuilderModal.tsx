@@ -14,6 +14,7 @@ import type { ModuleTemplate } from '../../../../types/moduleTypes';
 interface TemplateBuilderModalProps {
   isOpen: boolean;
   pdfFileId: number | null;
+  pdfFile: File | null; // For new template creation with uploaded PDF
   onClose: () => void;
   onSave: (templateData: TemplateData) => Promise<void>;
 }
@@ -21,7 +22,8 @@ interface TemplateBuilderModalProps {
 export interface TemplateData {
   name: string;
   description: string;
-  source_pdf_id: number;
+  source_pdf_id?: number | null; // Optional for uploaded PDFs
+  pdf_file?: File | null; // For uploaded PDFs
   signature_objects: SignatureObject[];
   extraction_fields: ExtractionField[];
   pipeline_state: PipelineState;
@@ -33,6 +35,7 @@ type BuilderStep = 'signature-objects' | 'extraction-fields' | 'pipeline' | 'tes
 export function TemplateBuilderModal({
   isOpen,
   pdfFileId,
+  pdfFile,
   onClose,
   onSave,
 }: TemplateBuilderModalProps) {
@@ -64,7 +67,12 @@ export function TemplateBuilderModal({
   const [pdfScale, setPdfScale] = useState<number>(1.0);
   const [pdfCurrentPage, setPdfCurrentPage] = useState<number>(1);
 
-  // Use React Query to fetch and cache PDF data
+  // State for uploaded PDF file
+  const [uploadedPdfUrl, setUploadedPdfUrl] = useState<string | null>(null);
+  const [uploadedPdfData, setUploadedPdfData] = useState<any>(null);
+  const [isProcessingUpload, setIsProcessingUpload] = useState(false);
+
+  // Use React Query to fetch and cache PDF data (only for stored PDFs)
   const { data: pdfData, isLoading: pdfLoading, error: pdfError } = usePdfData(pdfFileId);
   const { getModules } = useMockModulesApi();
 
@@ -83,10 +91,65 @@ export function TemplateBuilderModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only load once on mount
 
-  // Extract PDF data from query result
-  const pdfObjects = pdfData?.objectsData;
-  const pdfUrl = pdfData?.url || '';
-  const pdfDataLoaded = !!pdfData;
+  // Process uploaded PDF file
+  useEffect(() => {
+    if (!pdfFile) {
+      setUploadedPdfUrl(null);
+      setUploadedPdfData(null);
+      return;
+    }
+
+    setIsProcessingUpload(true);
+
+    // Create blob URL for PDF viewer
+    const blobUrl = URL.createObjectURL(pdfFile);
+    setUploadedPdfUrl(blobUrl);
+
+    // TODO: In production, extract PDF objects via API call
+    // For now, create mock PDF objects data
+    // This would normally be done by sending the file to a processing endpoint
+    const mockObjectsData = {
+      pages: [
+        {
+          page_num: 0,
+          objects: [
+            // Mock objects will be populated when user draws them
+          ],
+        },
+      ],
+    };
+
+    const mockMetadata = {
+      id: -1, // Temporary ID for uploaded file
+      filename: pdfFile.name,
+      file_size: pdfFile.size,
+      num_pages: 1, // Will be updated when PDF loads
+      upload_timestamp: new Date().toISOString(),
+      email_id: null,
+      eto_run_id: null,
+    };
+
+    setUploadedPdfData({
+      objectsData: mockObjectsData,
+      url: blobUrl,
+      metadata: mockMetadata,
+      emailData: null,
+    });
+
+    setIsProcessingUpload(false);
+
+    // Cleanup blob URL on unmount
+    return () => {
+      URL.revokeObjectURL(blobUrl);
+    };
+  }, [pdfFile]);
+
+  // Extract PDF data from either stored PDF or uploaded file
+  const activePdfData = pdfFile ? uploadedPdfData : pdfData;
+  const pdfObjects = activePdfData?.objectsData;
+  const pdfUrl = activePdfData?.url || '';
+  const pdfDataLoaded = !!activePdfData;
+  const isPdfLoading = pdfFile ? isProcessingUpload : pdfLoading;
 
   // Calculate completed steps
   const completedSteps = useMemo(() => {
@@ -139,6 +202,7 @@ export function TemplateBuilderModal({
         name: templateName,
         description: templateDescription,
         source_pdf_id: pdfFileId,
+        pdf_file: pdfFile,
         signature_objects: signatureObjects,
         extraction_fields: extractionFields,
         pipeline_state: pipelineState,
@@ -247,6 +311,8 @@ export function TemplateBuilderModal({
     setTestResults(null);
     setPdfScale(1.0);
     setPdfCurrentPage(1);
+    setUploadedPdfUrl(null);
+    setUploadedPdfData(null);
     onClose();
   };
 
@@ -282,24 +348,26 @@ export function TemplateBuilderModal({
   };
 
   // Early return after all hooks are defined
-  if (!isOpen || !pdfFileId) return null;
+  if (!isOpen || (!pdfFileId && !pdfFile)) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="bg-gray-900 rounded-lg w-full max-w-[95vw] h-[95vh] overflow-hidden flex flex-col shadow-2xl border border-gray-700">
         {/* Header */}
         <TemplateBuilderHeader
-          pdfMetadata={pdfData?.metadata ?? null}
-          emailData={pdfData?.emailData}
+          pdfMetadata={activePdfData?.metadata ?? null}
+          emailData={activePdfData?.emailData}
           onClose={handleClose}
         />
 
         {/* Main Content */}
         <div className="flex-1 overflow-y-auto">
           {/* Loading State - only show during initial load */}
-          {!pdfDataLoaded && pdfLoading && (
+          {!pdfDataLoaded && isPdfLoading && (
             <div className="h-full flex items-center justify-center">
-              <div className="text-white text-lg">Loading PDF...</div>
+              <div className="text-white text-lg">
+                {pdfFile ? 'Processing PDF...' : 'Loading PDF...'}
+              </div>
             </div>
           )}
 

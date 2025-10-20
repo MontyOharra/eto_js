@@ -49,7 +49,10 @@ export type GetTemplateDetailResponse = TemplateDetail;
 export interface PostTemplateCreateRequest {
   name: string; // required, 1-255 chars
   description?: string; // optional, max 1000 chars
-  source_pdf_id: number; // required
+
+  // PDF source - either existing file or new upload
+  // If source_pdf_id is null, pdf_file must be provided as multipart/form-data
+  source_pdf_id?: number | null; // optional - for templates from existing PDFs
 
   // Step 1: Signature objects
   signature_objects: SignatureObject[]; // required, min: 1
@@ -60,6 +63,8 @@ export interface PostTemplateCreateRequest {
   // Step 3: Pipeline definition
   pipeline_state: PipelineState;
   visual_state: VisualState;
+
+  // Note: pdf_file (File) will be sent as multipart/form-data when source_pdf_id is null
 }
 
 export interface PostTemplateCreateResponse {
@@ -145,14 +150,29 @@ export type GetTemplateVersionDetailResponse = TemplateVersionDetail;
 // POST /pdf-templates/simulate - Simulate full ETO process
 // =============================================================================
 
-export interface PostTemplateSimulateRequest {
-  pdf_file_id: number; // required
-
-  // Template definition to test (all 3 wizard steps)
+// Base template data shared by both request types
+interface TemplateSimulationData {
   signature_objects: SignatureObject[];
   extraction_fields: ExtractionField[];
   pipeline_state: PipelineState;
 }
+
+// Request variant for stored PDFs (from ETO runs)
+export interface PostTemplateSimulateStoredRequest extends TemplateSimulationData {
+  pdf_source: 'stored';
+  pdf_file_id: number;
+}
+
+// Request variant for uploaded PDFs (template builder)
+export interface PostTemplateSimulateUploadRequest extends TemplateSimulationData {
+  pdf_source: 'upload';
+  // pdf_file: File will be sent as multipart/form-data
+}
+
+// Discriminated union of both request types
+export type PostTemplateSimulateRequest =
+  | PostTemplateSimulateStoredRequest
+  | PostTemplateSimulateUploadRequest;
 
 export interface ValidationResult {
   field_label: string;

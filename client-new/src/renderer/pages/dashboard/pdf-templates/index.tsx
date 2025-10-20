@@ -30,6 +30,7 @@ function TemplatesPage() {
   // Template Builder Modal State
   const [isBuilderOpen, setIsBuilderOpen] = useState(false);
   const [builderPdfFileId, setBuilderPdfFileId] = useState<number | null>(null);
+  const [builderPdfFile, setBuilderPdfFile] = useState<File | null>(null);
 
   // Fetch templates on mount
   useEffect(() => {
@@ -144,15 +145,37 @@ function TemplatesPage() {
   };
 
   const handleCreateTemplate = () => {
-    // For now, use a mock PDF file ID (101)
-    // In real implementation, user would select a PDF first
-    setBuilderPdfFileId(101);
-    setIsBuilderOpen(true);
+    // Create a hidden file input element
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/pdf';
+
+    input.onchange = (e: Event) => {
+      const target = e.target as HTMLInputElement;
+      const file = target.files?.[0];
+
+      if (file) {
+        // Validate file type
+        if (file.type !== 'application/pdf') {
+          alert('Please select a PDF file');
+          return;
+        }
+
+        // Store the PDF file and open the builder
+        setBuilderPdfFile(file);
+        setBuilderPdfFileId(null); // No stored PDF ID for new uploads
+        setIsBuilderOpen(true);
+      }
+    };
+
+    // Trigger the file picker
+    input.click();
   };
 
   const handleCloseBuilder = () => {
     setIsBuilderOpen(false);
     setBuilderPdfFileId(null);
+    setBuilderPdfFile(null);
   };
 
   const handleSaveTemplate = async (templateData: TemplateData) => {
@@ -351,6 +374,7 @@ function TemplatesPage() {
       <TemplateBuilderModal
         isOpen={isBuilderOpen}
         pdfFileId={builderPdfFileId}
+        pdfFile={builderPdfFile}
         onClose={handleCloseBuilder}
         onSave={handleSaveTemplate}
       />
