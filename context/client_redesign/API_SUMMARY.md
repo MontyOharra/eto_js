@@ -3,7 +3,7 @@
 This document summarizes all API endpoints and type definitions referenced in the frontend codebase. This serves as a comparison point for backend implementation to ensure unified design.
 
 **Last Updated**: 2025-10-20
-**Total Endpoints**: 38 across 6 feature domains
+**Total Endpoints**: 37 across 6 feature domains
 
 ---
 
@@ -12,7 +12,7 @@ This document summarizes all API endpoints and type definitions referenced in th
 1. [Templates API](#1-templates-api) (10 endpoints)
 2. [ETO Runs API](#2-eto-runs-api) (7 endpoints)
 3. [Email Configurations API](#3-email-configurations-api) (10 endpoints)
-4. [Modules API](#4-modules-api) (2 endpoints)
+4. [Modules API](#4-modules-api) (1 endpoint)
 5. [Pipelines API](#5-pipelines-api) (5 endpoints)
 6. [PDF Files API](#6-pdf-files-api) (4 endpoints)
 
@@ -787,32 +787,6 @@ interface ModuleTemplate {
     }>;
   };
   config_schema: object;  // JSON Schema for configuration UI
-}
-```
-
-### 4.2 POST /modules/execute
-
-Execute a module for testing purposes.
-
-**Request**:
-```typescript
-interface ModuleExecuteRequest {
-  module_id: string;
-  inputs: Record<string, any>;
-  config: Record<string, any>;
-  use_cache?: boolean;
-}
-```
-
-**Response**:
-```typescript
-interface ModuleExecuteResponse {
-  success: boolean;
-  module_id: string;
-  outputs: Record<string, any>;
-  error: string | null;
-  performance_ms: number;
-  cache_used: boolean;
 }
 ```
 

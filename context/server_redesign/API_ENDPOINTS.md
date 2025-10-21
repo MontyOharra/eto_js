@@ -409,6 +409,7 @@ Return data directly (no `success` wrapper):
 | POST | `/eto-runs/reprocess` | Reprocess runs (bulk): reset to not_started, clear stage records |
 | POST | `/eto-runs/skip` | Skip runs (bulk): set status to skipped |
 | DELETE | `/eto-runs` | Delete runs (bulk): permanently remove (only if skipped) |
+| POST | `/eto-runs/{id}/reprocess` | Reprocess single run (convenience endpoint) |
 
 ---
 
@@ -753,6 +754,34 @@ Return data directly (no `success` wrapper):
   - `{"detail": "Can only delete skipped runs. Invalid runs: [123, 456]"}`
 - `404`: `{"detail": "One or more runs not found: [123, 456]"}`
 - `422`: Pydantic validation error (invalid request body)
+- `500`: `{"detail": "Database error"}`
+
+---
+
+### `POST /eto-runs/{id}/reprocess`
+
+**Description:** Reprocess single run (convenience endpoint - alternative to bulk operation). Resets run to `not_started` and clears all stage records.
+
+**Path Parameters:**
+- `id`: Run ID (integer)
+
+**Request:** No body
+
+**Validation Rules:**
+- Run must exist
+- Run status must NOT be `processing`
+- Run status must NOT be `success` (cannot reprocess successful runs)
+
+**Response:** `204 No Content`
+
+*(No response body)*
+
+**Errors:**
+- `400`: Validation failed
+  - `{"detail": "Run is currently processing"}`
+  - `{"detail": "Run has already succeeded"}`
+  - `{"detail": "Cannot reprocess successful runs"}`
+- `404`: `{"detail": "Run not found"}`
 - `500`: `{"detail": "Database error"}`
 
 ---
@@ -1138,12 +1167,13 @@ Return data directly (no `success` wrapper):
 
 **Description:** Create new template from wizard data (final save). Creates template + version 1 atomically. Sets status to `inactive` initially (user must activate).
 
-**Request Body:**
+**Request:** `multipart/form-data`
 ```typescript
 {
   "name": string,                    // required, 1-255 chars
   "description"?: string,             // optional, max 1000 chars
-  "source_pdf_id": number,            // required, from POST /pdf-files
+  "source_pdf_id"?: number | null,   // optional - for existing PDFs
+  // pdf_file: File (if source_pdf_id is null - multipart form field)
 
   // Step 1: Signature objects
   "signature_objects": [
@@ -1197,7 +1227,8 @@ Return data directly (no `success` wrapper):
 - Template starts with `status = "inactive"` (must call activate to use for matching)
 - Pipeline compilation happens during this operation (transparent to frontend)
 - Backend may deduplicate compiled plan if identical pipeline already exists
-- PDF must already exist (created via POST /pdf-files or from ETO run)
+- PDF can be provided via `source_pdf_id` (existing PDF) OR `pdf_file` (upload new PDF)
+- If `pdf_file` provided, PDF is stored and `source_pdf_id` is generated automatically
 
 **Errors:**
 - `400`: Business logic errors
@@ -1450,10 +1481,49 @@ Return data directly (no `success` wrapper):
 
 **Description:** Simulate full ETO process (template matching → data extraction → pipeline execution) without database persistence. Used for testing during template creation/editing. Action modules simulate only (no actual execution).
 
-**Request Body:**
+**Request:** `multipart/form-data` (discriminated union)
+
+**Variant 1 - Stored PDF:**
 ```typescript
 {
-  "pdf_file_id": number,              // required
+  "pdf_source": "stored",
+  "pdf_file_id": number,              // required when pdf_source = "stored"
+
+  // Template definition to test (all 3 wizard steps)
+  "signature_objects": [
+    {
+      "object_type": string,
+      "page": number,
+      "bbox": [number, number, number, number],
+      // Additional properties
+    }
+  ],
+
+  "extraction_fields": [
+    {
+      "field_id": string,
+      "label": string,
+      "description"?: string,
+      "page": number,
+      "bbox": [number, number, number, number],
+      "required": boolean,
+      "validation_regex"?: string
+    }
+  ],
+
+  "pipeline_state": {
+    "entry_points": [...],
+    "modules": [...],
+    "connections": [...]
+  }
+}
+```
+
+**Variant 2 - Uploaded PDF:**
+```typescript
+{
+  "pdf_source": "upload",
+  // pdf_file: File (multipart form field)
 
   // Template definition to test (all 3 wizard steps)
   "signature_objects": [
@@ -2000,10 +2070,10 @@ Return data directly (no `success` wrapper):
 
 ## Phase 3 Complete! 🎉
 
-All 7 routers have been fully specified with **36 total endpoints**:
+All 7 routers have been fully specified with **37 total endpoints**:
 
 - ✅ Router 1: `/email-configs` - 10 endpoints
-- ✅ Router 2: `/eto-runs` - 6 endpoints
+- ✅ Router 2: `/eto-runs` - 7 endpoints
 - ✅ Router 3: `/pdf-files` - 4 endpoints
 - ✅ Router 4: `/pdf-templates` - 10 endpoints
 - ✅ Router 5: `/modules` - 1 endpoint
