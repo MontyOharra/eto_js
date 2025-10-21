@@ -2,9 +2,40 @@
 
 ## Current Status
 
-**Phase:** Frontend Development - Template Builder & Pipeline Integration
+**Phase:** Backend Implementation - Router & Schema Setup
 
-**Latest Work (2025-10-18):**
+**Latest Work (2025-10-21):**
+- ✅ All 7 router files created with endpoint definitions (pass bodies)
+- ✅ All 7 schema files created with Pydantic models (~830 lines total)
+- ✅ Import statements fixed and verified across all routers and schemas
+- ✅ Router and schema package exports properly configured
+- 📍 Ready for error handling implementation
+
+**Router Implementation Details:**
+1. **email_configs.py** - 10 endpoints (list, get, create, update, delete, activate, deactivate, discover accounts/folders, validate)
+2. **eto.py** - 6 endpoints (list, get, upload, bulk reprocess/skip/delete)
+3. **pdf_files.py** - 4 endpoints (metadata, download, objects, process-objects) - NEW FILE CREATED
+4. **pdf_templates.py** - 9 endpoints (list, get, create, update, activate/deactivate, versions, simulate)
+5. **modules.py** - 1 endpoint (list catalog)
+6. **pipelines.py** - 5 endpoints (list, get, create, update, delete - dev/testing only)
+7. **health.py** - 1 endpoint (health check)
+
+**Schema Implementation Details:**
+- Created comprehensive Pydantic models for all request/response types
+- No type collation yet - duplicated types intentionally kept separate per design
+- Key models: PipelineState, ExtractionField, SignatureObject, EtoRunDetail, etc.
+- Fixed import structure: Updated `api/schemas/__init__.py` with all exports
+- Added `pdf_files_router` to `api/routers/__init__.py`
+
+**Next Immediate Task:**
+Add error handling to all endpoint functions as specified in API_ENDPOINTS.md:
+- 400 Bad Request (business logic errors)
+- 404 Not Found (resource not found)
+- 409 Conflict (state conflicts)
+- 422 Unprocessable Entity (validation errors)
+- 500 Internal Server Error (unexpected failures)
+
+**Previous Work (2025-10-18):**
 - ✅ Pipeline builder (step 3) integrated into template builder
 - ✅ Entry points auto-generated from extraction fields
 - ✅ Pipelines page created with mock API

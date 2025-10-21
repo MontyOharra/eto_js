@@ -1,0 +1,33 @@
+# Core FastAPI and server dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+jsonschema>=4.0.0
+pydantic==2.5.0
+python-multipart==0.0.6
+
+# Environment and configuration
+python-dotenv==1.0.0
+
+# Dask for pipeline execution (to be used later)
+dask[complete]==2023.12.0
+
+# Graph operations for pipeline compilation and validation
+networkx>=3.0
+
+# Database
+sqlalchemy==2.0.23
+pyodbc==5.0.1  # SQL Server driver for database connectivity
+
+# Logging and utilities
+python-json-logger==2.0.7
+
+# Windows integration (for email processing)
+pywin32>=306
+
+# PDF Processing
+PyPDF2>=3.0.1
+pdfplumber>=0.7.6
+
+# Data processing
+requests>=2.31.0
+sqlparse>=0.4.0

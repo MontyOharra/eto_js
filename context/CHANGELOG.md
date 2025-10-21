@@ -5,6 +5,110 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-10-21 15:00] — Backend Router & Schema Implementation Complete
+
+### Spec / Intent
+- Implement all 7 API routers with endpoint definitions in server-new/ directory
+- Create comprehensive Pydantic schema models for all request/response types
+- Fix and verify import statements across all router and schema files
+- Establish clean package structure for API layer
+
+### Changes Made
+
+**Router Files Created/Updated** (server-new/src/api/routers/):
+1. `email_configs.py` - 10 endpoints for email configuration management
+   - List, get, create, update, delete operations
+   - Activation/deactivation endpoints
+   - Discovery endpoints (accounts, folders)
+   - Validation endpoint
+
+2. `eto.py` - 6 endpoints for ETO run processing
+   - List and detail views
+   - Manual PDF upload
+   - Bulk operations (reprocess, skip, delete)
+
+3. `pdf_files.py` - 4 endpoints for PDF file access (NEW FILE)
+   - Metadata retrieval
+   - PDF download/streaming
+   - Object extraction (stored & uploaded PDFs)
+
+4. `pdf_templates.py` - 9 endpoints for template management
+   - CRUD operations
+   - Activation/deactivation
+   - Version management
+   - Simulation endpoint for wizard testing
+
+5. `modules.py` - 1 endpoint for module catalog
+
+6. `pipelines.py` - 5 endpoints for pipeline CRUD (dev/testing only)
+
+7. `health.py` - 1 endpoint for system health monitoring
+
+**Schema Files Created** (server-new/src/api/schemas/):
+- `email_configs.py` (184 lines) - FilterRule, EmailConfigDetail, CreateEmailConfigRequest, etc.
+- `eto_runs.py` (148 lines) - EtoRunDetail, PipelineExecutionStep, ListEtoRunsResponse, etc.
+- `pdf_files.py` (92 lines) - PDF object types (TextWord, GraphicRect, etc.), GetPdfObjectsResponse
+- `pdf_templates.py` (245 lines) - PipelineState, ExtractionField, SimulateTemplateResponse, etc.
+- `modules.py` (44 lines) - ModuleCatalogItem, ModuleInputPin, ModuleOutputPin
+- `pipelines.py` (88 lines) - PipelineListItem, CreatePipelineRequest, UpdatePipelineRequest
+- `health.py` (31 lines) - HealthCheckResponse, ServiceStatus
+
+**Import Structure Fixed:**
+- Updated `api/schemas/__init__.py` - Added all schema model exports (~230 lines)
+- Updated `api/routers/__init__.py` - Added pdf_files_router export
+- Verified all import paths are syntactically correct
+- Added note about intentional PipelineState duplication (no type collation yet)
+
+**Total Implementation:**
+- 36 endpoint definitions across 7 routers
+- ~830 lines of Pydantic schema definitions
+- All endpoints have proper type annotations (response_model + return types)
+- All endpoints have empty `pass` bodies (ready for implementation)
+
+### Key Technical Decisions
+
+**No Type Collation Yet:**
+- Intentionally kept duplicate type definitions separate (e.g., PipelineState in both pdf_templates.py and pipelines.py)
+- Using only base Python types in schemas
+- Will consolidate shared types in later refactoring phase
+
+**Import Organization:**
+- All routers import directly from `api.schemas.{module}`
+- Schema package properly exports all models via `__init__.py`
+- Router package exports all router instances
+
+**Status Code Assignments:**
+- 201 Created for POST operations
+- 204 No Content for DELETE operations
+- 200 OK for all other successful operations
+
+**Multipart Form Data:**
+- File upload endpoints properly typed with `UploadFile = File(...)`
+- PDF Files endpoint supports both stored and uploaded PDFs
+
+### Current State
+- ✅ All 7 router files implemented with endpoint skeletons
+- ✅ All 7 schema files implemented with comprehensive models
+- ✅ Import statements verified and working
+- ✅ Package structure properly configured
+- ✅ Ready for error handling implementation
+- 📍 Next: Add try/except blocks for error handling per API_ENDPOINTS.md
+
+### Next Actions
+- Add error handling to all endpoints (400, 404, 409, 422, 500)
+- Implement service layer integration
+- Add database repository connections
+- Implement actual endpoint logic
+
+### Notes
+- Working in server-new/ directory (unified FastAPI server)
+- All work based on API_ENDPOINTS.md specification
+- Frontend API expectations documented in API_SUMMARY.md
+- Design follows frontend-first, top-down approach
+- Foundation set for full backend implementation
+
+---
+
 ## [2025-10-20 14:00] — Template Detail Modal with Version Navigation & API Summary Documentation
 
 ### Spec / Intent
