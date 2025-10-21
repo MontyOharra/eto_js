@@ -1022,7 +1022,7 @@ Return data directly (no `success` wrapper):
 **Description:** List all templates with summary information including version counts and usage statistics.
 
 **Query Parameters:**
-- `status` (optional): `draft` | `active` | `inactive` (default: all statuses)
+- `status` (optional): `active` | `inactive` (default: all statuses)
 - `sort_by` (optional): `name` | `status` | `usage_count` (default: `name`)
 - `sort_order` (optional): `asc` | `desc` (default: `asc`)
 - `limit` (optional): number (default: 50, max: 200)
@@ -1036,7 +1036,7 @@ Return data directly (no `success` wrapper):
       "id": number,
       "name": string,
       "description": string | null,
-      "status": "draft" | "active" | "inactive",
+      "status": "active" | "inactive",
       "source_pdf_id": number,
 
       // Current version summary
@@ -1056,7 +1056,7 @@ Return data directly (no `success` wrapper):
 ```
 
 **Notes:**
-- `status` will be `draft` during initial creation (after POST /pdf-templates), becomes `active` after activation
+- `status` is `inactive` during initial creation (after POST /pdf-templates), becomes `active` after activation
 - `current_version` represents the version currently used for template matching
 - `total_versions` includes all finalized versions
 
@@ -1081,7 +1081,7 @@ Return data directly (no `success` wrapper):
   "name": string,
   "description": string | null,
   "source_pdf_id": number,
-  "status": "draft" | "active" | "inactive",
+  "status": "active" | "inactive",
   "current_version_id": number,
 
   // Current version details (denormalized for convenience)
@@ -1136,7 +1136,7 @@ Return data directly (no `success` wrapper):
 
 ### `POST /pdf-templates`
 
-**Description:** Create new template from wizard data (final save). Creates template + version 1 atomically. Sets status to `draft` initially (user must activate).
+**Description:** Create new template from wizard data (final save). Creates template + version 1 atomically. Sets status to `inactive` initially (user must activate).
 
 **Request Body:**
 ```typescript
@@ -1185,7 +1185,7 @@ Return data directly (no `success` wrapper):
 {
   "id": number,                       // Created template ID
   "name": string,
-  "status": "draft",                  // Always starts as draft
+  "status": "inactive",               // Always starts as inactive
   "current_version_id": number,       // Version 1 ID
   "current_version_num": 1,
   "pipeline_definition_id": number    // Created pipeline ID
@@ -1194,7 +1194,7 @@ Return data directly (no `success` wrapper):
 
 **Notes:**
 - Creates template + version 1 + pipeline definition atomically
-- Template starts with `status = "draft"` (must call activate to use for matching)
+- Template starts with `status = "inactive"` (must call activate to use for matching)
 - Pipeline compilation happens during this operation (transparent to frontend)
 - Backend may deduplicate compiled plan if identical pipeline already exists
 - PDF must already exist (created via POST /pdf-files or from ETO run)
@@ -1262,7 +1262,7 @@ Return data directly (no `success` wrapper):
 {
   "id": number,
   "name": string,
-  "status": "draft" | "active" | "inactive",  // Status unchanged
+  "status": "active" | "inactive",            // Status unchanged
   "current_version_id": number,               // Updated to new version ID
   "current_version_num": number,              // Incremented version number
   "pipeline_definition_id": number            // New pipeline ID
@@ -1286,7 +1286,7 @@ Return data directly (no `success` wrapper):
 
 ### `DELETE /pdf-templates/{id}`
 
-**Description:** Delete template. Only allowed if template has never been used for ETO matching (usage_count = 0 on all versions) or if status is `draft`.
+**Description:** Delete template. Only allowed if template has never been used for ETO matching (usage_count = 0 on all versions).
 
 **Path Parameters:**
 - `id`: Template ID (integer)
@@ -1296,7 +1296,6 @@ Return data directly (no `success` wrapper):
 *(No response body)*
 
 **Deletion Rules:**
-- Can delete if: `status = "draft"` (newly created, never activated)
 - Can delete if: All versions have `usage_count = 0` (never matched any ETO run)
 - Cannot delete if: Any version has `usage_count > 0` (historical integrity)
 

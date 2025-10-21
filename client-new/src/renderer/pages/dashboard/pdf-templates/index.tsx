@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { useMockTemplatesApi } from '../../../features/templates/hooks';
-import { TemplateCard, TemplateBuilderModal, TemplateData } from '../../../features/templates/components';
+import { TemplateCard, TemplateBuilderModal, TemplateDetailModal, TemplateData } from '../../../features/templates/components';
 import { TemplateListItem, TemplateStatus } from '../../../features/templates/types';
 
 export const Route = createFileRoute('/dashboard/pdf-templates/')({
@@ -17,7 +17,6 @@ function TemplatesPage() {
     createTemplate,
     activateTemplate,
     deactivateTemplate,
-    deleteTemplate,
     isLoading,
     error,
   } = useMockTemplatesApi();
@@ -31,6 +30,10 @@ function TemplatesPage() {
   const [isBuilderOpen, setIsBuilderOpen] = useState(false);
   const [builderPdfFileId, setBuilderPdfFileId] = useState<number | null>(null);
   const [builderPdfFile, setBuilderPdfFile] = useState<File | null>(null);
+
+  // Template Detail Modal State
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [detailTemplateId, setDetailTemplateId] = useState<number | null>(null);
 
   // Fetch templates on mount
   useEffect(() => {
@@ -94,15 +97,23 @@ function TemplatesPage() {
   // ==========================================================================
 
   const handleView = (templateId: number) => {
-    console.log('View template:', templateId);
-    // TODO: Navigate to template detail page or open modal
-    // navigate({ to: `/dashboard/pdf-templates/${templateId}` });
+    setDetailTemplateId(templateId);
+    setIsDetailOpen(true);
   };
 
-  const handleEdit = (templateId: number) => {
+  const handleCloseDetail = () => {
+    setIsDetailOpen(false);
+    setDetailTemplateId(null);
+  };
+
+  const handleEditFromDetail = (templateId: number) => {
+    // Close detail modal
+    setIsDetailOpen(false);
+    setDetailTemplateId(null);
+
+    // TODO: Open template editor/wizard
     console.log('Edit template:', templateId);
-    // TODO: Navigate to template editor/wizard
-    // navigate({ to: `/dashboard/pdf-templates/${templateId}/edit` });
+    // This would navigate to the template editor or open the builder in edit mode
   };
 
   const handleActivate = async (templateId: number) => {
@@ -122,25 +133,6 @@ function TemplatesPage() {
       await loadTemplates();
     } catch (err) {
       console.error('Failed to deactivate template:', err);
-    }
-  };
-
-  const handleDelete = async (templateId: number) => {
-    // Confirm deletion
-    if (
-      !window.confirm(
-        'Are you sure you want to delete this template? This action cannot be undone.'
-      )
-    ) {
-      return;
-    }
-
-    try {
-      await deleteTemplate(templateId);
-      // Reload templates after successful deletion
-      await loadTemplates();
-    } catch (err) {
-      console.error('Failed to delete template:', err);
     }
   };
 
@@ -253,7 +245,6 @@ function TemplatesPage() {
               <option value="all">All</option>
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
-              <option value="draft">Draft</option>
             </select>
           </div>
 
@@ -315,18 +306,11 @@ function TemplatesPage() {
               key={template.id}
               template={template}
               onView={handleView}
-              onEdit={handleEdit}
               onActivate={
                 template.status !== 'active' ? handleActivate : undefined
               }
               onDeactivate={
                 template.status === 'active' ? handleDeactivate : undefined
-              }
-              onDelete={
-                template.status === 'draft' ||
-                template.current_version.usage_count === 0
-                  ? handleDelete
-                  : undefined
               }
             />
           ))}
@@ -377,6 +361,14 @@ function TemplatesPage() {
         pdfFile={builderPdfFile}
         onClose={handleCloseBuilder}
         onSave={handleSaveTemplate}
+      />
+
+      {/* Template Detail Modal */}
+      <TemplateDetailModal
+        isOpen={isDetailOpen}
+        templateId={detailTemplateId}
+        onClose={handleCloseDetail}
+        onEdit={handleEditFromDetail}
       />
     </div>
   );

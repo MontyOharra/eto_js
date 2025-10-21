@@ -1,6 +1,6 @@
 // Domain types for Templates feature
 
-export type TemplateStatus = 'draft' | 'active' | 'inactive';
+export type TemplateStatus = 'active' | 'inactive';
 
 export type PdfObjectType =
   | 'text_word'

@@ -6,10 +6,6 @@ interface TemplateStatusBadgeProps {
 
 export function TemplateStatusBadge({ status }: TemplateStatusBadgeProps) {
   const statusConfig = {
-    draft: {
-      text: 'Draft',
-      classes: 'bg-gray-700 text-gray-300 border-gray-600',
-    },
     active: {
       text: 'Active',
       classes: 'bg-green-900 text-green-300 border-green-700',

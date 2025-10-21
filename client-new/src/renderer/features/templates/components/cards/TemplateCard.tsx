@@ -4,19 +4,15 @@ import { TemplateStatusBadge } from '../ui/TemplateStatusBadge';
 interface TemplateCardProps {
   template: TemplateListItem;
   onView?: (templateId: number) => void;
-  onEdit?: (templateId: number) => void;
   onActivate?: (templateId: number) => void;
   onDeactivate?: (templateId: number) => void;
-  onDelete?: (templateId: number) => void;
 }
 
 export function TemplateCard({
   template,
   onView,
-  onEdit,
   onActivate,
   onDeactivate,
-  onDelete,
 }: TemplateCardProps) {
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-lg p-5 hover:border-gray-600 transition-colors">
@@ -68,15 +64,7 @@ export function TemplateCard({
             View Details
           </button>
         )}
-        {onEdit && (
-          <button
-            onClick={() => onEdit(template.id)}
-            className="px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors"
-          >
-            Edit
-          </button>
-        )}
-        {template.status === 'draft' && onActivate && (
+        {template.status === 'inactive' && onActivate && (
           <button
             onClick={() => onActivate(template.id)}
             className="px-3 py-1.5 text-sm bg-green-600 hover:bg-green-700 text-white rounded transition-colors"
@@ -92,24 +80,6 @@ export function TemplateCard({
             Deactivate
           </button>
         )}
-        {template.status === 'inactive' && onActivate && (
-          <button
-            onClick={() => onActivate(template.id)}
-            className="px-3 py-1.5 text-sm bg-green-600 hover:bg-green-700 text-white rounded transition-colors"
-          >
-            Reactivate
-          </button>
-        )}
-        {(template.status === 'draft' ||
-          template.current_version.usage_count === 0) &&
-          onDelete && (
-            <button
-              onClick={() => onDelete(template.id)}
-              className="px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
-            >
-              Delete
-            </button>
-          )}
       </div>
     </div>
   );

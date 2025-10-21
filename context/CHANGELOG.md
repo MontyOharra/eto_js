@@ -5,6 +5,140 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-10-20 14:00] — Template Detail Modal with Version Navigation & API Summary Documentation
+
+### Spec / Intent
+- Build TemplateDetailModal component with read-only PDF viewer and version navigation
+- Display signature objects and extraction fields as color-coded overlays on PDF
+- Implement version history viewer with left/right arrow navigation
+- Create comprehensive API_SUMMARY.md documenting all 38 frontend endpoints
+- Simplify mock template data to single template for focused testing
+
+### Changes Made
+
+**TemplateDetailModal Component** (`TemplateDetailModal.tsx` - NEW, 827 lines)
+- Complete read-only modal for viewing template details across all versions
+- Three-tab interface: Overview, Signature Objects, Extraction Fields
+- Version navigation with left arrow (older) and right arrow (newer)
+- Integrates PdfViewer with custom overlay components
+- Color-coded object display matching template builder
+- Fixed page indexing: PDF viewer 1-indexed, objects 0-indexed (filter: `obj.page === currentPage - 1`)
+
+**Signature Objects Viewer:**
+- Custom SignatureObjectsOverlay component with color-matched rectangles
+- Sidebar showing objects grouped by type (text_word, graphic_rect, etc.)
+- Color indicators matching template builder (`OBJECT_TYPE_COLORS`)
+- Individual object cards with page, bbox, and type-specific properties
+- Read-only display (pointerEvents: 'none')
+
+**Extraction Fields Viewer:**
+- Custom ExtractionFieldsOverlay component
+- Purple boxes for extraction field locations
+- Field details in sidebar: label, description, required status, validation regex
+- Page filtering to show only fields on current page
+
+**Version Navigation:**
+- Left arrow (←) decrements version number (shows older versions)
+- Right arrow (→) increments version number (shows newer versions)
+- Version display: "Version X of Y"
+- Disable buttons at boundaries (oldest/newest)
+- Fetches version detail from API on navigation
+
+**Mock Data Simplification** (`mocks/data.ts`):
+- Removed all templates except "Commercial Invoice Template"
+- Updated template ID to 1, source_pdf_id to 2 (points to 2.pdf)
+- Simplified allMockTemplates array to single item
+- Updated mockTemplatesByStatus and mockTemplateDetailsById accordingly
+- All version data updated to reference template_id: 1
+
+**API Summary Document** (`context/client_redesign/API_SUMMARY.md` - NEW, 1000+ lines):
+- Comprehensive documentation of 38 API endpoints across 6 domains
+- **Templates API** (10 endpoints): CRUD, versioning, activation, simulation
+- **ETO Runs API** (7 endpoints): List, detail, upload, bulk operations
+- **Email Configurations API** (10 endpoints): CRUD, activation, discovery, validation
+- **Modules API** (2 endpoints): Catalog and execution
+- **Pipelines API** (5 endpoints): CRUD operations (dev/testing only)
+- **PDF Files API** (4 endpoints): Metadata, download, objects, processing
+- Full TypeScript type definitions for all requests/responses
+- Validation rules, query parameters, common patterns documented
+- Purpose: Compare frontend design with future backend implementation
+
+**Files Modified:**
+- `TemplateDetailModal.tsx` - Main modal component
+- `templates/mocks/data.ts` - Simplified to one template
+- `templates/components/modals/index.ts` - Export TemplateDetailModal
+- `templates/components/index.ts` - Re-export from modals
+- `pages/dashboard/pdf-templates/index.tsx` - Wire up detail modal handlers
+
+### Key Technical Decisions
+
+**Page Indexing System:**
+- PDF viewer uses 1-based indexing (pages 1, 2, 3...)
+- Template objects use 0-based indexing (page: 0, 1, 2...)
+- Filter adjustment: `obj.page === currentPage - 1`
+- Keeps UX intuitive (page 1) while matching backend data structure
+
+**Color Coding:**
+```typescript
+const OBJECT_TYPE_COLORS: Record<string, string> = {
+  text_word: '#ff0000',      // Red
+  text_line: '#00ff00',      // Green
+  graphic_rect: '#0000ff',   // Blue
+  graphic_line: '#ffff00',   // Yellow
+  graphic_curve: '#ff00ff',  // Magenta
+  image: '#00ffff',          // Cyan
+  table: '#ffa500',          // Orange
+};
+```
+
+**Read-only Overlays:**
+- Used `pointerEvents: 'none'` to prevent interaction
+- Same visual display as template builder but non-interactive
+- Consistent color scheme between builder and viewer
+
+**Version Navigation Logic:**
+- versions array sorted newest to oldest
+- currentVersionIndex: 0 = newest, length-1 = oldest
+- Left arrow increments index (older versions)
+- Right arrow decrements index (newer versions)
+
+### Debugging Journey
+
+1. **Import Path Error**: Changed `../../../` to `../../../../` (4 levels deep from modals/)
+2. **Objects Not Showing**: Added console logging to debug page filtering
+3. **Page 0 Issue**: Initially changed `useState(1)` to `useState(0)` - WRONG
+4. **Correct Fix**: Kept page 1, adjusted filter to `currentPage - 1`
+5. **Sidebar Design**: Grouped objects by type with color indicators per user feedback
+
+### Current State
+- ✅ TemplateDetailModal component complete with all features
+- ✅ Version navigation working (left=older, right=newer)
+- ✅ Signature objects displaying with color-coded overlays
+- ✅ Extraction fields displaying with purple overlays
+- ✅ Mock data simplified to single template
+- ✅ API_SUMMARY.md document complete and comprehensive
+- ✅ Page indexing issue resolved
+- ✅ All changes committed to git
+- 📍 Ready for user testing and template detail viewing
+
+### Next Actions
+- Test template detail modal with version navigation
+- Verify signature objects display correctly on all pages
+- Verify extraction fields display correctly on all pages
+- Consider adding edit functionality (opens template builder)
+- Consider adding version comparison view
+
+### Notes
+- Template detail modal provides complete read-only view of templates
+- Version history preservation allows viewing how templates evolved
+- Color coding consistent between template builder and viewer
+- API summary provides alignment tool for backend implementation
+- Mock data simplification makes testing more focused
+- Foundation set for template management features
+- Never look in apps/eto/server - always use eto_js/server/
+
+---
+
 ## [2025-10-19 03:00] — Complete Execution Visualization: Layered Layout, Orthogonal Edges & Data Display
 
 ### Spec / Intent
@@ -1149,390 +1283,3 @@ ModuleCatalogModel fields:
 - Need to align frontend types with backend schema before continuing
 - Pipeline page is dev tool, not production feature
 - Never look in apps/eto/server - always use eto_js/server/
-
----
-
-## [2025-10-17 18:30] — Template Builder: PDF Controls Redesign & Extraction Fields Step Complete
-
-### Spec / Intent
-- Redesign PDF controls from overlay buttons to vertical sidebar with native slider
-- Fix PDF zoom rendering issues (glitches, blur, scrollbar behavior)
-- Implement zoom/pan state persistence across template builder steps
-- Display signature objects from step 1 as gray overlays in step 2
-- Build complete extraction fields step (step 2) with drawing functionality and field management
-
-### Changes Made
-
-**PDF Controls Redesign:**
-- `PdfControlsSidebar.tsx` - Complete rewrite using rc-slider library
-  - Replaced CSS rotation hack with native vertical slider
-  - Added fit-to-width button with viewport calculation
-  - Reorganized layout: zoom % → fit button → + icon → slider → - icon
-  - Continuous zooming (1% increments instead of 5%)
-  - Removed percentage labels, added +/- icons for min/max
-- Deleted old components: `PdfControls.tsx`, `PdfInfoPanel.tsx`
-- Installed rc-slider: `npm install rc-slider`
-
-**PDF Rendering Engine Overhaul:**
-- `PdfCanvas.tsx` - Fixed zoom quality and scrollbar behavior
-  - Implemented hybrid approach: fixed RENDER_SCALE=3.0, CSS scaling for user zoom
-  - Added wrapper div with explicit dimensions for proper scrollbar behavior
-  - Changed transform origin from 'center center' to 'top left' for correct positioning
-  - Added `overflow: hidden` to clip scaled content to bounds
-  - Removed CSS transitions to eliminate wiggling/flashing
-  - Added mouse event handlers (onMouseDown, onMouseMove, onMouseUp) for drawing mode
-  - Added pageWrapperRef for coordinate calculations
-- `PdfViewer.tsx` - Implemented controlled component pattern
-  - Added initialScale, initialPage, onScaleChange, onPageChange props
-  - Removed page reset on document load to preserve state
-  - Fixed renderScale at 3.0 in context
-  - Added useEffect sync for controlled component behavior
-
-**State Persistence:**
-- `TemplateBuilderModal.tsx` - Lifted zoom/pan state to parent
-  - Added pdfScale and pdfCurrentPage state
-  - Passed state and callbacks to both step 1 and step 2
-  - Reset zoom/pan on modal close
-  - Passed templateName and templateDescription to ExtractionFieldsStep
-
-**Extraction Fields Step (Step 2) - Complete Implementation:**
-- `ExtractionFieldsStep.tsx` - Main orchestration component (complete rewrite)
-  - Drawing state: isDrawing, drawingBox (anchor point + width/height)
-  - Staging state: stagedFieldId, tempFieldData
-  - Form state: fieldLabel, fieldDescription, fieldRequired, fieldValidationRegex
-  - Mouse handlers with anchor point logic (width/height can be negative)
-  - Y-axis coordinate flipping (PDF bottom-left origin → screen top-left origin)
-  - Minimum box size check (10px absolute width/height)
-  - Integration of all subcomponents and signature object overlays
-
-- `ExtractionFieldsSidebar.tsx` - **NEW** Three-mode sidebar component
-  - **List Mode**: Scrollable field list with name, page, required status
-  - **Create Mode**: Form with auto-focus label input, Enter key to save
-  - **Detail Mode**: Read-only field details with delete button
-  - Template name/description always at top (read-only)
-  - Mode determination: tempFieldData → 'create', stagedFieldId → 'detail', else → 'list'
-
-- `ExtractionFieldOverlay.tsx` - **NEW** PDF overlay rendering component
-  - Renders saved fields as purple boxes (z-index 5)
-  - Staged field with thicker border (z-index 10)
-  - Temporary field after drawing (z-index 10)
-  - Active drawing box as blue dashed line (z-index 15)
-  - Hover labels above/below boxes
-  - Handles negative width/height for any-direction drawing
-  - Uses renderScale from PdfViewerContext
-
-**Signature Object Integration:**
-- Modified `ExtractionFieldsStep.tsx` to show signature objects as gray overlays
-- Reused `PdfObjectOverlay` with: selectedTypes=empty, selectedObjects=all, onObjectClick=empty
-- Provides visual reference without interactivity
-
-### Key Technical Decisions
-
-**Zoom Quality Solution:**
-- **Problem**: Direct scale changes = sharp but flashing; CSS transform = smooth but blurry
-- **Solution**: Fixed render at 3.0x (always sharp), CSS scale down for zoom, no re-renders
-- **Result**: Sharp PDF at all zoom levels with smooth scrolling
-
-**Coordinate System Handling:**
-- PDF coordinates: bottom-left origin (0,0 at bottom-left)
-- Screen coordinates: top-left origin (0,0 at top-left)
-- Y-axis flip formula: `pdfY = pageHeight - screenY`
-- Applied correctly in both directions for field creation and rendering
-
-**Drawing UX:**
-- Anchor point stays fixed, width/height can be negative
-- Normalize coordinates before saving to PDF format
-- Blue dashed box during drawing, purple solid after saving
-- Minimum 10px box size to prevent accidental clicks
-
-**State Management:**
-- Zoom/pan lifted to TemplateBuilderModal for cross-step persistence
-- Controlled component pattern with callbacks for PdfViewer
-- Three-mode sidebar determined by current interaction state
-- Form state separate from field data for clean reset
-
-**Z-Index Layering:**
-- Signature objects (gray overlays): z-index 1-2
-- Saved extraction fields: z-index 5
-- Staged/temp fields: z-index 10
-- Active drawing box: z-index 15
-- Hover labels: z-index 20
-
-### Debugging Journey
-
-1. **Vertical Slider**: CSS rotation hack didn't fill space → replaced with rc-slider library
-2. **Slider Direction**: Upside down → removed `reverse` prop
-3. **PDF Glitches**: Text flipping, PDF disappearing → hybrid render scale approach
-4. **Blur on Zoom**: CSS transform at variable scale → fixed RENDER_SCALE=3.0
-5. **Scrollbar Issues**: CSS transforms don't affect layout → explicit dimension wrapper
-6. **Content Outside Bounds**: center transform origin → top-left origin + overflow hidden
-7. **Wiggling**: CSS transition lag → removed transitions completely
-
-### Next Actions
-- Test extraction fields step with various box sizes and positions
-- Implement pipeline builder step (step 3) with React Flow integration
-- Wire up template save functionality with all three steps
-- Add validation for extraction field bounding boxes
-- Consider adding field editing/moving functionality
-
-### Notes
-- PDF viewer now production-quality with sharp rendering at all zoom levels
-- Extraction fields step fully functional with all requested UX features
-- State persistence working across steps (zoom, pan, signature objects)
-- Y-axis coordinate conversion properly implemented and tested
-- Template builder steps 1 and 2 complete, ready for step 3 (pipeline builder)
-- All components properly typed with TypeScript
-- Never look in apps/eto/server - always use eto_js/server/
-
----
-
-## [2025-10-17 14:00] — PDF Object Extraction & Mock API with Real Data
-
-### Spec / Intent
-- Extract real PDF objects from test PDFs using backend extraction algorithm
-- Generate mock API data in format matching API endpoint specification
-- Create mock PDF Files API that serves real extracted object data
-- Enable frontend development and testing with actual PDF object structures
-
-### Changes Made
-**Backend Extraction Script:**
-- `server/extract_test_pdfs.py` - Standalone script to extract objects from test PDFs
-  - Loads pdf_extractor module directly without database dependencies
-  - Processes all PDFs in `client-new/public/data/pdfs/`
-  - Groups flat object list into API-compliant structure (by type)
-  - Outputs JSON files matching `GET /pdf-files/{id}/objects` response format
-  - Handles Windows console encoding issues (removed emoji characters)
-
-**Extracted Real Data (4 PDFs):**
-- `103_objects.json` - 11 pages, 6,595 objects (mostly text words and lines)
-- `2_objects.json` - 2 pages, 709 objects (includes curves, images, tables)
-- `3_objects.json` - 2 pages, 735 objects (many graphic rects, images, tables)
-- `4_objects.json` - 18 pages, 8,434 objects (large document with table)
-
-**Frontend Mock API:**
-- `client-new/src/renderer/features/pdf-files/mocks/useMockPdfApi.ts` - Complete mock API implementation
-  - Imports real extracted JSON data files
-  - Three endpoints implemented:
-    - `getPdfMetadata(id)` - Returns file metadata with page counts
-    - `getPdfDownloadUrl(id)` - Returns URL to PDF in public directory
-    - `getPdfObjects(id)` - Returns real extracted objects grouped by type
-  - Console logging for debugging object counts
-  - Helper method `getAvailablePdfIds()` to list available test data
-- `client-new/src/renderer/features/pdf-files/mocks/data/README.md` - Documentation for extracted data
-  - Format specification
-  - Regeneration instructions
-  - Usage examples
-
-**Files Moved:**
-- Extracted JSON files moved from `server/extracted_objects/` to `client-new/src/renderer/features/pdf-files/mocks/data/`
-- Proper frontend integration ready for import and use
-
-### Key Technical Decisions
-**Backend Extraction Process:**
-- Used existing `pdf_extractor.py` from `server/src/features/pdf_processing/utils/`
-- Confirmed extraction algorithm matches API endpoint design
-- Transformation needed: flat list → grouped by type (simple mapping)
-- Direct module import to avoid database/enum dependencies
-
-**Object Type Mapping:**
-```
-Backend type field    → API group name
-------------------      ---------------
-"text_word"          → text_words
-"text_line"          → text_lines
-"graphic_rect"       → graphic_rects
-"graphic_line"       → graphic_lines
-"graphic_curve"      → graphic_curves
-"image"              → images
-"table"              → tables
-```
-
-**Mock API Design:**
-- Real data imported as static JSON modules
-- Simulates network delay (100-200ms) for realistic testing
-- Matches API endpoint specification exactly
-- Type-safe with existing DTO interfaces
-- Ready for UI component development
-
-### Extraction Results Summary
-
-| PDF ID | Pages | Total Objects | Notable Types |
-|--------|-------|---------------|---------------|
-| 103    | 11    | 6,595        | 5,909 text words, 469 lines |
-| 2      | 2     | 709          | 130 curves, 2 images, 3 tables |
-| 3      | 2     | 735          | 165 rects, 2 images, 3 tables |
-| 4      | 18    | 8,434        | 7,437 words, 905 lines, 1 table |
-
-### Next Actions
-- Build PDF object viewer component to display extracted objects
-- Create template wizard Step 1: signature object selection
-- Implement PDF overlay visualization showing object bounding boxes
-- Test object selection UI with real extracted data
-- Build template extraction field selector (Step 2)
-
-### Notes
-- Backend extraction algorithm confirmed working and accurate
-- Object structures match API specification exactly
-- Frontend now has real test data for development
-- No need for MSW - direct JSON imports sufficient for mock API
-- Can regenerate data anytime by running extraction script
-- Windows console encoding issue resolved (Unicode emojis removed)
-
----
-
-## [2025-10-17 01:30] — ETO Runs: PDF Viewer Integration Complete
-
-### Spec / Intent
-- Integrate react-pdf library into RunDetailModal for viewing PDFs associated with ETO runs
-- Create mock API endpoint that simulates real PDF streaming behavior
-- Implement professional PDF viewer with page navigation and zoom controls
-- Fix Vite configuration to properly serve static PDF files from public directory
-- Optimize modal layout with condensed spacing and proper column width ratios
-
-### Changes Made
-**PDF Infrastructure:**
-- `client-new/public/data/pdfs/` - Created directory for test PDFs with README documentation
-- `client-new/public/data/pdfs/README.md` - Documented mock PDF serving pattern
-- `vite.config.ts` - Added `publicDir` configuration pointing to `client-new/public/` to fix Vite root issue
-
-**Mock API Enhancement:**
-- `useMockEtoApi.ts` - Added `getPdfDownloadUrl(pdfFileId)` method that returns URLs to PDFs in public directory
-- Pattern: `getPdfDownloadUrl(103)` returns `/data/pdfs/103.pdf` served by Vite dev server
-- Simulates real API endpoint behavior where URL streams PDF bytes
-
-**RunDetailModal PDF Viewer:**
-- Integrated react-pdf's `Document` and `Page` components
-- Configured PDF.js worker using local worker from node_modules
-- Added PDF viewer state management (pdfUrl, numPages, currentPage, scale)
-- Implemented two useEffect hooks:
-  - Load run details when modal opens
-  - Set PDF URL and run diagnostic checks when run detail loads
-- Added PDF document event handlers (onDocumentLoadSuccess, onDocumentLoadError)
-- Created PDF controls section with:
-  - Page navigation (Prev/Next buttons with disable states)
-  - Current page indicator (Page X of Y)
-  - Zoom controls (Zoom In/Out buttons, percentage display)
-  - Scale range: 0.5x to 2.0x in 0.25x increments
-- Implemented two-column layout:
-  - Left column (40% width): Run metadata + specifics placeholder
-  - Right column (60% width): PDF viewer with controls
-- Condensed spacing throughout modal (reduced gaps, padding)
-
-**Layout Optimizations:**
-- Changed column widths from 50/50 to 40/60 (metadata/PDF)
-- Reduced all spacing: gaps from 6→4→3, padding from 6→5→4→3→2
-- Tightened field spacing from space-y-4 to space-y-3
-- Reduced button spacing from space-x-3 to space-x-2
-- More compact presentation while maintaining readability
-
-### Key Technical Decisions
-**PDF Streaming Architecture:**
-- Industry-standard approach: API URL returns PDF bytes, react-pdf fetches and renders
-- Same pattern used by Google Drive, Dropbox, Gmail, etc.
-- Mock implementation uses Vite's static file serving from `public/` directory
-- In production, real API endpoint `/pdf-files/{id}/download` will stream from server storage
-
-**Vite Configuration Issue:**
-- Root cause: Vite `root: "./src/renderer"` was looking for `public/` at `src/renderer/public/`
-- Solution: Added explicit `publicDir: path.resolve(__dirname, 'public')` to point to actual location
-- This fixed `contentType: "text/html"` issue (Vite was serving index.html instead of PDF)
-
-**React-PDF Integration:**
-- Disabled text layer and annotation layer for performance (renderTextLayer={false})
-- PDF.js worker loaded from local node_modules for offline compatibility
-- Direct URL passing to Document component (react-pdf handles fetch internally)
-
-### Debugging Journey
-1. Initial error: `InvalidPDFException: Invalid PDF structure`
-2. Diagnostic logging revealed `contentType: "text/html"` instead of `"application/pdf"`
-3. HEAD request returned 200 but direct navigation failed
-4. Root cause: Vite couldn't find files due to incorrect public directory configuration
-5. Solution: Added `publicDir` to vite.config.ts
-6. Result: PDF now loads correctly with proper content type
-
-### Next Actions
-- Build out "SPECIFICS" section to show executed actions for successful runs
-- Build out "SPECIFICS" section to show error details for failed runs
-- Add "View Details" button to show complete pipeline execution trace
-- Implement pipeline execution visualization with step-by-step inputs/outputs
-- Remove diagnostic console.log statements once feature is stable
-- Add PDF files for other mock run IDs (107.pdf, etc.)
-
-### Notes
-- PDF viewer working with full functionality (navigation, zoom, rendering)
-- Mock data uses pdf.id: 103 and 107 for successful runs
-- Test PDFs placed in `client-new/public/data/pdfs/` with numeric filenames
-- Modal takes 95% of viewport for maximum viewing space
-- Ready for specifics section implementation (Phase 6 continuation)
-- Never look in apps/eto/server - always use eto_js/server/
-
----
-
-## [2025-10-16 16:30] — Frontend: Phase 4 & 5 Complete - IPC Foundation & Infrastructure
-
-### Spec / Intent
-- Complete Phase 4: Implement type-safe Electron IPC for file operations
-- Complete Phase 5: Build out shared infrastructure and feature directories
-- Test IPC communication with interactive UI
-- Establish API layer foundation (Axios, React Query, interceptors)
-- Create all feature modules with proper directory structure
-
-### Changes Made
-**Phase 4: Electron API Foundation**
-- `@types/global.d.ts` - Type-safe IPC mappings for 4 operations:
-  - `file:select` - File picker dialog with filters
-  - `file:read` - Read file content with error handling
-  - `file:save` - Save file dialog
-  - `dialog:confirm` - Confirmation dialog
-- `preload/index.ts` - Exposed IPC methods to renderer via contextBridge
-- `main/helpers/ipcHandlers.ts` - Implemented all IPC handlers with Electron dialog API
-- `pages/index.tsx` - Created interactive test page with 4 buttons to test file operations
-- **Tested successfully**: File selection, reading, save dialog, confirm dialog all working
-
-**Phase 5: Complete Directory Structure & Infrastructure**
-- `shared/api/config.ts` - API configuration with base URL and endpoints
-- `shared/api/client.ts` - Axios instance with interceptors
-- `shared/api/interceptors/` - Auth, error, and logging interceptors
-- `app/queryClient.ts` - React Query configuration with caching defaults
-- `app/router.tsx` - TanStack Router setup (hash history for Electron)
-- `app/providers.tsx` - Global provider wrapper with React Query DevTools
-
-**Feature Directories Created (5 modules):**
-- `features/email-configs/` (api, components, hooks, mocks)
-- `features/templates/` (api, components, hooks, mocks)
-- `features/pipelines/` (api, components, hooks, mocks)
-- `features/pdf-files/` (api, components, hooks, mocks)
-- `features/eto-runs/` (api, components, hooks, mocks)
-
-**Page Files Created (5 routes):**
-- `pages/email-configs/index.tsx`
-- `pages/templates/index.tsx`
-- `pages/pipelines/index.tsx`
-- `pages/pdf-files.tsx`
-- `pages/eto-runs/index.tsx`
-
-### Next Actions
-**Phase 6: Types and Mock Data**
-- [ ] Define TypeScript interfaces for all features (matching backend Pydantic models)
-- [ ] Create mock data for development/testing
-- [ ] Set up MSW (Mock Service Worker) for API mocking
-
-**Phase 7: Basic Page Structure**
-- [ ] Create root layout with sidebar navigation
-- [ ] Implement page shells with consistent layout
-- [ ] Set up routing between pages
-
-**Phase 8: Component Implementation**
-- [ ] Implement feature components one by one
-- [ ] Wire up React Query hooks
-- [ ] Test with mock data
-
-### Notes
-- Phase 4 testing revealed file filter issue - fixed to show all files including PDFs
-- All IPC operations working with full type safety and autocomplete
-- Infrastructure follows best practices: interceptors, error handling, logging
-- Feature-Sliced Design architecture fully implemented
-- Ready for Phase 6: Type definitions and mock data
-- Phases 1-5 complete (5 out of 10 phases done)
-
----

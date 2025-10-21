@@ -70,7 +70,7 @@ export interface PostTemplateCreateRequest {
 export interface PostTemplateCreateResponse {
   id: number; // Created template ID
   name: string;
-  status: 'draft'; // Always starts as draft
+  status: 'inactive'; // Always starts as inactive
   current_version_id: number; // Version 1 ID
   current_version_num: 1;
   pipeline_definition_id: number;

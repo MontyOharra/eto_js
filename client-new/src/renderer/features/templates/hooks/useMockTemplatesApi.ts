@@ -242,10 +242,7 @@ export function useMockTemplatesApi() {
       }
 
       // Validate deletion rules
-      if (
-        template.status !== 'draft' &&
-        template.current_version.usage_count > 0
-      ) {
+      if (template.current_version.usage_count > 0) {
         throw new Error(
           'Cannot delete template with usage history. Deactivate instead.'
         );

@@ -145,64 +145,14 @@ const createMockVersionSummary = (
 // Mock Templates - List Items
 // =============================================================================
 
-export const mockActiveTemplate: TemplateListItem = {
-  id: 1,
-  name: 'Standard HAWB Template',
-  description: 'Standard template for House Air Waybill documents',
-  status: 'active',
-  source_pdf_id: 101,
-  current_version: createMockVersionSummary(1, 1, 25),
-  total_versions: 1,
-};
-
 export const mockActiveTemplateWithVersions: TemplateListItem = {
-  id: 2,
+  id: 1,
   name: 'Commercial Invoice Template',
   description: 'Template for commercial invoice processing',
   status: 'active',
-  source_pdf_id: 102,
+  source_pdf_id: 2, // Points to 2.pdf
   current_version: createMockVersionSummary(4, 3, 12),
   total_versions: 3,
-};
-
-export const mockInactiveTemplate: TemplateListItem = {
-  id: 3,
-  name: 'Legacy Invoice Template',
-  description: 'Old template - no longer in use',
-  status: 'inactive',
-  source_pdf_id: 103,
-  current_version: createMockVersionSummary(5, 1, 8),
-  total_versions: 1,
-};
-
-export const mockDraftTemplate: TemplateListItem = {
-  id: 4,
-  name: 'Bill of Lading Template',
-  description: 'In progress - not yet activated',
-  status: 'draft',
-  source_pdf_id: 104,
-  current_version: createMockVersionSummary(6, 1, 0),
-  total_versions: 1,
-};
-
-export const mockActiveTemplate2: TemplateListItem = {
-  id: 5,
-  name: 'Packing List Template',
-  description: 'Template for packing list documents',
-  status: 'active',
-  source_pdf_id: 105,
-  current_version: createMockVersionSummary(7, 2, 18),
-  total_versions: 2,
-};
-
-export const mockDraftTemplate2: TemplateListItem = {
-  id: 6,
-  name: 'Customs Declaration',
-  description: null,
-  status: 'draft',
-  source_pdf_id: 106,
-  current_version: createMockVersionSummary(8, 1, 0),
-  total_versions: 1,
 };
 
 // =============================================================================
@@ -210,54 +160,24 @@ export const mockDraftTemplate2: TemplateListItem = {
 // =============================================================================
 
 export const allMockTemplates: TemplateListItem[] = [
-  mockActiveTemplate,
   mockActiveTemplateWithVersions,
-  mockInactiveTemplate,
-  mockDraftTemplate,
-  mockActiveTemplate2,
-  mockDraftTemplate2,
 ];
 
 export const mockTemplatesByStatus: Record<TemplateStatus, TemplateListItem[]> =
   {
-    active: [mockActiveTemplate, mockActiveTemplateWithVersions, mockActiveTemplate2],
-    inactive: [mockInactiveTemplate],
-    draft: [mockDraftTemplate, mockDraftTemplate2],
+    active: [mockActiveTemplateWithVersions],
+    inactive: [],
   };
 
 // =============================================================================
 // Template Detail Response
 // =============================================================================
 
-export const mockTemplateDetail: TemplateDetail = {
-  // Template metadata
-  id: 1,
-  name: 'Standard HAWB Template',
-  description: 'Standard template for House Air Waybill documents',
-  source_pdf_id: 101,
-  status: 'active',
-  current_version_id: 1,
-
-  // Current version details
-  current_version: {
-    version_id: 1,
-    version_num: 1,
-    usage_count: 25,
-    last_used_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    signature_objects: createMockSignatureObjects(),
-    extraction_fields: createMockExtractionFields(),
-    pipeline_definition_id: 201,
-  },
-
-  // Version history
-  total_versions: 1,
-};
-
 export const mockTemplateDetailMultiVersion: TemplateDetail = {
-  id: 2,
+  id: 1,
   name: 'Commercial Invoice Template',
   description: 'Template for commercial invoice processing',
-  source_pdf_id: 102,
+  source_pdf_id: 2, // Points to 2.pdf
   status: 'active',
   current_version_id: 4,
 
@@ -276,80 +196,7 @@ export const mockTemplateDetailMultiVersion: TemplateDetail = {
 
 // Map of template ID to detail
 export const mockTemplateDetailsById: Record<number, TemplateDetail> = {
-  1: mockTemplateDetail,
-  2: mockTemplateDetailMultiVersion,
-  3: {
-    id: 3,
-    name: 'Legacy Invoice Template',
-    description: 'Old template - no longer in use',
-    source_pdf_id: 103,
-    status: 'inactive',
-    current_version_id: 5,
-    current_version: {
-      version_id: 5,
-      version_num: 1,
-      usage_count: 8,
-      last_used_at: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
-      signature_objects: createMockSignatureObjects(),
-      extraction_fields: createMockExtractionFields(),
-      pipeline_definition_id: 203,
-    },
-    total_versions: 1,
-  },
-  4: {
-    id: 4,
-    name: 'Bill of Lading Template',
-    description: 'In progress - not yet activated',
-    source_pdf_id: 104,
-    status: 'draft',
-    current_version_id: 6,
-    current_version: {
-      version_id: 6,
-      version_num: 1,
-      usage_count: 0,
-      last_used_at: null,
-      signature_objects: createMockSignatureObjects(),
-      extraction_fields: createMockExtractionFields(),
-      pipeline_definition_id: 204,
-    },
-    total_versions: 1,
-  },
-  5: {
-    id: 5,
-    name: 'Packing List Template',
-    description: 'Template for packing list documents',
-    source_pdf_id: 105,
-    status: 'active',
-    current_version_id: 7,
-    current_version: {
-      version_id: 7,
-      version_num: 2,
-      usage_count: 18,
-      last_used_at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-      signature_objects: createMockSignatureObjects(),
-      extraction_fields: createMockExtractionFields(),
-      pipeline_definition_id: 205,
-    },
-    total_versions: 2,
-  },
-  6: {
-    id: 6,
-    name: 'Customs Declaration',
-    description: null,
-    source_pdf_id: 106,
-    status: 'draft',
-    current_version_id: 8,
-    current_version: {
-      version_id: 8,
-      version_num: 1,
-      usage_count: 0,
-      last_used_at: null,
-      signature_objects: createMockSignatureObjects(),
-      extraction_fields: createMockExtractionFields(),
-      pipeline_definition_id: 206,
-    },
-    total_versions: 1,
-  },
+  1: mockTemplateDetailMultiVersion,
 };
 
 // =============================================================================
@@ -382,7 +229,7 @@ export const mockTemplateVersions: TemplateVersionListItem[] = [
 
 export const mockTemplateVersionDetail: TemplateVersionDetail = {
   version_id: 4,
-  template_id: 2,
+  template_id: 1,
   version_num: 3,
   usage_count: 12,
   last_used_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
@@ -397,10 +244,10 @@ export const mockTemplateVersionDetail: TemplateVersionDetail = {
 // =============================================================================
 
 export const mockCreateResponse: PostTemplateCreateResponse = {
-  id: 7,
+  id: 2,
   name: 'New Template',
-  status: 'draft',
-  current_version_id: 9,
+  status: 'inactive',
+  current_version_id: 10,
   current_version_num: 1,
   pipeline_definition_id: 207,
 };
