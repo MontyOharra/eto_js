@@ -24,4 +24,12 @@ router = APIRouter(
 @router.get("", response_model=List[ModuleCatalogItem])
 async def list_modules() -> List[ModuleCatalogItem]:
     """List all active modules (complete catalog for pipeline builder)"""
-    pass
+    try:
+        # Service layer call will go here
+        pass
+    except Exception as e:
+        logger.error(f"Database error in list_modules: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database error"
+        )

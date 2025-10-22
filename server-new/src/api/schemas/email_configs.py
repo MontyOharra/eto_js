@@ -3,7 +3,7 @@ Email Configurations API Schemas
 Pydantic models for email configuration endpoints
 """
 from typing import Optional, List, Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 # GET /email-configs - List Response
@@ -153,13 +153,15 @@ class DeactivateEmailConfigResponse(BaseModel):
 
 
 # GET /email-configs/discovery/accounts - Discovery Response
-class EmailAccountItem(BaseModel):
+class EmailAccount(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
     email_address: str
     display_name: Optional[str] = None
 
 
 class DiscoverEmailAccountsResponse(BaseModel):
-    __root__: List[EmailAccountItem]
+    accounts: List[EmailAccount]
 
 
 # GET /email-configs/discovery/folders - Discovery Response

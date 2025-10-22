@@ -5,6 +5,165 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-10-22 16:30] — Email Ingestion Service Implementation Complete
+
+### Spec / Intent
+- Implement complete EmailIngestionService with three major functional groups
+- Discovery methods for email accounts, folders, and validation
+- Configuration CRUD operations (create, read, update, delete, list)
+- Activation/deactivation operations with listener thread management
+- Use registry-based integrations with dataclass types (new architecture)
+- Use Pydantic types for database/config operations
+- Comprehensive error handling and logging throughout
+
+### Changes Made
+
+**Email Ingestion Service** (`server-new/src/features/email_ingestion/service.py`):
+
+**Discovery Methods** (Lines 104-454):
+- `discover_email_accounts(provider_type)` - Discover available email accounts from provider
+  - Creates temporary integration using IntegrationRegistry
+  - Returns list[EmailAccount] (dataclass)
+  - No persistent connection required
+- `discover_folders(email_address, provider_type)` - Get folder list for specific account
+  - Creates temporary integration, connects, discovers, disconnects
+  - Returns list[EmailFolder] (dataclass)
+  - Always disconnects in finally block
+- `validate_email_config(email_address, folder_name, provider_type)` - Test config before creating
+  - Creates temporary integration and tests connection
+  - Returns ConnectionTestResult (dataclass)
+  - Used for validating user input before saving
+- Helper methods: `get_available_providers()`, `get_provider_info()`, `get_all_providers_info()`
+
+**Configuration CRUD Operations** (Lines 456-809):
+- `create_config(config_create)` - Create new email configuration
+  - Uses EmailConfigCreate Pydantic model
+  - Returns EmailConfig Pydantic model
+  - Validates connection_manager initialized
+- `get_config(config_id)` - Retrieve configuration by ID
+  - Raises ObjectNotFoundError if not found
+- `update_config(config_id, config_update)` - Update existing config
+  - Uses EmailConfigUpdate Pydantic model
+  - Prevents updates to active configurations (must deactivate first)
+  - Cannot change name, email_address, or folder_name
+- `delete_config(config_id)` - Delete configuration
+  - Must be inactive to delete
+  - Repository checks is_active and raises ValidationError
+- `list_configs(order_by, desc)` - List all configs with sorting
+  - Supports sorting by: created_at, updated_at, name, is_active, last_used_at, emails_processed
+- `list_configs_summary()` - List with lightweight summary data
+  - Returns EmailConfigSummary objects for list views
+
+**Activation/Deactivation Operations** (Lines 819-1243):
+- `activate_config(config_id)` - Start monitoring
+  - Marks active in database with activation_time
+  - Creates persistent integration instance
+  - Starts EmailListenerThread for monitoring
+  - Stores integration in active_integrations dict
+  - Updates runtime status to running
+  - Full cleanup on failure (deactivates in database)
+- `deactivate_config(config_id)` - Stop monitoring
+  - Stops listener thread (10 second timeout)
+  - Disconnects integration
+  - Marks inactive in database
+  - Clears progress tracking data
+- `get_active_configs()` - List all active configurations
+- `get_listener_status(config_id)` - Get runtime status of specific listener
+  - Returns ListenerStatus dataclass
+- `get_all_listener_statuses()` - Get status of all active listeners
+
+**Helper/Callback Methods** (Lines 1182-1243):
+- `_process_email(config_id, email_message)` - Callback for email processing
+  - Called by listener thread when new email found
+  - TODO: Implement filtering, PDF extraction, service calls
+- `_handle_listener_error(config_id, error_message)` - Error handling callback
+  - Records error to database via repository
+
+**Imports Added**:
+- EmailMessage dataclass from email_integrations types
+- EmailConfig, EmailConfigCreate, EmailConfigUpdate, EmailConfigSummary Pydantic types
+
+**Total Implementation**:
+- 1243 lines of service code
+- 3 major functional groups (discovery, CRUD, activation)
+- 18 public methods
+- 2 private callback methods
+- Comprehensive docstrings with examples for all methods
+
+### Key Technical Decisions
+
+**Type System Architecture**:
+- **Dataclasses** for email integration domain layer (EmailMessage, EmailAccount, EmailFolder)
+- **Pydantic** for database/config operations (EmailConfig, EmailConfigCreate, EmailConfigUpdate)
+- Clear separation: dataclasses for integrations, Pydantic for persistence
+- Conversion happens at API boundary (not in service layer)
+
+**Integration Patterns**:
+- **Temporary integrations** for discovery operations (create → use → disconnect)
+- **Persistent integrations** for monitoring (create → store → long-running → cleanup on deactivate)
+- Registry pattern enables self-registering providers (outlook_com, future: gmail_api, etc.)
+
+**Thread Safety**:
+- RLock for managing active_integrations and active_listeners dicts
+- Proper cleanup in finally blocks
+- 10-second timeout for graceful thread shutdown
+
+**Error Handling Strategy**:
+- ValueError for validation errors (required params, invalid states)
+- ObjectNotFoundError for missing database objects
+- ConnectionError for email provider connection failures
+- ValidationError for business rule violations (can't delete active config)
+- ServiceError as catch-all for unexpected errors
+- All exceptions logged with context
+
+**Dependency Management**:
+- connection_manager, pdf_service, eto_service all optional in constructor
+- Discovery methods work without any dependencies
+- CRUD methods require connection_manager only
+- Activation methods warn if pdf_service/eto_service missing (allow dev without them)
+
+**Progress Tracking**:
+- activated_at timestamp records when monitoring started
+- last_check_time acts as cursor for incremental processing
+- total_emails_processed and total_pdfs_found track session stats
+- Cleared on deactivation for fresh start on reactivation
+
+### Current State
+- ✅ All three functional groups implemented
+- ✅ Discovery methods complete (accounts, folders, validation)
+- ✅ CRUD operations complete (create, read, update, delete, list)
+- ✅ Activation/deactivation complete (thread management, cleanup)
+- ✅ Comprehensive error handling throughout
+- ✅ Detailed logging at appropriate levels
+- ✅ Thread-safe operations with RLock
+- ✅ Callback placeholders for email processing
+- 📍 Ready to connect to API endpoints
+- 📍 Email processing logic not yet implemented (placeholder)
+
+### Next Actions
+- Connect service methods to API router endpoints
+- Implement _process_email() callback logic:
+  - Apply filter rules from config
+  - Extract PDF attachments from cached_attachments
+  - Pass PDFs to pdf_processing_service
+  - Update config statistics via repository
+- Implement startup recovery (restore active listeners on service init)
+- Add integration tests for service methods
+- Test activation/deactivation cycle
+- Test listener thread lifecycle
+
+### Notes
+- Working in server-new/ directory (unified backend architecture)
+- All methods use async def for consistency with FastAPI
+- Service uses existing repositories (EmailConfigRepository, EmailRepository)
+- Integration with new registry-based email integrations (not old factory pattern)
+- Listener thread management follows proven patterns from old server/
+- Provider type currently hardcoded to "outlook_com" (will be configurable via database later)
+- Callback methods are placeholders - full email processing pipeline to be implemented
+- Foundation set for complete email ingestion feature
+
+---
+
 ## [2025-10-21 15:00] — Backend Router & Schema Implementation Complete
 
 ### Spec / Intent
@@ -1166,224 +1325,3 @@ ModuleCatalogModel fields:
 - Categories enable logical grouping in module selector
 - Ready for offline development without backend server
 
----
-
-## [2025-10-18 21:30] — Standalone Pipeline Creator Page
-
-### Spec / Intent
-- Create standalone pipeline creation route at `/dashboard/pipelines/create`
-- Wire up "Create Pipeline" button navigation from pipelines list page
-- Enable full pipeline builder UI outside of template builder context
-- Reference old client implementation for structure and patterns
-
-### Changes Made
-
-**New Create Route:**
-- `client-new/src/renderer/pages/dashboard/pipelines/create.tsx` - Complete pipeline creation page
-  - Loads module templates from `/api/modules` endpoint on mount
-  - Integrates ModuleSelectorPane and PipelineGraph components from template builder
-  - Header with editable pipeline name and description fields
-  - Save, Validate, and Cancel buttons with API integration
-  - Loading and error states with user-friendly UI
-  - Uses TanStack Router for navigation
-
-**Navigation Wiring:**
-- `client-new/src/renderer/pages/dashboard/pipelines/index.tsx` - Updated to use Link components
-  - Changed Create Pipeline buttons from onClick handlers to Link components
-  - Removed handleCreatePipeline function (replaced with declarative routing)
-  - Both header button and empty state button now route to `/dashboard/pipelines/create`
-
-**Component Integration:**
-- Reused PipelineGraph component from `features/templates/components/builder/steps/PipelineBuilderStep/`
-- Reused ModuleSelectorPane component for module selection sidebar
-- Imported types from `types/moduleTypes.ts` and `types/pipelineTypes.ts`
-
-### Key Technical Decisions
-
-**Route Structure:**
-- Placed create.tsx alongside index.tsx in `pages/dashboard/pipelines/`
-- Follows TanStack Router file-based routing pattern
-- Route path: `/dashboard/pipelines/create`
-
-**Component Reuse:**
-- Leveraged existing PipelineGraph and ModuleSelectorPane from template builder
-- No duplication - components are shared between template builder and standalone pipeline creator
-- Same module templates, same graph builder, different context
-
-**API Integration:**
-- Fetches modules from `http://localhost:8090/api/modules`
-- Validates pipeline via `POST /api/pipelines/validate`
-- Saves pipeline via `POST /api/pipelines/upload`
-- Navigates back to list on successful save
-
-**State Management:**
-- Local state for pipeline name, description, selected module
-- Reference to PipelineGraph component to extract state on save/validate
-- Entry points array (currently empty, can be extended)
-
-### Current State
-- ✅ Create route file implemented
-- ✅ Navigation buttons wired up with Link components
-- ✅ Pipeline builder UI integrated
-- ✅ Module loading working
-- ✅ Save/validate/cancel handlers implemented
-- ⏳ Ready for testing (user will test navigation and functionality)
-
-### Next Actions
-- User to test navigation from pipelines list to create page
-- User to test module loading and pipeline builder functionality
-- User to test save/validate operations
-- Consider adding entry point creation UI (currently no entry points by default)
-- May need to add confirmation dialog before canceling unsaved changes
-
-### Notes
-- Pipeline creator now available as standalone feature (not just in template wizard)
-- Follows same patterns as old client implementation
-- Clean separation: pipelines can be created independently of templates
-- Ready for development and testing workflows
-
----
-
-## [2025-10-18 20:00] — Pipeline Builder Integration & Pipelines Page with Mock API
-
-### Spec / Intent
-- Copy transformation pipeline components from old client to new client template builder
-- Remove entry point modal, auto-generate entry points from extraction fields (step 2)
-- Build standalone pipelines page with card-based layout and mock API
-- Simplify pipelines page to view-only (no activation/editing) for dev/testing purposes
-- Discover mismatch between frontend pipeline types and actual backend database schema
-
-### Changes Made
-
-**Pipeline Components Migration (Step 3 of Template Builder):**
-- Copied 6 main files from `client/src/renderer/components/transformation-pipeline/` to `client-new/`:
-  - `PipelineGraph.tsx` - Main React Flow pipeline builder (1744 lines)
-  - `ModuleSelectorPane.tsx` - Sidebar for module selection with search/filter
-  - `EntryPointNode.tsx` - Entry point node visualization
-  - `ModuleNodeNew.tsx` - Module nodes with configurable inputs/outputs
-  - `ConfigSection.tsx` - Dynamic form rendering for module config
-  - `ModuleSelectorPane.tsx` - Draggable module catalog
-- Created type definitions:
-  - `moduleTypes.ts` - Module and node type definitions
-  - `pipelineTypes.ts` - Pipeline and connection types
-- Integrated with PipelineBuilderStep.tsx for API module loading
-
-**Entry Point Integration:**
-- Removed EntryPointModal completely (state, handlers, modal JSX)
-- Added `extractionFields` prop to PipelineBuilderStep
-- Created useMemo to auto-convert extraction fields to entry points:
-  - Format: `{ node_id: 'entry_${field_id}', name: field.label, type: 'str' }`
-- Added useEffect for auto-positioning entry points (x: 50, y: 50 + index * 120)
-- Changed PipelineGraph to use prop-driven entry points (not internal state)
-- Passed extractionFields through TemplateBuilderModal → PipelineBuilderStep → PipelineGraph
-
-**Hook Order Fix:**
-- Fixed `ReferenceError: Cannot access 'handleHandleClick' before initialization`
-- Root cause: useMemo for `nodes` referenced callbacks defined after it
-- Solution: Moved ALL useCallback definitions before useMemo
-- Removed duplicate callback definitions (lines 422-695 were duplicates)
-
-**Pipelines Feature - Initial Implementation:**
-- Created `client-new/src/renderer/features/pipelines/types.ts`:
-  - PipelineStatus ('draft' | 'active' | 'inactive')
-  - PipelineListItem (id, name, description, status, versions, timestamps)
-  - PipelineDetail (extends ListItem with graph structure)
-  - API response types (PipelinesListResponse, PipelineDetailResponse, etc.)
-- Created `client-new/src/renderer/features/pipelines/hooks/useMockPipelinesApi.ts`:
-  - Mock data for 4 pipelines (Standard Data Extraction, Advanced Field Processing, etc.)
-  - Full CRUD API: getPipelines, getPipeline, createPipeline, updatePipeline
-  - Lifecycle methods: activatePipeline, deactivatePipeline, deletePipeline
-  - Loading/error state management with simulated delays (200-500ms)
-- Created `client-new/src/renderer/features/pipelines/components/`:
-  - `PipelineStatusBadge.tsx` - Status indicator (draft/active/inactive)
-  - `PipelineCard.tsx` - Card layout with version info, usage count, actions
-  - `index.ts` - Component exports
-- Updated `client-new/src/renderer/pages/dashboard/pipelines/index.tsx`:
-  - Full page implementation with filter/sort controls
-  - Status filter (All, Active, Inactive, Draft)
-  - Sort by name/status/usage_count with asc/desc toggle
-  - Card grid layout (responsive 1/2/3 columns)
-  - Loading, error, and empty states
-  - Create button placeholder
-
-**Simplification to View-Only:**
-- Removed Edit, Activate, Deactivate, Delete functionality from PipelineCard
-- Removed corresponding handlers and API calls from pipelines page
-- Simplified to only View and Create actions
-- Justification: Pipelines are linked to templates, standalone management not needed
-
-**Database Schema Discovery:**
-- Analyzed `server/src/shared/database/models.py` to understand actual structure:
-  - `pipeline_definitions` table: id, pipeline_state (JSON), visual_state (JSON), compiled_plan_id
-  - `pipeline_compiled_plans` table: id, plan_checksum, compiled_at
-  - `pipeline_definition_steps` table: module instances with execution metadata
-- **CRITICAL FINDING**: Pipelines have NO name, description, or status fields
-- Pipelines are pure graph definitions, templates own the metadata
-- Templates link to pipelines via `pdf_template_versions.pipeline_definition_id`
-
-### Key Technical Decisions
-
-**Entry Point Auto-Generation:**
-- Entry points driven by extraction fields (step 2 state)
-- One entry point per extraction field with matching label
-- All entry points output type 'str' (extraction always produces strings)
-- Automatic positioning on left side of canvas, vertically stacked
-
-**Hook Ordering Rules:**
-- ALL callbacks (useCallback) must be defined before memoized values (useMemo)
-- Memoized values that reference callbacks can't be placed before their definitions
-- React hook initialization order is critical for avoiding reference errors
-
-**Pipelines Page Purpose:**
-- Dev/testing tool only (not production feature)
-- Allows testing transformation graphs without full template workflow
-- Will be removed once template builder is mature
-- View-only display prevents inconsistencies with template-managed pipelines
-
-### Debugging Journey
-
-1. **Entry Points Not Showing**: Added extractionFields prop, created conversion useMemo
-2. **Hook Order Error**: `handleHandleClick` accessed before initialization → moved callbacks up
-3. **Duplicate Callbacks**: Found identical callback definitions after useMemo → removed duplicates
-4. **Wrong Pipeline Structure**: Created types with name/description/status that don't exist in DB
-
-### Database Schema Mismatch Analysis
-
-**What Frontend Has (INCORRECT):**
-- name: string
-- description: string | null
-- status: 'draft' | 'active' | 'inactive'
-- current_version: { version_id, version_num, usage_count }
-- total_versions: number
-
-**What Backend Has (ACTUAL):**
-- id: int
-- pipeline_state: Text (JSON) - graph structure
-- visual_state: Text (JSON) - node positions
-- compiled_plan_id: int | null
-- created_at, updated_at: timestamps
-- NO name, description, or status
-
-**What Needs to Be Fixed:**
-1. Remove name, description, status from pipeline types
-2. Update PipelineListItem to match actual schema (id, timestamps, compiled_plan_id)
-3. Update mock API to return realistic data
-4. Update PipelineCard to show: ID, created date, compiled plan status, template references
-5. Remove status filter, add "has compiled plan" filter
-6. Change display from "pipeline management" to "pipeline inspection"
-
-### Next Actions
-- Fix pipeline types to match actual database schema
-- Update mock API data to reflect real structure
-- Redesign PipelineCard for inspection view (not management)
-- Update page filters and sort options for new structure
-- Add template reference information to pipeline details
-- Consider renaming "Pipelines" page to "Pipeline Definitions" or "Pipeline Inspector"
-
-### Notes
-- Template builder step 3 (pipeline builder) now fully integrated
-- Entry points auto-sync with extraction fields
-- Pipelines feature discovered to be fundamentally different than expected
-- Need to align frontend types with backend schema before continuing
-- Pipeline page is dev tool, not production feature
-- Never look in apps/eto/server - always use eto_js/server/

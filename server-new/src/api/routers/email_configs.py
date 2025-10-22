@@ -15,11 +15,16 @@ from api.schemas.email_configs import (
     UpdateEmailConfigResponse,
     ActivateEmailConfigResponse,
     DeactivateEmailConfigResponse,
+    EmailAccount,
     DiscoverEmailAccountsResponse,
     DiscoverEmailFoldersResponse,
     ValidateEmailConfigRequest,
     ValidateEmailConfigResponse,
 )
+
+from shared.services.service_container import ServiceContainer
+
+from features.email_ingestion.service import EmailIngestionService
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +43,7 @@ async def list_email_configs() -> List[EmailConfigDetail]:
 @router.get("/{id}", response_model=EmailConfigDetail)
 async def get_email_config(id: int) -> EmailConfigDetail:
     """Get email configuration details"""
-    pass
+    
 
 
 @router.post("", response_model=CreateEmailConfigResponse, status_code=status.HTTP_201_CREATED)
@@ -70,15 +75,27 @@ async def deactivate_email_config(id: int) -> DeactivateEmailConfigResponse:
     """Deactivate email configuration (stops email monitoring)"""
     pass
 
-
 @router.get("/discovery/accounts", response_model=List[DiscoverEmailAccountsResponse])
-async def discover_email_accounts() -> List[DiscoverEmailAccountsResponse]:
+async def discover_email_accounts(
+    ingestion_service: EmailIngestionService = Depends(
+        lambda: ServiceContainer.get_email_ingestion_service()
+    ),    
+) -> DiscoverEmailAccountsResponse:
     """List available email accounts for configuration wizard Step 1"""
-    pass
+    accounts = await ingestion_service.discover_email_accounts()
 
+    return DiscoverEmailAccountsResponse(
+        accounts=[
+            EmailAccount(
+                email_address=account.email_address,
+                display_name=account.display_name
+            )
+            for account in accounts
+        ]
+    )
 
 @router.get("/discovery/folders", response_model=List[DiscoverEmailFoldersResponse])
-async def discover_email_folders() -> List[DiscoverEmailFoldersResponse]:
+async def discover_email_folders(email_address: Optional[str] = None) -> List[DiscoverEmailFoldersResponse]:
     """List available folders for selected email account (wizard Step 2)"""
     pass
 
