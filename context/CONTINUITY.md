@@ -1,7 +1,7 @@
 # Session Continuity Document
 
-**Date**: 2025-10-22
-**Session Focus**: Email Domain Filter Rules Fix, Type Hints, EmailConfigService Implementation, PDF Domain Exploration
+**Date**: 2025-10-23
+**Session Focus**: PDF Objects Typing Implementation, PDF Template Types & Smart Update Logic
 
 ---
 
@@ -9,40 +9,50 @@
 
 ### What Was Accomplished
 
-1. **Fixed EmailListenerThread Filter Rule Logic** (`server-new/src/features/email_ingestion/utils/email_listener_thread.py:156`)
-   - Rewrote `_check_filter_rule()` method to handle different field types correctly
-   - **String fields** (sender_email, subject): equals, contains, starts_with, ends_with
-   - **Boolean field** (has_attachments): equals, is (converts string to bool)
-   - **DateTime field** (received_date): before, after, equals
-   - Proper error handling and logging for invalid operations
-   - Each field type now evaluated with appropriate operations
+1. **Implemented Full PDF Objects Typing (Complete Stack)**
+   - **Types Layer** (`server-new/src/shared/types/pdf_files.py`):
+     - Created 7 object type dataclasses (TextWord, TextLine, GraphicRect, GraphicLine, GraphicCurve, Image, Table)
+     - Created PdfExtractedObjects container with keyed structure
+     - Added serialization helpers (serialize/deserialize)
+     - Updated PdfMetadata and PdfCreate to use typed PdfExtractedObjects
 
-2. **Added Complete Type Hints to EmailListenerThread**
-   - Added class variable type annotations (lines 24-34)
-   - Added return type hints to all methods
-   - Import `Any` for dict return type in `get_status()`
-   - All parameters, class variables, and methods now fully typed
+   - **Repository Layer** (`server-new/src/shared/database/repositories/pdf.py`):
+     - Updated imports for typed dataclasses and serialization helpers
+     - Updated `_model_to_dataclass()` to deserialize JSON → typed objects with error handling
+     - Updated `create()` to serialize typed objects → JSON
 
-3. **Implemented EmailConfigService** (`server-new/src/features/email_configs/service.py`)
-   - Created new feature directory: `server-new/src/features/email_configs/`
-   - All 7 public methods implemented:
-     1. `list_configs_summary()` - List all configs with summary
-     2. `get_config()` - Get config by ID
-     3. `create_config()` - Create new config (starts inactive)
-     4. `update_config()` - Update config (validates inactive)
-     5. `delete_config()` - Delete config (auto-deactivates if active)
-     6. `activate_config()` - Start monitoring (calls `ingestion_service.start_monitoring()`)
-     7. `deactivate_config()` - Stop monitoring (calls `ingestion_service.stop_monitoring()`)
-   - Added `ConflictError` exception to `shared/exceptions/service.py`
-   - Proper exception handling (preserves 404, 409, wraps 500)
-   - Delegates to EmailIngestionService for activation/deactivation
+   - **Service Layer** (`server-new/src/features/pdf_files/service.py`):
+     - Updated `_extract_objects_from_file()` to return PdfExtractedObjects (creates typed dataclasses directly)
+     - Updated `extract_objects_from_bytes()` return type to PdfExtractedObjects
+     - Updated `get_pdf_objects()` return type to PdfExtractedObjects
+     - Updated `store_pdf()` to work with typed objects throughout
 
-4. **Explored PDF Files Domain Requirements**
-   - Analyzed SERVICE_LAYER_DESIGN_V2.md for PdfFilesService
-   - Identified 5 public methods needed
-   - Identified 1 internal method needed
-   - Documented required types and repositories
-   - Documented 4 API endpoints
+   - **API Layer** (`server-new/src/api/routers/pdf_files.py`):
+     - Added `_convert_to_pydantic_objects()` helper to convert dataclasses → Pydantic
+     - Updated GET `/{id}/objects` endpoint to use GetPdfObjectsResponse
+     - Updated POST `/process-objects` endpoint to use ProcessPdfObjectsResponse
+
+2. **Created PDF Template Types** (`server-new/src/shared/types/pdf_templates.py`)
+   - **12 Core Dataclasses**:
+     - TemplateMetadata, TemplateSummary, TemplateWithVersion
+     - TemplateCreate, TemplateUpdate, TemplateMetadataUpdate, TemplateStatusUpdate
+     - TemplateVersion, VersionCreate, VersionSummary
+     - SignatureObject, SignatureObjects (KEYED STRUCTURE - breaking change)
+     - ExtractionField
+   - **4 Serialization Helpers**:
+     - serialize/deserialize_signature_objects()
+     - serialize/deserialize_extraction_fields()
+   - **All types frozen** for immutability
+   - **Keyed object structure** matching PdfExtractedObjects pattern
+
+3. **Updated Design Documentation with Smart Update Logic**
+   - Updated `context/server_redesign/SERVICE_LAYER_DESIGN_V2.md`
+   - Documented smart update strategy for `update_template()` method:
+     - **Metadata-only changes** (name, description): Update template only, no new version
+     - **Wizard data changes** (signature_objects, extraction_fields, pipeline_definition_id): Create new version
+     - **Status changes**: Handled by separate activate/deactivate endpoints
+   - Added detailed implementation with branching logic
+   - Documented repository calls for each branch
 
 ---
 
@@ -62,6 +72,24 @@
 - ✅ Filter rule checking logic with proper type handling
 - ✅ Complete type hints throughout
 
+**PDF Files Domain (100% Complete - Types, Repository, Service)**:
+- ✅ PDF file types with strongly-typed extracted objects (`shared/types/pdf_files.py`)
+- ✅ PdfRepository with typed serialization/deserialization (`shared/database/repositories/pdf.py`)
+- ✅ PdfFilesService with typed object extraction (`features/pdf_files/service.py`)
+- ✅ API router with Pydantic conversion layer (`api/routers/pdf_files.py`)
+- ✅ Full type safety from extraction through API response
+
+**PDF Templates Domain (30% Complete - Types Only)**:
+- ✅ Template types with smart update support (`shared/types/pdf_templates.py`)
+- ✅ Version types for immutable snapshots
+- ✅ Wizard data types with keyed structure (BREAKING CHANGE)
+- ✅ Serialization helpers for JSON conversion
+- ✅ Design documentation with smart update logic
+- ❌ TemplateRepository (not yet implemented)
+- ❌ TemplateVersionRepository (not yet implemented)
+- ❌ TemplateManagementService (not yet implemented)
+- ❌ API router (not yet implemented)
+
 **Shared Infrastructure**:
 - ✅ Database connection manager (synchronous)
 - ✅ Unit of Work pattern
@@ -71,125 +99,192 @@
 
 ### 🔨 In Progress
 
-**PDF Files Domain (0% Complete)**:
-- 📍 Ready to start implementation
-- 📍 Requirements fully documented
+**PDF Templates Domain (30% Complete)**:
+- ✅ Types defined
+- 📍 Ready to implement repositories
+- 📍 Ready to implement service with smart update logic
+- 📍 Ready to implement API router
 
 ### 📋 Next Steps (Priority Order)
 
-1. **Implement PDF Files Domain**
-   - Create types in `shared/types/pdf_files.py`
-   - Create PdfRepository in `shared/database/repositories/pdf.py`
-   - Create PdfObjectRepository in `shared/database/repositories/pdf_object.py`
-   - Create/verify StorageConfig
-   - Implement PdfFilesService in `features/pdf_files/service.py`
+1. **Complete PDF Templates Domain**
+   - Create TemplateRepository in `shared/database/repositories/template.py`
+   - Create TemplateVersionRepository in `shared/database/repositories/template_version.py`
+   - Implement TemplateManagementService in `features/template_management/service.py`
+   - Create API router in `api/routers/pdf_templates.py`
+   - **Database migration** to convert signature_objects from array to keyed structure
+   - **Frontend updates** to work with keyed signature objects
 
-2. **Continue with Remaining Domains**
+2. **Implement Remaining Service Domains**
    - EtoProcessingService
-   - TemplateManagementService
-   - PipelineService
+   - PipelineService (if not already implemented)
 
 ---
 
-## PDF Files Domain - Implementation Checklist
+## PDF Templates Domain - Implementation Checklist
 
-### Types to Create (`shared/types/pdf_files.py`)
-
-**Input Types**:
-- [ ] `PdfCreate` - For creating new PDF record
-  - Fields: original_filename, file_hash, file_size_bytes, file_path, email_id, stored_at
-- [ ] `PdfObjectCreate` - For creating object record
-  - Fields: pdf_id, object_type, page_number, bbox, content_json, extracted_at
-
-**Output Types**:
-- [ ] `PdfMetadata` - Complete PDF metadata
-  - Fields: id, original_filename, file_hash, file_size_bytes, file_path, email_id, stored_at
-- [ ] `PdfObject` - Extracted object
-  - Fields: id, pdf_id, object_type, page_number, bbox, content_json, extracted_at
+### Types ✅ COMPLETE
+- ✅ All 12 dataclasses created
+- ✅ Serialization helpers implemented
+- ✅ Smart update types (TemplateUpdate, TemplateMetadataUpdate)
+- ✅ Keyed SignatureObjects structure
 
 ### Repositories to Create
 
-**PdfRepository** (`shared/database/repositories/pdf.py`):
-- [ ] Implement with `model_class = PdfFileModel`
-- [ ] `get_by_id(pdf_id)` → PdfMetadata | None
-- [ ] `get_by_hash(file_hash)` → PdfMetadata | None
-- [ ] `create(pdf_data)` → PdfMetadata
+**TemplateRepository** (`shared/database/repositories/template.py`):
+- [ ] Implement with `model_class = TemplateModel` (or whatever the model is called)
+- [ ] `get_by_id(template_id)` → TemplateMetadata | None
+- [ ] `get_by_id_with_current_version(template_id)` → TemplateWithVersion | None
+- [ ] `list_with_pagination(status_filter, sort_by, sort_order, limit, offset)` → tuple[list[TemplateSummary], int]
+- [ ] `create(template_data: TemplateCreate)` → TemplateMetadata
+- [ ] `update(template_id: int, template_update: TemplateMetadataUpdate)` → TemplateMetadata
+- [ ] `delete(template_id: int)` → None
+- [ ] `update_status(template_id: int, status_update: TemplateStatusUpdate)` → TemplateMetadata
 - [ ] Helper: `_model_to_dataclass()` for ORM→dataclass conversion
 
-**PdfObjectRepository** (`shared/database/repositories/pdf_object.py`):
-- [ ] Implement with `model_class = ???` (check if PdfObjectModel exists)
-- [ ] `get_by_pdf_id(pdf_id)` → list[PdfObject]
-- [ ] `get_by_pdf_and_type(pdf_id, object_type)` → list[PdfObject]
-- [ ] `create(object_data)` → PdfObject
+**TemplateVersionRepository** (`shared/database/repositories/template_version.py`):
+- [ ] Implement with `model_class = TemplateVersionModel` (or whatever the model is called)
+- [ ] `get_by_id(version_id)` → TemplateVersion | None
+- [ ] `get_by_template_id(template_id)` → list[TemplateVersion]
+- [ ] `get_versions_summary(template_id)` → list[VersionSummary]
+- [ ] `create(version_data: VersionCreate)` → TemplateVersion
+- [ ] `delete(version_id: int)` → None
 - [ ] Helper: `_model_to_dataclass()` for ORM→dataclass conversion
+- [ ] Helper: Need to serialize/deserialize SignatureObjects using helper functions
 
-### Storage Configuration
-- [ ] Check if `StorageConfig` exists
-- [ ] If not, create with `pdf_storage_path` property
-- [ ] Configuration should point to filesystem storage location
-
-### PdfFilesService (`features/pdf_files/service.py`)
+### TemplateManagementService (`features/template_management/service.py`)
 
 **Constructor**:
 ```python
 def __init__(
     self,
     connection_manager: DatabaseConnectionManager,
-    storage_config: StorageConfig
+    pdf_service: PdfFilesService,
+    pipeline_service: PipelineService  # May not exist yet
 ) -> None:
     self.connection_manager = connection_manager
-    self.storage_config = storage_config
+    self.pdf_service = pdf_service
+    self.pipeline_service = pipeline_service  # Optional for now
+
+    self.template_repository = TemplateRepository(connection_manager=connection_manager)
+    self.version_repository = TemplateVersionRepository(connection_manager=connection_manager)
     self.pdf_repository = PdfRepository(connection_manager=connection_manager)
-    self.pdf_object_repository = PdfObjectRepository(connection_manager=connection_manager)
-    self.base_storage_path = Path(storage_config.pdf_storage_path)
-    self.base_storage_path.mkdir(parents=True, exist_ok=True)
 ```
 
-**Public Methods** (in order of implementation priority):
+**Public Methods** (in priority order):
 
-1. [ ] `get_pdf_metadata(pdf_id)` → PdfMetadata | None
-   - Simple delegation to repository
-   - Used by: `GET /pdf-files/{id}`
+1. [ ] `list_templates(status, sort_by, sort_order, limit, offset)` → TemplateListResult
+   - Simple delegation to repository with pagination
+   - Used by: `GET /pdf-templates`
 
-2. [ ] `get_pdf_file_bytes(pdf_id)` → tuple[bytes, str]
-   - Get metadata from repository
-   - Resolve filesystem path
-   - Read file bytes
-   - Return (file_bytes, original_filename)
-   - Used by: `GET /pdf-files/{id}/download`
+2. [ ] `get_template(template_id)` → TemplateWithVersion
+   - Get template with current version
+   - Used by: `GET /pdf-templates/{id}`
 
-3. [ ] `get_pdf_objects(pdf_id, object_type)` → list[PdfObject]
-   - Validate PDF exists
-   - Get objects with optional type filter
-   - Used by: `GET /pdf-files/{id}/objects`
+3. [ ] `create_template(template_data: TemplateCreate)` → TemplateMetadata
+   - Validate signature objects and extraction fields
+   - Create template + version 1 atomically (UoW)
+   - Set status to "draft" or "inactive"
+   - Used by: `POST /pdf-templates`
 
-4. [ ] `extract_objects_from_bytes(pdf_bytes, filename)` → list[PdfObject]
-   - Create temporary file
-   - Call `_extract_objects_from_file()`
-   - Delete temp file
-   - Return transient objects (not persisted)
-   - Used by: `POST /pdf-files/process`
+4. [ ] `update_template(template_id, template_data: TemplateUpdate)` → TemplateMetadata
+   - **SMART UPDATE LOGIC**:
+     - Check if wizard data changed (signature_objects, extraction_fields, pipeline_definition_id)
+     - If changed: validate, create new version, update current_version_id
+     - If not changed: update metadata only (name, description)
+   - Used by: `PUT /pdf-templates/{id}`
 
-5. [ ] `store_pdf(file_bytes, filename, email_id)` → PdfMetadata
-   - Calculate SHA-256 hash
-   - Check for existing PDF (deduplication)
-   - Generate date-based path: YYYY/MM/DD/hash.pdf
-   - Write file to filesystem
-   - Create database record via UoW
-   - Extract objects via `_extract_objects_from_file()`
-   - Store objects via UoW
-   - Return metadata
-   - **Called by**: EmailIngestionService._process_email()
+5. [ ] `delete_template(template_id)` → None
+   - Check if template has been used (check version usage_count)
+   - If used: raise ConflictError (suggest deactivate instead)
+   - Delete all versions first, then template (UoW)
+   - Used by: `DELETE /pdf-templates/{id}`
 
-**Internal Method**:
+6. [ ] `activate_template(template_id)` → TemplateMetadata
+   - Set status to "active"
+   - Record activated_at timestamp
+   - Used by: `POST /pdf-templates/{id}/activate`
 
-6. [ ] `_extract_objects_from_file(file_path, filename)` → list[PdfObject]
-   - Use pdfplumber to extract:
-     - Tables (with structured data and bbox)
-     - Text blocks (paragraphs)
-     - Images (metadata only)
-   - Return list of transient PdfObject instances
-   - Called by both `store_pdf()` and `extract_objects_from_bytes()`
+7. [ ] `deactivate_template(template_id)` → TemplateMetadata
+   - Set status to "inactive"
+   - Used by: `POST /pdf-templates/{id}/deactivate`
+
+8. [ ] `list_versions(template_id)` → list[VersionSummary]
+   - Get version history for template
+   - Used by: `GET /pdf-templates/{id}/versions`
+
+9. [ ] `get_version(template_id, version_id)` → TemplateVersion
+   - Get specific version details
+   - Used by: `GET /pdf-templates/{id}/versions/{version_id}`
+
+10. [ ] `simulate_template(template_data, pdf_bytes)` → SimulationResult (if time allows)
+    - Test template without persistence
+    - Used by: `POST /pdf-templates/simulate`
+
+**Internal Methods**:
+
+11. [ ] `_validate_template_fields(signature_objects, extraction_fields)` → None
+    - Validate field references point to valid signature objects
+    - Validate no duplicate field names
+    - Validate object_ids exist in signature_objects
+
+---
+
+## Breaking Change: SignatureObjects Structure
+
+### Migration Required
+
+**Old Format (array)**:
+```json
+{
+  "signature_objects": [
+    {"id": "1", "type": "text_word", "page": 0, "bbox": [10, 20, 30, 40], ...},
+    {"id": "2", "type": "graphic_rect", "page": 0, "bbox": [50, 60, 70, 80], ...}
+  ]
+}
+```
+
+**New Format (keyed by type)**:
+```json
+{
+  "signature_objects": {
+    "text_words": [
+      {"id": "1", "page": 0, "bbox": [10, 20, 30, 40], "object_type": "text_word", ...}
+    ],
+    "text_lines": [],
+    "graphic_rects": [
+      {"id": "2", "page": 0, "bbox": [50, 60, 70, 80], "object_type": "graphic_rect", ...}
+    ],
+    "graphic_lines": [],
+    "graphic_curves": [],
+    "images": [],
+    "tables": []
+  }
+}
+```
+
+### Migration Steps
+
+1. **Database Migration Script** (Python):
+   - Read all existing template_versions records
+   - For each version:
+     - Parse old signature_objects JSON
+     - Convert array to keyed structure by grouping by type
+     - Add object_type field to each object
+     - Write back to database
+   - Test on dev database first
+
+2. **Frontend Template Builder Updates**:
+   - Update signature object selection to work with keyed structure
+   - Update rendering to iterate over keyed groups
+   - Update field configuration to reference objects in keyed structure
+
+### Why This Change?
+
+- **Consistency**: Matches PdfExtractedObjects keyed structure
+- **Efficiency**: Type-based filtering without iteration
+- **Type Safety**: Clear structure for each object type
+- **Matching Logic**: ETO matching can efficiently compare by type
 
 ---
 
@@ -200,6 +295,7 @@ def __init__(
 - Use `session.get(self.model_class, id)` for primary key lookups
 - Use `session.query(self.model_class)` for queries
 - Helper method `_model_to_dataclass()` for conversions
+- Serialization helpers in types layer, called by repository
 - Only CRUD methods (no business logic)
 
 ### Service Pattern
@@ -211,23 +307,78 @@ def __init__(
   - Preserve `ConflictError` (409)
   - Wrap infrastructure failures as `ServiceError` (500)
 - Delegate complex operations to other services
-- Use UnitOfWork for transactions
+- Use UnitOfWork for multi-table transactions
 
 ### Type System
 - Use `T | None` instead of `Optional[T]`
 - Use frozen dataclasses for domain types
 - All parameters and return types fully typed
 - Class variables annotated
+- Serialization helpers in types layer (not repository)
+
+### Smart Update Logic (Templates Only)
+- Check what fields changed in TemplateUpdate
+- Branch on wizard data vs metadata changes
+- Create version only when needed
+- Clear logging for each branch
 
 ---
 
-## Important Notes
+## Important Technical Details
 
-### Architecture Decisions
+### Serialization Pattern (PDF Objects & Template Objects)
+
+**In Types Layer** (`shared/types/`):
+```python
+def serialize_extracted_objects(objects: PdfExtractedObjects) -> dict:
+    """Convert dataclass to dict for JSON storage"""
+    return asdict(objects)
+
+def deserialize_extracted_objects(objects_dict: dict) -> PdfExtractedObjects:
+    """Convert dict to dataclass from JSON"""
+    return PdfExtractedObjects(
+        text_words=[TextWord(**obj) for obj in objects_dict.get("text_words", [])],
+        # ... etc
+    )
+```
+
+**In Repository Layer**:
+```python
+def _model_to_dataclass(self, model: PdfFileModel) -> PdfMetadata:
+    # Deserialize JSON → dict → typed dataclass
+    objects_dict = json.loads(model.objects_json)
+    extracted_objects = deserialize_extracted_objects(objects_dict)
+    return PdfMetadata(..., extracted_objects=extracted_objects)
+
+def create(self, pdf_data: PdfCreate) -> PdfMetadata:
+    # Serialize typed dataclass → dict → JSON
+    objects_dict = serialize_extracted_objects(pdf_data.extracted_objects)
+    objects_json = json.dumps(objects_dict)
+    # ... create model with objects_json
+```
+
+**Same pattern applies to SignatureObjects in template repositories**
+
+### Database Field Mappings
+
+**PDF Files** (already implemented):
+- `objects_json` (TEXT) ↔ `extracted_objects` (PdfExtractedObjects dataclass)
+
+**Templates** (to be implemented):
+- `signature_objects_json` (TEXT) ↔ `signature_objects` (SignatureObjects dataclass)
+- `extraction_fields_json` (TEXT) ↔ `extraction_fields` (list[ExtractionField])
+
+---
+
+## Architecture Decisions
+
+### Core Principles
 - **Synchronous Only**: No async/await in backend (SQL Server limitation)
 - **Dataclasses for Domain**: Frozen dataclasses for immutability
 - **Dual-Mode Repositories**: Work standalone or within UoW transactions
 - **Service Layer Separation**: Clear boundaries between services
+- **Type Safety**: Full type hints, Literal types for enums
+- **Keyed Object Structures**: Group objects by type for efficiency
 
 ### File Locations
 - Types: `server-new/src/shared/types/`
@@ -235,6 +386,7 @@ def __init__(
 - Services: `server-new/src/features/{domain}/service.py`
 - Models: `server-new/src/shared/database/models.py`
 - Exceptions: `server-new/src/shared/exceptions/`
+- API Routers: `server-new/src/api/routers/`
 
 ### Common Pitfalls to Avoid
 - ❌ Don't use async/await
@@ -242,59 +394,88 @@ def __init__(
 - ❌ Don't put business logic in repositories
 - ❌ Don't use `select()` statements (use `session.query()`)
 - ❌ Don't hardcode model classes (use `model_class` property)
+- ❌ Don't put serialization logic in repositories (belongs in types layer)
 
 ---
 
 ## Files Modified This Session
 
-1. `server-new/src/features/email_ingestion/utils/email_listener_thread.py`
-   - Fixed filter rule checking logic (lines 156-243)
-   - Added type hints to class and methods
+1. **server-new/src/shared/types/pdf_files.py** (modified, +250 lines)
+   - Added 7 object type dataclasses
+   - Added PdfExtractedObjects container
+   - Added serialization helpers
+   - Updated PdfMetadata and PdfCreate
 
-2. `server-new/src/shared/exceptions/service.py`
-   - Added ConflictError exception (line 14)
+2. **server-new/src/shared/database/repositories/pdf.py** (modified, +30 lines)
+   - Updated imports for typed dataclasses
+   - Updated `_model_to_dataclass()` with deserialization
+   - Updated `create()` with serialization
 
-3. `server-new/src/shared/exceptions/__init__.py`
-   - Exported ConflictError (line 4, 16)
+3. **server-new/src/features/pdf_files/service.py** (modified, ~150 lines)
+   - Updated `_extract_objects_from_file()` to create typed objects
+   - Updated all public method return types
+   - Updated `store_pdf()` to work with typed objects
 
-4. `server-new/src/features/email_configs/` (NEW DIRECTORY)
-   - `__init__.py` - Exports EmailConfigService
-   - `service.py` - Complete implementation (275 lines)
+4. **server-new/src/api/routers/pdf_files.py** (modified, +80 lines)
+   - Added `_convert_to_pydantic_objects()` helper
+   - Updated endpoints to use typed responses
 
----
+5. **server-new/src/shared/types/pdf_templates.py** (NEW, 300+ lines)
+   - Created 12 dataclasses for templates/versions/wizard data
+   - Created 4 serialization helpers
+   - SignatureObjects keyed structure
 
-## Commands to Run After Session Resumes
-
-```bash
-# Navigate to server directory
-cd server-new
-
-# Run type checking (should pass with no errors)
-python -m mypy src/
-
-# Run any existing tests
-pytest tests/
-
-# Verify imports work
-python -c "from features.email_configs import EmailConfigService; print('✓ EmailConfigService imports')"
-python -c "from features.email_ingestion import EmailIngestionService; print('✓ EmailIngestionService imports')"
-```
+6. **context/server_redesign/SERVICE_LAYER_DESIGN_V2.md** (modified)
+   - Updated `update_template()` with smart update logic
+   - Documented branching behavior
+   - Added version_created flag to return type
 
 ---
 
-## Questions for Next Session
+## Reference Examples for Next Implementation
 
-1. Does `PdfObjectModel` exist in `shared/database/models.py`?
-2. Does `StorageConfig` exist, and where is it located?
-3. Should we implement all PDF methods or just the ones needed by EmailIngestionService first?
-4. What priority should we give to the remaining services (ETO, Template, Pipeline)?
+When implementing TemplateRepository and TemplateVersionRepository, use these as reference:
+
+1. **For typed object serialization**: See `PdfRepository` (lines 46-89, 129-161)
+2. **For filter rules serialization**: See `EmailConfigRepository` (lines 40-70)
+3. **For list/pagination**: See `EmailConfigRepository.get_all_summaries()` (lines 104-136)
+4. **For composite queries**: See `PdfRepository.get_by_hash()` (lines 111-127)
+
+When implementing TemplateManagementService, use these as reference:
+
+1. **For smart update logic**: See updated design in SERVICE_LAYER_DESIGN_V2.md (lines 3307-3477)
+2. **For UoW transactions**: See EmailConfigService methods (activate/deactivate patterns)
+3. **For validation logic**: See PdfFilesService._validate_pdf() pattern
+4. **For file operations**: See PdfFilesService.store_pdf() pattern
+
+---
+
+## Questions to Resolve Before Starting Templates Implementation
+
+1. **Model Names**: What are the actual model class names?
+   - TemplateModel or PdfTemplateModel?
+   - TemplateVersionModel or PdfTemplateVersionModel?
+
+2. **Database Fields**: Confirm JSON field names in database:
+   - `signature_objects_json` or `signature_objects`?
+   - `extraction_fields_json` or `extraction_fields`?
+
+3. **Pipeline Service**: Does PipelineService exist yet?
+   - If not, template creation/updates can skip pipeline validation for now
+   - Can use `pipeline_definition_id: int | None` without compilation
+
+4. **Migration Timing**: When should signature_objects migration run?
+   - Before or after repository implementation?
+   - Need existing templates in database to test migration?
 
 ---
 
 ## Session Handoff Notes
 
-The email domain is now 100% complete with proper filter logic and type safety. The EmailConfigService is production-ready and properly integrates with EmailIngestionService for activation/deactivation.
+The PDF Files domain typing is now 100% complete with strong type safety from extraction through API response. All layers (types, repository, service, API) have been updated and work together seamlessly.
 
-Next focus should be the PDF files domain, which has been fully analyzed and is ready for implementation. All requirements are documented in this continuity document.
+The PDF Templates domain types are complete and ready for implementation. The smart update logic is fully designed and documented. The keyed SignatureObjects structure is a breaking change that will require database migration and frontend updates, but provides better consistency and efficiency.
 
-The codebase follows consistent patterns throughout - when implementing PDF domain, refer to email domain implementations as reference examples.
+Next session should focus on implementing TemplateRepository and TemplateVersionRepository first, followed by TemplateManagementService with the smart update logic. Once complete, create the API router and Pydantic schemas.
+
+The pattern established for PDF objects typing can be directly applied to template signature objects - same serialization approach, same keyed structure, same frozen dataclass pattern.
