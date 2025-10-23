@@ -34,8 +34,10 @@ router = APIRouter(
 )
 
 
-@router.get("", response_model=List[EmailConfigDetail])
-async def list_email_configs() -> List[EmailConfigDetail]:
+@router.get("", response_model=ListEmailConfigsResponse)
+async def list_email_configs(
+    ingestion_serv
+) -> ListEmailConfigsResponse:
     """List all email configurations (summary)"""
     pass
 

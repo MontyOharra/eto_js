@@ -59,6 +59,7 @@ class EmailConfigModel(BaseModel):
 
     email_address: Mapped[str] = mapped_column(String(255), nullable=False)
     folder_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    provider_type: Mapped[str] = mapped_column(String(50), nullable=False, default="outlook_com")
     filter_rules: Mapped[Optional[str]] = mapped_column(Text)
 
     poll_interval_seconds: Mapped[int] = mapped_column(Integer, default=5)
