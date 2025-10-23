@@ -38,7 +38,6 @@ class EmailConfigDetail(BaseModel):
     error_retry_attempts: int
     is_active: bool
     activated_at: Optional[str] = None  # ISO 8601
-    is_running: bool
     last_check_time: Optional[str] = None  # ISO 8601
     last_error_message: Optional[str] = None
     last_error_at: Optional[str] = None  # ISO 8601
@@ -75,7 +74,6 @@ class CreateEmailConfigResponse(BaseModel):
     error_retry_attempts: int
     is_active: bool
     activated_at: Optional[str] = None
-    is_running: bool
     last_check_time: Optional[str] = None
     last_error_message: Optional[str] = None
     last_error_at: Optional[str] = None
@@ -109,7 +107,6 @@ class UpdateEmailConfigResponse(BaseModel):
     error_retry_attempts: int
     is_active: bool
     activated_at: Optional[str] = None
-    is_running: bool
     last_check_time: Optional[str] = None
     last_error_message: Optional[str] = None
     last_error_at: Optional[str] = None
@@ -128,7 +125,6 @@ class ActivateEmailConfigResponse(BaseModel):
     poll_interval_seconds: int
     max_backlog_hours: int
     error_retry_attempts: int
-    is_running: bool
     last_check_time: Optional[str] = None
     last_error_message: Optional[str] = None
     last_error_at: Optional[str] = None
@@ -146,7 +142,6 @@ class DeactivateEmailConfigResponse(BaseModel):
     poll_interval_seconds: int
     max_backlog_hours: int
     error_retry_attempts: int
-    is_running: bool
     last_check_time: Optional[str] = None
     last_error_message: Optional[str] = None
     last_error_at: Optional[str] = None

@@ -1,11 +1,12 @@
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Literal
 
 
 @dataclass(frozen=True)
 class FilterRule:
-    field: str
-    operation: str
+    field: Literal["sender_email", "subject", "has_attachments", "attachment_types"]
+    operation: Literal["contains", "equals", "starts_with", "ends_with"]
     value: str
     case_sensitive: bool
 
@@ -21,7 +22,6 @@ class EmailConfig:
     description: str | None
     email_address: str
     folder_name: str
-    provider_type: str
     filter_rules: list[FilterRule]
     poll_interval_seconds: int
     max_backlog_hours: int
@@ -57,7 +57,6 @@ class EmailConfigCreate:
     email_address: str
     folder_name: str
     description: str | None = None
-    provider_type: str = "outlook_com"
     filter_rules: list[FilterRule] = field(default_factory=list)
     poll_interval_seconds: int = 5
     max_backlog_hours: int = 24

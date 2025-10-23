@@ -1503,8 +1503,7 @@ def discover_email_accounts(
 
 **Dependencies**:
 - `DatabaseConnectionManager` - For database access and transaction management
-- `PdfRepository` - For PDF metadata CRUD operations
-- `PdfObjectRepository` - For extracted object CRUD operations
+- `PdfRepository` - For PDF metadata CRUD operations (objects stored as JSON in pdf_files table)
 - `StorageConfig` - Configuration for filesystem storage paths (from config/settings)
 
 **Responsibilities**:
@@ -1528,7 +1527,7 @@ def __init__(
     self.storage_config = storage_config
 
     self.pdf_repository = PdfRepository(connection_manager=connection_manager)
-    self.pdf_object_repository = PdfObjectRepository(connection_manager=connection_manager)
+    # No pdf_object_repository - objects stored as JSON in pdf_files table
 
     # Storage settings
     self.base_storage_path = Path(storage_config.pdf_storage_path)
@@ -1627,7 +1626,7 @@ def get_pdf_file_bytes(self, pdf_id: int) -> tuple[bytes, str]:
 
 ---
 
-### 3. `get_pdf_objects(pdf_id)` → list[PdfObject]
+### 3. `get_pdf_objects(pdf_id, object_type)` → dict
 
 **Called by**: Router endpoint `GET /pdf-files/{id}/objects`
 
@@ -1639,43 +1638,54 @@ def get_pdf_objects(
     self,
     pdf_id: int,
     object_type: Optional[str] = None
-) -> list[PdfObject]:
+) -> dict:
     """
     Get all extracted objects for a PDF.
 
-    Optionally filter by object type (table, text, image).
+    Objects are returned as grouped dict (same format as storage and API response).
 
     Args:
         pdf_id: PDF record ID
-        object_type: Optional filter ("table", "text", "image")
+        object_type: Optional filter by type key (e.g., "text_words", "tables")
 
     Returns:
-        List of PdfObject dataclasses
+        Dict with grouped objects:
+        {
+            "text_words": [...],
+            "text_lines": [...],
+            "graphic_rects": [...],
+            "graphic_lines": [...],
+            "graphic_curves": [...],
+            "images": [...],
+            "tables": [...]
+        }
+        Or subset if object_type specified.
 
     Raises:
         ObjectNotFoundError: If PDF not found
     """
-    # Validate PDF exists
-    pdf = self.pdf_repository.get_by_id(pdf_id)
-    if not pdf:
+    # Get PDF metadata (contains extracted_objects JSON)
+    metadata = self.pdf_repository.get_by_id(pdf_id)
+    if not metadata:
         raise ObjectNotFoundError(f"PDF {pdf_id} not found")
 
-    # Get objects (with optional type filter)
+    # Return extracted_objects dict directly
+    objects = metadata.extracted_objects
+
+    # Optional filtering - return subset of dict
     if object_type:
-        return self.pdf_object_repository.get_by_pdf_and_type(
-            pdf_id, object_type
-        )
-    else:
-        return self.pdf_object_repository.get_by_pdf_id(pdf_id)
+        return {object_type: objects.get(object_type, [])}
+
+    return objects
 ```
 
-**Repository calls**: `pdf_repository.get_by_id()`, `pdf_object_repository.get_by_pdf_and_type()` or `pdf_object_repository.get_by_pdf_id()`
+**Repository calls**: `pdf_repository.get_by_id()`
 
 ---
 
-### 4. `extract_objects_from_bytes(pdf_bytes, filename)` → list[PdfObject]
+### 4. `extract_objects_from_bytes(pdf_bytes, filename)` → dict
 
-**Called by**: Router endpoint `POST /pdf-files/process`
+**Called by**: Router endpoint `POST /pdf-files/process-objects`
 
 **Purpose**: Extract objects from PDF bytes (temporary extraction, no persistent storage)
 
@@ -1685,7 +1695,7 @@ def extract_objects_from_bytes(
     self,
     pdf_bytes: bytes,
     filename: str
-) -> list[PdfObject]:
+) -> dict:
     """
     Extract objects from PDF bytes without storing the PDF.
 
@@ -1694,16 +1704,16 @@ def extract_objects_from_bytes(
 
     Process:
     1. Write bytes to temporary file
-    2. Extract objects using pdfplumber
+    2. Extract objects using pdfplumber (returns grouped dict)
     3. Delete temporary file
-    4. Return extracted objects (not persisted)
+    4. Return extracted objects dict (not persisted)
 
     Args:
         pdf_bytes: Raw PDF file bytes
         filename: Original filename (for logging/error messages)
 
     Returns:
-        List of PdfObject dataclasses (transient, not persisted)
+        Dict with grouped objects (same format as storage/API response)
 
     Raises:
         ServiceError: If extraction fails
@@ -1717,7 +1727,7 @@ def extract_objects_from_bytes(
             tmp_file.write(pdf_bytes)
 
         try:
-            # Extract objects from temporary file
+            # Extract objects from temporary file (returns dict)
             extracted_objects = self._extract_objects_from_file(
                 tmp_path,
                 filename
@@ -1761,11 +1771,12 @@ def store_pdf(
     Process:
     1. Calculate SHA-256 hash
     2. Check if hash already exists (deduplication)
-    3. If new: save file to date-based path (YYYY/MM/DD/hash.pdf)
-    4. Create database record (or return existing)
-    5. Extract objects using pdfplumber
-    6. Store objects in database
-    7. Return metadata
+    3. If exists: return existing metadata
+    4. If new:
+       - Save file to date-based path (YYYY/MM/DD/hash.pdf)
+       - Extract objects using pdfplumber (returns grouped dict)
+       - Create database record with extracted_objects JSON
+       - Return metadata
 
     Args:
         file_bytes: Raw PDF file bytes
@@ -1807,65 +1818,54 @@ def store_pdf(
 
         logger.info(f"Stored PDF at {relative_path}")
 
-        # Create database record
+        # Extract objects (returns grouped dict)
+        extracted_objects_dict = self._extract_objects_from_file(
+            full_path,
+            filename
+        )
+
+        # Count total objects for logging
+        total_objects = sum(len(objects) for objects in extracted_objects_dict.values())
+
+        # Create database record with extracted_objects JSON
         pdf_create = PdfCreate(
             original_filename=filename,
             file_hash=file_hash,
             file_size_bytes=len(file_bytes),
             file_path=str(relative_path),
             email_id=email_id,
-            stored_at=now
+            stored_at=now,
+            extracted_objects=extracted_objects_dict  # JSON dict
         )
 
-        # Use Unit of Work for atomic PDF + objects creation
-        with self.connection_manager.unit_of_work() as uow:
-            # Create PDF record
-            pdf_metadata = uow.pdfs.create(pdf_create)
+        # Single repository call - no UoW needed
+        pdf_metadata = self.pdf_repository.create(pdf_create)
 
-            # Extract objects
-            extracted_objects = self._extract_objects_from_file(
-                full_path,
-                filename
-            )
+        logger.info(
+            f"Extracted {total_objects} objects from {filename} "
+            f"(PDF ID: {pdf_metadata.id})"
+        )
 
-            # Store objects
-            for obj in extracted_objects:
-                obj_create = PdfObjectCreate(
-                    pdf_id=pdf_metadata.id,
-                    object_type=obj.object_type,
-                    page_number=obj.page_number,
-                    bbox=obj.bbox,
-                    content_json=obj.content_json,
-                    extracted_at=now
-                )
-                uow.pdf_objects.create(obj_create)
-
-            logger.info(
-                f"Extracted {len(extracted_objects)} objects from {filename} "
-                f"(PDF ID: {pdf_metadata.id})"
-            )
-
-            # Both PDF and objects commit together
-            return pdf_metadata
+        return pdf_metadata
 
     except Exception as e:
         logger.error(f"Error storing PDF {filename}: {e}", exc_info=True)
         raise ServiceError(f"Failed to store PDF: {str(e)}")
 ```
 
-**Repository calls**: `pdf_repository.get_by_hash()`, `uow.pdfs.create()`, `uow.pdf_objects.create()`
+**Repository calls**: `pdf_repository.get_by_hash()`, `pdf_repository.create()`
 
 **Internal calls**: `_extract_objects_from_file()`
 
 **Filesystem operations**: Write PDF file
 
-**Transaction**: Uses Unit of Work to ensure PDF record + objects are created atomically
+**Transaction**: Single repository call (no UoW needed - single record creation)
 
 ---
 
 **Internal Methods**:
 
-### `_extract_objects_from_file(file_path, filename)` → list[PdfObject]
+### `_extract_objects_from_file(file_path, filename)` → dict
 
 **Called by**: `store_pdf()`, `extract_objects_from_bytes()`
 
@@ -1877,86 +1877,126 @@ def _extract_objects_from_file(
     self,
     file_path: Path,
     filename: str
-) -> list[PdfObject]:
+) -> dict:
     """
     Extract objects from PDF file using pdfplumber.
 
+    Returns dict directly in grouped format (matches storage and API response).
+    No conversions needed - extract directly to final structure.
+
     Extracts:
-    - Tables (with structured data)
-    - Text blocks (paragraphs)
-    - Images (metadata only)
+    - Text words (text, fontname, fontsize)
+    - Text lines (bbox only)
+    - Graphic rectangles (bbox, linewidth)
+    - Graphic lines (bbox, linewidth)
+    - Graphic curves (bbox, points, linewidth)
+    - Images (metadata: format, colorspace, bits)
+    - Tables (bbox, rows, cols)
 
     Args:
         file_path: Path to PDF file on filesystem
         filename: Original filename (for logging)
 
     Returns:
-        List of PdfObject dataclasses (transient - not persisted)
+        Dict with grouped objects:
+        {
+            "text_words": [{page, bbox, text, fontname, fontsize}, ...],
+            "text_lines": [{page, bbox}, ...],
+            "graphic_rects": [{page, bbox, linewidth}, ...],
+            "graphic_lines": [{page, bbox, linewidth}, ...],
+            "graphic_curves": [{page, bbox, points, linewidth}, ...],
+            "images": [{page, bbox, format, colorspace, bits}, ...],
+            "tables": [{page, bbox, rows, cols}, ...]
+        }
 
     Raises:
         ServiceError: If extraction fails
     """
     import pdfplumber
 
-    extracted_objects = []
+    # Initialize grouped structure
+    objects = {
+        "text_words": [],
+        "text_lines": [],
+        "graphic_rects": [],
+        "graphic_lines": [],
+        "graphic_curves": [],
+        "images": [],
+        "tables": []
+    }
 
     try:
         with pdfplumber.open(file_path) as pdf:
-            for page_num, page in enumerate(pdf.pages, start=1):
-                # Extract tables
-                tables = page.extract_tables()
-                for table_idx, table_data in enumerate(tables):
-                    bbox = page.find_tables()[table_idx].bbox if page.find_tables() else None
+            for page in pdf.pages:
+                page_num = page.page_number - 1  # 0-indexed
 
-                    obj = PdfObject(
-                        id=None,  # Not persisted yet
-                        pdf_id=None,  # Not persisted yet
-                        object_type="table",
-                        page_number=page_num,
-                        bbox=bbox,
-                        content_json={"table": table_data},
-                        extracted_at=None  # Set when persisted
-                    )
-                    extracted_objects.append(obj)
+                # Extract text words
+                words = page.extract_words()
+                for word in words:
+                    objects["text_words"].append({
+                        "page": page_num,
+                        "bbox": [word['x0'], word['top'], word['x1'], word['bottom']],
+                        "text": word['text'],
+                        "fontname": word.get('fontname'),
+                        "fontsize": word.get('size')
+                    })
 
-                # Extract text blocks
-                text = page.extract_text()
-                if text:
-                    obj = PdfObject(
-                        id=None,
-                        pdf_id=None,
-                        object_type="text",
-                        page_number=page_num,
-                        bbox=None,
-                        content_json={"text": text},
-                        extracted_at=None
-                    )
-                    extracted_objects.append(obj)
+                # Extract lines
+                lines = page.lines
+                for line in lines:
+                    objects["text_lines"].append({
+                        "page": page_num,
+                        "bbox": [line['x0'], line['top'], line['x1'], line['bottom']]
+                    })
 
-                # Extract images (metadata only)
+                # Extract rectangles
+                rects = page.rects
+                for rect in rects:
+                    objects["graphic_rects"].append({
+                        "page": page_num,
+                        "bbox": [rect['x0'], rect['top'], rect['x1'], rect['bottom']],
+                        "linewidth": rect.get('linewidth', 1.0)
+                    })
+
+                # Extract curves
+                curves = page.curves
+                for curve in curves:
+                    objects["graphic_curves"].append({
+                        "page": page_num,
+                        "bbox": [curve['x0'], curve['top'], curve['x1'], curve['bottom']],
+                        "points": curve.get('points', []),
+                        "linewidth": curve.get('linewidth', 1.0)
+                    })
+
+                # Extract images
                 images = page.images
-                for img_idx, img in enumerate(images):
-                    obj = PdfObject(
-                        id=None,
-                        pdf_id=None,
-                        object_type="image",
-                        page_number=page_num,
-                        bbox=img.get('bbox'),
-                        content_json={
-                            "width": img.get('width'),
-                            "height": img.get('height'),
-                            "index": img_idx
-                        },
-                        extracted_at=None
-                    )
-                    extracted_objects.append(obj)
+                for img in images:
+                    objects["images"].append({
+                        "page": page_num,
+                        "bbox": [img['x0'], img['top'], img['x1'], img['bottom']],
+                        "format": img.get('name', '').split('.')[-1].upper(),
+                        "colorspace": img.get('colorspace'),
+                        "bits": img.get('bits')
+                    })
 
+                # Extract tables
+                tables = page.find_tables()
+                for table in tables:
+                    table_data = table.extract()
+                    objects["tables"].append({
+                        "page": page_num,
+                        "bbox": list(table.bbox),
+                        "rows": len(table_data),
+                        "cols": len(table_data[0]) if table_data else 0
+                    })
+
+        total_objects = sum(len(obj_list) for obj_list in objects.values())
         logger.debug(
-            f"Extracted {len(extracted_objects)} objects from {filename} "
-            f"({pdf.pages} pages)"
+            f"Extracted {total_objects} objects from {filename} "
+            f"({len(pdf.pages)} pages)"
         )
 
-        return extracted_objects
+        return objects
 
     except Exception as e:
         logger.error(f"Error extracting objects from {filename}: {e}")
@@ -1970,12 +2010,12 @@ def _extract_objects_from_file(
 **Dataclasses Used**:
 
 **Input types** (from `shared/types/`):
-- `PdfCreate` - Data for creating new PDF record
-- `PdfObjectCreate` - Data for creating new object record
+- `PdfCreate` - Data for creating new PDF record (includes extracted_objects dict)
 
 **Output types** (from `shared/types/`):
-- `PdfMetadata` - Complete PDF metadata (includes file info, hash, path, timestamps)
-- `PdfObject` - Extracted object (table, text, image) with content and bounding box
+- `PdfMetadata` - Complete PDF metadata (includes file info, hash, path, timestamps, extracted_objects dict)
+
+**Note**: PDF objects are stored as JSON in the `extracted_objects` field. No separate PdfObject or PdfObjectCreate types needed.
 
 ---
 
@@ -1985,7 +2025,7 @@ def _extract_objects_from_file(
 - `GET /pdf-files/{id}` → `get_pdf_metadata()`
 - `GET /pdf-files/{id}/download` → `get_pdf_file_bytes()`
 - `GET /pdf-files/{id}/objects` → `get_pdf_objects()`
-- `POST /pdf-files/process` → `extract_objects_from_bytes()`
+- `POST /pdf-files/process-objects` → `extract_objects_from_bytes()`
 
 **Other services call this service:**
 - EmailIngestionService._process_email() → `store_pdf()` (when processing email attachments)

@@ -9,10 +9,12 @@ if TYPE_CHECKING:
     from features.modules.service import ModulesService
     from features.pipeline import PipelineService
     from features.pipeline_execution.service import PipelineExecutionService
+    from features.email_configs.service import EmailConfigService
     from features.email_ingestion.service import EmailIngestionService
     from features.eto_processing.service import EtoProcessingService
     from features.pdf_processing.service import PdfProcessingService
     from features.pdf_templates.service import PdfTemplateService
+    from features.pdf_files.service import PdfFilesService
     from shared.utils.registry import ModuleRegistry
     from shared.database.connection import DatabaseConnectionManager
 
@@ -127,6 +129,18 @@ class ServiceContainer:
                 'singleton': True,
                 'description': 'External database connection pool for action modules'
             },
+            'storage_config': {
+                'factory': 'shared.config.StorageConfig.from_environment',
+                'args': [],
+                'singleton': True,
+                'description': 'Storage configuration (filesystem paths)'
+            },
+            'email_configs': {
+                'class': 'features.email_configs.service.EmailConfigService',
+                'args': [cls._connection_manager, '_service:email_ingestion'],
+                'singleton': True,
+                'description': 'Email configuration management service'
+            },
             'email_ingestion': {
                 'class': 'features.email_ingestion.service.EmailIngestionService',
                 'args': [cls._connection_manager, '_service:pdf_processing', '_service:eto_processing'],
@@ -150,6 +164,12 @@ class ServiceContainer:
                 'args': [cls._connection_manager],
                 'singleton': True,
                 'description': 'PDF template service with storage'
+            },
+            'pdf_files': {
+                'class': 'features.pdf_files.service.PdfFilesService',
+                'args': [cls._connection_manager, '_service:storage_config'],
+                'singleton': True,
+                'description': 'PDF files service with extraction and storage'
             },
         }
 
@@ -314,6 +334,11 @@ class ServiceContainer:
         return cls.get('pipeline_execution')
     
     @classmethod
+    def get_email_config_service(cls) -> 'EmailConfigService':
+        """Get the email config service"""
+        return cls.get('email_configs')
+
+    @classmethod
     def get_email_ingestion_service(cls) -> 'EmailIngestionService':
         """Get the email ingestion service"""
         return cls.get('email_ingestion')
@@ -332,6 +357,11 @@ class ServiceContainer:
     def get_pdf_template_service(cls) -> 'PdfTemplateService':
         """Get the PDF template service"""
         return cls.get('pdf_templates')
+
+    @classmethod
+    def get_pdf_files_service(cls) -> 'PdfFilesService':
+        """Get the PDF files service"""
+        return cls.get('pdf_files')
 
     @classmethod
     def get_module_registry(cls) -> 'ModuleRegistry':

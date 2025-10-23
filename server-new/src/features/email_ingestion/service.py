@@ -410,7 +410,7 @@ class EmailIngestionService:
             try:
                 # Create persistent integration
                 integration = IntegrationRegistry.create(
-                    provider_type=config.provider_type,
+                    provider_type='outklook_com',
                     email_address=config.email_address,
                     folder_name=config.folder_name
                 )

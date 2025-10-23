@@ -8,35 +8,22 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from './routes/__root'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as Transformation_pipelineRouteRouteImport } from './routes/transformation_pipeline/route'
-import { Route as DashboardRouteRouteImport } from './routes/dashboard/route'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as Transformation_pipelineIndexRouteImport } from './routes/transformation_pipeline/index'
-import { Route as Transformation_pipelineCreateRouteImport } from './routes/transformation_pipeline/create'
-import { Route as DashboardTemplatesRouteImport } from './routes/dashboard/templates'
-import { Route as DashboardHomeRouteImport } from './routes/dashboard/home'
-import { Route as DashboardEtoInfoRouteImport } from './routes/dashboard/eto-info'
-import { Route as DashboardSettingsRouteRouteImport } from './routes/dashboard/settings/route'
-import { Route as DashboardPipelinesRouteRouteImport } from './routes/dashboard/pipelines/route'
-import { Route as DashboardPipelinesIndexRouteImport } from './routes/dashboard/pipelines/index'
-import { Route as Transformation_pipelineViewPipelineIdRouteImport } from './routes/transformation_pipeline/view.$pipelineId'
-import { Route as DashboardSettingsEmailConfigsRouteImport } from './routes/dashboard/settings/email-configs'
-import { Route as DashboardPipelinesCreateRouteImport } from './routes/dashboard/pipelines/create'
-import { Route as DashboardPipelinesViewPipelineIdRouteImport } from './routes/dashboard/pipelines/view.$pipelineId'
+import { Route as rootRouteImport } from './pages/__root'
+import { Route as LoginRouteImport } from './pages/login'
+import { Route as DashboardRouteRouteImport } from './pages/dashboard/route'
+import { Route as IndexRouteImport } from './pages/index'
+import { Route as DashboardIndexRouteImport } from './pages/dashboard/index'
+import { Route as DashboardPipelinesIndexRouteImport } from './pages/dashboard/pipelines/index'
+import { Route as DashboardPdfTemplatesIndexRouteImport } from './pages/dashboard/pdf-templates/index'
+import { Route as DashboardEtoIndexRouteImport } from './pages/dashboard/eto/index'
+import { Route as DashboardConfigsIndexRouteImport } from './pages/dashboard/configs/index'
+import { Route as DashboardPipelinesCreateRouteImport } from './pages/dashboard/pipelines/create'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const Transformation_pipelineRouteRoute =
-  Transformation_pipelineRouteRouteImport.update({
-    id: '/transformation_pipeline',
-    path: '/transformation_pipeline',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 const DashboardRouteRoute = DashboardRouteRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -47,185 +34,110 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const Transformation_pipelineIndexRoute =
-  Transformation_pipelineIndexRouteImport.update({
-    id: '/',
-    path: '/',
-    getParentRoute: () => Transformation_pipelineRouteRoute,
-  } as any)
-const Transformation_pipelineCreateRoute =
-  Transformation_pipelineCreateRouteImport.update({
-    id: '/create',
-    path: '/create',
-    getParentRoute: () => Transformation_pipelineRouteRoute,
-  } as any)
-const DashboardTemplatesRoute = DashboardTemplatesRouteImport.update({
-  id: '/templates',
-  path: '/templates',
-  getParentRoute: () => DashboardRouteRoute,
-} as any)
-const DashboardHomeRoute = DashboardHomeRouteImport.update({
-  id: '/home',
-  path: '/home',
-  getParentRoute: () => DashboardRouteRoute,
-} as any)
-const DashboardEtoInfoRoute = DashboardEtoInfoRouteImport.update({
-  id: '/eto-info',
-  path: '/eto-info',
-  getParentRoute: () => DashboardRouteRoute,
-} as any)
-const DashboardSettingsRouteRoute = DashboardSettingsRouteRouteImport.update({
-  id: '/settings',
-  path: '/settings',
-  getParentRoute: () => DashboardRouteRoute,
-} as any)
-const DashboardPipelinesRouteRoute = DashboardPipelinesRouteRouteImport.update({
-  id: '/pipelines',
-  path: '/pipelines',
+const DashboardIndexRoute = DashboardIndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => DashboardRouteRoute,
 } as any)
 const DashboardPipelinesIndexRoute = DashboardPipelinesIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => DashboardPipelinesRouteRoute,
+  id: '/pipelines/',
+  path: '/pipelines/',
+  getParentRoute: () => DashboardRouteRoute,
 } as any)
-const Transformation_pipelineViewPipelineIdRoute =
-  Transformation_pipelineViewPipelineIdRouteImport.update({
-    id: '/view/$pipelineId',
-    path: '/view/$pipelineId',
-    getParentRoute: () => Transformation_pipelineRouteRoute,
+const DashboardPdfTemplatesIndexRoute =
+  DashboardPdfTemplatesIndexRouteImport.update({
+    id: '/pdf-templates/',
+    path: '/pdf-templates/',
+    getParentRoute: () => DashboardRouteRoute,
   } as any)
-const DashboardSettingsEmailConfigsRoute =
-  DashboardSettingsEmailConfigsRouteImport.update({
-    id: '/email-configs',
-    path: '/email-configs',
-    getParentRoute: () => DashboardSettingsRouteRoute,
-  } as any)
+const DashboardEtoIndexRoute = DashboardEtoIndexRouteImport.update({
+  id: '/eto/',
+  path: '/eto/',
+  getParentRoute: () => DashboardRouteRoute,
+} as any)
+const DashboardConfigsIndexRoute = DashboardConfigsIndexRouteImport.update({
+  id: '/configs/',
+  path: '/configs/',
+  getParentRoute: () => DashboardRouteRoute,
+} as any)
 const DashboardPipelinesCreateRoute =
   DashboardPipelinesCreateRouteImport.update({
-    id: '/create',
-    path: '/create',
-    getParentRoute: () => DashboardPipelinesRouteRoute,
-  } as any)
-const DashboardPipelinesViewPipelineIdRoute =
-  DashboardPipelinesViewPipelineIdRouteImport.update({
-    id: '/view/$pipelineId',
-    path: '/view/$pipelineId',
-    getParentRoute: () => DashboardPipelinesRouteRoute,
+    id: '/pipelines/create',
+    path: '/pipelines/create',
+    getParentRoute: () => DashboardRouteRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRouteRouteWithChildren
-  '/transformation_pipeline': typeof Transformation_pipelineRouteRouteWithChildren
   '/login': typeof LoginRoute
-  '/dashboard/pipelines': typeof DashboardPipelinesRouteRouteWithChildren
-  '/dashboard/settings': typeof DashboardSettingsRouteRouteWithChildren
-  '/dashboard/eto-info': typeof DashboardEtoInfoRoute
-  '/dashboard/home': typeof DashboardHomeRoute
-  '/dashboard/templates': typeof DashboardTemplatesRoute
-  '/transformation_pipeline/create': typeof Transformation_pipelineCreateRoute
-  '/transformation_pipeline/': typeof Transformation_pipelineIndexRoute
+  '/dashboard/': typeof DashboardIndexRoute
   '/dashboard/pipelines/create': typeof DashboardPipelinesCreateRoute
-  '/dashboard/settings/email-configs': typeof DashboardSettingsEmailConfigsRoute
-  '/transformation_pipeline/view/$pipelineId': typeof Transformation_pipelineViewPipelineIdRoute
-  '/dashboard/pipelines/': typeof DashboardPipelinesIndexRoute
-  '/dashboard/pipelines/view/$pipelineId': typeof DashboardPipelinesViewPipelineIdRoute
+  '/dashboard/configs': typeof DashboardConfigsIndexRoute
+  '/dashboard/eto': typeof DashboardEtoIndexRoute
+  '/dashboard/pdf-templates': typeof DashboardPdfTemplatesIndexRoute
+  '/dashboard/pipelines': typeof DashboardPipelinesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/dashboard': typeof DashboardRouteRouteWithChildren
   '/login': typeof LoginRoute
-  '/dashboard/settings': typeof DashboardSettingsRouteRouteWithChildren
-  '/dashboard/eto-info': typeof DashboardEtoInfoRoute
-  '/dashboard/home': typeof DashboardHomeRoute
-  '/dashboard/templates': typeof DashboardTemplatesRoute
-  '/transformation_pipeline/create': typeof Transformation_pipelineCreateRoute
-  '/transformation_pipeline': typeof Transformation_pipelineIndexRoute
+  '/dashboard': typeof DashboardIndexRoute
   '/dashboard/pipelines/create': typeof DashboardPipelinesCreateRoute
-  '/dashboard/settings/email-configs': typeof DashboardSettingsEmailConfigsRoute
-  '/transformation_pipeline/view/$pipelineId': typeof Transformation_pipelineViewPipelineIdRoute
+  '/dashboard/configs': typeof DashboardConfigsIndexRoute
+  '/dashboard/eto': typeof DashboardEtoIndexRoute
+  '/dashboard/pdf-templates': typeof DashboardPdfTemplatesIndexRoute
   '/dashboard/pipelines': typeof DashboardPipelinesIndexRoute
-  '/dashboard/pipelines/view/$pipelineId': typeof DashboardPipelinesViewPipelineIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRouteRouteWithChildren
-  '/transformation_pipeline': typeof Transformation_pipelineRouteRouteWithChildren
   '/login': typeof LoginRoute
-  '/dashboard/pipelines': typeof DashboardPipelinesRouteRouteWithChildren
-  '/dashboard/settings': typeof DashboardSettingsRouteRouteWithChildren
-  '/dashboard/eto-info': typeof DashboardEtoInfoRoute
-  '/dashboard/home': typeof DashboardHomeRoute
-  '/dashboard/templates': typeof DashboardTemplatesRoute
-  '/transformation_pipeline/create': typeof Transformation_pipelineCreateRoute
-  '/transformation_pipeline/': typeof Transformation_pipelineIndexRoute
+  '/dashboard/': typeof DashboardIndexRoute
   '/dashboard/pipelines/create': typeof DashboardPipelinesCreateRoute
-  '/dashboard/settings/email-configs': typeof DashboardSettingsEmailConfigsRoute
-  '/transformation_pipeline/view/$pipelineId': typeof Transformation_pipelineViewPipelineIdRoute
+  '/dashboard/configs/': typeof DashboardConfigsIndexRoute
+  '/dashboard/eto/': typeof DashboardEtoIndexRoute
+  '/dashboard/pdf-templates/': typeof DashboardPdfTemplatesIndexRoute
   '/dashboard/pipelines/': typeof DashboardPipelinesIndexRoute
-  '/dashboard/pipelines/view/$pipelineId': typeof DashboardPipelinesViewPipelineIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/dashboard'
-    | '/transformation_pipeline'
     | '/login'
-    | '/dashboard/pipelines'
-    | '/dashboard/settings'
-    | '/dashboard/eto-info'
-    | '/dashboard/home'
-    | '/dashboard/templates'
-    | '/transformation_pipeline/create'
-    | '/transformation_pipeline/'
+    | '/dashboard/'
     | '/dashboard/pipelines/create'
-    | '/dashboard/settings/email-configs'
-    | '/transformation_pipeline/view/$pipelineId'
-    | '/dashboard/pipelines/'
-    | '/dashboard/pipelines/view/$pipelineId'
+    | '/dashboard/configs'
+    | '/dashboard/eto'
+    | '/dashboard/pdf-templates'
+    | '/dashboard/pipelines'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/dashboard'
     | '/login'
-    | '/dashboard/settings'
-    | '/dashboard/eto-info'
-    | '/dashboard/home'
-    | '/dashboard/templates'
-    | '/transformation_pipeline/create'
-    | '/transformation_pipeline'
+    | '/dashboard'
     | '/dashboard/pipelines/create'
-    | '/dashboard/settings/email-configs'
-    | '/transformation_pipeline/view/$pipelineId'
+    | '/dashboard/configs'
+    | '/dashboard/eto'
+    | '/dashboard/pdf-templates'
     | '/dashboard/pipelines'
-    | '/dashboard/pipelines/view/$pipelineId'
   id:
     | '__root__'
     | '/'
     | '/dashboard'
-    | '/transformation_pipeline'
     | '/login'
-    | '/dashboard/pipelines'
-    | '/dashboard/settings'
-    | '/dashboard/eto-info'
-    | '/dashboard/home'
-    | '/dashboard/templates'
-    | '/transformation_pipeline/create'
-    | '/transformation_pipeline/'
+    | '/dashboard/'
     | '/dashboard/pipelines/create'
-    | '/dashboard/settings/email-configs'
-    | '/transformation_pipeline/view/$pipelineId'
+    | '/dashboard/configs/'
+    | '/dashboard/eto/'
+    | '/dashboard/pdf-templates/'
     | '/dashboard/pipelines/'
-    | '/dashboard/pipelines/view/$pipelineId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DashboardRouteRoute: typeof DashboardRouteRouteWithChildren
-  Transformation_pipelineRouteRoute: typeof Transformation_pipelineRouteRouteWithChildren
   LoginRoute: typeof LoginRoute
 }
 
@@ -236,13 +148,6 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/transformation_pipeline': {
-      id: '/transformation_pipeline'
-      path: '/transformation_pipeline'
-      fullPath: '/transformation_pipeline'
-      preLoaderRoute: typeof Transformation_pipelineRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard': {
@@ -259,170 +164,76 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/transformation_pipeline/': {
-      id: '/transformation_pipeline/'
+    '/dashboard/': {
+      id: '/dashboard/'
       path: '/'
-      fullPath: '/transformation_pipeline/'
-      preLoaderRoute: typeof Transformation_pipelineIndexRouteImport
-      parentRoute: typeof Transformation_pipelineRouteRoute
-    }
-    '/transformation_pipeline/create': {
-      id: '/transformation_pipeline/create'
-      path: '/create'
-      fullPath: '/transformation_pipeline/create'
-      preLoaderRoute: typeof Transformation_pipelineCreateRouteImport
-      parentRoute: typeof Transformation_pipelineRouteRoute
-    }
-    '/dashboard/templates': {
-      id: '/dashboard/templates'
-      path: '/templates'
-      fullPath: '/dashboard/templates'
-      preLoaderRoute: typeof DashboardTemplatesRouteImport
-      parentRoute: typeof DashboardRouteRoute
-    }
-    '/dashboard/home': {
-      id: '/dashboard/home'
-      path: '/home'
-      fullPath: '/dashboard/home'
-      preLoaderRoute: typeof DashboardHomeRouteImport
-      parentRoute: typeof DashboardRouteRoute
-    }
-    '/dashboard/eto-info': {
-      id: '/dashboard/eto-info'
-      path: '/eto-info'
-      fullPath: '/dashboard/eto-info'
-      preLoaderRoute: typeof DashboardEtoInfoRouteImport
-      parentRoute: typeof DashboardRouteRoute
-    }
-    '/dashboard/settings': {
-      id: '/dashboard/settings'
-      path: '/settings'
-      fullPath: '/dashboard/settings'
-      preLoaderRoute: typeof DashboardSettingsRouteRouteImport
-      parentRoute: typeof DashboardRouteRoute
-    }
-    '/dashboard/pipelines': {
-      id: '/dashboard/pipelines'
-      path: '/pipelines'
-      fullPath: '/dashboard/pipelines'
-      preLoaderRoute: typeof DashboardPipelinesRouteRouteImport
+      fullPath: '/dashboard/'
+      preLoaderRoute: typeof DashboardIndexRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
     '/dashboard/pipelines/': {
       id: '/dashboard/pipelines/'
-      path: '/'
-      fullPath: '/dashboard/pipelines/'
+      path: '/pipelines'
+      fullPath: '/dashboard/pipelines'
       preLoaderRoute: typeof DashboardPipelinesIndexRouteImport
-      parentRoute: typeof DashboardPipelinesRouteRoute
+      parentRoute: typeof DashboardRouteRoute
     }
-    '/transformation_pipeline/view/$pipelineId': {
-      id: '/transformation_pipeline/view/$pipelineId'
-      path: '/view/$pipelineId'
-      fullPath: '/transformation_pipeline/view/$pipelineId'
-      preLoaderRoute: typeof Transformation_pipelineViewPipelineIdRouteImport
-      parentRoute: typeof Transformation_pipelineRouteRoute
+    '/dashboard/pdf-templates/': {
+      id: '/dashboard/pdf-templates/'
+      path: '/pdf-templates'
+      fullPath: '/dashboard/pdf-templates'
+      preLoaderRoute: typeof DashboardPdfTemplatesIndexRouteImport
+      parentRoute: typeof DashboardRouteRoute
     }
-    '/dashboard/settings/email-configs': {
-      id: '/dashboard/settings/email-configs'
-      path: '/email-configs'
-      fullPath: '/dashboard/settings/email-configs'
-      preLoaderRoute: typeof DashboardSettingsEmailConfigsRouteImport
-      parentRoute: typeof DashboardSettingsRouteRoute
+    '/dashboard/eto/': {
+      id: '/dashboard/eto/'
+      path: '/eto'
+      fullPath: '/dashboard/eto'
+      preLoaderRoute: typeof DashboardEtoIndexRouteImport
+      parentRoute: typeof DashboardRouteRoute
+    }
+    '/dashboard/configs/': {
+      id: '/dashboard/configs/'
+      path: '/configs'
+      fullPath: '/dashboard/configs'
+      preLoaderRoute: typeof DashboardConfigsIndexRouteImport
+      parentRoute: typeof DashboardRouteRoute
     }
     '/dashboard/pipelines/create': {
       id: '/dashboard/pipelines/create'
-      path: '/create'
+      path: '/pipelines/create'
       fullPath: '/dashboard/pipelines/create'
       preLoaderRoute: typeof DashboardPipelinesCreateRouteImport
-      parentRoute: typeof DashboardPipelinesRouteRoute
-    }
-    '/dashboard/pipelines/view/$pipelineId': {
-      id: '/dashboard/pipelines/view/$pipelineId'
-      path: '/view/$pipelineId'
-      fullPath: '/dashboard/pipelines/view/$pipelineId'
-      preLoaderRoute: typeof DashboardPipelinesViewPipelineIdRouteImport
-      parentRoute: typeof DashboardPipelinesRouteRoute
+      parentRoute: typeof DashboardRouteRoute
     }
   }
 }
-
-interface DashboardPipelinesRouteRouteChildren {
-  DashboardPipelinesCreateRoute: typeof DashboardPipelinesCreateRoute
-  DashboardPipelinesIndexRoute: typeof DashboardPipelinesIndexRoute
-  DashboardPipelinesViewPipelineIdRoute: typeof DashboardPipelinesViewPipelineIdRoute
-}
-
-const DashboardPipelinesRouteRouteChildren: DashboardPipelinesRouteRouteChildren =
-  {
-    DashboardPipelinesCreateRoute: DashboardPipelinesCreateRoute,
-    DashboardPipelinesIndexRoute: DashboardPipelinesIndexRoute,
-    DashboardPipelinesViewPipelineIdRoute:
-      DashboardPipelinesViewPipelineIdRoute,
-  }
-
-const DashboardPipelinesRouteRouteWithChildren =
-  DashboardPipelinesRouteRoute._addFileChildren(
-    DashboardPipelinesRouteRouteChildren,
-  )
-
-interface DashboardSettingsRouteRouteChildren {
-  DashboardSettingsEmailConfigsRoute: typeof DashboardSettingsEmailConfigsRoute
-}
-
-const DashboardSettingsRouteRouteChildren: DashboardSettingsRouteRouteChildren =
-  {
-    DashboardSettingsEmailConfigsRoute: DashboardSettingsEmailConfigsRoute,
-  }
-
-const DashboardSettingsRouteRouteWithChildren =
-  DashboardSettingsRouteRoute._addFileChildren(
-    DashboardSettingsRouteRouteChildren,
-  )
 
 interface DashboardRouteRouteChildren {
-  DashboardPipelinesRouteRoute: typeof DashboardPipelinesRouteRouteWithChildren
-  DashboardSettingsRouteRoute: typeof DashboardSettingsRouteRouteWithChildren
-  DashboardEtoInfoRoute: typeof DashboardEtoInfoRoute
-  DashboardHomeRoute: typeof DashboardHomeRoute
-  DashboardTemplatesRoute: typeof DashboardTemplatesRoute
+  DashboardIndexRoute: typeof DashboardIndexRoute
+  DashboardPipelinesCreateRoute: typeof DashboardPipelinesCreateRoute
+  DashboardConfigsIndexRoute: typeof DashboardConfigsIndexRoute
+  DashboardEtoIndexRoute: typeof DashboardEtoIndexRoute
+  DashboardPdfTemplatesIndexRoute: typeof DashboardPdfTemplatesIndexRoute
+  DashboardPipelinesIndexRoute: typeof DashboardPipelinesIndexRoute
 }
 
 const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
-  DashboardPipelinesRouteRoute: DashboardPipelinesRouteRouteWithChildren,
-  DashboardSettingsRouteRoute: DashboardSettingsRouteRouteWithChildren,
-  DashboardEtoInfoRoute: DashboardEtoInfoRoute,
-  DashboardHomeRoute: DashboardHomeRoute,
-  DashboardTemplatesRoute: DashboardTemplatesRoute,
+  DashboardIndexRoute: DashboardIndexRoute,
+  DashboardPipelinesCreateRoute: DashboardPipelinesCreateRoute,
+  DashboardConfigsIndexRoute: DashboardConfigsIndexRoute,
+  DashboardEtoIndexRoute: DashboardEtoIndexRoute,
+  DashboardPdfTemplatesIndexRoute: DashboardPdfTemplatesIndexRoute,
+  DashboardPipelinesIndexRoute: DashboardPipelinesIndexRoute,
 }
 
 const DashboardRouteRouteWithChildren = DashboardRouteRoute._addFileChildren(
   DashboardRouteRouteChildren,
 )
 
-interface Transformation_pipelineRouteRouteChildren {
-  Transformation_pipelineCreateRoute: typeof Transformation_pipelineCreateRoute
-  Transformation_pipelineIndexRoute: typeof Transformation_pipelineIndexRoute
-  Transformation_pipelineViewPipelineIdRoute: typeof Transformation_pipelineViewPipelineIdRoute
-}
-
-const Transformation_pipelineRouteRouteChildren: Transformation_pipelineRouteRouteChildren =
-  {
-    Transformation_pipelineCreateRoute: Transformation_pipelineCreateRoute,
-    Transformation_pipelineIndexRoute: Transformation_pipelineIndexRoute,
-    Transformation_pipelineViewPipelineIdRoute:
-      Transformation_pipelineViewPipelineIdRoute,
-  }
-
-const Transformation_pipelineRouteRouteWithChildren =
-  Transformation_pipelineRouteRoute._addFileChildren(
-    Transformation_pipelineRouteRouteChildren,
-  )
-
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DashboardRouteRoute: DashboardRouteRouteWithChildren,
-  Transformation_pipelineRouteRoute:
-    Transformation_pipelineRouteRouteWithChildren,
   LoginRoute: LoginRoute,
 }
 export const routeTree = rootRouteImport

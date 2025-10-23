@@ -1,40 +1,70 @@
-import { position } from "../../prisma/generated/client/index";
-import { DatabaseConfig } from "./database";
+/**
+ * Global type definitions for IPC communication
+ */
 
 declare global {
-  // Output payloads (responses from main process)
+  // Output payloads (responses from main process to renderer)
   type OutputPayloadMapping = {
-    'file:select': { filePath: string; fileName: string } | null;
-    'file:read': { content: string; filePath: string };
-    'file:save': { success: boolean; filePath: string };
-    'dialog:confirm': { confirmed: boolean };
+    'file:select': {
+      filePaths: string[];
+      canceled: boolean;
+    };
+    'file:read': {
+      content: string;
+      error?: string;
+    };
+    'file:save': {
+      filePath: string | null;
+      canceled: boolean;
+    };
+    'dialog:confirm': {
+      response: number; // 0 = OK, 1 = Cancel
+      confirmed: boolean;
+    };
   };
 
-  // Input payloads (requests to main process)
+  // Input payloads (requests from renderer to main process)
   type InputPayloadMapping = {
     'file:select': {
       filters?: Array<{ name: string; extensions: string[] }>;
-      title?: string;
+      properties?: Array<
+        | 'openFile'
+        | 'openDirectory'
+        | 'multiSelections'
+        | 'showHiddenFiles'
+      >;
     };
-    'file:read': { filePath: string };
+    'file:read': {
+      filePath: string;
+    };
     'file:save': {
-      content: string;
       defaultPath?: string;
       filters?: Array<{ name: string; extensions: string[] }>;
     };
     'dialog:confirm': {
+      title: string;
       message: string;
       detail?: string;
-      title?: string;
     };
   };
 
+  // Window API exposed to renderer via preload script
   interface Window {
     electron: {
-      selectFile: (options?: InputPayloadMapping['file:select']) => Promise<OutputPayloadMapping['file:select']>;
-      readFile: (filePath: string) => Promise<OutputPayloadMapping['file:read']>;
-      saveFile: (content: string, options?: { defaultPath?: string; filters?: Array<{ name: string; extensions: string[] }> }) => Promise<OutputPayloadMapping['file:save']>;
-      confirm: (message: string, options?: { detail?: string; title?: string }) => Promise<boolean>;
+      selectFile: (
+        options?: InputPayloadMapping['file:select']
+      ) => Promise<OutputPayloadMapping['file:select']>;
+      readFile: (
+        options: InputPayloadMapping['file:read']
+      ) => Promise<OutputPayloadMapping['file:read']>;
+      saveFile: (
+        options?: InputPayloadMapping['file:save']
+      ) => Promise<OutputPayloadMapping['file:save']>;
+      confirmDialog: (
+        options: InputPayloadMapping['dialog:confirm']
+      ) => Promise<OutputPayloadMapping['dialog:confirm']>;
     };
   }
 }
+
+export {};

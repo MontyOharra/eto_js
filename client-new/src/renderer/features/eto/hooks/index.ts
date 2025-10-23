@@ -1,1 +1,0 @@
-export { useMockEtoApi } from './useMockEtoApi';

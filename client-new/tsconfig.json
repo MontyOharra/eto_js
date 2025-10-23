@@ -1,9 +1,0 @@
-{
-  "files": [],
-  "references": [
-    { "path": "./src/renderer" },
-    { "path": "./src/main" },
-    { "path": "./src/preload" },
-    { "path": "./tsconfig.vite.json" }
-  ]
-}

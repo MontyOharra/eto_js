@@ -1,1 +1,0 @@
-export { useMockTemplatesApi } from './useMockTemplatesApi';

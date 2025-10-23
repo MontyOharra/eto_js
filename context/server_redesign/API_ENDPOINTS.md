@@ -97,20 +97,22 @@ Return data directly (no `success` wrapper):
 
 > See `API_DESIGN.md` Domain 1 for business rules and requirements.
 
+**Router Status**: ✅ Reviewed
+
 ### Endpoints Overview
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/email-configs` | List all configurations (summary) |
-| GET | `/email-configs/{id}` | Get configuration details |
-| POST | `/email-configs` | Create new configuration |
-| PUT | `/email-configs/{id}` | Update configuration |
-| DELETE | `/email-configs/{id}` | Delete configuration |
-| POST | `/email-configs/{id}/activate` | Activate configuration |
-| POST | `/email-configs/{id}/deactivate` | Deactivate configuration |
-| GET | `/email-configs/discovery/accounts` | List available email accounts |
-| GET | `/email-configs/discovery/folders` | List folders for account |
-| POST | `/email-configs/validate` | Validate configuration |
+| Method | Path | Description | Reviewed |
+|--------|------|-------------|----------|
+| GET | `/email-configs` | List all configurations (summary) | ✅ |
+| GET | `/email-configs/{id}` | Get configuration details | ✅ |
+| POST | `/email-configs` | Create new configuration | ✅ |
+| PUT | `/email-configs/{id}` | Update configuration | ✅ |
+| DELETE | `/email-configs/{id}` | Delete configuration | ✅ |
+| POST | `/email-configs/{id}/activate` | Activate configuration | ✅ |
+| POST | `/email-configs/{id}/deactivate` | Deactivate configuration | ✅ |
+| GET | `/email-configs/discovery/accounts` | List available email accounts | ✅ |
+| GET | `/email-configs/discovery/folders` | List folders for account | ✅ |
+| POST | `/email-configs/validate` | Validate configuration | ✅ |
 
 ---
 
@@ -399,17 +401,18 @@ Return data directly (no `success` wrapper):
 
 > See `API_DESIGN.md` Domain 2 for business rules and requirements.
 
+**Router Status**: ✅ Reviewed
+
 ### Endpoints Overview
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/eto-runs` | List runs with optional status filtering, sorting, and pagination |
-| GET | `/eto-runs/{id}` | Get full run details including all stage results and execution logs |
-| POST | `/eto-runs/upload` | Create new run via manual PDF upload |
-| POST | `/eto-runs/reprocess` | Reprocess runs (bulk): reset to not_started, clear stage records |
-| POST | `/eto-runs/skip` | Skip runs (bulk): set status to skipped |
-| DELETE | `/eto-runs` | Delete runs (bulk): permanently remove (only if skipped) |
-| POST | `/eto-runs/{id}/reprocess` | Reprocess single run (convenience endpoint) |
+| Method | Path | Description | Reviewed |
+|--------|------|-------------|----------|
+| GET | `/eto-runs` | List runs with optional status filtering, sorting, and pagination | ✅ |
+| GET | `/eto-runs/{id}` | Get full run details including all stage results and execution logs | ✅ |
+| POST | `/eto-runs/upload` | Create new run via manual PDF upload | ✅ |
+| POST | `/eto-runs/reprocess` | Reprocess runs (bulk): reset to not_started, clear stage records | ✅ |
+| POST | `/eto-runs/skip` | Skip runs (bulk): set status to skipped | ✅ |
+| DELETE | `/eto-runs` | Delete runs (bulk): permanently remove (only if skipped) | ✅ |
 
 ---
 
@@ -758,44 +761,20 @@ Return data directly (no `success` wrapper):
 
 ---
 
-### `POST /eto-runs/{id}/reprocess`
-
-**Description:** Reprocess single run (convenience endpoint - alternative to bulk operation). Resets run to `not_started` and clears all stage records.
-
-**Path Parameters:**
-- `id`: Run ID (integer)
-
-**Request:** No body
-
-**Validation Rules:**
-- Run must exist
-- Run status must NOT be `processing`
-- Run status must NOT be `success` (cannot reprocess successful runs)
-
-**Response:** `204 No Content`
-
-*(No response body)*
-
-**Errors:**
-- `400`: Validation failed
-  - `{"detail": "Run is currently processing"}`
-  - `{"detail": "Run has already succeeded"}`
-  - `{"detail": "Cannot reprocess successful runs"}`
-- `404`: `{"detail": "Run not found"}`
-- `500`: `{"detail": "Database error"}`
-
----
-
 ## Router 3: `/pdf-files` - PDF File Access
+
+**Router Status**: ✅ Reviewed
+
+**Implementation Note**: PDF objects are stored as JSON in the `extracted_objects` field of the `pdf_files` table. There is no separate `pdf_objects` table. Objects are extracted using pdfplumber and stored in a grouped dict structure that matches the API response format.
 
 ### Endpoints Overview
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/pdf-files/{id}` | Get PDF file metadata |
-| GET | `/pdf-files/{id}/download` | Download/stream PDF file bytes |
-| GET | `/pdf-files/{id}/objects` | Get extracted PDF objects (for template building) |
-| POST | `/pdf-files/process` | Process uploaded PDF and extract objects (no persistence) |
+| Method | Path | Description | Reviewed |
+|--------|------|-------------|----------|
+| GET | `/pdf-files/{id}` | Get PDF file metadata | ✅ |
+| GET | `/pdf-files/{id}/download` | Download/stream PDF file bytes | ✅ |
+| GET | `/pdf-files/{id}/objects` | Get extracted PDF objects (for template building) | ✅ |
+| POST | `/pdf-files/process-objects` | Process uploaded PDF and extract objects (no persistence) | ✅ |
 
 ---
 
@@ -921,7 +900,8 @@ Return data directly (no `success` wrapper):
 
 **Notes:**
 - Objects are grouped by type (7 types total)
-- Parsed from the `objects_json` field in the `pdf_files` table
+- Retrieved from the `extracted_objects` JSON field in the `pdf_files` table
+- Objects extracted using pdfplumber during PDF storage
 - Coordinates are rounded to 3 decimal places for consistency
 - Each array can be empty if no objects of that type were found
 - Frontend should iterate through each object type separately
@@ -932,7 +912,7 @@ Return data directly (no `success` wrapper):
 
 ---
 
-### `POST /pdf-files/process`
+### `POST /pdf-files/process-objects`
 
 **Description:** Process uploaded PDF file and extract objects without database persistence. Used during template creation with manual PDF upload. Returns same object structure as `GET /pdf-files/{id}/objects` but for temporary files.
 
@@ -1029,20 +1009,21 @@ Return data directly (no `success` wrapper):
 
 > See `API_DESIGN.md` Domain 3 for business rules and requirements.
 
+**Router Status**: ✅ Reviewed
+
 ### Endpoints Overview
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/pdf-templates` | List all templates (summary with pagination) |
-| GET | `/pdf-templates/{id}` | Get full template details (with current version data) |
-| POST | `/pdf-templates` | Create new template (accepts pdf_file_id + wizard data) |
-| PUT | `/pdf-templates/{id}` | Update template (creates new version from wizard data) |
-| DELETE | `/pdf-templates/{id}` | Delete template (conditional - only inactive/unused) |
-| POST | `/pdf-templates/{id}/activate` | Set template status to active |
-| POST | `/pdf-templates/{id}/deactivate` | Set template status to inactive |
-| GET | `/pdf-templates/{id}/versions` | List all versions for a template |
-| GET | `/pdf-templates/{id}/versions/{version_id}` | Get specific version details |
-| POST | `/pdf-templates/simulate` | Simulate full ETO process without DB persistence |
+| Method | Path | Description | Reviewed |
+|--------|------|-------------|----------|
+| GET | `/pdf-templates` | List all templates (summary with pagination) | ✅ |
+| GET | `/pdf-templates/{id}` | Get full template details (with current version data) | ✅ |
+| POST | `/pdf-templates` | Create new template (accepts pdf_file_id + wizard data) | ✅ |
+| PUT | `/pdf-templates/{id}` | Update template (creates new version from wizard data) | ✅ |
+| POST | `/pdf-templates/{id}/activate` | Set template status to active | ✅ |
+| POST | `/pdf-templates/{id}/deactivate` | Set template status to inactive | ✅ |
+| GET | `/pdf-templates/{id}/versions` | List all versions for a template | ✅ |
+| GET | `/pdf-templates/{id}/versions/{version_id}` | Get specific version details | ✅ |
+| POST | `/pdf-templates/simulate` | Simulate full ETO process without DB persistence | ✅ |
 
 ---
 
@@ -1312,28 +1293,6 @@ Return data directly (no `success` wrapper):
 - `400`: Business logic errors (same as POST /pdf-templates)
 - `422`: Pydantic validation error
 - `500`: `{"detail": "Database error or pipeline compilation error"}`
-
----
-
-### `DELETE /pdf-templates/{id}`
-
-**Description:** Delete template. Only allowed if template has never been used for ETO matching (usage_count = 0 on all versions).
-
-**Path Parameters:**
-- `id`: Template ID (integer)
-
-**Response:** `204 No Content`
-
-*(No response body)*
-
-**Deletion Rules:**
-- Can delete if: All versions have `usage_count = 0` (never matched any ETO run)
-- Cannot delete if: Any version has `usage_count > 0` (historical integrity)
-
-**Errors:**
-- `404`: `{"detail": "Template not found"}`
-- `409`: `{"detail": "Cannot delete template with usage history. Deactivate instead."}`
-- `500`: `{"detail": "Database error"}`
 
 ---
 
@@ -1648,11 +1607,13 @@ Return data directly (no `success` wrapper):
 
 > See `API_DESIGN.md` Domain 4 for business rules and requirements.
 
+**Router Status**: ✅ Reviewed
+
 ### Endpoints Overview
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/modules` | List all active modules (complete catalog for pipeline builder) |
+| Method | Path | Description | Reviewed |
+|--------|------|-------------|----------|
+| GET | `/modules` | List all active modules (complete catalog for pipeline builder) | ✅ |
 
 ---
 
@@ -1727,17 +1688,19 @@ Return data directly (no `success` wrapper):
 
 > See `API_DESIGN.md` Domain 5 for business rules and requirements.
 
-**Note:** This router is primarily for standalone pipeline testing during development. Pipelines are typically accessed via templates in production. This router may be removed when the standalone pipeline testing page is removed.
+**Router Status**: ✅ Reviewed
+
+**Note:** This router is primarily for standalone pipeline testing during development. Pipelines are typically accessed via templates in production. POST, PUT, and DELETE endpoints will be removed once pipeline system testing is complete.
 
 ### Endpoints Overview
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/pipelines` | List all pipelines (with pagination) |
-| GET | `/pipelines/{id}` | Get pipeline definition (pipeline_state, visual_state) |
-| POST | `/pipelines` | Create standalone pipeline |
-| PUT | `/pipelines/{id}` | Update pipeline definition |
-| DELETE | `/pipelines/{id}` | Delete pipeline |
+| Method | Path | Description | Reviewed |
+|--------|------|-------------|----------|
+| GET | `/pipelines` | List all pipelines (with pagination) | ✅ |
+| GET | `/pipelines/{id}` | Get pipeline definition (pipeline_state, visual_state) | ✅ |
+| POST | `/pipelines` | Create standalone pipeline | ✅ |
+| PUT | `/pipelines/{id}` | Update pipeline definition | ✅ |
+| DELETE | `/pipelines/{id}` | Delete pipeline | ✅ |
 
 ---
 
@@ -1920,6 +1883,7 @@ Return data directly (no `success` wrapper):
 
 **Notes:**
 - **Dev/Testing only** - Creates pipeline without template
+- **Will be removed** - This endpoint will be removed once pipeline system testing is complete
 - Pipeline compilation may happen during creation (validation)
 - Backend may deduplicate compiled plan if identical pipeline exists
 - No template association - standalone pipeline
@@ -1964,6 +1928,7 @@ Return data directly (no `success` wrapper):
 ```
 
 **Notes:**
+- **Will be removed** - This endpoint will be removed once pipeline system testing is complete
 - Replaces entire pipeline definition
 - Recompilation may occur if pipeline logic changed
 - `compiled_plan_id` may update to point to different compiled plan
@@ -1989,6 +1954,9 @@ Return data directly (no `success` wrapper):
 
 *(No response body)*
 
+**Notes:**
+- **Will be removed** - This endpoint will be removed once pipeline system testing is complete
+
 **Deletion Rules:**
 - Can delete: Standalone pipelines (not referenced by any template version)
 - Cannot delete: Pipelines referenced by template versions (historical integrity)
@@ -2004,11 +1972,13 @@ Return data directly (no `success` wrapper):
 
 > See `API_DESIGN.md` Domain 6 for business rules and requirements.
 
+**Router Status**: ✅ Reviewed
+
 ### Endpoints Overview
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/health` | Get system health status (server + all services) |
+| Method | Path | Description | Reviewed |
+|--------|------|-------------|----------|
+| GET | `/health` | Get system health status (server + all services) | ✅ |
 
 ---
 
@@ -2061,6 +2031,7 @@ Return data directly (no `success` wrapper):
 - Services checked: All services registered in service container
 - Lightweight operation - simple boolean checks, no detailed diagnostics
 - Detailed diagnostics available in server logs (not exposed via API)
+- **TODO**: Response structure is preliminary. Service names and structure will be updated once service layer architecture is finalized
 
 **Errors:**
 - No error responses - if server can respond, returns 200 with status

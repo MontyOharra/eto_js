@@ -23,6 +23,12 @@ from shared.types.email_integrations import (
     ConnectionTestResult,
 )
 
+# PDF files types
+from shared.types.pdf_files import (
+    PdfMetadata,
+    PdfCreate,
+)
+
 __all__ = [
     # Email configuration
     "FilterRule",
@@ -38,4 +44,7 @@ __all__ = [
     "EmailFolder",
     "EmailMessage",
     "ConnectionTestResult",
+    # PDF files
+    "PdfMetadata",
+    "PdfCreate",
 ]

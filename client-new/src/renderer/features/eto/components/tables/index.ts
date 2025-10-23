@@ -1,1 +1,0 @@
-export { EtoRunsTable } from './EtoRunsTable';
