@@ -1,0 +1,519 @@
+{
+  "modules": [
+    {
+      "id": "basic_text_cleaner",
+      "version": "1.0.0",
+      "title": "Basic Text Cleaner",
+      "description": "Clean and normalize text by removing extra whitespace and applying basic transformations",
+      "kind": "transform",
+      "category": "Text",
+      "color": "#EC4899",
+      "meta": {
+        "io_shape": {
+          "inputs": {
+            "nodes": [
+              {
+                "label": "input_text",
+                "min_count": 1,
+                "max_count": 1,
+                "typing": {
+                  "allowed_types": ["str"]
+                }
+              }
+            ]
+          },
+          "outputs": {
+            "nodes": [
+              {
+                "label": "cleaned_text",
+                "min_count": 1,
+                "max_count": 1,
+                "typing": {
+                  "allowed_types": ["str"]
+                }
+              }
+            ]
+          }
+        }
+      },
+      "config_schema": {
+        "type": "object",
+        "properties": {
+          "strip_whitespace": {
+            "type": "boolean",
+            "title": "Strip Whitespace",
+            "description": "Remove leading/trailing whitespace",
+            "default": true
+          },
+          "normalize_spaces": {
+            "type": "boolean",
+            "title": "Normalize Spaces",
+            "description": "Convert multiple spaces to single space",
+            "default": true
+          },
+          "remove_empty_lines": {
+            "type": "boolean",
+            "title": "Remove Empty Lines",
+            "description": "Remove empty lines",
+            "default": false
+          },
+          "to_lowercase": {
+            "type": "boolean",
+            "title": "To Lowercase",
+            "description": "Convert text to lowercase",
+            "default": false
+          }
+        }
+      }
+    },
+    {
+      "id": "data_duplicator",
+      "version": "1.0.0",
+      "title": "Data Duplicator",
+      "description": "Duplicate input data to multiple outputs",
+      "kind": "transform",
+      "category": "Data",
+      "color": "#F3F4F6",
+      "meta": {
+        "io_shape": {
+          "inputs": {
+            "nodes": [
+              {
+                "label": "Data",
+                "min_count": 1,
+                "max_count": 1,
+                "typing": {
+                  "type_var": "T"
+                }
+              }
+            ]
+          },
+          "outputs": {
+            "nodes": [
+              {
+                "label": "Duplication",
+                "min_count": 2,
+                "max_count": null,
+                "typing": {
+                  "type_var": "T"
+                }
+              }
+            ]
+          },
+          "type_params": {
+            "T": []
+          }
+        }
+      },
+      "config_schema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "id": "type_converter",
+      "version": "1.0.0",
+      "title": "Type Converter",
+      "description": "Convert data from one type to another (string, number, boolean)",
+      "kind": "transform",
+      "category": "Data",
+      "color": "#8B5CF6",
+      "meta": {
+        "io_shape": {
+          "inputs": {
+            "nodes": [
+              {
+                "label": "input",
+                "min_count": 1,
+                "max_count": 1,
+                "typing": {
+                  "allowed_types": ["str", "int", "float", "bool"]
+                }
+              }
+            ]
+          },
+          "outputs": {
+            "nodes": [
+              {
+                "label": "output",
+                "min_count": 1,
+                "max_count": 1,
+                "typing": {
+                  "allowed_types": ["str", "int", "float", "bool"]
+                }
+              }
+            ]
+          }
+        }
+      },
+      "config_schema": {
+        "type": "object",
+        "properties": {
+          "target_type": {
+            "type": "string",
+            "title": "Target Type",
+            "description": "Type to convert to",
+            "enum": ["str", "int", "float", "bool"],
+            "default": "str"
+          },
+          "strict_mode": {
+            "type": "boolean",
+            "title": "Strict Mode",
+            "description": "Fail on conversion errors instead of using defaults",
+            "default": true
+          }
+        },
+        "required": ["target_type"]
+      }
+    },
+    {
+      "id": "boolean_and",
+      "version": "1.0.0",
+      "title": "Boolean AND",
+      "description": "Logical AND operation on two boolean inputs",
+      "kind": "logic",
+      "category": "Gate",
+      "color": "#10B981",
+      "meta": {
+        "io_shape": {
+          "inputs": {
+            "nodes": [
+              {
+                "label": "A",
+                "min_count": 1,
+                "max_count": 1,
+                "typing": {
+                  "allowed_types": ["bool"]
+                }
+              },
+              {
+                "label": "B",
+                "min_count": 1,
+                "max_count": 1,
+                "typing": {
+                  "allowed_types": ["bool"]
+                }
+              }
+            ]
+          },
+          "outputs": {
+            "nodes": [
+              {
+                "label": "And",
+                "min_count": 1,
+                "max_count": 1,
+                "typing": {
+                  "allowed_types": ["bool"]
+                }
+              }
+            ]
+          }
+        }
+      },
+      "config_schema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "id": "boolean_or",
+      "version": "1.0.0",
+      "title": "Boolean OR",
+      "description": "Logical OR operation on two boolean inputs",
+      "kind": "logic",
+      "category": "Gate",
+      "color": "#10B981",
+      "meta": {
+        "io_shape": {
+          "inputs": {
+            "nodes": [
+              {
+                "label": "A",
+                "min_count": 1,
+                "max_count": 1,
+                "typing": {
+                  "allowed_types": ["bool"]
+                }
+              },
+              {
+                "label": "B",
+                "min_count": 1,
+                "max_count": 1,
+                "typing": {
+                  "allowed_types": ["bool"]
+                }
+              }
+            ]
+          },
+          "outputs": {
+            "nodes": [
+              {
+                "label": "Or",
+                "min_count": 1,
+                "max_count": 1,
+                "typing": {
+                  "allowed_types": ["bool"]
+                }
+              }
+            ]
+          }
+        }
+      },
+      "config_schema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "id": "boolean_not",
+      "version": "1.0.0",
+      "title": "Boolean NOT",
+      "description": "Logical NOT operation (inversion)",
+      "kind": "logic",
+      "category": "Gate",
+      "color": "#10B981",
+      "meta": {
+        "io_shape": {
+          "inputs": {
+            "nodes": [
+              {
+                "label": "input",
+                "min_count": 1,
+                "max_count": 1,
+                "typing": {
+                  "allowed_types": ["bool"]
+                }
+              }
+            ]
+          },
+          "outputs": {
+            "nodes": [
+              {
+                "label": "output",
+                "min_count": 1,
+                "max_count": 1,
+                "typing": {
+                  "allowed_types": ["bool"]
+                }
+              }
+            ]
+          }
+        }
+      },
+      "config_schema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "id": "if_selector",
+      "version": "1.0.0",
+      "title": "If Selector",
+      "description": "Select between two values based on a boolean condition (if-then-else)",
+      "kind": "logic",
+      "category": "Selector",
+      "color": "#6366F1",
+      "meta": {
+        "io_shape": {
+          "inputs": {
+            "nodes": [
+              {
+                "label": "condition",
+                "min_count": 1,
+                "max_count": 1,
+                "typing": {
+                  "allowed_types": ["bool"]
+                }
+              },
+              {
+                "label": "if_true",
+                "min_count": 1,
+                "max_count": 1,
+                "typing": {
+                  "type_var": "T"
+                }
+              },
+              {
+                "label": "if_false",
+                "min_count": 1,
+                "max_count": 1,
+                "typing": {
+                  "type_var": "T"
+                }
+              }
+            ]
+          },
+          "outputs": {
+            "nodes": [
+              {
+                "label": "result",
+                "min_count": 1,
+                "max_count": 1,
+                "typing": {
+                  "type_var": "T"
+                }
+              }
+            ]
+          },
+          "type_params": {
+            "T": []
+          }
+        }
+      },
+      "config_schema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "id": "print_action",
+      "version": "1.0.0",
+      "title": "Print to Server Log",
+      "description": "Prints a message to the server backend logs",
+      "kind": "action",
+      "category": "Print",
+      "color": "#EF4444",
+      "meta": {
+        "io_shape": {
+          "inputs": {
+            "nodes": [
+              {
+                "label": "message",
+                "min_count": 1,
+                "max_count": 1,
+                "typing": {
+                  "allowed_types": ["str"]
+                }
+              }
+            ]
+          },
+          "outputs": {
+            "nodes": []
+          }
+        }
+      },
+      "config_schema": {
+        "type": "object",
+        "properties": {
+          "prefix": {
+            "type": "string",
+            "title": "Prefix",
+            "description": "Optional prefix to add before message",
+            "default": ""
+          }
+        }
+      }
+    },
+    {
+      "id": "string_equals",
+      "version": "1.0.0",
+      "title": "String Equals",
+      "description": "Compare two strings for equality",
+      "kind": "logic",
+      "category": "Comparator",
+      "color": "#F59E0B",
+      "meta": {
+        "io_shape": {
+          "inputs": {
+            "nodes": [
+              {
+                "label": "string_a",
+                "min_count": 1,
+                "max_count": 1,
+                "typing": {
+                  "allowed_types": ["str"]
+                }
+              },
+              {
+                "label": "string_b",
+                "min_count": 1,
+                "max_count": 1,
+                "typing": {
+                  "allowed_types": ["str"]
+                }
+              }
+            ]
+          },
+          "outputs": {
+            "nodes": [
+              {
+                "label": "equals",
+                "min_count": 1,
+                "max_count": 1,
+                "typing": {
+                  "allowed_types": ["bool"]
+                }
+              }
+            ]
+          }
+        }
+      },
+      "config_schema": {
+        "type": "object",
+        "properties": {
+          "case_sensitive": {
+            "type": "boolean",
+            "title": "Case Sensitive",
+            "description": "Whether comparison should be case sensitive",
+            "default": true
+          },
+          "trim_whitespace": {
+            "type": "boolean",
+            "title": "Trim Whitespace",
+            "description": "Trim whitespace before comparing",
+            "default": false
+          }
+        }
+      }
+    },
+    {
+      "id": "number_greater_than",
+      "version": "1.0.0",
+      "title": "Number Greater Than",
+      "description": "Compare two numbers (A > B)",
+      "kind": "logic",
+      "category": "Comparator",
+      "color": "#F59E0B",
+      "meta": {
+        "io_shape": {
+          "inputs": {
+            "nodes": [
+              {
+                "label": "A",
+                "min_count": 1,
+                "max_count": 1,
+                "typing": {
+                  "allowed_types": ["int", "float"]
+                }
+              },
+              {
+                "label": "B",
+                "min_count": 1,
+                "max_count": 1,
+                "typing": {
+                  "allowed_types": ["int", "float"]
+                }
+              }
+            ]
+          },
+          "outputs": {
+            "nodes": [
+              {
+                "label": "result",
+                "min_count": 1,
+                "max_count": 1,
+                "typing": {
+                  "allowed_types": ["bool"]
+                }
+              }
+            ]
+          }
+        }
+      },
+      "config_schema": {
+        "type": "object",
+        "properties": {}
+      }
+    }
+  ]
+}

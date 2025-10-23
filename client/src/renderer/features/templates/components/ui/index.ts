@@ -1,0 +1,1 @@
+export { TemplateStatusBadge } from './TemplateStatusBadge';

@@ -1,0 +1,8166 @@
+{
+  "pdf_file_id": 3,
+  "page_count": 2,
+  "objects": {
+    "text_words": [
+      {
+        "page": 1,
+        "bbox": [
+          187.44,
+          32.805,
+          217.04,
+          46.801
+        ],
+        "text": "ALG",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          220.732,
+          32.805,
+          310.401,
+          46.801
+        ],
+        "text": "WORLDWIDE",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          314.08,
+          32.805,
+          393.648,
+          46.801
+        ],
+        "text": "LOGISTICS,",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          397.284,
+          32.805,
+          424.533,
+          46.801
+        ],
+        "text": "LLC",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          237.48,
+          51.258,
+          261.465,
+          63.22
+        ],
+        "text": "ALG",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          264.991,
+          51.258,
+          318.324,
+          63.22
+        ],
+        "text": "ADMIRAL",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          321.851,
+          51.258,
+          374.518,
+          63.22
+        ],
+        "text": "DIVISION",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          150.84,
+          65.658,
+          195.468,
+          77.62
+        ],
+        "text": "Station:",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          198.971,
+          65.658,
+          225.602,
+          77.62
+        ],
+        "text": "ORD",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          232.596,
+          65.658,
+          273.276,
+          77.62
+        ],
+        "text": "Phone:",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          276.72,
+          65.658,
+          351.432,
+          77.62
+        ],
+        "text": "630-766-3900",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          354.947,
+          65.658,
+          382.939,
+          77.62
+        ],
+        "text": "FAX:",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          386.406,
+          65.658,
+          461.118,
+          77.62
+        ],
+        "text": "630-766-2037",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          266.46,
+          80.058,
+          293.786,
+          92.02
+        ],
+        "text": "Alert",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          296.835,
+          80.058,
+          345.488,
+          92.02
+        ],
+        "text": "Manifest",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          36.0,
+          124.862,
+          60.867,
+          134.791
+        ],
+        "text": "Dest:",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          63.576,
+          124.862,
+          86.222,
+          134.791
+        ],
+        "text": "DFW",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          102.277,
+          124.862,
+          133.801,
+          134.791
+        ],
+        "text": "Agent:",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          136.48,
+          124.862,
+          179.611,
+          134.791
+        ],
+        "text": "HARRAH",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          182.291,
+          124.862,
+          275.215,
+          134.791
+        ],
+        "text": "TRANSPORTATION",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          280.534,
+          124.862,
+          314.298,
+          134.791
+        ],
+        "text": "Phone:",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          316.938,
+          124.862,
+          378.939,
+          134.791
+        ],
+        "text": "972-574-2487",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          381.638,
+          124.862,
+          404.872,
+          134.791
+        ],
+        "text": "FAX:",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          407.531,
+          124.862,
+          478.38,
+          134.791
+        ],
+        "text": "1-972-574-2486",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          19.44,
+          136.814,
+          40.991,
+          146.743
+        ],
+        "text": "Ship",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          43.799,
+          136.814,
+          65.379,
+          146.743
+        ],
+        "text": "Date",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          73.441,
+          136.814,
+          123.263,
+          146.743
+        ],
+        "text": "09/12/2025",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          127.44,
+          136.814,
+          160.074,
+          146.743
+        ],
+        "text": "Carrier",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          181.441,
+          136.814,
+          232.873,
+          146.743
+        ],
+        "text": "FORWARD",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          235.929,
+          136.814,
+          255.299,
+          146.743
+        ],
+        "text": "AIR,",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          258.355,
+          136.814,
+          275.504,
+          146.743
+        ],
+        "text": "INC",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          325.44,
+          136.814,
+          354.743,
+          146.743
+        ],
+        "text": "Origin",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          361.436,
+          136.814,
+          383.529,
+          146.743
+        ],
+        "text": "ORD",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          397.44,
+          136.814,
+          436.149,
+          146.743
+        ],
+        "text": "PCS/WT",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          451.44,
+          136.814,
+          476.346,
+          146.743
+        ],
+        "text": "1/350",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          19.44,
+          148.766,
+          40.443,
+          158.695
+        ],
+        "text": "EDA",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          73.436,
+          148.766,
+          123.248,
+          158.695
+        ],
+        "text": "09/15/2025",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          127.44,
+          148.766,
+          165.024,
+          158.695
+        ],
+        "text": "MAWB#",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          181.437,
+          148.766,
+          225.712,
+          158.695
+        ],
+        "text": "93200309",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          325.44,
+          148.766,
+          347.0,
+          158.695
+        ],
+        "text": "Dest",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          361.437,
+          148.766,
+          384.083,
+          158.695
+        ],
+        "text": "DFW",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          397.44,
+          148.766,
+          415.146,
+          158.695
+        ],
+        "text": "Svc",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          418.034,
+          148.766,
+          442.925,
+          158.695
+        ],
+        "text": "Code",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          451.444,
+          148.766,
+          477.964,
+          158.695
+        ],
+        "text": "NEXT",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          480.773,
+          148.766,
+          501.218,
+          158.695
+        ],
+        "text": "DAY",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          19.44,
+          160.718,
+          39.337,
+          170.647
+        ],
+        "text": "ETA",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          73.443,
+          160.718,
+          98.867,
+          170.647
+        ],
+        "text": "08:00",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          127.44,
+          160.718,
+          160.074,
+          170.647
+        ],
+        "text": "Carrier",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          162.753,
+          160.718,
+          243.419,
+          170.647
+        ],
+        "text": "Ph:800-763-8892",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          19.44,
+          172.67,
+          73.655,
+          182.599
+        ],
+        "text": "Chargeable",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          76.542,
+          172.67,
+          89.26,
+          182.599
+        ],
+        "text": "Wt",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          129.232,
+          172.67,
+          134.753,
+          182.599
+        ],
+        "text": "5",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          134.712,
+          172.67,
+          140.234,
+          182.599
+        ],
+        "text": "2",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          140.193,
+          172.67,
+          145.715,
+          182.599
+        ],
+        "text": "1",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          159.84,
+          172.67,
+          187.49,
+          182.599
+        ],
+        "text": "Cubic",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          190.348,
+          172.67,
+          210.833,
+          182.599
+        ],
+        "text": "Feet",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          241.127,
+          172.67,
+          246.649,
+          182.599
+        ],
+        "text": "6",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          246.618,
+          172.67,
+          252.14,
+          182.599
+        ],
+        "text": "0",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          252.128,
+          172.67,
+          260.387,
+          182.599
+        ],
+        "text": ".2",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          260.376,
+          172.67,
+          265.898,
+          182.599
+        ],
+        "text": "6",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          18.0,
+          213.566,
+          45.068,
+          223.495
+        ],
+        "text": "HWB:",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          47.777,
+          213.566,
+          114.219,
+          223.495
+        ],
+        "text": "126274819067",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          19.44,
+          227.028,
+          47.122,
+          235.043
+        ],
+        "text": "Shipper",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          127.44,
+          227.028,
+          165.849,
+          235.043
+        ],
+        "text": "Consignee",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          235.44,
+          227.028,
+          248.833,
+          235.043
+        ],
+        "text": "Pcs",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          343.44,
+          227.028,
+          353.256,
+          235.043
+        ],
+        "text": "Wt",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          372.24,
+          227.028,
+          385.633,
+          235.043
+        ],
+        "text": "Svc",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          387.816,
+          227.028,
+          407.025,
+          235.043
+        ],
+        "text": "Code",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          455.986,
+          227.028,
+          484.552,
+          235.043
+        ],
+        "text": "FCCOD",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          527.895,
+          227.028,
+          545.746,
+          235.043
+        ],
+        "text": "COD",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          19.44,
+          236.676,
+          120.807,
+          244.691
+        ],
+        "text": "WALGREENS-WAREHOUS",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          127.443,
+          236.676,
+          178.795,
+          244.691
+        ],
+        "text": "WALGREENS",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          181.279,
+          236.676,
+          203.614,
+          244.691
+        ],
+        "text": "16538",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          235.441,
+          236.676,
+          239.899,
+          244.691
+        ],
+        "text": "1",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          343.44,
+          236.676,
+          356.837,
+          244.691
+        ],
+        "text": "350",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          372.241,
+          236.676,
+          414.58,
+          244.691
+        ],
+        "text": "SECONDD",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          19.44,
+          246.324,
+          32.837,
+          254.339
+        ],
+        "text": "370",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          35.336,
+          246.324,
+          42.901,
+          254.339
+        ],
+        "text": "W",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          45.416,
+          246.324,
+          102.572,
+          254.339
+        ],
+        "text": "CROSSROADS",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          105.056,
+          246.324,
+          123.336,
+          254.339
+        ],
+        "text": "PKW",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          127.44,
+          246.324,
+          145.294,
+          254.339
+        ],
+        "text": "7859",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          147.601,
+          246.324,
+          181.521,
+          254.339
+        ],
+        "text": "WALNUT",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          183.812,
+          246.324,
+          200.79,
+          254.339
+        ],
+        "text": "HILL",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          203.073,
+          246.324,
+          213.343,
+          254.339
+        ],
+        "text": "LN",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          19.44,
+          255.972,
+          35.06,
+          263.987
+        ],
+        "text": "STE",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          37.479,
+          255.972,
+          42.825,
+          263.987
+        ],
+        "text": "B",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          127.44,
+          255.972,
+          151.098,
+          263.987
+        ],
+        "text": "SUITE",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          153.381,
+          255.972,
+          166.778,
+          263.987
+        ],
+        "text": "110",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          235.441,
+          255.972,
+          261.781,
+          263.987
+        ],
+        "text": "Pallets:",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          264.2,
+          255.972,
+          268.657,
+          263.987
+        ],
+        "text": "0",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          19.44,
+          265.62,
+          81.094,
+          273.635
+        ],
+        "text": "BOLINGBROOK,",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          83.297,
+          265.62,
+          90.005,
+          273.635
+        ],
+        "text": "IL",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          92.232,
+          265.62,
+          114.576,
+          273.635
+        ],
+        "text": "60440",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          127.439,
+          265.62,
+          160.487,
+          273.635
+        ],
+        "text": "DALLAS,",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          162.626,
+          265.62,
+          172.899,
+          273.635
+        ],
+        "text": "TX",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          175.038,
+          265.62,
+          197.373,
+          273.635
+        ],
+        "text": "75230",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          235.436,
+          265.62,
+          258.21,
+          273.635
+        ],
+        "text": "Value:",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          260.405,
+          265.62,
+          277.805,
+          273.635
+        ],
+        "text": "MAX",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          280.032,
+          265.62,
+          301.431,
+          273.635
+        ],
+        "text": "FREE",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          19.44,
+          275.268,
+          45.333,
+          283.283
+        ],
+        "text": "Control",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          19.44,
+          284.916,
+          37.274,
+          292.931
+        ],
+        "text": "ORD",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          127.44,
+          313.86,
+          156.452,
+          321.875
+        ],
+        "text": "Delivery",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          158.639,
+          313.86,
+          179.182,
+          321.875
+        ],
+        "text": "Zone:",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          181.361,
+          313.86,
+          186.707,
+          321.875
+        ],
+        "text": "A",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          19.44,
+          323.508,
+          25.228,
+          331.523
+        ],
+        "text": "R",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          25.259,
+          323.508,
+          29.716,
+          331.523
+        ],
+        "text": "e",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          29.747,
+          323.508,
+          31.974,
+          331.523
+        ],
+        "text": "f",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          32.005,
+          323.508,
+          34.231,
+          331.523
+        ],
+        "text": ":",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          127.44,
+          323.508,
+          142.171,
+          331.523
+        ],
+        "text": "Ref:",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          144.262,
+          323.508,
+          230.513,
+          331.523
+        ],
+        "text": "ST.203385.04.800001.0",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          19.44,
+          333.156,
+          31.02,
+          341.171
+        ],
+        "text": "PO",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          235.44,
+          333.156,
+          277.435,
+          341.171
+        ],
+        "text": "Department",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          343.44,
+          333.156,
+          367.544,
+          341.171
+        ],
+        "text": "Pieces",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          19.44,
+          342.804,
+          138.759,
+          350.819
+        ],
+        "text": "1046-B1262748-16538-NAK13LL",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          343.44,
+          342.804,
+          347.897,
+          350.819
+        ],
+        "text": "1",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          18.0,
+          360.59,
+          67.788,
+          370.519
+        ],
+        "text": "Customer:",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          127.441,
+          360.59,
+          259.677,
+          370.519
+        ],
+        "text": "WALGREENS-WAREHOUSE",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          262.862,
+          360.59,
+          273.906,
+          370.519
+        ],
+        "text": "#2",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          280.396,
+          360.59,
+          350.161,
+          370.519
+        ],
+        "text": "[WALG60440D]",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          18.0,
+          372.542,
+          36.797,
+          382.471
+        ],
+        "text": "Due",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          39.625,
+          372.542,
+          90.523,
+          382.471
+        ],
+        "text": "Date/Time:",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          93.381,
+          372.542,
+          113.279,
+          382.471
+        ],
+        "text": "DLV",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          116.117,
+          372.542,
+          129.939,
+          382.471
+        ],
+        "text": "BY",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          132.767,
+          372.542,
+          152.122,
+          382.471
+        ],
+        "text": "9/16",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          36.0,
+          384.494,
+          68.087,
+          394.423
+        ],
+        "text": "Waybill",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          70.875,
+          384.494,
+          103.509,
+          394.423
+        ],
+        "text": "Special",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          106.297,
+          384.494,
+          159.994,
+          394.423
+        ],
+        "text": "Instructions:",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          162.782,
+          384.494,
+          210.375,
+          394.423
+        ],
+        "text": "LIFTGATE",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          213.133,
+          384.494,
+          262.373,
+          394.423
+        ],
+        "text": "DELIVERY",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          265.132,
+          384.494,
+          270.654,
+          394.423
+        ],
+        "text": "2",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          273.442,
+          384.494,
+          295.546,
+          394.423
+        ],
+        "text": "MAN",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          298.364,
+          384.494,
+          347.614,
+          394.423
+        ],
+        "text": "DELIVERY",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          350.372,
+          384.494,
+          353.679,
+          394.423
+        ],
+        "text": "-",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          356.477,
+          384.494,
+          384.685,
+          394.423
+        ],
+        "text": "MUST",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          387.473,
+          384.494,
+          400.718,
+          394.423
+        ],
+        "text": "BE",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          403.517,
+          384.494,
+          453.29,
+          394.423
+        ],
+        "text": "BROUGHT",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          456.078,
+          384.494,
+          479.835,
+          394.423
+        ],
+        "text": "INTO",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          482.653,
+          384.494,
+          529.678,
+          394.423
+        ],
+        "text": "BUILDING",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          532.466,
+          384.494,
+          535.772,
+          394.423
+        ],
+        "text": "-",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          36.0,
+          396.446,
+          50.893,
+          406.375
+        ],
+        "text": "DO",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          53.94,
+          396.446,
+          74.928,
+          406.375
+        ],
+        "text": "NOT",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          77.964,
+          396.446,
+          110.066,
+          406.375
+        ],
+        "text": "LEAVE",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          113.043,
+          396.446,
+          157.304,
+          406.375
+        ],
+        "text": "OUTSIDE",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          160.291,
+          396.446,
+          206.733,
+          406.375
+        ],
+        "text": "WITHOUT",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          209.75,
+          396.446,
+          291.082,
+          406.375
+        ],
+        "text": "AUTHORIZATION",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          294.05,
+          396.446,
+          323.358,
+          406.375
+        ],
+        "text": "FROM",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          326.385,
+          396.446,
+          349.08,
+          406.375
+        ],
+        "text": "ALG.",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          18.0,
+          441.156,
+          36.277,
+          449.171
+        ],
+        "text": "Dims",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          32.94,
+          450.804,
+          57.044,
+          458.819
+        ],
+        "text": "Pieces",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          86.707,
+          450.804,
+          111.269,
+          458.819
+        ],
+        "text": "Length",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          142.725,
+          450.804,
+          163.26,
+          458.819
+        ],
+        "text": "Width",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          195.382,
+          450.804,
+          218.606,
+          458.819
+        ],
+        "text": "Height",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          42.765,
+          460.452,
+          47.222,
+          468.467
+        ],
+        "text": "1",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          94.526,
+          460.452,
+          103.441,
+          468.467
+        ],
+        "text": "35",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          148.53,
+          460.452,
+          157.445,
+          468.467
+        ],
+        "text": "35",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          202.528,
+          460.452,
+          211.443,
+          468.467
+        ],
+        "text": "85",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          36.0,
+          508.692,
+          39.119,
+          516.707
+        ],
+        "text": "*",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          43.613,
+          508.692,
+          68.199,
+          516.707
+        ],
+        "text": "Please",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          70.45,
+          508.692,
+          86.07,
+          516.707
+        ],
+        "text": "FAX",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          88.296,
+          508.692,
+          95.447,
+          516.707
+        ],
+        "text": "or",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          97.706,
+          508.692,
+          111.537,
+          516.707
+        ],
+        "text": "Call",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          113.796,
+          508.692,
+          128.081,
+          516.707
+        ],
+        "text": "with",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          130.34,
+          508.692,
+          147.756,
+          516.707
+        ],
+        "text": "POD",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          150.007,
+          508.692,
+          192.456,
+          516.707
+        ],
+        "text": "Information.",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          36.0,
+          526.478,
+          39.864,
+          536.407
+        ],
+        "text": "*",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          42.593,
+          526.478,
+          73.021,
+          536.407
+        ],
+        "text": "Please",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          75.779,
+          526.478,
+          90.678,
+          536.407
+        ],
+        "text": "call",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          93.436,
+          526.478,
+          160.911,
+          536.407
+        ],
+        "text": "IMMEDIATELY",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          163.63,
+          526.478,
+          168.594,
+          536.407
+        ],
+        "text": "if",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          171.353,
+          526.478,
+          217.799,
+          536.407
+        ],
+        "text": "paperwork",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          220.558,
+          526.478,
+          247.68,
+          536.407
+        ],
+        "text": "pouch",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          250.438,
+          526.478,
+          257.609,
+          536.407
+        ],
+        "text": "is",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          260.337,
+          526.478,
+          296.861,
+          536.407
+        ],
+        "text": "Missing.",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          42.689,
+          537.636,
+          54.751,
+          545.651
+        ],
+        "text": "We",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          57.074,
+          537.636,
+          68.228,
+          545.651
+        ],
+        "text": "will",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          70.551,
+          537.636,
+          86.163,
+          545.651
+        ],
+        "text": "FAX",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          88.478,
+          537.636,
+          132.711,
+          545.651
+        ],
+        "text": "replacement",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          135.042,
+          537.636,
+          156.666,
+          545.651
+        ],
+        "text": "D.R.'s",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          158.989,
+          537.636,
+          167.928,
+          545.651
+        ],
+        "text": "on",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          170.243,
+          537.636,
+          201.513,
+          545.651
+        ],
+        "text": "demand.",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          203.852,
+          537.636,
+          226.176,
+          545.651
+        ],
+        "text": "Thank",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          228.499,
+          537.636,
+          245.043,
+          545.651
+        ],
+        "text": "You.",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          36.0,
+          556.932,
+          39.119,
+          564.947
+        ],
+        "text": "*",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          41.346,
+          556.932,
+          50.285,
+          564.947
+        ],
+        "text": "All",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          52.512,
+          556.932,
+          81.09,
+          564.947
+        ],
+        "text": "charges",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          83.341,
+          556.932,
+          92.726,
+          564.947
+        ],
+        "text": "for",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          94.953,
+          556.932,
+          129.363,
+          564.947
+        ],
+        "text": "additional",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          131.589,
+          556.932,
+          161.072,
+          564.947
+        ],
+        "text": "services",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          163.323,
+          556.932,
+          170.449,
+          564.947
+        ],
+        "text": "or",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          172.7,
+          556.932,
+          197.705,
+          564.947
+        ],
+        "text": "special",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          199.956,
+          556.932,
+          233.884,
+          564.947
+        ],
+        "text": "deliveries",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          236.135,
+          556.932,
+          261.139,
+          564.947
+        ],
+        "text": "require",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          263.398,
+          556.932,
+          267.856,
+          564.947
+        ],
+        "text": "a",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          270.106,
+          556.932,
+          294.231,
+          564.947
+        ],
+        "text": "unique",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          40.462,
+          566.58,
+          86.484,
+          574.595
+        ],
+        "text": "authorization",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          88.751,
+          566.58,
+          115.99,
+          574.595
+        ],
+        "text": "number",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          118.265,
+          566.58,
+          162.966,
+          574.595
+        ],
+        "text": "forpayment.",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          165.233,
+          566.58,
+          189.796,
+          574.595
+        ],
+        "text": "Please",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          192.055,
+          566.58,
+          204.113,
+          574.595
+        ],
+        "text": "call",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          206.364,
+          566.58,
+          222.421,
+          574.595
+        ],
+        "text": "prior",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          224.704,
+          566.58,
+          231.389,
+          574.595
+        ],
+        "text": "to",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          233.655,
+          566.58,
+          272.061,
+          574.595
+        ],
+        "text": "performing",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          274.352,
+          566.58,
+          310.104,
+          574.595
+        ],
+        "text": "requested",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          312.363,
+          566.58,
+          340.049,
+          574.595
+        ],
+        "text": "service.",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          18.0,
+          765.876,
+          36.75,
+          773.891
+        ],
+        "text": "Page",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          38.977,
+          765.876,
+          43.435,
+          773.891
+        ],
+        "text": "1",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          553.768,
+          765.876,
+          593.985,
+          773.891
+        ],
+        "text": "09/12/2025",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          187.44,
+          30.837,
+          217.04,
+          44.833
+        ],
+        "text": "ALG",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          220.732,
+          30.837,
+          310.401,
+          44.833
+        ],
+        "text": "WORLDWIDE",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          314.08,
+          30.837,
+          393.648,
+          44.833
+        ],
+        "text": "LOGISTICS,",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          397.284,
+          30.837,
+          424.533,
+          44.833
+        ],
+        "text": "LLC",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          237.48,
+          49.29,
+          261.465,
+          61.252
+        ],
+        "text": "ALG",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          264.991,
+          49.29,
+          318.324,
+          61.252
+        ],
+        "text": "ADMIRAL",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          321.851,
+          49.29,
+          374.518,
+          61.252
+        ],
+        "text": "DIVISION",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          242.1,
+          63.69,
+          280.711,
+          75.652
+        ],
+        "text": "WOOD",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          284.453,
+          63.69,
+          319.11,
+          75.652
+        ],
+        "text": "DALE,",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          322.817,
+          63.69,
+          332.793,
+          75.652
+        ],
+        "text": "IL",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          336.524,
+          63.69,
+          369.86,
+          75.652
+        ],
+        "text": "60191",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          154.56,
+          78.09,
+          195.234,
+          90.052
+        ],
+        "text": "Station:",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          198.797,
+          78.09,
+          225.427,
+          90.052
+        ],
+        "text": "ORD",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          232.589,
+          78.09,
+          270.623,
+          90.052
+        ],
+        "text": "Phone:",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          274.185,
+          78.09,
+          348.886,
+          90.052
+        ],
+        "text": "630-766-3900",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          352.484,
+          78.09,
+          379.157,
+          90.052
+        ],
+        "text": "FAX:",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          382.696,
+          78.09,
+          457.396,
+          90.052
+        ],
+        "text": "630-766-2037",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          36.0,
+          121.29,
+          95.968,
+          133.252
+        ],
+        "text": "DELIVERY",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          102.815,
+          121.29,
+          154.804,
+          133.252
+        ],
+        "text": "RECEIPT",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          321.06,
+          131.124,
+          325.517,
+          139.139
+        ],
+        "text": "0",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          325.508,
+          131.124,
+          329.966,
+          139.139
+        ],
+        "text": "9",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          329.972,
+          131.124,
+          335.76,
+          139.139
+        ],
+        "text": "D",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          335.767,
+          131.124,
+          341.555,
+          139.139
+        ],
+        "text": "R",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          341.562,
+          131.124,
+          346.019,
+          139.139
+        ],
+        "text": "1",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          346.018,
+          131.124,
+          350.475,
+          139.139
+        ],
+        "text": "2",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          350.482,
+          131.124,
+          354.94,
+          139.139
+        ],
+        "text": "6",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          354.938,
+          131.124,
+          359.396,
+          139.139
+        ],
+        "text": "2",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          359.402,
+          131.124,
+          363.86,
+          139.139
+        ],
+        "text": "7",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          363.859,
+          131.124,
+          368.316,
+          139.139
+        ],
+        "text": "4",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          368.323,
+          131.124,
+          372.78,
+          139.139
+        ],
+        "text": "8",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          372.779,
+          131.124,
+          377.236,
+          139.139
+        ],
+        "text": "1",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          377.243,
+          131.124,
+          381.7,
+          139.139
+        ],
+        "text": "9",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          381.699,
+          131.124,
+          386.157,
+          139.139
+        ],
+        "text": "0",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          386.163,
+          131.124,
+          390.621,
+          139.139
+        ],
+        "text": "6",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          390.619,
+          131.124,
+          395.077,
+          139.139
+        ],
+        "text": "7",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          45.42,
+          141.566,
+          66.971,
+          151.495
+        ],
+        "text": "Ship",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          69.779,
+          141.566,
+          91.359,
+          151.495
+        ],
+        "text": "Date",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          111.881,
+          141.566,
+          147.284,
+          151.495
+        ],
+        "text": "Service",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          199.32,
+          141.566,
+          218.117,
+          151.495
+        ],
+        "text": "Due",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          221.064,
+          141.566,
+          268.656,
+          151.495
+        ],
+        "text": "Date/Time",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          318.339,
+          141.566,
+          347.642,
+          151.495
+        ],
+        "text": "Origin",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          369.003,
+          141.566,
+          390.564,
+          151.495
+        ],
+        "text": "Dest",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          455.58,
+          141.566,
+          486.004,
+          151.495
+        ],
+        "text": "House",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          488.762,
+          141.566,
+          523.607,
+          151.495
+        ],
+        "text": "Waybill",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          43.48,
+          153.518,
+          93.302,
+          163.447
+        ],
+        "text": "09/12/2025",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          126.832,
+          153.518,
+          132.354,
+          163.447
+        ],
+        "text": "2",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          204.66,
+          153.518,
+          224.557,
+          163.447
+        ],
+        "text": "DLV",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          227.346,
+          153.518,
+          241.139,
+          163.447
+        ],
+        "text": "BY",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          243.947,
+          153.518,
+          263.301,
+          163.447
+        ],
+        "text": "9/16",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          321.931,
+          153.518,
+          344.024,
+          163.447
+        ],
+        "text": "ORD",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          368.469,
+          153.518,
+          391.116,
+          163.447
+        ],
+        "text": "DFW",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          456.373,
+          153.518,
+          522.796,
+          163.447
+        ],
+        "text": "126274819067",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          153.839,
+          165.47,
+          188.131,
+          175.399
+        ],
+        "text": "Shipper",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          417.196,
+          165.47,
+          464.777,
+          175.399
+        ],
+        "text": "Consignee",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          55.44,
+          189.374,
+          187.676,
+          199.303
+        ],
+        "text": "WALGREENS-WAREHOUSE",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          191.358,
+          189.374,
+          202.402,
+          199.303
+        ],
+        "text": "#2",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          325.44,
+          189.374,
+          389.046,
+          199.303
+        ],
+        "text": "WALGREENS",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          392.182,
+          189.374,
+          419.851,
+          199.303
+        ],
+        "text": "16538",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          55.44,
+          201.326,
+          72.036,
+          211.255
+        ],
+        "text": "370",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          75.082,
+          201.326,
+          84.454,
+          211.255
+        ],
+        "text": "W",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          87.53,
+          201.326,
+          158.356,
+          211.255
+        ],
+        "text": "CROSSROADS",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          161.372,
+          201.326,
+          190.69,
+          211.255
+        ],
+        "text": "PKWY",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          325.44,
+          201.326,
+          347.558,
+          211.255
+        ],
+        "text": "7859",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          350.535,
+          201.326,
+          392.575,
+          211.255
+        ],
+        "text": "WALNUT",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          395.512,
+          201.326,
+          416.545,
+          211.255
+        ],
+        "text": "HILL",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          419.502,
+          201.326,
+          432.224,
+          211.255
+        ],
+        "text": "LN",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          55.44,
+          213.278,
+          74.79,
+          223.207
+        ],
+        "text": "STE",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          77.598,
+          213.278,
+          84.22,
+          223.207
+        ],
+        "text": "B",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          325.44,
+          213.278,
+          354.748,
+          223.207
+        ],
+        "text": "SUITE",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          357.537,
+          213.278,
+          374.132,
+          223.207
+        ],
+        "text": "110",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          55.44,
+          225.23,
+          131.817,
+          235.159
+        ],
+        "text": "BOLINGBROOK,",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          134.526,
+          225.23,
+          142.807,
+          235.159
+        ],
+        "text": "IL",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          145.595,
+          225.23,
+          173.265,
+          235.159
+        ],
+        "text": "60440",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          325.44,
+          225.23,
+          366.399,
+          235.159
+        ],
+        "text": "DALLAS,",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          369.158,
+          225.23,
+          381.845,
+          235.159
+        ],
+        "text": "TX",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          384.634,
+          225.23,
+          412.303,
+          235.159
+        ],
+        "text": "75230",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          55.44,
+          237.182,
+          62.062,
+          247.111
+        ],
+        "text": "A",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          62.041,
+          237.182,
+          64.8,
+          247.111
+        ],
+        "text": "t",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          64.788,
+          237.182,
+          73.057,
+          247.111
+        ],
+        "text": "tn",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          73.055,
+          237.182,
+          75.814,
+          247.111
+        ],
+        "text": ":",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          325.44,
+          237.182,
+          332.062,
+          247.111
+        ],
+        "text": "A",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          332.041,
+          237.182,
+          334.8,
+          247.111
+        ],
+        "text": "t",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          334.788,
+          237.182,
+          343.057,
+          247.111
+        ],
+        "text": "tn",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          343.055,
+          237.182,
+          345.814,
+          247.111
+        ],
+        "text": ":",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          55.44,
+          249.134,
+          62.062,
+          259.063
+        ],
+        "text": "P",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          62.041,
+          249.134,
+          67.563,
+          259.063
+        ],
+        "text": "h",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          67.551,
+          249.134,
+          73.073,
+          259.063
+        ],
+        "text": "o",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          73.062,
+          249.134,
+          78.584,
+          259.063
+        ],
+        "text": "n",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          78.582,
+          249.134,
+          84.104,
+          259.063
+        ],
+        "text": "e",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          84.092,
+          249.134,
+          86.851,
+          259.063
+        ],
+        "text": ":",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          325.44,
+          249.134,
+          337.584,
+          259.063
+        ],
+        "text": "Ph",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          337.553,
+          249.134,
+          343.075,
+          259.063
+        ],
+        "text": "o",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          343.063,
+          249.134,
+          348.585,
+          259.063
+        ],
+        "text": "n",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          348.574,
+          249.134,
+          354.096,
+          259.063
+        ],
+        "text": "e",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          354.094,
+          249.134,
+          356.853,
+          259.063
+        ],
+        "text": ":",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          55.44,
+          273.038,
+          70.931,
+          282.967
+        ],
+        "text": "Ref",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          73.759,
+          273.038,
+          82.039,
+          282.967
+        ],
+        "text": "#:",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          325.44,
+          273.038,
+          340.931,
+          282.967
+        ],
+        "text": "Ref",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          343.61,
+          273.038,
+          351.92,
+          282.967
+        ],
+        "text": "#:",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          354.609,
+          273.038,
+          478.084,
+          282.967
+        ],
+        "text": "ST.203385.04.800001.0012",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          71.58,
+          284.99,
+          93.693,
+          294.919
+        ],
+        "text": "Total",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          96.531,
+          284.99,
+          126.402,
+          294.919
+        ],
+        "text": "Pieces",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          205.8,
+          284.99,
+          227.913,
+          294.919
+        ],
+        "text": "Total",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          231.198,
+          284.99,
+          262.169,
+          294.919
+        ],
+        "text": "Weight",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          416.1,
+          284.99,
+          429.37,
+          294.919
+        ],
+        "text": "Bill",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          431.85,
+          284.99,
+          440.131,
+          294.919
+        ],
+        "text": "to",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          442.641,
+          284.99,
+          465.875,
+          294.919
+        ],
+        "text": "Party",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          96.231,
+          296.942,
+          101.753,
+          306.871
+        ],
+        "text": "1",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          225.693,
+          296.942,
+          242.289,
+          306.871
+        ],
+        "text": "350",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          366.66,
+          296.942,
+          380.453,
+          306.871
+        ],
+        "text": "US",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          383.35,
+          296.942,
+          410.458,
+          306.871
+        ],
+        "text": "BANK",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          413.325,
+          296.942,
+          431.007,
+          306.871
+        ],
+        "text": "C/O",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          433.905,
+          296.942,
+          497.54,
+          306.871
+        ],
+        "text": "WALGREENS",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          500.388,
+          296.942,
+          515.311,
+          306.871
+        ],
+        "text": "CO",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          146.09,
+          308.894,
+          195.883,
+          318.823
+        ],
+        "text": "Description",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          361.98,
+          308.894,
+          404.035,
+          318.823
+        ],
+        "text": "Purchase",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          407.061,
+          308.894,
+          519.962,
+          318.823
+        ],
+        "text": "Order/Department/Pieces",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          39.6,
+          332.798,
+          88.272,
+          342.727
+        ],
+        "text": "DISPLAYS",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          315.745,
+          332.798,
+          463.559,
+          342.727
+        ],
+        "text": "1046-B1262748-16538-NAK13LL",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          466.129,
+          332.798,
+          468.708,
+          342.727
+        ],
+        "text": "|",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          473.848,
+          332.798,
+          476.427,
+          342.727
+        ],
+        "text": "|",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          479.017,
+          332.798,
+          484.539,
+          342.727
+        ],
+        "text": "1",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          73.44,
+          488.174,
+          98.874,
+          498.103
+        ],
+        "text": "Value",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          101.583,
+          488.174,
+          123.138,
+          498.103
+        ],
+        "text": "MAX",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          125.857,
+          488.174,
+          152.407,
+          498.103
+        ],
+        "text": "FREE",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          307.44,
+          488.174,
+          329.553,
+          498.103
+        ],
+        "text": "COD",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          332.312,
+          488.174,
+          373.237,
+          498.103
+        ],
+        "text": "Amount:",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          395.177,
+          488.174,
+          420.093,
+          498.103
+        ],
+        "text": "$0.00",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          127.86,
+          512.078,
+          160.494,
+          522.007
+        ],
+        "text": "Special",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          163.193,
+          512.078,
+          214.101,
+          522.007
+        ],
+        "text": "Instructions",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          54.0,
+          524.03,
+          101.582,
+          533.959
+        ],
+        "text": "LIFTGATE",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          104.341,
+          524.03,
+          153.561,
+          533.959
+        ],
+        "text": "DELIVERY",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          156.35,
+          524.03,
+          161.872,
+          533.959
+        ],
+        "text": "2",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          164.68,
+          524.03,
+          186.783,
+          533.959
+        ],
+        "text": "MAN",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          189.601,
+          524.03,
+          238.851,
+          533.959
+        ],
+        "text": "DELIVERY",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          241.61,
+          524.03,
+          244.916,
+          533.959
+        ],
+        "text": "-",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          247.744,
+          524.03,
+          275.942,
+          533.959
+        ],
+        "text": "MUST",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          278.741,
+          524.03,
+          292.015,
+          533.959
+        ],
+        "text": "BE",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          294.804,
+          524.03,
+          344.587,
+          533.959
+        ],
+        "text": "BROUGHT",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          347.375,
+          524.03,
+          371.132,
+          533.959
+        ],
+        "text": "INTO",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          373.95,
+          524.03,
+          420.975,
+          533.959
+        ],
+        "text": "BUILDING",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          423.773,
+          524.03,
+          427.079,
+          533.959
+        ],
+        "text": "-",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          429.898,
+          524.03,
+          444.821,
+          533.959
+        ],
+        "text": "DO",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          447.629,
+          524.03,
+          468.647,
+          533.959
+        ],
+        "text": "NOT",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          471.435,
+          524.03,
+          503.516,
+          533.959
+        ],
+        "text": "LEAVE",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          54.0,
+          535.982,
+          98.231,
+          545.911
+        ],
+        "text": "OUTSIDE",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          101.387,
+          535.982,
+          147.859,
+          545.911
+        ],
+        "text": "WITHOUT",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          151.005,
+          535.982,
+          232.338,
+          545.911
+        ],
+        "text": "AUTHORIZATION",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          235.464,
+          535.982,
+          264.762,
+          545.911
+        ],
+        "text": "FROM",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          267.938,
+          535.982,
+          290.643,
+          545.911
+        ],
+        "text": "ALG.",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          54.0,
+          573.348,
+          63.353,
+          581.363
+        ],
+        "text": "By",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          65.612,
+          573.348,
+          98.672,
+          581.363
+        ],
+        "text": "signature",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          100.939,
+          573.348,
+          128.194,
+          581.363
+        ],
+        "text": "hereon,",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          130.461,
+          573.348,
+          167.105,
+          581.363
+        ],
+        "text": "consignee",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          169.356,
+          573.348,
+          199.727,
+          581.363
+        ],
+        "text": "confirms",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          201.994,
+          573.348,
+          214.498,
+          581.363
+        ],
+        "text": "this",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          216.757,
+          573.348,
+          249.375,
+          581.363
+        ],
+        "text": "shipment",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          251.634,
+          573.348,
+          257.422,
+          581.363
+        ],
+        "text": "is",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          259.689,
+          573.348,
+          290.055,
+          581.363
+        ],
+        "text": "received",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          292.322,
+          573.348,
+          324.932,
+          581.363
+        ],
+        "text": "complete",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          327.198,
+          573.348,
+          340.595,
+          581.363
+        ],
+        "text": "and",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          342.862,
+          573.348,
+          349.1,
+          581.363
+        ],
+        "text": "in",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          351.367,
+          573.348,
+          369.229,
+          581.363
+        ],
+        "text": "good",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          371.496,
+          573.348,
+          390.262,
+          581.363
+        ],
+        "text": "order",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          392.529,
+          573.348,
+          405.934,
+          581.363
+        ],
+        "text": "and",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          408.185,
+          573.348,
+          440.34,
+          581.363
+        ],
+        "text": "condition",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          442.615,
+          573.348,
+          465.839,
+          581.363
+        ],
+        "text": "unless",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          468.097,
+          573.348,
+          502.48,
+          581.363
+        ],
+        "text": "otherwise",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          504.754,
+          573.348,
+          524.867,
+          581.363
+        ],
+        "text": "noted",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          54.0,
+          582.996,
+          81.255,
+          591.011
+        ],
+        "text": "hereon,",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          83.482,
+          582.996,
+          96.887,
+          591.011
+        ],
+        "text": "and",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          99.138,
+          582.996,
+          123.708,
+          591.011
+        ],
+        "text": "agrees",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          125.959,
+          582.996,
+          132.643,
+          591.011
+        ],
+        "text": "to",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          134.894,
+          582.996,
+          156.525,
+          591.011
+        ],
+        "text": "ALG's",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          158.752,
+          582.996,
+          179.275,
+          591.011
+        ],
+        "text": "Rules",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          181.526,
+          582.996,
+          194.923,
+          591.011
+        ],
+        "text": "and",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          197.174,
+          582.996,
+          239.614,
+          591.011
+        ],
+        "text": "Regulations",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          241.841,
+          582.996,
+          260.154,
+          591.011
+        ],
+        "text": "Tariff",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          262.405,
+          582.996,
+          303.933,
+          591.011
+        ],
+        "text": "ALGW1000",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          306.184,
+          582.996,
+          326.707,
+          591.011
+        ],
+        "text": "which",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          328.958,
+          582.996,
+          334.746,
+          591.011
+        ],
+        "text": "is",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          336.997,
+          582.996,
+          368.706,
+          591.011
+        ],
+        "text": "available",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          370.957,
+          582.996,
+          380.31,
+          591.011
+        ],
+        "text": "for",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          382.569,
+          582.996,
+          405.777,
+          591.011
+        ],
+        "text": "review",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          408.036,
+          582.996,
+          418.306,
+          591.011
+        ],
+        "text": "via",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          420.532,
+          582.996,
+          431.698,
+          591.011
+        ],
+        "text": "the",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          433.949,
+          582.996,
+          461.209,
+          591.011
+        ],
+        "text": "Internet",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          463.435,
+          582.996,
+          470.152,
+          591.011
+        ],
+        "text": "at",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          54.0,
+          592.644,
+          139.743,
+          600.659
+        ],
+        "text": "www.algworldwide.com.",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          144.148,
+          592.644,
+          157.991,
+          600.659
+        ],
+        "text": "Any",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          160.194,
+          592.644,
+          203.081,
+          600.659
+        ],
+        "text": "discrepancy",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          205.283,
+          592.644,
+          211.522,
+          600.659
+        ],
+        "text": "in",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          213.724,
+          592.644,
+          241.422,
+          600.659
+        ],
+        "text": "delivery",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          243.617,
+          592.644,
+          267.283,
+          600.659
+        ],
+        "text": "should",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          269.51,
+          592.644,
+          278.425,
+          600.659
+        ],
+        "text": "be",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          280.628,
+          592.644,
+          307.891,
+          600.659
+        ],
+        "text": "brought",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          310.086,
+          592.644,
+          316.77,
+          600.659
+        ],
+        "text": "to",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          318.997,
+          592.644,
+          330.138,
+          600.659
+        ],
+        "text": "the",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          332.341,
+          592.644,
+          369.416,
+          600.659
+        ],
+        "text": "immediate",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          371.643,
+          592.644,
+          402.464,
+          600.659
+        ],
+        "text": "attention",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          404.659,
+          592.644,
+          411.367,
+          600.659
+        ],
+        "text": "of",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          413.554,
+          592.644,
+          429.615,
+          600.659
+        ],
+        "text": "ALG",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          431.842,
+          592.644,
+          442.088,
+          600.659
+        ],
+        "text": "via",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          444.29,
+          592.644,
+          466.634,
+          600.659
+        ],
+        "text": "phone",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          468.829,
+          592.644,
+          475.537,
+          600.659
+        ],
+        "text": "at",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          477.724,
+          592.644,
+          530.016,
+          600.659
+        ],
+        "text": "800-323-0289.",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          36.0,
+          619.646,
+          68.639,
+          629.575
+        ],
+        "text": "POD#1",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          324.0,
+          619.646,
+          356.639,
+          629.575
+        ],
+        "text": "POD#2",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          359.403,
+          619.646,
+          384.275,
+          629.575
+        ],
+        "text": "(OSD",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          387.068,
+          619.646,
+          395.926,
+          629.575
+        ],
+        "text": "or",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          398.696,
+          619.646,
+          435.2,
+          629.575
+        ],
+        "text": "Partials)",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          36.0,
+          643.55,
+          256.37,
+          653.479
+        ],
+        "text": "Name___________________________________",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          323.995,
+          643.55,
+          544.355,
+          653.479
+        ],
+        "text": "Name___________________________________",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          36.0,
+          667.454,
+          140.07,
+          677.383
+        ],
+        "text": "Date_______________",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          324.0,
+          667.454,
+          428.07,
+          677.383
+        ],
+        "text": "Date_______________",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          36.0,
+          691.358,
+          141.181,
+          701.287
+        ],
+        "text": "Time_______________",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          324.0,
+          691.358,
+          429.181,
+          701.287
+        ],
+        "text": "Time_______________",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          36.0,
+          715.262,
+          65.861,
+          725.191
+        ],
+        "text": "Pieces",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          68.252,
+          715.262,
+          192.822,
+          725.191
+        ],
+        "text": "Received_______________",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          324.0,
+          715.262,
+          353.861,
+          725.191
+        ],
+        "text": "Pieces",
+        "fontname": "",
+        "fontsize": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          356.252,
+          715.262,
+          480.822,
+          725.191
+        ],
+        "text": "Received_______________",
+        "fontname": "",
+        "fontsize": 0
+      }
+    ],
+    "text_lines": [
+      {
+        "page": 1,
+        "bbox": [
+          187.44,
+          32.805,
+          424.533,
+          46.801
+        ]
+      },
+      {
+        "page": 1,
+        "bbox": [
+          237.48,
+          51.258,
+          374.518,
+          63.22
+        ]
+      },
+      {
+        "page": 1,
+        "bbox": [
+          150.84,
+          65.658,
+          461.118,
+          77.62
+        ]
+      },
+      {
+        "page": 1,
+        "bbox": [
+          266.46,
+          80.058,
+          345.488,
+          92.02
+        ]
+      },
+      {
+        "page": 1,
+        "bbox": [
+          36.0,
+          124.862,
+          478.38,
+          134.791
+        ]
+      },
+      {
+        "page": 1,
+        "bbox": [
+          19.44,
+          136.814,
+          476.346,
+          146.743
+        ]
+      },
+      {
+        "page": 1,
+        "bbox": [
+          19.44,
+          148.766,
+          501.218,
+          158.695
+        ]
+      },
+      {
+        "page": 1,
+        "bbox": [
+          19.44,
+          160.718,
+          243.419,
+          170.647
+        ]
+      },
+      {
+        "page": 1,
+        "bbox": [
+          19.44,
+          172.67,
+          265.898,
+          182.599
+        ]
+      },
+      {
+        "page": 1,
+        "bbox": [
+          18.0,
+          213.566,
+          114.219,
+          223.495
+        ]
+      },
+      {
+        "page": 1,
+        "bbox": [
+          19.44,
+          227.028,
+          545.746,
+          235.043
+        ]
+      },
+      {
+        "page": 1,
+        "bbox": [
+          19.44,
+          236.676,
+          414.58,
+          244.691
+        ]
+      },
+      {
+        "page": 1,
+        "bbox": [
+          19.44,
+          246.324,
+          213.343,
+          254.339
+        ]
+      },
+      {
+        "page": 1,
+        "bbox": [
+          19.44,
+          255.972,
+          268.657,
+          263.987
+        ]
+      },
+      {
+        "page": 1,
+        "bbox": [
+          19.44,
+          265.62,
+          301.431,
+          273.635
+        ]
+      },
+      {
+        "page": 1,
+        "bbox": [
+          19.44,
+          275.268,
+          45.333,
+          283.283
+        ]
+      },
+      {
+        "page": 1,
+        "bbox": [
+          19.44,
+          284.916,
+          37.274,
+          292.931
+        ]
+      },
+      {
+        "page": 1,
+        "bbox": [
+          127.44,
+          313.86,
+          186.707,
+          321.875
+        ]
+      },
+      {
+        "page": 1,
+        "bbox": [
+          19.44,
+          323.508,
+          230.513,
+          331.523
+        ]
+      },
+      {
+        "page": 1,
+        "bbox": [
+          19.44,
+          333.156,
+          367.544,
+          341.171
+        ]
+      },
+      {
+        "page": 1,
+        "bbox": [
+          19.44,
+          342.804,
+          347.897,
+          350.819
+        ]
+      },
+      {
+        "page": 1,
+        "bbox": [
+          18.0,
+          360.59,
+          350.161,
+          370.519
+        ]
+      },
+      {
+        "page": 1,
+        "bbox": [
+          18.0,
+          372.542,
+          152.122,
+          382.471
+        ]
+      },
+      {
+        "page": 1,
+        "bbox": [
+          36.0,
+          384.494,
+          535.772,
+          394.423
+        ]
+      },
+      {
+        "page": 1,
+        "bbox": [
+          36.0,
+          396.446,
+          349.08,
+          406.375
+        ]
+      },
+      {
+        "page": 1,
+        "bbox": [
+          18.0,
+          441.156,
+          36.277,
+          449.171
+        ]
+      },
+      {
+        "page": 1,
+        "bbox": [
+          32.94,
+          450.804,
+          218.606,
+          458.819
+        ]
+      },
+      {
+        "page": 1,
+        "bbox": [
+          42.765,
+          460.452,
+          211.443,
+          468.467
+        ]
+      },
+      {
+        "page": 1,
+        "bbox": [
+          36.0,
+          508.692,
+          192.456,
+          516.707
+        ]
+      },
+      {
+        "page": 1,
+        "bbox": [
+          36.0,
+          526.478,
+          296.861,
+          536.407
+        ]
+      },
+      {
+        "page": 1,
+        "bbox": [
+          42.689,
+          537.636,
+          245.043,
+          545.651
+        ]
+      },
+      {
+        "page": 1,
+        "bbox": [
+          36.0,
+          556.932,
+          294.231,
+          564.947
+        ]
+      },
+      {
+        "page": 1,
+        "bbox": [
+          40.462,
+          566.58,
+          340.049,
+          574.595
+        ]
+      },
+      {
+        "page": 1,
+        "bbox": [
+          18.0,
+          765.876,
+          593.985,
+          773.891
+        ]
+      },
+      {
+        "page": 2,
+        "bbox": [
+          187.44,
+          30.837,
+          424.533,
+          44.833
+        ]
+      },
+      {
+        "page": 2,
+        "bbox": [
+          237.48,
+          49.29,
+          374.518,
+          61.252
+        ]
+      },
+      {
+        "page": 2,
+        "bbox": [
+          242.1,
+          63.69,
+          369.86,
+          75.652
+        ]
+      },
+      {
+        "page": 2,
+        "bbox": [
+          154.56,
+          78.09,
+          457.396,
+          90.052
+        ]
+      },
+      {
+        "page": 2,
+        "bbox": [
+          36.0,
+          121.29,
+          154.804,
+          133.252
+        ]
+      },
+      {
+        "page": 2,
+        "bbox": [
+          321.06,
+          131.124,
+          395.077,
+          139.139
+        ]
+      },
+      {
+        "page": 2,
+        "bbox": [
+          45.42,
+          141.566,
+          523.607,
+          151.495
+        ]
+      },
+      {
+        "page": 2,
+        "bbox": [
+          43.48,
+          153.518,
+          522.796,
+          163.447
+        ]
+      },
+      {
+        "page": 2,
+        "bbox": [
+          153.839,
+          165.47,
+          464.777,
+          175.399
+        ]
+      },
+      {
+        "page": 2,
+        "bbox": [
+          55.44,
+          189.374,
+          419.851,
+          199.303
+        ]
+      },
+      {
+        "page": 2,
+        "bbox": [
+          55.44,
+          201.326,
+          432.224,
+          211.255
+        ]
+      },
+      {
+        "page": 2,
+        "bbox": [
+          55.44,
+          213.278,
+          374.132,
+          223.207
+        ]
+      },
+      {
+        "page": 2,
+        "bbox": [
+          55.44,
+          225.23,
+          412.303,
+          235.159
+        ]
+      },
+      {
+        "page": 2,
+        "bbox": [
+          55.44,
+          237.182,
+          345.814,
+          247.111
+        ]
+      },
+      {
+        "page": 2,
+        "bbox": [
+          55.44,
+          249.134,
+          356.853,
+          259.063
+        ]
+      },
+      {
+        "page": 2,
+        "bbox": [
+          55.44,
+          273.038,
+          478.084,
+          282.967
+        ]
+      },
+      {
+        "page": 2,
+        "bbox": [
+          71.58,
+          284.99,
+          465.875,
+          294.919
+        ]
+      },
+      {
+        "page": 2,
+        "bbox": [
+          96.231,
+          296.942,
+          515.311,
+          306.871
+        ]
+      },
+      {
+        "page": 2,
+        "bbox": [
+          146.09,
+          308.894,
+          519.962,
+          318.823
+        ]
+      },
+      {
+        "page": 2,
+        "bbox": [
+          39.6,
+          332.798,
+          484.539,
+          342.727
+        ]
+      },
+      {
+        "page": 2,
+        "bbox": [
+          73.44,
+          488.174,
+          420.093,
+          498.103
+        ]
+      },
+      {
+        "page": 2,
+        "bbox": [
+          127.86,
+          512.078,
+          214.101,
+          522.007
+        ]
+      },
+      {
+        "page": 2,
+        "bbox": [
+          54.0,
+          524.03,
+          503.516,
+          533.959
+        ]
+      },
+      {
+        "page": 2,
+        "bbox": [
+          54.0,
+          535.982,
+          290.643,
+          545.911
+        ]
+      },
+      {
+        "page": 2,
+        "bbox": [
+          54.0,
+          573.348,
+          524.867,
+          581.363
+        ]
+      },
+      {
+        "page": 2,
+        "bbox": [
+          54.0,
+          582.996,
+          470.152,
+          591.011
+        ]
+      },
+      {
+        "page": 2,
+        "bbox": [
+          54.0,
+          592.644,
+          530.016,
+          600.659
+        ]
+      },
+      {
+        "page": 2,
+        "bbox": [
+          36.0,
+          619.646,
+          435.2,
+          629.575
+        ]
+      },
+      {
+        "page": 2,
+        "bbox": [
+          36.0,
+          643.55,
+          544.355,
+          653.479
+        ]
+      },
+      {
+        "page": 2,
+        "bbox": [
+          36.0,
+          667.454,
+          428.07,
+          677.383
+        ]
+      },
+      {
+        "page": 2,
+        "bbox": [
+          36.0,
+          691.358,
+          429.181,
+          701.287
+        ]
+      },
+      {
+        "page": 2,
+        "bbox": [
+          36.0,
+          715.262,
+          480.822,
+          725.191
+        ]
+      }
+    ],
+    "graphic_rects": [
+      {
+        "page": 1,
+        "bbox": [
+          0.0,
+          0.0,
+          612.0,
+          792.0
+        ],
+        "linewidth": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          0.0,
+          0.0,
+          612.0,
+          792.0
+        ],
+        "linewidth": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          18.0,
+          645.072,
+          72.0,
+          657.024
+        ],
+        "linewidth": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          126.0,
+          645.072,
+          180.0,
+          657.024
+        ],
+        "linewidth": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          324.0,
+          645.072,
+          360.0,
+          657.024
+        ],
+        "linewidth": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          396.0,
+          645.072,
+          450.0,
+          657.024
+        ],
+        "linewidth": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          18.0,
+          633.24,
+          72.0,
+          645.191
+        ],
+        "linewidth": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          126.0,
+          633.24,
+          180.0,
+          645.191
+        ],
+        "linewidth": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          324.0,
+          633.24,
+          360.0,
+          645.191
+        ],
+        "linewidth": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          396.0,
+          633.24,
+          450.0,
+          645.191
+        ],
+        "linewidth": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          18.0,
+          621.289,
+          72.0,
+          633.24
+        ],
+        "linewidth": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          126.0,
+          621.289,
+          180.0,
+          633.24
+        ],
+        "linewidth": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          18.0,
+          609.336,
+          97.2,
+          621.289
+        ],
+        "linewidth": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          158.4,
+          609.336,
+          216.0,
+          621.289
+        ],
+        "linewidth": 0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          18.0,
+          333.071,
+          72.0,
+          342.72
+        ],
+        "linewidth": 1.898
+      },
+      {
+        "page": 1,
+        "bbox": [
+          72.0,
+          333.071,
+          126.0,
+          342.72
+        ],
+        "linewidth": 1.898
+      },
+      {
+        "page": 1,
+        "bbox": [
+          126.0,
+          333.071,
+          180.0,
+          342.72
+        ],
+        "linewidth": 1.898
+      },
+      {
+        "page": 1,
+        "bbox": [
+          180.0,
+          333.071,
+          234.0,
+          342.72
+        ],
+        "linewidth": 1.898
+      },
+      {
+        "page": 2,
+        "bbox": [
+          0.0,
+          0.0,
+          612.0,
+          792.0
+        ],
+        "linewidth": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          0.0,
+          0.0,
+          612.0,
+          792.0
+        ],
+        "linewidth": 0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          172.8,
+          662.4,
+          173.616,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          176.544,
+          662.4,
+          177.36,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          178.416,
+          662.4,
+          181.104,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          182.16,
+          662.4,
+          184.849,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          185.904,
+          662.4,
+          186.72,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          187.776,
+          662.4,
+          188.591,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          189.649,
+          662.4,
+          190.464,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          193.391,
+          662.4,
+          196.08,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          197.136,
+          662.4,
+          199.824,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          200.88,
+          662.4,
+          201.696,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          202.751,
+          662.4,
+          203.568,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          204.624,
+          662.4,
+          207.312,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          210.24,
+          662.4,
+          211.056,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          212.111,
+          662.4,
+          214.8,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          215.856,
+          662.4,
+          216.671,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          217.729,
+          662.4,
+          218.544,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          219.6,
+          662.4,
+          220.416,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          221.471,
+          662.4,
+          224.16,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          227.089,
+          662.4,
+          227.904,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          228.96,
+          662.4,
+          231.649,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          232.704,
+          662.4,
+          235.392,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          236.449,
+          662.4,
+          237.264,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          238.32,
+          662.4,
+          239.136,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          240.191,
+          662.4,
+          242.88,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          245.809,
+          662.4,
+          246.624,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          247.68,
+          662.4,
+          250.369,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          251.424,
+          662.4,
+          252.24,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          255.169,
+          662.4,
+          255.984,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          257.04,
+          662.4,
+          257.856,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          258.911,
+          662.4,
+          261.6,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          262.656,
+          662.4,
+          263.471,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          264.529,
+          662.4,
+          267.216,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          270.144,
+          662.4,
+          270.96,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          272.016,
+          662.4,
+          272.831,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          273.889,
+          662.4,
+          276.576,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          277.631,
+          662.4,
+          278.448,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          279.504,
+          662.4,
+          282.192,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          285.12,
+          662.4,
+          287.809,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          288.864,
+          662.4,
+          289.68,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          290.736,
+          662.4,
+          291.551,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          292.609,
+          662.4,
+          293.424,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          294.48,
+          662.4,
+          297.169,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          300.096,
+          662.4,
+          300.911,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          301.969,
+          662.4,
+          302.784,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          303.84,
+          662.4,
+          306.529,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          307.584,
+          662.4,
+          308.4,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          309.456,
+          662.4,
+          310.271,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          313.2,
+          662.4,
+          314.016,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          315.071,
+          662.4,
+          317.76,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          318.816,
+          662.4,
+          321.504,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          322.56,
+          662.4,
+          323.376,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          324.431,
+          662.4,
+          325.248,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          328.176,
+          662.4,
+          330.864,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          331.92,
+          662.4,
+          332.736,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          333.791,
+          662.4,
+          336.48,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          337.536,
+          662.4,
+          340.224,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          341.28,
+          662.4,
+          342.096,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          345.024,
+          662.4,
+          345.84,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          346.896,
+          662.4,
+          349.584,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          350.64,
+          662.4,
+          351.456,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          352.511,
+          662.4,
+          355.2,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          356.256,
+          662.4,
+          357.071,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          360.0,
+          662.4,
+          360.816,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          361.871,
+          662.4,
+          362.688,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          363.744,
+          662.4,
+          366.432,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          367.489,
+          662.4,
+          368.304,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          369.36,
+          662.4,
+          372.049,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          374.976,
+          662.4,
+          375.791,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          376.849,
+          662.4,
+          379.536,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          380.591,
+          662.4,
+          381.408,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          382.464,
+          662.4,
+          383.28,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          384.336,
+          662.4,
+          385.151,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          388.08,
+          662.4,
+          390.769,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          391.824,
+          662.4,
+          394.512,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          395.569,
+          662.4,
+          396.384,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          397.44,
+          662.4,
+          398.256,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          399.311,
+          662.4,
+          402.0,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          404.929,
+          662.4,
+          407.616,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          408.671,
+          662.4,
+          409.488,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          410.544,
+          662.4,
+          411.36,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          412.416,
+          662.4,
+          413.231,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          414.289,
+          662.4,
+          415.104,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          418.031,
+          662.4,
+          418.848,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          419.904,
+          662.4,
+          422.592,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          423.649,
+          662.4,
+          426.336,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          427.391,
+          662.4,
+          428.208,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          431.136,
+          662.4,
+          433.824,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          434.88,
+          662.4,
+          435.696,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          436.751,
+          662.4,
+          439.44,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          440.496,
+          662.4,
+          441.311,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          442.369,
+          662.4,
+          443.184,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          446.111,
+          662.4,
+          448.8,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          449.856,
+          662.4,
+          450.671,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          451.729,
+          662.4,
+          454.416,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          455.471,
+          662.4,
+          456.288,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          457.344,
+          662.4,
+          458.16,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          461.089,
+          662.4,
+          463.776,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          464.831,
+          662.4,
+          465.648,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          466.704,
+          662.4,
+          469.392,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          470.449,
+          662.4,
+          471.264,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          472.32,
+          662.4,
+          473.136,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          476.064,
+          662.4,
+          478.752,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          479.809,
+          662.4,
+          480.624,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          481.68,
+          662.4,
+          484.369,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          485.424,
+          662.4,
+          486.24,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          487.296,
+          662.4,
+          488.111,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          491.04,
+          662.4,
+          493.729,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          494.784,
+          662.4,
+          495.6,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          496.656,
+          662.4,
+          499.344,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          500.4,
+          662.4,
+          501.216,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          502.271,
+          662.4,
+          503.088,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          506.016,
+          662.4,
+          508.704,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          509.76,
+          662.4,
+          510.576,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          511.631,
+          662.4,
+          514.32,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          515.376,
+          662.4,
+          516.191,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          517.249,
+          662.4,
+          518.064,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          520.991,
+          662.4,
+          523.68,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          524.736,
+          662.4,
+          525.551,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          526.609,
+          662.4,
+          529.296,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          530.351,
+          662.4,
+          531.168,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          532.224,
+          662.4,
+          533.04,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          535.969,
+          662.4,
+          538.656,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          539.711,
+          662.4,
+          540.528,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          541.584,
+          662.4,
+          544.272,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          545.329,
+          662.4,
+          546.144,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          547.2,
+          662.4,
+          548.016,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          550.944,
+          662.4,
+          551.76,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          552.816,
+          662.4,
+          555.504,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          556.56,
+          662.4,
+          559.249,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          560.304,
+          662.4,
+          561.12,
+          698.4
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          36.0,
+          640.32,
+          100.8,
+          652.271
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          100.8,
+          640.32,
+          158.4,
+          652.271
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          158.4,
+          640.32,
+          309.6,
+          652.271
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          309.6,
+          640.32,
+          356.4,
+          652.271
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          356.4,
+          640.32,
+          403.2,
+          652.271
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          403.2,
+          640.32,
+          576.0,
+          652.271
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          36.0,
+          616.416,
+          306.0,
+          628.369
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          306.0,
+          616.416,
+          576.0,
+          628.369
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          36.0,
+          497.016,
+          162.0,
+          508.969
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          162.0,
+          497.016,
+          306.0,
+          508.969
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          306.0,
+          497.016,
+          576.0,
+          508.969
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          36.0,
+          473.112,
+          306.0,
+          485.064
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          306.0,
+          473.112,
+          576.0,
+          485.064
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          36.0,
+          269.929,
+          306.0,
+          281.88
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          306.0,
+          269.929,
+          576.0,
+          281.88
+        ],
+        "linewidth": 1.0
+      }
+    ],
+    "graphic_lines": [
+      {
+        "page": 1,
+        "bbox": [
+          19.44,
+          557.282,
+          47.145,
+          557.282
+        ],
+        "linewidth": 1.898
+      },
+      {
+        "page": 1,
+        "bbox": [
+          127.44,
+          557.282,
+          165.872,
+          557.282
+        ],
+        "linewidth": 1.898
+      },
+      {
+        "page": 1,
+        "bbox": [
+          235.44,
+          557.282,
+          248.835,
+          557.282
+        ],
+        "linewidth": 1.898
+      },
+      {
+        "page": 1,
+        "bbox": [
+          343.44,
+          557.282,
+          353.265,
+          557.282
+        ],
+        "linewidth": 1.898
+      },
+      {
+        "page": 1,
+        "bbox": [
+          372.24,
+          557.282,
+          385.635,
+          557.282
+        ],
+        "linewidth": 1.898
+      },
+      {
+        "page": 1,
+        "bbox": [
+          385.59,
+          557.282,
+          407.04,
+          557.282
+        ],
+        "linewidth": 1.898
+      },
+      {
+        "page": 1,
+        "bbox": [
+          455.985,
+          557.282,
+          484.56,
+          557.282
+        ],
+        "linewidth": 1.898
+      },
+      {
+        "page": 1,
+        "bbox": [
+          527.895,
+          557.282,
+          545.76,
+          557.282
+        ],
+        "linewidth": 1.898
+      },
+      {
+        "page": 1,
+        "bbox": [
+          19.44,
+          451.153,
+          31.05,
+          451.153
+        ],
+        "linewidth": 1.898
+      },
+      {
+        "page": 1,
+        "bbox": [
+          235.44,
+          451.153,
+          277.457,
+          451.153
+        ],
+        "linewidth": 1.898
+      },
+      {
+        "page": 1,
+        "bbox": [
+          343.44,
+          451.153,
+          367.56,
+          451.153
+        ],
+        "linewidth": 1.898
+      },
+      {
+        "page": 1,
+        "bbox": [
+          360.0,
+          633.24,
+          360.0,
+          657.024
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          396.0,
+          633.24,
+          396.0,
+          657.024
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          450.0,
+          633.24,
+          450.0,
+          657.024
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          594.0,
+          633.24,
+          594.0,
+          657.024
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          72.0,
+          621.289,
+          72.0,
+          657.024
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          126.0,
+          621.289,
+          126.0,
+          657.024
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          180.0,
+          621.289,
+          180.0,
+          657.024
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          324.0,
+          621.289,
+          324.0,
+          657.024
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          18.0,
+          609.336,
+          18.0,
+          657.024
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          97.2,
+          609.336,
+          97.2,
+          621.289
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          158.4,
+          609.336,
+          158.4,
+          621.289
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          216.0,
+          609.336,
+          216.0,
+          621.289
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          277.2,
+          609.336,
+          277.2,
+          621.289
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          18.0,
+          323.424,
+          18.0,
+          342.72
+        ],
+        "linewidth": 1.5
+      },
+      {
+        "page": 1,
+        "bbox": [
+          72.0,
+          323.424,
+          72.0,
+          342.72
+        ],
+        "linewidth": 1.5
+      },
+      {
+        "page": 1,
+        "bbox": [
+          126.0,
+          323.424,
+          126.0,
+          342.72
+        ],
+        "linewidth": 1.5
+      },
+      {
+        "page": 1,
+        "bbox": [
+          180.0,
+          323.424,
+          180.0,
+          342.72
+        ],
+        "linewidth": 1.5
+      },
+      {
+        "page": 1,
+        "bbox": [
+          234.0,
+          323.424,
+          234.0,
+          342.72
+        ],
+        "linewidth": 1.5
+      },
+      {
+        "page": 1,
+        "bbox": [
+          18.0,
+          657.024,
+          594.0,
+          657.024
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          18.0,
+          645.071,
+          594.0,
+          645.071
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          18.0,
+          645.191,
+          594.0,
+          645.191
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          18.0,
+          633.24,
+          594.0,
+          633.24
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          18.0,
+          621.289,
+          324.0,
+          621.289
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          18.0,
+          609.336,
+          277.2,
+          609.336
+        ],
+        "linewidth": 1.0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          18.0,
+          588.096,
+          558.0,
+          588.096
+        ],
+        "linewidth": 6.0
+      },
+      {
+        "page": 1,
+        "bbox": [
+          18.0,
+          342.72,
+          234.0,
+          342.72
+        ],
+        "linewidth": 1.5
+      },
+      {
+        "page": 1,
+        "bbox": [
+          18.0,
+          333.071,
+          234.0,
+          333.071
+        ],
+        "linewidth": 1.5
+      },
+      {
+        "page": 1,
+        "bbox": [
+          18.0,
+          323.424,
+          234.0,
+          323.424
+        ],
+        "linewidth": 1.5
+      },
+      {
+        "page": 1,
+        "bbox": [
+          18.0,
+          313.776,
+          558.0,
+          313.776
+        ],
+        "linewidth": 6.0
+      },
+      {
+        "page": 2,
+        "bbox": [
+          36.0,
+          659.306,
+          95.951,
+          659.306
+        ],
+        "linewidth": 2.73
+      },
+      {
+        "page": 2,
+        "bbox": [
+          96.169,
+          659.306,
+          154.8,
+          659.306
+        ],
+        "linewidth": 2.73
+      },
+      {
+        "page": 2,
+        "bbox": [
+          36.0,
+          162.863,
+          68.65,
+          162.863
+        ],
+        "linewidth": 2.302
+      },
+      {
+        "page": 2,
+        "bbox": [
+          324.0,
+          162.863,
+          356.65,
+          162.863
+        ],
+        "linewidth": 2.302
+      },
+      {
+        "page": 2,
+        "bbox": [
+          356.644,
+          162.863,
+          384.313,
+          162.863
+        ],
+        "linewidth": 2.302
+      },
+      {
+        "page": 2,
+        "bbox": [
+          384.31,
+          162.863,
+          395.942,
+          162.863
+        ],
+        "linewidth": 2.302
+      },
+      {
+        "page": 2,
+        "bbox": [
+          395.938,
+          162.863,
+          435.24,
+          162.863
+        ],
+        "linewidth": 2.302
+      },
+      {
+        "page": 2,
+        "bbox": [
+          100.8,
+          628.369,
+          100.8,
+          652.271
+        ],
+        "linewidth": 1.5
+      },
+      {
+        "page": 2,
+        "bbox": [
+          158.4,
+          628.369,
+          158.4,
+          652.271
+        ],
+        "linewidth": 1.5
+      },
+      {
+        "page": 2,
+        "bbox": [
+          309.6,
+          628.369,
+          309.6,
+          652.271
+        ],
+        "linewidth": 1.5
+      },
+      {
+        "page": 2,
+        "bbox": [
+          356.4,
+          628.369,
+          356.4,
+          652.271
+        ],
+        "linewidth": 1.5
+      },
+      {
+        "page": 2,
+        "bbox": [
+          403.2,
+          628.369,
+          403.2,
+          652.271
+        ],
+        "linewidth": 1.5
+      },
+      {
+        "page": 2,
+        "bbox": [
+          162.0,
+          485.064,
+          162.0,
+          508.969
+        ],
+        "linewidth": 1.5
+      },
+      {
+        "page": 2,
+        "bbox": [
+          306.0,
+          473.111,
+          306.0,
+          628.369
+        ],
+        "linewidth": 1.5
+      },
+      {
+        "page": 2,
+        "bbox": [
+          36.0,
+          293.831,
+          36.0,
+          652.271
+        ],
+        "linewidth": 1.5
+      },
+      {
+        "page": 2,
+        "bbox": [
+          576.0,
+          293.831,
+          576.0,
+          652.271
+        ],
+        "linewidth": 1.5
+      },
+      {
+        "page": 2,
+        "bbox": [
+          306.0,
+          269.929,
+          306.0,
+          281.88
+        ],
+        "linewidth": 1.5
+      },
+      {
+        "page": 2,
+        "bbox": [
+          36.0,
+          186.264,
+          36.0,
+          293.711
+        ],
+        "linewidth": 1.5
+      },
+      {
+        "page": 2,
+        "bbox": [
+          576.0,
+          186.264,
+          576.0,
+          293.711
+        ],
+        "linewidth": 1.5
+      },
+      {
+        "page": 2,
+        "bbox": [
+          36.0,
+          652.271,
+          576.0,
+          652.271
+        ],
+        "linewidth": 1.5
+      },
+      {
+        "page": 2,
+        "bbox": [
+          36.0,
+          640.32,
+          576.0,
+          640.32
+        ],
+        "linewidth": 1.5
+      },
+      {
+        "page": 2,
+        "bbox": [
+          36.0,
+          628.369,
+          576.0,
+          628.369
+        ],
+        "linewidth": 1.5
+      },
+      {
+        "page": 2,
+        "bbox": [
+          36.0,
+          616.416,
+          576.0,
+          616.416
+        ],
+        "linewidth": 1.5
+      },
+      {
+        "page": 2,
+        "bbox": [
+          36.0,
+          508.969,
+          576.0,
+          508.969
+        ],
+        "linewidth": 1.5
+      },
+      {
+        "page": 2,
+        "bbox": [
+          36.0,
+          497.016,
+          576.0,
+          497.016
+        ],
+        "linewidth": 1.5
+      },
+      {
+        "page": 2,
+        "bbox": [
+          36.0,
+          485.064,
+          576.0,
+          485.064
+        ],
+        "linewidth": 1.5
+      },
+      {
+        "page": 2,
+        "bbox": [
+          36.0,
+          473.111,
+          576.0,
+          473.111
+        ],
+        "linewidth": 1.5
+      },
+      {
+        "page": 2,
+        "bbox": [
+          36.0,
+          281.88,
+          576.0,
+          281.88
+        ],
+        "linewidth": 1.5
+      },
+      {
+        "page": 2,
+        "bbox": [
+          36.0,
+          269.929,
+          576.0,
+          269.929
+        ],
+        "linewidth": 1.5
+      },
+      {
+        "page": 2,
+        "bbox": [
+          36.0,
+          222.12,
+          576.0,
+          222.12
+        ],
+        "linewidth": 1.5
+      },
+      {
+        "page": 2,
+        "bbox": [
+          36.0,
+          186.264,
+          576.0,
+          186.264
+        ],
+        "linewidth": 1.5
+      }
+    ],
+    "graphic_curves": [],
+    "images": [
+      {
+        "page": 1,
+        "bbox": [
+          36.0,
+          694.56,
+          144.0,
+          766.56
+        ],
+        "format": "",
+        "colorspace": "[/'DeviceRGB']",
+        "bits": 8
+      },
+      {
+        "page": 2,
+        "bbox": [
+          36.0,
+          694.56,
+          144.0,
+          766.56
+        ],
+        "format": "",
+        "colorspace": "[/'DeviceRGB']",
+        "bits": 8
+      }
+    ],
+    "tables": [
+      {
+        "page": 1,
+        "bbox": [
+          18.0,
+          134.976,
+          594.0,
+          182.664
+        ],
+        "rows": 4,
+        "cols": 11
+      },
+      {
+        "page": 1,
+        "bbox": [
+          18.0,
+          449.28,
+          234.0,
+          468.576
+        ],
+        "rows": 2,
+        "cols": 4
+      },
+      {
+        "page": 2,
+        "bbox": [
+          36.0,
+          139.729,
+          576.0,
+          605.736
+        ],
+        "rows": 11,
+        "cols": 5
+      }
+    ]
+  }
+}
