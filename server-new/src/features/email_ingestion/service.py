@@ -32,7 +32,7 @@ from features.email_ingestion.utils.email_listener_thread import EmailListenerTh
 
 # TYPE_CHECKING imports for forward references
 if TYPE_CHECKING:
-    from features.pdf_processing.service import PdfProcessingService
+    from features.pdf_files.service import PdfFilesService
     from features.eto_processing.service import EtoProcessingService
     from shared.database.connection import DatabaseConnectionManager
 
@@ -65,7 +65,7 @@ class EmailIngestionService:
     def __init__(
         self,
         connection_manager: 'DatabaseConnectionManager',
-        pdf_service: 'PdfProcessingService',
+        pdf_service: 'PdfFilesService',
         eto_service: 'EtoProcessingService'
     ):
         """

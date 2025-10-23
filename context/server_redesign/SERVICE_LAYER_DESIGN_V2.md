@@ -3308,7 +3308,12 @@ def create_template(
 
 **Called by**: Router endpoint `PUT /pdf-templates/{id}`
 
-**Purpose**: Update template by creating new version
+**Purpose**: Update template with smart version creation logic
+
+**SMART UPDATE LOGIC**:
+- **Metadata-only changes** (name, description): Update template record only, no new version
+- **Wizard data changes** (signature_objects, extraction_fields, pipeline_definition_id): Create new version
+- **Status changes**: Handled by separate activate/deactivate endpoints
 
 **Implementation**:
 ```python
@@ -3318,19 +3323,23 @@ def update_template(
     template_data: TemplateUpdate
 ) -> TemplateUpdated:
     """
-    Update template by creating new version.
+    Update template with smart version creation.
 
     Process:
-    1. Get current template
-    2. Validate fields
-    3. Compile pipeline
-    4. Create new version (increment version_num)
-    5. Update template's current_version_id
-    6. Optionally update template metadata (name, description)
+    1. Get current template and version
+    2. Determine if wizard data changed
+    3. If wizard data changed:
+       - Validate fields
+       - Compile pipeline (if pipeline changed)
+       - Create new version (increment version_num)
+       - Update template's current_version_id
+    4. If only metadata changed:
+       - Update template metadata only (no new version)
+    5. Update name/description if provided
 
     Args:
         template_id: Template ID
-        template_data: TemplateUpdate with new version data
+        template_data: TemplateUpdate with optional fields
 
     Returns:
         TemplateUpdated with updated info
@@ -3345,73 +3354,125 @@ def update_template(
         if not template:
             raise ObjectNotFoundError(f"Template {template_id} not found")
 
-        # Get current version to determine next version_num
+        # Get current version
         current_version = uow.template_versions.get_by_id(
             template.current_version_id
         )
 
-        next_version_num = current_version.version_num + 1
-
-        # Validate fields
-        self._validate_template_fields(
-            template_data.signature_objects,
-            template_data.extraction_fields
+        # Determine if wizard data changed
+        wizard_data_changed = (
+            template_data.signature_objects is not None or
+            template_data.extraction_fields is not None or
+            template_data.pipeline_definition_id is not None
         )
 
-        # Compile pipeline
-        pipeline_id = self.pipeline_service.compile_pipeline(
-            template_data.pipeline_state,
-            template_data.visual_state
-        )
+        if wizard_data_changed:
+            # WIZARD DATA CHANGED: Create new version
 
-        # Create new version
-        version_create = TemplateVersionCreate(
-            template_id=template_id,
-            version_num=next_version_num,
-            signature_objects=template_data.signature_objects,
-            extraction_fields=template_data.extraction_fields,
-            pipeline_definition_id=pipeline_id,
-            usage_count=0
-        )
+            # Use provided values or fall back to current version
+            new_signature_objects = (
+                template_data.signature_objects
+                if template_data.signature_objects is not None
+                else current_version.signature_objects
+            )
+            new_extraction_fields = (
+                template_data.extraction_fields
+                if template_data.extraction_fields is not None
+                else current_version.extraction_fields
+            )
+            new_pipeline_id = (
+                template_data.pipeline_definition_id
+                if template_data.pipeline_definition_id is not None
+                else current_version.pipeline_definition_id
+            )
 
-        new_version = uow.template_versions.create(version_create)
+            # Validate fields
+            self._validate_template_fields(
+                new_signature_objects,
+                new_extraction_fields
+            )
 
-        # Update template
-        template_update_data = TemplateUpdate(
-            current_version_id=new_version.id
-        )
+            # Create new version
+            next_version_num = current_version.version_number + 1
 
-        # Optionally update name/description
-        if template_data.name:
-            template_update_data.name = template_data.name
-        if template_data.description is not None:
-            template_update_data.description = template_data.description
+            version_create = VersionCreate(
+                template_id=template_id,
+                version_number=next_version_num,
+                source_pdf_id=current_version.source_pdf_id,
+                signature_objects=new_signature_objects,
+                extraction_fields=new_extraction_fields,
+                pipeline_definition_id=new_pipeline_id
+            )
 
-        updated_template = uow.templates.update(
-            template_id,
-            template_update_data
-        )
+            new_version = uow.template_versions.create(version_create)
 
-        logger.info(
-            f"Updated template {template_id} to version {next_version_num} "
-            f"(pipeline {pipeline_id})"
-        )
+            # Update template with new version reference
+            template_update_data = TemplateMetadataUpdate()
+            template_update_data.current_version_id = new_version.id
 
-        return TemplateUpdated(
-            id=template_id,
-            name=updated_template.name,
-            status=updated_template.status,
-            current_version_id=new_version.id,
-            current_version_num=next_version_num,
-            pipeline_definition_id=pipeline_id
-        )
+            # Also update name/description if provided
+            if template_data.name is not None:
+                template_update_data.name = template_data.name
+            if template_data.description is not None:
+                template_update_data.description = template_data.description
+
+            updated_template = uow.templates.update(
+                template_id,
+                template_update_data
+            )
+
+            logger.info(
+                f"Updated template {template_id} to version {next_version_num} "
+                f"(wizard data changed)"
+            )
+
+            return TemplateUpdated(
+                id=template_id,
+                name=updated_template.name,
+                status=updated_template.status,
+                current_version_id=new_version.id,
+                current_version_number=next_version_num,
+                pipeline_definition_id=new_pipeline_id,
+                version_created=True
+            )
+
+        else:
+            # METADATA-ONLY CHANGED: Update template only (no new version)
+
+            template_update_data = TemplateMetadataUpdate()
+
+            if template_data.name is not None:
+                template_update_data.name = template_data.name
+            if template_data.description is not None:
+                template_update_data.description = template_data.description
+
+            updated_template = uow.templates.update(
+                template_id,
+                template_update_data
+            )
+
+            logger.info(
+                f"Updated template {template_id} metadata only (no new version)"
+            )
+
+            return TemplateUpdated(
+                id=template_id,
+                name=updated_template.name,
+                status=updated_template.status,
+                current_version_id=current_version.id,
+                current_version_number=current_version.version_number,
+                pipeline_definition_id=current_version.pipeline_definition_id,
+                version_created=False
+            )
 ```
 
-**Service calls**: `pipeline_service.compile_pipeline()`
+**Service calls**: None (pipeline compilation removed - pipeline_definition_id is provided directly)
 
-**Internal calls**: `_validate_template_fields()`
+**Internal calls**: `_validate_template_fields()` (only when wizard data changes)
 
-**Repository calls**: `uow.templates.get_by_id()`, `uow.template_versions.get_by_id()`, `uow.template_versions.create()`, `uow.templates.update()`
+**Repository calls**:
+- Always: `uow.templates.get_by_id()`, `uow.template_versions.get_by_id()`, `uow.templates.update()`
+- If wizard data changed: `uow.template_versions.create()`
 
 **Transaction**: Uses Unit of Work
 
