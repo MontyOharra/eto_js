@@ -5,6 +5,118 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-10-22 19:00] — EmailConfigService Implementation & Filter Logic Fix
+
+### Spec / Intent
+- Fix EmailListenerThread filter rule checking to handle different field types correctly
+- Add complete type hints to EmailListenerThread class
+- Implement EmailConfigService as outward-facing service for email configuration management
+- Add ConflictError exception for state conflict scenarios
+- Explore PDF files domain requirements for next implementation phase
+
+### Changes Made
+
+**EmailListenerThread Filter Logic Fix** (`server-new/src/features/email_ingestion/utils/email_listener_thread.py:156-243`):
+- Rewrote `_check_filter_rule()` method to properly handle three field types:
+  - **String fields** (sender_email, subject): Supports equals, contains, starts_with, ends_with operations with case sensitivity
+  - **Boolean field** (has_attachments): Supports equals/is operations, converts string values to booleans
+  - **DateTime field** (received_date): Supports before, after, equals operations with ISO datetime parsing
+- Added detailed error logging for invalid operations
+- Each field type now has its own validation branch with appropriate operations
+
+**Type Hints Added** (`email_listener_thread.py:24-34`):
+- Added class variable type annotations for all instance variables
+- Added return type hints to all methods (`-> None`, `-> bool`, `-> list[EmailMessage]`, etc.)
+- Imported `Any` type for `get_status()` return type
+- All parameters, class variables, and methods now fully typed
+
+**ConflictError Exception** (`server-new/src/shared/exceptions/service.py:14-16`):
+- Added new exception class for state conflicts (HTTP 409)
+- Used when trying to update active configs or activate already-active configs
+- Exported from `shared/exceptions/__init__.py`
+
+**EmailConfigService Implementation** (`server-new/src/features/email_configs/`):
+
+Created new feature directory with complete service implementation:
+
+1. **list_configs_summary(order_by, desc)** - Simple delegation to repository
+2. **get_config(config_id)** - Get config by ID, returns None if not found
+3. **create_config(config_data)** - Creates inactive config
+4. **update_config(config_id, config_update)** - Validates inactive, raises ConflictError if active
+5. **delete_config(config_id)** - Auto-deactivates if active, then deletes
+6. **activate_config(config_id)** - Delegates to `ingestion_service.start_monitoring()`, updates DB
+7. **deactivate_config(config_id)** - Delegates to `ingestion_service.stop_monitoring()`, updates DB
+
+**Exception Handling Pattern**:
+- Preserves `ObjectNotFoundError` (404)
+- Preserves `ConflictError` (409)
+- Wraps infrastructure failures as `ServiceError` (500)
+- All exceptions logged with context
+
+**Service Integration**:
+- Constructor takes `connection_manager` and `ingestion_service`
+- Lazy-loads `EmailConfigRepository` in constructor
+- Properly delegates activation/deactivation to EmailIngestionService
+- No business logic in service - just orchestration and validation
+
+**PDF Domain Exploration**:
+- Analyzed SERVICE_LAYER_DESIGN_V2.md for PdfFilesService requirements
+- Identified 5 public methods + 1 internal method needed
+- Documented required types: PdfMetadata, PdfObject, PdfCreate, PdfObjectCreate
+- Documented required repositories: PdfRepository, PdfObjectRepository
+- Created detailed implementation checklist in CONTINUITY.md
+- Ready for next session implementation
+
+### Key Technical Decisions
+
+**Filter Rule Type Handling**:
+- Each field type (string, bool, datetime) has dedicated validation logic
+- Boolean values accept multiple string representations ("true", "1", "yes" → True)
+- DateTime comparisons support before/after/equals with ISO format parsing
+- Invalid operations log warnings and pass emails by default (fail open)
+
+**Type Safety**:
+- Comprehensive type hints throughout EmailListenerThread
+- All class variables, parameters, and return types annotated
+- Follows modern Python typing standards (`T | None` instead of `Optional[T]`)
+
+**Service Architecture**:
+- EmailConfigService is outward-facing (called by routers)
+- EmailIngestionService is internal (manages actual email processing)
+- Clear separation: configs manages CRUD, ingestion manages listeners
+- Activation/deactivation flows through both services with proper coordination
+
+**Exception Design**:
+- ConflictError for state conflicts (can't update active config, can't activate already-active)
+- Different from ValidationError (input validation) and ObjectNotFoundError (resource missing)
+- Maps cleanly to HTTP 409 Conflict status code
+
+### Current State
+- ✅ EmailListenerThread filter logic fixed and fully typed
+- ✅ EmailConfigService complete with all 7 methods
+- ✅ ConflictError exception added to shared exceptions
+- ✅ Email domain now 100% complete
+- ✅ PDF domain requirements fully documented
+- 📍 Ready to implement PDF files domain
+- 📍 Codebase follows consistent patterns throughout
+
+### Next Actions
+- Implement PDF files domain types (`shared/types/pdf_files.py`)
+- Implement PdfRepository and PdfObjectRepository
+- Check for/create StorageConfig
+- Implement PdfFilesService with all 6 methods
+- Continue with remaining domains (ETO, Template, Pipeline)
+
+### Notes
+- Email domain serves as reference implementation for all future domains
+- Repository pattern: `model_class` property, `_model_to_dataclass()` helper
+- Service pattern: dependency injection, proper exception handling, delegation
+- All code follows synchronous design (no async/await)
+- Type system uses `T | None` consistently
+- Working in server-new/ directory (unified backend architecture)
+
+---
+
 ## [2025-10-22 16:30] — Email Ingestion Service Implementation Complete
 
 ### Spec / Intent

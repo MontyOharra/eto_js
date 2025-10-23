@@ -11,6 +11,11 @@ class BusinessLogicError(ServiceError):
     pass
 
 
+class ConflictError(ServiceError):
+    """Resource state conflict (409)"""
+    pass
+
+
 class ExternalServiceError(ServiceError):
     """External service communication failed"""
     pass

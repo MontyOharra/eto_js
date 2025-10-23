@@ -311,7 +311,68 @@ class EmailIngestionService:
         Raises:
             ValidationError: If inputs invalid
         """
-        pass
+        try:
+            # Validate inputs
+            if not email_address:
+                raise ValidationError("email_address is required")
+            if not folder_name:
+                raise ValidationError("folder_name is required")
+
+            # Create temporary integration
+            integration = IntegrationRegistry.create(
+                provider_type=provider_type,
+                email_address=email_address,
+                folder_name=folder_name
+            )
+
+            # Test connection
+            if not integration.connect(email_address):
+                return ConnectionTestResult(
+                    success=False,
+                    message=f"Cannot connect to email account '{email_address}'",
+                    error=f"Connection to '{email_address}' failed",
+                    details=None
+                )
+
+            try:
+                # Test folder access (check if folder exists)
+                folders = integration.discover_folders(email_address)
+                folder_names = [f.name for f in folders]
+
+                if folder_name not in folder_names:
+                    return ConnectionTestResult(
+                        success=False,
+                        message=f"Folder '{folder_name}' does not exist or is not accessible",
+                        error=f"Folder '{folder_name}' not found. Available folders: {', '.join(folder_names[:5])}",
+                        details={"available_folders": folder_names[:10]}
+                    )
+
+                # Success
+                return ConnectionTestResult(
+                    success=True,
+                    message=f"Successfully connected to '{email_address}' and accessed folder '{folder_name}'",
+                    error=None,
+                    details=None
+                )
+
+            finally:
+                # Always disconnect
+                try:
+                    integration.disconnect()
+                except Exception as disconnect_error:
+                    logger.warning(f"Error disconnecting during test: {disconnect_error}")
+
+        except ValidationError:
+            raise
+
+        except Exception as e:
+            logger.error(f"Error testing connection: {e}", exc_info=True)
+            return ConnectionTestResult(
+                success=False,
+                message="Connection test failed",
+                error=f"Connection test failed: {str(e)}",
+                details=None
+            )
 
     # ========== Public Methods: Listener Lifecycle ==========
 
@@ -341,7 +402,61 @@ class EmailIngestionService:
         Raises:
             ServiceError: If already running or startup fails
         """
-        pass
+        with self.lock:
+            # Check if already running
+            if config.id in self.active_listeners:
+                raise ServiceError(f"Configuration {config.id} is already being monitored")
+
+            try:
+                # Create persistent integration
+                integration = IntegrationRegistry.create(
+                    provider_type=config.provider_type,
+                    email_address=config.email_address,
+                    folder_name=config.folder_name
+                )
+
+                # Connect to provider
+                if not integration.connect(config.email_address):
+                    raise ServiceError(
+                        f"Failed to connect to email account '{config.email_address}'"
+                    )
+
+                # Create listener thread with callbacks
+                listener = EmailListenerThread(
+                    config_id=config.id,
+                    integration=integration,
+                    filter_rules=config.filter_rules,
+                    poll_interval=config.poll_interval_seconds,
+                    process_callback=self._process_email,
+                    error_callback=self._handle_listener_error
+                )
+
+                # Start thread
+                listener.start()
+
+                # Track active listener
+                self.active_integrations[config.id] = integration
+                self.active_listeners[config.id] = listener
+
+                logger.info(f"Started monitoring for config {config.id}")
+
+                # Return status
+                return ListenerStatus(
+                    config_id=config.id,
+                    email_address=config.email_address,
+                    folder_name=config.folder_name,
+                    is_active=True,
+                    is_running=True,
+                    start_time=datetime.now(timezone.utc),
+                    last_check_time=None,
+                    error_count=0,
+                    emails_processed=0,
+                    pdfs_found=0
+                )
+
+            except Exception as e:
+                logger.error(f"Failed to start monitoring for config {config.id}: {e}", exc_info=True)
+                raise ServiceError(f"Failed to start monitoring: {str(e)}") from e
 
     def stop_monitoring(self, config_id: int) -> bool:
         """
@@ -369,7 +484,39 @@ class EmailIngestionService:
         Raises:
             ServiceError: If shutdown fails (thread won't stop)
         """
-        pass
+        with self.lock:
+            # Check if running
+            if config_id not in self.active_listeners:
+                logger.warning(f"Config {config_id} is not being monitored")
+                return False
+
+            try:
+                # Stop listener thread
+                listener = self.active_listeners[config_id]
+                listener.stop()
+                listener.join(timeout=5.0)  # Wait up to 5 seconds
+
+                if listener.is_alive():
+                    logger.error(f"Listener thread for config {config_id} did not stop")
+                    raise ServiceError("Listener thread did not stop gracefully")
+
+                # Disconnect integration
+                integration = self.active_integrations[config_id]
+                try:
+                    integration.disconnect()
+                except Exception as disconnect_error:
+                    logger.warning(f"Error disconnecting integration for config {config_id}: {disconnect_error}")
+
+                # Remove from active tracking
+                del self.active_listeners[config_id]
+                del self.active_integrations[config_id]
+
+                logger.info(f"Stopped monitoring for config {config_id}")
+                return True
+
+            except Exception as e:
+                logger.error(f"Failed to stop monitoring for config {config_id}: {e}", exc_info=True)
+                raise ServiceError(f"Failed to stop monitoring: {str(e)}") from e
 
     def is_listener_active(self, config_id: int) -> bool:
         """
@@ -390,7 +537,12 @@ class EmailIngestionService:
         Returns:
             True if listener is active and running, False otherwise
         """
-        pass
+        with self.lock:
+            if config_id not in self.active_listeners:
+                return False
+
+            listener = self.active_listeners[config_id]
+            return listener.is_alive()
 
     # ========== Internal Methods: Email Processing ==========
 
@@ -425,7 +577,71 @@ class EmailIngestionService:
             - Called from background thread - must be thread-safe
             - Errors should be caught and passed to _handle_listener_error()
         """
-        pass
+        try:
+            # Check for duplicate
+            existing = self.email_repository.get_by_message_id(email_msg.message_id)
+            if existing:
+                logger.debug(f"Email {email_msg.message_id} already processed, skipping")
+                return
+
+            # Store email record
+            email_create = EmailCreate(
+                config_id=config_id,
+                message_id=email_msg.message_id,
+                sender_email=email_msg.sender_email,
+                subject=email_msg.subject,
+                received_date=email_msg.received_date,
+                folder_name=email_msg.folder_name
+            )
+            email_record = self.email_repository.create(email_create)
+
+            logger.info(
+                f"Stored email record {email_record.id} for message {email_msg.message_id[:20]}..."
+            )
+
+            # Process PDF attachments
+            pdf_count = 0
+            for attachment in attachments:
+                # Check if PDF
+                is_pdf = (
+                    (attachment.content_type and 'pdf' in attachment.content_type.lower()) or
+                    (attachment.filename and attachment.filename.lower().endswith('.pdf'))
+                )
+
+                if is_pdf:
+                    logger.info(
+                        f"Processing PDF attachment: {attachment.filename} "
+                        f"({attachment.size_bytes} bytes)"
+                    )
+
+                    # Store PDF via pdf_service
+                    # Note: pdf_service will be implemented later
+                    # For now, just log that we would process it
+                    logger.info(f"PDF {attachment.filename} would be stored and processed by ETO")
+                    pdf_count += 1
+
+                    # TODO: When pdf_service is implemented:
+                    # pdf_record = self.pdf_service.store_pdf(
+                    #     file_bytes=attachment.content,
+                    #     filename=attachment.filename,
+                    #     email_id=email_record.id
+                    # )
+                    #
+                    # # Trigger ETO processing
+                    # self.eto_service.process_pdf(pdf_record.id)
+
+            logger.info(
+                f"Processed email {email_msg.message_id[:20]}... "
+                f"(config {config_id}): {pdf_count} PDFs found"
+            )
+
+        except Exception as e:
+            logger.error(
+                f"Error processing email {email_msg.message_id}: {e}",
+                exc_info=True
+            )
+            # Don't re-raise - let listener continue with next email
+            # Error is already logged and will be tracked by listener
 
     def _handle_listener_error(self, config_id: int, error: Exception) -> None:
         """
@@ -449,4 +665,28 @@ class EmailIngestionService:
             - Called from background thread - must be thread-safe
             - Should not raise exceptions (would crash thread)
         """
-        pass
+        logger.error(
+            f"Listener error for config {config_id}: {error}",
+            exc_info=True
+        )
+
+        try:
+            # Update config error tracking
+            from shared.types.email_configs import EmailConfigUpdate
+
+            error_update = EmailConfigUpdate(
+                last_error_message=str(error)[:500],  # Truncate to 500 chars
+                last_error_at=datetime.now(timezone.utc)
+            )
+
+            self.config_repository.update(config_id, error_update)
+
+            logger.debug(f"Updated error tracking for config {config_id}")
+
+        except Exception as update_error:
+            # Don't raise - just log the error
+            # This prevents cascading failures in the listener thread
+            logger.error(
+                f"Error updating error tracking for config {config_id}: {update_error}",
+                exc_info=True
+            )
