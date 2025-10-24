@@ -20,7 +20,7 @@ from api.schemas.pdf_templates import (
     PdfTemplateDetail,
     TemplateVersionDetail,
     VersionIdSummary,
-    PdfTemplateMetadataResponse,
+    PdfTemplate as PdfTemplateAPI,
     GetTemplateVersionsResponse,
     VersionListItem,
     CreatePdfTemplateRequest,
@@ -77,15 +77,15 @@ def convert_extraction_fields_to_domain(fields: list[ExtractionFieldAPI]) -> lis
 
 # ========== Domain → API (Response) Conversions ==========
 
-def convert_template_metadata(template: PdfTemplate) -> PdfTemplateMetadataResponse:
-    """Convert domain PdfTemplate to API metadata response"""
-    return PdfTemplateMetadataResponse(
+def convert_pdf_template(template: PdfTemplate) -> PdfTemplateAPI:
+    """Convert domain PdfTemplate to API PdfTemplate"""
+    return PdfTemplateAPI(
         id=template.id,
         name=template.name,
         description=template.description,
+        status=template.status,
         source_pdf_id=template.source_pdf_id,
         current_version_id=template.current_version_id,
-        status=template.status,
         created_at=template.created_at.isoformat(),
         updated_at=template.updated_at.isoformat()
     )

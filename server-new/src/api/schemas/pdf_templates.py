@@ -78,15 +78,15 @@ class ListPdfTemplatesResponse(BaseModel):
     items: List[TemplateListItem]
 
 
-# GET /pdf-templates/{id} - Metadata Response (simplified)
-class PdfTemplateMetadataResponse(BaseModel):
-    """Simple template metadata without full version details"""
+# PdfTemplate - Main template object (mirrors domain PdfTemplate exactly)
+class PdfTemplate(BaseModel):
+    """Template metadata - mirrors backend domain PdfTemplate"""
     id: int
     name: str
     description: Optional[str] = None
+    status: Literal["active", "inactive"]
     source_pdf_id: int
     current_version_id: Optional[int] = None
-    status: Literal["active", "inactive"]
     created_at: str  # ISO 8601
     updated_at: str  # ISO 8601
 
