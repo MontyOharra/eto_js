@@ -15,13 +15,10 @@ class SignatureObjectBase(BaseModel):
 
 # Extraction Fields (used across multiple endpoints)
 class ExtractionField(BaseModel):
-    field_id: str
-    label: str
-    description: Optional[str] = None
-    page: int
+    name: str
+    description: str
     bbox: Tuple[float, float, float, float]  # [x0, y0, x1, y1]
-    required: bool
-    validation_regex: Optional[str] = None
+    page: int
 
 
 # Pipeline State structures
@@ -79,9 +76,6 @@ class TemplateListItem(BaseModel):
 
 class ListPdfTemplatesResponse(BaseModel):
     items: List[TemplateListItem]
-    total: int
-    limit: int
-    offset: int
 
 
 # GET /pdf-templates/{id} - Detail Response
@@ -95,6 +89,13 @@ class TemplateVersionDetail(BaseModel):
     pipeline_definition_id: int
 
 
+class VersionIdSummary(BaseModel):
+    """Lightweight version identifier for template detail"""
+    version_id: int
+    version_num: int
+    created_at: str  # ISO 8601
+
+
 class PdfTemplateDetail(BaseModel):
     id: int
     name: str
@@ -104,6 +105,7 @@ class PdfTemplateDetail(BaseModel):
     current_version_id: int
     current_version: TemplateVersionDetail
     total_versions: int
+    available_versions: List[VersionIdSummary]
 
 
 # POST /pdf-templates - Create Request/Response
@@ -111,8 +113,8 @@ class CreatePdfTemplateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = Field(None, max_length=1000)
     source_pdf_id: Optional[int] = None
-    signature_objects: List[Dict[str, Any]] = Field(..., min_items=1)
-    extraction_fields: List[ExtractionField] = Field(..., min_items=1)
+    signature_objects: List[Dict[str, Any]] = Field(..., min_length=1)
+    extraction_fields: List[ExtractionField] = Field(..., min_length=1)
     pipeline_state: PipelineState
     visual_state: VisualState
 

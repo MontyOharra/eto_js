@@ -3,7 +3,8 @@ Shared module type definitions and base classes
 """
 from typing import Optional, List, Dict, Type, Any
 from abc import ABC, abstractmethod
-from pydantic import BaseModel, Field
+from dataclasses import dataclass, field
+from pydantic import BaseModel
 from enum import Enum
 
 class AllowedModuleNodeTypes(str, Enum):
@@ -22,36 +23,124 @@ class ModuleKind(str, Enum):
     COMPARATOR = "comparator"
 
 
-class NodeTypeRule(BaseModel):
+@dataclass(frozen=True)
+class NodeTypeRule:
     """Type rule for a node group - either allowed_types list or type_var"""
     # exactly one of these is AllowedModuleNodeTypes
     allowed_types: Optional[List[AllowedModuleNodeTypes]] = None  # per-pin whitelist; user picks independently
     type_var: Optional[str] = None             # e.g., "T" (unifies across pins)
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'allowed_types': [t.value if isinstance(t, AllowedModuleNodeTypes) else t for t in self.allowed_types] if self.allowed_types else None,
+            'type_var': self.type_var
+        }
 
-class NodeGroup(BaseModel):
+    @staticmethod
+    def from_dict(data: Dict[str, Any]) -> "NodeTypeRule":
+        """Create from dictionary"""
+        return NodeTypeRule(
+            allowed_types=[AllowedModuleNodeTypes(t) for t in data.get('allowed_types', [])] if data.get('allowed_types') else None,
+            type_var=data.get('type_var')
+        )
+
+
+@dataclass(frozen=True)
+class NodeGroup:
     """Definition of a group of nodes (pins) with cardinality constraints"""
-    min_count: int = 1
-    max_count: Optional[int] = 1
     typing: NodeTypeRule
     label: str
+    min_count: int = 1
+    max_count: Optional[int] = 1
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'min_count': self.min_count,
+            'max_count': self.max_count,
+            'typing': self.typing.to_dict(),
+            'label': self.label
+        }
+
+    @staticmethod
+    def from_dict(data: Dict[str, Any]) -> "NodeGroup":
+        """Create from dictionary"""
+        return NodeGroup(
+            typing=NodeTypeRule.from_dict(data['typing']),
+            label=data['label'],
+            min_count=data.get('min_count', 1),
+            max_count=data.get('max_count', 1)
+        )
 
 
-class IOSideShape(BaseModel):
+@dataclass(frozen=True)
+class IOSideShape:
     """Shape definition for one side of I/O (inputs or outputs)"""
-    nodes: List[NodeGroup] = []  # exact count, fixed order
+    nodes: List[NodeGroup] = field(default_factory=list)  # exact count, fixed order
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'nodes': [node.to_dict() for node in self.nodes]
+        }
+
+    @staticmethod
+    def from_dict(data: Dict[str, Any]) -> "IOSideShape":
+        """Create from dictionary"""
+        return IOSideShape(
+            nodes=[NodeGroup.from_dict(node) for node in data.get('nodes', [])]
+        )
 
 
-class IOShape(BaseModel):
+@dataclass(frozen=True)
+class IOShape:
     """Complete I/O shape definition for a module"""
-    inputs: IOSideShape = IOSideShape()
-    outputs: IOSideShape = IOSideShape()
-    type_params: Dict[str, List[AllowedModuleNodeTypes]] = Field(default_factory=dict)
+    inputs: IOSideShape = field(default_factory=IOSideShape)
+    outputs: IOSideShape = field(default_factory=IOSideShape)
+    type_params: Dict[str, List[AllowedModuleNodeTypes]] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'inputs': self.inputs.to_dict(),
+            'outputs': self.outputs.to_dict(),
+            'type_params': {
+                key: [t.value if isinstance(t, AllowedModuleNodeTypes) else t for t in types]
+                for key, types in self.type_params.items()
+            }
+        }
+
+    @staticmethod
+    def from_dict(data: Dict[str, Any]) -> "IOShape":
+        """Create from dictionary"""
+        return IOShape(
+            inputs=IOSideShape.from_dict(data.get('inputs', {})),
+            outputs=IOSideShape.from_dict(data.get('outputs', {})),
+            type_params={
+                key: [AllowedModuleNodeTypes(t) for t in types]
+                for key, types in data.get('type_params', {}).items()
+            }
+        )
 
 
-class ModuleMeta(BaseModel):
+@dataclass(frozen=True)
+class ModuleMeta:
     """Metadata defining I/O constraints for a module"""
-    io_shape: IOShape = IOShape()
+    io_shape: IOShape = field(default_factory=IOShape)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'io_shape': self.io_shape.to_dict()
+        }
+
+    @staticmethod
+    def from_dict(data: Dict[str, Any]) -> "ModuleMeta":
+        """Create from dictionary (replaces Pydantic model_validate)"""
+        return ModuleMeta(
+            io_shape=IOShape.from_dict(data.get('io_shape', {}))
+        )
 
 
 class BaseModule(ABC):
@@ -113,7 +202,13 @@ class BaseModule(ABC):
             List of validation errors (empty if valid)
         """
         return []
-
+    
+    @abstractmethod
+    def run(self, inputs: Dict[str, Any], config: Dict[str, Any], context: Optional[Any]) -> Dict[str, Any]:
+        """
+        Execute the module logic
+        """
+        return {}
 
 class TransformModule(BaseModule):
     """

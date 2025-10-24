@@ -8,7 +8,7 @@ from typing import Dict, List, Optional, Type, Any
 from shared.types import BaseModule, ModuleCatalog
 from shared.database.repositories.module_catalog import ModuleCatalogRepository
 from shared.utils.registry import ModuleRegistry, get_registry
-from exceptions.service import ObjectNotFoundError
+from shared.exceptions.service import ObjectNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -269,7 +269,7 @@ class ModulesService:
                         name=entry["name"],
                         description=entry["description"],
                         module_kind=ModuleKind(entry["module_kind"]),
-                        meta=ModuleMeta.model_validate(entry["meta"]),
+                        meta=ModuleMeta.from_dict(entry["meta"]),
                         config_schema=entry["config_schema"],
                         handler_name=entry["handler_name"],
                         color=entry["color"],

@@ -6,11 +6,6 @@ class RepositoryError(Exception):
     pass
 
 
-class ObjectNotFoundError(RepositoryError):
-    """Resource not found (404)"""
-    pass
-
-
 class ValidationError(RepositoryError):
     """Data validation failed"""
     pass

@@ -23,7 +23,7 @@ from shared.types.email_configs import EmailConfig
 
 from shared.database.repositories.email import EmailRepository
 from shared.database.repositories.email_config import EmailConfigRepository
-from shared.exceptions import ServiceError, ValidationError
+from shared.exceptions.service import ServiceError, ValidationError
 
 # Import new registry-based integration system
 from features.email_ingestion.integrations import IntegrationRegistry
@@ -33,7 +33,6 @@ from features.email_ingestion.utils.email_listener_thread import EmailListenerTh
 # TYPE_CHECKING imports for forward references
 if TYPE_CHECKING:
     from features.pdf_files.service import PdfFilesService
-    from features.eto_processing.service import EtoProcessingService
     from shared.database.connection import DatabaseConnectionManager
 
 
@@ -66,7 +65,6 @@ class EmailIngestionService:
         self,
         connection_manager: 'DatabaseConnectionManager',
         pdf_service: 'PdfFilesService',
-        eto_service: 'EtoProcessingService'
     ):
         """
         Initialize email ingestion service
@@ -78,7 +76,6 @@ class EmailIngestionService:
         """
         self.connection_manager = connection_manager
         self.pdf_service = pdf_service
-        self.eto_service = eto_service
 
         self.config_repository = EmailConfigRepository(connection_manager=connection_manager)
         self.email_repository = EmailRepository(connection_manager=connection_manager)
@@ -88,7 +85,224 @@ class EmailIngestionService:
         self.active_listeners: dict[int, EmailListenerThread] = {}
         self.lock = threading.RLock()
 
+        # Background worker thread for health monitoring
+        self._worker_thread: threading.Thread | None = None
+        self._worker_stop_event = threading.Event()
+
         logger.info("EmailIngestionService initialized")
+
+    # ========== Public Methods: Lifecycle ==========
+
+    def startup(self) -> None:
+        """
+        Start email ingestion service on application startup.
+
+        Queries for all active configurations and starts monitoring for each.
+        Also starts the background worker thread to monitor listener health.
+
+        Implementation:
+        1. Query config_repository for all configurations
+        2. Filter for configs where is_active=True
+        3. For each active config, call start_monitoring()
+        4. Start background worker thread
+        5. Log startup summary
+
+        Note:
+            - Called once during application initialization
+            - Should be idempotent (safe to call multiple times)
+            - Errors starting individual configs are logged but don't stop startup
+        """
+        logger.info("Starting EmailIngestionService...")
+
+        try:
+            # Get all config summaries
+            all_configs = self.config_repository.get_all_summaries()
+            active_config_ids = [config.id for config in all_configs if config.is_active]
+
+            logger.info(f"Found {len(active_config_ids)} active configuration(s) to start")
+
+            # Start monitoring for each active config
+            started_count = 0
+            failed_count = 0
+
+            for config_id in active_config_ids:
+                try:
+                    # Get full config details
+                    config = self.config_repository.get_by_id(config_id)
+                    if not config:
+                        logger.warning(f"Config {config_id} not found, skipping")
+                        failed_count += 1
+                        continue
+
+                    # Start monitoring
+                    self.start_monitoring(config)
+                    started_count += 1
+                    logger.info(f"Started monitoring for config {config_id}: {config.name}")
+
+                except Exception as e:
+                    logger.error(
+                        f"Failed to start monitoring for config {config_id}: {e}",
+                        exc_info=True
+                    )
+                    failed_count += 1
+
+            # Start background worker thread
+            self._worker_stop_event.clear()
+            self._worker_thread = threading.Thread(
+                target=self._background_worker,
+                name="EmailIngestionWorker",
+                daemon=True
+            )
+            self._worker_thread.start()
+            logger.info("Started background worker thread")
+
+            # Log startup summary
+            logger.info(
+                f"EmailIngestionService startup complete: "
+                f"{started_count} started, {failed_count} failed"
+            )
+
+        except Exception as e:
+            logger.error(f"Error during EmailIngestionService startup: {e}", exc_info=True)
+            raise ServiceError(f"Failed to start EmailIngestionService: {str(e)}") from e
+
+    def shutdown(self) -> None:
+        """
+        Shut down email ingestion service on application shutdown.
+
+        Stops all active listeners and the background worker thread.
+        Ensures graceful cleanup of all resources.
+
+        Implementation:
+        1. Stop background worker thread
+        2. Get list of all active listener config_ids
+        3. For each active listener, call stop_monitoring()
+        4. Log shutdown summary
+
+        Note:
+            - Called once during application shutdown
+            - Should be idempotent (safe to call multiple times)
+            - Waits for graceful shutdown but logs errors if listeners won't stop
+        """
+        logger.info("Shutting down EmailIngestionService...")
+
+        try:
+            # Stop background worker thread
+            if self._worker_thread and self._worker_thread.is_alive():
+                logger.info("Stopping background worker thread...")
+                self._worker_stop_event.set()
+                self._worker_thread.join(timeout=10.0)
+
+                if self._worker_thread.is_alive():
+                    logger.warning("Background worker thread did not stop within timeout")
+                else:
+                    logger.info("Background worker thread stopped")
+
+            # Get snapshot of active listeners (to avoid dict changing during iteration)
+            with self.lock:
+                active_config_ids = list(self.active_listeners.keys())
+
+            logger.info(f"Stopping {len(active_config_ids)} active listener(s)...")
+
+            # Stop all active listeners
+            stopped_count = 0
+            failed_count = 0
+
+            for config_id in active_config_ids:
+                try:
+                    if self.stop_monitoring(config_id):
+                        stopped_count += 1
+                        logger.info(f"Stopped monitoring for config {config_id}")
+                    else:
+                        logger.warning(f"Config {config_id} was not running")
+                except Exception as e:
+                    logger.error(
+                        f"Failed to stop monitoring for config {config_id}: {e}",
+                        exc_info=True
+                    )
+                    failed_count += 1
+
+            # Log shutdown summary
+            logger.info(
+                f"EmailIngestionService shutdown complete: "
+                f"{stopped_count} stopped, {failed_count} failed"
+            )
+
+        except Exception as e:
+            logger.error(f"Error during EmailIngestionService shutdown: {e}", exc_info=True)
+            # Don't raise - shutdown should not fail
+
+    def _background_worker(self) -> None:
+        """
+        Background worker that runs every minute to check listener health.
+
+        Monitors all active listeners and ensures they match the database state.
+        If a listener is running but its config is no longer active, stops it.
+
+        Implementation (runs in loop every 60 seconds):
+        1. Wait for 60 seconds (or stop event)
+        2. Get all active listener config_ids
+        3. For each listener, query database for current is_active status
+        4. If is_active=False in database, call stop_monitoring()
+        5. Log any mismatches and actions taken
+
+        Note:
+            - Runs in background daemon thread
+            - Stops when _worker_stop_event is set
+            - Errors are logged but don't crash the worker
+        """
+        logger.info("Background worker thread started")
+
+        while not self._worker_stop_event.wait(timeout=60.0):
+            try:
+                # Get snapshot of active listeners
+                with self.lock:
+                    active_config_ids = list(self.active_listeners.keys())
+
+                if not active_config_ids:
+                    logger.debug("No active listeners to check")
+                    continue
+
+                logger.debug(f"Checking health of {len(active_config_ids)} listener(s)...")
+
+                # Check each active listener
+                stopped_count = 0
+
+                for config_id in active_config_ids:
+                    try:
+                        # Query database for current config state
+                        config = self.config_repository.get_by_id(config_id)
+
+                        if not config:
+                            logger.warning(
+                                f"Config {config_id} not found in database, stopping listener"
+                            )
+                            self.stop_monitoring(config_id)
+                            stopped_count += 1
+                            continue
+
+                        # Check if config is still active
+                        if not config.is_active:
+                            logger.info(
+                                f"Config {config_id} is no longer active (is_active=False), "
+                                f"stopping listener"
+                            )
+                            self.stop_monitoring(config_id)
+                            stopped_count += 1
+
+                    except Exception as e:
+                        logger.error(
+                            f"Error checking health of listener {config_id}: {e}",
+                            exc_info=True
+                        )
+
+                if stopped_count > 0:
+                    logger.info(f"Background worker stopped {stopped_count} listener(s)")
+
+            except Exception as e:
+                logger.error(f"Error in background worker: {e}", exc_info=True)
+
+        logger.info("Background worker thread stopped")
 
     # ========== Public Methods: Account/Folder Discovery ==========
 
@@ -410,7 +624,7 @@ class EmailIngestionService:
             try:
                 # Create persistent integration
                 integration = IntegrationRegistry.create(
-                    provider_type='outklook_com',
+                    provider_type='outlook_com',
                     email_address=config.email_address,
                     folder_name=config.folder_name
                 )

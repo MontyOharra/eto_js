@@ -33,7 +33,7 @@ class ModuleCatalogCreate:
             'name': self.name,
             'description': self.description,
             'module_kind': self.module_kind.value if isinstance(self.module_kind, ModuleKind) else self.module_kind,
-            'meta': json.dumps(self.meta.model_dump(exclude_none=False)),
+            'meta': json.dumps(self.meta.to_dict()),
             'config_schema': json.dumps(self.config_schema),
             'handler_name': self.handler_name,
             'color': self.color,
@@ -65,7 +65,7 @@ class ModuleCatalogUpdate:
         if self.module_kind is not None:
             data['module_kind'] = self.module_kind.value if isinstance(self.module_kind, ModuleKind) else self.module_kind
         if self.meta is not None:
-            data['meta'] = json.dumps(self.meta.model_dump(exclude_none=False))
+            data['meta'] = json.dumps(self.meta.to_dict())
         if self.config_schema is not None:
             data['config_schema'] = json.dumps(self.config_schema)
         if self.handler_name is not None:
@@ -117,7 +117,7 @@ class ModuleCatalog:
             name=db_model.name,
             description=db_model.description,
             module_kind=ModuleKind(db_model.module_kind),
-            meta=ModuleMeta.model_validate(meta_data),
+            meta=ModuleMeta.from_dict(meta_data),
             config_schema=config_schema_data,
             handler_name=db_model.handler_name,
             color=db_model.color,

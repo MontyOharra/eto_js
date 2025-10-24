@@ -24,8 +24,6 @@ class EmailConfig:
     folder_name: str
     filter_rules: list[FilterRule]
     poll_interval_seconds: int
-    max_backlog_hours: int
-    error_retry_attempts: int
     is_active: bool
     activated_at: datetime | None
     last_check_time: datetime | None
@@ -59,8 +57,6 @@ class EmailConfigCreate:
     description: str | None = None
     filter_rules: list[FilterRule] = field(default_factory=list)
     poll_interval_seconds: int = 5
-    max_backlog_hours: int = 24
-    error_retry_attempts: int = 3
 
 
 @dataclass(frozen=True)
@@ -73,8 +69,6 @@ class EmailConfigUpdate:
     description: str | None = None
     filter_rules: list[FilterRule] | None = None
     poll_interval_seconds: int | None = None
-    max_backlog_hours: int | None = None
-    error_retry_attempts: int | None = None
     is_active: bool | None = None
     activated_at: datetime | None = None
     last_check_time: datetime | None = None

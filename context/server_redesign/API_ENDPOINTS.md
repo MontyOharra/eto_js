@@ -1016,12 +1016,11 @@ Return data directly (no `success` wrapper):
 | Method | Path | Description | Reviewed |
 |--------|------|-------------|----------|
 | GET | `/pdf-templates` | List all templates (summary with pagination) | ✅ |
-| GET | `/pdf-templates/{id}` | Get full template details (with current version data) | ✅ |
+| GET | `/pdf-templates/{id}` | Get full template details (with current version data and version list) | ✅ |
 | POST | `/pdf-templates` | Create new template (accepts pdf_file_id + wizard data) | ✅ |
 | PUT | `/pdf-templates/{id}` | Update template (creates new version from wizard data) | ✅ |
 | POST | `/pdf-templates/{id}/activate` | Set template status to active | ✅ |
 | POST | `/pdf-templates/{id}/deactivate` | Set template status to inactive | ✅ |
-| GET | `/pdf-templates/{id}/versions` | List all versions for a template | ✅ |
 | GET | `/pdf-templates/{id}/versions/{version_id}` | Get specific version details | ✅ |
 | POST | `/pdf-templates/simulate` | Simulate full ETO process without DB persistence | ✅ |
 
@@ -1078,7 +1077,7 @@ Return data directly (no `success` wrapper):
 
 ### `GET /pdf-templates/{id}`
 
-**Description:** Get full template details including current version's signature objects, extraction fields, and pipeline reference.
+**Description:** Get full template details including current version's signature objects, extraction fields, and pipeline reference, plus list of all available versions.
 
 **Path Parameters:**
 - `id`: Template ID (integer)
@@ -1114,13 +1113,10 @@ Return data directly (no `success` wrapper):
     // Extraction fields (from Step 2 of wizard)
     "extraction_fields": [
       {
-        "field_id": string,           // unique identifier
-        "label": string,               // e.g., "hawb", "customer_name"
-        "description": string | null,
-        "page": number,
+        "name": string,
+        "description": string,
         "bbox": [number, number, number, number],  // [x0, y0, x1, y1]
-        "required": boolean,
-        "validation_regex": string | null
+        "page": number
       }
     ],
 
@@ -1129,13 +1125,23 @@ Return data directly (no `success` wrapper):
   },
 
   // Version history summary
-  "total_versions": number
+  "total_versions": number,
+
+  // All available versions (for version selection dropdown)
+  "available_versions": [
+    {
+      "version_id": number,
+      "version_num": number,
+      "created_at": string  // ISO 8601
+    }
+  ]
 }
 ```
 
 **Notes:**
 - Current version data is denormalized into response for convenience
-- To view different version, use `GET /pdf-templates/{id}/versions/{version_id}`
+- `available_versions` list enables frontend version selection without separate API call
+- To view full details of different version, use `GET /pdf-templates/{id}/versions/{version_id}`
 - Pipeline details retrieved via pipelines endpoints (if needed)
 
 **Errors:**
@@ -1169,13 +1175,10 @@ Return data directly (no `success` wrapper):
   // Step 2: Extraction fields
   "extraction_fields": [
     {
-      "field_id": string,              // required, unique within template
-      "label": string,                 // required, will be key in extracted_data
-      "description"?: string,
-      "page": number,
-      "bbox": [number, number, number, number],
-      "required": boolean,             // default: false
-      "validation_regex"?: string      // optional regex pattern
+      "name": string,
+      "description": string,
+      "bbox": [number, number, number, number],  // [x0, y0, x1, y1]
+      "page": number
     }
   ],  // required, min: 1 field
 
@@ -1248,13 +1251,10 @@ Return data directly (no `success` wrapper):
 
   "extraction_fields": [
     {
-      "field_id": string,
-      "label": string,
-      "description"?: string,
-      "page": number,
-      "bbox": [number, number, number, number],
-      "required": boolean,
-      "validation_regex"?: string
+      "name": string,
+      "description": string,
+      "bbox": [number, number, number, number],  // [x0, y0, x1, y1]
+      "page": number
     }
   ],  // required, min: 1 field
 
@@ -1350,37 +1350,6 @@ Return data directly (no `success` wrapper):
 
 ---
 
-### `GET /pdf-templates/{id}/versions`
-
-**Description:** List all versions for a template, ordered by version_num descending (newest first).
-
-**Path Parameters:**
-- `id`: Template ID (integer)
-
-**Response:** `200 OK`
-```typescript
-[
-  {
-    "version_id": number,
-    "version_num": number,
-    "usage_count": number,           // ETO runs that used this version
-    "last_used_at": string | null,   // ISO 8601
-    "is_current": boolean            // true if this is current_version_id
-  }
-]
-```
-
-**Notes:**
-- Ordered by version_num DESC (newest first)
-- `is_current` indicates which version is actively used for matching
-- To view full version details, use `GET /pdf-templates/{id}/versions/{version_id}`
-
-**Errors:**
-- `404`: `{"detail": "Template not found"}`
-- `500`: `{"detail": "Database error"}`
-
----
-
 ### `GET /pdf-templates/{id}/versions/{version_id}`
 
 **Description:** Get full details for a specific template version including signature objects, extraction fields, and pipeline definition.
@@ -1411,13 +1380,10 @@ Return data directly (no `success` wrapper):
 
   "extraction_fields": [
     {
-      "field_id": string,
-      "label": string,
-      "description": string | null,
-      "page": number,
-      "bbox": [number, number, number, number],
-      "required": boolean,
-      "validation_regex": string | null
+      "name": string,
+      "description": string,
+      "bbox": [number, number, number, number],  // [x0, y0, x1, y1]
+      "page": number
     }
   ],
 
@@ -1460,13 +1426,10 @@ Return data directly (no `success` wrapper):
 
   "extraction_fields": [
     {
-      "field_id": string,
-      "label": string,
-      "description"?: string,
-      "page": number,
-      "bbox": [number, number, number, number],
-      "required": boolean,
-      "validation_regex"?: string
+      "name": string,
+      "description": string,
+      "bbox": [number, number, number, number],  // [x0, y0, x1, y1]
+      "page": number
     }
   ],
 
@@ -1496,13 +1459,10 @@ Return data directly (no `success` wrapper):
 
   "extraction_fields": [
     {
-      "field_id": string,
-      "label": string,
-      "description"?: string,
-      "page": number,
-      "bbox": [number, number, number, number],
-      "required": boolean,
-      "validation_regex"?: string
+      "name": string,
+      "description": string,
+      "bbox": [number, number, number, number],  // [x0, y0, x1, y1]
+      "page": number
     }
   ],
 
@@ -1690,7 +1650,7 @@ Return data directly (no `success` wrapper):
 
 **Router Status**: ✅ Reviewed
 
-**Note:** This router is primarily for standalone pipeline testing during development. Pipelines are typically accessed via templates in production. POST, PUT, and DELETE endpoints will be removed once pipeline system testing is complete.
+**Note:** This router is primarily for standalone pipeline testing during development. Pipelines are typically accessed via templates in production. Pipelines are immutable once created (append-only architecture).
 
 ### Endpoints Overview
 
@@ -1699,8 +1659,6 @@ Return data directly (no `success` wrapper):
 | GET | `/pipelines` | List all pipelines (with pagination) | ✅ |
 | GET | `/pipelines/{id}` | Get pipeline definition (pipeline_state, visual_state) | ✅ |
 | POST | `/pipelines` | Create standalone pipeline | ✅ |
-| PUT | `/pipelines/{id}` | Update pipeline definition | ✅ |
-| DELETE | `/pipelines/{id}` | Delete pipeline | ✅ |
 
 ---
 
@@ -2041,12 +1999,12 @@ Return data directly (no `success` wrapper):
 
 ## Phase 3 Complete! 🎉
 
-All 7 routers have been fully specified with **37 total endpoints**:
+All 7 routers have been fully specified with **36 total endpoints**:
 
 - ✅ Router 1: `/email-configs` - 10 endpoints
-- ✅ Router 2: `/eto-runs` - 7 endpoints
+- ✅ Router 2: `/eto-runs` - 6 endpoints
 - ✅ Router 3: `/pdf-files` - 4 endpoints
-- ✅ Router 4: `/pdf-templates` - 10 endpoints
+- ✅ Router 4: `/pdf-templates` - 8 endpoints
 - ✅ Router 5: `/modules` - 1 endpoint
 - ✅ Router 6: `/pipelines` - 5 endpoints (dev/testing)
 - ✅ Router 7: `/health` - 1 endpoint

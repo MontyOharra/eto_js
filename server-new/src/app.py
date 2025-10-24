@@ -21,6 +21,7 @@ import uvicorn
 from shared.database import init_database_connection
 from shared.services.service_container import ServiceContainer
 from shared.utils.storage_config import get_storage_configuration
+from shared.exceptions.service import ObjectNotFoundError, ConflictError, ValidationError, ServiceError
 
 logger = logging.getLogger(__name__)
 
@@ -240,29 +241,13 @@ async def initialize_services() -> None:
 
         logger.info("All services initialized successfully via ServiceContainer")
 
-        # Try email startup recovery
+        # Start email ingestion service
         try:
             email_ingestion_service = ServiceContainer.get_email_ingestion_service()
-            email_ingestion_service.startup_recovery()
-            logger.info("Modules service initialized successfully")
+            email_ingestion_service.startup()
+            logger.info("Email ingestion service started successfully")
         except Exception as service_error:
-            logger.warning(f"Email ingestion startup recovery failed: {service_error}")
-
-        # Auto-start ETO processing if enabled
-        try:
-            worker_enabled = os.getenv('ETO_WORKER_ENABLED', 'true').lower() == 'true'
-            if worker_enabled:
-                eto_service = ServiceContainer.get_eto_processing_service()
-                # Start the worker automatically
-                worker_started = await eto_service.start_worker()
-                if worker_started:
-                    logger.info("ETO processing worker started automatically")
-                else:
-                    logger.warning("ETO processing worker failed to start automatically")
-            else:
-                logger.info("ETO processing service initialized but worker disabled (ETO_WORKER_ENABLED=false)")
-        except Exception as eto_error:
-            logger.exception(f"ETO processing service initialization failed: {eto_error}")
+            logger.warning(f"Email ingestion service startup failed: {service_error}")
 
 
     except Exception as e:
@@ -277,19 +262,6 @@ async def cleanup_services() -> None:
 
     try:
         if ServiceContainer.is_initialized():
-            try:
-                eto_service = ServiceContainer.get_eto_processing_service()
-                if hasattr(eto_service, 'stop_worker'):
-                    worker_stopped = await eto_service.stop_worker(graceful=True)
-                    if worker_stopped:
-                        logger.info("ETO processing worker stopped gracefully")
-                    else:
-                        logger.info("ETO processing worker was not running")
-                else:
-                    logger.info("ETO processing service stopped")
-            except Exception as e:
-                logger.warning(f"Failed to stop ETO service: {e}")
-            
             # Stop email ingestion service if running
             try:
                 email_ingestion_service = ServiceContainer.get_email_ingestion_service()
@@ -347,17 +319,15 @@ def setup_exception_handlers(app: FastAPI) -> None:
     """Setup exception handlers for FastAPI"""
     
     @app.exception_handler(RequestValidationError)
-    async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    async def schema_validation_exception_handler(request: Request, exc: RequestValidationError):
         """Handle Pydantic validation errors"""
         logger.warning(f"Validation error on {request.method} {request.url}: {exc}")
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content={
-                "success": False,
                 "error": "Validation error",
                 "message": "The request data failed validation",
                 "details": exc.errors(),
-                "status_code": 422
             }
         )
 
@@ -367,50 +337,67 @@ def setup_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=exc.status_code,
             content={
-                "success": False,
                 "error": exc.detail,
                 "message": exc.detail,
-                "status_code": exc.status_code
+            }
+        )
+        
+    @app.exception_handler(ValidationError)
+    async def validation_exception_handler(request: Request, exc : ValidationError):
+        """Handle 400 errors with consistent JSON response"""
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "error": "Validation error",
+                "message": exc.args[0] if len(exc.args) > 0 else "The request data failed validation",
             }
         )
 
-    @app.exception_handler(404)
-    async def not_found_handler(request: Request, exc):
+    @app.exception_handler(ObjectNotFoundError)
+    async def not_found_handler(request: Request, exc : ObjectNotFoundError):
         """Handle 404 errors with consistent JSON response"""
+        logger.info(f"Resource not found on {request.method} {request.url.path}: {exc}")
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
             content={
-                "success": False,
                 "error": "Resource not found",
-                "message": "The requested resource does not exist",
-                "status_code": 404
+                "message": exc.args[0] if len(exc.args) > 0 else "The requested resource does not exist",
             }
         )
 
-    @app.exception_handler(500)
-    async def internal_server_error_handler(request: Request, exc):
+    @app.exception_handler(ConflictError)
+    async def conflict_handler(request: Request, exc : ConflictError):
+        """Handle 409 errors with consistent JSON response"""
+        logger.warning(f"Conflict on {request.method} {request.url.path}: {exc}")
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                "error": "Conflict",
+                "message": exc.args[0] if len(exc.args) > 0 else "The request conflicts with current state",
+            }
+        )
+
+    @app.exception_handler(ServiceError)
+    async def service_error_handler(request: Request, exc : ServiceError):
+        """Handle service-level errors with 500 response"""
+        logger.error(f"Service error on {request.method} {request.url.path}: {exc}", exc_info=True)
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "error": "Service error",
+                "message": exc.args[0] if len(exc.args) > 0 else "An error occurred while processing the request",
+            }
+        )
+
+    @app.exception_handler(Exception)
+    async def internal_server_error_handler(request: Request, exc : Exception):
         """Handle 500 errors with consistent JSON response"""
         logger.error(f"Internal server error: {exc}", exc_info=True)
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={
-                "success": False,
                 "error": "Internal server error",
                 "message": "An unexpected error occurred on the server",
-                "status_code": 500
-            }
-        )
-
-    @app.exception_handler(405)
-    async def method_not_allowed_handler(request: Request, exc):
-        """Handle 405 errors with consistent JSON response"""
-        return JSONResponse(
-            status_code=status.HTTP_405_METHOD_NOT_ALLOWED,
-            content={
-                "success": False,
-                "error": "Method not allowed",
-                "message": "The HTTP method is not allowed for this endpoint",
-                "status_code": 405
             }
         )
 
@@ -418,53 +405,6 @@ def setup_exception_handlers(app: FastAPI) -> None:
 def register_routers(app: FastAPI) -> None:
     """Register FastAPI routers"""
     # Register health router first
-    try:
-        from .api.routers import health_router
-        app.include_router(health_router, prefix="/api")
-        logger.info("Registered health router")
-    except ImportError as e:
-        logger.warning(f"Could not import health router: {e}")
-    except Exception as e:
-        logger.error(f"Error registering health router: {e}", exc_info=True)
-
-    # Register modules router
-    try:
-        from .api.routers import modules_router
-        app.include_router(modules_router, prefix="/api")
-        logger.info("Registered modules router")
-    except ImportError as e:
-        logger.warning(f"Could not import modules router: {e}")
-    except Exception as e:
-        logger.error(f"Error registering modules router: {e}", exc_info=True)
-
-    # Register pipelines router
-    try:
-        from .api.routers import pipelines_router
-        app.include_router(pipelines_router, prefix="/api")
-        logger.info("Registered pipelines router")
-    except ImportError as e:
-        logger.warning(f"Could not import pipelines router: {e}")
-    except Exception as e:
-        logger.error(f"Error registering pipelines router: {e}", exc_info=True)
-        
-    try:
-        from .api.routers import eto_router
-        app.include_router(eto_router, prefix="/api")
-        logger.info("Registered ETO processing router")
-    except ImportError as e:
-        logger.warning(f"Could not import ETO processing router: {e}")
-    except Exception as e:
-        logger.error(f"Error registering ETO processing router: {e}", exc_info=True)
-        
-    try:
-        from .api.routers import pdf_templates_router
-        app.include_router(pdf_templates_router, prefix="/api")
-        logger.info("Registered pdf templates router")
-    except ImportError as e:
-        logger.warning(f"Could not import pdf templates router: {e}")
-    except Exception as e:
-        logger.error(f"Error registering pdf templates router: {e}", exc_info=True)
-        
     try:
         from .api.routers import email_configs_router
         app.include_router(email_configs_router, prefix="/api")
@@ -474,6 +414,24 @@ def register_routers(app: FastAPI) -> None:
     except Exception as e:
         logger.error(f"Error registering email configs router: {e}", exc_info=True)
 
+    try:
+        from .api.routers import pdf_files_router
+        app.include_router(pdf_files_router, prefix="/api")
+        logger.info("Registered pdf files router")
+    except ImportError as e:
+        logger.warning(f"Could not import pdf files router: {e}")
+    except Exception as e:
+        logger.error(f"Error registering pdf files router: {e}", exc_info=True)
+
+    try:
+        from .api.routers import pdf_templates_router
+        app.include_router(pdf_templates_router, prefix="/api")
+        logger.info("Registered pdf templates router")
+    except ImportError as e:
+        logger.warning(f"Could not import pdf templates router: {e}")
+    except Exception as e:
+        logger.error(f"Error registering pdf templates router: {e}", exc_info=True)
+        
 
 def register_info_endpoint(app: FastAPI) -> None:
     """Register application info endpoint"""

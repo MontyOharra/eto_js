@@ -3,209 +3,236 @@ PDF Templates FastAPI Router
 REST endpoints for PDF template creation, management, and versioning
 """
 import logging
-from typing import List, Optional
-from fastapi import APIRouter, HTTPException, Depends, status, Query, UploadFile, File, Form
-from fastapi.responses import JSONResponse
+from typing import Optional, Union, Literal
+from fastapi import APIRouter, Query, status, Depends
 
 from api.schemas.pdf_templates import (
     ListPdfTemplatesResponse,
-    PdfTemplateDetail,
     CreatePdfTemplateRequest,
     CreatePdfTemplateResponse,
     UpdatePdfTemplateRequest,
     UpdatePdfTemplateResponse,
+    PdfTemplateDetail,
     ActivatePdfTemplateResponse,
     DeactivatePdfTemplateResponse,
-    ListTemplateVersionsResponse,
     GetTemplateVersionResponse,
     SimulateTemplateResponse,
+    SimulateTemplateRequestStored,
+    SimulateTemplateRequestUpload,
 )
+from api.mappers.pdf_templates import (
+    convert_template_summary_list,
+    convert_template_detail,
+    convert_create_template_request,
+    convert_create_template_response,
+    convert_update_template_request,
+    convert_update_template_response,
+    convert_activate_template_response,
+    convert_deactivate_template_response,
+    convert_template_version,
+)
+
+from shared.services.service_container import ServiceContainer
+from features.pdf_templates import PdfTemplateService
 
 logger = logging.getLogger(__name__)
 
-# Create router with prefix and tags
 router = APIRouter(
     prefix="/pdf-templates",
-    tags=["PDF Templates"],
-    responses={
-        404: {"description": "Not found"},
-        500: {"description": "Internal server error"}
-    }
+    tags=["PDF Templates"]
 )
 
 
 @router.get("", response_model=ListPdfTemplatesResponse)
-async def list_pdf_templates() -> ListPdfTemplatesResponse:
-    """List all templates (summary with pagination)"""
-    try:
-        # Service layer call will go here
-        # If invalid query parameters, raise 400
-        pass
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Database error in list_pdf_templates: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error"
-        )
+def list_pdf_templates(
+    status_filter: Optional[Literal["active", "inactive"]] = Query(None, description="Filter by status"),
+    sort_by: Literal["name", "status", "usage_count"] = Query("name", description="Field to sort by"),
+    sort_order: Literal["asc", "desc"] = Query("asc", description="Sort order"),
+    service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service())
+) -> ListPdfTemplatesResponse:
+    """List all PDF templates with filtering and sorting"""
+    summaries = service.list_templates(
+        status=status_filter,
+        sort_by=sort_by,
+        sort_order=sort_order
+    )
+    return convert_template_summary_list(summaries)
 
 
-@router.get("/{id}", response_model=PdfTemplateDetail)
-async def get_pdf_template(id: int) -> PdfTemplateDetail:
-    """Get full template details (with current version data)"""
-    try:
-        # Service layer call will go here
-        # If template not found, raise 404
-        pass
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Database error in get_pdf_template: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error"
-        )
+@router.get("/{id}")
+def get_pdf_template(
+    id: int,
+    service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service())
+):
+    """
+    Get template metadata (name, description, source_pdf_id, current_version_id).
+
+    Frontend will use this to:
+    1. Get source_pdf_id → fetch PDF bytes via GET /api/pdf-files/{source_pdf_id}/download
+    2. Get current_version_id → fetch version details via GET /api/pdf-templates/versions/{current_version_id}
+    3. Call GET /api/pdf-templates/{id}/versions to get version list for navigation
+    """
+    template = service.get_template(id)
+
+    return {
+        "id": template.id,
+        "name": template.name,
+        "description": template.description,
+        "source_pdf_id": template.source_pdf_id,
+        "current_version_id": template.current_version_id,
+        "status": template.status,
+        "usage_count": template.usage_count,
+        "last_used_at": template.last_used_at.isoformat() if template.last_used_at else None,
+        "created_at": template.created_at.isoformat(),
+        "updated_at": template.updated_at.isoformat()
+    }
+
+
+@router.get("/{id}/versions")
+def get_template_versions(
+    id: int,
+    service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service())
+):
+    """
+    Get list of all version IDs and version numbers for a template.
+
+    Returns list of tuples: [(version_id, version_number), ...]
+    Used by frontend for version navigation (e.g., "Version 1 of 3", "Version 2 of 3")
+    """
+    version_list = service.get_version_list(id)
+
+    return {
+        "template_id": id,
+        "versions": [
+            {"version_id": vid, "version_number": vnum}
+            for vid, vnum in version_list
+        ]
+    }
 
 
 @router.post("", response_model=CreatePdfTemplateResponse, status_code=status.HTTP_201_CREATED)
-async def create_pdf_template(request: CreatePdfTemplateRequest) -> CreatePdfTemplateResponse:
-    """Create new template (accepts pdf_file_id + wizard data)"""
-    try:
-        # Service layer call will go here
-        # If source PDF not found, raise 400
-        # If signature objects invalid, raise 400
-        # If extraction fields invalid, raise 400
-        # If pipeline validation fails, raise 400
-        pass
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Database error or pipeline compilation error in create_pdf_template: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error or pipeline compilation error"
-        )
+def create_pdf_template(
+    request: CreatePdfTemplateRequest,
+    service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service())
+) -> CreatePdfTemplateResponse:
+    """Create new PDF template with wizard data (template + version 1 atomically)"""
+    template_create_data = convert_create_template_request(request)
+    template, version_num, pipeline_id = service.create_template(template_create_data)
+    return convert_create_template_response(template, version_num, pipeline_id)
 
 
-@router.put("/{id}", response_model=UpdatePdfTemplateResponse)
-async def update_pdf_template(id: int, request: UpdatePdfTemplateRequest) -> UpdatePdfTemplateResponse:
-    """Update template (creates new version from wizard data)"""
-    try:
-        # Service layer call will go here
-        # If template not found, raise 404
-        # If validation errors (same as create), raise 400
-        pass
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Database error or pipeline compilation error in update_pdf_template: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error or pipeline compilation error"
-        )
+@router.put("/{id}", response_model=UpdatePdfTemplateResponse, status_code=status.HTTP_200_OK)
+def update_pdf_template(
+    id: int,
+    request: UpdatePdfTemplateRequest,
+    service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service())
+) -> UpdatePdfTemplateResponse:
+    """
+    Update template with smart versioning logic.
 
+    Flow:
+    1. Simple Case: Only name/description → Update metadata only (no new version)
+    2. Version Case: signature_objects or extraction_fields → Create new version
+    3. Complex Case: Pipeline fields → Validate/compile/create pipeline → Create new version
 
-@router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_pdf_template(id: int) -> None:
-    """Delete template (conditional - only inactive/unused)"""
-    try:
-        # Service layer call will go here
-        # If template not found, raise 404
-        # If template has usage history, raise 409
-        pass
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Database error in delete_pdf_template: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error"
-        )
+    All updates are atomic using unit-of-work pattern.
+
+    Errors:
+    - 404: Template not found
+    - 409: Template is active (deactivate first to update wizard data)
+    - 400: Pipeline validation fails
+    """
+    update_data = convert_update_template_request(request)
+    template, version_num, pipeline_id = service.update_template(id, update_data)
+    return convert_update_template_response(template, version_num, pipeline_id)
 
 
 @router.post("/{id}/activate", response_model=ActivatePdfTemplateResponse)
-async def activate_pdf_template(id: int) -> ActivatePdfTemplateResponse:
-    """Set template status to active"""
-    try:
-        # Service layer call will go here
-        # If template not found, raise 404
-        # If no finalized versions, raise 400
-        pass
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Database error in activate_pdf_template: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error"
-        )
+def activate_pdf_template(
+    id: int,
+    service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service())
+) -> ActivatePdfTemplateResponse:
+    """Activate template for ETO matching"""
+    template = service.activate_template(id)
+    return convert_activate_template_response(template)
 
 
 @router.post("/{id}/deactivate", response_model=DeactivatePdfTemplateResponse)
-async def deactivate_pdf_template(id: int) -> DeactivatePdfTemplateResponse:
-    """Set template status to inactive"""
-    try:
-        # Service layer call will go here
-        # If template not found, raise 404
-        pass
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Database error in deactivate_pdf_template: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error"
-        )
+def deactivate_pdf_template(
+    id: int,
+    service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service())
+) -> DeactivatePdfTemplateResponse:
+    """Deactivate template (stop using for ETO matching)"""
+    template = service.deactivate_template(id)
+    return convert_deactivate_template_response(template)
 
 
-@router.get("/{id}/versions", response_model=ListTemplateVersionsResponse)
-async def list_template_versions(id: int) -> ListTemplateVersionsResponse:
-    """List all versions for a template"""
-    try:
-        # Service layer call will go here
-        # If template not found, raise 404
-        pass
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Database error in list_template_versions: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error"
-        )
+@router.get("/versions/{version_id}")
+def get_template_version(
+    version_id: int,
+    service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service())
+):
+    """
+    Get specific version details by version ID.
+
+    Used when:
+    1. Viewing template details (fetch current version)
+    2. Switching between versions (fetch selected version)
+
+    Returns full version object with signature_objects, extraction_fields, pipeline_definition_id.
+    """
+    version = service.get_version_by_id(version_id)
+
+    from shared.types.pdf_files import serialize_pdf_objects
+    from shared.types.pdf_templates import serialize_extraction_fields
+
+    return {
+        "id": version.id,
+        "template_id": version.template_id,
+        "version_number": version.version_number,
+        "source_pdf_id": version.source_pdf_id,
+        "signature_objects": serialize_pdf_objects(version.signature_objects),
+        "extraction_fields": serialize_extraction_fields(version.extraction_fields),
+        "pipeline_definition_id": version.pipeline_definition_id,
+        "created_at": version.created_at.isoformat()
+    }
 
 
-@router.get("/{id}/versions/{version_id}", response_model=GetTemplateVersionResponse)
-async def get_template_version(id: int, version_id: int) -> GetTemplateVersionResponse:
-    """Get specific version details"""
-    try:
-        # Service layer call will go here
-        # If template or version not found, raise 404
-        pass
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Database error in get_template_version: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error"
-        )
+@router.post("/simulate", response_model=SimulateTemplateResponse, status_code=status.HTTP_200_OK)
+def simulate_template(
+    request: Union[SimulateTemplateRequestStored, SimulateTemplateRequestUpload]
+) -> SimulateTemplateResponse:
+    """
+    Simulate template processing without persistence.
 
+    Used during template creation/editing to test extraction and transformation logic.
 
-@router.post("/simulate", response_model=SimulateTemplateResponse)
-async def simulate_template() -> SimulateTemplateResponse:
-    """Simulate full ETO process without DB persistence"""
-    try:
-        # Service layer call will go here
-        # If PDF not found, raise 404
-        # If validation errors (signature objects, extraction fields, pipeline), raise 400
-        pass
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Simulation error in simulate_template: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Simulation error: {str(e)}"
-        )
+    Two modes:
+    1. Stored PDF: Uses existing PDF file from database (pdf_source: "stored", pdf_file_id)
+    2. Uploaded PDF: Uses PDF from multipart upload (pdf_source: "upload", file in form data)
+
+    Request Body (Stored):
+    - pdf_source: "stored"
+    - pdf_file_id: ID of stored PDF file
+    - signature_objects: Objects to match
+    - extraction_fields: Fields to extract
+    - pipeline_state: Transformation pipeline
+
+    Request Body (Upload):
+    - pdf_source: "upload"
+    - signature_objects: Objects to match
+    - extraction_fields: Fields to extract
+    - pipeline_state: Transformation pipeline
+    - PDF file in multipart form data
+
+    Returns:
+    - Simulation results with:
+      - Template matching status
+      - Data extraction results with validation
+      - Pipeline execution results (action modules simulated, not executed)
+
+    Errors:
+    - 400: Invalid request or simulation failed
+    - 404: Referenced PDF file not found (for stored mode)
+    """
+    pass

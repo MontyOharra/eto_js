@@ -9,11 +9,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from shared.database import DatabaseConnectionManager
-from shared.database.repositories import PdfRepository
+from shared.database.repositories import PdfFileRepository
 from shared.types.pdf_files import (
     PdfMetadata,
     PdfCreate,
-    PdfExtractedObjects,
+    PdfObjects,
     TextWord,
     TextLine,
     GraphicRect,
@@ -23,7 +23,7 @@ from shared.types.pdf_files import (
     Table
 )
 from shared.config import StorageConfig
-from shared.exceptions import ObjectNotFoundError, ServiceError, ValidationError
+from shared.exceptions.service import ObjectNotFoundError, ServiceError, ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ class PdfFilesService:
 
     connection_manager: DatabaseConnectionManager
     storage_config: StorageConfig
-    pdf_repository: PdfRepository
+    pdf_repository: PdfFileRepository
     base_storage_path: Path
 
     def __init__(
@@ -56,7 +56,7 @@ class PdfFilesService:
         self.connection_manager = connection_manager
         self.storage_config = storage_config
 
-        self.pdf_repository = PdfRepository(connection_manager=connection_manager)
+        self.pdf_repository = PdfFileRepository(connection_manager=connection_manager)
 
         # Storage settings
         self.base_storage_path = Path(storage_config.pdf_storage_path)
@@ -136,18 +136,18 @@ class PdfFilesService:
         self,
         pdf_id: int,
         object_type: str | None = None
-    ) -> PdfExtractedObjects:
+    ) -> PdfObjects:
         """
         Get all extracted objects for a PDF.
 
-        Objects are returned as typed PdfExtractedObjects dataclass.
+        Objects are returned as typed PdfObjects dataclass.
 
         Args:
             pdf_id: PDF record ID
-            object_type: Optional filter (not implemented - would require creating filtered PdfExtractedObjects)
+            object_type: Optional filter (not implemented - would require creating filtered PdfObjects)
 
         Returns:
-            PdfExtractedObjects dataclass with typed objects
+            PdfObjects dataclass with typed objects
 
         Raises:
             ObjectNotFoundError: If PDF not found
@@ -158,14 +158,14 @@ class PdfFilesService:
             raise ObjectNotFoundError(f"PDF {pdf_id} not found")
 
         # Return typed extracted_objects
-        # Note: object_type filtering not implemented (would require constructing new PdfExtractedObjects)
+        # Note: object_type filtering not implemented (would require constructing new PdfObjects)
         return metadata.extracted_objects
 
     def extract_objects_from_bytes(
         self,
         pdf_bytes: bytes,
         filename: str
-    ) -> PdfExtractedObjects:
+    ) -> PdfObjects:
         """
         Extract objects from PDF bytes without storing the PDF.
 
@@ -175,7 +175,7 @@ class PdfFilesService:
         Process:
         1. Validate PDF
         2. Write bytes to temporary file
-        3. Extract objects using pdfplumber (returns typed PdfExtractedObjects)
+        3. Extract objects using pdfplumber (returns typed PdfObjects)
         4. Delete temporary file
         5. Return extracted objects (not persisted)
 
@@ -184,7 +184,7 @@ class PdfFilesService:
             filename: Original filename (for logging/error messages)
 
         Returns:
-            PdfExtractedObjects dataclass with typed objects
+            PdfObjects dataclass with typed objects
 
         Raises:
             ValidationError: If PDF is invalid (400)
@@ -239,7 +239,7 @@ class PdfFilesService:
         4. If exists: return existing metadata
         5. If new:
            - Save file to date-based path (YYYY/MM/DD/hash.pdf)
-           - Extract objects using pdfplumber (returns typed PdfExtractedObjects)
+           - Extract objects using pdfplumber (returns typed PdfObjects)
            - Create database record with typed extracted_objects
            - Return metadata
 
@@ -289,7 +289,7 @@ class PdfFilesService:
 
             logger.info(f"Stored PDF at {relative_path}")
 
-            # Extract objects (returns typed PdfExtractedObjects)
+            # Extract objects (returns typed PdfObjects)
             extracted_objects = self._extract_objects_from_file(
                 full_path,
                 filename
@@ -348,11 +348,11 @@ class PdfFilesService:
         self,
         file_path: Path,
         filename: str
-    ) -> PdfExtractedObjects:
+    ) -> PdfObjects:
         """
         Extract objects from PDF file using pdfplumber.
 
-        Returns PdfExtractedObjects dataclass with strongly-typed objects.
+        Returns PdfObjects dataclass with strongly-typed objects.
 
         Extracts:
         - Text words (text, fontname, fontsize)
@@ -368,7 +368,7 @@ class PdfFilesService:
             filename: Original filename (for logging)
 
         Returns:
-            PdfExtractedObjects dataclass with typed objects
+            PdfObjects dataclass with typed objects
 
         Raises:
             ServiceError: If extraction fails
@@ -459,7 +459,7 @@ class PdfFilesService:
             )
 
             # Return typed container
-            return PdfExtractedObjects(
+            return PdfObjects(
                 text_words=text_words,
                 text_lines=text_lines,
                 graphic_rects=graphic_rects,

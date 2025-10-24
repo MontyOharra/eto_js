@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from shared.database import DatabaseConnectionManager
 from shared.database.repositories import EmailConfigRepository
 from shared.types.email_configs import EmailConfig, EmailConfigSummary, EmailConfigCreate, EmailConfigUpdate
-from shared.exceptions import ObjectNotFoundError, ConflictError, ServiceError
+from shared.exceptions.service import ObjectNotFoundError, ConflictError, ServiceError
 
 from features.email_ingestion import EmailIngestionService
 
@@ -59,7 +59,7 @@ class EmailConfigService:
         """
         return self.config_repository.get_all_summaries(order_by, desc)
 
-    def get_config(self, config_id: int) -> EmailConfig | None:
+    def get_config(self, config_id: int) -> EmailConfig:
         """
         Get email configuration by ID.
 
@@ -69,7 +69,12 @@ class EmailConfigService:
         Returns:
             EmailConfig dataclass or None if not found
         """
-        return self.config_repository.get_by_id(config_id)
+        config = self.config_repository.get_by_id(config_id)
+
+        if not config:
+            raise ObjectNotFoundError(f"Configuration {config_id} not found")
+
+        return config
 
     def create_config(self, config_data: EmailConfigCreate) -> EmailConfig:
         """
@@ -146,29 +151,16 @@ class EmailConfigService:
         if not config:
             raise ObjectNotFoundError(f"Configuration {config_id} not found")
 
-        # Store config before deletion (for return value)
-        config_to_delete = config
-
         # If active, deactivate first
         if config.is_active:
-            try:
-                # Stop listener
-                self.ingestion_service.stop_monitoring(config_id)
-            except Exception as e:
-                logger.error(f"Failed to stop monitoring for config {config_id}: {e}", exc_info=True)
-                raise ServiceError(f"Failed to stop email monitoring: {str(e)}") from e
-
-            # Update DB to mark inactive
-            self.config_repository.update(
-                config_id,
-                EmailConfigUpdate(is_active=False)
-            )
+            raise ConflictError("Cannot deactivate active configuration. Deactivate first.")
+ 
 
         # Delete config
-        self.config_repository.delete(config_id)
+        config = self.config_repository.delete(config_id)
 
         logger.info(f"Deleted configuration {config_id}")
-        return config_to_delete
+        return config
 
     def activate_config(self, config_id: int) -> EmailConfig:
         """

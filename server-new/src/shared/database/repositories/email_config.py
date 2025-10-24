@@ -16,7 +16,8 @@ from shared.types.email_configs import (
     EmailConfigUpdate,
     FilterRule,
 )
-from shared.exceptions import ObjectNotFoundError
+
+from exceptions.service import ObjectNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -79,8 +80,6 @@ class EmailConfigRepository(BaseRepository[EmailConfigModel]):
             folder_name=model.folder_name,
             filter_rules=self._filter_rules_from_json(model.filter_rules),
             poll_interval_seconds=model.poll_interval_seconds,
-            max_backlog_hours=model.max_backlog_hours,
-            error_retry_attempts=model.error_retry_attempts,
             is_active=model.is_active,
             activated_at=model.activated_at,
             last_check_time=model.last_check_time,
@@ -172,11 +171,8 @@ class EmailConfigRepository(BaseRepository[EmailConfigModel]):
                 folder_name=config_data.folder_name,
                 filter_rules=self._filter_rules_to_json(config_data.filter_rules),
                 poll_interval_seconds=config_data.poll_interval_seconds,
-                max_backlog_hours=config_data.max_backlog_hours,
-                error_retry_attempts=config_data.error_retry_attempts,
                 is_active=False,  # Always start inactive
                 activated_at=None,
-                is_running=False,
                 last_check_time=None,
                 last_error_message=None,
                 last_error_at=None,
@@ -224,12 +220,6 @@ class EmailConfigRepository(BaseRepository[EmailConfigModel]):
             if config_update.poll_interval_seconds is not None:
                 model.poll_interval_seconds = config_update.poll_interval_seconds
 
-            if config_update.max_backlog_hours is not None:
-                model.max_backlog_hours = config_update.max_backlog_hours
-
-            if config_update.error_retry_attempts is not None:
-                model.error_retry_attempts = config_update.error_retry_attempts
-
             if config_update.is_active is not None:
                 model.is_active = config_update.is_active
 
@@ -251,7 +241,7 @@ class EmailConfigRepository(BaseRepository[EmailConfigModel]):
 
             return self._model_to_dataclass(model)
 
-    def delete(self, config_id: int) -> None:
+    def delete(self, config_id: int) -> EmailConfig:
         """
         Delete email configuration.
 
@@ -265,10 +255,12 @@ class EmailConfigRepository(BaseRepository[EmailConfigModel]):
             # Get existing config
             model = session.get(self.model_class, config_id)
 
-            if model is None:
+            if not model:
                 raise ObjectNotFoundError(f"Configuration {config_id} not found")
 
             session.delete(model)
             session.flush()
 
             logger.info(f"Deleted email config {config_id}")
+
+            return self._model_to_dataclass(model)

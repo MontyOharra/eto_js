@@ -6,16 +6,11 @@ import logging
 from typing import Dict, Any, Optional, List, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from features.modules.service import ModulesService
-    from features.pipeline import PipelineService
-    from features.pipeline_execution.service import PipelineExecutionService
     from features.email_configs.service import EmailConfigService
     from features.email_ingestion.service import EmailIngestionService
-    from features.eto_processing.service import EtoProcessingService
-    from features.pdf_processing.service import PdfProcessingService
-    from features.pdf_templates.service import PdfTemplateService
     from features.pdf_files.service import PdfFilesService
-    from shared.utils.registry import ModuleRegistry
+    from features.pdf_templates.service import PdfTemplateService
+    from features.pipelines.service import PipelineService
     from shared.database.connection import DatabaseConnectionManager
 
 logger = logging.getLogger(__name__)
@@ -99,36 +94,6 @@ class ServiceContainer:
         Single place to define all services and their dependencies.
         """
         cls._service_definitions = {
-            'modules': {
-                'class': 'features.modules.service.ModulesService',
-                'args': [cls._connection_manager],
-                'singleton': True,
-                'description': 'Module management and execution service'
-            },
-            'pipeline': {
-                'class': 'features.pipeline.PipelineService',
-                'args': [cls._connection_manager],
-                'singleton': True,
-                'description': 'Pipeline creation and management service'
-            },
-            'module_registry': {
-                'factory': 'shared.utils.registry.get_registry',
-                'args': [],
-                'singleton': True,
-                'description': 'Module handler registry (singleton)'
-            },
-            'pipeline_execution': {
-                'class': 'features.pipeline_execution.service.PipelineExecutionService',
-                'args': [cls._connection_manager],
-                'singleton': True,
-                'description': 'Pipeline execution service with Dask orchestration'
-            },
-            'database_pool': {
-                'class': 'shared.services.database_connection_pool.DatabaseConnectionPool',
-                'args': [],
-                'singleton': True,
-                'description': 'External database connection pool for action modules'
-            },
             'storage_config': {
                 'factory': 'shared.config.StorageConfig.from_environment',
                 'args': [],
@@ -147,29 +112,23 @@ class ServiceContainer:
                 'singleton': True,
                 'description': 'Email ingestion service with integrations'
             },
-            'eto_processing': {
-                'class': 'features.eto_processing.service.EtoProcessingService',
-                'args': [cls._connection_manager, '_service:pdf_processing', '_service:pdf_templates'],
-                'singleton': True,
-                'description': 'ETO processing service with integrations'
-            },
-            'pdf_processing': {
-                'class': 'features.pdf_processing.service.PdfProcessingService',
-                'args': [cls._pdf_storage_path, cls._connection_manager],
-                'singleton': True,
-                'description': 'PDF processing service with storage'
-            },
-            'pdf_templates': {
-                'class': 'features.pdf_templates.service.PdfTemplateService',
-                'args': [cls._connection_manager],
-                'singleton': True,
-                'description': 'PDF template service with storage'
-            },
             'pdf_files': {
                 'class': 'features.pdf_files.service.PdfFilesService',
                 'args': [cls._connection_manager, '_service:storage_config'],
                 'singleton': True,
                 'description': 'PDF files service with extraction and storage'
+            },
+            'pipelines': {
+                'class': 'features.pipelines.service.PipelineService',
+                'args': [cls._connection_manager],
+                'singleton': True,
+                'description': 'Pipeline compilation and execution service'
+            },
+            'pdf_templates': {
+                'class': 'features.pdf_templates.service.PdfTemplateService',
+                'args': [cls._connection_manager, '_service:pipelines'],
+                'singleton': True,
+                'description': 'PDF template service with versioning and pipeline integration'
             },
         }
 
@@ -319,21 +278,6 @@ class ServiceContainer:
     # === Convenience Methods ===
 
     @classmethod
-    def get_modules_service(cls) -> 'ModulesService':
-        """Get the modules service"""
-        return cls.get('modules')
-
-    @classmethod
-    def get_pipeline_service(cls) -> 'PipelineService':
-        """Get the pipeline service"""
-        return cls.get('pipeline')
-
-    @classmethod
-    def get_pipeline_execution_service(cls) -> 'PipelineExecutionService':
-        """Get the pipeline execution service"""
-        return cls.get('pipeline_execution')
-    
-    @classmethod
     def get_email_config_service(cls) -> 'EmailConfigService':
         """Get the email config service"""
         return cls.get('email_configs')
@@ -344,14 +288,9 @@ class ServiceContainer:
         return cls.get('email_ingestion')
     
     @classmethod
-    def get_eto_processing_service(cls) -> 'EtoProcessingService':
-        """Get the ETO processing service"""
-        return cls.get('eto_processing')
-    
-    @classmethod
-    def get_pdf_processing_service(cls) -> 'PdfProcessingService':
+    def get_pdf_files_service(cls) -> 'PdfFilesService':
         """Get the PDF processing service"""
-        return cls.get('pdf_processing')    
+        return cls.get('pdf_files')    
     
     @classmethod
     def get_pdf_template_service(cls) -> 'PdfTemplateService':
@@ -359,14 +298,9 @@ class ServiceContainer:
         return cls.get('pdf_templates')
 
     @classmethod
-    def get_pdf_files_service(cls) -> 'PdfFilesService':
-        """Get the PDF files service"""
-        return cls.get('pdf_files')
-
-    @classmethod
-    def get_module_registry(cls) -> 'ModuleRegistry':
-        """Get the module registry"""
-        return cls.get('module_registry')
+    def get_pipeline_service(cls) -> 'PipelineService':
+        """Get the pipeline service"""
+        return cls.get('pipelines')
 
     @classmethod
     def get_connection_manager(cls) -> 'DatabaseConnectionManager':

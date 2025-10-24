@@ -59,16 +59,12 @@ class EmailConfigModel(BaseModel):
 
     email_address: Mapped[str] = mapped_column(String(255), nullable=False)
     folder_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    provider_type: Mapped[str] = mapped_column(String(50), nullable=False, default="outlook_com")
     filter_rules: Mapped[Optional[str]] = mapped_column(Text)
 
     poll_interval_seconds: Mapped[int] = mapped_column(Integer, default=5)
-    max_backlog_hours: Mapped[int] = mapped_column(Integer, default=24)
-    error_retry_attempts: Mapped[int] = mapped_column(Integer, default=3)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     activated_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
-    is_running: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     last_check_time: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
     last_error_message: Mapped[Optional[str]] = mapped_column(Text)
     last_error_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
@@ -85,7 +81,6 @@ class EmailConfigModel(BaseModel):
 
     __table_args__ = (
         Index("idx_email_config_active", "is_active"),
-        Index("idx_email_config_running", "is_running"),
     )
 
 

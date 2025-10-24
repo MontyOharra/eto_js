@@ -333,7 +333,7 @@ class ModuleRegistry:
                     "name": module_class.title,
                     "description": module_class.description,
                     "module_kind": module_class.kind,
-                    "meta": meta.model_dump(exclude_none=False),  # Convert to dict
+                    "meta": meta.to_dict(),  # Convert to dict
                     "config_schema": config_schema,
                     "handler_name": f"{module_class.__module__}:{module_class.__name__}",
                     "color": getattr(module_class, 'color', '#3B82F6'),  # Default color
