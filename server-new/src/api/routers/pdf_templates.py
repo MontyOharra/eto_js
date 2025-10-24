@@ -11,11 +11,7 @@ from api.schemas.pdf_templates import (
     PdfTemplateMetadataResponse,
     GetTemplateVersionsResponse,
     CreatePdfTemplateRequest,
-    CreatePdfTemplateResponse,
     UpdatePdfTemplateRequest,
-    UpdatePdfTemplateResponse,
-    ActivatePdfTemplateResponse,
-    DeactivatePdfTemplateResponse,
     GetTemplateVersionResponse,
     SimulateTemplateResponse,
     SimulateTemplateRequestStored,
@@ -26,14 +22,8 @@ from api.mappers.pdf_templates import (
     convert_template_metadata,
     convert_version_list,
     convert_create_template_request,
-    convert_create_template_response,
     convert_update_template_request,
-    convert_update_template_response,
-    convert_activate_template_response,
-    convert_deactivate_template_response,
     convert_template_version,
-    convert_pdf_objects_to_api,
-    convert_extraction_fields_to_api,
 )
 
 from shared.services.service_container import ServiceContainer
@@ -95,23 +85,23 @@ async def get_template_versions(
     return convert_version_list(id, version_list)
 
 
-@router.post("", response_model=CreatePdfTemplateResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=PdfTemplateMetadataResponse, status_code=status.HTTP_201_CREATED)
 async def create_pdf_template(
     request: CreatePdfTemplateRequest,
     service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service())
-) -> CreatePdfTemplateResponse:
+) -> PdfTemplateMetadataResponse:
     """Create new PDF template with wizard data (template + version 1 atomically)"""
     template_create_data = convert_create_template_request(request)
     template, version_num, pipeline_id = service.create_template(template_create_data)
-    return convert_create_template_response(template, version_num, pipeline_id)
+    return convert_template_metadata(template)
 
 
-@router.put("/{id}", response_model=UpdatePdfTemplateResponse, status_code=status.HTTP_200_OK)
+@router.put("/{id}", response_model=PdfTemplateMetadataResponse, status_code=status.HTTP_200_OK)
 async def update_pdf_template(
     id: int,
     request: UpdatePdfTemplateRequest,
     service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service())
-) -> UpdatePdfTemplateResponse:
+) -> PdfTemplateMetadataResponse:
     """
     Update template with smart versioning logic.
 
@@ -129,27 +119,27 @@ async def update_pdf_template(
     """
     update_data = convert_update_template_request(request)
     template, version_num, pipeline_id = service.update_template(id, update_data)
-    return convert_update_template_response(template, version_num, pipeline_id)
+    return convert_template_metadata(template)
 
 
-@router.post("/{id}/activate", response_model=ActivatePdfTemplateResponse)
+@router.post("/{id}/activate", response_model=PdfTemplateMetadataResponse)
 async def activate_pdf_template(
     id: int,
     service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service())
-) -> ActivatePdfTemplateResponse:
+) -> PdfTemplateMetadataResponse:
     """Activate template for ETO matching"""
     template = service.activate_template(id)
-    return convert_activate_template_response(template)
+    return convert_template_metadata(template)
 
 
-@router.post("/{id}/deactivate", response_model=DeactivatePdfTemplateResponse)
+@router.post("/{id}/deactivate", response_model=PdfTemplateMetadataResponse)
 async def deactivate_pdf_template(
     id: int,
     service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service())
-) -> DeactivatePdfTemplateResponse:
+) -> PdfTemplateMetadataResponse:
     """Deactivate template (stop using for ETO matching)"""
     template = service.deactivate_template(id)
-    return convert_deactivate_template_response(template)
+    return convert_template_metadata(template)
 
 
 @router.get("/versions/{version_id}", response_model=GetTemplateVersionResponse)

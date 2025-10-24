@@ -24,11 +24,7 @@ from api.schemas.pdf_templates import (
     GetTemplateVersionsResponse,
     VersionListItem,
     CreatePdfTemplateRequest,
-    CreatePdfTemplateResponse,
     UpdatePdfTemplateRequest,
-    UpdatePdfTemplateResponse,
-    ActivatePdfTemplateResponse,
-    DeactivatePdfTemplateResponse,
     GetTemplateVersionResponse,
     ExtractionField as ExtractionFieldAPI,
 )
@@ -173,38 +169,6 @@ def convert_template_detail(
     )
 
 
-def convert_create_template_response(
-    template: PdfTemplate,
-    version_num: int,
-    pipeline_id: int
-) -> CreatePdfTemplateResponse:
-    """Convert created template metadata to API response"""
-    return CreatePdfTemplateResponse(
-        id=template.id,
-        name=template.name,
-        status=template.status,
-        current_version_id=template.current_version_id or 0,
-        current_version_num=version_num,
-        pipeline_definition_id=pipeline_id
-    )
-
-
-def convert_activate_template_response(template: PdfTemplate) -> ActivatePdfTemplateResponse:
-    """Convert activated template to API response"""
-    return ActivatePdfTemplateResponse(
-        id=template.id,
-        status=template.status,
-        current_version_id=template.current_version_id or 0
-    )
-
-
-def convert_deactivate_template_response(template: PdfTemplate) -> DeactivatePdfTemplateResponse:
-    """Convert deactivated template to API response"""
-    return DeactivatePdfTemplateResponse(
-        id=template.id,
-        status=template.status,
-        current_version_id=template.current_version_id or 0
-    )
 
 
 def convert_template_version(
@@ -257,17 +221,3 @@ def convert_update_template_request(request: UpdatePdfTemplateRequest) -> PdfTem
     )
 
 
-def convert_update_template_response(
-    template: PdfTemplate,
-    version_num: int,
-    pipeline_id: int
-) -> UpdatePdfTemplateResponse:
-    """Convert updated template metadata to API response"""
-    return UpdatePdfTemplateResponse(
-        id=template.id,
-        name=template.name,
-        status=template.status,
-        current_version_id=template.current_version_id or 0,
-        current_version_num=version_num,
-        pipeline_definition_id=pipeline_id
-    )

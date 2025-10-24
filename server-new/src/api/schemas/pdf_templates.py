@@ -133,7 +133,7 @@ class PdfTemplateDetail(BaseModel):
     available_versions: List[VersionIdSummary]
 
 
-# POST /pdf-templates - Create Request/Response
+# POST /pdf-templates - Create Request
 class CreatePdfTemplateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = Field(None, max_length=1000)
@@ -144,16 +144,7 @@ class CreatePdfTemplateRequest(BaseModel):
     visual_state: VisualState
 
 
-class CreatePdfTemplateResponse(BaseModel):
-    id: int
-    name: str
-    status: Literal["inactive"]
-    current_version_id: int
-    current_version_num: int  # 1
-    pipeline_definition_id: int
-
-
-# PUT /pdf-templates/{id} - Update Request/Response
+# PUT /pdf-templates/{id} - Update Request
 class UpdatePdfTemplateRequest(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = Field(None, max_length=1000)
@@ -161,29 +152,6 @@ class UpdatePdfTemplateRequest(BaseModel):
     extraction_fields: Optional[List[ExtractionField]] = None
     pipeline_state: Optional[PipelineState] = None
     visual_state: Optional[VisualState] = None
-
-
-class UpdatePdfTemplateResponse(BaseModel):
-    id: int
-    name: str
-    status: Literal["active", "inactive"]
-    current_version_id: int
-    current_version_num: int
-    pipeline_definition_id: int
-
-
-# POST /pdf-templates/{id}/activate - Activate Response
-class ActivatePdfTemplateResponse(BaseModel):
-    id: int
-    status: Literal["active"]
-    current_version_id: int
-
-
-# POST /pdf-templates/{id}/deactivate - Deactivate Response
-class DeactivatePdfTemplateResponse(BaseModel):
-    id: int
-    status: Literal["inactive"]
-    current_version_id: int
 
 
 # GET /pdf-templates/{id}/versions - List Versions Response
