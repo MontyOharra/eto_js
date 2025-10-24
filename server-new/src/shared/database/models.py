@@ -13,7 +13,6 @@ from sqlalchemy import (
     Index,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.mssql import DATETIME2
 from sqlalchemy.orm import DeclarativeBase, relationship, Mapped, mapped_column
 from sqlalchemy.sql import func
 from sqlalchemy import Enum as SAEnum
@@ -62,16 +61,16 @@ class EmailConfigModel(BaseModel):
     poll_interval_seconds: Mapped[int] = mapped_column(Integer, default=5)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    activated_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
-    last_check_time: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
+    activated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    last_check_time: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     last_error_message: Mapped[Optional[str]] = mapped_column(Text)
-    last_error_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
+    last_error_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     created_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
     )
 
     # Relationships
@@ -96,20 +95,20 @@ class EmailModel(BaseModel):
     subject: Mapped[Optional[str]] = mapped_column(String(500))
     sender_email: Mapped[Optional[str]] = mapped_column(String(255))
     sender_name: Mapped[Optional[str]] = mapped_column(String(255))
-    received_date: Mapped[Optional[datetime]] = mapped_column(DATETIME2, index=True)
+    received_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), index=True)
     folder_name: Mapped[Optional[str]] = mapped_column(String(100))
 
     has_pdf_attachments: Mapped[bool] = mapped_column(Boolean, default=False)
     attachment_count: Mapped[int] = mapped_column(Integer, default=0)
     pdf_count: Mapped[int] = mapped_column(Integer, default=0)
 
-    processed_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
+    processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     created_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
     )
 
     # Relationships
@@ -144,10 +143,10 @@ class PdfFileModel(BaseModel):
     objects_json: Mapped[str] = mapped_column(Text, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
     )
 
     # Relationships
@@ -183,10 +182,10 @@ class PdfTemplateModel(BaseModel):
     current_version_id: Mapped[Optional[int]] = mapped_column(ForeignKey("pdf_template_versions.id"))
 
     created_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
     )
 
     # Relationships
@@ -210,13 +209,13 @@ class PdfTemplateVersionModel(BaseModel):
     extraction_fields: Mapped[str] = mapped_column(Text, nullable=False)
     pipeline_definition_id: Mapped[int] = mapped_column(ForeignKey("pipeline_definitions.id"), nullable=False, index=True)
     usage_count: Mapped[int] = mapped_column(Integer, default=0)
-    last_used_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     created_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
     )
 
     # Relationships
@@ -245,10 +244,10 @@ class ModuleCatalogModel(BaseModel):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     created_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
     )
 
     # Relationships
@@ -274,13 +273,13 @@ class PipelineCompiledPlanModel(BaseModel):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     plan_checksum: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
-    compiled_at: Mapped[datetime] = mapped_column(DATETIME2, nullable=False)
+    compiled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
     )
 
     # Relationships
@@ -305,10 +304,10 @@ class PipelineDefinitionModel(BaseModel):
     compiled_plan_id: Mapped[Optional[int]] = mapped_column(ForeignKey("pipeline_compiled_plans.id"), index=True)
 
     created_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
     )
 
     # Relationships
@@ -337,10 +336,10 @@ class PipelineDefinitionStepModel(BaseModel):
     step_number: Mapped[int] = mapped_column(Integer, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
     )
 
     # Relationships
@@ -377,14 +376,14 @@ class EtoRunModel(BaseModel):
     error_message: Mapped[Optional[str]] = mapped_column(Text)
     error_details: Mapped[Optional[str]] = mapped_column(Text)
 
-    started_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     created_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
     )
 
     # Relationships
@@ -426,14 +425,14 @@ class EtoRunTemplateMatchingModel(BaseModel):
         ForeignKey("pdf_template_versions.id"), index=True
     )
 
-    started_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     created_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
     )
 
     # Relationships
@@ -464,14 +463,14 @@ class EtoRunExtractionModel(BaseModel):
     )
     extracted_data: Mapped[Optional[str]] = mapped_column(Text)
 
-    started_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     created_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
     )
 
     # Relationships
@@ -500,14 +499,14 @@ class EtoRunPipelineExecutionModel(BaseModel):
 
     executed_actions: Mapped[Optional[str]] = mapped_column(Text)
 
-    started_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     created_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
     )
 
     # Relationships
@@ -536,10 +535,10 @@ class EtoRunPipelineExecutionStepModel(BaseModel):
     error: Mapped[Optional[str]] = mapped_column(Text)
 
     created_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
     )
 
     # Relationships

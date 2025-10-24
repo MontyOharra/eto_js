@@ -5,6 +5,77 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-10-24 18:00] — Timezone-Aware Datetime Fix
+
+### Spec / Intent
+- Fix timezone-naive/aware datetime comparison errors throughout the application
+- Convert all database datetime columns to timezone-aware storage
+- Ensure consistency between Python datetime objects and database values
+
+### Problem
+Application was throwing `TypeError: can't subtract offset-naive and offset-aware datetimes` when comparing:
+- Timezone-aware datetimes from Python code: `datetime.now(timezone.utc)`
+- Timezone-naive datetimes from database (retrieved from `DATETIME2` columns)
+
+### Solution
+- Updated all SQLAlchemy model datetime columns to use `DateTime(timezone=True)`
+- SQLAlchemy automatically maps this to SQL Server `DATETIMEOFFSET` type
+- All datetime values retrieved from database are now timezone-aware Python objects
+- All existing values interpreted as UTC (consistent with `func.getutcdate()` server defaults)
+
+### Changes Made
+
+**Database Models** (`server-new/src/shared/database/models.py`):
+- Removed `DATETIME2` import and all references
+- Updated ALL datetime column definitions across all tables:
+  - `email_configs`: activated_at, last_check_time, last_error_at, created_at, updated_at
+  - `emails`: received_date, processed_at, created_at, updated_at
+  - `pdf_files`: created_at, updated_at
+  - `pdf_templates`: created_at, updated_at
+  - `pdf_template_versions`: last_used_at, created_at, updated_at
+  - `module_catalog`: created_at, updated_at
+  - `pipeline_compiled_plans`: compiled_at, created_at, updated_at
+  - `pipeline_definitions`: created_at, updated_at
+  - `pipeline_definition_steps`: created_at, updated_at
+  - `eto_runs`: started_at, completed_at, created_at, updated_at
+  - `eto_run_template_matchings`: started_at, completed_at, created_at, updated_at
+  - `eto_run_extractions`: started_at, completed_at, created_at, updated_at
+  - `eto_run_pipeline_executions`: started_at, completed_at, created_at, updated_at
+  - `eto_run_pipeline_execution_steps`: created_at, updated_at
+
+**Example Change**:
+```python
+# Before
+from sqlalchemy.dialects.mssql import DATETIME2
+activated_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
+
+# After
+activated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+```
+
+### Database Impact
+**IMPORTANT**: Database schema must be updated - all `DATETIME2` columns must become `DATETIMEOFFSET`
+- Option 1: Drop and recreate database (cleanest)
+- Option 2: Manually alter columns if preserving data
+
+### Technical Details
+- `DateTime(timezone=True)` → SQL Server `DATETIMEOFFSET` type
+- `DATETIMEOFFSET` stores timezone offset with the value
+- SQLAlchemy automatically converts to/from Python timezone-aware datetime objects
+- All UTC datetimes stored with `+00:00` offset
+- Server defaults use `SYSUTCDATETIME()` (returns `DATETIMEOFFSET` in UTC)
+
+### Next Actions
+- Drop and recreate database to apply schema changes
+- Test email ingestion with new timezone-aware datetimes
+- Verify no more naive/aware datetime comparison errors
+
+### Notes
+- All existing data assumed to be UTC (consistent with previous `func.getutcdate()` usage)
+- This is a breaking schema change - database must be updated
+
+---
+
 ## [2025-10-25 02:30] — Email Ingestion Startup Recovery Fix
 
 ### Spec / Intent
