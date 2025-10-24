@@ -32,7 +32,7 @@ from api.mappers.pdf_templates import (
     convert_activate_template_response,
     convert_deactivate_template_response,
     convert_template_version,
-    convert_pdf_objects_to_list,
+    convert_pdf_objects_to_api,
     convert_extraction_fields_to_api,
 )
 

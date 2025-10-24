@@ -35,41 +35,22 @@ from api.schemas.pdf_templates import (
 
 # ========== Helper Functions ==========
 
-def convert_pdf_objects_to_list(objects: PdfObjects) -> list[dict[str, Any]]:
+def convert_pdf_objects_to_api(objects: PdfObjects) -> dict[str, list[dict[str, Any]]]:
     """
-    Convert grouped PdfObjects to flat list with object_type field.
+    Convert domain PdfObjects to API format (both use grouped dict).
 
-    Domain format: { "text_words": [...], "graphic_rects": [...] }
-    API format: [ {..., "object_type": "text_words"}, {..., "object_type": "graphic_rects"} ]
+    Format: {"text_words": [...], "graphic_rects": [...]}
     """
-    signature_objects_dict = serialize_pdf_objects(objects)
-    signature_objects_list = []
-
-    for obj_type, objects_list in signature_objects_dict.items():
-        for obj in objects_list:
-            obj_with_type = {**obj, "object_type": obj_type}
-            signature_objects_list.append(obj_with_type)
-
-    return signature_objects_list
+    return serialize_pdf_objects(objects)
 
 
-def convert_pdf_objects_from_list(objects_list: list[dict[str, Any]]) -> PdfObjects:
+def convert_pdf_objects_to_domain(objects_dict: dict[str, list[dict[str, Any]]]) -> PdfObjects:
     """
-    Convert flat list with object_type to grouped PdfObjects.
+    Convert API grouped dict to domain PdfObjects.
 
-    API format: [ {..., "object_type": "text_words"}, {..., "object_type": "graphic_rects"} ]
-    Domain format: { "text_words": [...], "graphic_rects": [...] }
+    Format: {"text_words": [...], "graphic_rects": [...]}
     """
-    signature_objects_grouped = {}
-
-    for obj in objects_list:
-        obj_copy = dict(obj)
-        obj_type = obj_copy.pop("object_type")
-        if obj_type not in signature_objects_grouped:
-            signature_objects_grouped[obj_type] = []
-        signature_objects_grouped[obj_type].append(obj_copy)
-
-    return deserialize_pdf_objects(signature_objects_grouped)
+    return deserialize_pdf_objects(objects_dict)
 
 
 def convert_extraction_fields_to_api(fields: list[ExtractionFieldDomain]) -> list[ExtractionFieldAPI]:
@@ -158,14 +139,12 @@ def convert_template_summary_list(
 
 
 def convert_template_detail(
-    template_with_version: PdfTemplateWithVersion,
+    template: PdfTemplate,
+    current_version: PdfTemplateVersion,
     total_versions: int,
     version_summaries: list[PdfVersionSummary]
 ) -> PdfTemplateDetail:
     """Convert domain template with version to API detail response"""
-    template = template_with_version.template
-    current_version = template_with_version.current_version
-
     if not current_version:
         raise ValueError("Template must have a current version")
 
@@ -181,7 +160,7 @@ def convert_template_detail(
             version_num=current_version.version_number,
             usage_count=0,
             last_used_at=None,
-            signature_objects=convert_pdf_objects_to_list(current_version.signature_objects),
+            signature_objects=convert_pdf_objects_to_api(current_version.signature_objects),
             extraction_fields=convert_extraction_fields_to_api(current_version.extraction_fields),
             pipeline_definition_id=current_version.pipeline_definition_id
         ),
@@ -243,7 +222,7 @@ def convert_template_version(
         usage_count=0,
         last_used_at=None,
         is_current=is_current,
-        signature_objects=convert_pdf_objects_to_list(version.signature_objects),
+        signature_objects=convert_pdf_objects_to_api(version.signature_objects),
         extraction_fields=convert_extraction_fields_to_api(version.extraction_fields),
         pipeline_definition_id=version.pipeline_definition_id
     )
@@ -256,7 +235,7 @@ def convert_create_template_request(request: CreatePdfTemplateRequest) -> PdfTem
     return PdfTemplateCreate(
         name=request.name,
         description=request.description,
-        signature_objects=convert_pdf_objects_from_list(request.signature_objects),
+        signature_objects=convert_pdf_objects_to_domain(request.signature_objects),
         extraction_fields=convert_extraction_fields_to_domain(request.extraction_fields),
         pipeline_state=request.pipeline_state.model_dump(),
         visual_state=request.visual_state.model_dump(),
@@ -274,7 +253,7 @@ def convert_update_template_request(request: UpdatePdfTemplateRequest) -> PdfTem
     return PdfTemplateUpdate(
         name=request.name,
         description=request.description,
-        signature_objects=convert_pdf_objects_from_list(request.signature_objects) if request.signature_objects else None,
+        signature_objects=convert_pdf_objects_to_domain(request.signature_objects) if request.signature_objects else None,
         extraction_fields=convert_extraction_fields_to_domain(request.extraction_fields) if request.extraction_fields else None,
         pipeline_state=request.pipeline_state.model_dump() if request.pipeline_state else None,
         visual_state=request.visual_state.model_dump() if request.visual_state else None

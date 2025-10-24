@@ -112,7 +112,7 @@ class TemplateVersionDetail(BaseModel):
     version_num: int
     usage_count: int
     last_used_at: Optional[str] = None  # ISO 8601
-    signature_objects: List[Dict[str, Any]]  # Varies by object_type
+    signature_objects: Dict[str, List[Dict[str, Any]]]  # Grouped: {"text_words": [...], "graphic_rects": [...]}
     extraction_fields: List[ExtractionField]
     pipeline_definition_id: int
 
@@ -141,7 +141,7 @@ class CreatePdfTemplateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = Field(None, max_length=1000)
     source_pdf_id: Optional[int] = None
-    signature_objects: List[Dict[str, Any]] = Field(..., min_length=1)
+    signature_objects: Dict[str, List[Dict[str, Any]]]  # Grouped: {"text_words": [...], "graphic_rects": [...]}
     extraction_fields: List[ExtractionField] = Field(..., min_length=1)
     pipeline_state: PipelineState
     visual_state: VisualState
@@ -160,10 +160,10 @@ class CreatePdfTemplateResponse(BaseModel):
 class UpdatePdfTemplateRequest(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = Field(None, max_length=1000)
-    signature_objects: List[Dict[str, Any]] = Field(..., min_length=1)
-    extraction_fields: List[ExtractionField] = Field(..., min_length=1)
-    pipeline_state: PipelineState
-    visual_state: VisualState
+    signature_objects: Optional[Dict[str, List[Dict[str, Any]]]] = None  # Grouped: {"text_words": [...], "graphic_rects": [...]}
+    extraction_fields: Optional[List[ExtractionField]] = None
+    pipeline_state: Optional[PipelineState] = None
+    visual_state: Optional[VisualState] = None
 
 
 class UpdatePdfTemplateResponse(BaseModel):
@@ -210,7 +210,7 @@ class GetTemplateVersionResponse(BaseModel):
     usage_count: int
     last_used_at: Optional[str] = None  # ISO 8601
     is_current: bool
-    signature_objects: List[Dict[str, Any]]
+    signature_objects: Dict[str, List[Dict[str, Any]]]  # Grouped: {"text_words": [...], "graphic_rects": [...]}
     extraction_fields: List[ExtractionField]
     pipeline_definition_id: int
 
@@ -219,14 +219,14 @@ class GetTemplateVersionResponse(BaseModel):
 class SimulateTemplateRequestStored(BaseModel):
     pdf_source: Literal["stored"]
     pdf_file_id: int
-    signature_objects: List[Dict[str, Any]]
+    signature_objects: Dict[str, List[Dict[str, Any]]]  # Grouped: {"text_words": [...], "graphic_rects": [...]}
     extraction_fields: List[ExtractionField]
     pipeline_state: PipelineState
 
 
 class SimulateTemplateRequestUpload(BaseModel):
     pdf_source: Literal["upload"]
-    signature_objects: List[Dict[str, Any]]
+    signature_objects: Dict[str, List[Dict[str, Any]]]  # Grouped: {"text_words": [...], "graphic_rects": [...]}
     extraction_fields: List[ExtractionField]
     pipeline_state: PipelineState
 
