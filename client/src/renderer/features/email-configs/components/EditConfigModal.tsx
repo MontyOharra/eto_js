@@ -16,8 +16,6 @@ interface EditConfigModalProps {
       description?: string | null;
       filter_rules?: FilterRule[];
       poll_interval_seconds?: number;
-      max_backlog_hours?: number;
-      error_retry_attempts?: number;
     }
   ) => Promise<void>;
 }
@@ -30,8 +28,6 @@ export function EditConfigModal({
 }: EditConfigModalProps) {
   const [description, setDescription] = useState('');
   const [pollInterval, setPollInterval] = useState(60);
-  const [maxBacklog, setMaxBacklog] = useState(24);
-  const [retryAttempts, setRetryAttempts] = useState(3);
   const [filterRules, setFilterRules] = useState<FilterRule[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -40,8 +36,6 @@ export function EditConfigModal({
     if (config && isOpen) {
       setDescription(config.description || '');
       setPollInterval(config.poll_interval_seconds);
-      setMaxBacklog(config.max_backlog_hours);
-      setRetryAttempts(config.error_retry_attempts);
       setFilterRules(config.filter_rules || []);
     }
   }, [config, isOpen]);
@@ -77,8 +71,6 @@ export function EditConfigModal({
         description: description.trim() || null,
         filter_rules: filterRules,
         poll_interval_seconds: pollInterval,
-        max_backlog_hours: maxBacklog,
-        error_retry_attempts: retryAttempts,
       });
       onClose();
     } catch (err) {
@@ -186,49 +178,19 @@ export function EditConfigModal({
           {/* Monitoring Settings */}
           <div>
             <h3 className="text-lg font-medium text-white mb-4">Monitoring Settings</h3>
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Poll Interval (seconds)
-                </label>
-                <input
-                  type="number"
-                  min="5"
-                  max="3600"
-                  value={pollInterval}
-                  onChange={(e) => setPollInterval(parseInt(e.target.value) || 60)}
-                  disabled={config.is_active}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Max Backlog (hours)
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="168"
-                  value={maxBacklog}
-                  onChange={(e) => setMaxBacklog(parseInt(e.target.value) || 24)}
-                  disabled={config.is_active}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Retry Attempts
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  max="10"
-                  value={retryAttempts}
-                  onChange={(e) => setRetryAttempts(parseInt(e.target.value) || 3)}
-                  disabled={config.is_active}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
-                />
-              </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Poll Interval (seconds)
+              </label>
+              <input
+                type="number"
+                min="5"
+                max="3600"
+                value={pollInterval}
+                onChange={(e) => setPollInterval(parseInt(e.target.value) || 60)}
+                disabled={config.is_active}
+                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+              />
             </div>
           </div>
 

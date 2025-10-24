@@ -49,11 +49,8 @@ export interface EmailConfigDetailDTO {
   folder_name: string;
   filter_rules: FilterRuleDTO[];
   poll_interval_seconds: number;
-  max_backlog_hours: number;
-  error_retry_attempts: number;
   is_active: boolean;
   activated_at: string | null; // ISO 8601
-  is_running: boolean;
   last_check_time: string | null; // ISO 8601
   last_error_message: string | null;
   last_error_at: string | null; // ISO 8601
@@ -70,8 +67,6 @@ export interface CreateEmailConfigRequestDTO {
   folder_name: string; // required, min 1 char
   filter_rules?: FilterRuleDTO[]; // optional, default: []
   poll_interval_seconds?: number; // optional, min: 5, default: 5
-  max_backlog_hours?: number; // optional, min: 1, default: 24
-  error_retry_attempts?: number; // optional, min: 1, max: 10, default: 3
 }
 
 // ============================================================================
@@ -82,8 +77,6 @@ export interface UpdateEmailConfigRequestDTO {
   description?: string | null;
   filter_rules?: FilterRuleDTO[];
   poll_interval_seconds?: number; // min: 5
-  max_backlog_hours?: number; // min: 1
-  error_retry_attempts?: number; // min: 1, max: 10
 }
 
 // ============================================================================

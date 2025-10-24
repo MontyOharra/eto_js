@@ -22,8 +22,6 @@ export interface WizardData {
   folder_name: string;
   filter_rules: FilterRule[];
   poll_interval_seconds: number;
-  max_backlog_hours: number;
-  error_retry_attempts: number;
 }
 
 type WizardStep = 'account' | 'folder' | 'configuration';
@@ -51,8 +49,6 @@ export function EmailConfigWizard({
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [pollInterval, setPollInterval] = useState(60);
-  const [maxBacklog, setMaxBacklog] = useState(24);
-  const [retryAttempts, setRetryAttempts] = useState(3);
   const [filterRules, setFilterRules] = useState<FilterRule[]>([]);
 
   // Load accounts when modal opens
@@ -153,8 +149,6 @@ export function EmailConfigWizard({
         folder_name: selectedFolder,
         filter_rules: filterRules,
         poll_interval_seconds: pollInterval,
-        max_backlog_hours: maxBacklog,
-        error_retry_attempts: retryAttempts,
       });
 
       // Reset wizard
@@ -174,8 +168,6 @@ export function EmailConfigWizard({
     setName('');
     setDescription('');
     setPollInterval(60);
-    setMaxBacklog(24);
-    setRetryAttempts(3);
     setFilterRules([]);
     onClose();
   };
@@ -324,16 +316,12 @@ export function EmailConfigWizard({
               name={name}
               description={description}
               pollInterval={pollInterval}
-              maxBacklog={maxBacklog}
-              retryAttempts={retryAttempts}
               filterRules={filterRules}
               emailAccount={selectedAccountDisplay || ''}
               folderName={selectedFolder || ''}
               onNameChange={setName}
               onDescriptionChange={setDescription}
               onPollIntervalChange={setPollInterval}
-              onMaxBacklogChange={setMaxBacklog}
-              onRetryAttemptsChange={setRetryAttempts}
               onAddFilterRule={handleAddFilterRule}
               onUpdateFilterRule={handleUpdateFilterRule}
               onRemoveFilterRule={handleRemoveFilterRule}

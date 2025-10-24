@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useState, useEffect } from 'react';
-import { useMockEmailConfigsApi } from '../../../features/email-configs/hooks/useMockEmailConfigsApi';
+import { useEmailConfigsApiHook } from '../../../features/email-configs/hooks';
 import {
   EmailConfigCard,
   EmailConfigWizard,
@@ -26,7 +26,7 @@ function ConfigurationsPage() {
     getEmailFolders,
     isLoading,
     error,
-  } = useMockEmailConfigsApi();
+  } = useEmailConfigsApiHook();
 
   const [configs, setConfigs] = useState<EmailConfigDetail[]>([]);
   const [showCreateWizard, setShowCreateWizard] = useState(false);
@@ -73,8 +73,6 @@ function ConfigurationsPage() {
       description?: string | null;
       filter_rules?: any[];
       poll_interval_seconds?: number;
-      max_backlog_hours?: number;
-      error_retry_attempts?: number;
     }
   ) => {
     try {

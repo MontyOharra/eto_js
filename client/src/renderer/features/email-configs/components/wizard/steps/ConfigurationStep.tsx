@@ -9,16 +9,12 @@ interface ConfigurationStepProps {
   name: string;
   description: string;
   pollInterval: number;
-  maxBacklog: number;
-  retryAttempts: number;
   filterRules: FilterRule[];
   emailAccount: string;
   folderName: string;
   onNameChange: (name: string) => void;
   onDescriptionChange: (description: string) => void;
   onPollIntervalChange: (interval: number) => void;
-  onMaxBacklogChange: (hours: number) => void;
-  onRetryAttemptsChange: (attempts: number) => void;
   onAddFilterRule: () => void;
   onUpdateFilterRule: (index: number, field: keyof FilterRule, value: any) => void;
   onRemoveFilterRule: (index: number) => void;
@@ -28,16 +24,12 @@ export function ConfigurationStep({
   name,
   description,
   pollInterval,
-  maxBacklog,
-  retryAttempts,
   filterRules,
   emailAccount,
   folderName,
   onNameChange,
   onDescriptionChange,
   onPollIntervalChange,
-  onMaxBacklogChange,
-  onRetryAttemptsChange,
   onAddFilterRule,
   onUpdateFilterRule,
   onRemoveFilterRule,
@@ -76,49 +68,20 @@ export function ConfigurationStep({
         </div>
       </div>
 
-      {/* Advanced Settings */}
+      {/* Monitoring Settings */}
       <div>
         <h4 className="text-sm font-medium text-gray-300 mb-3">Monitoring Settings</h4>
-        <div className="grid grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1">
-              Poll Interval (seconds)
-            </label>
-            <input
-              type="number"
-              min="5"
-              value={pollInterval}
-              onChange={(e) => onPollIntervalChange(parseInt(e.target.value) || 5)}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1">
-              Max Backlog (hours)
-            </label>
-            <input
-              type="number"
-              min="1"
-              value={maxBacklog}
-              onChange={(e) => onMaxBacklogChange(parseInt(e.target.value) || 24)}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1">
-              Retry Attempts
-            </label>
-            <input
-              type="number"
-              min="1"
-              max="10"
-              value={retryAttempts}
-              onChange={(e) => onRetryAttemptsChange(parseInt(e.target.value) || 3)}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-400 mb-1">
+            Poll Interval (seconds)
+          </label>
+          <input
+            type="number"
+            min="5"
+            value={pollInterval}
+            onChange={(e) => onPollIntervalChange(parseInt(e.target.value) || 5)}
+            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
         </div>
       </div>
 

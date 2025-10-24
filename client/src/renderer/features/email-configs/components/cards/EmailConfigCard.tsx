@@ -38,7 +38,6 @@ export function EmailConfigCard({
             <div className="flex items-center space-x-2">
               {config.is_active && <StatusBadge type="active" />}
               {!config.is_active && <StatusBadge type="inactive" />}
-              {config.is_running && <StatusBadge type="running" />}
               {config.last_error_message && <StatusBadge type="error" />}
             </div>
           </div>
