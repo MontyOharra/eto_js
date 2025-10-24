@@ -20,7 +20,7 @@ import uvicorn
 
 from shared.database import init_database_connection
 from shared.services.service_container import ServiceContainer
-from shared.utils.storage_config import get_storage_configuration
+from shared.config.storage import get_storage_configuration
 from shared.exceptions.service import ObjectNotFoundError, ConflictError, ValidationError, ServiceError
 
 logger = logging.getLogger(__name__)
@@ -404,33 +404,29 @@ def setup_exception_handlers(app: FastAPI) -> None:
 
 def register_routers(app: FastAPI) -> None:
     """Register FastAPI routers"""
-    # Register health router first
     try:
-        from .api.routers import email_configs_router
+        from .api.routers import (
+            email_configs_router,
+            pdf_files_router,
+            pdf_templates_router,
+        )
+
+        # Register all routers
         app.include_router(email_configs_router, prefix="/api")
-        logger.info("Registered email configs router")
-    except ImportError as e:
-        logger.warning(f"Could not import email configs router: {e}")
-    except Exception as e:
-        logger.error(f"Error registering email configs router: {e}", exc_info=True)
+        logger.info("Registered email configs router at /api/email-configs")
 
-    try:
-        from .api.routers import pdf_files_router
         app.include_router(pdf_files_router, prefix="/api")
-        logger.info("Registered pdf files router")
-    except ImportError as e:
-        logger.warning(f"Could not import pdf files router: {e}")
-    except Exception as e:
-        logger.error(f"Error registering pdf files router: {e}", exc_info=True)
+        logger.info("Registered pdf files router at /api/pdf-files")
 
-    try:
-        from .api.routers import pdf_templates_router
         app.include_router(pdf_templates_router, prefix="/api")
-        logger.info("Registered pdf templates router")
+        logger.info("Registered pdf templates router at /api/pdf-templates")
+
     except ImportError as e:
-        logger.warning(f"Could not import pdf templates router: {e}")
+        logger.error(f"Could not import routers: {e}", exc_info=True)
+        raise
     except Exception as e:
-        logger.error(f"Error registering pdf templates router: {e}", exc_info=True)
+        logger.error(f"Error registering routers: {e}", exc_info=True)
+        raise
         
 
 def register_info_endpoint(app: FastAPI) -> None:
@@ -447,18 +443,20 @@ def register_info_endpoint(app: FastAPI) -> None:
             "framework": "FastAPI",
             "api_prefix": "/api",
             "endpoints": {
-                "health": "/api/health",
-                "email_configuration": "/api/email-configs",
-                "eto_processing": "/api/eto-runs",
-                "eto_worker": "/api/eto-runs/worker",
-                "pdf_templates": "/api/pdf_templates"
+                "email_configs": "/api/email-configs",
+                "pdf_files": "/api/pdf-files",
+                "pdf_templates": "/api/pdf-templates"
             },
             "documentation": {
-                "health": "Service health and status monitoring",
-                "email_configuration": "Email ingestion configuration management",
-                "eto_processing": "ETO processing run management and background processing",
-                "eto_worker": "Background worker management (start/stop/pause/resume)",
-                "pdf_templates": "PDF template creation and versioning"
+                "email_configs": "Email ingestion configuration management (CRUD, activation, discovery)",
+                "pdf_files": "PDF file storage, extraction, and object retrieval",
+                "pdf_templates": "PDF template creation, versioning, and activation"
+            },
+            "features": {
+                "email_ingestion": "Automated email monitoring with Outlook COM integration",
+                "pdf_processing": "PDF extraction with pdfminer.six",
+                "template_matching": "Signature-based template matching with versioning",
+                "pipeline_execution": "Visual node-based transformation pipelines"
             },
             "interactive_docs": "/docs",
             "openapi_schema": "/openapi.json"

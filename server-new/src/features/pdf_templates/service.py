@@ -81,7 +81,7 @@ class PdfTemplateService:
             sort_order=sort_order
         )
 
-    def get_template(self, template_id: int) -> PdfTemplate | None:
+    def get_template(self, template_id: int) -> PdfTemplate:
         """
         Get PDF template metadata by ID.
 

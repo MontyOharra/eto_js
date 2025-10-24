@@ -100,23 +100,23 @@ class ServiceContainer:
                 'singleton': True,
                 'description': 'Storage configuration (filesystem paths)'
             },
-            'email_configs': {
-                'class': 'features.email_configs.service.EmailConfigService',
-                'args': [cls._connection_manager, '_service:email_ingestion'],
-                'singleton': True,
-                'description': 'Email configuration management service'
-            },
-            'email_ingestion': {
-                'class': 'features.email_ingestion.service.EmailIngestionService',
-                'args': [cls._connection_manager, '_service:pdf_processing', '_service:eto_processing'],
-                'singleton': True,
-                'description': 'Email ingestion service with integrations'
-            },
             'pdf_files': {
                 'class': 'features.pdf_files.service.PdfFilesService',
                 'args': [cls._connection_manager, '_service:storage_config'],
                 'singleton': True,
                 'description': 'PDF files service with extraction and storage'
+            },
+            'email_ingestion': {
+                'class': 'features.email_ingestion.service.EmailIngestionService',
+                'args': [cls._connection_manager, '_service:pdf_files'],
+                'singleton': True,
+                'description': 'Email ingestion service with PDF processing integration'
+            },
+            'email_configs': {
+                'class': 'features.email_configs.service.EmailConfigService',
+                'args': [cls._connection_manager, '_service:email_ingestion'],
+                'singleton': True,
+                'description': 'Email configuration management service'
             },
             'pipelines': {
                 'class': 'features.pipelines.service.PipelineService',
