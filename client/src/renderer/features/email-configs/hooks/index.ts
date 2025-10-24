@@ -3,7 +3,7 @@
  * Exports either mock or real API hook based on environment configuration
  */
 
-import { API_CONFIG } from '@renderer/shared/api/config';
+import { API_CONFIG } from '../../../shared/api/config';
 import { useMockEmailConfigsApi } from './useMockEmailConfigsApi';
 import { useEmailConfigsApi } from './useEmailConfigsApi';
 

@@ -4,8 +4,8 @@
  */
 
 import { useState, useCallback } from 'react';
-import { apiClient } from '@renderer/shared/api/client';
-import { API_CONFIG } from '@renderer/shared/api/config';
+import { apiClient } from '../../../shared/api/client';
+import { API_CONFIG } from '../../../shared/api/config';
 import type {
   EmailConfigSummaryDTO,
   EmailConfigDetailDTO,
