@@ -5,6 +5,61 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-10-24 19:00] — Pipeline Backend Router Implementation
+
+### Spec / Intent
+- Implement complete backend API router for pipeline definitions
+- Create three-layer architecture: schemas → mappers → routers
+- Support GET (list/detail) and POST (create) operations
+- Register router in main FastAPI application
+
+### Changes Made
+
+**Pipeline API Schemas** (`server-new/src/api/schemas/pipelines.py`):
+- Created comprehensive Pydantic models for pipeline API contract
+- Key models: `NodeDTO`, `EntryPointDTO`, `ModuleInstanceDTO`, `NodeConnectionDTO`
+- Separated logical structure (`PipelineStateDTO`) from visual layout (`VisualStateDTO`)
+- Request/response models: `PipelinesListResponse`, `PipelineDetailDTO`, `CreatePipelineRequest`
+- All models match frontend TypeScript types and backend API specification
+
+**Pipeline API Mappers** (`server-new/src/api/mappers/pipelines.py`):
+- Implemented bidirectional conversions between domain types and API DTOs
+- Domain → API (response): `convert_pipeline_summary_list()`, `convert_pipeline_detail()`
+- API → Domain (request): `convert_create_request()`, `convert_dto_to_pipeline_state()`
+- Handles all nested structures (nodes, modules, connections, visual positions)
+
+**Pipeline Router** (`server-new/src/api/routers/pipelines.py`):
+- `GET /api/pipelines` - List pipelines with pagination (limit, offset) and sorting (sort_by, sort_order)
+- `GET /api/pipelines/{id}` - Get full pipeline detail including pipeline_state and visual_state
+- `POST /api/pipelines` - Create new pipeline (validates, compiles, persists)
+- Uses dependency injection for `PipelineService` via `ServiceContainer`
+- Marked as dev/testing endpoints (will be removed when standalone pipeline page is deprecated)
+
+**Router Registration**:
+- Updated `server-new/src/api/routers/__init__.py` to export `pipelines_router`
+- Updated `server-new/src/app.py` to import and register pipelines router at `/api` prefix
+- Updated info endpoint to include `/api/pipelines` in endpoints list
+
+### Technical Details
+- Pipeline service already existed with full functionality (validation, compilation, persistence)
+- Compilation includes: structural validation, type checking, cycle detection, dead branch pruning, topological sorting
+- Checksum-based deduplication: multiple pipeline definitions can share same compiled plan
+- Pagination limit capped at 200 items per request
+- All datetime values returned as ISO 8601 strings for API convenience
+
+### Next Actions
+- Test pipeline endpoints with frontend
+- Verify list, detail, and create operations work correctly
+- Implement remaining endpoints: PUT /api/pipelines/{id}, DELETE /api/pipelines/{id}
+- Test full round-trip: create pipeline in frontend, compile, view details
+
+### Notes
+- Backend now fully supports GET (list/detail) and POST (create) for pipelines
+- Frontend already connected to these endpoints via `usePipelinesApi` hook
+- Following same three-layer pattern as email-configs: schemas → mappers → routers
+
+---
+
 ## [2025-10-24 18:30] — Pipeline List API Integration
 
 ### Spec / Intent

@@ -409,6 +409,7 @@ def register_routers(app: FastAPI) -> None:
             email_configs_router,
             pdf_files_router,
             pdf_templates_router,
+            pipelines_router,
         )
 
         # Register all routers
@@ -420,6 +421,9 @@ def register_routers(app: FastAPI) -> None:
 
         app.include_router(pdf_templates_router, prefix="/api")
         logger.info("Registered pdf templates router at /api/pdf-templates")
+
+        app.include_router(pipelines_router, prefix="/api")
+        logger.info("Registered pipelines router at /api/pipelines")
 
     except ImportError as e:
         logger.error(f"Could not import routers: {e}", exc_info=True)
@@ -445,12 +449,14 @@ def register_info_endpoint(app: FastAPI) -> None:
             "endpoints": {
                 "email_configs": "/api/email-configs",
                 "pdf_files": "/api/pdf-files",
-                "pdf_templates": "/api/pdf-templates"
+                "pdf_templates": "/api/pdf-templates",
+                "pipelines": "/api/pipelines"
             },
             "documentation": {
                 "email_configs": "Email ingestion configuration management (CRUD, activation, discovery)",
                 "pdf_files": "PDF file storage, extraction, and object retrieval",
-                "pdf_templates": "PDF template creation, versioning, and activation"
+                "pdf_templates": "PDF template creation, versioning, and activation",
+                "pipelines": "Pipeline definition management (dev/testing - CRUD, compilation)"
             },
             "features": {
                 "email_ingestion": "Automated email monitoring with Outlook COM integration",
