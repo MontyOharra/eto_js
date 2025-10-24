@@ -5,6 +5,53 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-10-24 18:30] — Pipeline List API Integration
+
+### Spec / Intent
+- Connect frontend pipeline list to real backend API
+- Replace mock data with actual API calls to `/api/pipelines`
+- First step in migrating pipeline functionality from mocks to real backend
+
+### Changes Made
+
+**New API Hook** (`client/src/renderer/features/pipelines/hooks/usePipelinesApi.ts`):
+- Created real API hook following same pattern as `useEmailConfigsApi`
+- Implements all pipeline CRUD operations:
+  - `getPipelines()` - GET /api/pipelines (with pagination/sorting)
+  - `getPipeline(id)` - GET /api/pipelines/{id}
+  - `createPipeline(data)` - POST /api/pipelines
+  - `updatePipeline(id, data)` - PUT /api/pipelines/{id}
+  - `deletePipeline(id)` - DELETE /api/pipelines/{id}
+- Includes loading and error state management
+- Uses existing `apiClient` and `API_CONFIG` from shared API layer
+
+**Updated Pipelines Page** (`client/src/renderer/pages/dashboard/pipelines/index.tsx`):
+- Replaced `useMockPipelinesApi` with `usePipelinesApi`
+- Now fetches real pipeline data from backend
+- Maintains same UI/UX - only data source changed
+
+**Updated Hooks Export** (`client/src/renderer/features/pipelines/hooks/index.ts`):
+- Added `usePipelinesApi` to centralized exports
+
+### Technical Details
+- Uses `PipelinesListResponse` type matching backend API spec
+- API endpoint: `API_CONFIG.ENDPOINTS.PIPELINES` (`/api/pipelines`)
+- Frontend types already match backend API structure from prior planning
+- Mock API hook (`useMockPipelinesApi`) still exists for reference but is no longer used
+
+### Next Actions
+- Test pipeline list loading with real backend
+- Connect pipeline detail view to API (GET /api/pipelines/{id})
+- Connect pipeline create/edit operations to API
+- Eventually remove mock hooks once all functionality is connected
+
+### Notes
+- This is first of several pipeline endpoints to be connected
+- Backend pipeline router exists but needs implementation
+- Following incremental replacement strategy: list → detail → create → edit → delete
+
+---
+
 ## [2025-10-24 18:00] — Timezone-Aware Datetime Fix
 
 ### Spec / Intent

@@ -7,3 +7,4 @@ export * from './useConnectionManager';
 export * from './useNodeUpdates';
 export * from './useModuleOperations';
 export * from './usePipelineInitialization';
+export * from './usePipelinesApi';

@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
-import { useMockPipelinesApi } from '../../../features/pipelines/hooks/useMockPipelinesApi';
+import { usePipelinesApi } from '../../../features/pipelines/hooks/usePipelinesApi';
 import { PipelineCard } from '../../../features/pipelines/components';
 import { TestExecutedPipelineModal } from '../../../features/pipelines/components/TestExecutedPipelineModal';
 import { PipelineListItem } from '../../../features/pipelines/types';
@@ -17,7 +17,7 @@ function PipelinesPage() {
     getPipelines,
     isLoading,
     error,
-  } = useMockPipelinesApi();
+  } = usePipelinesApi();
 
   const [allPipelines, setAllPipelines] = useState<PipelineListItem[]>([]);
   const [sortBy, setSortBy] = useState<SortBy>('created_at');
