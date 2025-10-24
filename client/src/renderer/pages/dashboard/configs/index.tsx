@@ -119,6 +119,11 @@ function ConfigurationsPage() {
     }
   };
 
+  // Wrapper to convert string email to params object
+  const handleLoadFolders = async (emailAddress: string) => {
+    return getEmailFolders({ email_address: emailAddress });
+  };
+
   return (
     <>
       <div className="p-6">
@@ -206,7 +211,7 @@ function ConfigurationsPage() {
         onClose={() => setShowCreateWizard(false)}
         onSave={handleCreateConfig}
         onLoadAccounts={getEmailAccounts}
-        onLoadFolders={getEmailFolders}
+        onLoadFolders={handleLoadFolders}
       />
 
       {/* Edit Configuration Modal */}
