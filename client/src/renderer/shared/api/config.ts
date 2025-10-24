@@ -13,14 +13,14 @@ export const API_CONFIG = {
   // Request timeout in milliseconds
   TIMEOUT: 30000,
 
-  // API endpoints
+  // API endpoints (all backend routes are prefixed with /api)
   ENDPOINTS: {
-    EMAIL_CONFIGS: '/email-configs',
-    TEMPLATES: '/pdf-templates',
-    PIPELINES: '/pipelines',
-    PDF_FILES: '/pdf-files',
-    ETO_RUNS: '/eto-runs',
-    MODULES: '/modules',
+    EMAIL_CONFIGS: '/api/email-configs',
+    TEMPLATES: '/api/pdf-templates',
+    PIPELINES: '/api/pipelines',
+    PDF_FILES: '/api/pdf-files',
+    ETO_RUNS: '/api/eto-runs',
+    MODULES: '/api/modules',
   },
 } as const;
 

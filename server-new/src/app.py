@@ -492,7 +492,7 @@ def create_app() -> FastAPI:
 def run_server():
     """Run the FastAPI server with uvicorn"""
     # Get configuration from environment
-    port = int(os.getenv('PORT', 8090))
+    port = int(os.getenv('PORT', 8000))
     host = os.getenv('HOST', '0.0.0.0')
     debug = os.getenv('DEBUG', 'false').lower() == 'true'
 
