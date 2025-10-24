@@ -410,6 +410,8 @@ def register_routers(app: FastAPI) -> None:
             pdf_files_router,
             pdf_templates_router,
             pipelines_router,
+            modules_router,
+            admin_router,
         )
 
         # Register all routers
@@ -424,6 +426,12 @@ def register_routers(app: FastAPI) -> None:
 
         app.include_router(pipelines_router, prefix="/api")
         logger.info("Registered pipelines router at /api/pipelines")
+
+        app.include_router(modules_router, prefix="/api")
+        logger.info("Registered modules router at /api/modules")
+
+        app.include_router(admin_router, prefix="/api")
+        logger.info("Registered admin router at /api/admin")
 
     except ImportError as e:
         logger.error(f"Could not import routers: {e}", exc_info=True)
@@ -450,13 +458,17 @@ def register_info_endpoint(app: FastAPI) -> None:
                 "email_configs": "/api/email-configs",
                 "pdf_files": "/api/pdf-files",
                 "pdf_templates": "/api/pdf-templates",
-                "pipelines": "/api/pipelines"
+                "pipelines": "/api/pipelines",
+                "modules": "/api/modules",
+                "admin": "/api/admin"
             },
             "documentation": {
                 "email_configs": "Email ingestion configuration management (CRUD, activation, discovery)",
                 "pdf_files": "PDF file storage, extraction, and object retrieval",
                 "pdf_templates": "PDF template creation, versioning, and activation",
-                "pipelines": "Pipeline definition management (dev/testing - CRUD, compilation)"
+                "pipelines": "Pipeline definition management (dev/testing - CRUD, compilation)",
+                "modules": "Module catalog access (GET modules for pipeline building)",
+                "admin": "Administrative endpoints (module sync, system management)"
             },
             "features": {
                 "email_ingestion": "Automated email monitoring with Outlook COM integration",

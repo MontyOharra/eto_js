@@ -5,6 +5,94 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-10-24 20:00] — Modules and Admin API Endpoints
+
+### Spec / Intent
+- Expose module sync functionality via API endpoint instead of CLI-only
+- Create GET endpoint to retrieve module catalog for frontend use
+- Enable web-based module synchronization for deployment automation
+- Support filtering modules by kind (transform, action, logic, comparator)
+
+### Changes Made
+
+**Modules API Schemas** (`server-new/src/api/schemas/modules.py`):
+- `ModuleCatalogDTO` - Module catalog entry with all metadata
+- `ModulesListResponse` - Response for GET /api/modules
+- `ModuleSyncResult` - Individual module sync result
+- `SyncModulesResponse` - Response for POST /api/admin/sync-modules
+
+**Modules API Mappers** (`server-new/src/api/mappers/modules.py`):
+- `convert_module_catalog_to_dto()` - Domain → DTO conversion
+- `convert_module_catalog_list()` - Batch conversion for list responses
+- Handles JSON parsing for meta and config_schema fields
+
+**Modules Router** (`server-new/src/api/routers/modules.py`):
+- `GET /api/modules` - List all module catalog entries
+  - Query param `kind` - Filter by module kind (optional)
+  - Query param `only_active` - Filter active modules (default: true)
+  - Returns ModulesListResponse with module DTOs
+
+**Admin Router** (`server-new/src/api/routers/admin.py`):
+- `POST /api/admin/sync-modules` - Sync modules from code to database
+  - Query param `refresh` - Clear existing modules before sync (default: false)
+  - Auto-discovers modules from known packages
+  - Validates security for each module
+  - Returns detailed sync results with success/error counts
+  - Uses same logic as CLI tool but exposed via API
+
+**Router Registration**:
+- Updated `server-new/src/api/routers/__init__.py` to export modules and admin routers
+- Registered both routers in `server-new/src/app.py` at `/api` prefix
+- Updated info endpoint to document new endpoints
+
+### Technical Details
+- Uses `ServiceContainer.get_connection_manager()` for dependency injection
+- Module repository created per-request with connection manager
+- Admin endpoint clears Python module cache and registry before sync
+- Supports refresh mode to clear catalog before syncing
+- Returns structured response with per-module results
+
+### API Endpoints
+
+**GET /api/modules**
+```
+Query Parameters:
+  - kind: string (optional) - "transform", "action", "logic", "comparator"
+  - only_active: boolean (default: true)
+
+Response: ModulesListResponse
+  - items: ModuleCatalogDTO[]
+  - total: number
+```
+
+**POST /api/admin/sync-modules**
+```
+Query Parameters:
+  - refresh: boolean (default: false) - Clear before sync
+
+Response: SyncModulesResponse
+  - success: boolean
+  - modules_discovered: number
+  - modules_synced: number
+  - modules_failed: number
+  - results: ModuleSyncResult[]
+  - message: string
+```
+
+### Next Actions
+- Test GET /api/modules endpoint
+- Test POST /api/admin/sync-modules endpoint
+- Update frontend to fetch modules from /api/modules
+- Add authentication/authorization to admin endpoints
+
+### Notes
+- Admin endpoint exposed without auth (add security before production)
+- Module catalog now accessible via REST API
+- Frontend can call sync endpoint during deployment/setup
+- CLI tool still available for local development
+
+---
+
 ## [2025-10-24 19:45] — Module Sync CLI Tool Implementation
 
 ### Spec / Intent
