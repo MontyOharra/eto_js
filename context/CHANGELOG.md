@@ -5,6 +5,207 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-10-25 02:30] — Email Ingestion Startup Recovery Fix
+
+### Spec / Intent
+- Fix email ingestion to process emails received during server downtime
+- Implement proper last_check_time handling for startup recovery
+- Set last_check_time=NULL on manual deactivation to prevent historical resume
+- Distinguish between server restart (resume from last_check_time) and manual deactivation (start fresh)
+
+### User Requirement
+"If the config is never deactivated, but the worker is shut down, the last_check_time will not be updated. Then, when the server starts back up, it should see the last_check_time. When the email ingestion listeners run, they should first filter the emails out based on the last check time. Then, the emails should pass through the filters. This means that if the server was shut down at 3:00:00, its last_check_time will be < 3:00:00. So, if any emails were received after that, and then the service starts back up, it will see the last_check_time, and process any emails with received times > 3:00:00. Then, the last_check_time will be updated, in order to not reingest any of those emails. When a config is deactivated, its last_check_time should be set to null. Which indicates that on recovery, the config should not attempt to ingest any emails, but immediately upon activation, it should set its last_check_time as the activation time."
+
+### Changes Made
+
+**EmailListenerThread** (`server-new/src/features/email_ingestion/utils/email_listener_thread.py`):
+
+**Lines 37-93 - Added last_check_time parameter**:
+```python
+def __init__(
+    self,
+    config_id: int,
+    integration: BaseEmailIntegration,
+    filter_rules: list[FilterRule],
+    poll_interval: int,
+    process_callback: Callable[..., None],
+    error_callback: Callable[..., None],
+    check_complete_callback: Callable[..., None],
+    last_check_time: datetime | None = None  # NEW PARAMETER
+) -> None:
+    # ... existing setup ...
+
+    # Track last check time for incremental retrieval
+    # Use provided last_check_time (startup recovery) or current time (fresh activation)
+    self.activation_time = datetime.now(timezone.utc)
+    if last_check_time is not None:
+        # Resume from database value (startup recovery)
+        self.last_check_time = last_check_time
+        logger.info(
+            f"Listener for config {config_id} resuming from last_check_time: "
+            f"{last_check_time.isoformat()}"
+        )
+    else:
+        # Fresh activation - start from now
+        self.last_check_time = self.activation_time
+        logger.info(
+            f"Listener for config {config_id} starting fresh from activation time: "
+            f"{self.activation_time.isoformat()}"
+        )
+```
+
+**EmailIngestionService** (`server-new/src/features/email_ingestion/service.py`):
+
+**Lines 628-715 - Updated start_monitoring to handle last_check_time logic**:
+```python
+def start_monitoring(self, config: EmailConfig) -> ListenerStatus:
+    """
+    Start email monitoring for a configuration (creates listener thread).
+
+    Implementation:
+    3. Determine last_check_time:
+       - If config.last_check_time is None, set to current time (first activation or post-deactivation)
+       - If config.last_check_time exists, use it (startup recovery)
+    4. Update database with last_check_time (before starting listener)
+    """
+    # ... existing lock and checks ...
+
+    # Determine starting point for email retrieval
+    activation_time = datetime.now(timezone.utc)
+
+    if config.last_check_time is None:
+        # Fresh activation or post-deactivation
+        # Set last_check_time to now - only process emails received AFTER activation
+        resume_from_time = activation_time
+        logger.info(
+            f"Config {config.id} - Fresh activation, setting last_check_time "
+            f"to {resume_from_time.isoformat()}"
+        )
+
+        # Update database BEFORE starting listener
+        self.config_repository.update(
+            config.id,
+            EmailConfigUpdate(
+                activated_at=activation_time,
+                last_check_time=resume_from_time
+            )
+        )
+    else:
+        # Startup recovery - resume from where we left off
+        resume_from_time = config.last_check_time
+        logger.info(
+            f"Config {config.id} - Startup recovery, resuming from last_check_time "
+            f"{resume_from_time.isoformat()}"
+        )
+
+        # Update activation time in database
+        self.config_repository.update(
+            config.id,
+            EmailConfigUpdate(activated_at=activation_time)
+        )
+
+    # ... create integration and listener ...
+
+    # Create listener thread with resume point
+    listener = EmailListenerThread(
+        config_id=config.id,
+        integration=integration,
+        filter_rules=config.filter_rules,
+        poll_interval=config.poll_interval_seconds,
+        process_callback=self._process_email,
+        error_callback=self._handle_listener_error,
+        check_complete_callback=self._update_last_check_time,
+        last_check_time=resume_from_time  # Pass resume point
+    )
+```
+
+**Lines 717-787 - Updated stop_monitoring to set last_check_time=NULL**:
+```python
+def stop_monitoring(self, config_id: int) -> bool:
+    """
+    Stop email monitoring for a configuration (stops listener thread).
+
+    Implementation:
+    7. Update database: set last_check_time=NULL (marks as manually deactivated)
+    """
+    # ... existing stop and disconnect logic ...
+
+    # Update database: Set last_check_time=NULL to indicate manual deactivation
+    # This ensures on next activation, we start from activation time (not historical)
+    self.config_repository.update(
+        config_id,
+        EmailConfigUpdate(last_check_time=None)
+    )
+
+    logger.info(
+        f"Stopped monitoring for config {config_id} and cleared last_check_time "
+        f"(manual deactivation)"
+    )
+```
+
+### Flow Scenarios
+
+**Scenario 1: First Activation**
+1. User activates config → `last_check_time = NULL` in database
+2. `start_monitoring` called → sets `last_check_time = now` in database
+3. Listener created with `last_check_time = now`
+4. **Result**: Only processes emails received AFTER activation
+
+**Scenario 2: Server Shutdown (config still active)**
+1. Server shuts down at 3:00 PM → `last_check_time = 2:59 PM` (last successful check)
+2. Emails arrive at 3:05 PM, 3:10 PM (while server down)
+3. Server starts at 3:15 PM
+4. `startup()` finds config with `last_check_time = 2:59 PM`
+5. Listener created with `last_check_time = 2:59 PM`
+6. Fetches emails since 2:59 PM
+7. **Result**: Processes 3:05 PM and 3:10 PM emails (caught up!)
+
+**Scenario 3: Manual Deactivation**
+1. User deactivates config → `stop_monitoring` called
+2. Sets `last_check_time = NULL` in database
+3. Next activation will behave like "First Activation"
+4. **Result**: No historical emails processed, clean slate
+
+### Key Technical Decisions
+
+**Database as Source of Truth**:
+- `last_check_time` in database determines resume behavior
+- NULL = fresh start, timestamp = resume from that point
+- Updated before listener starts (atomic operation)
+
+**Clear Deactivation Signal**:
+- Setting `last_check_time = NULL` distinguishes manual deactivation from crash
+- Prevents unintended historical email processing after deactivation
+- User explicitly opts into monitoring new emails only
+
+**Thread Initialization**:
+- Listener accepts `last_check_time` parameter at construction
+- Logs clearly whether resuming or starting fresh
+- Maintains activation_time separately for overlap logic
+
+### Current State
+- ✅ EmailListenerThread accepts last_check_time parameter
+- ✅ start_monitoring handles NULL vs timestamp logic
+- ✅ stop_monitoring sets last_check_time=NULL
+- ✅ Startup recovery will process missed emails
+- ✅ Manual deactivation results in clean slate
+- 📍 Ready for testing with server restart scenario
+
+### Next Actions
+- Test startup recovery: shut down server, send emails, restart, verify processing
+- Test manual deactivation: deactivate config, send emails, reactivate, verify no historical processing
+- Test first activation: verify only future emails processed
+- Verify last_check_time updates correctly after each check cycle
+
+### Notes
+- Critical fix for production reliability
+- Ensures no emails lost during downtime
+- Clear distinction between crash recovery and clean restart
+- Foundation for robust email ingestion service
+- Working in server-new/ directory (unified backend)
+
+---
+
 ## [2025-10-25 01:45] — PSLiteral Extraction Architecture Fix & PDF Storage Complete
 
 ### Spec / Intent

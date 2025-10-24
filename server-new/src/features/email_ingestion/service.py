@@ -600,12 +600,16 @@ class EmailIngestionService:
         Implementation:
         1. Acquire lock (thread-safe operation)
         2. Check if already running (raise ServiceError if so)
-        3. Create persistent integration via IntegrationRegistry
-        4. Connect to email provider
-        5. Create EmailListenerThread with callbacks
-        6. Start thread
-        7. Track in active_integrations and active_listeners dicts
-        8. Return ListenerStatus dataclass
+        3. Determine last_check_time:
+           - If config.last_check_time is None, set to current time (first activation or post-deactivation)
+           - If config.last_check_time exists, use it (startup recovery)
+        4. Update database with last_check_time (before starting listener)
+        5. Create persistent integration via IntegrationRegistry
+        6. Connect to email provider
+        7. Create EmailListenerThread with last_check_time
+        8. Start thread
+        9. Track in active_integrations and active_listeners dicts
+        10. Return ListenerStatus dataclass
 
         Args:
             config: EmailConfig dataclass with configuration to monitor
@@ -622,6 +626,42 @@ class EmailIngestionService:
                 raise ServiceError(f"Configuration {config.id} is already being monitored")
 
             try:
+                # Determine starting point for email retrieval
+                activation_time = datetime.now(timezone.utc)
+
+                if config.last_check_time is None:
+                    # Fresh activation or post-deactivation
+                    # Set last_check_time to now - only process emails received AFTER activation
+                    resume_from_time = activation_time
+                    logger.info(
+                        f"Config {config.id} - Fresh activation, setting last_check_time "
+                        f"to {resume_from_time.isoformat()}"
+                    )
+
+                    # Update database BEFORE starting listener
+                    from shared.types.email_configs import EmailConfigUpdate
+                    self.config_repository.update(
+                        config.id,
+                        EmailConfigUpdate(
+                            activated_at=activation_time,
+                            last_check_time=resume_from_time
+                        )
+                    )
+                else:
+                    # Startup recovery - resume from where we left off
+                    resume_from_time = config.last_check_time
+                    logger.info(
+                        f"Config {config.id} - Startup recovery, resuming from last_check_time "
+                        f"{resume_from_time.isoformat()}"
+                    )
+
+                    # Update activation time in database
+                    from shared.types.email_configs import EmailConfigUpdate
+                    self.config_repository.update(
+                        config.id,
+                        EmailConfigUpdate(activated_at=activation_time)
+                    )
+
                 # Create persistent integration
                 integration = IntegrationRegistry.create(
                     provider_type='outlook_com',
@@ -635,7 +675,7 @@ class EmailIngestionService:
                         f"Failed to connect to email account '{config.email_address}'"
                     )
 
-                # Create listener thread with callbacks
+                # Create listener thread with resume point
                 listener = EmailListenerThread(
                     config_id=config.id,
                     integration=integration,
@@ -643,7 +683,8 @@ class EmailIngestionService:
                     poll_interval=config.poll_interval_seconds,
                     process_callback=self._process_email,
                     error_callback=self._handle_listener_error,
-                    check_complete_callback=self._update_last_check_time
+                    check_complete_callback=self._update_last_check_time,
+                    last_check_time=resume_from_time  # Pass resume point
                 )
 
                 # Start thread
@@ -662,8 +703,8 @@ class EmailIngestionService:
                     folder_name=config.folder_name,
                     is_active=True,
                     is_running=True,
-                    start_time=datetime.now(timezone.utc),
-                    last_check_time=None,
+                    start_time=activation_time,
+                    last_check_time=resume_from_time,
                     error_count=0,
                     emails_processed=0,
                     pdfs_found=0
@@ -687,8 +728,9 @@ class EmailIngestionService:
         4. Call listener.join(timeout=5.0) to wait for thread
         5. Check if thread stopped (raise ServiceError if still alive)
         6. Disconnect integration
-        7. Remove from active_listeners and active_integrations dicts
-        8. Return True
+        7. Update database: set last_check_time=NULL (marks as manually deactivated)
+        8. Remove from active_listeners and active_integrations dicts
+        9. Return True
 
         Args:
             config_id: Configuration ID to stop monitoring
@@ -726,7 +768,18 @@ class EmailIngestionService:
                 del self.active_listeners[config_id]
                 del self.active_integrations[config_id]
 
-                logger.info(f"Stopped monitoring for config {config_id}")
+                # Update database: Set last_check_time=NULL to indicate manual deactivation
+                # This ensures on next activation, we start from activation time (not historical)
+                from shared.types.email_configs import EmailConfigUpdate
+                self.config_repository.update(
+                    config_id,
+                    EmailConfigUpdate(last_check_time=None)
+                )
+
+                logger.info(
+                    f"Stopped monitoring for config {config_id} and cleared last_check_time "
+                    f"(manual deactivation)"
+                )
                 return True
 
             except Exception as e:

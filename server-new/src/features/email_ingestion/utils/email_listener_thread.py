@@ -42,7 +42,8 @@ class EmailListenerThread(threading.Thread):
         poll_interval: int,
         process_callback: Callable[[int, EmailMessage, list[EmailAttachment]], None],
         error_callback: Callable[[int, Exception], None],
-        check_complete_callback: Callable[[int, datetime], None]
+        check_complete_callback: Callable[[int, datetime], None],
+        last_check_time: datetime | None = None
     ) -> None:
         """
         Initialize email listener thread
@@ -55,6 +56,7 @@ class EmailListenerThread(threading.Thread):
             process_callback: Function to call for each new email (config_id, email_msg, attachments)
             error_callback: Function to call when errors occur (config_id, error)
             check_complete_callback: Function to call after each check completes (config_id, check_time)
+            last_check_time: Timestamp to resume from (None = start from now, for fresh activation)
         """
         super().__init__(name=f"EmailListener-{config_id}")
         self.config_id = config_id
@@ -71,9 +73,22 @@ class EmailListenerThread(threading.Thread):
         self.max_errors = 5
 
         # Track last check time for incremental retrieval
-        # Start from now (activation time)
-        self.last_check_time = datetime.now(timezone.utc)
+        # Use provided last_check_time (startup recovery) or current time (fresh activation)
         self.activation_time = datetime.now(timezone.utc)
+        if last_check_time is not None:
+            # Resume from database value (startup recovery)
+            self.last_check_time = last_check_time
+            logger.info(
+                f"Listener for config {config_id} resuming from last_check_time: "
+                f"{last_check_time.isoformat()}"
+            )
+        else:
+            # Fresh activation - start from now
+            self.last_check_time = self.activation_time
+            logger.info(
+                f"Listener for config {config_id} starting fresh from activation time: "
+                f"{self.activation_time.isoformat()}"
+            )
 
         logger.info(f"Initialized EmailListenerThread for config {config_id} with {poll_interval}s interval")
 
