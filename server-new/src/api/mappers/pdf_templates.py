@@ -90,8 +90,6 @@ def convert_template_metadata(template: PdfTemplate) -> PdfTemplateMetadataRespo
         source_pdf_id=template.source_pdf_id,
         current_version_id=template.current_version_id,
         status=template.status,
-        usage_count=template.usage_count,
-        last_used_at=template.last_used_at.isoformat() if template.last_used_at else None,
         created_at=template.created_at.isoformat(),
         updated_at=template.updated_at.isoformat()
     )
@@ -158,11 +156,10 @@ def convert_template_detail(
         current_version=TemplateVersionDetail(
             version_id=current_version.id,
             version_num=current_version.version_number,
-            usage_count=0,
-            last_used_at=None,
             signature_objects=convert_pdf_objects_to_api(current_version.signature_objects),
             extraction_fields=convert_extraction_fields_to_api(current_version.extraction_fields),
-            pipeline_definition_id=current_version.pipeline_definition_id
+            pipeline_definition_id=current_version.pipeline_definition_id,
+            created_at=current_version.created_at.isoformat()
         ),
         total_versions=total_versions,
         available_versions=[
@@ -219,12 +216,12 @@ def convert_template_version(
         version_id=version.id,
         template_id=version.template_id,
         version_num=version.version_number,
-        usage_count=0,
-        last_used_at=None,
+        source_pdf_id=version.source_pdf_id,
         is_current=is_current,
         signature_objects=convert_pdf_objects_to_api(version.signature_objects),
         extraction_fields=convert_extraction_fields_to_api(version.extraction_fields),
-        pipeline_definition_id=version.pipeline_definition_id
+        pipeline_definition_id=version.pipeline_definition_id,
+        created_at=version.created_at.isoformat()
     )
 
 

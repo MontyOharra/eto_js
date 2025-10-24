@@ -87,8 +87,6 @@ class PdfTemplateMetadataResponse(BaseModel):
     source_pdf_id: int
     current_version_id: Optional[int] = None
     status: Literal["active", "inactive"]
-    usage_count: int
-    last_used_at: Optional[str] = None  # ISO 8601
     created_at: str  # ISO 8601
     updated_at: str  # ISO 8601
 
@@ -110,11 +108,10 @@ class GetTemplateVersionsResponse(BaseModel):
 class TemplateVersionDetail(BaseModel):
     version_id: int
     version_num: int
-    usage_count: int
-    last_used_at: Optional[str] = None  # ISO 8601
     signature_objects: Dict[str, List[Dict[str, Any]]]  # Grouped: {"text_words": [...], "graphic_rects": [...]}
     extraction_fields: List[ExtractionField]
     pipeline_definition_id: int
+    created_at: str  # ISO 8601
 
 
 class VersionIdSummary(BaseModel):
@@ -207,12 +204,12 @@ class GetTemplateVersionResponse(BaseModel):
     version_id: int
     template_id: int
     version_num: int
-    usage_count: int
-    last_used_at: Optional[str] = None  # ISO 8601
+    source_pdf_id: int
     is_current: bool
     signature_objects: Dict[str, List[Dict[str, Any]]]  # Grouped: {"text_words": [...], "graphic_rects": [...]}
     extraction_fields: List[ExtractionField]
     pipeline_definition_id: int
+    created_at: str  # ISO 8601
 
 
 # POST /pdf-templates/simulate - Simulate Request/Response
