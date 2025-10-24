@@ -642,7 +642,8 @@ class EmailIngestionService:
                     filter_rules=config.filter_rules,
                     poll_interval=config.poll_interval_seconds,
                     process_callback=self._process_email,
-                    error_callback=self._handle_listener_error
+                    error_callback=self._handle_listener_error,
+                    check_complete_callback=self._update_last_check_time
                 )
 
                 # Start thread
@@ -902,5 +903,39 @@ class EmailIngestionService:
             # This prevents cascading failures in the listener thread
             logger.error(
                 f"Error updating error tracking for config {config_id}: {update_error}",
+                exc_info=True
+            )
+
+    def _update_last_check_time(self, config_id: int, check_time: datetime) -> None:
+        """
+        Update last check time after listener completes an email check (callback).
+
+        Called by EmailListenerThread after each successful email check cycle.
+        Updates the database to reflect when the config last checked for emails.
+
+        Args:
+            config_id: Configuration ID that completed a check
+            check_time: Timestamp of the completed check
+
+        Note:
+            - Called from background thread - must be thread-safe
+            - Should not raise exceptions (would crash thread)
+        """
+        try:
+            from shared.types.email_configs import EmailConfigUpdate
+
+            check_update = EmailConfigUpdate(
+                last_check_time=check_time
+            )
+
+            self.config_repository.update(config_id, check_update)
+
+            logger.debug(f"Updated last_check_time for config {config_id} to {check_time.isoformat()}")
+
+        except Exception as update_error:
+            # Don't raise - just log the error
+            # This prevents cascading failures in the listener thread
+            logger.error(
+                f"Error updating last_check_time for config {config_id}: {update_error}",
                 exc_info=True
             )

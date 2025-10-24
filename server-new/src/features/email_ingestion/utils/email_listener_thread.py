@@ -27,6 +27,7 @@ class EmailListenerThread(threading.Thread):
     poll_interval: int
     process_callback: Callable[[int, EmailMessage, list[EmailAttachment]], None]
     error_callback: Callable[[int, Exception], None]
+    check_complete_callback: Callable[[int, datetime], None]
     stop_event: threading.Event
     error_count: int
     max_errors: int
@@ -40,7 +41,8 @@ class EmailListenerThread(threading.Thread):
         filter_rules: list[FilterRule],
         poll_interval: int,
         process_callback: Callable[[int, EmailMessage, list[EmailAttachment]], None],
-        error_callback: Callable[[int, Exception], None]
+        error_callback: Callable[[int, Exception], None],
+        check_complete_callback: Callable[[int, datetime], None]
     ) -> None:
         """
         Initialize email listener thread
@@ -52,6 +54,7 @@ class EmailListenerThread(threading.Thread):
             poll_interval: Seconds between email checks
             process_callback: Function to call for each new email (config_id, email_msg, attachments)
             error_callback: Function to call when errors occur (config_id, error)
+            check_complete_callback: Function to call after each check completes (config_id, check_time)
         """
         super().__init__(name=f"EmailListener-{config_id}")
         self.config_id = config_id
@@ -60,6 +63,7 @@ class EmailListenerThread(threading.Thread):
         self.poll_interval = poll_interval
         self.process_callback = process_callback
         self.error_callback = error_callback
+        self.check_complete_callback = check_complete_callback
 
         # Thread control
         self.stop_event = threading.Event()
@@ -331,6 +335,12 @@ class EmailListenerThread(threading.Thread):
 
             # Update last check time to now
             self.last_check_time = datetime.now(timezone.utc)
+
+            # Notify service to update database
+            try:
+                self.check_complete_callback(self.config_id, self.last_check_time)
+            except Exception as callback_error:
+                logger.error(f"Error in check complete callback: {callback_error}")
 
         except Exception as e:
             logger.error(f"Error checking emails for config {self.config_id}: {e}", exc_info=True)
