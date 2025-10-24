@@ -16,12 +16,7 @@ from shared.types.pdf_files import PdfObjects, serialize_pdf_objects, deserializ
 from api.schemas.pdf_templates import (
     TemplateListItem,
     TemplateVersionSummary,
-    ListPdfTemplatesResponse,
-    PdfTemplateDetail,
-    TemplateVersionDetail,
-    VersionIdSummary,
     PdfTemplate as PdfTemplateAPI,
-    GetTemplateVersionsResponse,
     VersionListItem,
     CreatePdfTemplateRequest,
     UpdatePdfTemplateRequest,
@@ -91,15 +86,12 @@ def convert_pdf_template(template: PdfTemplate) -> PdfTemplateAPI:
     )
 
 
-def convert_version_list(template_id: int, version_list: list[tuple[int, int]]) -> GetTemplateVersionsResponse:
-    """Convert list of (version_id, version_number) tuples to API response"""
-    return GetTemplateVersionsResponse(
-        template_id=template_id,
-        versions=[
-            VersionListItem(version_id=vid, version_number=vnum)
-            for vid, vnum in version_list
-        ]
-    )
+def convert_version_list(version_list: list[tuple[int, int]]) -> list[VersionListItem]:
+    """Convert list of (version_id, version_number) tuples to API list"""
+    return [
+        VersionListItem(version_id=vid, version_number=vnum)
+        for vid, vnum in version_list
+    ]
 
 
 def convert_template_summary(summary: PdfTemplateListView) -> TemplateListItem:
@@ -125,48 +117,9 @@ def convert_template_summary(summary: PdfTemplateListView) -> TemplateListItem:
 
 def convert_template_summary_list(
     summaries: list[PdfTemplateListView]
-) -> ListPdfTemplatesResponse:
-    """Convert list of domain summaries to API response"""
-    return ListPdfTemplatesResponse(
-        items=[convert_template_summary(s) for s in summaries]
-    )
-
-
-def convert_template_detail(
-    template: PdfTemplate,
-    current_version: PdfTemplateVersion,
-    total_versions: int,
-    version_summaries: list[PdfVersionSummary]
-) -> PdfTemplateDetail:
-    """Convert domain template with version to API detail response"""
-    if not current_version:
-        raise ValueError("Template must have a current version")
-
-    return PdfTemplateDetail(
-        id=template.id,
-        name=template.name,
-        description=template.description,
-        source_pdf_id=template.source_pdf_id,
-        status=template.status,
-        current_version_id=template.current_version_id or 0,
-        current_version=TemplateVersionDetail(
-            version_id=current_version.id,
-            version_num=current_version.version_number,
-            signature_objects=convert_pdf_objects_to_api(current_version.signature_objects),
-            extraction_fields=convert_extraction_fields_to_api(current_version.extraction_fields),
-            pipeline_definition_id=current_version.pipeline_definition_id,
-            created_at=current_version.created_at.isoformat()
-        ),
-        total_versions=total_versions,
-        available_versions=[
-            VersionIdSummary(
-                version_id=vs.id,
-                version_num=vs.version_number,
-                created_at=vs.created_at.isoformat()
-            )
-            for vs in version_summaries
-        ]
-    )
+) -> list[TemplateListItem]:
+    """Convert list of domain summaries to API list"""
+    return [convert_template_summary(s) for s in summaries]
 
 
 

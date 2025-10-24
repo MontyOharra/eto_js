@@ -7,9 +7,9 @@ from typing import Optional, Union, Literal
 from fastapi import APIRouter, Query, status, Depends
 
 from api.schemas.pdf_templates import (
-    ListPdfTemplatesResponse,
     PdfTemplate,
-    GetTemplateVersionsResponse,
+    TemplateListItem,
+    VersionListItem,
     CreatePdfTemplateRequest,
     UpdatePdfTemplateRequest,
     GetTemplateVersionResponse,
@@ -37,13 +37,13 @@ router = APIRouter(
 )
 
 
-@router.get("", response_model=ListPdfTemplatesResponse)
+@router.get("", response_model=list[TemplateListItem])
 async def list_pdf_templates(
     status_filter: Optional[Literal["active", "inactive"]] = Query(None, description="Filter by status"),
     sort_by: Literal["name", "status", "usage_count"] = Query("name", description="Field to sort by"),
     sort_order: Literal["asc", "desc"] = Query("asc", description="Sort order"),
     service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service())
-) -> ListPdfTemplatesResponse:
+) -> list[TemplateListItem]:
     """List all PDF templates with filtering and sorting"""
     summaries = service.list_templates(
         status=status_filter,
@@ -70,11 +70,11 @@ async def get_pdf_template(
     return convert_pdf_template(template)
 
 
-@router.get("/{id}/versions", response_model=GetTemplateVersionsResponse)
+@router.get("/{id}/versions", response_model=list[VersionListItem])
 async def get_template_versions(
     id: int,
     service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service())
-) -> GetTemplateVersionsResponse:
+) -> list[VersionListItem]:
     """
     Get list of all version IDs and version numbers for a template.
 
@@ -82,7 +82,7 @@ async def get_template_versions(
     Used by frontend for version navigation (e.g., "Version 1 of 3", "Version 2 of 3")
     """
     version_list = service.get_version_list(id)
-    return convert_version_list(id, version_list)
+    return convert_version_list(version_list)
 
 
 @router.post("", response_model=PdfTemplate, status_code=status.HTTP_201_CREATED)
@@ -165,7 +165,7 @@ async def get_template_version(
 @router.post("/simulate", response_model=SimulateTemplateResponse, status_code=status.HTTP_200_OK)
 async def simulate_template(
     request: Union[SimulateTemplateRequestStored, SimulateTemplateRequestUpload]
-) -> SimulateTemplateResponse:
+) -> SimulateTemplateResponse | None:
     """
     Simulate template processing without persistence.
 

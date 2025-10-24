@@ -93,7 +93,7 @@ async def update_email_config(
     return convert_email_config(config)
 
 
-@router.delete("/{id}", response_model=EmailConfig, status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{id}", response_model=EmailConfig)
 async def delete_email_config(
     id: int,
     config_service: EmailConfigService = Depends(

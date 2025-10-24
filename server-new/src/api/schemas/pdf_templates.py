@@ -6,13 +6,6 @@ from typing import Optional, List, Dict, Any, Literal, Tuple, Union
 from pydantic import BaseModel, Field
 
 
-# Signature Objects (used across multiple endpoints)
-class SignatureObjectBase(BaseModel):
-    object_type: Literal["text_word", "text_line", "graphic_rect", "graphic_line", "graphic_curve", "image", "table"]
-    page: int
-    bbox: Tuple[float, float, float, float]  # [x0, y0, x1, y1]
-
-
 # Extraction Fields (used across multiple endpoints)
 class ExtractionField(BaseModel):
     name: str
@@ -74,10 +67,6 @@ class TemplateListItem(BaseModel):
     total_versions: int
 
 
-class ListPdfTemplatesResponse(BaseModel):
-    items: List[TemplateListItem]
-
-
 # PdfTemplate - Main template object (mirrors domain PdfTemplate exactly)
 class PdfTemplate(BaseModel):
     """Template metadata - mirrors backend domain PdfTemplate"""
@@ -91,46 +80,11 @@ class PdfTemplate(BaseModel):
     updated_at: str  # ISO 8601
 
 
-# GET /pdf-templates/{id}/versions - List Versions Response (simplified)
+# GET /pdf-templates/{id}/versions - Version list item
 class VersionListItem(BaseModel):
     """Lightweight version identifier for navigation"""
     version_id: int
     version_number: int
-
-
-class GetTemplateVersionsResponse(BaseModel):
-    """Response for version list endpoint"""
-    template_id: int
-    versions: List[VersionListItem]
-
-
-# GET /pdf-templates/{id} - Detail Response (UNUSED - kept for reference)
-class TemplateVersionDetail(BaseModel):
-    version_id: int
-    version_num: int
-    signature_objects: Dict[str, List[Dict[str, Any]]]  # Grouped: {"text_words": [...], "graphic_rects": [...]}
-    extraction_fields: List[ExtractionField]
-    pipeline_definition_id: int
-    created_at: str  # ISO 8601
-
-
-class VersionIdSummary(BaseModel):
-    """Lightweight version identifier for template detail"""
-    version_id: int
-    version_num: int
-    created_at: str  # ISO 8601
-
-
-class PdfTemplateDetail(BaseModel):
-    id: int
-    name: str
-    description: Optional[str] = None
-    source_pdf_id: int
-    status: Literal["active", "inactive"]
-    current_version_id: int
-    current_version: TemplateVersionDetail
-    total_versions: int
-    available_versions: List[VersionIdSummary]
 
 
 # POST /pdf-templates - Create Request
@@ -154,20 +108,7 @@ class UpdatePdfTemplateRequest(BaseModel):
     visual_state: Optional[VisualState] = None
 
 
-# GET /pdf-templates/{id}/versions - List Versions Response
-class TemplateVersionListItem(BaseModel):
-    version_id: int
-    version_num: int
-    usage_count: int
-    last_used_at: Optional[str] = None  # ISO 8601
-    is_current: bool
-
-
-class ListTemplateVersionsResponse(BaseModel):
-    __root__: List[TemplateVersionListItem]
-
-
-# GET /pdf-templates/{id}/versions/{version_id} - Version Detail Response
+# GET /pdf-templates/versions/{version_id} - Version Detail Response
 class GetTemplateVersionResponse(BaseModel):
     version_id: int
     template_id: int

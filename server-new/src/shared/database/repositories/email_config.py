@@ -17,7 +17,7 @@ from shared.types.email_configs import (
     FilterRule,
 )
 
-from exceptions.service import ObjectNotFoundError
+from shared.exceptions.service import ObjectNotFoundError
 
 logger = logging.getLogger(__name__)
 

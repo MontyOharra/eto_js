@@ -13,7 +13,7 @@ from shared.types import (
     ModuleCatalogUpdate,
 )
 
-from exceptions.service import ObjectNotFoundError
+from shared.exceptions.service import ObjectNotFoundError
 
 logger = logging.getLogger(__name__)
 
