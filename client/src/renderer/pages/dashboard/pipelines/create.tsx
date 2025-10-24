@@ -4,6 +4,7 @@ import { ModuleSelectorPane } from '../../../features/pipelines/components/Modul
 import { PipelineGraph, PipelineGraphRef } from '../../../features/pipelines/components/PipelineGraph';
 import { EntryPointModal } from '../../../features/pipelines/components/EntryPointModal';
 import { useMockModulesApi } from '../../../features/modules/hooks';
+import { usePipelinesApi } from '../../../features/pipelines/hooks';
 import { serializePipelineData } from '../../../utils/pipelineSerializer';
 import type { ModuleTemplate } from '../../../types/moduleTypes';
 import type { EntryPoint } from '../../../types/pipelineTypes';
@@ -15,6 +16,7 @@ export const Route = createFileRoute('/dashboard/pipelines/create')({
 function PipelineCreatePage() {
   const navigate = useNavigate();
   const { getModules, isLoading, error: apiError } = useMockModulesApi();
+  const { createPipeline, isLoading: isSaving } = usePipelinesApi();
 
   // Page state
   const [moduleTemplates, setModuleTemplates] = useState<ModuleTemplate[]>([]);
@@ -127,46 +129,17 @@ function PipelineCreatePage() {
     console.log('Backend format:', JSON.stringify(backendData, null, 2));
 
     try {
-      // Send to backend API
-      const response = await fetch('http://localhost:8090/api/pipelines/upload', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(backendData),
-      });
+      // Create pipeline using the API hook
+      const result = await createPipeline(backendData);
 
-      if (!response.ok) {
-        // Parse error response
-        const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
-
-        // Handle 422 validation errors
-        if (response.status === 422 && errorData.detail?.errors) {
-          console.error('❌ Pipeline validation failed:');
-          console.error(`   ${errorData.detail.message} (${errorData.detail.error_count} error(s))`);
-          console.error('\n📋 Validation Errors:');
-          errorData.detail.errors.forEach((error: any, index: number) => {
-            console.error(`   ${index + 1}. [${error.code}] ${error.message}`);
-            if (error.where && Object.keys(error.where).length > 0) {
-              console.error(`      Location:`, error.where);
-            }
-          });
-
-          alert(`❌ Pipeline validation failed with ${errorData.detail.error_count} error(s).\n\nCheck the browser console for details.`);
-          return;
-        }
-
-        // Handle other errors
-        throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const result = await response.json();
       console.log('✅ Pipeline created successfully:', result);
-      alert(`✅ Pipeline created successfully!\n\nID: ${result.id}`);
+      alert(`✅ Pipeline created successfully!\n\nID: ${result.id}\nCompiled Plan ID: ${result.compiled_plan_id || 'Not yet compiled'}`);
 
       // Navigate back to pipelines list
       navigate({ to: '/dashboard/pipelines' });
     } catch (err) {
-      console.error('Failed to process pipeline:', err);
-      alert(`Failed to process pipeline: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      console.error('Failed to create pipeline:', err);
+      alert(`Failed to create pipeline: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
 
@@ -258,9 +231,10 @@ function PipelineCreatePage() {
             </button>
             <button
               onClick={handleSave}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+              disabled={isSaving}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Save Pipeline
+              {isSaving ? 'Saving...' : 'Save Pipeline'}
             </button>
           </div>
         </div>

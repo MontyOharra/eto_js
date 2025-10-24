@@ -5,6 +5,42 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-10-24 19:15] — Connect Pipeline Save Button to Backend API
+
+### Spec / Intent
+- Connect the "Save Pipeline" button in pipeline builder to the new POST /api/pipelines endpoint
+- Replace manual fetch call with proper API hook usage
+- Enable testing of full pipeline creation flow
+
+### Changes Made
+
+**Pipeline Create Page** (`client/src/renderer/pages/dashboard/pipelines/create.tsx`):
+- Added `usePipelinesApi` hook import and initialization
+- Updated `handleSave()` function to use `createPipeline()` from API hook instead of manual fetch
+- Replaced hardcoded endpoint URL (`http://localhost:8090/api/pipelines/upload`) with proper API client
+- Added loading state to Save Pipeline button (shows "Saving..." when active)
+- Button now disabled during save operation to prevent duplicate submissions
+- Improved success message to show both pipeline ID and compiled plan ID
+
+### Technical Details
+- Pipeline data serialization remains the same (using `serializePipelineData`)
+- Error handling improved through API hook's built-in error management
+- Uses proper API base URL from `API_CONFIG` instead of hardcoded URL
+- Loading state (`isSaving`) prevents user interaction during save
+
+### Next Actions
+- Test pipeline creation flow end-to-end
+- Verify compilation happens on backend
+- Check that created pipelines appear in pipeline list
+- Test error handling for invalid pipelines
+
+### Notes
+- Old fetch-based implementation removed in favor of consistent API hook usage
+- Pipeline validation endpoint still uses manual fetch (can be migrated later)
+- Backend compilation happens automatically during POST /api/pipelines
+
+---
+
 ## [2025-10-24 19:00] — Pipeline Backend Router Implementation
 
 ### Spec / Intent
