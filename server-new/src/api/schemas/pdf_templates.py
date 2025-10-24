@@ -78,7 +78,35 @@ class ListPdfTemplatesResponse(BaseModel):
     items: List[TemplateListItem]
 
 
-# GET /pdf-templates/{id} - Detail Response
+# GET /pdf-templates/{id} - Metadata Response (simplified)
+class PdfTemplateMetadataResponse(BaseModel):
+    """Simple template metadata without full version details"""
+    id: int
+    name: str
+    description: Optional[str] = None
+    source_pdf_id: int
+    current_version_id: Optional[int] = None
+    status: Literal["active", "inactive"]
+    usage_count: int
+    last_used_at: Optional[str] = None  # ISO 8601
+    created_at: str  # ISO 8601
+    updated_at: str  # ISO 8601
+
+
+# GET /pdf-templates/{id}/versions - List Versions Response (simplified)
+class VersionListItem(BaseModel):
+    """Lightweight version identifier for navigation"""
+    version_id: int
+    version_number: int
+
+
+class GetTemplateVersionsResponse(BaseModel):
+    """Response for version list endpoint"""
+    template_id: int
+    versions: List[VersionListItem]
+
+
+# GET /pdf-templates/{id} - Detail Response (UNUSED - kept for reference)
 class TemplateVersionDetail(BaseModel):
     version_id: int
     version_num: int

@@ -20,6 +20,9 @@ from api.schemas.pdf_templates import (
     PdfTemplateDetail,
     TemplateVersionDetail,
     VersionIdSummary,
+    PdfTemplateMetadataResponse,
+    GetTemplateVersionsResponse,
+    VersionListItem,
     CreatePdfTemplateRequest,
     CreatePdfTemplateResponse,
     UpdatePdfTemplateRequest,
@@ -96,6 +99,33 @@ def convert_extraction_fields_to_domain(fields: list[ExtractionFieldAPI]) -> lis
 
 
 # ========== Domain → API (Response) Conversions ==========
+
+def convert_template_metadata(template: PdfTemplate) -> PdfTemplateMetadataResponse:
+    """Convert domain PdfTemplate to API metadata response"""
+    return PdfTemplateMetadataResponse(
+        id=template.id,
+        name=template.name,
+        description=template.description,
+        source_pdf_id=template.source_pdf_id,
+        current_version_id=template.current_version_id,
+        status=template.status,
+        usage_count=template.usage_count,
+        last_used_at=template.last_used_at.isoformat() if template.last_used_at else None,
+        created_at=template.created_at.isoformat(),
+        updated_at=template.updated_at.isoformat()
+    )
+
+
+def convert_version_list(template_id: int, version_list: list[tuple[int, int]]) -> GetTemplateVersionsResponse:
+    """Convert list of (version_id, version_number) tuples to API response"""
+    return GetTemplateVersionsResponse(
+        template_id=template_id,
+        versions=[
+            VersionListItem(version_id=vid, version_number=vnum)
+            for vid, vnum in version_list
+        ]
+    )
+
 
 def convert_template_summary(summary: PdfTemplateListView) -> TemplateListItem:
     """Convert domain PdfTemplateSummary to API TemplateListItem"""

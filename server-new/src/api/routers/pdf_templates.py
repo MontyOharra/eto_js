@@ -8,11 +8,12 @@ from fastapi import APIRouter, Query, status, Depends
 
 from api.schemas.pdf_templates import (
     ListPdfTemplatesResponse,
+    PdfTemplateMetadataResponse,
+    GetTemplateVersionsResponse,
     CreatePdfTemplateRequest,
     CreatePdfTemplateResponse,
     UpdatePdfTemplateRequest,
     UpdatePdfTemplateResponse,
-    PdfTemplateDetail,
     ActivatePdfTemplateResponse,
     DeactivatePdfTemplateResponse,
     GetTemplateVersionResponse,
@@ -22,7 +23,8 @@ from api.schemas.pdf_templates import (
 )
 from api.mappers.pdf_templates import (
     convert_template_summary_list,
-    convert_template_detail,
+    convert_template_metadata,
+    convert_version_list,
     convert_create_template_request,
     convert_create_template_response,
     convert_update_template_request,
@@ -30,6 +32,8 @@ from api.mappers.pdf_templates import (
     convert_activate_template_response,
     convert_deactivate_template_response,
     convert_template_version,
+    convert_pdf_objects_to_list,
+    convert_extraction_fields_to_api,
 )
 
 from shared.services.service_container import ServiceContainer
@@ -44,7 +48,7 @@ router = APIRouter(
 
 
 @router.get("", response_model=ListPdfTemplatesResponse)
-def list_pdf_templates(
+async def list_pdf_templates(
     status_filter: Optional[Literal["active", "inactive"]] = Query(None, description="Filter by status"),
     sort_by: Literal["name", "status", "usage_count"] = Query("name", description="Field to sort by"),
     sort_order: Literal["asc", "desc"] = Query("asc", description="Sort order"),
@@ -59,11 +63,11 @@ def list_pdf_templates(
     return convert_template_summary_list(summaries)
 
 
-@router.get("/{id}")
-def get_pdf_template(
+@router.get("/{id}", response_model=PdfTemplateMetadataResponse)
+async def get_pdf_template(
     id: int,
     service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service())
-):
+) -> PdfTemplateMetadataResponse:
     """
     Get template metadata (name, description, source_pdf_id, current_version_id).
 
@@ -73,26 +77,14 @@ def get_pdf_template(
     3. Call GET /api/pdf-templates/{id}/versions to get version list for navigation
     """
     template = service.get_template(id)
-
-    return {
-        "id": template.id,
-        "name": template.name,
-        "description": template.description,
-        "source_pdf_id": template.source_pdf_id,
-        "current_version_id": template.current_version_id,
-        "status": template.status,
-        "usage_count": template.usage_count,
-        "last_used_at": template.last_used_at.isoformat() if template.last_used_at else None,
-        "created_at": template.created_at.isoformat(),
-        "updated_at": template.updated_at.isoformat()
-    }
+    return convert_template_metadata(template)
 
 
-@router.get("/{id}/versions")
-def get_template_versions(
+@router.get("/{id}/versions", response_model=GetTemplateVersionsResponse)
+async def get_template_versions(
     id: int,
     service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service())
-):
+) -> GetTemplateVersionsResponse:
     """
     Get list of all version IDs and version numbers for a template.
 
@@ -100,18 +92,11 @@ def get_template_versions(
     Used by frontend for version navigation (e.g., "Version 1 of 3", "Version 2 of 3")
     """
     version_list = service.get_version_list(id)
-
-    return {
-        "template_id": id,
-        "versions": [
-            {"version_id": vid, "version_number": vnum}
-            for vid, vnum in version_list
-        ]
-    }
+    return convert_version_list(id, version_list)
 
 
 @router.post("", response_model=CreatePdfTemplateResponse, status_code=status.HTTP_201_CREATED)
-def create_pdf_template(
+async def create_pdf_template(
     request: CreatePdfTemplateRequest,
     service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service())
 ) -> CreatePdfTemplateResponse:
@@ -122,7 +107,7 @@ def create_pdf_template(
 
 
 @router.put("/{id}", response_model=UpdatePdfTemplateResponse, status_code=status.HTTP_200_OK)
-def update_pdf_template(
+async def update_pdf_template(
     id: int,
     request: UpdatePdfTemplateRequest,
     service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service())
@@ -148,7 +133,7 @@ def update_pdf_template(
 
 
 @router.post("/{id}/activate", response_model=ActivatePdfTemplateResponse)
-def activate_pdf_template(
+async def activate_pdf_template(
     id: int,
     service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service())
 ) -> ActivatePdfTemplateResponse:
@@ -158,7 +143,7 @@ def activate_pdf_template(
 
 
 @router.post("/{id}/deactivate", response_model=DeactivatePdfTemplateResponse)
-def deactivate_pdf_template(
+async def deactivate_pdf_template(
     id: int,
     service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service())
 ) -> DeactivatePdfTemplateResponse:
@@ -167,11 +152,11 @@ def deactivate_pdf_template(
     return convert_deactivate_template_response(template)
 
 
-@router.get("/versions/{version_id}")
-def get_template_version(
+@router.get("/versions/{version_id}", response_model=GetTemplateVersionResponse)
+async def get_template_version(
     version_id: int,
     service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service())
-):
+) -> GetTemplateVersionResponse:
     """
     Get specific version details by version ID.
 
@@ -182,24 +167,13 @@ def get_template_version(
     Returns full version object with signature_objects, extraction_fields, pipeline_definition_id.
     """
     version = service.get_version_by_id(version_id)
-
-    from shared.types.pdf_files import serialize_pdf_objects
-    from shared.types.pdf_templates import serialize_extraction_fields
-
-    return {
-        "id": version.id,
-        "template_id": version.template_id,
-        "version_number": version.version_number,
-        "source_pdf_id": version.source_pdf_id,
-        "signature_objects": serialize_pdf_objects(version.signature_objects),
-        "extraction_fields": serialize_extraction_fields(version.extraction_fields),
-        "pipeline_definition_id": version.pipeline_definition_id,
-        "created_at": version.created_at.isoformat()
-    }
+    template = service.get_template(version.template_id)
+    is_current = template.current_version_id == version.id
+    return convert_template_version(version, is_current)
 
 
 @router.post("/simulate", response_model=SimulateTemplateResponse, status_code=status.HTTP_200_OK)
-def simulate_template(
+async def simulate_template(
     request: Union[SimulateTemplateRequestStored, SimulateTemplateRequestUpload]
 ) -> SimulateTemplateResponse:
     """
