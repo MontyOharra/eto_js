@@ -326,14 +326,14 @@ class ModuleRegistry:
                 meta = module_class.meta()
                 config_schema = module_class.config_schema()
 
-                # Build catalog entry
+                # Build catalog entry (keep meta as ModuleMeta object, conversion happens in repository)
                 entry = {
                     "id": module_class.id,
                     "version": getattr(module_class, 'version', '1.0.0'),  # Default version
                     "name": module_class.title,
                     "description": module_class.description,
                     "module_kind": module_class.kind,
-                    "meta": meta.to_dict(),  # Convert to dict
+                    "meta": meta,  # Keep as ModuleMeta object
                     "config_schema": config_schema,
                     "handler_name": f"{module_class.__module__}:{module_class.__name__}",
                     "color": getattr(module_class, 'color', '#3B82F6'),  # Default color

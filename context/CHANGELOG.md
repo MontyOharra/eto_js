@@ -5,6 +5,68 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-10-24 19:45] — Module Sync CLI Tool Implementation
+
+### Spec / Intent
+- Implement CLI tool to sync module definitions from code to database
+- Enable module catalog management for the module/pipeline system
+- Support module discovery, listing, and database synchronization
+- Follow the pattern from old server but adapt for new architecture
+
+### Changes Made
+
+**CLI Tool** (`server-new/src/cli/sync_modules.py`):
+- Created complete CLI tool with three commands:
+  - `sync` - Auto-discover modules and sync to database (with optional `--refresh` flag)
+  - `list` - List all discovered modules without touching database
+  - `clear` - Clear all modules from database catalog
+- Auto-discovers modules from package paths: transform, action, logic, comparator
+- Validates module handler paths for security
+- Uses module registry to convert modules to catalog format
+- Uses `ModuleCatalogRepository` for database operations with proper UoW support
+- Added `__init__.py` for CLI package
+
+**Registry Fixes** (`server-new/src/shared/utils/registry.py`):
+- Updated `to_catalog_format()` to keep `meta` as `ModuleMeta` object
+- Let repository layer handle conversion to JSON (separation of concerns)
+- Registry now returns catalog entries ready for `ModuleCatalogCreate` dataclass
+
+### Technical Details
+- Uses connection_manager.session() context manager (new server pattern)
+- Module repository initialized with `connection_manager=connection_manager` kwarg
+- Successfully synced 25 modules to database on first run
+- Package paths use "features.modules.*" (no "src." prefix)
+- Security validation prevents loading modules from unauthorized packages
+- One module (llm_parser) skipped due to missing import dependency
+
+### Usage
+```bash
+# List modules without database interaction
+python src/cli/sync_modules.py list
+
+# Sync modules to database
+python src/cli/sync_modules.py sync
+
+# Clear and re-sync modules
+python src/cli/sync_modules.py sync --refresh
+
+# Clear all modules
+python src/cli/sync_modules.py clear
+```
+
+### Next Actions
+- Set up modules GET endpoint in API router
+- Connect frontend module selector to real API
+- Fix llm_parser import issue if needed
+- Document CLI tool usage in README
+
+### Notes
+- All 25 modules successfully synced to database
+- CLI tool ready for use during development and deployment
+- Module catalog now populated and ready for frontend consumption
+
+---
+
 ## [2025-10-24 19:15] — Connect Pipeline Save Button to Backend API
 
 ### Spec / Intent
