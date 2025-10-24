@@ -11,6 +11,12 @@ from sqlalchemy.orm import Session
 if TYPE_CHECKING:
     from shared.database.repositories.email_config import EmailConfigRepository
     from shared.database.repositories.email import EmailRepository
+    from shared.database.repositories.pdf_template import PdfTemplateRepository
+    from shared.database.repositories.pdf_template_version import PdfTemplateVersionRepository
+    from shared.database.repositories.pipeline_definition import PipelineDefinitionRepository
+    from shared.database.repositories.pipeline_compiled_plan import PipelineCompiledPlanRepository
+    from shared.database.repositories.pipeline_definition_step import PipelineDefinitionStepRepository
+    from shared.database.repositories.module_catalog import ModuleCatalogRepository
     # Add other repositories as they're created
 
 logger = logging.getLogger(__name__)
@@ -45,6 +51,12 @@ class UnitOfWork:
         # These are created on first access via properties
         self._email_config_repository: Optional['EmailConfigRepository'] = None
         self._email_repository: Optional['EmailRepository'] = None
+        self._pdf_template_repository: Optional['PdfTemplateRepository'] = None
+        self._pdf_template_version_repository: Optional['PdfTemplateVersionRepository'] = None
+        self._pipeline_definition_repository: Optional['PipelineDefinitionRepository'] = None
+        self._pipeline_compiled_plan_repository: Optional['PipelineCompiledPlanRepository'] = None
+        self._pipeline_definition_step_repository: Optional['PipelineDefinitionStepRepository'] = None
+        self._module_catalog_repository: Optional['ModuleCatalogRepository'] = None
         # Add other repositories as needed
 
         logger.debug("UnitOfWork initialized")
@@ -76,6 +88,90 @@ class UnitOfWork:
             self._email_repository = EmailRepository(session=self.session)
             logger.debug("EmailRepository loaded in UoW")
         return self._email_repository
+
+    @property
+    def pdf_templates(self) -> 'PdfTemplateRepository':
+        """
+        Access to PDF template repository within this transaction.
+
+        Returns:
+            PdfTemplateRepository instance using this UoW's session
+        """
+        if not self._pdf_template_repository:
+            from shared.database.repositories.pdf_template import PdfTemplateRepository
+            self._pdf_template_repository = PdfTemplateRepository(session=self.session)
+            logger.debug("PdfTemplateRepository loaded in UoW")
+        return self._pdf_template_repository
+
+    @property
+    def pdf_template_versions(self) -> 'PdfTemplateVersionRepository':
+        """
+        Access to PDF template version repository within this transaction.
+
+        Returns:
+            PdfTemplateVersionRepository instance using this UoW's session
+        """
+        if not self._pdf_template_version_repository:
+            from shared.database.repositories.pdf_template_version import PdfTemplateVersionRepository
+            self._pdf_template_version_repository = PdfTemplateVersionRepository(session=self.session)
+            logger.debug("PdfTemplateVersionRepository loaded in UoW")
+        return self._pdf_template_version_repository
+
+    @property
+    def pipeline_definitions(self) -> 'PipelineDefinitionRepository':
+        """
+        Access to pipeline definition repository within this transaction.
+
+        Returns:
+            PipelineDefinitionRepository instance using this UoW's session
+        """
+        if not self._pipeline_definition_repository:
+            from shared.database.repositories.pipeline_definition import PipelineDefinitionRepository
+            self._pipeline_definition_repository = PipelineDefinitionRepository(session=self.session)
+            logger.debug("PipelineDefinitionRepository loaded in UoW")
+        return self._pipeline_definition_repository
+
+    @property
+    def pipeline_compiled_plans(self) -> 'PipelineCompiledPlanRepository':
+        """
+        Access to pipeline compiled plan repository within this transaction.
+
+        Returns:
+            PipelineCompiledPlanRepository instance using this UoW's session
+        """
+        if not self._pipeline_compiled_plan_repository:
+            from shared.database.repositories.pipeline_compiled_plan import PipelineCompiledPlanRepository
+            self._pipeline_compiled_plan_repository = PipelineCompiledPlanRepository(session=self.session)
+            logger.debug("PipelineCompiledPlanRepository loaded in UoW")
+        return self._pipeline_compiled_plan_repository
+
+    @property
+    def pipeline_definition_steps(self) -> 'PipelineDefinitionStepRepository':
+        """
+        Access to pipeline definition step repository within this transaction.
+
+        Returns:
+            PipelineDefinitionStepRepository instance using this UoW's session
+        """
+        if not self._pipeline_definition_step_repository:
+            from shared.database.repositories.pipeline_definition_step import PipelineDefinitionStepRepository
+            self._pipeline_definition_step_repository = PipelineDefinitionStepRepository(session=self.session)
+            logger.debug("PipelineDefinitionStepRepository loaded in UoW")
+        return self._pipeline_definition_step_repository
+
+    @property
+    def module_catalog(self) -> 'ModuleCatalogRepository':
+        """
+        Access to module catalog repository within this transaction.
+
+        Returns:
+            ModuleCatalogRepository instance using this UoW's session
+        """
+        if not self._module_catalog_repository:
+            from shared.database.repositories.module_catalog import ModuleCatalogRepository
+            self._module_catalog_repository = ModuleCatalogRepository(session=self.session)
+            logger.debug("ModuleCatalogRepository loaded in UoW")
+        return self._module_catalog_repository
 
     # ========== Transaction Control ==========
     # Usually not needed - context manager handles commit/rollback

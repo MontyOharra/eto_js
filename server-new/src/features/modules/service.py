@@ -4,10 +4,11 @@ Handles module catalog queries and execution
 """
 import logging
 from typing import Dict, List, Optional, Type, Any
+
 from shared.types import BaseModule, ModuleCatalog
 from shared.database.repositories.module_catalog import ModuleCatalogRepository
 from shared.utils.registry import ModuleRegistry, get_registry
-from shared.exceptions import ObjectNotFoundError
+from exceptions.service import ObjectNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -32,13 +33,13 @@ class ModuleExecutionError(Exception):
 
 class ModulesService:
     """
-    Runtime service for module operations
-    Provides module catalog access and execution capabilities
+    Runtime service for module operations.
+    Provides module catalog access and execution capabilities.
     """
 
     def __init__(self, connection_manager):
         """
-        Initialize service with database connection
+        Initialize service with database connection.
 
         Args:
             connection_manager: Database connection manager
@@ -47,7 +48,7 @@ class ModulesService:
             raise RuntimeError("Database connection manager is required")
 
         self.connection_manager = connection_manager
-        self.module_catalog_repo = ModuleCatalogRepository(connection_manager)
+        self.module_catalog_repo = ModuleCatalogRepository(connection_manager=connection_manager)
 
         # Get singleton registry for class loading/caching
         self.registry = get_registry()
@@ -62,10 +63,10 @@ class ModulesService:
         from shared.utils.registry import auto_discover_modules
 
         packages_to_scan = [
-            "src.features.modules.transform",
-            "src.features.modules.action",
-            "src.features.modules.logic",
-            "src.features.modules.comparator",
+            "features.modules.transform",
+            "features.modules.action",
+            "features.modules.logic",
+            "features.modules.comparator",
         ]
 
         try:
@@ -80,12 +81,12 @@ class ModulesService:
             # Don't fail startup if auto-discovery fails
             # Modules can still be loaded from database
 
-    def get_module_catalog(self, only_active: bool = False) -> List[ModuleCatalog]:
+    def get_module_catalog(self, only_active: bool = True) -> list[ModuleCatalog]:
         """
-        Get module catalog from database
+        Get module catalog from database.
 
         Args:
-            include_inactive: Whether to include inactive modules
+            only_active: Whether to only include active modules
 
         Returns:
             List of ModuleCatalog domain objects
@@ -98,9 +99,9 @@ class ModulesService:
             logger.error(f"Failed to get module catalog: {e}")
             return []
 
-    def get_module_info(self, module_id: str) -> Optional[ModuleCatalog]:
+    def get_module_info(self, module_id: str) -> ModuleCatalog | None:
         """
-        Get detailed information about a specific module from database
+        Get detailed information about a specific module from database.
 
         Args:
             module_id: Module ID to retrieve
@@ -122,13 +123,15 @@ class ModulesService:
             logger.error(f"Failed to get module info for {module_id}: {e}")
             return None
 
-    def execute_module(self,
-                      module_id: str,
-                      inputs: Dict[str, Any],
-                      config: Dict[str, Any],
-                      context: Optional[Any] = None) -> Dict[str, Any]:
+    def execute_module(
+        self,
+        module_id: str,
+        inputs: Dict[str, Any],
+        config: Dict[str, Any],
+        context: Optional[Any] = None
+    ) -> Dict[str, Any]:
         """
-        Execute a module with given inputs and configuration
+        Execute a module with given inputs and configuration.
 
         Args:
             module_id: Module ID to execute
@@ -160,7 +163,7 @@ class ModulesService:
 
     def _get_module_class(self, module_info: ModuleCatalog) -> Type[BaseModule]:
         """
-        Get module class from registry, loading if needed
+        Get module class from registry, loading if needed.
 
         Args:
             module_info: Module catalog entry
@@ -184,13 +187,15 @@ class ModulesService:
 
         return module_class
 
-    def _execute_module_instance(self,
-                                module_class: Type[BaseModule],
-                                inputs: Dict[str, Any],
-                                config: Dict[str, Any],
-                                context: Optional[Any]) -> Dict[str, Any]:
+    def _execute_module_instance(
+        self,
+        module_class: Type[BaseModule],
+        inputs: Dict[str, Any],
+        config: Dict[str, Any],
+        context: Optional[Any]
+    ) -> Dict[str, Any]:
         """
-        Execute a module instance with validation
+        Execute a module instance with validation.
 
         Args:
             module_class: Module class to instantiate and execute
@@ -228,7 +233,7 @@ class ModulesService:
 
     def _create_default_context(self, inputs: Dict[str, Any]) -> Any:
         """
-        Create a default execution context for modules
+        Create a default execution context for modules.
 
         Args:
             inputs: Input values
@@ -240,3 +245,46 @@ class ModulesService:
             'instance_ordered_inputs': list(inputs.items()),
             'instance_ordered_outputs': []
         })()
+
+    def sync_catalog_to_db(self):
+        """
+        Sync registered modules from registry to database.
+        This should be called after module discovery to ensure database is up to date.
+        """
+        try:
+            # Get all modules from registry in catalog format
+            catalog_entries = self.registry.to_catalog_format()
+
+            logger.info(f"Syncing {len(catalog_entries)} modules to database...")
+
+            synced_count = 0
+            for entry in catalog_entries:
+                try:
+                    # Convert to domain object
+                    from shared.types import ModuleCatalogCreate, ModuleKind, ModuleMeta
+
+                    module_create = ModuleCatalogCreate(
+                        id=entry["id"],
+                        version=entry["version"],
+                        name=entry["name"],
+                        description=entry["description"],
+                        module_kind=ModuleKind(entry["module_kind"]),
+                        meta=ModuleMeta.model_validate(entry["meta"]),
+                        config_schema=entry["config_schema"],
+                        handler_name=entry["handler_name"],
+                        color=entry["color"],
+                        category=entry["category"],
+                        is_active=entry["is_active"],
+                    )
+
+                    # Upsert to database
+                    self.module_catalog_repo.upsert(module_create)
+                    synced_count += 1
+
+                except Exception as e:
+                    logger.error(f"Failed to sync module {entry.get('id')}: {e}")
+
+            logger.info(f"Successfully synced {synced_count}/{len(catalog_entries)} modules")
+
+        except Exception as e:
+            logger.error(f"Failed to sync catalog to database: {e}")
