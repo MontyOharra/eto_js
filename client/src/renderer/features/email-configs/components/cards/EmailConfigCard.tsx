@@ -5,6 +5,7 @@
 
 import type { EmailConfigDetail } from '../../types';
 import { StatusBadge } from '../ui/StatusBadge';
+import { formatUtcToLocal } from '../../../../shared/utils/dateUtils';
 
 interface EmailConfigCardProps {
   config: EmailConfigDetail;
@@ -21,10 +22,6 @@ export function EmailConfigCard({
   onDeactivate,
   onDelete,
 }: EmailConfigCardProps) {
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return 'Never';
-    return new Date(dateString).toLocaleString();
-  };
 
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-lg p-5 hover:border-gray-600 transition-colors">
@@ -65,7 +62,9 @@ export function EmailConfigCard({
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-gray-400">Last Check:</span>
-          <span className="text-gray-200">{formatDate(config.last_check_time)}</span>
+          <span className="text-gray-200">
+            {formatUtcToLocal(config.last_check_time)}
+          </span>
         </div>
         {config.filter_rules.length > 0 && (
           <div className="flex items-center justify-between text-sm">
@@ -88,7 +87,7 @@ export function EmailConfigCard({
               </p>
               {config.last_error_at && (
                 <p className="text-xs text-red-400 mt-1">
-                  {formatDate(config.last_error_at)}
+                  {formatUtcToLocal(config.last_error_at)}
                 </p>
               )}
             </div>

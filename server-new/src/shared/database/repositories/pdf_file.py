@@ -50,8 +50,12 @@ class PdfFileRepository(BaseRepository[PdfFileModel]):
         """
         Convert PdfObjects dataclass to JSON-serializable dict.
 
-        Uses dataclasses.asdict pattern to recursively convert nested dataclasses.
-        Tuples (like bbox) are automatically converted to lists.
+        Uses dataclasses.asdict to recursively convert nested dataclasses.
+        Tuples (like bbox) are automatically converted to lists for JSON compatibility.
+
+        Note: PSLiteral and other non-serializable types are already cleaned
+        during extraction in PdfFilesService._extract_objects_from_file(),
+        so this is a simple conversion.
         """
         from dataclasses import asdict
         return asdict(obj)

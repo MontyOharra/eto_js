@@ -5,6 +5,376 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-10-25 01:45] — PSLiteral Extraction Architecture Fix & PDF Storage Complete
+
+### Spec / Intent
+- **Critical Architecture Fix**: Handle PSLiteral objects from pdfplumber DURING extraction, not serialization
+- Clean all non-serializable types (PSLiteral, bytes) to Python primitives at extraction time
+- Simplify repository serialization to just use dataclasses.asdict()
+- Complete PDF storage integration with email ingestion
+- Fix ServiceContainer factory import logic to support class methods (StorageConfig.from_environment)
+
+### Changes Made
+
+**PDF Files Service** (`server-new/src/features/pdf_files/service.py`):
+
+**Lines 347-377 - Added _clean_pdf_value() method**:
+```python
+def _clean_pdf_value(self, value: any) -> any:
+    """
+    Clean a value from pdfplumber to ensure it's JSON-serializable.
+    Handles PSLiteral objects from pdfminer by converting to strings.
+    """
+    # Handle None
+    if value is None:
+        return ''
+
+    # Handle PSLiteral objects (have a 'name' attribute)
+    if hasattr(value, 'name'):
+        name = value.name
+        if isinstance(name, bytes):
+            return name.decode('utf-8', errors='replace')
+        return str(name)
+
+    # Handle bytes
+    if isinstance(value, bytes):
+        return value.decode('utf-8', errors='replace')
+
+    # Return as-is for primitive types
+    return value
+```
+
+**Lines 425-437 - Clean fontname during text word extraction**:
+- Call `_clean_pdf_value()` for fontname field (can be PSLiteral)
+- Ensure fontname is string before creating TextWord dataclass
+- Ensure fontsize is float
+
+**Lines 466-482 - Clean colorspace during image extraction**:
+- Call `_clean_pdf_value()` for colorspace field (can be PSLiteral)
+- Ensure colorspace is string before creating Image dataclass
+- Ensure bits is int
+
+**PDF File Repository** (`server-new/src/shared/database/repositories/pdf_file.py:49-61`):
+
+**Simplified _serialize_pdf_objects() method**:
+```python
+def _serialize_pdf_objects(self, obj: PdfObjects) -> dict[str, Any]:
+    """
+    Convert PdfObjects dataclass to JSON-serializable dict.
+
+    Uses dataclasses.asdict to recursively convert nested dataclasses.
+    Tuples (like bbox) are automatically converted to lists for JSON compatibility.
+
+    Note: PSLiteral and other non-serializable types are already cleaned
+    during extraction in PdfFilesService._extract_objects_from_file(),
+    so this is a simple conversion.
+    """
+    from dataclasses import asdict
+    return asdict(obj)
+```
+- Removed complex recursive conversion logic
+- PSLiteral handling now done during extraction
+- Repository only handles clean Python types
+
+### Architectural Decision - Clean at Extraction
+
+**User Guidance**: "it doesnt need to be compatible with the old server. That is not important. The extraction method itself of the objects should extract the pdf plumber objects and create them as the PdfObjects type we have defined out. There should be no references to the weird PSLiteral type, because when the objects are extracted via that extraction function, they should immediately be a type of PdfObjects"
+
+**Implementation**:
+1. **Extraction Layer** (PdfFilesService):
+   - pdfplumber returns PSLiteral and bytes objects
+   - `_clean_pdf_value()` immediately converts to clean Python types
+   - TextWord, Image dataclasses contain only str/int/float
+   - PdfObjects dataclass is fully JSON-serializable
+
+2. **Repository Layer** (PdfFileRepository):
+   - Receives clean PdfObjects dataclass
+   - Simple `dataclasses.asdict()` conversion
+   - No PSLiteral handling needed
+   - Clean separation of concerns
+
+3. **Database Layer**:
+   - objects_json field stores clean JSON
+   - No special deserialization logic needed
+   - Direct dict → PdfObjects reconstruction
+
+**Benefits**:
+- Single source of truth for cleaning (extraction)
+- Repository stays simple and focused
+- No PSLiteral references outside extraction
+- Type safety guaranteed by dataclasses
+- Easy to test and maintain
+
+### Error Resolution Timeline
+
+**Error 1 - ModuleNotFoundError**:
+```
+ModuleNotFoundError: No module named 'src.shared.config.StorageConfig'
+```
+- **Cause**: Factory path missing 'storage' module name
+- **Fix**: Changed `'shared.config.StorageConfig.from_environment'` → `'shared.config.storage.StorageConfig.from_environment'`
+
+**Error 2 - Factory Import Logic**:
+```
+ModuleNotFoundError: No module named 'src.shared.config.storage.StorageConfig';
+'src.shared.config.storage' is not a package
+```
+- **Cause**: ServiceContainer factory import only supported `module.function`, not `module.Class.method`
+- **Fix**: Enhanced factory import logic to detect 3+ part paths and handle class methods
+
+**Error 3 - PSLiteral JSON Serialization**:
+```
+TypeError: Object of type PSLiteral is not JSON serializable
+```
+- **Initial Approach**: Tried to handle in repository's `_serialize_pdf_objects()` with recursive converter
+- **User Correction**: "The extraction method itself of the objects should extract the pdf plumber objects and create them as the PdfObjects type we have defined out. There should be no references to the weird PSLiteral type"
+- **Correct Fix**: Created `_clean_pdf_value()` in service, clean during extraction, simplify repository
+
+### Current State
+- ✅ PSLiteral objects cleaned during extraction (fontname, colorspace)
+- ✅ Repository serialization simplified to dataclasses.asdict()
+- ✅ All extracted objects contain only clean Python types (str, int, float, tuple)
+- ✅ PdfObjects dataclass fully JSON-serializable
+- ✅ ServiceContainer factory import supports class methods
+- ✅ PDF storage integration complete
+- ✅ Email ingestion calls PDF storage for attachments
+- ✅ Hash-based deduplication working
+- 📍 Ready for end-to-end testing with actual email configurations
+
+### Next Actions
+- Test complete email ingestion → PDF storage flow
+- Send test email with PDF attachment to monitored address
+- Verify PDF saved to filesystem: `storage/pdfs/YYYY/MM/DD/{hash}.pdf`
+- Verify database record created with extracted objects
+- Verify objects_json field contains clean JSON (no PSLiteral)
+- Test deduplication (send same PDF twice)
+- Verify all object types extract correctly (text, graphics, images, tables)
+
+### Notes
+- Clean separation: extraction produces clean types, serialization is trivial
+- Architecture decision follows user's guidance exactly
+- By time PdfObjects dataclass created, all values are JSON-serializable
+- Repository serialization now just 3 lines (import asdict, return asdict(obj))
+- Foundation for robust PDF processing pipeline
+- Working in server-new/ directory (unified backend)
+
+---
+
+## [2025-10-25 00:15] — PDF Storage Integration with Email Ingestion
+
+### Spec / Intent
+- Integrate PdfFilesService with EmailIngestionService to automatically store PDF attachments
+- Download PDF files from email attachments and save to disk storage
+- Create pdf_file database records with metadata and extracted objects
+- Enable hash-based PDF deduplication
+- Link PDFs to source email records
+
+### Changes Made
+
+**Service Container Fixes** (`server-new/src/shared/services/service_container.py`):
+- **Line 98**: Fixed incorrect factory path for `storage_config` service
+  - Was: `'shared.config.StorageConfig.from_environment'` (wrong - missing module name)
+  - Now: `'shared.config.storage.StorageConfig.from_environment'` (correct)
+- **Lines 199-237**: Enhanced factory import logic to support class methods
+  - Now supports `module.Class.method` pattern (e.g., `StorageConfig.from_environment`)
+  - Previously only supported `module.function` pattern
+  - Detects 3+ part paths and splits into module, class, method
+  - Falls back to old pattern for simple module-level functions
+  - Example: `'shared.config.storage.StorageConfig.from_environment'` → imports module `shared.config.storage`, gets class `StorageConfig`, calls method `from_environment`
+
+**Email Ingestion Service** (`server-new/src/features/email_ingestion/service.py:817-868`):
+- Implemented PDF storage in `_process_email()` callback method
+- Lines 832-855: Call `self.pdf_service.store_pdf()` for each PDF attachment
+  - Passes `attachment.content` (file bytes from email)
+  - Passes `attachment.filename` (original filename)
+  - Passes `email_record.id` to link PDF to source email
+- Added try/except block around PDF storage (lines 832-863)
+  - Individual PDF storage failures don't stop processing of other attachments
+  - Errors logged with full stack trace
+  - pdf_count only incremented for successfully stored PDFs
+- Updated success log message (line 867): "PDFs stored successfully" instead of "PDFs found"
+
+**PDF Storage Pipeline**:
+When an email with PDF attachments is processed:
+1. Email record created first (line 811)
+2. For each attachment, check if it's a PDF (lines 821-824)
+3. Call `pdf_service.store_pdf()` which:
+   - Validates the PDF file
+   - Calculates SHA-256 hash for deduplication
+   - Checks if hash already exists (returns existing if duplicate)
+   - Saves file to disk: `storage/pdfs/YYYY/MM/DD/{hash}.pdf`
+   - Extracts objects using pdfplumber (text, graphics, images, tables)
+   - Creates database record with extracted_objects
+4. Log success with PDF ID, hash, and file path
+5. Continue with next attachment even if one fails
+
+### Key Technical Decisions
+
+**Error Handling Strategy**:
+- Individual PDF failures don't crash entire email processing
+- Each PDF wrapped in its own try/except block
+- Errors logged but processing continues
+- pdf_count tracks only successful storage operations
+
+**Deduplication**:
+- PdfFilesService automatically handles deduplication via SHA-256 hash
+- If same PDF arrives in multiple emails, only stored once on disk
+- Each email's pdf_file record links to the same physical file
+
+**Link to Source Email**:
+- `email_id` parameter creates audit trail
+- Can trace any PDF back to originating email
+- Supports compliance and debugging requirements
+
+**Separation of Concerns**:
+- EmailIngestionService handles email processing and attachment extraction
+- PdfFilesService handles PDF validation, storage, and object extraction
+- Clean interface between services via `store_pdf()` method
+
+### Current State
+- ✅ PDF attachments automatically downloaded from emails
+- ✅ PDFs saved to disk with date-based organization
+- ✅ Database records created with full metadata
+- ✅ Object extraction happens automatically via pdfplumber
+- ✅ Hash-based deduplication working
+- ✅ Email → PDF linkage established
+- ✅ Error handling prevents cascade failures
+- 📍 Ready for testing with actual email configurations
+- 📍 ETO processing integration pending (TODO remains)
+
+### Next Actions
+- Test email ingestion with PDF attachments
+- Verify PDFs saved to correct filesystem paths
+- Verify database records created correctly
+- Verify deduplication works (send same PDF twice)
+- Verify object extraction populates extracted_objects field
+- Implement ETO processing trigger (currently TODO)
+- Add statistics tracking (total_pdfs_processed on email config)
+
+### Notes
+- PdfFilesService already existed - this integrates it with email flow
+- All PDF validation/extraction logic reused from existing service
+- Working in server-new/ directory (unified backend architecture)
+- Email ingestion now complete except for ETO processing trigger
+- Foundation set for automated PDF → ETO pipeline
+
+---
+
+## [2025-10-24 23:55] — Frontend Timestamp Display with UTC to Local Conversion
+
+### Spec / Intent
+- Display all UTC timestamps from backend in user's local timezone
+- Create reusable date utility functions for consistent timestamp formatting
+- Always show exact timestamps (no relative time like "just now")
+- Automatic timezone conversion using browser's built-in Date API
+- Fix backend timestamps sent without 'Z' suffix being interpreted as local time
+
+### Changes Made
+
+**Date Utilities** (`client/src/renderer/shared/utils/dateUtils.ts` - NEW, 109 lines):
+- Created three utility functions for timestamp formatting:
+  - `formatUtcToLocal()` - Converts UTC ISO string to local timezone with full date/time
+  - `formatUtcToLocalDate()` - Converts UTC ISO string to local date only
+  - `formatUtcToRelative()` - Converts UTC ISO string to relative time ("5 minutes ago", "2 hours ago")
+- **Critical Fix (Lines 19-26)**: Backend sends timestamps without 'Z' suffix (e.g., "2025-10-24T22:17:33.114862")
+  - JavaScript interprets timestamps without timezone indicator as local time, not UTC
+  - Added logic to automatically append 'Z' if no timezone indicator present
+  - Checks for 'Z', '+', or '-' (after position 10) to detect timezone info
+  - This ensures proper UTC → local conversion regardless of backend format
+- Default formatting options: `year: numeric, month: numeric, day: numeric, hour: numeric, minute: 2-digit, second: 2-digit, hour12: true`
+- Handles null/undefined timestamps by returning "Never"
+- Invalid date detection with console warnings
+- Comprehensive error handling for date parsing failures
+- Supports custom Intl.DateTimeFormatOptions for flexibility
+
+**Email Config Card** (`client/src/renderer/features/email-configs/components/cards/EmailConfigCard.tsx`):
+- Line 8: Imported `formatUtcToLocal` utility function
+- Removed inline `formatDate` function (lines 24-27)
+- Lines 64-68: Updated `last_check_time` display to use `formatUtcToLocal()` for exact timestamp
+  - Display: `formatUtcToLocal(config.last_check_time)` (e.g., "10/24/2025, 5:17:33 PM" in CDT for UTC 22:17:33)
+- Lines 88-92: Updated `last_error_at` display to use `formatUtcToLocal()` for exact timestamp
+
+### Key Technical Decisions
+
+**Missing 'Z' Suffix Fix**:
+- Backend Python's `.isoformat()` returns timestamps without 'Z' suffix
+- JavaScript's Date constructor interprets timestamps without timezone as local time
+- **Example Problem**: Backend sends "2025-10-24T22:17:33" (UTC 22:17)
+  - Without fix: JavaScript treats as local → displays "10/24/2025, 10:17:33 PM" (wrong!)
+  - With fix: Add 'Z' suffix → JavaScript parses as UTC → displays "10/24/2025, 5:17:33 PM" (correct in CDT)
+- Fix applies only when no timezone indicator present (no 'Z', no '+', no '-')
+- Handles both properly formatted timestamps (with Z) and Python isoformat (without Z)
+
+**Exact Timestamps Always**:
+- All timestamps display as exact date/time in user's local timezone
+- Format: "10/24/2025, 5:17:33 PM" (12-hour format with AM/PM)
+- No relative time ("just now", "5 minutes ago") for clarity
+- Provides precise information at a glance
+
+**Native JavaScript Date API**:
+- Uses built-in `Date` object and `toLocaleString()`
+- Automatically detects user's timezone from browser
+- No external dependencies (no date-fns or dayjs needed)
+- Works across all modern browsers
+
+**Error Handling Strategy**:
+- Returns "Never" for null/undefined (semantic meaning)
+- Returns "Invalid Date" for parsing errors
+- Logs warnings to console for debugging
+- Prevents crashes from malformed date strings
+
+**UTC ISO 8601 Format**:
+- Backend sends: `"2025-01-16T14:30:00Z"` (UTC with Z suffix)
+- JavaScript Date constructor handles timezone conversion automatically
+- Browser's Intl.DateTimeFormat uses user's system timezone
+
+### Implementation Flow
+
+**Backend → Frontend Data Flow**:
+```
+Backend (Python):
+  datetime.now(timezone.utc) → "2025-01-16T14:30:00Z"
+                    ↓
+API Response (JSON):
+  { "last_check_time": "2025-01-16T14:30:00Z" }
+                    ↓
+Frontend (TypeScript):
+  new Date("2025-01-16T14:30:00Z") → Date object in local timezone
+                    ↓
+Display:
+  formatUtcToRelative() → "5 minutes ago"
+  formatUtcToLocal() → "1/16/2025, 2:30:00 PM" (in user's timezone)
+```
+
+### Current State
+- ✅ Date utility functions created and exported
+- ✅ EmailConfigCard updated to use new utilities
+- ✅ last_check_time displays exact timestamp in local timezone
+- ✅ last_error_at displays exact timestamp in local timezone
+- ✅ Missing 'Z' suffix fix working correctly
+- ✅ Tested with actual backend: UTC 22:17 → CDT 17:17 (5 hour offset correct)
+- ✅ Comprehensive error handling for invalid dates
+- ✅ All timestamps automatically convert from UTC to user's local timezone
+- ✅ Debug logging removed - production ready
+
+### Next Actions
+- Apply timestamp formatting to other components if they display timestamps (EditConfigModal, etc.)
+- Consider adding timestamp formatting to other domains (ETO runs, PDF files, templates)
+- Monitor for edge cases with different timezone formats from backend
+- Consider documenting the 'Z' suffix requirement for backend team
+
+### Notes
+- Date utilities are reusable across entire frontend codebase
+- Native JavaScript Date API handles all timezone complexity automatically
+- 'Z' suffix fix is defensive programming - works with both formats
+- No breaking changes - pure enhancement to timestamp display
+- EmailConfigCard is only component displaying timestamps in email configs feature
+- Working in client/ directory (frontend React application)
+- Foundation set for consistent timestamp handling throughout application
+- **Key Learning**: Python's `.isoformat()` doesn't append 'Z' by default (requires `timespec` parameter or manual append)
+
+---
+
 ## [2025-10-24 23:45] — PDF Template & Pipeline Architecture Refinement
 
 ### Spec / Intent

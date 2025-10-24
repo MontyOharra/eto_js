@@ -95,7 +95,7 @@ class ServiceContainer:
         """
         cls._service_definitions = {
             'storage_config': {
-                'factory': 'shared.config.StorageConfig.from_environment',
+                'factory': 'shared.config.storage.StorageConfig.from_environment',
                 'args': [],
                 'singleton': True,
                 'description': 'Storage configuration (filesystem paths)'
@@ -198,17 +198,40 @@ class ServiceContainer:
         # Check if this is a factory function or a class constructor
         if 'factory' in definition:
             # Factory pattern - call a function to get the service
+            # Supports both module.function and module.Class.method patterns
             factory_path = definition['factory']
-            module_path, function_name = factory_path.rsplit('.', 1)
-            try:
-                # Import the module
-                if module_path.startswith('.'):
-                    from importlib import import_module
-                    module = import_module(module_path, package='src')
-                else:
-                    module = __import__(f'src.{module_path}', fromlist=[function_name])
+            parts = factory_path.split('.')
 
-                factory_func = getattr(module, function_name)
+            try:
+                # Try module.Class.method pattern first (3+ parts)
+                # For 'shared.config.storage.StorageConfig.from_environment':
+                # - module: 'shared.config.storage'
+                # - class: 'StorageConfig'
+                # - method: 'from_environment'
+                if len(parts) >= 3:
+                    # Try importing as module.Class.method
+                    module_path = '.'.join(parts[:-2])  # 'shared.config.storage'
+                    class_name = parts[-2]  # 'StorageConfig'
+                    method_name = parts[-1]  # 'from_environment'
+
+                    try:
+                        # Import the module
+                        module = __import__(f'src.{module_path}', fromlist=[class_name])
+                        # Get the class
+                        factory_class = getattr(module, class_name)
+                        # Get the method from the class
+                        factory_func = getattr(factory_class, method_name)
+                    except (ImportError, AttributeError):
+                        # Fall back to module.function pattern
+                        module_path, function_name = factory_path.rsplit('.', 1)
+                        module = __import__(f'src.{module_path}', fromlist=[function_name])
+                        factory_func = getattr(module, function_name)
+                else:
+                    # module.function pattern
+                    module_path, function_name = factory_path.rsplit('.', 1)
+                    module = __import__(f'src.{module_path}', fromlist=[function_name])
+                    factory_func = getattr(module, function_name)
+
             except (ImportError, AttributeError) as e:
                 logger.error(f"Failed to import factory function {factory_path}: {e}")
                 raise RuntimeError(f"Cannot create service '{service_name}': {e}")

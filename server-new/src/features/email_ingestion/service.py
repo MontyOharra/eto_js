@@ -829,25 +829,42 @@ class EmailIngestionService:
                         f"({attachment.size_bytes} bytes)"
                     )
 
-                    # Store PDF via pdf_service
-                    # Note: pdf_service will be implemented later
-                    # For now, just log that we would process it
-                    logger.info(f"PDF {attachment.filename} would be stored and processed by ETO")
-                    pdf_count += 1
+                    try:
+                        # Store PDF via pdf_service
+                        # This will:
+                        # 1. Validate the PDF
+                        # 2. Calculate SHA-256 hash for deduplication
+                        # 3. Save file to disk (date-based path: YYYY/MM/DD/hash.pdf)
+                        # 4. Extract objects using pdfplumber
+                        # 5. Create database record with extracted_objects
+                        pdf_record = self.pdf_service.store_pdf(
+                            file_bytes=attachment.content,
+                            filename=attachment.filename,
+                            email_id=email_record.id
+                        )
 
-                    # TODO: When pdf_service is implemented:
-                    # pdf_record = self.pdf_service.store_pdf(
-                    #     file_bytes=attachment.content,
-                    #     filename=attachment.filename,
-                    #     email_id=email_record.id
-                    # )
-                    #
-                    # # Trigger ETO processing
-                    # self.eto_service.process_pdf(pdf_record.id)
+                        logger.info(
+                            f"Stored PDF {attachment.filename} as PDF ID {pdf_record.id} "
+                            f"(hash: {pdf_record.file_hash[:8]}..., "
+                            f"path: {pdf_record.file_path})"
+                        )
+
+                        pdf_count += 1
+
+                        # TODO: Trigger ETO processing in future implementation
+                        # self.eto_service.process_pdf(pdf_record.id)
+
+                    except Exception as pdf_error:
+                        # Log PDF storage error but continue processing other attachments
+                        logger.error(
+                            f"Failed to store PDF {attachment.filename}: {pdf_error}",
+                            exc_info=True
+                        )
+                        # Don't increment pdf_count for failed PDFs
 
             logger.info(
                 f"Processed email {email_msg.message_id[:20]}... "
-                f"(config {config_id}): {pdf_count} PDFs found"
+                f"(config {config_id}): {pdf_count} PDFs stored successfully"
             )
 
         except Exception as e:

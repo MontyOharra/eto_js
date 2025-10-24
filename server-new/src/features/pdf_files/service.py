@@ -344,6 +344,38 @@ class PdfFilesService:
             logger.error(f"Error storing PDF {filename}: {e}", exc_info=True)
             raise ServiceError(f"Failed to store PDF: {str(e)}")
 
+    def _clean_pdf_value(self, value: any) -> any:
+        """
+        Clean a value from pdfplumber to ensure it's JSON-serializable.
+
+        Handles PSLiteral objects from pdfminer by converting to strings.
+        Also handles bytes and other non-serializable types.
+
+        Args:
+            value: Raw value from pdfplumber
+
+        Returns:
+            Clean, JSON-serializable value
+        """
+        # Handle None
+        if value is None:
+            return ''
+
+        # Handle PSLiteral objects (have a 'name' attribute)
+        if hasattr(value, 'name'):
+            # PSLiteral.name can be bytes or str
+            name = value.name
+            if isinstance(name, bytes):
+                return name.decode('utf-8', errors='replace')
+            return str(name)
+
+        # Handle bytes
+        if isinstance(value, bytes):
+            return value.decode('utf-8', errors='replace')
+
+        # Return as-is for primitive types
+        return value
+
     def _extract_objects_from_file(
         self,
         file_path: Path,
@@ -353,6 +385,7 @@ class PdfFilesService:
         Extract objects from PDF file using pdfplumber.
 
         Returns PdfObjects dataclass with strongly-typed objects.
+        All PSLiteral and non-serializable types are converted to clean Python types.
 
         Extracts:
         - Text words (text, fontname, fontsize)
@@ -368,7 +401,7 @@ class PdfFilesService:
             filename: Original filename (for logging)
 
         Returns:
-            PdfObjects dataclass with typed objects
+            PdfObjects dataclass with typed objects (all clean, JSON-serializable)
 
         Raises:
             ServiceError: If extraction fails
@@ -392,12 +425,15 @@ class PdfFilesService:
                     # Extract text words → TextWord dataclasses
                     words = page.extract_words()
                     for word in words:
+                        # Clean fontname (can be PSLiteral)
+                        fontname = self._clean_pdf_value(word.get('fontname', ''))
+
                         text_words.append(TextWord(
                             page=page_num,
                             bbox=(word['x0'], word['top'], word['x1'], word['bottom']),
                             text=word['text'],
-                            fontname=word.get('fontname', ''),
-                            fontsize=word.get('size', 0.0)
+                            fontname=str(fontname),  # Ensure string
+                            fontsize=float(word.get('size', 0.0))  # Ensure float
                         ))
 
                     # Extract lines → TextLine dataclasses
@@ -430,12 +466,19 @@ class PdfFilesService:
                     # Extract images → Image dataclasses
                     imgs = page.images
                     for img in imgs:
+                        # Clean colorspace (can be PSLiteral)
+                        colorspace = self._clean_pdf_value(img.get('colorspace', ''))
+
+                        # Extract format from name
+                        img_name = img.get('name', '')
+                        img_format = str(img_name).split('.')[-1].upper() if img_name else ''
+
                         images.append(Image(
                             page=page_num,
                             bbox=(img['x0'], img['top'], img['x1'], img['bottom']),
-                            format=img.get('name', '').split('.')[-1].upper(),
-                            colorspace=img.get('colorspace', ''),
-                            bits=img.get('bits', 0)
+                            format=img_format,
+                            colorspace=str(colorspace),  # Ensure string
+                            bits=int(img.get('bits', 0))  # Ensure int
                         ))
 
                     # Extract tables → Table dataclasses
