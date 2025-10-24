@@ -20,10 +20,10 @@ class ModuleSecurityValidator:
     """Security validation for module loading"""
 
     ALLOWED_PACKAGES = [
-        "src.features.modules.transform",
-        "src.features.modules.action",
-        "src.features.modules.logic",
-        "src.features.modules.comparator",
+        "features.modules.transform",
+        "features.modules.action",
+        "features.modules.logic",
+        "features.modules.comparator",
     ]
 
     BLOCKED_PATTERNS = [
@@ -280,7 +280,7 @@ class ModuleRegistry:
 
         Args:
             package_paths: List of package paths to scan for modules
-                          e.g., ["src.features.modules.transform", "src.features.modules.action"]
+                          e.g., ["features.modules.transform", "features.modules.action"]
         """
         for package_path in package_paths:
             try:

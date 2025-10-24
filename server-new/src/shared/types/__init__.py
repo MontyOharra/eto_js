@@ -29,6 +29,29 @@ from shared.types.pdf_files import (
     PdfCreate,
 )
 
+# Module types
+from shared.types.modules import (
+    AllowedModuleNodeTypes,
+    ModuleKind,
+    NodeTypeRule,
+    NodeGroup,
+    IOSideShape,
+    IOShape,
+    ModuleMeta,
+    BaseModule,
+    TransformModule,
+    ActionModule,
+    LogicModule,
+    ComparatorModule,
+)
+
+# Module catalog types
+from shared.types.module_catalog import (
+    ModuleCatalog,
+    ModuleCatalogCreate,
+    ModuleCatalogUpdate,
+)
+
 __all__ = [
     # Email configuration
     "FilterRule",
@@ -47,4 +70,17 @@ __all__ = [
     # PDF files
     "PdfMetadata",
     "PdfCreate",
+    # Module types
+    "AllowedModuleNodeTypes",
+    "ModuleKind",
+    "NodeTypeRule",
+    "NodeGroup",
+    "IOSideShape",
+    "IOShape",
+    "ModuleMeta",
+    "BaseModule",
+    "TransformModule",
+    "ActionModule",
+    "LogicModule",
+    "ComparatorModule",
 ]
