@@ -5,6 +5,99 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-10-24 21:45] — Pipeline Validation Endpoint Implementation
+
+### Spec / Intent
+- Create API endpoint for pipeline validation (`POST /api/pipelines/validate`)
+- Expose existing validation logic in `PipelineService` for frontend use
+- Enable "Validate Pipeline" button in pipeline builder to check structure before saving
+- Provide structured error responses with error codes and messages
+
+### Changes Made
+
+**Backend - PipelineService** (`server-new/src/features/pipelines/service.py`):
+- Added public `validate_pipeline()` method (lines 689-743)
+- Wraps existing private `_validate_pipeline()` method
+- Returns structured dict with `valid: bool` and `errors: list`
+- Parses `ValidationError` messages to extract error codes:
+  - `invalid_reference` - Non-existent pins or modules
+  - `type_mismatch` - Incompatible connection types
+  - `duplicate_connection` - Duplicate connections
+  - `cycle_detected` - Circular dependencies
+  - `unconnected_input` - Missing required connections
+  - `invalid_connection` - Invalid pin directions
+  - `internal_error` - Unexpected validation failures
+
+**Backend - API Schemas** (`server-new/src/api/schemas/pipelines.py`):
+- Added `ValidationErrorDTO` (lines 125-129): Error code, message, optional context
+- Added `ValidatePipelineRequest` (lines 132-134): Accepts `pipeline_json` (PipelineStateDTO)
+- Added `ValidatePipelineResponse` (lines 137-140): Returns `valid` flag and `errors` list
+
+**Backend - Pipelines Router** (`server-new/src/api/routers/pipelines.py`):
+- Added `POST /validate` endpoint (lines 123-163)
+- Converts request DTO to domain `PipelineState` using existing mapper
+- Calls `pipeline_service.validate_pipeline()`
+- Returns structured validation response with detailed error information
+- No database modifications (validation only)
+
+**Frontend - API Types** (`client/src/renderer/features/pipelines/api/types.ts`):
+- Added `ValidationErrorDTO` interface (lines 152-156)
+- Added `ValidatePipelineRequestDTO` interface (lines 158-160)
+- Added `ValidatePipelineResponseDTO` interface (lines 162-165)
+
+**Frontend - Domain Types** (`client/src/renderer/features/pipelines/types.ts`):
+- Added `ValidationError` interface (lines 164-168)
+- Added `ValidatePipelineRequest` interface (lines 170-201)
+- Added `ValidatePipelineResponse` interface (lines 203-206)
+
+**Frontend - Pipelines Hook** (`client/src/renderer/features/pipelines/hooks/usePipelinesApi.ts`):
+- Added `validatePipeline()` method (lines 137-152)
+- Posts to `/api/pipelines/validate` endpoint
+- Returns validation result with error details
+- Uses same loading/error state management as other API methods
+
+**Frontend - Pipeline Builder** (`client/src/renderer/pages/dashboard/pipelines/create.tsx`):
+- Updated `handleValidate()` to use `validatePipeline()` from hook (lines 69-99)
+- Replaced manual fetch with proper API call
+- Maintains same UI feedback (alerts and console logging)
+- Displays error count and details on validation failure
+
+### Technical Details
+- Validation checks performed (from `_validate_pipeline`):
+  1. Module references exist in catalog (currently skipped - TODO)
+  2. Connections reference valid pins
+  3. Type compatibility (str→str, etc.)
+  4. No duplicate connections
+  5. No cycles (DAG requirement via DFS)
+  6. All module inputs are connected
+- Error parsing uses message pattern matching to determine error codes
+- Frontend and backend type conversion handled by existing mappers
+- No changes to database schema or repositories
+
+### Before/After Behavior
+**Before:**
+- Validate button used manual fetch with hardcoded URL
+- No proper error handling or type safety
+- Direct coupling to backend URL
+
+**After:**
+- Validate button uses typed API hook
+- Consistent error handling with other API operations
+- Proper TypeScript types for request/response
+- Reusable validation logic across frontend
+
+### Next Actions
+- Test validation endpoint with various pipeline configurations
+- Enhance validation to check module catalog references (currently TODO)
+- Consider adding validation warnings (non-blocking issues)
+
+### Notes
+- Validation is read-only - no database changes
+- Module catalog check is skipped (line 161 in service.py) pending catalog implementation
+- Error `where` field currently unused but available for future context enhancement
+
+---
+
 ## [2025-10-24 20:20] — Fix Module Category Display in Selector Pane
 
 ### Spec / Intent

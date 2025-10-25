@@ -31,7 +31,8 @@ from shared.types.pipeline_definition import (
 )
 from shared.types.pipeline_compiled_plan import PipelineCompiledPlanCreate
 from shared.types.pipeline_definition_step import PipelineDefinitionStepCreate
-from shared.exceptions.service import ServiceError, ValidationError, ObjectNotFoundError
+from shared.exceptions import ServiceError, ValidationError, ObjectNotFoundError, PipelineValidationError
+from .utils.validation import PipelineValidator
 
 logger = logging.getLogger(__name__)
 
@@ -136,86 +137,24 @@ class PipelineService:
 
     def _validate_pipeline(self, pipeline_state: PipelineState) -> None:
         """
-        Validate pipeline structure.
+        Validate pipeline structure through multiple stages.
 
-        Checks:
-        1. All module references exist in module catalog
-        2. All connections reference valid pins
-        3. Connection type compatibility (str -> str, etc.)
-        4. No duplicate connections
-        5. No cycles (DAG requirement)
-        6. All module inputs are connected
+        Uses PipelineValidator to perform comprehensive validation:
+        1. Schema validation (node IDs, types, format)
+        2. Index building (preprocessing)
+        3. Module validation (catalog, groups, type vars, config, actions)
+        4. Edge validation (connections, types, cardinality)
+        5. Graph validation (cycles, DAG)
 
         Args:
             pipeline_state: Pipeline to validate
 
         Raises:
-            ValidationError: If validation fails
+            PipelineValidationError: If validation fails at any stage
         """
-        indices = self._build_indices(pipeline_state)
-
-        # 1. Validate module references exist
-        for module in pipeline_state.modules:
-            # TODO: Call get_module_metadata() once module catalog exists
-            # For now, we'll skip this check
-            logger.debug(f"Skipping module catalog check for {module.module_ref}")
-
-        # 2. Validate all connections reference valid pins
-        seen_connections: Set[tuple[str, str]] = set()
-
-        for connection in pipeline_state.connections:
-            # Check source pin exists
-            if connection.from_node_id not in indices.pin_by_id:
-                raise ValidationError(
-                    f"Connection references non-existent source pin: {connection.from_node_id}"
-                )
-
-            # Check target pin exists
-            if connection.to_node_id not in indices.pin_by_id:
-                raise ValidationError(
-                    f"Connection references non-existent target pin: {connection.to_node_id}"
-                )
-
-            source_pin = indices.pin_by_id[connection.from_node_id]
-            target_pin = indices.pin_by_id[connection.to_node_id]
-
-            # Check direction is valid (entry/out -> in)
-            if source_pin.direction not in ["entry", "out"]:
-                raise ValidationError(
-                    f"Invalid connection source: {connection.from_node_id} is an input pin"
-                )
-
-            if target_pin.direction != "in":
-                raise ValidationError(
-                    f"Invalid connection target: {connection.to_node_id} is not an input pin"
-                )
-
-            # 3. Check type compatibility (entry points are "any" and compatible with everything)
-            if source_pin.direction != "entry" and source_pin.type != target_pin.type:
-                raise ValidationError(
-                    f"Type mismatch in connection {connection.from_node_id} -> {connection.to_node_id}: "
-                    f"{source_pin.type} != {target_pin.type}"
-                )
-
-            # 4. Check for duplicate connections
-            conn_tuple = (connection.from_node_id, connection.to_node_id)
-            if conn_tuple in seen_connections:
-                raise ValidationError(
-                    f"Duplicate connection: {connection.from_node_id} -> {connection.to_node_id}"
-                )
-            seen_connections.add(conn_tuple)
-
-        # 5. Check for cycles using DFS
-        self._check_for_cycles(pipeline_state, indices)
-
-        # 6. Check all module inputs are connected
-        for module in pipeline_state.modules:
-            for input_pin in module.inputs:
-                if input_pin.node_id not in indices.input_to_upstream:
-                    raise ValidationError(
-                        f"Unconnected input pin in module {module.module_instance_id}: "
-                        f"{input_pin.name} ({input_pin.node_id})"
-                    )
+        # TODO: Pass module catalog repository once available
+        validator = PipelineValidator(module_catalog_repo=None)
+        validator.validate(pipeline_state)
 
     def _check_for_cycles(self, pipeline_state: PipelineState, indices: PipelineIndices) -> None:
         """
@@ -639,8 +578,8 @@ class PipelineService:
             )
             return result
 
-        except ValidationError:
-            # Re-raise validation errors as-is
+        except PipelineValidationError:
+            # Re-raise pipeline validation errors as-is
             raise
         except Exception as e:
             logger.error(f"Error creating pipeline: {e}", exc_info=True)
@@ -685,3 +624,35 @@ class PipelineService:
             sort_by=sort_by,
             sort_order=sort_order
         )
+
+    def validate_pipeline(self, pipeline_state: PipelineState) -> Dict[str, Any]:
+        """
+        Validate pipeline structure without saving.
+
+        Returns structured validation results for API responses.
+
+        Args:
+            pipeline_state: Pipeline structure to validate
+
+        Returns:
+            Dict with:
+                - valid: bool (True if no errors)
+                - error: Error dict (code, message, where) if validation failed
+
+        Raises:
+            Exception: Any non-validation errors (will result in 500)
+        """
+        try:
+            self._validate_pipeline(pipeline_state)
+            return {"valid": True}
+        except PipelineValidationError as e:
+            # Convert validation exception to API response format (400)
+            return {
+                "valid": False,
+                "error": {
+                    "code": e.code,
+                    "message": str(e),
+                    "where": e.where
+                }
+            }
+        # Note: Other exceptions bubble up and trigger 500 error

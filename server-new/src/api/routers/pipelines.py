@@ -12,6 +12,9 @@ from api.schemas.pipelines import (
     PipelineDetailDTO,
     CreatePipelineRequest,
     CreatePipelineResponse,
+    ValidatePipelineRequest,
+    ValidatePipelineResponse,
+    ValidationErrorDTO,
 )
 
 from api.mappers.pipelines import (
@@ -114,4 +117,48 @@ async def create_pipeline(
     return CreatePipelineResponse(
         id=pipeline.id,
         compiled_plan_id=pipeline.compiled_plan_id
+    )
+
+
+@router.post("/validate", response_model=ValidatePipelineResponse)
+async def validate_pipeline(
+    request: ValidatePipelineRequest,
+    pipeline_service: PipelineService = Depends(
+        lambda: ServiceContainer.get_pipeline_service()
+    )
+) -> ValidatePipelineResponse:
+    """
+    Validate pipeline structure without saving.
+
+    Checks:
+    - All module references exist in module catalog
+    - All connections reference valid pins
+    - Connection type compatibility
+    - No duplicate connections
+    - No cycles (DAG requirement)
+    - All module inputs are connected
+
+    Returns validation results with detailed error messages if validation fails.
+    """
+    # Convert API request to domain type
+    from api.mappers.pipelines import convert_dto_to_pipeline_state
+    pipeline_state = convert_dto_to_pipeline_state(request.pipeline_json)
+
+    # Validate pipeline
+    validation_result = pipeline_service.validate_pipeline(pipeline_state)
+
+    # Convert error to DTO list (single error or empty)
+    error_dtos = []
+    if not validation_result["valid"] and "error" in validation_result:
+        error_dtos = [
+            ValidationErrorDTO(
+                code=validation_result["error"]["code"],
+                message=validation_result["error"]["message"],
+                where=validation_result["error"].get("where")
+            )
+        ]
+
+    return ValidatePipelineResponse(
+        valid=validation_result["valid"],
+        errors=error_dtos
     )

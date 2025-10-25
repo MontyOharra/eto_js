@@ -4,10 +4,10 @@ import { ModuleSelectorPane } from '../../../features/pipelines/components/Modul
 import { PipelineGraph, PipelineGraphRef } from '../../../features/pipelines/components/PipelineGraph';
 import { EntryPointModal } from '../../../features/pipelines/components/EntryPointModal';
 import { useModulesApi } from '../../../features/modules/hooks';
-import { usePipelinesApi } from '../../../features/pipelines/hooks';
+import { usePipelinesApi, usePipelineValidation } from '../../../features/pipelines/hooks';
 import { serializePipelineData } from '../../../utils/pipelineSerializer';
 import type { ModuleTemplate } from '../../../types/moduleTypes';
-import type { EntryPoint } from '../../../types/pipelineTypes';
+import type { EntryPoint, PipelineState } from '../../../types/pipelineTypes';
 
 export const Route = createFileRoute('/dashboard/pipelines/create')({
   component: PipelineCreatePage,
@@ -16,7 +16,7 @@ export const Route = createFileRoute('/dashboard/pipelines/create')({
 function PipelineCreatePage() {
   const navigate = useNavigate();
   const { getModules, isLoading, error: apiError } = useModulesApi();
-  const { createPipeline, isLoading: isSaving } = usePipelinesApi();
+  const { createPipeline, validatePipeline, isLoading: isSaving } = usePipelinesApi();
 
   // Page state
   const [moduleTemplates, setModuleTemplates] = useState<ModuleTemplate[]>([]);
@@ -28,6 +28,24 @@ function PipelineCreatePage() {
 
   // Reference to PipelineGraph to extract state
   const pipelineGraphRef = useRef<PipelineGraphRef>(null);
+
+  // Poll pipeline state for validation
+  const [currentPipelineState, setCurrentPipelineState] = useState<PipelineState | null>(null);
+
+  // Auto-validate pipeline state whenever it changes
+  const { isValid, error: validationError, isValidating } = usePipelineValidation(currentPipelineState);
+
+  // Poll pipeline state from PipelineGraph every 500ms
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (pipelineGraphRef.current) {
+        const state = pipelineGraphRef.current.getPipelineState();
+        setCurrentPipelineState(state);
+      }
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, []);
 
   // Fetch module templates on mount from API
   useEffect(() => {
@@ -76,24 +94,18 @@ function PipelineCreatePage() {
     const pipelineState = pipelineGraphRef.current.getPipelineState();
 
     try {
-      const response = await fetch('http://localhost:8090/api/pipelines/validate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          pipeline_json: pipelineState,
-        }),
+      // Call validation endpoint using API hook
+      const validationResult = await validatePipeline({
+        pipeline_json: pipelineState,
       });
 
-      const validationResult = await response.json();
       console.log('Validation result:', validationResult);
 
       if (validationResult.valid) {
         alert('✅ Pipeline is valid!');
       } else {
         console.error('❌ Pipeline validation failed:');
-        validationResult.errors.forEach((error: any) => {
+        validationResult.errors.forEach((error) => {
           console.error(`  - [${error.code}] ${error.message}`, error.where);
         });
         alert(`❌ Pipeline validation failed with ${validationResult.errors.length} error(s).\n\nCheck the browser console for details.`);
@@ -231,10 +243,10 @@ function PipelineCreatePage() {
             </button>
             <button
               onClick={handleSave}
-              disabled={isSaving}
+              disabled={isSaving || !isValid || isValidating}
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isSaving ? 'Saving...' : 'Save Pipeline'}
+              {isSaving ? 'Saving...' : isValidating ? 'Validating...' : 'Save Pipeline'}
             </button>
           </div>
         </div>

@@ -116,3 +116,25 @@ class UpdatePipelineResponse(BaseModel):
     """Response for PUT /pipelines/{id}"""
     id: int
     compiled_plan_id: Optional[int] = None  # May change if pipeline logic changed
+
+
+# ============================================================================
+# Validation
+# ============================================================================
+
+class ValidationErrorDTO(BaseModel):
+    """Single validation error"""
+    code: str  # Error code (e.g., "type_mismatch", "cycle_detected")
+    message: str  # Human-readable error message
+    where: Optional[Dict[str, Any]] = None  # Additional context (connection, module, etc.)
+
+
+class ValidatePipelineRequest(BaseModel):
+    """Request body for POST /pipelines/validate"""
+    pipeline_json: PipelineStateDTO = Field(..., alias="pipeline_json")
+
+
+class ValidatePipelineResponse(BaseModel):
+    """Response for POST /pipelines/validate"""
+    valid: bool
+    errors: List[ValidationErrorDTO] = []

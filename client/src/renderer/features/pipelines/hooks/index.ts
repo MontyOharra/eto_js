@@ -8,3 +8,4 @@ export * from './useNodeUpdates';
 export * from './useModuleOperations';
 export * from './usePipelineInitialization';
 export * from './usePipelinesApi';
+export * from './usePipelineValidation';

@@ -156,3 +156,51 @@ export interface UpdatePipelineResponse {
   id: number;
   compiled_plan_id: number | null;
 }
+
+// =============================================================================
+// Validation Types (matches POST /pipelines/validate backend)
+// =============================================================================
+
+export interface ValidationError {
+  code: string; // Error code (e.g., "type_mismatch", "cycle_detected")
+  message: string; // Human-readable error message
+  where?: Record<string, any> | null; // Additional context (connection, module, etc.)
+}
+
+export interface ValidatePipelineRequest {
+  pipeline_json: {
+    entry_points: Array<{
+      node_id: string;
+      name: string;
+    }>;
+    modules: Array<{
+      module_instance_id: string;
+      module_ref: string;
+      module_kind: string;
+      config: Record<string, any>;
+      inputs: Array<{
+        node_id: string;
+        name: string;
+        type: string;
+        position_index: number;
+        group_index: number;
+      }>;
+      outputs: Array<{
+        node_id: string;
+        name: string;
+        type: string;
+        position_index: number;
+        group_index: number;
+      }>;
+    }>;
+    connections: Array<{
+      from_node_id: string;
+      to_node_id: string;
+    }>;
+  };
+}
+
+export interface ValidatePipelineResponse {
+  valid: boolean;
+  errors: ValidationError[];
+}

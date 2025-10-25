@@ -13,6 +13,8 @@ import type {
   CreatePipelineResponse,
   UpdatePipelineRequest,
   UpdatePipelineResponse,
+  ValidatePipelineRequest,
+  ValidatePipelineResponse,
 } from '../types';
 
 interface PipelinesQueryParams {
@@ -33,6 +35,7 @@ interface UsePipelinesApiResult {
   createPipeline: (data: CreatePipelineRequest) => Promise<CreatePipelineResponse>;
   updatePipeline: (id: number, data: UpdatePipelineRequest) => Promise<UpdatePipelineResponse>;
   deletePipeline: (id: number) => Promise<void>;
+  validatePipeline: (data: ValidatePipelineRequest) => Promise<ValidatePipelineResponse>;
 }
 
 export function usePipelinesApi(): UsePipelinesApiResult {
@@ -131,6 +134,23 @@ export function usePipelinesApi(): UsePipelinesApiResult {
     [baseUrl, withLoadingAndError]
   );
 
+  /**
+   * POST /api/pipelines/validate
+   * Validate pipeline structure without saving
+   */
+  const validatePipeline = useCallback(
+    async (data: ValidatePipelineRequest): Promise<ValidatePipelineResponse> => {
+      return withLoadingAndError(async () => {
+        const response = await apiClient.post<ValidatePipelineResponse>(
+          `${baseUrl}/validate`,
+          data
+        );
+        return response.data;
+      });
+    },
+    [baseUrl, withLoadingAndError]
+  );
+
   return {
     isLoading,
     error,
@@ -139,5 +159,6 @@ export function usePipelinesApi(): UsePipelinesApiResult {
     createPipeline,
     updatePipeline,
     deletePipeline,
+    validatePipeline,
   };
 }

@@ -146,6 +146,25 @@ export interface UpdatePipelineResponseDTO {
 }
 
 // ============================================================================
+// Validation
+// ============================================================================
+
+export interface ValidationErrorDTO {
+  code: string; // Error code (e.g., "type_mismatch", "cycle_detected")
+  message: string; // Human-readable error message
+  where?: Record<string, any> | null; // Additional context (connection, module, etc.)
+}
+
+export interface ValidatePipelineRequestDTO {
+  pipeline_json: PipelineStateDTO;
+}
+
+export interface ValidatePipelineResponseDTO {
+  valid: boolean;
+  errors: ValidationErrorDTO[];
+}
+
+// ============================================================================
 // Query Parameters
 // ============================================================================
 
