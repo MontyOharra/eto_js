@@ -243,58 +243,112 @@ class PipelineExecutionService:
 
     def execute_pipeline(
         self,
-        pipeline_definition_id: int,
-        eto_run_id: int,
+        steps: List[PipelineDefinitionStepFull],
         entry_values_by_name: Dict[str, Any],
-    ) -> PipelineExecutionRun:
+        pipeline_state,  # PipelineState from pipelines module
+    ) -> PipelineExecutionResult:
         """
-        Execute a compiled pipeline with the provided entry values.
+        Execute a compiled pipeline with the provided entry values (SIMULATION MODE).
+
+        This method executes the pipeline without any database persistence.
+        Used for template simulation to show users what would happen.
 
         Policy:
           - Fail fast on missing required entry names
           - Extra entry names are ignored (logged)
           - All Action modules run only after all Transform/Logic modules succeed
+          - Actions collect data but DON'T execute (simulation only)
           - On any module error, the whole run is marked failed
 
         Args:
-            pipeline_definition_id: ID of compiled pipeline to execute
-            eto_run_id: Parent ETO run ID
+            steps: Compiled pipeline steps to execute
             entry_values_by_name: Entry point values keyed by entry point name
+            pipeline_state: Pipeline state containing entry points for mapping
 
         Returns:
-            PipelineExecutionRun with final status
+            PipelineExecutionResult with steps and action data
 
         Raises:
             ValueError: Missing required entry values
-            RuntimeError: Pipeline not compiled or module not found
+            RuntimeError: Module not found or execution failed
         """
-        logger.info(
-            f"Starting pipeline execution for definition {pipeline_definition_id}, "
-            f"ETO run {eto_run_id}"
+        logger.info(f"Starting pipeline simulation with {len(steps)} steps")
+
+        # Step 1: Map entry points
+        entry_name_to_ids = self._map_entry_names_to_pin_ids_from_state(pipeline_state)
+
+        # Step 2: Seed entry values
+        producer_of_pin, missing, extras = self._seed_entry_values(
+            entry_values_by_name, entry_name_to_ids
         )
 
-        # Step 1: Load pipeline and verify it's compiled
-        pipeline = self._require_pipeline(pipeline_definition_id)
-        steps = self._require_compiled_steps(pipeline.compiled_plan_id)
+        if missing:
+            msg = f"Missing required entry values: {', '.join(missing)}"
+            logger.error(msg)
+            raise ValueError(msg)
 
-        # Step 2: Create execution run record (status: PROCESSING)
-        run = self.run_repo.create(
-            PipelineExecutionRunCreate(
-                eto_run_id=eto_run_id,
-                status=EtoStepStatus.PROCESSING,
-                started_at=datetime.utcnow(),
+        if extras:
+            logger.warning(f"Ignoring extra entry values: {', '.join(extras)}")
+
+        # Step 3: Build collectors
+        collector = StepResultCollector()
+        action_collector = ActionDataCollector()
+
+        # Step 4: Build Dask graph
+        task_of_step: Dict[str, Any] = {}
+        non_action_tasks: List[Any] = []
+        action_steps: List[PipelineDefinitionStepFull] = []
+
+        # Determine module kind for each step
+        for step in steps:
+            module_id = step.module_ref.split(":")[0] if ":" in step.module_ref else step.module_ref
+            handler = self.module_registry.get(module_id)
+            if handler and handler.module_kind.value == 'action':
+                action_steps.append(step)
+            else:
+                # Transform or logic module
+                task = self._make_step_task(step, producer_of_pin, collector, action_collector)
+                task_of_step[step.module_instance_id] = task
+                self._publish_outputs_for_downstream(step, task, producer_of_pin)
+                non_action_tasks.append(task)
+
+        # Step 5: Create action barrier
+        if non_action_tasks:
+            barrier = delayed(lambda *args: True, pure=True)(*non_action_tasks)
+        else:
+            barrier = delayed(lambda: True, pure=True)()
+
+        # Step 6: Build action tasks (depend on barrier + upstreams)
+        for step in action_steps:
+            task = self._make_step_task(
+                step, producer_of_pin, collector, action_collector,
+                extra_dependencies=[barrier]
             )
+            task_of_step[step.module_instance_id] = task
+            self._publish_outputs_for_downstream(step, task, producer_of_pin)
+
+        # Step 7: Execute graph
+        try:
+            leaves = [t for t in task_of_step.values()] or list(producer_of_pin.values())
+            if leaves:
+                logger.info(f"Executing Dask graph with {len(leaves)} leaf tasks")
+                compute(*leaves)  # Raises on first failure
+
+            status = "success"
+            error = None
+            logger.info("Pipeline execution succeeded")
+        except Exception as e:
+            status = "failed"
+            error = f"{type(e).__name__}: {e}"
+            logger.exception(f"Pipeline execution failed: {e}")
+
+        # Step 8: Return results
+        return PipelineExecutionResult(
+            status=status,
+            steps=collector.get_all(),
+            executed_actions=action_collector.to_executed_actions_dict(),
+            error=error
         )
-
-        logger.info(f"Created execution run {run.id}")
-
-        # Step 3: Build entry point mapping
-        entry_name_to_ids = self._map_entry_names_to_pin_ids(pipeline)
-
-        # TODO: Steps 5-11 (seed entry values, build graph, execute, update status)
-        logger.warning("Execution not yet fully implemented - returning processing run")
-
-        return run
 
     # ==================== Helper Methods (to be implemented) ====================
 
@@ -366,9 +420,26 @@ class PipelineExecutionService:
         Returns:
             Mapping of entry point names to pin IDs
         """
+        return self._map_entry_names_to_pin_ids_from_state(pipeline.pipeline_state)
+
+    def _map_entry_names_to_pin_ids_from_state(
+        self,
+        pipeline_state
+    ) -> Dict[str, List[str]]:
+        """
+        Build {entry_name -> [pin_id, ...]} from pipeline_state.entry_points.
+
+        Entry points can feed multiple downstream pins.
+
+        Args:
+            pipeline_state: Pipeline state with entry points
+
+        Returns:
+            Mapping of entry point names to pin IDs
+        """
         entry_name_to_ids: Dict[str, List[str]] = {}
 
-        for entry_point in pipeline.pipeline_state.entry_points:
+        for entry_point in pipeline_state.entry_points:
             if entry_point.name not in entry_name_to_ids:
                 entry_name_to_ids[entry_point.name] = []
             entry_name_to_ids[entry_point.name].append(entry_point.node_id)
@@ -395,30 +466,152 @@ class PipelineExecutionService:
             - missing_names: Required entry names not provided
             - extra_names: Provided entry names not used
         """
-        # TODO: Step 5
-        raise NotImplementedError()
+        expected = set(entry_name_to_ids.keys())
+        provided = set(entry_values_by_name.keys())
+        missing = sorted(expected - provided)
+        extras = sorted(provided - expected)
+
+        @delayed(pure=True)
+        def _const(v):
+            """Tiny wrapper so everything in the graph is delayed"""
+            return v
+
+        producer_of_pin: Dict[str, Any] = {}
+        for name, node_ids in entry_name_to_ids.items():
+            if name in entry_values_by_name:
+                v = entry_values_by_name[name]
+                for pin_id in node_ids:
+                    producer_of_pin[pin_id] = _const(v)
+
+        logger.debug(
+            f"Seeded {len(producer_of_pin)} entry point pins. "
+            f"Missing: {missing}, Extras: {extras}"
+        )
+
+        return producer_of_pin, missing, extras
 
     def _make_step_task(
         self,
         step: PipelineDefinitionStepFull,
         producer_of_pin: Dict[str, Any],
-        run_id: int,
+        collector: StepResultCollector,
+        action_collector: ActionDataCollector,
         extra_dependencies: Optional[List[Any]] = None,
     ) -> Any:
         """
         Create delayed task for a module execution.
 
+        For transforms/logic: Execute handler and return outputs
+        For actions: Collect data for later (simulation shows what would happen)
+
         Args:
             step: Pipeline step to execute
             producer_of_pin: Map of pin_id -> delayed value
-            run_id: Execution run ID for audit trail
+            collector: Collector for step results
+            action_collector: Collector for action data
             extra_dependencies: Additional delayed dependencies (e.g., action barrier)
 
         Returns:
             Delayed task that produces {output_pin_id: value}
         """
-        # TODO: Step 6
-        raise NotImplementedError()
+        # Resolve handler
+        module_id = step.module_ref.split(":")[0] if ":" in step.module_ref else step.module_ref
+        handler = self.module_registry.get(module_id)
+        if not handler:
+            raise RuntimeError(f"Module handler not found for {step.module_ref}")
+
+        ConfigModel = handler.config_class()
+        handlerInstance = handler()
+
+        # Determine module kind from handler class
+        module_kind = handler.module_kind.value  # "transform", "logic", or "action"
+        is_action = (module_kind == "action")
+
+        # Build execution context
+        inputs_metadata = step.node_metadata.get("inputs") or []
+        outputs_metadata = step.node_metadata.get("outputs") or []
+
+        from shared.types.pipelines import ModuleExecutionContext
+        ctx = ModuleExecutionContext(
+            inputs=inputs_metadata,
+            outputs=outputs_metadata,
+            module_instance_id=step.module_instance_id,
+            services=self.services,
+        )
+
+        # Gather upstream producers
+        input_ids = list(step.input_field_mappings.keys())
+        upstream_ids = [step.input_field_mappings[iid] for iid in input_ids]
+        upstream_tasks = [producer_of_pin[uid] for uid in upstream_ids]
+
+        if extra_dependencies:
+            upstream_tasks = upstream_tasks + list(extra_dependencies)
+
+        @delayed(pure=False)
+        def _run_module(*resolved):
+            """
+            Execute module (or collect action data).
+
+            resolved contains:
+            - first len(input_ids) items: resolved input values
+            - remaining items: barrier tokens (ignored)
+            """
+            # Build {input_pin_id: value}
+            values = resolved[:len(input_ids)]
+            inputs_dict = {inp_id: val for inp_id, val in zip(input_ids, values)}
+
+            if is_action:
+                # Action module: Collect data, don't execute
+                named_inputs = _convert_to_named_inputs(inputs_dict, ctx.inputs)
+
+                action_collector.add(ActionExecutionData(
+                    module_instance_id=step.module_instance_id,
+                    action_module_id=module_id,
+                    inputs=named_inputs,
+                    config=step.module_config
+                ))
+
+                # Actions don't produce outputs
+                outputs_dict = {}
+                error = None
+
+                logger.debug(f"Collected action data for {step.module_instance_id}")
+            else:
+                # Transform/Logic module: Execute normally
+                try:
+                    outputs_dict = handlerInstance.run(
+                        inputs=inputs_dict,
+                        cfg=ConfigModel(**step.module_config),
+                        context=ctx
+                    )
+                    error = None
+                    logger.debug(f"Executed {module_kind} module {step.module_instance_id}")
+                except Exception as e:
+                    outputs_dict = {}
+                    error = f"{type(e).__name__}: {e}"
+                    logger.exception(f"Module {step.module_instance_id} failed: {e}")
+
+            # Serialize for audit trail
+            audit_inputs = _serialize_io_for_audit(inputs_dict, ctx.inputs)
+            audit_outputs = _serialize_io_for_audit(outputs_dict, ctx.outputs) if outputs_dict else {}
+
+            # Collect step result
+            collector.add(PipelineExecutionStepResult(
+                module_instance_id=step.module_instance_id,
+                step_number=step.step_number,
+                inputs=audit_inputs,
+                outputs=audit_outputs,
+                error=error
+            ))
+
+            # Fail fast on error
+            if error:
+                raise RuntimeError(error)
+
+            return outputs_dict
+
+        task = _run_module(*upstream_tasks)
+        return task
 
     def _publish_outputs_for_downstream(
         self,
@@ -429,6 +622,9 @@ class PipelineExecutionService:
         """
         Split module outputs into per-pin delayed futures.
 
+        After creating a task for a module, expose each output pin as its own
+        delayed node in the graph so downstream inputs can depend on specific pins.
+
         task produces: {output_pin_id -> value}
         We create: delayed futures for each output pin individually
 
@@ -437,5 +633,16 @@ class PipelineExecutionService:
             task: Delayed task that produces outputs
             producer_of_pin: Map to update with new producers
         """
-        # TODO: Step 7
-        raise NotImplementedError()
+        output_pins: List[NodeInstance] = step.node_metadata.get("outputs") or []
+
+        for pin in output_pins:
+            node_id = pin.node_id
+
+            @delayed(pure=True)
+            def _select(outputs: Dict[str, Any], key: str):
+                """Select a specific output from the module's output dict"""
+                return outputs.get(key)
+
+            producer_of_pin[node_id] = _select(task, node_id)
+
+        logger.debug(f"Published {len(output_pins)} outputs for {step.module_instance_id}")
