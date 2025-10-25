@@ -10,6 +10,8 @@ from .pipeline_definition import PipelineDefinitionRepository
 from .pipeline_compiled_plan import PipelineCompiledPlanRepository
 from .pipeline_definition_step import PipelineDefinitionStepRepository
 from .module_catalog import ModuleCatalogRepository
+from .eto_run_pipeline_execution import EtoRunPipelineExecutionRepository
+from .eto_run_pipeline_execution_step import EtoRunPipelineExecutionStepRepository
 
 __all__ = [
     'BaseRepository',
@@ -22,4 +24,6 @@ __all__ = [
     'PipelineCompiledPlanRepository',
     'PipelineDefinitionStepRepository',
     'ModuleCatalogRepository',
+    'EtoRunPipelineExecutionRepository',
+    'EtoRunPipelineExecutionStepRepository',
 ]

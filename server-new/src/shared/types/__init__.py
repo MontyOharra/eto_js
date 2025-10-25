@@ -52,6 +52,14 @@ from shared.types.module_catalog import (
     ModuleCatalogUpdate,
 )
 
+# Pipeline execution types
+from shared.types.pipeline_execution import (
+    PipelineExecutionRun,
+    PipelineExecutionRunCreate,
+    PipelineExecutionStep,
+    PipelineExecutionStepCreate,
+)
+
 __all__ = [
     # Email configuration
     "FilterRule",
@@ -83,4 +91,9 @@ __all__ = [
     "ActionModule",
     "LogicModule",
     "ComparatorModule",
+    # Pipeline execution
+    "PipelineExecutionRun",
+    "PipelineExecutionRunCreate",
+    "PipelineExecutionStep",
+    "PipelineExecutionStepCreate",
 ]
