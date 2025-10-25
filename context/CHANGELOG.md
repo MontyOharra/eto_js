@@ -5,6 +5,70 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-10-24 20:15] — Connect Pipeline Builder to Real Modules API
+
+### Spec / Intent
+- Replace mock modules API with real API integration in pipeline builder
+- Fetch modules from GET /api/modules endpoint
+- Enable pipeline builder to use live module catalog from database
+- Maintain same interface for seamless transition from mock to real API
+
+### Changes Made
+
+**Modules API Hook** (`client/src/renderer/features/modules/hooks/useModulesApi.ts`):
+- Created real API hook that fetches from `/api/modules` endpoint
+- Converts backend `ModuleCatalogDTO` to frontend `ModuleTemplate` format
+- Supports filtering by kind, category, and search (client-side filtering for category/search)
+- Same interface as `useMockModulesApi` for drop-in replacement
+- Methods: `getModules()`, `getModuleById()`, `getAvailableModuleIds()`, `getModulesByCategory()`, `getModulesByKind()`
+- Returns loading state and error handling
+
+**Modules Hooks Export** (`client/src/renderer/features/modules/hooks/index.ts`):
+- Added export for `useModulesApi` alongside `useMockModulesApi`
+- Allows gradual migration or environment-based switching
+
+**Pipeline Builder** (`client/src/renderer/pages/dashboard/pipelines/create.tsx`):
+- Replaced `useMockModulesApi` with `useModulesApi`
+- Now fetches modules from live database via API
+- Module selector pane displays real module catalog
+- Updated comment to reflect API usage
+
+### Technical Details
+- Backend returns `ModulesListResponse` with `items: ModuleCatalogDTO[]`
+- Frontend expects `ModuleCatalogResponse` with `modules: ModuleTemplate[]`
+- Mapper converts between formats: `name` → `title`, `module_kind` → `kind`
+- Backend filtering by `kind` via query param, frontend filters category/search client-side
+- Uses `apiClient` from shared API layer for consistent HTTP handling
+
+### Type Mapping
+```typescript
+// Backend (ModuleCatalogDTO)
+{
+  id, version, name, description, module_kind, meta,
+  config_schema, handler_name, color, category, is_active,
+  created_at, updated_at
+}
+
+// Frontend (ModuleTemplate)
+{
+  id, version, title, description, kind,
+  color, meta, config_schema
+}
+```
+
+### Next Actions
+- Test module loading in pipeline builder
+- Verify all 25 modules appear in module selector
+- Test module filtering and search functionality
+- Remove mock modules API dependency once fully tested
+
+### Notes
+- Mock API still available for offline development/testing
+- Module catalog must be synced to database first (via CLI or admin endpoint)
+- Pipeline builder now fully integrated with backend module system
+
+---
+
 ## [2025-10-24 20:00] — Modules and Admin API Endpoints
 
 ### Spec / Intent

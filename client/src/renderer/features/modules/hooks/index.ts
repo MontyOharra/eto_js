@@ -4,3 +4,4 @@
  */
 
 export { useMockModulesApi } from '../mocks/useMockModulesApi';
+export { useModulesApi } from './useModulesApi';

@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { ModuleSelectorPane } from '../../../features/pipelines/components/ModuleSelectorPane';
 import { PipelineGraph, PipelineGraphRef } from '../../../features/pipelines/components/PipelineGraph';
 import { EntryPointModal } from '../../../features/pipelines/components/EntryPointModal';
-import { useMockModulesApi } from '../../../features/modules/hooks';
+import { useModulesApi } from '../../../features/modules/hooks';
 import { usePipelinesApi } from '../../../features/pipelines/hooks';
 import { serializePipelineData } from '../../../utils/pipelineSerializer';
 import type { ModuleTemplate } from '../../../types/moduleTypes';
@@ -15,7 +15,7 @@ export const Route = createFileRoute('/dashboard/pipelines/create')({
 
 function PipelineCreatePage() {
   const navigate = useNavigate();
-  const { getModules, isLoading, error: apiError } = useMockModulesApi();
+  const { getModules, isLoading, error: apiError } = useModulesApi();
   const { createPipeline, isLoading: isSaving } = usePipelinesApi();
 
   // Page state
@@ -29,7 +29,7 @@ function PipelineCreatePage() {
   // Reference to PipelineGraph to extract state
   const pipelineGraphRef = useRef<PipelineGraphRef>(null);
 
-  // Fetch module templates on mount using mock API
+  // Fetch module templates on mount from API
   useEffect(() => {
     async function loadModules() {
       try {
