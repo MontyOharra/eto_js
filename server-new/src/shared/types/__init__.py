@@ -58,6 +58,10 @@ from shared.types.pipeline_execution import (
     PipelineExecutionRunCreate,
     PipelineExecutionStep,
     PipelineExecutionStepCreate,
+    # Simulation types
+    PipelineExecutionStepResult,
+    ActionExecutionData,
+    PipelineExecutionResult,
 )
 
 __all__ = [
@@ -96,4 +100,8 @@ __all__ = [
     "PipelineExecutionRunCreate",
     "PipelineExecutionStep",
     "PipelineExecutionStepCreate",
+    # Simulation
+    "PipelineExecutionStepResult",
+    "ActionExecutionData",
+    "PipelineExecutionResult",
 ]

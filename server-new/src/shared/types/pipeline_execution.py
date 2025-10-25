@@ -84,3 +84,56 @@ class PipelineExecutionStepCreate:
     inputs: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     outputs: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     error: Optional[str] = None
+
+
+# ==================== Simulation Types ====================
+
+
+@dataclass(frozen=True)
+class PipelineExecutionStepResult:
+    """
+    Result of single module execution (simulation mode).
+
+    Similar to PipelineExecutionStep but without DB IDs.
+    Used for in-memory execution results during simulation.
+    """
+    module_instance_id: str
+    step_number: int
+    inputs: Dict[str, Dict[str, Any]]  # {node_name: {value, type}}
+    outputs: Dict[str, Dict[str, Any]]  # {node_name: {value, type}}
+    error: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class ActionExecutionData:
+    """
+    Data about an action module that would execute.
+
+    During simulation, action modules collect their data but don't actually
+    execute. This holds the data that would be passed to the action handler
+    if it were to execute in production.
+
+    Format for executed_actions field:
+        {"module_id": {"input_field": "value", ...}, ...}
+    """
+    module_instance_id: str
+    action_module_id: str  # e.g., "email_sender"
+    inputs: Dict[str, Any]  # {node_name: value} - ready for handler
+    config: Dict[str, Any]  # Module configuration
+
+
+@dataclass(frozen=True)
+class PipelineExecutionResult:
+    """
+    Result of pipeline execution (simulation mode).
+
+    Contains all execution steps and collected action data without
+    any database persistence.
+
+    Used by simulate endpoint to show users what would happen if
+    the pipeline were executed in production.
+    """
+    status: str  # "success" or "failed"
+    steps: list  # List[PipelineExecutionStepResult]
+    executed_actions: Dict[str, Dict[str, Any]]  # {module_id: {field: value}}
+    error: Optional[str] = None

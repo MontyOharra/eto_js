@@ -13,7 +13,8 @@ Usage:
 
 from typing import Dict, Any, List, Tuple, Optional
 import logging
-from datetime import datetime
+from datetime import datetime, date
+from threading import Lock
 from dask.delayed import delayed
 from dask.base import compute
 
@@ -33,10 +34,157 @@ from shared.types.pipeline_execution import (
     PipelineExecutionRun,
     PipelineExecutionRunCreate,
     PipelineExecutionStepCreate,
+    # Simulation types
+    PipelineExecutionStepResult,
+    ActionExecutionData,
+    PipelineExecutionResult,
 )
 from shared.database.models import EtoStepStatus
 
 logger = logging.getLogger(__name__)
+
+
+# ==================== Utility Classes ====================
+
+
+class StepResultCollector:
+    """
+    Thread-safe collector for execution step results.
+
+    Used during Dask execution to collect module execution results
+    as they complete. Thread-safe because Dask may execute tasks
+    in parallel threads.
+    """
+
+    def __init__(self):
+        self.results: List[PipelineExecutionStepResult] = []
+        self.lock = Lock()
+
+    def add(self, result: PipelineExecutionStepResult) -> None:
+        """Add a step result to the collection (thread-safe)"""
+        with self.lock:
+            self.results.append(result)
+
+    def get_all(self) -> List[PipelineExecutionStepResult]:
+        """Get all collected results, sorted by step_number"""
+        with self.lock:
+            return sorted(self.results, key=lambda s: s.step_number)
+
+
+class ActionDataCollector:
+    """
+    Thread-safe collector for action execution data.
+
+    Collects data about action modules during graph execution.
+    Actions are not executed during simulation - only their data is collected
+    to show users what would happen in production.
+    """
+
+    def __init__(self):
+        self.actions: List[ActionExecutionData] = []
+        self.lock = Lock()
+
+    def add(self, data: ActionExecutionData) -> None:
+        """Add action data to the collection (thread-safe)"""
+        with self.lock:
+            self.actions.append(data)
+
+    def get_all(self) -> List[ActionExecutionData]:
+        """Get all collected action data"""
+        with self.lock:
+            return list(self.actions)
+
+    def to_executed_actions_dict(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Convert collected actions to executed_actions format.
+
+        Returns:
+            Dict in format: {"module_id": {"input_field": "value", ...}, ...}
+        """
+        with self.lock:
+            result = {}
+            for action in self.actions:
+                result[action.action_module_id] = action.inputs
+            return result
+
+
+# ==================== Serialization Utilities ====================
+
+
+def _serialize_value(value: Any, type_hint: str) -> Any:
+    """
+    Serialize a value to JSON-compatible format for audit storage.
+
+    Args:
+        value: Raw value from module execution
+        type_hint: Type hint from pin metadata ("datetime", "str", etc.)
+
+    Returns:
+        JSON-serializable value
+    """
+    if type_hint == "datetime":
+        if isinstance(value, (datetime, date)):
+            return value.isoformat()
+    return value
+
+
+def _serialize_io_for_audit(
+    io_dict: Dict[str, Any],
+    pins: List[NodeInstance]
+) -> Dict[str, Dict[str, Any]]:
+    """
+    Transform {node_id: value} to {node_name: {value, type}} for audit persistence.
+
+    This converts raw module I/O (keyed by node IDs) into a human-readable
+    format suitable for audit trails and debugging.
+
+    Args:
+        io_dict: Raw I/O from module execution {node_id: value}
+        pins: Pin metadata with node_id, name, and type
+
+    Returns:
+        Dict in format: {node_name: {value: serialized_value, type: type_hint}}
+
+    Example:
+        Input:  {"m1_out_0": "ABC123"}, [NodeInstance(node_id="m1_out_0", name="hawb", type="str")]
+        Output: {"hawb": {"value": "ABC123", "type": "str"}}
+    """
+    result = {}
+    for pin in pins:
+        if pin.node_id in io_dict:
+            raw_value = io_dict[pin.node_id]
+            result[pin.name] = {
+                "value": _serialize_value(raw_value, pin.type),
+                "type": pin.type
+            }
+    return result
+
+
+def _convert_to_named_inputs(
+    io_dict: Dict[str, Any],
+    pins: List[NodeInstance]
+) -> Dict[str, Any]:
+    """
+    Convert {node_id: value} to {node_name: value} for action execution.
+
+    Actions need inputs keyed by name (not node ID) for handler execution.
+
+    Args:
+        io_dict: Raw I/O from graph {node_id: value}
+        pins: Pin metadata with node_id and name
+
+    Returns:
+        Dict in format: {node_name: value}
+
+    Example:
+        Input:  {"m1_in_0": "ABC123"}, [NodeInstance(node_id="m1_in_0", name="hawb", ...)]
+        Output: {"hawb": "ABC123"}
+    """
+    result = {}
+    for pin in pins:
+        if pin.node_id in io_dict:
+            result[pin.name] = io_dict[pin.node_id]
+    return result
 
 
 class PipelineExecutionService:
