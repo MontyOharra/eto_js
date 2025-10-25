@@ -44,6 +44,7 @@ function convertModuleCatalogToTemplate(dto: ModuleCatalogDTO): ModuleTemplate {
     description: dto.description || '',
     kind: dto.module_kind,
     color: dto.color,
+    category: dto.category,
     meta: dto.meta,
     config_schema: dto.config_schema,
   };

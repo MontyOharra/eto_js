@@ -5,6 +5,46 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-10-24 20:20] — Fix Module Category Display in Selector Pane
+
+### Spec / Intent
+- Fix module categories not being used to display modules in separated sections
+- Ensure category field is properly mapped from backend to frontend
+- Enable ModuleSelectorPane to group modules by category correctly
+
+### Changes Made
+
+**ModuleTemplate Type** (`client/src/renderer/types/moduleTypes.ts`):
+- Added `category: string` field to `ModuleTemplate` interface
+- This field was missing, causing all modules to be grouped under "Uncategorized"
+
+**Modules API Hook** (`client/src/renderer/features/modules/hooks/useModulesApi.ts`):
+- Updated `convertModuleCatalogToTemplate()` to map `category` field from backend DTO
+- Now includes `category: dto.category` in the conversion
+
+### Technical Details
+- Backend `ModuleCatalogDTO` always includes `category` field from database
+- Frontend was not mapping this field during conversion
+- ModuleSelectorPane already had category grouping logic (lines 32-62)
+- Fix enables existing UI logic to work correctly
+
+### Before/After
+**Before:**
+- All modules displayed under single "Uncategorized" section
+- Category grouping code existed but had no category values to work with
+
+**After:**
+- Modules grouped by their actual categories (Text, Comparison, Logic, etc.)
+- Proper section headers displayed for each category
+- Modules sorted alphabetically within categories
+
+### Notes
+- Mock modules API already referenced category field (no changes needed)
+- ModuleSelectorPane component already had correct grouping logic
+- This was a data mapping issue, not a UI issue
+
+---
+
 ## [2025-10-24 20:15] — Connect Pipeline Builder to Real Modules API
 
 ### Spec / Intent

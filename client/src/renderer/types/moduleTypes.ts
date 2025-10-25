@@ -65,6 +65,7 @@ export interface ModuleTemplate {
   description: string;
   kind: string;
   color: string;
+  category: string;
   meta: ModuleMeta;
   config_schema: any;
 }
