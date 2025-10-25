@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
-import { useMockTemplatesApi } from '../../../features/templates/hooks';
+import { useTemplatesApi } from '../../../features/templates/hooks';
 import { TemplateCard, TemplateBuilderModal, TemplateDetailModal, TemplateData } from '../../../features/templates/components';
 import { TemplateListItem, TemplateStatus } from '../../../features/templates/types';
 
@@ -19,7 +19,7 @@ function TemplatesPage() {
     deactivateTemplate,
     isLoading,
     error,
-  } = useMockTemplatesApi();
+  } = useTemplatesApi();
 
   const [allTemplates, setAllTemplates] = useState<TemplateListItem[]>([]);
   const [statusFilter, setStatusFilter] = useState<TemplateStatus | 'all'>('all');
@@ -42,8 +42,8 @@ function TemplatesPage() {
 
   const loadTemplates = async () => {
     try {
-      const response = await getTemplates();
-      setAllTemplates(response.items);
+      const templates = await getTemplates();
+      setAllTemplates(templates);
     } catch (err) {
       console.error('Failed to load templates:', err);
     }
