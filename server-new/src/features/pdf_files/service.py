@@ -436,12 +436,59 @@ class PdfFilesService:
                             fontsize=float(word.get('size', 0.0))  # Ensure float
                         ))
 
-                    # Extract lines → TextLine dataclasses
-                    lines = page.lines
-                    for line in lines:
+                    # Extract text lines → Group text words into lines by y-coordinate
+                    # Sort words by y-position (top to bottom) then x-position (left to right)
+                    sorted_words = sorted(words, key=lambda w: (w['top'], w['x0']))
+
+                    # Group words into lines based on y-coordinate proximity
+                    current_line_words = []
+                    current_line_y = None
+                    y_tolerance = 5.0  # pixels - words within this tolerance are on same line
+
+                    for word in sorted_words:
+                        word_y = (word['top'] + word['bottom']) / 2  # Center y-coordinate
+
+                        if current_line_y is None or abs(word_y - current_line_y) <= y_tolerance:
+                            # Same line
+                            current_line_words.append(word)
+                            if current_line_y is None:
+                                current_line_y = word_y
+                        else:
+                            # New line - create TextLine from current line words
+                            if current_line_words:
+                                min_x0 = min(w['x0'] for w in current_line_words)
+                                min_top = min(w['top'] for w in current_line_words)
+                                max_x1 = max(w['x1'] for w in current_line_words)
+                                max_bottom = max(w['bottom'] for w in current_line_words)
+
+                                text_lines.append(TextLine(
+                                    page=page_num,
+                                    bbox=(min_x0, min_top, max_x1, max_bottom)
+                                ))
+
+                            # Start new line
+                            current_line_words = [word]
+                            current_line_y = word_y
+
+                    # Don't forget the last line
+                    if current_line_words:
+                        min_x0 = min(w['x0'] for w in current_line_words)
+                        min_top = min(w['top'] for w in current_line_words)
+                        max_x1 = max(w['x1'] for w in current_line_words)
+                        max_bottom = max(w['bottom'] for w in current_line_words)
+
                         text_lines.append(TextLine(
                             page=page_num,
-                            bbox=(line['x0'], line['top'], line['x1'], line['bottom'])
+                            bbox=(min_x0, min_top, max_x1, max_bottom)
+                        ))
+
+                    # Extract graphic lines → GraphicLine dataclasses
+                    lines = page.lines
+                    for line in lines:
+                        graphic_lines.append(GraphicLine(
+                            page=page_num,
+                            bbox=(line['x0'], line['top'], line['x1'], line['bottom']),
+                            linewidth=line.get('linewidth', 1.0)
                         ))
 
                     # Extract rectangles → GraphicRect dataclasses
