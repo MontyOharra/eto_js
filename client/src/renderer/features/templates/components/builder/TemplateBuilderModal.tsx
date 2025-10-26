@@ -7,9 +7,8 @@ import { useState, useMemo, useEffect } from 'react';
 import { SignatureObject, ExtractionField, PipelineState, VisualState } from '../../types';
 import { SignatureObjectsStep, ExtractionFieldsStep, PipelineBuilderStep, TestingStep, TemplateSimulationResult } from './steps';
 import { TemplateBuilderHeader, TemplateBuilderStepper } from './components';
-import { usePdfData } from '../../../pdf-files/hooks/usePdfData';
+import { usePdfData, usePdfFilesApi } from '../../../pdf-files/hooks';
 import { useMockModulesApi } from '../../../modules/hooks';
-import { useMockPdfApi } from '../../../pdf-files/mocks/useMockPdfApi';
 import type { ModuleTemplate } from '../../../../types/moduleTypes';
 
 interface TemplateBuilderModalProps {
@@ -76,6 +75,7 @@ export function TemplateBuilderModal({
   // Use React Query to fetch and cache PDF data (only for stored PDFs)
   const { data: pdfData, isLoading: pdfLoading, error: pdfError } = usePdfData(pdfFileId);
   const { getModules } = useMockModulesApi();
+  const { processObjects } = usePdfFilesApi();
 
   // Load module templates for pipeline execution visualization
   useEffect(() => {
@@ -108,8 +108,8 @@ export function TemplateBuilderModal({
         const blobUrl = URL.createObjectURL(pdfFile);
         setUploadedPdfUrl(blobUrl);
 
-        // Process PDF to extract objects via mock API
-        const objectsData = await useMockPdfApi.processPdf(pdfFile);
+        // Process PDF to extract objects via real API
+        const objectsData = await processObjects(pdfFile);
 
         const mockMetadata = {
           id: -1, // Temporary ID for uploaded file
