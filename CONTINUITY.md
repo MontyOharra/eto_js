@@ -1,200 +1,377 @@
-# Pipeline Validation Auto-Validation Continuity Document
+# Template Simulate Endpoint Integration Continuity Document
 
-**Date**: 2025-10-24
+**Date**: 2025-10-26
 **Branch**: server_unification
-**Session Context**: Fixed auto-validation to use onChange callback pattern with debouncing
+**Commit**: 0748ee9 - "Complete pipeline execution visualization with real-time data overlay"
+**Session Context**: Attempted pipeline execution integration into template simulate endpoint, rolled back due to poor design
 
-## Current State
+---
 
-### What Was Completed
+## Current State (After Rollback)
 
-1. **Backend Validation Infrastructure** ✅
-   - Created comprehensive exception hierarchy in `server-new/src/shared/exceptions/pipeline_validation.py`
-   - Exception classes: `PipelineValidationError` (base), `SchemaValidationError`, `ModuleValidationError`, `EdgeValidationError`, `GraphValidationError`
-   - All exceptions use fail-fast single-error approach (not error lists)
+### What Works Independently ✅
 
-2. **Validation Orchestrator** ✅
-   - Created `server-new/src/features/pipelines/utils/validation.py`
-   - Implements 5-stage validation pipeline:
-     1. Schema validation (node IDs, types, format)
-     2. Index building (preprocessing)
-     3. Module validation (catalog, groups, type vars, config)
-     4. Edge validation (connections, types, cardinality)
-     5. Graph validation (cycles, DAG)
-   - Currently all stages are skeletons (pass without validation)
-   - **IMPORTANT**: Line 85 has a test exception that was added during debugging - needs removal
+1. **PDF Text Extraction** - Fully functional
+   - `POST /api/pdf-templates/simulate` endpoint exists
+   - Extracts text from PDFs using pdfplumber
+   - Works with bounding box coordinates
+   - Handles both stored PDFs (by ID) and uploaded PDFs (multipart)
+   - Returns extracted data keyed by field name
+   - **Location**: `server-new/src/features/pdf_templates/service.py::simulate_extraction()`
+   - **Frontend**: ExtractionFieldsSidebar has "Simulate" button that calls this
 
-3. **API Endpoint** ✅
-   - Added POST `/api/pipelines/validate` endpoint in `server-new/src/api/routers/pipelines.py`
-   - Converts DTO to domain types
-   - Returns single error (not list) when validation fails
-   - Non-validation errors bubble up as 500 responses
+2. **Pipeline Execution** - Fully functional
+   - Pipeline compilation and validation works
+   - Topological sort and layer assignment
+   - Execution with entry values
+   - Action module data collection
+   - Visualization with ExecutedPipelineGraph
+   - **Location**: `server-new/src/features/pipelines/service_execution.py::execute_pipeline()`
+   - **Frontend**: ExecutePipelineModal provides manual testing UI
 
-4. **Service Layer Integration** ✅
-   - Updated `PipelineService.validate_pipeline()` in `server-new/src/features/pipelines/service.py`
-   - Catches only `PipelineValidationError`, lets other exceptions propagate
-   - Returns `{"valid": True}` or `{"valid": False, "error": {...}}`
+3. **Pipeline Builder in Template Builder** - Works
+   - Users can build transformation pipelines in step 3 of template builder
+   - Entry points auto-created from extraction fields
+   - Modules can be placed and connected
+   - State preserved when navigating between steps
+   - **Location**: `client/src/renderer/features/templates/components/builder/steps/PipelineBuilderStep.tsx`
 
-5. **Frontend Auto-Validation** ✅
-   - Created `usePipelineValidation` hook in `client/src/renderer/features/pipelines/hooks/usePipelineValidation.ts`
-   - Implements debounced validation (500ms)
-   - **FIXED**: Changed from polling to onChange callback pattern
-   - Updates `create.tsx` to disable save button when invalid/validating
+### What Was Attempted (Then Rolled Back) ❌
 
-6. **Fixed Validation Pattern** ✅ (Current Session)
-   - **Problem**: Originally implemented polling (checking state every 500ms regardless of changes)
-   - **User Request**: Validation should trigger on state changes, but debounced to prevent rapid API calls
-   - **Solution**:
-     - Added `onChange?: (state: PipelineState) => void` prop to PipelineGraph
-     - Added useEffect in PipelineGraph to call onChange when nodes/edges change
-     - Removed polling interval from create.tsx
-     - PipelineGraph now notifies parent of state changes via callback
-     - usePipelineValidation hook receives updated state and debounces validation calls
-   - **Result**: Validation triggers on actual changes, debounced to 500ms, no unnecessary polling
+**Commits Removed:**
+- `f0c2a60` - fix: Data duplicator empty allowed types and infinite reconstruction loop
+- `2f7cde7` - fix: Preserve pipeline state when navigating between template builder steps
+- `15ddee9` - feat: Display full pipeline execution results in template simulate
+- `19279ee` - docs: Update CHANGELOG with pipeline execution integration
+- `fce361e` - feat: Integrate pipeline execution into PDF template simulate endpoint
 
-### Current Issues
+**What Went Wrong:**
+1. **Schema Mismatches**: Created duplicate pipeline schemas in `pdf_templates` that didn't match `pipelines` schemas
+   - `PipelineEntryPoint` had different fields (id/label/field_reference vs node_id/name)
+   - `PipelineNodePin` had wrong type (List[str] vs str)
+   - `PipelineModuleInstance` had wrong field names (instance_id/module_id vs module_instance_id/module_ref)
 
-1. **500 Error from Validation Endpoint** ❌
-   - Test calls to `/api/pipelines/validate` return 500 Internal Server Error
-   - CORS is configured correctly (`allow_origins=["*"]` in `server-new/src/app.py`)
-   - Server is running on port 8000
-   - Issue is NOT CORS-related despite initial investigation
-   - **ROOT CAUSE UNKNOWN** - needs debugging with server logs
+2. **Mapper Complexity**: Created complex mappers to convert between mismatched schemas
+   - Added `convert_pipeline_state_to_domain()` in `pdf_templates/mappers.py`
+   - Tried to add fields like `direction`, `label`, `allowed_types` to NodeInstance (they don't exist)
+   - Had to build lookup dictionaries to get module_ref from module_instance_id
 
-2. **Test Exception in Validation** ⚠️
-   - `server-new/src/features/pipelines/utils/validation.py` line 85 has:
-     ```python
-     raise SchemaValidationError("test", "Schema validation not implemented")
-     ```
-   - This was added during debugging and should be removed
-   - Should just be `pass` to skip validation for now
+3. **Frontend/Backend Disconnect**:
+   - Page numbering mismatch (frontend 0-indexed, backend 1-indexed)
+   - Extraction field name vs entry point name mismatch
+   - Had to create custom serializers on top of existing `serializePipelineData()`
 
-### Files Modified
+4. **Poor Design**: Everything was "thrown together" rather than cleanly architected
+
+**Why We Rolled Back:**
+> "The work right now has kind of thrown stuff together in a manner that is not good design."
+
+---
+
+## System Architecture (Current)
+
+### Backend Structure
+
+**PDF Template Flow:**
+```
+POST /api/pdf-templates/simulate
+  ↓
+PdfTemplateService.simulate_extraction()
+  ↓
+PdfFilesService.extract_text_from_pdf()
+  ↓
+extract_data_from_pdf_objects() (utils)
+  ↓
+Returns: {"field_name": "extracted_text"}
+```
+
+**Pipeline Execution Flow:**
+```
+POST /api/pipelines/{id}/execute
+  ↓
+PipelineService.get_pipeline_by_id()
+  ↓
+PipelineExecutionService.execute_pipeline()
+  ↓
+Returns: PipelineExecutionResult with steps and actions
+```
+
+**Key Separation:**
+- PDF templates service handles template matching and extraction
+- Pipeline service handles pipeline CRUD and compilation
+- Pipeline execution service handles runtime execution
+- **These are currently separate domains**
+
+### Frontend Structure
+
+**Template Builder Flow:**
+```
+TemplateBuilderModal
+  ├── Step 1: SignatureObjectsStep (PDF form matching)
+  ├── Step 2: ExtractionFieldsStep (draw bboxes on PDF)
+  │   └── Has "Simulate" button → calls extract endpoint
+  ├── Step 3: PipelineBuilderStep (build transformation pipeline)
+  │   └── Uses PipelineGraph component
+  └── Step 4: TestingStep (shows mock results)
+      └── Currently uses MOCK data, not real execution
+```
+
+**Pipeline Execution Flow:**
+```
+/dashboard/pipelines/{id} (detail page)
+  └── ExecutePipelineModal
+      ├── Manual entry point value input
+      ├── Calls POST /api/pipelines/{id}/execute
+      └── Shows ExecutedPipelineGraph with real results
+```
+
+### Data Type Mismatches
+
+**Frontend Pipeline Types:**
+- Location: `client/src/renderer/types/pipelineTypes.ts`
+- Entry points: `{node_id, name, type}`
+- Modules: Full `ModuleInstance` with all pin metadata
+- Pins: Include `direction`, `label`, `type_var`, `allowed_types`
+
+**Backend Domain Types:**
+- Location: `server-new/src/shared/types/pipelines.py`
+- Entry points: `{node_id, name}` (no type)
+- Modules: `ModuleInstance` with minimal data
+- Pins: Only `{node_id, type, name, position_index, group_index}`
+
+**Serialization:**
+- `serializePipelineData()` in `client/src/renderer/utils/pipelineSerializer.ts`
+- Strips frontend-only fields before sending to backend
+- This is the CORRECT way to convert (already working for pipeline create/execute)
+
+---
+
+## Key Issues Identified
+
+### 1. Page Number Indexing Mismatch
+- **Frontend**: React PDF viewer uses 0-indexed pages (0, 1, 2...)
+- **Backend**: pdfplumber uses 1-indexed pages (1, 2, 3...)
+- **Impact**: Extraction fields on page 0 won't match text words from page 1
+- **Solution Needed**: Convert page numbers when sending extraction fields to backend
+
+### 2. Extraction Field Name vs Entry Point Name
+- **Frontend**: Creates entry points with `name: field.label` (e.g., "hawb")
+- **Backend**: Expects extracted data keyed by entry point name
+- **Current**: Extraction fields use `field_id` (e.g., "field_1234")
+- **Solution Needed**: Extraction field `name` should be `field.label` to match entry point
+
+### 3. Schema Duplication
+- **Current**: `pdf_templates/schemas.py` has its own `PipelineState` schema
+- **Problem**: Doesn't match `pipelines/schemas.py` schema
+- **Solution Needed**: Either use the same schema or clearly document why they differ
+
+### 4. Testing Flow Incomplete
+- **Current**: TestingStep (step 4) shows mock data
+- **Needed**: Should call real simulate endpoint with:
+  - PDF (uploaded or stored)
+  - Extraction fields (from step 2)
+  - Pipeline state (from step 3)
+- **Returns**: Combined results (extracted data + pipeline execution + actions)
+
+---
+
+## Recommended Next Steps
+
+### Phase 1: Design Clean Integration (Planning) 🎯
+
+**Goal**: Design how template simulate should work WITHOUT writing code first
+
+**Questions to Answer:**
+1. Should template simulate endpoint:
+   - Option A: Do extraction only (current state)
+   - Option B: Do extraction + pipeline execution (attempted)
+   - Option C: Keep them separate, call two endpoints
+
+2. If integrating (Option B):
+   - Should we create a new endpoint `/api/pdf-templates/{id}/test` separate from `/simulate`?
+   - Or expand existing `/simulate` endpoint?
+
+3. Schema design:
+   - Should `pdf_templates` API use the same pipeline schemas as `pipelines` API?
+   - Or should they be different (template-specific vs pipeline-specific)?
+
+4. Frontend flow:
+   - Should TestingStep call one endpoint or multiple?
+   - Where should the integration happen (frontend or backend)?
+
+### Phase 2: Standardize Schemas (If Integrating) 📋
+
+**If we decide to integrate:**
+
+1. **Backend Schema Alignment**:
+   - Decide: Use same schemas from `pipelines` or keep separate?
+   - If separate: Document the differences and why
+   - If same: Import from `pipelines/schemas.py` instead of duplicating
+
+2. **Frontend Serialization**:
+   - Use existing `serializePipelineData()` utility
+   - Don't create custom mappers
+   - Handle page number conversion (0-indexed → 1-indexed)
+   - Handle field name mapping (field.label for entry points)
+
+3. **Backend Mappers**:
+   - Minimize or eliminate custom mapping code
+   - Domain types should be shared between features
+   - Don't add fields that don't exist in dataclasses
+
+### Phase 3: Implement Clean Integration (If Proceeding) 🛠️
+
+**Backend Changes:**
+
+1. **Template Service** (`server-new/src/features/pdf_templates/service.py`):
+   ```python
+   def simulate_with_pipeline(
+       self,
+       pdf_bytes: bytes,
+       extraction_fields: List[ExtractionField],
+       pipeline_state: PipelineState  # From shared types
+   ) -> TemplateSimulationResult:
+       # 1. Extract data
+       extracted_data = self.simulate_extraction(pdf_bytes, extraction_fields)
+
+       # 2. Compile pipeline (in-memory, no DB save)
+       compiled_steps, pruned_pipeline = self.pipeline_service.compile_for_simulation(
+           pipeline_state
+       )
+
+       # 3. Execute pipeline with extracted data as entry values
+       execution_result = self.pipeline_execution_service.execute_pipeline(
+           steps=compiled_steps,
+           entry_values_by_name=extracted_data,
+           pipeline_state=pruned_pipeline
+       )
+
+       # 4. Return combined results
+       return TemplateSimulationResult(
+           extraction=extracted_data,
+           execution=execution_result
+       )
+   ```
+
+2. **Router** (`server-new/src/api/routers/pdf_templates.py`):
+   - Keep extraction-only endpoint at `POST /simulate`
+   - Add new endpoint `POST /simulate-with-pipeline` for full testing
+   - Or: Add optional `pipeline_state` param to `/simulate`
+
+**Frontend Changes:**
+
+1. **TemplateBuilderModal** - Update `handleTest()`:
+   ```typescript
+   const handleTest = async () => {
+     // Serialize pipeline (strips frontend-only fields)
+     const serialized = serializePipelineData(pipelineState, visualState);
+
+     // Convert extraction fields
+     const fields = extractionFields.map(f => ({
+       name: f.label,  // Matches entry point name
+       bbox: f.bbox,
+       page: f.page + 1,  // 0-indexed → 1-indexed
+       description: f.label
+     }));
+
+     // Call simulate endpoint
+     const result = await simulateWithPipeline({
+       pdfSource: pdfFile ? 'upload' : 'stored',
+       pdfFileId,
+       pdfFile,
+       extractionFields: fields,
+       pipelineState: serialized.pipeline_state
+     });
+
+     // Display results in TestingStep
+     setTestResults(result);
+   };
+   ```
+
+2. **TestingStep** - Display real results instead of mock data
+
+### Phase 4: Testing & Validation ✅
+
+1. Test extraction-only flow (should still work)
+2. Test pipeline-only flow (should still work)
+3. Test combined flow (new functionality)
+4. Test error cases (extraction fails, pipeline fails, etc.)
+
+---
+
+## Files Reference
+
+### Currently Working (Don't Touch)
 
 **Backend:**
-- `server-new/src/shared/exceptions/pipeline_validation.py` - NEW (exception classes)
-- `server-new/src/features/pipelines/utils/validation.py` - NEW (PipelineValidator)
-- `server-new/src/features/pipelines/utils/__init__.py` - Updated (export PipelineValidator)
-- `server-new/src/features/pipelines/service.py` - Updated (uses PipelineValidator)
-- `server-new/src/api/schemas/pipelines.py` - Updated (validation request/response schemas)
-- `server-new/src/api/routers/pipelines.py` - Updated (POST /validate endpoint, fixed error handling)
+- `server-new/src/features/pdf_files/service.py` - PDF extraction (✅ works)
+- `server-new/src/features/pdf_files/utils/extraction.py` - Text extraction from bbox (✅ works)
+- `server-new/src/features/pipelines/service.py` - Pipeline compilation/validation (✅ works)
+- `server-new/src/features/pipelines/service_execution.py` - Pipeline execution (✅ works)
 
-**Frontend (Previous Session):**
-- `client/src/renderer/features/pipelines/hooks/usePipelineValidation.ts` - NEW
-- `client/src/renderer/features/pipelines/hooks/usePipelinesApi.ts` - Updated (validatePipeline method)
-- `client/src/renderer/features/pipelines/hooks/index.ts` - Updated (export usePipelineValidation)
-- `client/src/renderer/features/pipelines/types.ts` - Updated (validation types)
-- `client/src/renderer/pages/dashboard/pipelines/create.tsx` - Updated (polling → removed in current session)
+**Frontend:**
+- `client/src/renderer/utils/pipelineSerializer.ts` - Pipeline serialization (✅ works)
+- `client/src/renderer/features/pipelines/components/PipelineGraph.tsx` - Graph editor (✅ works)
+- `client/src/renderer/features/pipelines/components/ExecutedPipelineGraph.tsx` - Visualization (✅ works)
 
-**Frontend (Current Session - Fixed Pattern):**
-- `client/src/renderer/features/pipelines/components/PipelineGraph.tsx` - Updated (added onChange prop and useEffect)
-- `client/src/renderer/pages/dashboard/pipelines/create.tsx` - Updated (removed polling, added onChange callback)
+### Needs Clean Implementation
 
-### Key Design Decisions
+**Backend:**
+- `server-new/src/api/routers/pdf_templates.py` - Add pipeline execution integration
+- `server-new/src/features/pdf_templates/service.py` - Add `simulate_with_pipeline()` method
+- `server-new/src/api/schemas/pdf_templates.py` - Align or document pipeline schemas
 
-1. **Fail-Fast Validation**: Each validation stage throws on first error, does not collect multiple errors
-2. **Single Error Response**: API returns one error at a time, not a list
-3. **onChange Callback Pattern**: PipelineGraph notifies parent of state changes via callback (maintains state ownership in graph)
-4. **Debouncing**: Validation calls triggered on state change but debounced by 500ms to avoid rapid API calls during editing
-5. **Exception Hierarchy**: `ServiceError (500) → ValidationError (400) → PipelineValidationError → Stage-specific errors`
+**Frontend:**
+- `client/src/renderer/features/templates/components/builder/TemplateBuilderModal.tsx` - Update `handleTest()`
+- `client/src/renderer/features/templates/components/builder/steps/TestingStep.tsx` - Display real results
+- `client/src/renderer/features/templates/hooks/useTemplatesApi.ts` - Add `simulateWithPipeline()` method
 
-## Next Steps
+---
 
-### Immediate Priority
+## Design Principles (Learned from Rollback)
 
-1. **Debug 500 Error** 🔴
-   - Remove test exception from `validation.py:85`
-   - Check server logs for actual error
-   - Test validation endpoint with curl:
-     ```bash
-     curl -X POST http://localhost:8000/api/pipelines/validate \
-       -H "Content-Type: application/json" \
-       -d '{"pipeline_json":{"entry_points":[],"modules":[],"connections":[]}}'
-     ```
-   - Expected response: `{"valid": true, "errors": []}`
+1. **Don't Duplicate Schemas**: If two features need the same data structure, share it
+2. **Use Existing Serialization**: Don't create custom mappers when standard ones exist
+3. **Domain Types Are Canonical**: API schemas map to domain types, not the other way around
+4. **Plan Before Coding**: Design the integration cleanly before implementing
+5. **Keep Features Separate Until Integration Is Designed**: Working independently is better than broken together
 
-2. **Test Frontend Integration** 🟡
-   - Once backend is working, open pipeline builder in browser
-   - Verify auto-validation is working (save button disabled on invalid state)
-   - Check browser console for validation errors
+---
 
-3. **Implement Validation Stages** 🟢
-   - Schema validation (node ID uniqueness, pin types, module ref format)
-   - Module validation (catalog lookups, type checking)
-   - Edge validation (connection validity, type compatibility)
-   - Graph validation (cycle detection - can reuse `_check_for_cycles` from service.py)
+## Questions for Next Session
 
-### Implementation Notes
+1. **Do we want to integrate extraction + pipeline execution?**
+   - If yes: Design the integration cleanly first
+   - If no: Keep them separate, improve each independently
 
-**Validation Skeleton Locations:**
-- `_validate_schema()` - Line 71-85 in validation.py
-- `_build_indices()` - Line 87-106 (returns empty indices)
-- `_validate_modules()` - Line 108-128
-- `_validate_edges()` - Line 130-148
-- `_validate_graph()` - Line 150-166
+2. **What should the template "test" flow look like from a user perspective?**
+   - What do they see in TestingStep?
+   - What happens when they click "Test Template"?
 
-**Testing Strategy:**
-1. Test with empty pipeline (should pass all validation)
-2. Test with single module (should pass if module exists in catalog)
-3. Test with invalid connections (should fail edge validation)
-4. Test with cycle (should fail graph validation)
+3. **Should we create a new endpoint or expand existing one?**
+   - `/api/pdf-templates/simulate` (current, extraction only)
+   - `/api/pdf-templates/simulate-with-pipeline` (new, full testing)
+   - `/api/pdf-templates/test` (new, combined flow)
 
-## Important Context
+4. **Schema strategy:**
+   - Share schemas between `pdf_templates` and `pipelines`?
+   - Or keep separate with clear documentation of differences?
 
-### Exception Design Evolution
+---
 
-The exception design went through multiple iterations based on user feedback:
+## Git Status
 
-**Iteration 1** (Wrong): Exceptions collected lists of errors
-```python
-def __init__(self, errors: List[Dict[str, Any]]):
-    self.errors = errors
-```
+**Branch**: server_unification
+**HEAD**: 0748ee9 - "Complete pipeline execution visualization with real-time data overlay"
+**Working Tree**: Clean (no uncommitted changes)
+**Commits Ahead of Origin**: 32 commits
 
-**Iteration 2** (Wrong): Still too complex with separate error objects
-```python
-def __init__(self, errors: List[ValidationErrorDetail]):
-    self.errors = errors
-```
+**Removed Commits** (rolled back):
+- f0c2a60 through fce361e (integration attempts)
 
-**Final Design** (Correct): Single error, fail-fast
-```python
-def __init__(self, message: str, code: str, where: Optional[Dict[str, Any]] = None):
-    self.code = code
-    self.where = where
-    super().__init__(message)
-```
+**Ready for**: Clean redesign and implementation
 
-### User Preferences
-
-- **No migration scripts ever** - User explicitly stated this
-- **Fail-fast validation** - Return first error only
-- **500 for non-validation errors** - Don't catch generic exceptions in validation endpoint
-- **PipelineGraph owns state** - Parent polls via ref rather than lifting state up
-
-### Related Code Locations
-
-**Module Catalog:**
-- Sync CLI: `server-new/src/cli/sync_modules.py`
-- Service: `server-new/src/features/modules/service.py`
-- API: `server-new/src/api/routers/modules.py`
-
-**Pipeline State Types:**
-- Domain: `server-new/src/shared/types/pipelines.py`
-- DTO: `server-new/src/api/schemas/pipelines.py`
-- Frontend: `client/src/renderer/features/pipelines/types.ts`
-
-## Debugging Checklist
-
-If validation endpoint still returns 500:
-
-1. ✅ Check CORS configuration (already verified correct)
-2. ⬜ Remove test exception from validation.py:85
-3. ⬜ Check server logs for actual error
-4. ⬜ Verify DTO → domain type conversion in convert_dto_to_pipeline_state
-5. ⬜ Check PipelineState dataclass imports
-6. ⬜ Verify PipelineIndices type definition
-7. ⬜ Test with minimal pipeline JSON
+---
 
 ## Commands Reference
 
@@ -204,30 +381,26 @@ cd server-new
 python main.py
 ```
 
-**Test Validation Endpoint:**
+**Start Frontend:**
 ```bash
-curl -X POST http://localhost:8000/api/pipelines/validate \
-  -H "Content-Type: application/json" \
-  -d '{"pipeline_json":{"entry_points":[],"modules":[],"connections":[]}}'
+cd client
+npm run dev
 ```
 
-**Sync Modules to Database:**
-```bash
-cd server-new
-python src/cli/sync_modules.py
-```
+**Test Extraction (currently works):**
+- Open template builder
+- Go to step 2 (Extraction Fields)
+- Click "Simulate" button
+- Should see extracted text
 
-## Git Status
+**Test Pipeline Execution (currently works):**
+- Open pipeline detail page
+- Click "Execute Pipeline"
+- Enter entry point values
+- Should see execution results with visualization
 
-**Branch**: server_unification
-**Modified Files:**
-- Backend: 6 files (exceptions, validation, service, schemas, router, __init__)
-- Frontend: 5 files (new hook, types, api hook, create page, index)
-
-**Untracked Files:**
-- `client-new/src/renderer/routeTree.gen.ts`
-- `client-new/src/renderer/src/rendererrouteTree.gen.ts`
-- `client-new/src/renderer/src/rerouteTree.gen.ts`
-- `client-new/src/renderer/src/renderer/routeTree.gen.ts`
-
-These are auto-generated router files and should likely be gitignored.
+**Test Template Testing (currently mock data):**
+- Open template builder
+- Complete steps 1-3
+- Click "Test Template"
+- Shows mock results (needs real integration)
