@@ -86,8 +86,16 @@ export function usePipelinesApi(): UsePipelinesApiResult {
   const getPipeline = useCallback(
     async (id: number): Promise<PipelineDetailResponse> => {
       return withLoadingAndError(async () => {
-        const response = await apiClient.get<PipelineDetailResponse>(`${baseUrl}/${id}`);
-        return response.data;
+        const response = await apiClient.get<any>(`${baseUrl}/${id}`);
+        const data = response.data;
+
+        // Transform backend snake_case to frontend camelCase
+        if (data.visual_state?.entry_points) {
+          data.visual_state.entryPoints = data.visual_state.entry_points;
+          delete data.visual_state.entry_points;
+        }
+
+        return data as PipelineDetailResponse;
       });
     },
     [baseUrl, withLoadingAndError]
@@ -100,7 +108,14 @@ export function usePipelinesApi(): UsePipelinesApiResult {
   const createPipeline = useCallback(
     async (data: CreatePipelineRequest): Promise<CreatePipelineResponse> => {
       return withLoadingAndError(async () => {
-        const response = await apiClient.post<CreatePipelineResponse>(baseUrl, data);
+        // Transform frontend camelCase to backend snake_case
+        const transformedData = { ...data };
+        if (transformedData.visual_state?.entryPoints) {
+          (transformedData.visual_state as any).entry_points = transformedData.visual_state.entryPoints;
+          delete transformedData.visual_state.entryPoints;
+        }
+
+        const response = await apiClient.post<CreatePipelineResponse>(baseUrl, transformedData);
         return response.data;
       });
     },
@@ -114,7 +129,14 @@ export function usePipelinesApi(): UsePipelinesApiResult {
   const updatePipeline = useCallback(
     async (id: number, data: UpdatePipelineRequest): Promise<UpdatePipelineResponse> => {
       return withLoadingAndError(async () => {
-        const response = await apiClient.put<UpdatePipelineResponse>(`${baseUrl}/${id}`, data);
+        // Transform frontend camelCase to backend snake_case
+        const transformedData = { ...data };
+        if (transformedData.visual_state?.entryPoints) {
+          (transformedData.visual_state as any).entry_points = transformedData.visual_state.entryPoints;
+          delete transformedData.visual_state.entryPoints;
+        }
+
+        const response = await apiClient.put<UpdatePipelineResponse>(`${baseUrl}/${id}`, transformedData);
         return response.data;
       });
     },
@@ -141,9 +163,16 @@ export function usePipelinesApi(): UsePipelinesApiResult {
   const validatePipeline = useCallback(
     async (data: ValidatePipelineRequest): Promise<ValidatePipelineResponse> => {
       return withLoadingAndError(async () => {
+        // Transform frontend camelCase to backend snake_case
+        const transformedData = { ...data };
+        if (transformedData.visual_state?.entryPoints) {
+          (transformedData.visual_state as any).entry_points = transformedData.visual_state.entryPoints;
+          delete transformedData.visual_state.entryPoints;
+        }
+
         const response = await apiClient.post<ValidatePipelineResponse>(
           `${baseUrl}/validate`,
-          data
+          transformedData
         );
         return response.data;
       });
