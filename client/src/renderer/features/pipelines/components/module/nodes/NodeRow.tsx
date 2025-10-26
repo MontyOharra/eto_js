@@ -116,7 +116,7 @@ export function NodeRow({
 
       {/* Node Content - Mirrored layout based on direction */}
       {direction === 'input' ? (
-        // Input layout: [handle] name - type - delete (type and delete only show in edit mode)
+        // Input layout: [handle] name - delete - type (type and delete only show in edit mode)
         <div className="flex items-center w-full gap-2">
           <div className="flex-[2] min-w-0 nodrag flex items-center">
             <textarea
@@ -131,18 +131,6 @@ export function NodeRow({
             />
           </div>
           {!executionMode && (
-            <div className="flex-shrink-0 w-12 flex items-center">
-              <TypeIndicator
-                node={node}
-                onTypeChange={onTypeChange}
-                onFocus={() => onTypeVarFocus(node.type_var || null)}
-                onBlur={() => onTypeVarFocus(null)}
-                isHighlighted={!!isHighlighted}
-                effectiveAllowedTypes={getEffectiveAllowedTypes?.(moduleId, node.node_id, node.allowed_types || [])}
-              />
-            </div>
-          )}
-          {!executionMode && (
             <div className="flex-shrink-0">
               <button
                 onClick={canRemove && onRemove ? onRemove : undefined}
@@ -158,12 +146,36 @@ export function NodeRow({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
+            </div>
+          )}
+          {!executionMode && (
+            <div className="flex-shrink-0 w-12 flex items-center">
+              <TypeIndicator
+                node={node}
+                onTypeChange={onTypeChange}
+                onFocus={() => onTypeVarFocus(node.type_var || null)}
+                onBlur={() => onTypeVarFocus(null)}
+                isHighlighted={!!isHighlighted}
+                effectiveAllowedTypes={getEffectiveAllowedTypes?.(moduleId, node.node_id, node.allowed_types || [])}
+              />
             </div>
           )}
         </div>
       ) : (
-        // Output layout: delete - type - name [handle] (type and delete only show in edit mode)
+        // Output layout: type - delete - name [handle] (type and delete only show in edit mode)
         <div className="flex items-center w-full gap-2">
+          {!executionMode && (
+            <div className="flex-shrink-0 w-12 flex items-center">
+              <TypeIndicator
+                node={node}
+                onTypeChange={onTypeChange}
+                onFocus={() => onTypeVarFocus(node.type_var || null)}
+                onBlur={() => onTypeVarFocus(null)}
+                isHighlighted={!!isHighlighted}
+                effectiveAllowedTypes={getEffectiveAllowedTypes?.(moduleId, node.node_id, node.allowed_types || [])}
+              />
+            </div>
+          )}
           {!executionMode && (
             <div className="flex-shrink-0">
               <button
@@ -180,18 +192,6 @@ export function NodeRow({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
-            </div>
-          )}
-          {!executionMode && (
-            <div className="flex-shrink-0 w-12 flex items-center">
-              <TypeIndicator
-                node={node}
-                onTypeChange={onTypeChange}
-                onFocus={() => onTypeVarFocus(node.type_var || null)}
-                onBlur={() => onTypeVarFocus(null)}
-                isHighlighted={!!isHighlighted}
-                effectiveAllowedTypes={getEffectiveAllowedTypes?.(moduleId, node.node_id, node.allowed_types || [])}
-              />
             </div>
           )}
           <div className="flex-[2] min-w-0 nodrag flex items-center">
