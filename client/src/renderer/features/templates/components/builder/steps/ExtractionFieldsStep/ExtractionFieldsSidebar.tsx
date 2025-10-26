@@ -9,7 +9,6 @@
 import { useRef, useEffect, useState } from 'react';
 import { ExtractionField, SignatureObject, PipelineState, VisualState } from '../../../../types';
 import { useTemplatesApi } from '../../../../hooks/useTemplatesApi';
-import { PostTemplateSimulateStoredRequest } from '../../../../api/types';
 
 export type SidebarMode = 'list' | 'create' | 'detail';
 
@@ -120,13 +119,33 @@ export function ExtractionFieldsSidebar({
     setSimulationResult(null);
 
     try {
-      const request: PostTemplateSimulateStoredRequest = {
-        pdf_source: 'stored',
-        pdf_file_id: pdfFileId,
-        signature_objects: signatureObjects,
-        extraction_fields: extractionFields,
-        pipeline_state: pipelineState,
-      };
+      // Map frontend ExtractionField to backend format
+      // Frontend uses 'label', backend uses 'name'
+      const mappedFields = extractionFields.map(field => ({
+        name: field.label,
+        description: field.description || undefined, // Convert null to undefined
+        bbox: field.bbox,
+        page: field.page,
+      }));
+
+      // Determine if using stored PDF or uploaded PDF
+      // pdfFileId is null or -1 for uploaded PDFs, otherwise it's a stored PDF
+      const isStoredPdf = pdfFileId !== null && pdfFileId > 0;
+
+      let request;
+      if (isStoredPdf) {
+        request = {
+          pdf_source: 'stored' as const,
+          pdf_file_id: pdfFileId,
+          extraction_fields: mappedFields,
+          pipeline_state: pipelineState,
+        };
+      } else {
+        // TODO: Handle uploaded PDF mode
+        alert('Uploaded PDF simulation not yet implemented. Please use a stored PDF.');
+        setIsSimulating(false);
+        return;
+      }
 
       const response = await simulateTemplate(request);
 

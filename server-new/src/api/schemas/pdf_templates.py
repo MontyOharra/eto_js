@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 # Extraction Fields (used across multiple endpoints)
 class ExtractionField(BaseModel):
     name: str
-    description: str
+    description: Optional[str] = None
     bbox: Tuple[float, float, float, float]  # [x0, y0, x1, y1]
     page: int
 
@@ -17,7 +17,7 @@ class ExtractionField(BaseModel):
 # Pipeline State structures
 class PipelineEntryPoint(BaseModel):
     id: str
-    label: str
+    label: str 
     field_reference: str
 
 
@@ -125,14 +125,13 @@ class GetTemplateVersionResponse(BaseModel):
 class SimulateTemplateRequestStored(BaseModel):
     pdf_source: Literal["stored"]
     pdf_file_id: int
-    signature_objects: Dict[str, List[Dict[str, Any]]]  # Grouped: {"text_words": [...], "graphic_rects": [...]}
     extraction_fields: List[ExtractionField]
     pipeline_state: PipelineState
 
 
 class SimulateTemplateRequestUpload(BaseModel):
     pdf_source: Literal["upload"]
-    signature_objects: Dict[str, List[Dict[str, Any]]]  # Grouped: {"text_words": [...], "graphic_rects": [...]}
+    # pdf_file will be sent as multipart/form-data
     extraction_fields: List[ExtractionField]
     pipeline_state: PipelineState
 

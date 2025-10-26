@@ -152,18 +152,17 @@ export type GetTemplateVersionDetailResponse = TemplateVersionDetail;
 
 // Base template data shared by both request types
 interface TemplateSimulationData {
-  signature_objects: SignatureObject[];
   extraction_fields: ExtractionField[];
   pipeline_state: PipelineState;
 }
 
-// Request variant for stored PDFs (from ETO runs)
+// Request variant for stored PDFs (from database)
 export interface PostTemplateSimulateStoredRequest extends TemplateSimulationData {
   pdf_source: 'stored';
   pdf_file_id: number;
 }
 
-// Request variant for uploaded PDFs (template builder)
+// Request variant for uploaded PDFs (template builder with local file)
 export interface PostTemplateSimulateUploadRequest extends TemplateSimulationData {
   pdf_source: 'upload';
   // pdf_file: File will be sent as multipart/form-data
