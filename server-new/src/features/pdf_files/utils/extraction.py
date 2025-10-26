@@ -214,7 +214,7 @@ def extract_data_from_pdf_objects(
         bbox = field.get("bbox")
         page = field.get("page")
 
-        if not field_name or not bbox or not page:
+        if not field_name or not bbox or page is None:
             logger.warning(f"Skipping invalid extraction field: {field}")
             extracted_data[field_name or "unknown"] = ""
             continue

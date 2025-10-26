@@ -123,11 +123,12 @@ export function ExtractionFieldsSidebar({
     try {
       // Map frontend ExtractionField to backend format
       // Frontend uses 'label', backend uses 'name'
+      // Frontend uses 0-indexed pages, backend uses 1-indexed pages
       const mappedFields = extractionFields.map(field => ({
         name: field.label,
         description: field.description || undefined, // Convert null to undefined
         bbox: field.bbox,
-        page: field.page,
+        page: field.page + 1, // Convert 0-indexed to 1-indexed
       }));
 
       // Determine if using stored PDF or uploaded PDF
