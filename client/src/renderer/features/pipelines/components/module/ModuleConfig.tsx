@@ -15,7 +15,7 @@ export interface ModuleConfigProps {
 }
 
 export function ModuleConfig({ moduleInstance, template, onConfigChange, executionMode = false }: ModuleConfigProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(true);
 
   const handleConfigChange = (configKey: string, value: any) => {
     if (onConfigChange) {

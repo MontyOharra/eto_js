@@ -88,6 +88,9 @@ export function ModuleNodes({
     return getConnectedOutputName(moduleInstance.module_instance_id, inputNodeId);
   };
 
+  const hasInputs = moduleInstance.inputs.length > 0;
+  const hasOutputs = moduleInstance.outputs.length > 0;
+
   return (
     <div
       className={`flex relative ${executionMode ? 'nodrag nopan' : ''}`}
@@ -95,62 +98,66 @@ export function ModuleNodes({
       onMouseEnter={() => onModuleMouseEnter?.(moduleInstance.module_instance_id)}
       onMouseLeave={() => onModuleMouseLeave?.()}
     >
-      {/* Inputs Section */}
-      <div className="w-1/2 p-3 border-r border-gray-600">
-        {Array.from(inputGroups.entries()).map(([groupIndex, nodes]) => (
-          <NodeGroupSection
-            key={groupIndex}
-            groupIndex={groupIndex}
-            groupLabel={nodes[0]?.label || 'Group'}
-            nodes={nodes}
-            direction="input"
-            moduleId={moduleInstance.module_instance_id}
-            template={template}
-            onTypeChange={handleTypeChange}
-            onNameChange={handleNameChange}
-            onAddNode={onAddNode}
-            onRemoveNode={onRemoveNode}
-            getConnectedOutputName={getConnectedName}
-            highlightedTypeVar={highlightedTypeVar}
-            onTypeVarFocus={onTypeVarFocus}
-            onTextFocus={onTextFocus}
-            onTextBlur={onTextBlur}
-            onHandleClick={onHandleClick}
-            pendingConnection={pendingConnection}
-            getEffectiveAllowedTypes={getEffectiveAllowedTypes}
-            executionMode={executionMode}
-            executionValues={executionValues}
-          />
-        ))}
-      </div>
+      {/* Inputs Section - only render if has inputs */}
+      {hasInputs && (
+        <div className={`${hasOutputs ? 'w-1/2 border-r border-gray-600' : 'w-full'} p-3`}>
+          {Array.from(inputGroups.entries()).map(([groupIndex, nodes]) => (
+            <NodeGroupSection
+              key={groupIndex}
+              groupIndex={groupIndex}
+              groupLabel={nodes[0]?.label || 'Group'}
+              nodes={nodes}
+              direction="input"
+              moduleId={moduleInstance.module_instance_id}
+              template={template}
+              onTypeChange={handleTypeChange}
+              onNameChange={handleNameChange}
+              onAddNode={onAddNode}
+              onRemoveNode={onRemoveNode}
+              getConnectedOutputName={getConnectedName}
+              highlightedTypeVar={highlightedTypeVar}
+              onTypeVarFocus={onTypeVarFocus}
+              onTextFocus={onTextFocus}
+              onTextBlur={onTextBlur}
+              onHandleClick={onHandleClick}
+              pendingConnection={pendingConnection}
+              getEffectiveAllowedTypes={getEffectiveAllowedTypes}
+              executionMode={executionMode}
+              executionValues={executionValues}
+            />
+          ))}
+        </div>
+      )}
 
-      {/* Outputs Section */}
-      <div className="w-1/2 p-3">
-        {Array.from(outputGroups.entries()).map(([groupIndex, nodes]) => (
-          <NodeGroupSection
-            key={groupIndex}
-            groupIndex={groupIndex}
-            groupLabel={nodes[0]?.label || 'Group'}
-            nodes={nodes}
-            direction="output"
-            moduleId={moduleInstance.module_instance_id}
-            template={template}
-            onTypeChange={handleTypeChange}
-            onNameChange={handleNameChange}
-            onAddNode={onAddNode}
-            onRemoveNode={onRemoveNode}
-            highlightedTypeVar={highlightedTypeVar}
-            onTypeVarFocus={onTypeVarFocus}
-            onTextFocus={onTextFocus}
-            onTextBlur={onTextBlur}
-            onHandleClick={onHandleClick}
-            pendingConnection={pendingConnection}
-            getEffectiveAllowedTypes={getEffectiveAllowedTypes}
-            executionMode={executionMode}
-            executionValues={executionValues}
-          />
-        ))}
-      </div>
+      {/* Outputs Section - only render if has outputs */}
+      {hasOutputs && (
+        <div className={`${hasInputs ? 'w-1/2' : 'w-full'} p-3`}>
+          {Array.from(outputGroups.entries()).map(([groupIndex, nodes]) => (
+            <NodeGroupSection
+              key={groupIndex}
+              groupIndex={groupIndex}
+              groupLabel={nodes[0]?.label || 'Group'}
+              nodes={nodes}
+              direction="output"
+              moduleId={moduleInstance.module_instance_id}
+              template={template}
+              onTypeChange={handleTypeChange}
+              onNameChange={handleNameChange}
+              onAddNode={onAddNode}
+              onRemoveNode={onRemoveNode}
+              highlightedTypeVar={highlightedTypeVar}
+              onTypeVarFocus={onTypeVarFocus}
+              onTextFocus={onTextFocus}
+              onTextBlur={onTextBlur}
+              onHandleClick={onHandleClick}
+              pendingConnection={pendingConnection}
+              getEffectiveAllowedTypes={getEffectiveAllowedTypes}
+              executionMode={executionMode}
+              executionValues={executionValues}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

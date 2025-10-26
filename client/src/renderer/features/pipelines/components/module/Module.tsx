@@ -63,6 +63,11 @@ export function Module({ data }: ModuleProps) {
   // Check if this module has failed
   const hasFailed = failedModuleIds.includes(moduleInstance.module_instance_id);
 
+  // Check if module has both inputs and outputs
+  const hasInputs = moduleInstance.inputs.length > 0;
+  const hasOutputs = moduleInstance.outputs.length > 0;
+  const isSingleSided = (hasInputs && !hasOutputs) || (!hasInputs && hasOutputs);
+
   // Auto-correct types when effective allowed types change and current type becomes invalid
   useEffect(() => {
     if (!getEffectiveAllowedTypes || !onUpdateNode) return;
@@ -81,7 +86,7 @@ export function Module({ data }: ModuleProps) {
 
   return (
     <div
-      className={`bg-gray-800 rounded-lg border-2 ${hasFailed ? 'border-red-600' : 'border-gray-600'} min-w-[400px] w-min ${executionMode ? 'nodrag nopan' : ''}`}
+      className={`bg-gray-800 rounded-lg border-2 ${hasFailed ? 'border-red-600' : 'border-gray-600'} ${isSingleSided ? 'min-w-[200px]' : 'min-w-[400px]'} w-min ${executionMode ? 'nodrag nopan' : ''}`}
       onMouseEnter={() => onModuleMouseEnter?.(moduleInstance.module_instance_id)}
       onMouseLeave={() => onModuleMouseLeave?.()}
       style={{ pointerEvents: 'auto' }}

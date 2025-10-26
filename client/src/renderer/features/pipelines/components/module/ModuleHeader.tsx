@@ -32,13 +32,8 @@ export function ModuleHeader({ moduleInstance, template, onDeleteModule, executi
       onMouseEnter={() => onModuleMouseEnter?.(moduleInstance.module_instance_id)}
       onMouseLeave={() => onModuleMouseLeave?.()}
     >
-      <div>
-        <div className="font-medium text-sm" style={{ color: textColor }}>
-          {template.title}
-        </div>
-        <div className="text-xs opacity-70" style={{ color: textColor }}>
-          {moduleInstance.module_instance_id}
-        </div>
+      <div className="font-medium text-sm" style={{ color: textColor }}>
+        {template.title}
       </div>
       {!executionMode && (
         <button
