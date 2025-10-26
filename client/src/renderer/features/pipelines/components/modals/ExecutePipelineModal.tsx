@@ -1,10 +1,12 @@
 /**
  * ExecutePipelineModal
  * Modal for executing a pipeline with entry point values
+ * Uses split-panel layout similar to RunDetailModal
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { usePipelinesApi } from '../../hooks/usePipelinesApi';
+import { ExecutedPipelineViewer, ExecutedPipelineViewerRef } from '../ExecutedPipelineViewer';
 import type { EntryPoint } from '../../../../types/pipelineTypes';
 
 interface ExecutePipelineModalProps {
@@ -19,13 +21,15 @@ interface ExecutionResult {
   steps: Array<{
     module_instance_id: string;
     step_number: number;
-    inputs: Record<string, { value: any; type: string }>;
-    outputs: Record<string, { value: any; type: string }>;
+    inputs: Record<string, { name: string; value: any; type: string }>;
+    outputs: Record<string, { name: string; value: any; type: string }>;
     error: string | null;
   }>;
   executed_actions: Record<string, Record<string, any>>;
   error: string | null;
 }
+
+type ViewMode = 'summary' | 'detail';
 
 export function ExecutePipelineModal({
   isOpen,
@@ -39,6 +43,10 @@ export function ExecutePipelineModal({
   const [isExecuting, setIsExecuting] = useState(false);
   const [result, setResult] = useState<ExecutionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('summary');
+  const [executionWidth, setExecutionWidth] = useState(60); // Percentage for left panel
+  const [isDragging, setIsDragging] = useState(false);
+  const pipelineViewerRef = useRef<ExecutedPipelineViewerRef>(null);
 
   // Initialize entry values when modal opens
   useEffect(() => {
@@ -50,8 +58,38 @@ export function ExecutePipelineModal({
       setEntryValues(initialValues);
       setResult(null);
       setError(null);
+      setViewMode('summary');
     }
   }, [isOpen, entryPoints]);
+
+  // Fit pipeline view when switching to detail mode
+  useEffect(() => {
+    if (viewMode === 'detail' && pipelineViewerRef.current && result) {
+      setTimeout(() => {
+        pipelineViewerRef.current?.fitView();
+      }, 100);
+    }
+  }, [viewMode, result]);
+
+  // Auto-fit pipeline viewer when its container is resized
+  useEffect(() => {
+    if (viewMode !== 'detail' || !result) return;
+
+    const executionPanel = document.querySelector('.execution-panel');
+    if (!executionPanel) return;
+
+    const resizeObserver = new ResizeObserver(() => {
+      if (pipelineViewerRef.current) {
+        pipelineViewerRef.current.fitView();
+      }
+    });
+
+    resizeObserver.observe(executionPanel);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [viewMode, result]);
 
   const handleValueChange = (name: string, value: string) => {
     setEntryValues(prev => ({
@@ -92,39 +130,169 @@ export function ExecutePipelineModal({
     onClose();
   };
 
+  // Resizable divider handlers
+  const handleMouseDown = () => {
+    setIsDragging(true);
+  };
+
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!isDragging) return;
+
+    const modal = document.querySelector('.resize-container');
+    if (!modal) return;
+
+    const rect = modal.getBoundingClientRect();
+    const offsetX = e.clientX - rect.left;
+    const percentage = (offsetX / rect.width) * 100;
+
+    // Constrain between 30% and 70%
+    const constrainedPercentage = Math.min(Math.max(percentage, 30), 70);
+    setExecutionWidth(constrainedPercentage);
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  // Attach/detach mouse event listeners for resizing
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDragging]);
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-75">
-      <div className="bg-gray-900 rounded-lg shadow-xl w-[90vw] max-w-4xl max-h-[85vh] flex flex-col">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-gray-900 rounded-lg shadow-xl w-full max-w-[95vw] h-[95vh] overflow-hidden border border-gray-700 flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700">
-          <div>
-            <h2 className="text-xl font-bold text-white">
-              Execute Pipeline #{pipelineId}
-            </h2>
-            <p className="text-sm text-gray-400 mt-1">
-              Provide entry point values to test pipeline execution
-            </p>
+        <div className="flex items-center justify-between p-3 border-b border-gray-700 flex-shrink-0">
+          <div className="flex items-center space-x-4">
+            <h2 className="text-xl font-semibold text-white">Pipeline Execution Tester</h2>
+
+            {/* View Mode Toggle - Only show after execution */}
+            {result && (
+              <div className="flex items-center bg-gray-800 rounded-lg p-1 border-l border-gray-600 ml-4">
+                <button
+                  onClick={() => setViewMode('summary')}
+                  className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                    viewMode === 'summary'
+                      ? 'bg-blue-600 text-white'
+                      : 'text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  Summary
+                </button>
+                <button
+                  onClick={() => setViewMode('detail')}
+                  className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                    viewMode === 'detail'
+                      ? 'bg-blue-600 text-white'
+                      : 'text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  Detail
+                </button>
+              </div>
+            )}
           </div>
+
           <button
             onClick={handleClose}
-            className="text-gray-400 hover:text-white transition-colors"
+            className="text-gray-400 hover:text-gray-200 transition-colors"
           >
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
-          {!result && (
-            <>
-              {/* Entry Point Inputs */}
-              <div className="mb-6">
-                <h3 className="text-lg font-semibold text-white mb-4">Entry Point Values</h3>
-                <div className="space-y-4">
+        {/* Content - Split Panel Layout */}
+        <div className="flex-1 overflow-hidden">
+          <div className="pr-4 pl-2 py-4 flex h-full resize-container">
+            {/* Left Panel - Execution Auditor */}
+            <div className="flex flex-col execution-panel" style={{ width: `${executionWidth}%` }}>
+              <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 flex flex-col flex-1 overflow-hidden">
+                <h3 className="text-lg font-semibold text-white mb-3">
+                  {!result ? 'Execution Auditor' : (result.status === 'success' ? 'Execution Results' : 'Execution Failed')}
+                </h3>
+
+                {/* Scrollable content area */}
+                <div className="flex-1 overflow-auto bg-gray-900 rounded p-3 relative">
+                  {!result ? (
+                    // Before execution
+                    <div className="flex items-center justify-center h-full">
+                      <p className="text-gray-400 text-sm">Execute pipeline to see results here</p>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Summary View - Actions/Errors */}
+                      <div className={`font-mono text-xs ${viewMode === 'summary' ? '' : 'hidden'}`}>
+                        {result.status === 'success' && Object.keys(result.executed_actions).length > 0 ? (
+                          <pre className="text-gray-300 whitespace-pre-wrap break-words">
+                            {JSON.stringify(result.executed_actions, null, 2)}
+                          </pre>
+                        ) : result.status === 'failed' ? (
+                          <div className="text-red-300">
+                            <p className="font-bold mb-2">Execution Failed</p>
+                            <p className="mb-2">{result.error || 'No error message available'}</p>
+                          </div>
+                        ) : (
+                          <p className="text-gray-400">No actions executed</p>
+                        )}
+                      </div>
+
+                      {/* Detail View - Pipeline Visualization */}
+                      <div className={`absolute inset-0 ${viewMode === 'detail' ? '' : 'hidden'}`}>
+                        {pipelineId ? (
+                          <ExecutedPipelineViewer
+                            ref={pipelineViewerRef}
+                            pipelineDefinitionId={pipelineId}
+                            executionData={{
+                              steps: result.steps,
+                              executed_actions: result.executed_actions
+                                ? Object.entries(result.executed_actions).map(([moduleId, inputs]) => ({
+                                    action_module_name: moduleId,
+                                    inputs,
+                                  }))
+                                : undefined,
+                            }}
+                            extractedData={entryValues}
+                          />
+                        ) : (
+                          <div className="flex items-center justify-center h-full">
+                            <p className="text-gray-400">No pipeline data available</p>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Resizable Divider */}
+            <div
+              className="w-1 bg-gray-700 hover:bg-blue-500 cursor-col-resize transition-colors flex-shrink-0 mx-1"
+              onMouseDown={handleMouseDown}
+              style={{
+                userSelect: 'none',
+                backgroundColor: isDragging ? '#3B82F6' : undefined,
+              }}
+            />
+
+            {/* Right Panel - Entry Points */}
+            <div className="flex flex-col" style={{ width: `${100 - executionWidth}%` }}>
+              <div className="bg-gray-800 border border-gray-700 rounded-lg flex-1 overflow-hidden p-4 flex flex-col">
+                <h3 className="text-lg font-semibold text-white mb-4">Entry Points</h3>
+
+                <div className="flex-1 overflow-y-auto space-y-4">
                   {entryPoints.map(ep => (
                     <div key={ep.node_id}>
                       <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -136,142 +304,44 @@ export function ExecutePipelineModal({
                         value={entryValues[ep.name] || ''}
                         onChange={(e) => handleValueChange(ep.name, e.target.value)}
                         placeholder={`Enter value for ${ep.name}`}
-                        className="w-full px-4 py-2 bg-gray-800 border border-gray-600 rounded text-white focus:outline-none focus:border-blue-500"
+                        className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:border-blue-500"
                         disabled={isExecuting}
                       />
                     </div>
                   ))}
                 </div>
-              </div>
 
-              {/* Error Display */}
-              {error && (
-                <div className="mb-4 bg-red-900 border border-red-700 rounded-lg p-4">
-                  <p className="text-red-200">{error}</p>
-                </div>
-              )}
-
-              {/* Execute Button */}
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={handleClose}
-                  className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors"
-                  disabled={isExecuting}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleExecute}
-                  disabled={isExecuting}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isExecuting ? 'Executing...' : 'Execute Pipeline'}
-                </button>
-              </div>
-            </>
-          )}
-
-          {/* Execution Results */}
-          {result && (
-            <div className="space-y-6">
-              {/* Status */}
-              <div className={`p-4 rounded-lg ${
-                result.status === 'success'
-                  ? 'bg-green-900 border border-green-700'
-                  : 'bg-red-900 border border-red-700'
-              }`}>
-                <h3 className="text-lg font-bold mb-2">
-                  {result.status === 'success' ? '✅ Execution Succeeded' : '❌ Execution Failed'}
-                </h3>
-                {result.error && (
-                  <p className="text-sm text-red-200">{result.error}</p>
-                )}
-              </div>
-
-              {/* Steps */}
-              <div>
-                <h3 className="text-lg font-semibold text-white mb-4">Execution Steps</h3>
-                <div className="space-y-4">
-                  {result.steps.map((step, index) => (
-                    <div
-                      key={step.module_instance_id}
-                      className={`p-4 rounded-lg border ${
-                        step.error
-                          ? 'bg-red-900 border-red-700'
-                          : 'bg-gray-800 border-gray-700'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="font-medium text-white">
-                          Step {step.step_number + 1}: {step.module_instance_id}
-                        </h4>
-                        {step.error && (
-                          <span className="text-xs text-red-300 font-medium">ERROR</span>
-                        )}
-                      </div>
-
-                      {step.error && (
-                        <div className="mb-3 text-sm text-red-200">
-                          {step.error}
-                        </div>
-                      )}
-
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        {/* Inputs */}
-                        <div>
-                          <p className="text-gray-400 mb-2">Inputs:</p>
-                          <div className="bg-gray-900 rounded p-2 max-h-32 overflow-y-auto">
-                            <pre className="text-xs text-gray-300">
-                              {JSON.stringify(step.inputs, null, 2)}
-                            </pre>
-                          </div>
-                        </div>
-
-                        {/* Outputs */}
-                        <div>
-                          <p className="text-gray-400 mb-2">Outputs:</p>
-                          <div className="bg-gray-900 rounded p-2 max-h-32 overflow-y-auto">
-                            <pre className="text-xs text-gray-300">
-                              {JSON.stringify(step.outputs, null, 2)}
-                            </pre>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Executed Actions */}
-              {Object.keys(result.executed_actions).length > 0 && (
-                <div>
-                  <h3 className="text-lg font-semibold text-white mb-4">Actions (Not Executed - Simulation)</h3>
-                  <div className="space-y-3">
-                    {Object.entries(result.executed_actions).map(([moduleId, inputs]) => (
-                      <div key={moduleId} className="p-4 bg-purple-900 border border-purple-700 rounded-lg">
-                        <h4 className="font-medium text-white mb-2">{moduleId}</h4>
-                        <div className="bg-gray-900 rounded p-2">
-                          <pre className="text-xs text-gray-300">
-                            {JSON.stringify(inputs, null, 2)}
-                          </pre>
-                        </div>
-                      </div>
-                    ))}
+                {/* Error Display */}
+                {error && (
+                  <div className="mt-4 bg-red-900 border border-red-700 rounded-lg p-3">
+                    <p className="text-red-200 text-sm">{error}</p>
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* Close Button */}
-              <div className="flex justify-end">
-                <button
-                  onClick={handleClose}
-                  className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors"
-                >
-                  Close
-                </button>
+                {/* Execute Button */}
+                <div className="mt-4 flex justify-end">
+                  <button
+                    onClick={handleExecute}
+                    disabled={isExecuting}
+                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isExecuting ? 'Executing...' : 'Execute'}
+                  </button>
+                </div>
               </div>
             </div>
-          )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end p-3 border-t border-gray-700 flex-shrink-0">
+          <button
+            type="button"
+            onClick={handleClose}
+            className="px-4 py-2 border border-gray-600 text-gray-300 rounded hover:bg-gray-800 transition-colors text-sm"
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>

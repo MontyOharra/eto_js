@@ -5,7 +5,8 @@
  */
 
 import { useEffect, useState, forwardRef, useImperativeHandle, useRef } from 'react';
-import { useMockPipelinesApi } from '../hooks/useMockPipelinesApi';
+import { usePipelinesApi } from '../hooks/usePipelinesApi';
+import { useModulesApi } from '../../modules/hooks/useModulesApi';
 import { ExecutedPipelineGraph, ExecutedPipelineGraphRef } from './ExecutedPipelineGraph';
 import { applyLayeredLayout } from '../utils/layeredLayout';
 import type { PipelineState, VisualState, ModuleTemplate } from '../../../types/pipelineTypes';
@@ -65,7 +66,8 @@ const getModuleColor = (moduleId: string): string => {
 };
 
 export const ExecutedPipelineViewer = forwardRef<ExecutedPipelineViewerRef, ExecutedPipelineViewerProps>(({ pipelineDefinitionId, executionData, extractedData }, ref) => {
-  const { getPipeline, isLoading, error } = useMockPipelinesApi();
+  const { getPipeline, isLoading, error } = usePipelinesApi();
+  const { getModules } = useModulesApi();
   const [pipelineState, setPipelineState] = useState<PipelineState | null>(null);
   const [visualState, setVisualState] = useState<VisualState | null>(null);
   const [moduleTemplates, setModuleTemplates] = useState<ModuleTemplate[]>([]);
@@ -80,13 +82,19 @@ export const ExecutedPipelineViewer = forwardRef<ExecutedPipelineViewerRef, Exec
     },
   }), []);
 
-  // Fetch pipeline definition
+  // Fetch pipeline definition and module templates
   useEffect(() => {
     const loadPipeline = async () => {
       try {
         console.log('[ExecutedPipelineViewer] Fetching pipeline:', pipelineDefinitionId);
-        const pipeline = await getPipeline(pipelineDefinitionId);
+        const [pipeline, modulesResponse] = await Promise.all([
+          getPipeline(pipelineDefinitionId),
+          getModules()
+        ]);
         console.log('[ExecutedPipelineViewer] Pipeline loaded:', pipeline);
+        console.log('[ExecutedPipelineViewer] Modules loaded:', modulesResponse);
+
+        const allModules = modulesResponse.modules;
 
         // Extract all node IDs that have execution data and build value map
         const executedNodeIds = new Set<string>();
@@ -133,21 +141,28 @@ export const ExecutedPipelineViewer = forwardRef<ExecutedPipelineViewerRef, Exec
         // Add entry point values from extracted data
         if (extractedData && apiState.entry_points) {
           apiState.entry_points.forEach((ep: any) => {
-            const fieldValue = extractedData[ep.field_reference];
+            // extractedData is keyed by entry point name
+            const fieldValue = extractedData[ep.name];
             if (fieldValue !== undefined) {
-              executedNodeIds.add(ep.id);
-              // Determine type from the value
-              let valueType = typeof fieldValue;
-              if (valueType === 'object' && fieldValue instanceof Date) {
+              executedNodeIds.add(ep.node_id);
+              // Determine pipeline type from the value (map JS types to pipeline types)
+              let valueType: string;
+              if (fieldValue instanceof Date) {
                 valueType = 'datetime';
-              } else if (valueType === 'number') {
+              } else if (typeof fieldValue === 'number') {
                 valueType = Number.isInteger(fieldValue) ? 'int' : 'float';
+              } else if (typeof fieldValue === 'boolean') {
+                valueType = 'bool';
+              } else if (typeof fieldValue === 'string') {
+                valueType = 'str';
+              } else {
+                valueType = 'str'; // Default to string for objects/unknown
               }
 
-              executionValues.set(ep.id, {
+              executionValues.set(ep.node_id, {
                 value: fieldValue,
                 type: valueType,
-                name: ep.label,
+                name: ep.name,
               });
             }
           });
@@ -159,39 +174,48 @@ export const ExecutedPipelineViewer = forwardRef<ExecutedPipelineViewerRef, Exec
         setFailedModuleIds(failedModules);
         setExecutionValues(executionValues);
 
-        // Create module templates from module IDs
-        // Module ID format: "string_uppercase:1.0.0"
-        // Template needs: id="string_uppercase", version="1.0.0"
+        // Map real module templates from fetched modules
         const templates: ModuleTemplate[] = [];
         const seenModuleRefs = new Set<string>();
 
         apiState.modules.forEach((module: any) => {
-          if (!seenModuleRefs.has(module.module_id)) {
-            seenModuleRefs.add(module.module_id);
+          if (!seenModuleRefs.has(module.module_ref)) {
+            seenModuleRefs.add(module.module_ref);
 
-            const [templateId, version] = module.module_id.split(':');
-            templates.push(
-              createMinimalModuleTemplate(
-                templateId,              // Just the ID part (e.g., "string_uppercase")
-                version || '1.0.0',      // Version (e.g., "1.0.0")
-                getModuleName(templateId),
-                getModuleColor(templateId)
-              )
-            );
+            const [moduleId, version] = module.module_ref.split(':');
+
+            // Find the actual module template from fetched modules
+            const actualModule = allModules.find((m: ModuleTemplate) => m.id === moduleId);
+
+            if (actualModule) {
+              // Use the real module template
+              templates.push(actualModule);
+            } else {
+              // Fallback to minimal template if module not found
+              console.warn(`[ExecutedPipelineViewer] Module ${moduleId} not found in modules list, using fallback`);
+              templates.push(
+                createMinimalModuleTemplate(
+                  moduleId,
+                  version || '1.0.0',
+                  getModuleName(moduleId),
+                  getModuleColor(moduleId)
+                )
+              );
+            }
           }
         });
 
-        console.log('[ExecutedPipelineViewer] Created module templates:', templates);
+        console.log('[ExecutedPipelineViewer] Module templates:', templates);
         setModuleTemplates(templates);
 
         // Convert entry points
         const entryPoints: EntryPoint[] = apiState.entry_points.map((ep: any) => {
           // Entry points are always "executed" - they provide the initial data
-          executedNodeIds.add(ep.id);
+          executedNodeIds.add(ep.node_id);
 
           return {
-            node_id: ep.id,
-            name: ep.label,
+            node_id: ep.node_id,
+            name: ep.name,
             type: 'str', // Default type for entry points
           };
         });
@@ -199,52 +223,52 @@ export const ExecutedPipelineViewer = forwardRef<ExecutedPipelineViewerRef, Exec
         // Convert modules to ModuleInstance format
         const modules: ModuleInstance[] = apiState.modules.map((module: any) => {
           const converted = {
-            module_instance_id: module.instance_id,
-            module_ref: module.module_id,
-            module_kind: module.module_id.includes('action_') ? 'action' : 'transform',
+            module_instance_id: module.module_instance_id,
+            module_ref: module.module_ref,
+            module_kind: module.module_kind,
             config: module.config || {},
             inputs: module.inputs.map((input: any, idx: number) => ({
               node_id: input.node_id,
               direction: 'in' as const,
-              type: input.type[0] || 'str',
+              type: input.type || 'str',
               name: input.name,
               label: input.name,
-              position_index: idx,
-              group_index: 0,
-              allowed_types: input.type,
+              position_index: input.position_index ?? idx,
+              group_index: input.group_index ?? 0,
+              allowed_types: Array.isArray(input.type) ? input.type : [input.type],
             })),
             outputs: module.outputs.map((output: any, idx: number) => ({
               node_id: output.node_id,
               direction: 'out' as const,
-              type: output.type[0] || 'str',
+              type: output.type || 'str',
               name: output.name,
               label: output.name,
-              position_index: idx,
-              group_index: 0,
-              allowed_types: output.type,
+              position_index: output.position_index ?? idx,
+              group_index: output.group_index ?? 0,
+              allowed_types: Array.isArray(output.type) ? output.type : [output.type],
             })),
           };
-          console.log('[ExecutedPipelineViewer] Converted module:', module.instance_id, converted);
+          console.log('[ExecutedPipelineViewer] Converted module:', module.module_instance_id, converted);
           return converted;
         });
 
         // Convert connections - only show connections where both endpoints have execution data
         const connections = apiState.connections
           .filter((conn: any) => {
-            const sourceExists = executedNodeIds.has(conn.source_handle_id);
-            const targetExists = executedNodeIds.has(conn.target_handle_id);
+            const sourceExists = executedNodeIds.has(conn.from_node_id);
+            const targetExists = executedNodeIds.has(conn.to_node_id);
             const shouldShow = sourceExists && targetExists;
 
             if (!shouldShow) {
-              console.log('[ExecutedPipelineViewer] Hiding connection:', conn.source_handle_id, '→', conn.target_handle_id,
+              console.log('[ExecutedPipelineViewer] Hiding connection:', conn.from_node_id, '→', conn.to_node_id,
                 `(source: ${sourceExists}, target: ${targetExists})`);
             }
 
             return shouldShow;
           })
           .map((conn: any) => ({
-            from_node_id: conn.source_handle_id,
-            to_node_id: conn.target_handle_id,
+            from_node_id: conn.from_node_id,
+            to_node_id: conn.to_node_id,
           }));
 
         console.log('[ExecutedPipelineViewer] Showing', connections.length, 'of', apiState.connections.length, 'connections');

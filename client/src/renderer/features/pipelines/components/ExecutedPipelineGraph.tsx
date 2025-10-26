@@ -50,8 +50,8 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'LR') => 
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
 
-  const nodeWidth = 280;  // Reduced from 400 (no delete buttons or type indicators in execution mode)
-  const nodeHeight = 200;
+  const nodeWidth = 220;  // Further reduced for execution mode (no delete buttons, no type indicators)
+  const nodeHeight = 180;
 
   // Increased spacing: nodesep=200 for vertical separation, ranksep=450 for horizontal module spacing
   dagreGraph.setGraph({ rankdir: direction, ranksep: 450, nodesep: 200 });
@@ -123,6 +123,32 @@ const ExecutedPipelineGraphInner = forwardRef<ExecutedPipelineGraphRef, Executed
     const newNodes: Node[] = [];
     const templateMap = new Map(moduleTemplates.map((t) => [t.id, t]));
 
+    // Build a lookup map for connections: input_pin_id -> output_pin_id
+    const connectionMap = new Map<string, string>();
+    pipelineState.connections.forEach((conn) => {
+      connectionMap.set(conn.to_node_id, conn.from_node_id);
+    });
+
+    // Build a lookup map for pin names: node_id -> pin
+    const allPins = new Map<string, any>();
+    pipelineState.entry_points.forEach((ep) => {
+      allPins.set(ep.node_id, { name: ep.name, type: 'entry_point' });
+    });
+    pipelineState.modules.forEach((mod) => {
+      mod.inputs.forEach((pin) => allPins.set(pin.node_id, pin));
+      mod.outputs.forEach((pin) => allPins.set(pin.node_id, pin));
+    });
+
+    // Function to get connected output name for an input pin
+    const getConnectedOutputName = (moduleId: string, inputPinId: string): string | undefined => {
+      const outputPinId = connectionMap.get(inputPinId);
+      if (outputPinId) {
+        const outputPin = allPins.get(outputPinId);
+        return outputPin?.name;
+      }
+      return undefined;
+    };
+
     // Create entry point nodes (initial position doesn't matter, dagre will position them)
     pipelineState.entry_points.forEach((entryPoint: EntryPoint) => {
       const position = { x: 0, y: 0 };
@@ -155,13 +181,14 @@ const ExecutedPipelineGraphInner = forwardRef<ExecutedPipelineGraphRef, Executed
             title: 'Entry Point',
             description: 'Pipeline entry point',
             kind: 'entry_point',
-            color: '#6B7280',
+            color: '#000000',  // Black color for entry points
             meta: { io_shape: { inputs: { nodes: [] }, outputs: { nodes: [] }, type_params: {} } },
             config_schema: {},
           },
           executionMode: true,  // Execution view mode
           failedModuleIds,
           executionValues,  // Pass execution data for value display
+          getConnectedOutputName,  // Function to lookup connected output names
           onModuleMouseEnter: handleModuleMouseEnter,
           onModuleMouseLeave: handleModuleMouseLeave,
         },
@@ -192,6 +219,7 @@ const ExecutedPipelineGraphInner = forwardRef<ExecutedPipelineGraphRef, Executed
           executionMode: true,  // Execution view mode
           failedModuleIds,
           executionValues,  // Pass execution data for value display
+          getConnectedOutputName,  // Function to lookup connected output names
           onModuleMouseEnter: handleModuleMouseEnter,
           onModuleMouseLeave: handleModuleMouseLeave,
         },
@@ -320,7 +348,7 @@ const ExecutedPipelineGraphInner = forwardRef<ExecutedPipelineGraphRef, Executed
         }}
       >
         <Controls />
-        <Background variant="dots" gap={20} size={1} />
+        <Background variant="dots" />
       </ReactFlow>
     </div>
   );

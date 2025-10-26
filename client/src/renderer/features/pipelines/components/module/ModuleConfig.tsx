@@ -28,6 +28,26 @@ export function ModuleConfig({ moduleInstance, template, onConfigChange, executi
     return null;
   }
 
+  // Don't show config section if there are no config properties
+  // Check if config_schema exists and has actual properties
+  const hasConfigProperties =
+    template.config_schema &&
+    typeof template.config_schema === 'object' &&
+    (
+      // Either it's a JSON Schema with properties field that has keys
+      (template.config_schema.properties &&
+       typeof template.config_schema.properties === 'object' &&
+       Object.keys(template.config_schema.properties).length > 0) ||
+      // Or it's a flat object with keys (not JSON Schema format)
+      (!template.config_schema.properties &&
+       Object.keys(template.config_schema).length > 0 &&
+       !template.config_schema.type) // Exclude JSON Schema metadata fields
+    );
+
+  if (!hasConfigProperties) {
+    return null;
+  }
+
   return (
     <div className="border-t border-gray-600">
       <button

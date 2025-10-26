@@ -71,7 +71,7 @@ export function NodeGroupSection({
       {/* Group Label */}
       <div className="flex items-center mb-2">
         <div className="flex-1 border-t border-gray-600"></div>
-        <span className="px-2 text-[10px] text-gray-400 uppercase font-semibold">{groupLabel}</span>
+        <span className="px-2 text-sm text-gray-400 uppercase font-semibold">{groupLabel}</span>
         <div className="flex-1 border-t border-gray-600"></div>
       </div>
 

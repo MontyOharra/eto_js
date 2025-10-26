@@ -84,16 +84,12 @@ export function ExecutionEdge({
     targetPosition,
   });
 
-  // For LR layout with horizontal offset, manually construct the path
-  // to keep connection points fixed but offset the vertical section
-  let edgePath = standardPath;
-  if (horizontalOffset !== 0) {
-    // Calculate the midpoint X where the vertical line should be
-    const midX = sourceX + (targetX - sourceX) / 2 + horizontalOffset;
+  // For LR layout, manually construct the path with bends closer to target
+  // Position the vertical line close to the target (80px before target)
+  const midX = targetX - 40 + horizontalOffset;
 
-    // Construct smooth step path: horizontal from source, vertical (offset), horizontal to target
-    edgePath = `M ${sourceX},${sourceY} L ${midX},${sourceY} L ${midX},${targetY} L ${targetX},${targetY}`;
-  }
+  // Construct smooth step path: horizontal from source, vertical (offset), horizontal to target
+  const edgePath = `M ${sourceX},${sourceY} L ${midX},${sourceY} L ${midX},${targetY} L ${targetX},${targetY}`;
 
   // Position label next to the source output pin
   // For LR layout, place label slightly to the right of the source
@@ -132,7 +128,7 @@ export function ExecutionEdge({
             style={{
               position: 'absolute',
               transform: `translate(-50%, -50%) translate(${labelOffsetX}px,${labelOffsetY}px)`,
-              fontSize: 11,
+              fontSize: 14,
               fontWeight: 500,
               pointerEvents: 'all',
             }}

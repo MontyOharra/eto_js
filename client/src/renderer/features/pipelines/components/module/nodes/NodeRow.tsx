@@ -118,17 +118,10 @@ export function NodeRow({
       {direction === 'input' ? (
         // Input layout: [handle] name - delete - type (type and delete only show in edit mode)
         <div className="flex items-center w-full gap-2">
-          <div className="flex-[2] min-w-0 nodrag flex items-center">
-            <textarea
-              ref={inputTextareaRef}
-              value={displayName}
-              readOnly
-              rows={1}
-              className="text-[10px] text-gray-300 px-1.5 py-0.5 bg-gray-700 rounded border border-gray-600 w-full resize-none overflow-hidden cursor-default min-h-[24px]"
-              style={{
-                height: 'auto',
-              }}
-            />
+          <div className={`${executionMode || !canRemove ? 'flex-1' : 'flex-[2]'} min-w-0 nodrag flex items-center ${executionMode ? 'justify-center' : ''}`}>
+            <div className={`text-sm text-gray-300 px-1.5 py-0.5 w-full min-h-[24px] flex items-center ${executionMode ? 'justify-center' : ''}`}>
+              {displayName}
+            </div>
           </div>
           {!executionMode && (
             <div className="flex-shrink-0">
@@ -194,21 +187,27 @@ export function NodeRow({
               </button>
             </div>
           )}
-          <div className="flex-[2] min-w-0 nodrag flex items-center">
-            <textarea
-              value={node.name}
-              onChange={(e) => onNameChange(node.node_id, e.target.value)}
-              onFocus={onTextFocus}
-              onBlur={onTextBlur}
-              placeholder="Node name"
-              className="w-full text-[10px] bg-gray-700 text-gray-200 px-1.5 py-0.5 rounded border border-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none overflow-hidden min-h-[24px] nodrag"
-              rows={1}
-              onInput={(e) => {
-                const target = e.target as HTMLTextAreaElement;
-                target.style.height = 'auto';
-                target.style.height = target.scrollHeight + 'px';
-              }}
-            />
+          <div className={`${executionMode || !canRemove ? 'flex-1' : 'flex-[2]'} min-w-0 nodrag flex items-center ${executionMode ? 'justify-center' : ''}`}>
+            {executionMode ? (
+              <div className="text-sm text-gray-300 px-1.5 py-0.5 w-full min-h-[24px] flex items-center justify-center">
+                {node.name}
+              </div>
+            ) : (
+              <textarea
+                value={node.name}
+                onChange={(e) => onNameChange(node.node_id, e.target.value)}
+                onFocus={onTextFocus}
+                onBlur={onTextBlur}
+                placeholder="Node name"
+                className="w-full text-sm bg-gray-700 text-gray-200 px-1.5 py-0.5 rounded border border-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none overflow-hidden min-h-[24px] nodrag"
+                rows={1}
+                onInput={(e) => {
+                  const target = e.target as HTMLTextAreaElement;
+                  target.style.height = 'auto';
+                  target.style.height = target.scrollHeight + 'px';
+                }}
+              />
+            )}
           </div>
         </div>
       )}

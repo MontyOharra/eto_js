@@ -99,8 +99,8 @@ class PipelineExecutionStepResult:
     """
     module_instance_id: str
     step_number: int
-    inputs: Dict[str, Dict[str, Any]]  # {node_name: {value, type}}
-    outputs: Dict[str, Dict[str, Any]]  # {node_name: {value, type}}
+    inputs: Dict[str, Dict[str, Any]]  # {node_id: {name, value, type}}
+    outputs: Dict[str, Dict[str, Any]]  # {node_id: {name, value, type}}
     error: Optional[str] = None
 
 
@@ -114,11 +114,12 @@ class ActionExecutionData:
     if it were to execute in production.
 
     Format for executed_actions field:
-        {"module_id": {"input_field": "value", ...}, ...}
+        {"module_title": {"upstream_pin_name": "value", ...}, ...}
     """
     module_instance_id: str
-    action_module_id: str  # e.g., "email_sender"
-    inputs: Dict[str, Any]  # {node_name: value} - ready for handler
+    module_title: str  # e.g., "Print to Server Log" - for display
+    action_module_id: str  # e.g., "print_action" - for handler lookup
+    inputs: Dict[str, Any]  # {upstream_pin_name: value} - using connected output pin names
     config: Dict[str, Any]  # Module configuration
 
 

@@ -99,12 +99,32 @@ class ActionDataCollector:
         Convert collected actions to executed_actions format.
 
         Returns:
-            Dict in format: {"module_id": {"input_field": "value", ...}, ...}
+            Dict in format: {"module_title": {"upstream_pin_name": "value", ...}, ...}
+            If multiple actions have the same title, appends #1, #2, etc.
         """
         with self.lock:
             result = {}
+            title_counts: Dict[str, int] = {}
+
             for action in self.actions:
-                result[action.action_module_id] = action.inputs
+                title = action.module_title
+
+                # Track how many times we've seen this title
+                if title in title_counts:
+                    title_counts[title] += 1
+                    unique_title = f"{title} #{title_counts[title]}"
+                else:
+                    title_counts[title] = 1
+                    # First occurrence - check if we'll have duplicates
+                    # Count total occurrences
+                    total_count = sum(1 for a in self.actions if a.module_title == title)
+                    if total_count > 1:
+                        unique_title = f"{title} #1"
+                    else:
+                        unique_title = title
+
+                result[unique_title] = action.inputs
+
             return result
 
 
@@ -133,27 +153,28 @@ def _serialize_io_for_audit(
     pins: List[NodeInstance]
 ) -> Dict[str, Dict[str, Any]]:
     """
-    Transform {node_id: value} to {node_name: {value, type}} for audit persistence.
+    Transform {node_id: value} to {node_id: {name, value, type}} for execution visualization.
 
-    This converts raw module I/O (keyed by node IDs) into a human-readable
-    format suitable for audit trails and debugging.
+    This converts raw module I/O into a format suitable for ExecutedPipelineViewer,
+    which needs node_id as keys and name as a field for proper visualization.
 
     Args:
         io_dict: Raw I/O from module execution {node_id: value}
         pins: Pin metadata with node_id, name, and type
 
     Returns:
-        Dict in format: {node_name: {value: serialized_value, type: type_hint}}
+        Dict in format: {node_id: {name, value, type}}
 
     Example:
         Input:  {"m1_out_0": "ABC123"}, [NodeInstance(node_id="m1_out_0", name="hawb", type="str")]
-        Output: {"hawb": {"value": "ABC123", "type": "str"}}
+        Output: {"m1_out_0": {"name": "hawb", "value": "ABC123", "type": "str"}}
     """
     result = {}
     for pin in pins:
         if pin.node_id in io_dict:
             raw_value = io_dict[pin.node_id]
-            result[pin.name] = {
+            result[pin.node_id] = {
+                "name": pin.name,
                 "value": _serialize_value(raw_value, pin.type),
                 "type": pin.type
             }
@@ -184,6 +205,59 @@ def _convert_to_named_inputs(
     for pin in pins:
         if pin.node_id in io_dict:
             result[pin.name] = io_dict[pin.node_id]
+    return result
+
+
+def _convert_to_upstream_named_inputs(
+    inputs_dict: Dict[str, Any],
+    input_field_mappings: Dict[str, str],
+    all_nodes_metadata: Dict[str, List[NodeInstance]]
+) -> Dict[str, Any]:
+    """
+    Convert action inputs to use upstream output pin names.
+
+    For actions, we want to show the connected upstream output pin names
+    as keys, not the action's input pin names.
+
+    Args:
+        inputs_dict: {input_pin_id: value}
+        input_field_mappings: {input_pin_id: upstream_output_pin_id}
+        all_nodes_metadata: All node metadata from pipeline state to look up pin names
+
+    Returns:
+        Dict in format: {upstream_pin_name: value}
+
+    Example:
+        Input:
+            inputs_dict = {"action_in_0": "value"}
+            input_field_mappings = {"action_in_0": "transform_out_0"}
+            all_nodes_metadata has NodeInstance(node_id="transform_out_0", name="pu")
+        Output:
+            {"pu": "value"}
+    """
+    result = {}
+
+    # Build a lookup map of node_id -> name from all metadata
+    node_id_to_name = {}
+    for node_list in all_nodes_metadata.values():
+        for node in node_list:
+            node_id_to_name[node.node_id] = node.name
+
+    # For each input, find its upstream output pin name
+    for input_pin_id, value in inputs_dict.items():
+        upstream_pin_id = input_field_mappings.get(input_pin_id)
+        if upstream_pin_id and upstream_pin_id in node_id_to_name:
+            upstream_name = node_id_to_name[upstream_pin_id]
+            result[upstream_name] = value
+        else:
+            # Fallback: use the input pin name if we can't find upstream
+            # This shouldn't happen in normal execution
+            logger.warning(
+                f"Could not find upstream pin name for {input_pin_id}, "
+                f"upstream_pin_id={upstream_pin_id}"
+            )
+            result[input_pin_id] = value
+
     return result
 
 
@@ -294,6 +368,16 @@ class PipelineExecutionService:
         collector = StepResultCollector()
         action_collector = ActionDataCollector()
 
+        # Step 3.5: Build global node metadata lookup for actions
+        # Actions need to look up upstream pin names from all steps
+        all_nodes_metadata: Dict[str, List[NodeInstance]] = {}
+        for step in steps:
+            if step.node_metadata:
+                for key, nodes in step.node_metadata.items():
+                    if key not in all_nodes_metadata:
+                        all_nodes_metadata[key] = []
+                    all_nodes_metadata[key].extend(nodes)
+
         # Step 4: Build Dask graph
         task_of_step: Dict[str, Any] = {}
         non_action_tasks: List[Any] = []
@@ -307,7 +391,7 @@ class PipelineExecutionService:
                 action_steps.append(step)
             else:
                 # Transform or logic module
-                task = self._make_step_task(step, producer_of_pin, collector, action_collector)
+                task = self._make_step_task(step, producer_of_pin, collector, action_collector, all_nodes_metadata)
                 task_of_step[step.module_instance_id] = task
                 self._publish_outputs_for_downstream(step, task, producer_of_pin)
                 non_action_tasks.append(task)
@@ -321,7 +405,7 @@ class PipelineExecutionService:
         # Step 6: Build action tasks (depend on barrier + upstreams)
         for step in action_steps:
             task = self._make_step_task(
-                step, producer_of_pin, collector, action_collector,
+                step, producer_of_pin, collector, action_collector, all_nodes_metadata,
                 extra_dependencies=[barrier]
             )
             task_of_step[step.module_instance_id] = task
@@ -496,6 +580,7 @@ class PipelineExecutionService:
         producer_of_pin: Dict[str, Any],
         collector: StepResultCollector,
         action_collector: ActionDataCollector,
+        all_nodes_metadata: Dict[str, List[NodeInstance]],
         extra_dependencies: Optional[List[Any]] = None,
     ) -> Any:
         """
@@ -579,12 +664,21 @@ class PipelineExecutionService:
 
             if is_action:
                 # Action module: Collect data, don't execute
-                named_inputs = _convert_to_named_inputs(inputs_dict, ctx.inputs)
+                # Use upstream pin names (not action input names) for better UX
+                upstream_named_inputs = _convert_to_upstream_named_inputs(
+                    inputs_dict,
+                    step.input_field_mappings,
+                    all_nodes_metadata
+                )
+
+                # Get module title from handler for display
+                module_title = getattr(handler, 'title', module_id)
 
                 action_collector.add(ActionExecutionData(
                     module_instance_id=step.module_instance_id,
+                    module_title=module_title,
                     action_module_id=module_id,
-                    inputs=named_inputs,
+                    inputs=upstream_named_inputs,
                     config=step.module_config
                 ))
 
