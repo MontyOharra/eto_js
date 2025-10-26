@@ -7,6 +7,7 @@ import logging
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 import pdfplumber
 
 from shared.database import DatabaseConnectionManager
@@ -224,6 +225,84 @@ class PdfFilesService:
             logger.error(f"Error extracting objects from {filename}: {e}")
             raise ServiceError(f"Failed to extract PDF objects: {str(e)}")
 
+    def extract_text_from_pdf(
+        self,
+        pdf_bytes: bytes,
+        extraction_fields: list[dict[str, Any]]
+    ) -> dict[str, str]:
+        """
+        Extract text from PDF using extraction fields (text words only).
+
+        More efficient than extract_objects_from_bytes - only extracts text words,
+        not graphics, images, tables, etc.
+
+        Args:
+            pdf_bytes: Raw PDF file bytes
+            extraction_fields: List of extraction field dicts with:
+                - name: Field name
+                - bbox: [x0, y0, x1, y1]
+                - page: Page number
+
+        Returns:
+            Dict mapping field names to extracted text
+
+        Raises:
+            ValidationError: If PDF is invalid
+            ServiceError: If extraction fails
+        """
+        from features.pdf_files.utils import extract_data_from_pdf_objects
+
+        try:
+            # Validate PDF first
+            is_valid, error_msg = self._validate_pdf(pdf_bytes)
+            if not is_valid:
+                raise ValidationError(f"Invalid PDF: {error_msg}")
+
+            # Create temporary file
+            with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp_file:
+                tmp_path = Path(tmp_file.name)
+                tmp_file.write(pdf_bytes)
+
+            try:
+                # Extract ONLY text words (not all objects)
+                text_words = []
+
+                with pdfplumber.open(tmp_path) as pdf:
+                    for page in pdf.pages:
+                        page_num = page.page_number  # 1-indexed
+
+                        # Extract only text words
+                        words = page.extract_words()
+                        for word in words:
+                            text_words.append({
+                                "type": "text_word",
+                                "page": page_num,
+                                "bbox": [word['x0'], word['top'], word['x1'], word['bottom']],
+                                "text": word['text'],
+                                "fontname": self._clean_pdf_value(word.get('fontname', '')),
+                                "fontsize": float(word.get('size', 0.0))
+                            })
+
+                # Use extraction utility to extract data from text words
+                extracted_data = extract_data_from_pdf_objects(
+                    pdf_objects=text_words,
+                    extraction_fields=extraction_fields
+                )
+
+                return extracted_data
+
+            finally:
+                # Always delete temporary file
+                tmp_path.unlink(missing_ok=True)
+
+        except ValidationError:
+            # Re-raise validation errors unchanged
+            raise
+
+        except Exception as e:
+            logger.error(f"Failed to extract text from PDF: {e}")
+            raise ServiceError(f"Failed to extract text from PDF: {e}")
+
     def store_pdf(
         self,
         file_bytes: bytes,
@@ -345,7 +424,7 @@ class PdfFilesService:
             logger.error(f"Error storing PDF {filename}: {e}", exc_info=True)
             raise ServiceError(f"Failed to store PDF: {str(e)}")
 
-    def _clean_pdf_value(self, value: any) -> any:
+    def _clean_pdf_value(self, value: Any) -> Any:
         """
         Clean a value from pdfplumber to ensure it's JSON-serializable.
 

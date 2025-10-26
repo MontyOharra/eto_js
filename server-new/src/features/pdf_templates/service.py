@@ -21,6 +21,7 @@ from shared.types.pdf_templates import (
 )
 from shared.exceptions.service import ObjectNotFoundError, ConflictError, ServiceError
 from features.pipelines.service import PipelineService
+from features.pdf_files.service import PdfFilesService
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +42,8 @@ class PdfTemplateService:
     def __init__(
         self,
         connection_manager: DatabaseConnectionManager,
-        pipeline_service: 'PipelineService'
+        pipeline_service: 'PipelineService',
+        pdf_files_service: 'PdfFilesService'
     ) -> None:
         """
         Initialize PDF template service
@@ -49,12 +51,14 @@ class PdfTemplateService:
         Args:
             connection_manager: Database connection manager
             pipeline_service: Pipeline service for pipeline operations
+            pdf_files_service: PDF files service for text extraction
         """
         self.connection_manager = connection_manager
         self.template_repository = PdfTemplateRepository(connection_manager=connection_manager)
         self.version_repository = PdfTemplateVersionRepository(connection_manager=connection_manager)
         self.pipeline_repository = PipelineDefinitionRepository(connection_manager=connection_manager)
         self.pipeline_service = pipeline_service
+        self.pdf_files_service = pdf_files_service
 
     def list_templates(
         self,
@@ -419,3 +423,48 @@ class PdfTemplateService:
             raise ServiceError(f"Failed to deactivate template {template_id}")
 
         return updated_template
+
+    def simulate_extraction(
+        self,
+        pdf_bytes: bytes,
+        extraction_fields: list[dict[str, Any]]
+    ) -> dict[str, str]:
+        """
+        Simulate data extraction from PDF using extraction fields.
+
+        For now, this method only extracts text data and prints it.
+        Pipeline execution is not yet implemented.
+
+        Args:
+            pdf_bytes: Raw PDF file bytes
+            extraction_fields: List of extraction field dicts with:
+                - name: Field name
+                - bbox: [x0, y0, x1, y1]
+                - page: Page number
+
+        Returns:
+            Dict mapping field names to extracted text values
+
+        Example:
+            extraction_fields = [
+                {"name": "hawb", "bbox": [100, 200, 300, 220], "page": 1},
+                {"name": "weight", "bbox": [100, 250, 200, 270], "page": 1}
+            ]
+
+            Returns: {"hawb": "ABC123", "weight": "150.5"}
+        """
+        logger.info(f"Simulating extraction for {len(extraction_fields)} fields")
+
+        # Use PDF files service to extract only text words (efficient)
+        extracted_data = self.pdf_files_service.extract_text_from_pdf(
+            pdf_bytes=pdf_bytes,
+            extraction_fields=extraction_fields
+        )
+
+        # Print the results for debugging
+        print(f"\n=== EXTRACTED DATA ===")
+        for field_name, value in extracted_data.items():
+            print(f"{field_name}: {value}")
+        print(f"======================\n")
+
+        return extracted_data

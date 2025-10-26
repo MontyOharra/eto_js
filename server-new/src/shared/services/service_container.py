@@ -126,7 +126,7 @@ class ServiceContainer:
             },
             'pdf_templates': {
                 'class': 'features.pdf_templates.service.PdfTemplateService',
-                'args': [cls._connection_manager, '_service:pipelines'],
+                'args': [cls._connection_manager, '_service:pipelines', '_service:pdf_files'],
                 'singleton': True,
                 'description': 'PDF template service with versioning and pipeline integration'
             },

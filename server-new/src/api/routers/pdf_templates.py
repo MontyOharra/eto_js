@@ -16,6 +16,8 @@ from api.schemas.pdf_templates import (
     SimulateTemplateResponse,
     SimulateTemplateRequestStored,
     SimulateTemplateRequestUpload,
+    DataExtractionSimulation,
+    PipelineExecutionSimulation,
 )
 from api.mappers.pdf_templates import (
     convert_template_summary_list,
@@ -27,7 +29,9 @@ from api.mappers.pdf_templates import (
 )
 
 from shared.services.service_container import ServiceContainer
+from shared.exceptions.service import ValidationError
 from features.pdf_templates import PdfTemplateService
+from features.pdf_files.service import PdfFilesService
 
 logger = logging.getLogger(__name__)
 
@@ -164,8 +168,10 @@ async def get_template_version(
 
 @router.post("/simulate", response_model=SimulateTemplateResponse, status_code=status.HTTP_200_OK)
 async def simulate_template(
-    request: Union[SimulateTemplateRequestStored, SimulateTemplateRequestUpload]
-) -> SimulateTemplateResponse | None:
+    request: Union[SimulateTemplateRequestStored, SimulateTemplateRequestUpload],
+    template_service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service()),
+    pdf_service: 'PdfFilesService' = Depends(lambda: ServiceContainer.get_pdf_files_service())
+) -> SimulateTemplateResponse:
     """
     Simulate template processing without persistence.
 
@@ -199,4 +205,39 @@ async def simulate_template(
     - 400: Invalid request or simulation failed
     - 404: Referenced PDF file not found (for stored mode)
     """
-    pass
+    # Get PDF bytes based on source
+    if request.pdf_source == "stored":
+        # Get PDF from database
+        pdf_bytes, _ = pdf_service.get_pdf_file_bytes(request.pdf_file_id)
+    else:
+        # TODO: Handle uploaded PDF (multipart form data)
+        # For now, this mode is not fully implemented
+        raise ValidationError("Uploaded PDF mode not yet implemented")
+
+    # Convert extraction fields to dict format for service method
+    extraction_fields = [field.model_dump() for field in request.extraction_fields]
+
+    # Call simulate extraction (pipelines not implemented yet)
+    extracted_data = template_service.simulate_extraction(
+        pdf_bytes=pdf_bytes,
+        extraction_fields=extraction_fields
+    )
+
+    # Build response (pipelines not implemented yet)
+    return SimulateTemplateResponse(
+        template_matching={
+            "status": "success",
+            "message": "Simulation mode - template matching skipped"
+        },
+        data_extraction=DataExtractionSimulation(
+            status="success",
+            extracted_data=extracted_data,
+            validation_results=[]  # TODO: Add validation
+        ),
+        pipeline_execution=PipelineExecutionSimulation(
+            status="success",
+            message="Pipeline execution not yet implemented",
+            steps=[],
+            simulated_actions=[]
+        )
+    )
