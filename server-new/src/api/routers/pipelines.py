@@ -131,7 +131,7 @@ async def validate_pipeline(
     )
 ) -> ValidatePipelineResponse:
     """
-    Validate pipeline structure without saving.
+    Validate pipeline structure and module configurations without saving.
 
     Checks:
     - All module references exist in module catalog
@@ -140,6 +140,7 @@ async def validate_pipeline(
     - No duplicate connections
     - No cycles (DAG requirement)
     - All module inputs are connected
+    - Module configurations are valid (required fields, correct types, etc.)
 
     Returns validation results with detailed error messages if validation fails.
     """
@@ -147,7 +148,7 @@ async def validate_pipeline(
     from api.mappers.pipelines import convert_dto_to_pipeline_state
     pipeline_state = convert_dto_to_pipeline_state(request.pipeline_json)
 
-    # Validate pipeline
+    # Validate pipeline structure
     validation_result = pipeline_service.validate_pipeline(pipeline_state)
 
     # Convert error to DTO list (single error or empty)
@@ -161,8 +162,63 @@ async def validate_pipeline(
             )
         ]
 
+    # Validate module configurations (even if structure validation failed)
+    from shared.utils.registry import get_registry
+    from pydantic import ValidationError
+
+    module_registry = get_registry()
+
+    for module_instance in pipeline_state.modules:
+        # Extract module_id from module_ref (format: "module_id:version")
+        module_id = module_instance.module_ref.split(":")[0] if ":" in module_instance.module_ref else module_instance.module_ref
+
+        # Get module handler from registry
+        handler = module_registry.get(module_id)
+        if not handler:
+            error_dtos.append(
+                ValidationErrorDTO(
+                    code="module_not_found",
+                    message=f"Module '{module_id}' not found in registry",
+                    where={"module_instance_id": module_instance.module_instance_id}
+                )
+            )
+            continue
+
+        # Validate config against module's Pydantic schema
+        try:
+            ConfigModel = handler.config_class()
+            # This will raise ValidationError if config is invalid
+            ConfigModel(**module_instance.config)
+        except ValidationError as e:
+            # Pydantic validation failed - extract errors
+            for error in e.errors():
+                field_path = " -> ".join(str(loc) for loc in error["loc"])
+                error_dtos.append(
+                    ValidationErrorDTO(
+                        code="invalid_config",
+                        message=f"Module {module_instance.module_instance_id}: {field_path}: {error['msg']}",
+                        where={
+                            "module_instance_id": module_instance.module_instance_id,
+                            "field": field_path,
+                            "type": error["type"]
+                        }
+                    )
+                )
+        except Exception as e:
+            # Unexpected error during config validation
+            error_dtos.append(
+                ValidationErrorDTO(
+                    code="config_validation_error",
+                    message=f"Module {module_instance.module_instance_id}: {str(e)}",
+                    where={"module_instance_id": module_instance.module_instance_id}
+                )
+            )
+
+    # Overall validation is only valid if no errors were found
+    is_valid = len(error_dtos) == 0
+
     return ValidatePipelineResponse(
-        valid=validation_result["valid"],
+        valid=is_valid,
         errors=error_dtos
     )
 
