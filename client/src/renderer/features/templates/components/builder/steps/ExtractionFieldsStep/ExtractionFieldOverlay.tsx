@@ -39,19 +39,17 @@ export function ExtractionFieldOverlay({
 
     const [x0, y0, x1, y1] = field.bbox;
 
-    // Convert PDF coordinates to screen coordinates (flip Y-axis)
-    const screenY0 = pageHeight - y1;
-    const screenY1 = pageHeight - y0;
-
+    // Bbox is already in screen coordinates (y=0 at top)
+    // No conversion needed - pdfplumber uses same coordinate system
     const isStaged = stagedFieldId === field.field_id;
     const isHovered = hoveredFieldId === field.field_id;
 
     const style: React.CSSProperties = {
       position: 'absolute',
       left: `${x0 * renderScale}px`,
-      top: `${screenY0 * renderScale}px`,
+      top: `${y0 * renderScale}px`,
       width: `${(x1 - x0) * renderScale}px`,
-      height: `${(screenY1 - screenY0) * renderScale}px`,
+      height: `${(y1 - y0) * renderScale}px`,
       backgroundColor: 'rgba(147, 51, 234, 0.2)', // Purple with transparency
       border: `${isStaged ? '3px' : '2px'} ${isStaged ? 'dashed' : 'solid'} rgba(147, 51, 234, 0.8)`,
       cursor: 'pointer',
@@ -62,8 +60,8 @@ export function ExtractionFieldOverlay({
 
     // Determine label position (above or below box)
     const showLabel = isHovered || isStaged;
-    const labelTop = screenY0 < 50; // Show below if too high on page
-    const labelY = labelTop ? screenY1 + 2 : screenY0 - 8;
+    const labelTop = y0 < 50; // Show below if too high on page
+    const labelY = labelTop ? y1 + 2 : y0 - 8;
 
     return (
       <div key={field.field_id}>
@@ -104,16 +102,14 @@ export function ExtractionFieldOverlay({
 
     const [x0, y0, x1, y1] = tempFieldData.bbox;
 
-    // Convert PDF coordinates to screen coordinates (flip Y-axis)
-    const screenY0 = pageHeight - y1;
-    const screenY1 = pageHeight - y0;
-
+    // Bbox is already in screen coordinates (y=0 at top)
+    // No conversion needed - pdfplumber uses same coordinate system
     const style: React.CSSProperties = {
       position: 'absolute',
       left: `${x0 * renderScale}px`,
-      top: `${screenY0 * renderScale}px`,
+      top: `${y0 * renderScale}px`,
       width: `${(x1 - x0) * renderScale}px`,
-      height: `${(screenY1 - screenY0) * renderScale}px`,
+      height: `${(y1 - y0) * renderScale}px`,
       backgroundColor: 'rgba(147, 51, 234, 0.25)',
       border: '3px dashed rgba(147, 51, 234, 0.9)',
       zIndex: 10,

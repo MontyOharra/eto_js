@@ -153,15 +153,12 @@ export function ExtractionFieldsStep({
       const normalizedX1 = Math.max(screenX0, screenX1);
       const normalizedY1 = Math.max(screenY0, screenY1);
 
-      // Convert screen coordinates to PDF coordinates (flip Y axis)
-      const pdfX0 = normalizedX0;
-      const pdfY0 = pageHeight - normalizedY1;
-      const pdfX1 = normalizedX1;
-      const pdfY1 = pageHeight - normalizedY0;
-
+      // Store coordinates as-is (no Y-axis flip)
+      // Backend text_words use pdfplumber coordinates (y=0 at top)
+      // which matches screen coordinates, so no conversion needed
       const newFieldId = `field_${Date.now()}`;
       setTempFieldData({
-        bbox: [pdfX0, pdfY0, pdfX1, pdfY1],
+        bbox: [normalizedX0, normalizedY0, normalizedX1, normalizedY1],
         page: currentPage - 1, // Convert to 0-based
       });
 
