@@ -487,7 +487,7 @@ class PdfFilesService:
                     for line in lines:
                         graphic_lines.append(GraphicLine(
                             page=page_num,
-                            bbox=(line['x0'], line['top'], line['x1'], line['bottom']),
+                            bbox=(line['x0'], line['y0'], line['x1'], line['y1']),
                             linewidth=line.get('linewidth', 1.0)
                         ))
 
@@ -496,7 +496,7 @@ class PdfFilesService:
                     for rect in rects:
                         graphic_rects.append(GraphicRect(
                             page=page_num,
-                            bbox=(rect['x0'], rect['top'], rect['x1'], rect['bottom']),
+                            bbox=(rect['x0'], rect['y0'], rect['x1'], rect['y1']),
                             linewidth=rect.get('linewidth', 1.0)
                         ))
 
@@ -522,7 +522,7 @@ class PdfFilesService:
 
                         images.append(Image(
                             page=page_num,
-                            bbox=(img['x0'], img['top'], img['x1'], img['bottom']),
+                            bbox=(img['x0'], img['y0'], img['x1'], img['y1']),
                             format=img_format,
                             colorspace=str(colorspace),  # Ensure string
                             bits=int(img.get('bits', 0))  # Ensure int
