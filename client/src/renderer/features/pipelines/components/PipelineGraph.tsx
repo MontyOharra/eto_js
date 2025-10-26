@@ -504,7 +504,7 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
           onPaneClick={handlePaneClick}
           panOnDrag={!isTextFocused}
           defaultEdgeOptions={{
-            type: viewOnly ? 'straight' : 'default',
+            type: 'default',
             style: { strokeWidth: 2 },
           }}
           minZoom={0.1}

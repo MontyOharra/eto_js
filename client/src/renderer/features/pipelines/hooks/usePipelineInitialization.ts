@@ -29,6 +29,9 @@ function createEntryPointNodes(entryPoints: EntryPoint[], visualState?: VisualSt
     };
 
     // Create fake module instance for visual rendering
+    // Backend entry points don't have 'type', default to 'str'
+    const entryPointType = (ep as any).type || 'str';
+
     const fakeModuleInstance: ModuleInstance = {
       module_instance_id: `entry-${ep.node_id}`,
       module_ref: 'entry_point:1.0.0',
@@ -39,7 +42,7 @@ function createEntryPointNodes(entryPoints: EntryPoint[], visualState?: VisualSt
         {
           node_id: ep.node_id,
           direction: 'out',
-          type: ep.type,
+          type: entryPointType,
           name: ep.name,
           label: ep.name,
           position_index: 0,

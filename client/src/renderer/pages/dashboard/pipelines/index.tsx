@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { usePipelinesApi } from '../../../features/pipelines/hooks/usePipelinesApi';
-import { PipelineCard } from '../../../features/pipelines/components';
+import { PipelineCard, PipelineViewerModal } from '../../../features/pipelines/components';
 import { TestExecutedPipelineModal } from '../../../features/pipelines/components/TestExecutedPipelineModal';
 import { PipelineListItem } from '../../../features/pipelines/types';
 
@@ -23,6 +23,7 @@ function PipelinesPage() {
   const [sortBy, setSortBy] = useState<SortBy>('created_at');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
+  const [viewerPipelineId, setViewerPipelineId] = useState<number | null>(null);
 
   // Fetch pipelines on mount
   useEffect(() => {
@@ -79,9 +80,7 @@ function PipelinesPage() {
   // ==========================================================================
 
   const handleView = (pipelineId: number) => {
-    console.log('View pipeline:', pipelineId);
-    // TODO: Navigate to pipeline detail page or open modal
-    // navigate({ to: `/dashboard/pipelines/${pipelineId}` });
+    setViewerPipelineId(pipelineId);
   };
 
 
@@ -242,6 +241,13 @@ function PipelinesPage() {
       <TestExecutedPipelineModal
         isOpen={isTestModalOpen}
         onClose={() => setIsTestModalOpen(false)}
+      />
+
+      {/* Pipeline Viewer Modal */}
+      <PipelineViewerModal
+        isOpen={viewerPipelineId !== null}
+        pipelineId={viewerPipelineId}
+        onClose={() => setViewerPipelineId(null)}
       />
     </div>
   );
