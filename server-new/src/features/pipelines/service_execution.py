@@ -303,7 +303,7 @@ class PipelineExecutionService:
         for step in steps:
             module_id = step.module_ref.split(":")[0] if ":" in step.module_ref else step.module_ref
             handler = self.module_registry.get(module_id)
-            if handler and handler.module_kind.value == 'action':
+            if handler and handler.kind.value == 'action':
                 action_steps.append(step)
             else:
                 # Transform or logic module
@@ -524,7 +524,7 @@ class PipelineExecutionService:
         handlerInstance = handler()
 
         # Determine module kind from handler class
-        module_kind = handler.module_kind.value  # "transform", "logic", or "action"
+        module_kind = handler.kind.value  # "transform", "logic", or "action"
         is_action = (module_kind == "action")
 
         # Build execution context
