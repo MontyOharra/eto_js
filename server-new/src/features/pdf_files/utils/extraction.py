@@ -58,8 +58,8 @@ def extract_text_from_bbox(
         return ""
 
     # Sort words by position (top to bottom, left to right)
-    # Note: y-axis may be inverted depending on PDF coordinate system
-    words_in_box.sort(key=lambda w: (-w["bbox"][1], w["bbox"][0]))
+    # pdfplumber coordinates: y=0 at top, so sort by Y ascending
+    words_in_box.sort(key=lambda w: (w["bbox"][1], w["bbox"][0]))
 
     # Group words into lines based on y-coordinate proximity
     lines = _group_words_into_lines(words_in_box, y_tolerance=5.0)
