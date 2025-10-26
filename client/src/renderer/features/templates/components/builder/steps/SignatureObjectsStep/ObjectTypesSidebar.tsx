@@ -20,7 +20,7 @@ const OBJECT_TYPE_COLORS: Record<string, string> = {
   text_word: '#ff0000',
   text_line: '#00ff00',
   graphic_rect: '#0000ff',
-  graphic_line: '#ffff00',
+  graphic_line: '#b45a00', // Dark orange - matches overlay color
   graphic_curve: '#ff00ff',
   image: '#00ffff',
   table: '#ffa500',

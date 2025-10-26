@@ -12,7 +12,7 @@ const OBJECT_COLORS: Record<string, string> = {
   text_word: 'rgba(255, 0, 0, 0.2)',
   text_line: 'rgba(0, 255, 0, 0.2)',
   graphic_rect: 'rgba(0, 0, 255, 0.2)',
-  graphic_line: 'rgba(255, 255, 0, 0.2)',
+  graphic_line: 'rgba(180, 90, 0, 0.3)', // Dark orange - easier to see than bright yellow
   graphic_curve: 'rgba(255, 0, 255, 0.2)',
   image: 'rgba(0, 255, 255, 0.2)',
   table: 'rgba(255, 165, 0, 0.3)',
@@ -23,7 +23,7 @@ const OBJECT_BORDER_COLORS: Record<string, string> = {
   text_word: 'rgba(255, 0, 0, 0.6)',
   text_line: 'rgba(0, 255, 0, 0.6)',
   graphic_rect: 'rgba(0, 0, 255, 0.6)',
-  graphic_line: 'rgba(255, 255, 0, 0.6)',
+  graphic_line: 'rgba(180, 90, 0, 0.8)', // Dark orange - easier to see than bright yellow
   graphic_curve: 'rgba(255, 0, 255, 0.6)',
   image: 'rgba(0, 255, 255, 0.6)',
   table: 'rgba(255, 165, 0, 0.7)',
@@ -153,19 +153,42 @@ export function PdfObjectOverlay({
     // Apply transform for hover effect
     const transform = isHovered ? 'scale(1.05)' : 'scale(1)';
 
+    // Calculate dimensions
+    const objectWidth = (x1 - x0) * renderScale;
+    const objectHeight = (screenY1 - screenY0) * renderScale;
+
+    // Minimum hitbox size in pixels (makes thin lines easier to click)
+    const MIN_HITBOX_SIZE = 8;
+
+    // Expand hitbox for small objects
+    const hitboxWidth = Math.max(objectWidth, MIN_HITBOX_SIZE);
+    const hitboxHeight = Math.max(objectHeight, MIN_HITBOX_SIZE);
+
+    // Center the visual element within the hitbox
+    const hitboxOffsetX = (hitboxWidth - objectWidth) / 2;
+    const hitboxOffsetY = (hitboxHeight - objectHeight) / 2;
+
     const style: React.CSSProperties = {
       position: 'absolute',
-      left: `${x0 * renderScale}px`,
-      top: `${screenY0 * renderScale}px`,
-      width: `${(x1 - x0) * renderScale}px`,
-      height: `${(screenY1 - screenY0) * renderScale}px`,
+      left: `${x0 * renderScale - hitboxOffsetX}px`,
+      top: `${screenY0 * renderScale - hitboxOffsetY}px`,
+      width: `${hitboxWidth}px`,
+      height: `${hitboxHeight}px`,
+      pointerEvents: isHiddenSelected ? 'none' : 'auto',
+      cursor: isHiddenSelected ? 'default' : 'pointer',
+      zIndex: isSelected ? 10 : 1,
+      // Use padding to create visual element centered in hitbox
+      padding: `${hitboxOffsetY}px ${hitboxOffsetX}px`,
+      boxSizing: 'border-box',
+    };
+
+    const visualStyle: React.CSSProperties = {
+      width: '100%',
+      height: '100%',
       backgroundColor,
       border: `${borderWidth} solid ${borderColor}`,
-      pointerEvents: isHiddenSelected ? 'none' : 'auto', // Hidden selected not clickable
-      cursor: isHiddenSelected ? 'default' : 'pointer',
-      transition: 'transform 0.15s ease-in-out', // Only transition the hover scale, not position/size
+      transition: 'transform 0.15s ease-in-out',
       transform,
-      zIndex: isSelected ? 10 : 1,
     };
 
     return (
@@ -176,7 +199,9 @@ export function PdfObjectOverlay({
         onMouseEnter={() => !isHiddenSelected && setHoveredObjectId(objectId)}
         onMouseLeave={() => setHoveredObjectId(null)}
         title={obj.text || obj.type}
-      />
+      >
+        <div style={visualStyle} />
+      </div>
     );
   };
 
