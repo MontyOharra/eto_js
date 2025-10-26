@@ -4,7 +4,7 @@
  */
 
 import { useState, useMemo } from 'react';
-import { ExtractionField, SignatureObject } from '../../../types';
+import { ExtractionField, SignatureObject, PipelineState, VisualState } from '../../../types';
 import { PdfViewer } from '../../../../../shared/components/pdf';
 import { PdfObjectOverlay } from './SignatureObjectsStep/PdfObjectOverlay';
 import { ExtractionFieldsSidebar, SidebarMode } from './ExtractionFieldsStep/ExtractionFieldsSidebar';
@@ -18,6 +18,8 @@ interface ExtractionFieldsStepProps {
   signatureObjects: SignatureObject[];
   pdfObjects: any;
   pdfUrl: string;
+  pipelineState: PipelineState;
+  visualState: VisualState;
   onTemplateNameChange: (name: string) => void;
   onTemplateDescriptionChange: (description: string) => void;
   onExtractionFieldsChange: (fields: ExtractionField[]) => void;
@@ -35,6 +37,8 @@ export function ExtractionFieldsStep({
   signatureObjects,
   pdfObjects,
   pdfUrl,
+  pipelineState,
+  visualState,
   onTemplateNameChange,
   onTemplateDescriptionChange,
   onExtractionFieldsChange,
@@ -251,9 +255,13 @@ export function ExtractionFieldsStep({
       {/* Sidebar - Field Management */}
       <div className="w-80 flex-shrink-0 bg-gray-900 border-r border-gray-700 p-4 overflow-y-auto">
         <ExtractionFieldsSidebar
+          pdfFileId={pdfFileId}
           templateName={templateName}
           templateDescription={templateDescription}
           extractionFields={extractionFields}
+          signatureObjects={signatureObjects}
+          pipelineState={pipelineState}
+          visualState={visualState}
           mode={sidebarMode}
           selectedFieldId={stagedFieldId}
           showSignatureObjects={showSignatureObjects}

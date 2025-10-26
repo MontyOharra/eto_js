@@ -424,6 +424,8 @@ export function TemplateBuilderModal({
                   signatureObjects={signatureObjects}
                   pdfObjects={pdfObjects}
                   pdfUrl={pdfUrl}
+                  pipelineState={pipelineState}
+                  visualState={visualState}
                   onTemplateNameChange={setTemplateName}
                   onTemplateDescriptionChange={setTemplateDescription}
                   onExtractionFieldsChange={setExtractionFields}

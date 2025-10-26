@@ -7,14 +7,20 @@
  */
 
 import { useRef, useEffect, useState } from 'react';
-import { ExtractionField } from '../../../../types';
+import { ExtractionField, SignatureObject, PipelineState, VisualState } from '../../../../types';
+import { useTemplatesApi } from '../../../../hooks/useTemplatesApi';
+import { PostTemplateSimulateStoredRequest } from '../../../../api/types';
 
 export type SidebarMode = 'list' | 'create' | 'detail';
 
 interface ExtractionFieldsSidebarProps {
+  pdfFileId: number;
   templateName: string;
   templateDescription: string;
   extractionFields: ExtractionField[];
+  signatureObjects: SignatureObject[];
+  pipelineState: PipelineState;
+  visualState: VisualState;
   mode: SidebarMode;
   selectedFieldId: string | null;
   showSignatureObjects: boolean;
@@ -43,9 +49,13 @@ interface ExtractionFieldsSidebarProps {
 }
 
 export function ExtractionFieldsSidebar({
+  pdfFileId,
   templateName,
   templateDescription,
   extractionFields,
+  signatureObjects,
+  pipelineState,
+  visualState,
   mode,
   selectedFieldId,
   showSignatureObjects,
@@ -71,6 +81,10 @@ export function ExtractionFieldsSidebar({
   const fieldLabelInputRef = useRef<HTMLInputElement>(null);
   const [isEditingLabel, setIsEditingLabel] = useState(false);
   const [editedLabel, setEditedLabel] = useState('');
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [simulationResult, setSimulationResult] = useState<string | null>(null);
+
+  const { simulateTemplate } = useTemplatesApi();
 
   // Auto-focus field label input when entering create mode
   useEffect(() => {
@@ -92,6 +106,43 @@ export function ExtractionFieldsSidebar({
       if (fieldLabel.trim()) {
         onSaveField();
       }
+    }
+  };
+
+  // Handle simulate button click
+  const handleSimulate = async () => {
+    if (extractionFields.length === 0) {
+      alert('Please define at least one extraction field before simulating.');
+      return;
+    }
+
+    setIsSimulating(true);
+    setSimulationResult(null);
+
+    try {
+      const request: PostTemplateSimulateStoredRequest = {
+        pdf_source: 'stored',
+        pdf_file_id: pdfFileId,
+        signature_objects: signatureObjects,
+        extraction_fields: extractionFields,
+        pipeline_state: pipelineState,
+      };
+
+      const response = await simulateTemplate(request);
+
+      // Display extracted data
+      if (response.data_extraction.status === 'success' && response.data_extraction.extracted_data) {
+        const formattedData = JSON.stringify(response.data_extraction.extracted_data, null, 2);
+        setSimulationResult(formattedData);
+        console.log('[Simulate] Extracted Data:', response.data_extraction.extracted_data);
+      } else {
+        setSimulationResult('Extraction failed: ' + (response.data_extraction.error_message || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('[Simulate] Error:', error);
+      setSimulationResult('Error: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    } finally {
+      setIsSimulating(false);
     }
   };
 
@@ -144,7 +195,7 @@ export function ExtractionFieldsSidebar({
             <h3 className="text-sm font-semibold text-white mb-2">
               Extraction Fields ({extractionFields.length})
             </h3>
-            <div className="flex-1 overflow-y-auto space-y-2">
+            <div className="flex-1 overflow-y-auto space-y-2 mb-4">
               {extractionFields.length === 0 ? (
                 <div className="bg-gray-800 rounded p-3 text-center">
                   <div className="text-sm text-gray-400">No fields defined yet</div>
@@ -165,6 +216,35 @@ export function ExtractionFieldsSidebar({
                     </div>
                   </button>
                 ))
+              )}
+            </div>
+
+            {/* Simulate Button */}
+            <div className="border-t border-gray-700 pt-4">
+              <button
+                onClick={handleSimulate}
+                disabled={isSimulating || extractionFields.length === 0}
+                className="w-full px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded transition-colors font-medium"
+              >
+                {isSimulating ? 'Simulating...' : 'Simulate'}
+              </button>
+
+              {/* Simulation Results */}
+              {simulationResult && (
+                <div className="mt-3 p-3 bg-gray-800 border border-gray-600 rounded max-h-64 overflow-y-auto">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-xs font-semibold text-gray-400">Extracted Data:</div>
+                    <button
+                      onClick={() => setSimulationResult(null)}
+                      className="text-xs text-gray-400 hover:text-white"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <pre className="text-xs text-green-400 font-mono whitespace-pre-wrap">
+                    {simulationResult}
+                  </pre>
+                </div>
               )}
             </div>
           </>
