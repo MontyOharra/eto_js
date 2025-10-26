@@ -357,15 +357,24 @@ class PipelineService:
         """
         from collections import deque
 
-        # Step 1: Create canonical entry points (sorted by name)
-        canonical_entry_points = sorted(
-            [{"name": ep.name} for ep in pruned_pipeline.entry_points],
-            key=lambda ep: ep["name"]
-        )
+        # Step 1: Create canonical entry points (count only, names don't matter for logic)
+        # Sort entry points by their first downstream connection for deterministic ordering
+        def ep_sort_key(ep):
+            # Find what this entry point connects to
+            downstream_nodes = []
+            for conn in pruned_pipeline.connections:
+                if conn.from_node_id == ep.node_id:
+                    downstream_nodes.append(conn.to_node_id)
+            # Sort by downstream connections (deterministic even if names change)
+            return tuple(sorted(downstream_nodes))
+
+        sorted_eps = sorted(pruned_pipeline.entry_points, key=ep_sort_key)
+
+        # Just include the count of entry points, not their names
+        canonical_entry_points = [{"index": idx} for idx in range(len(sorted_eps))]
 
         # Map entry point node_ids to canonical IDs
         entry_point_id_map = {}
-        sorted_eps = sorted(pruned_pipeline.entry_points, key=lambda ep: ep.name)
         for idx, ep in enumerate(sorted_eps):
             entry_point_id_map[ep.node_id] = f"EP_{idx}"
 
