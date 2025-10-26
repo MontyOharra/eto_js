@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { PipelineState, VisualState, ExtractionField } from '../../../types';
 import { PipelineGraph, PipelineGraphRef } from '../../../../pipelines/components/PipelineGraph';
 import { ModuleSelectorPane } from '../../../../pipelines/components/ModuleSelectorPane';
-import { useMockModulesApi } from '../../../../../features/modules/hooks';
+import { useModulesApi } from '../../../../../features/modules/hooks';
 import type { ModuleTemplate } from '../../../../../types/moduleTypes';
 import type { EntryPoint } from '../../../../../types/pipelineTypes';
 
@@ -21,7 +21,7 @@ export function PipelineBuilderStep({
   onPipelineStateChange,
   onVisualStateChange,
 }: PipelineBuilderStepProps) {
-  const { getModules, isLoading: isLoadingModules } = useMockModulesApi();
+  const { getModules, isLoading: isLoadingModules } = useModulesApi();
   const [modules, setModules] = useState<ModuleTemplate[]>([]);
   const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null);
   const pipelineGraphRef = useRef<PipelineGraphRef>(null);
@@ -35,7 +35,7 @@ export function PipelineBuilderStep({
     }));
   }, [extractionFields]);
 
-  // Load modules from mock API
+  // Load modules from API
   useEffect(() => {
     async function loadModules() {
       try {
@@ -47,7 +47,7 @@ export function PipelineBuilderStep({
       }
     }
     loadModules();
-  }, []);
+  }, [getModules]);
 
   // Sync graph state changes back to parent
   useEffect(() => {
