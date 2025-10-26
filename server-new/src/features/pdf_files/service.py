@@ -7,6 +7,7 @@ import logging
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
+import pdfplumber
 
 from shared.database import DatabaseConnectionManager
 from shared.database.repositories import PdfFileRepository
@@ -406,7 +407,6 @@ class PdfFilesService:
         Raises:
             ServiceError: If extraction fails
         """
-        import pdfplumber
 
         # Initialize lists for typed objects
         text_words: list[TextWord] = []
@@ -420,7 +420,7 @@ class PdfFilesService:
         try:
             with pdfplumber.open(file_path) as pdf:
                 for page in pdf.pages:
-                    page_num = page.page_number - 1  # 0-indexed
+                    page_num = page.page_number  # 1-indexed (matches frontend)
 
                     # Extract text words → TextWord dataclasses
                     words = page.extract_words()
