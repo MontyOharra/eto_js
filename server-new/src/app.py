@@ -239,9 +239,52 @@ async def initialize_services() -> None:
         ServiceContainer.initialize(_connection_manager, pdf_storage_path)
         logger.info("ServiceContainer initialized successfully")
 
-        logger.info("All services initialized successfully via ServiceContainer")
+        # Eagerly initialize all services to ensure proper startup
+        logger.info("Eagerly initializing all services...")
 
-        # Start email ingestion service
+        # 1. Initialize modules service FIRST (triggers auto-discovery)
+        try:
+            modules_service = ServiceContainer.get_modules_service()
+            logger.info("Modules service initialized (auto-discovery complete)")
+        except Exception as e:
+            logger.error(f"Failed to initialize modules service: {e}")
+            # Continue - other services may still work
+
+        # 2. Initialize core data services
+        try:
+            pdf_files_service = ServiceContainer.get_pdf_files_service()
+            logger.info("PDF files service initialized")
+        except Exception as e:
+            logger.warning(f"Failed to initialize PDF files service: {e}")
+
+        try:
+            pipeline_service = ServiceContainer.get_pipeline_service()
+            logger.info("Pipeline service initialized")
+        except Exception as e:
+            logger.warning(f"Failed to initialize pipeline service: {e}")
+
+        try:
+            pdf_template_service = ServiceContainer.get_pdf_template_service()
+            logger.info("PDF template service initialized")
+        except Exception as e:
+            logger.warning(f"Failed to initialize PDF template service: {e}")
+
+        # 3. Initialize ingestion services
+        try:
+            email_ingestion_service = ServiceContainer.get_email_ingestion_service()
+            logger.info("Email ingestion service initialized")
+        except Exception as e:
+            logger.warning(f"Failed to initialize email ingestion service: {e}")
+
+        try:
+            email_config_service = ServiceContainer.get_email_config_service()
+            logger.info("Email config service initialized")
+        except Exception as e:
+            logger.warning(f"Failed to initialize email config service: {e}")
+
+        logger.info("All services initialized successfully")
+
+        # Start email ingestion service (background workers)
         try:
             email_ingestion_service = ServiceContainer.get_email_ingestion_service()
             email_ingestion_service.startup()

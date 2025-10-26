@@ -6,6 +6,7 @@ import logging
 from typing import Dict, Any, Optional, List, TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from features.modules.service import ModulesService
     from features.email_configs.service import EmailConfigService
     from features.email_ingestion.service import EmailIngestionService
     from features.pdf_files.service import PdfFilesService
@@ -99,6 +100,12 @@ class ServiceContainer:
                 'args': [],
                 'singleton': True,
                 'description': 'Storage configuration (filesystem paths)'
+            },
+            'modules': {
+                'class': 'features.modules.service.ModulesService',
+                'args': [cls._connection_manager],
+                'singleton': True,
+                'description': 'Module catalog and auto-discovery service'
             },
             'pdf_files': {
                 'class': 'features.pdf_files.service.PdfFilesService',
@@ -301,6 +308,11 @@ class ServiceContainer:
     # === Convenience Methods ===
 
     @classmethod
+    def get_modules_service(cls) -> 'ModulesService':
+        """Get the modules service"""
+        return cls.get('modules')
+
+    @classmethod
     def get_email_config_service(cls) -> 'EmailConfigService':
         """Get the email config service"""
         return cls.get('email_configs')
@@ -309,12 +321,12 @@ class ServiceContainer:
     def get_email_ingestion_service(cls) -> 'EmailIngestionService':
         """Get the email ingestion service"""
         return cls.get('email_ingestion')
-    
+
     @classmethod
     def get_pdf_files_service(cls) -> 'PdfFilesService':
         """Get the PDF processing service"""
-        return cls.get('pdf_files')    
-    
+        return cls.get('pdf_files')
+
     @classmethod
     def get_pdf_template_service(cls) -> 'PdfTemplateService':
         """Get the PDF template service"""
