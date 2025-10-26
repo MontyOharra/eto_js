@@ -39,11 +39,26 @@ export function usePipelineValidation(
   useEffect(() => {
     // Skip validation if no pipeline state yet
     if (!pipelineState) {
+      console.log('[usePipelineValidation] Skipping - no pipeline state');
       return;
     }
 
+    // Skip validation for empty pipelines (no modules added yet)
+    if (pipelineState.modules.length === 0) {
+      console.log('[usePipelineValidation] Skipping - empty pipeline (no modules)');
+      setIsValid(true);
+      setError(null);
+      return;
+    }
+
+    console.log('[usePipelineValidation] State changed, starting debounce timer', {
+      pipelineState,
+      debounceMs
+    });
+
     // Debounce: wait for user to stop making changes before validating
     const timer = setTimeout(async () => {
+      console.log('[usePipelineValidation] Debounce complete, calling API');
       setIsValidating(true);
 
       try {
@@ -51,15 +66,16 @@ export function usePipelineValidation(
           pipeline_json: pipelineState,
         });
 
+        console.log('[usePipelineValidation] Result:', result);
         setIsValid(result.valid);
         setError(result.error || null);
 
         // Log validation errors to console
         if (!result.valid && result.error) {
-          console.error(`${result.error.code}: ${result.error.message}`);
+          console.error(`[usePipelineValidation] Validation failed: ${result.error.code}: ${result.error.message}`);
         }
       } catch (err) {
-        console.error('Validation request failed:', err);
+        console.error('[usePipelineValidation] API request failed:', err);
         // On API error, assume invalid for safety
         setIsValid(false);
         setError({
@@ -71,7 +87,10 @@ export function usePipelineValidation(
       }
     }, debounceMs);
 
-    return () => clearTimeout(timer);
+    return () => {
+      console.log('[usePipelineValidation] Debounce timer cancelled');
+      clearTimeout(timer);
+    };
   }, [pipelineState, validatePipeline, debounceMs]);
 
   return { isValid, error, isValidating };

@@ -13,7 +13,8 @@ import { useTemplatesApi } from '../../../../hooks/useTemplatesApi';
 export type SidebarMode = 'list' | 'create' | 'detail';
 
 interface ExtractionFieldsSidebarProps {
-  pdfFileId: number;
+  pdfFileId: number | null;
+  pdfFile: File | null;
   templateName: string;
   templateDescription: string;
   extractionFields: ExtractionField[];
@@ -49,6 +50,7 @@ interface ExtractionFieldsSidebarProps {
 
 export function ExtractionFieldsSidebar({
   pdfFileId,
+  pdfFile,
   templateName,
   templateDescription,
   extractionFields,
@@ -129,25 +131,29 @@ export function ExtractionFieldsSidebar({
       }));
 
       // Determine if using stored PDF or uploaded PDF
-      // pdfFileId is null or -1 for uploaded PDFs, otherwise it's a stored PDF
       const isStoredPdf = pdfFileId !== null && pdfFileId > 0;
+      const isUploadedPdf = pdfFile !== null;
 
-      let request;
-      if (isStoredPdf) {
-        request = {
-          pdf_source: 'stored' as const,
-          pdf_file_id: pdfFileId,
-          extraction_fields: mappedFields,
-          pipeline_state: pipelineState,
-        };
-      } else {
-        // TODO: Handle uploaded PDF mode
-        alert('Uploaded PDF simulation not yet implemented. Please use a stored PDF.');
+      if (!isStoredPdf && !isUploadedPdf) {
+        alert('No PDF source available. Please provide either a stored PDF ID or upload a PDF file.');
         setIsSimulating(false);
         return;
       }
 
-      const response = await simulateTemplate(request);
+      // Build FormData for multipart/form-data request
+      const formData = new FormData();
+      formData.append('extraction_fields', JSON.stringify(mappedFields));
+      formData.append('pipeline_state', JSON.stringify(pipelineState));
+
+      if (isStoredPdf) {
+        formData.append('pdf_source', 'stored');
+        formData.append('pdf_file_id', pdfFileId!.toString());
+      } else if (isUploadedPdf) {
+        formData.append('pdf_source', 'upload');
+        formData.append('pdf_file', pdfFile!);
+      }
+
+      const response = await simulateTemplate(formData);
 
       // Display extracted data
       if (response.data_extraction.status === 'success' && response.data_extraction.extracted_data) {

@@ -4,7 +4,7 @@
  * Refactored to use extracted hooks and utilities
  */
 
-import { useState, useCallback, useImperativeHandle, forwardRef, useEffect } from 'react';
+import { useState, useCallback, useImperativeHandle, forwardRef, useEffect, useMemo, useRef } from 'react';
 import {
   ReactFlow,
   Node,
@@ -45,6 +45,7 @@ export interface PipelineGraphProps {
   initialVisualState?: VisualState;
   selectedModuleId?: string | null;
   onModulePlaced?: () => void;
+  onChange?: (state: PipelineState) => void;  // Called when pipeline state changes
   entryPoints?: EntryPoint[];
   failedModuleIds?: string[];  // For execution visualization - highlight failed modules
 }
@@ -73,6 +74,7 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
       moduleTemplates,
       selectedModuleId,
       onModulePlaced,
+      onChange,
       initialPipelineState,
       initialVisualState,
       entryPoints = [],
@@ -132,15 +134,44 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
       viewOnly,
     });
 
+    // Memoize pipeline state (logical structure only, not visual positioning)
+    const pipelineState = useMemo(() => {
+      return serializeToPipelineState(nodes, edges);
+    }, [nodes, edges]);
+
+    // Track previous pipeline state to detect actual changes (not just visual moves)
+    const prevPipelineStateRef = useRef<string | null>(null);
+
     // Expose ref API
     useImperativeHandle(
       ref,
       () => ({
-        getPipelineState: () => serializeToPipelineState(nodes, edges),
+        getPipelineState: () => pipelineState,
         getVisualState: () => serializeToVisualState(nodes),
       }),
-      [nodes, edges]
+      [nodes, edges, pipelineState]
     );
+
+    // Notify parent of state changes (only when logical structure changes, not visual)
+    useEffect(() => {
+      if (!onChange) return;
+
+      // Serialize to JSON for deep comparison
+      const currentStateJson = JSON.stringify(pipelineState);
+
+      // Only call onChange if the pipeline structure actually changed
+      if (prevPipelineStateRef.current !== currentStateJson) {
+        console.log('[PipelineGraph onChange]', {
+          nodeCount: nodes.length,
+          edgeCount: edges.length,
+          pipelineState,
+          reason: prevPipelineStateRef.current === null ? 'initial' : 'structure changed'
+        });
+
+        prevPipelineStateRef.current = currentStateJson;
+        onChange(pipelineState);
+      }
+    }, [pipelineState, onChange, nodes.length, edges.length]);
 
     // React Flow node/edge change handlers
     const onNodesChange = useCallback(

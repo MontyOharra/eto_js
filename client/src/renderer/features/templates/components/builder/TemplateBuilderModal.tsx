@@ -418,6 +418,7 @@ export function TemplateBuilderModal({
               {currentStep === 'extraction-fields' && (
                 <ExtractionFieldsStep
                   pdfFileId={pdfFileId}
+                  pdfFile={pdfFile}
                   templateName={templateName}
                   templateDescription={templateDescription}
                   extractionFields={extractionFields}

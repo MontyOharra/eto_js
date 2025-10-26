@@ -5,6 +5,7 @@
 
 import { ModuleTemplate, ModuleInstance, NodePin, IOSideShape } from '../../../types/moduleTypes';
 import { initializeConfig } from '../../../utils/moduleFactoryNew';
+import { generateModuleId, generateNodeId } from './idGenerator';
 
 const ALL_TYPES = ['str', 'int', 'float', 'bool', 'datetime'];
 
@@ -41,7 +42,7 @@ function createPins(
     // Create min_count pins for this group
     for (let i = 0; i < nodeGroup.min_count; i++) {
       pins.push({
-        node_id: `${instanceId}-${direction}-g${groupIndex}-${i}`,
+        node_id: generateNodeId(),
         direction,
         type: defaultType,
         name: '',
@@ -62,9 +63,9 @@ function createPins(
  */
 export function createModuleInstance(
   template: ModuleTemplate,
-  instanceIdPrefix: string = 'module'
+  instanceIdPrefix: string = 'module' // Kept for API compatibility but not used
 ): ModuleInstance {
-  const instanceId = `${instanceIdPrefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const instanceId = generateModuleId();
 
   const typeParams = template.meta?.io_shape?.type_params || {};
   const inputs = createPins(instanceId, template.meta?.io_shape?.inputs, 'in', typeParams);
@@ -128,7 +129,7 @@ export function addPinToModule(
   }
 
   const newPin: NodePin = {
-    node_id: `${moduleInstance.module_instance_id}-${direction === 'input' ? 'in' : 'out'}-g${groupIndex}-${positionIndex}`,
+    node_id: generateNodeId(),
     direction: direction === 'input' ? 'in' : 'out',
     type: defaultType,
     name: '',

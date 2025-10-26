@@ -4,7 +4,8 @@ REST endpoints for PDF template creation, management, and versioning
 """
 import logging
 from typing import Optional, Union, Literal
-from fastapi import APIRouter, Query, status, Depends
+from fastapi import APIRouter, Query, status, Depends, File, UploadFile, Form
+import json
 
 from api.schemas.pdf_templates import (
     PdfTemplate,
@@ -168,7 +169,11 @@ async def get_template_version(
 
 @router.post("/simulate", response_model=SimulateTemplateResponse, status_code=status.HTTP_200_OK)
 async def simulate_template(
-    request: Union[SimulateTemplateRequestStored, SimulateTemplateRequestUpload],
+    pdf_source: str = Form(...),
+    extraction_fields: str = Form(...),
+    pipeline_state: str = Form(...),
+    pdf_file_id: Optional[int] = Form(None),
+    pdf_file: Optional[UploadFile] = File(None),
     template_service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service()),
     pdf_service: 'PdfFilesService' = Depends(lambda: ServiceContainer.get_pdf_files_service())
 ) -> SimulateTemplateResponse:
@@ -178,49 +183,68 @@ async def simulate_template(
     Used during template creation/editing to test extraction and transformation logic.
 
     Two modes:
-    1. Stored PDF: Uses existing PDF file from database (pdf_source: "stored", pdf_file_id)
-    2. Uploaded PDF: Uses PDF from multipart upload (pdf_source: "upload", file in form data)
+    1. Stored PDF (ETO runs): Uses existing PDF from database
+       - pdf_source: "stored"
+       - pdf_file_id: ID of stored PDF file
+       - extraction_fields: JSON string
+       - pipeline_state: JSON string
 
-    Request Body (Stored):
-    - pdf_source: "stored"
-    - pdf_file_id: ID of stored PDF file
-    - signature_objects: Objects to match
-    - extraction_fields: Fields to extract
-    - pipeline_state: Transformation pipeline
-
-    Request Body (Upload):
-    - pdf_source: "upload"
-    - signature_objects: Objects to match
-    - extraction_fields: Fields to extract
-    - pipeline_state: Transformation pipeline
-    - PDF file in multipart form data
+    2. Uploaded PDF (Template builder): Uses uploaded PDF file
+       - pdf_source: "upload"
+       - pdf_file: PDF file (multipart)
+       - extraction_fields: JSON string
+       - pipeline_state: JSON string
 
     Returns:
     - Simulation results with:
-      - Template matching status
-      - Data extraction results with validation
-      - Pipeline execution results (action modules simulated, not executed)
+      - Template matching status (skipped)
+      - Data extraction results
+      - Pipeline execution results (not yet implemented)
 
     Errors:
     - 400: Invalid request or simulation failed
     - 404: Referenced PDF file not found (for stored mode)
     """
+    # Parse JSON fields
+    try:
+        extraction_fields_data = json.loads(extraction_fields)
+        pipeline_state_data = json.loads(pipeline_state)
+    except json.JSONDecodeError as e:
+        raise ValidationError(f"Invalid JSON in request fields: {str(e)}")
+
+    # Validate and parse extraction fields using Pydantic
+    from api.schemas.pdf_templates import ExtractionField as ExtractionFieldSchema
+    try:
+        parsed_extraction_fields = [
+            ExtractionFieldSchema(**field) for field in extraction_fields_data
+        ]
+    except Exception as e:
+        raise ValidationError(f"Invalid extraction fields format: {str(e)}")
+
     # Get PDF bytes based on source
-    if request.pdf_source == "stored":
+    if pdf_source == "stored":
+        if pdf_file_id is None:
+            raise ValidationError("pdf_file_id is required when pdf_source is 'stored'")
         # Get PDF from database
-        pdf_bytes, _ = pdf_service.get_pdf_file_bytes(request.pdf_file_id)
+        pdf_bytes, _ = pdf_service.get_pdf_file_bytes(pdf_file_id)
+    elif pdf_source == "upload":
+        if pdf_file is None:
+            raise ValidationError("pdf_file is required when pdf_source is 'upload'")
+        # Validate file upload
+        if not pdf_file.filename or not pdf_file.filename.endswith('.pdf'):
+            raise ValidationError("Invalid file type - must be a PDF")
+        # Read uploaded PDF bytes
+        pdf_bytes = await pdf_file.read()
     else:
-        # TODO: Handle uploaded PDF (multipart form data)
-        # For now, this mode is not fully implemented
-        raise ValidationError("Uploaded PDF mode not yet implemented")
+        raise ValidationError(f"Invalid pdf_source: {pdf_source}. Must be 'stored' or 'upload'")
 
     # Convert extraction fields to dict format for service method
-    extraction_fields = [field.model_dump() for field in request.extraction_fields]
+    extraction_fields_dict = [field.model_dump() for field in parsed_extraction_fields]
 
     # Call simulate extraction (pipelines not implemented yet)
     extracted_data = template_service.simulate_extraction(
         pdf_bytes=pdf_bytes,
-        extraction_fields=extraction_fields
+        extraction_fields=extraction_fields_dict
     )
 
     # Build response (pipelines not implemented yet)

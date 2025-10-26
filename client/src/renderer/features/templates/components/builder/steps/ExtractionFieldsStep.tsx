@@ -11,7 +11,8 @@ import { ExtractionFieldsSidebar, SidebarMode } from './ExtractionFieldsStep/Ext
 import { ExtractionFieldOverlay } from './ExtractionFieldsStep/ExtractionFieldOverlay';
 
 interface ExtractionFieldsStepProps {
-  pdfFileId: number;
+  pdfFileId: number | null;
+  pdfFile: File | null;
   templateName: string;
   templateDescription: string;
   extractionFields: ExtractionField[];
@@ -31,6 +32,7 @@ interface ExtractionFieldsStepProps {
 
 export function ExtractionFieldsStep({
   pdfFileId,
+  pdfFile,
   templateName,
   templateDescription,
   extractionFields,
@@ -256,6 +258,7 @@ export function ExtractionFieldsStep({
       <div className="w-80 flex-shrink-0 bg-gray-900 border-r border-gray-700 p-4 overflow-y-auto">
         <ExtractionFieldsSidebar
           pdfFileId={pdfFileId}
+          pdfFile={pdfFile}
           templateName={templateName}
           templateDescription={templateDescription}
           extractionFields={extractionFields}

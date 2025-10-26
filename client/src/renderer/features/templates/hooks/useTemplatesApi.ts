@@ -205,13 +205,20 @@ export function useTemplatesApi() {
   /**
    * POST /api/pdf-templates/simulate
    * Simulate full ETO process
+   * Accepts FormData for multipart/form-data requests (both stored and uploaded PDFs)
    */
   const simulateTemplate = useCallback(
-    async (request: PostTemplateSimulateRequest): Promise<PostTemplateSimulateResponse> => {
+    async (request: PostTemplateSimulateRequest | FormData): Promise<PostTemplateSimulateResponse> => {
       return withLoadingAndError(async () => {
         const response = await apiClient.post<PostTemplateSimulateResponse>(
           `${baseUrl}/simulate`,
-          request
+          request,
+          // Set correct content-type header for FormData
+          request instanceof FormData ? {
+            headers: {
+              'Content-Type': 'multipart/form-data',
+            },
+          } : undefined
         );
         return response.data;
       });

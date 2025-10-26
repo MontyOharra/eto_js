@@ -3,13 +3,17 @@ Pipeline Validation
 Validates pipeline structure through multiple stages
 """
 from typing import Dict, List, Set, Optional
-from shared.types.pipelines import PipelineState, PipelineIndices, PinInfo
+from collections import Counter
+from shared.types.pipelines import PipelineState, PipelineIndices, PinInfo, ModuleInstance
 from shared.exceptions import (
     SchemaValidationError,
     ModuleValidationError,
     EdgeValidationError,
     GraphValidationError,
 )
+
+# Allowed types for module pins
+ALLOWED_PIN_TYPES = {"str", "int", "float", "bool", "datetime"}
 
 
 class PipelineValidator:
@@ -80,10 +84,103 @@ class PipelineValidator:
         Raises:
             SchemaValidationError: If schema validation fails
         """
-        # TODO: Implement schema validation
-        # For now, validation always passes
-        raise SchemaValidationError("test", "Schema validation not implemented")
-        pass
+        # Check 1: Node ID uniqueness
+        self._check_node_id_uniqueness(pipeline_state)
+
+        # Check 2: Pin types
+        self._check_pin_types(pipeline_state)
+
+        # Check 3: Module ref format
+        self._check_module_refs(pipeline_state)
+
+    def _check_node_id_uniqueness(self, pipeline_state: PipelineState) -> None:
+        """
+        Check all node IDs are globally unique across entry points and all module pins.
+        Fails fast on first duplicate found.
+
+        Raises:
+            SchemaValidationError: If duplicate node ID found
+        """
+        # Collect all node IDs with their sources for error reporting
+        node_ids: List[tuple[str, str]] = []
+
+        # Entry points
+        for ep in pipeline_state.entry_points:
+            node_ids.append((ep.node_id, f"entry point '{ep.name}'"))
+
+        # Module pins
+        for module in pipeline_state.modules:
+            for pin in module.inputs:
+                node_ids.append(
+                    (pin.node_id, f"input pin '{pin.name}' in module '{module.module_instance_id}'")
+                )
+            for pin in module.outputs:
+                node_ids.append(
+                    (pin.node_id, f"output pin '{pin.name}' in module '{module.module_instance_id}'")
+                )
+
+        # Find duplicates (fail fast on first duplicate)
+        node_id_counts = Counter([node_id for node_id, _ in node_ids])
+        for node_id, count in node_id_counts.items():
+            if count > 1:
+                # Find all sources of this duplicate
+                sources = [source for nid, source in node_ids if nid == node_id]
+                raise SchemaValidationError(
+                    message=f"Node ID '{node_id}' is used {count} times: {', '.join(sources)}",
+                    code="duplicate_node_id",
+                    where={"node_id": node_id}
+                )
+
+    def _check_pin_types(self, pipeline_state: PipelineState) -> None:
+        """
+        Check all module pin types are in the allowed set.
+        Fails fast on first invalid type.
+
+        Raises:
+            SchemaValidationError: If invalid pin type found
+        """
+        for module in pipeline_state.modules:
+            # Check input pins
+            for pin in module.inputs:
+                if pin.type not in ALLOWED_PIN_TYPES:
+                    raise SchemaValidationError(
+                        message=f"Invalid type '{pin.type}' for input pin '{pin.name}' in module '{module.module_instance_id}'. Allowed types: {', '.join(sorted(ALLOWED_PIN_TYPES))}",
+                        code="invalid_pin_type",
+                        where={
+                            "module_instance_id": module.module_instance_id,
+                            "node_id": pin.node_id,
+                            "pin_name": pin.name,
+                        }
+                    )
+
+            # Check output pins
+            for pin in module.outputs:
+                if pin.type not in ALLOWED_PIN_TYPES:
+                    raise SchemaValidationError(
+                        message=f"Invalid type '{pin.type}' for output pin '{pin.name}' in module '{module.module_instance_id}'. Allowed types: {', '.join(sorted(ALLOWED_PIN_TYPES))}",
+                        code="invalid_pin_type",
+                        where={
+                            "module_instance_id": module.module_instance_id,
+                            "node_id": pin.node_id,
+                            "pin_name": pin.name,
+                        }
+                    )
+
+    def _check_module_refs(self, pipeline_state: PipelineState) -> None:
+        """
+        Check module_ref format is valid (should contain ':' for "module_id:version").
+        Fails fast on first malformed ref.
+
+        Raises:
+            SchemaValidationError: If malformed module ref found
+        """
+        for module in pipeline_state.modules:
+            if ":" not in module.module_ref:
+                raise SchemaValidationError(
+                    message=f"Module ref '{module.module_ref}' in module '{module.module_instance_id}' is malformed. Expected format: 'module_id:version'",
+                    code="malformed_module_ref",
+                    where={"module_instance_id": module.module_instance_id}
+                )
 
     def _build_indices(self, pipeline_state: PipelineState) -> PipelineIndices:
         """
@@ -97,12 +194,53 @@ class PipelineValidator:
         Returns:
             PipelineIndices with lookup structures
         """
-        # TODO: Implement index building
-        # For now, return empty indices
+        pin_by_id: Dict[str, PinInfo] = {}
+        module_by_id: Dict[str, ModuleInstance] = {}
+        input_to_upstream: Dict[str, str] = {}
+
+        # Index entry points
+        for entry in pipeline_state.entry_points:
+            pin_by_id[entry.node_id] = PinInfo(
+                node_id=entry.node_id,
+                type="str",  # Entry points always output str
+                direction="entry",
+                name=entry.name,
+                module_instance_id=None
+            )
+
+        # Index modules and their pins
+        for module in pipeline_state.modules:
+            # Index module
+            module_by_id[module.module_instance_id] = module
+
+            # Index input pins
+            for input_pin in module.inputs:
+                pin_by_id[input_pin.node_id] = PinInfo(
+                    node_id=input_pin.node_id,
+                    type=input_pin.type,
+                    direction="in",
+                    name=input_pin.name,
+                    module_instance_id=module.module_instance_id
+                )
+
+            # Index output pins
+            for output_pin in module.outputs:
+                pin_by_id[output_pin.node_id] = PinInfo(
+                    node_id=output_pin.node_id,
+                    type=output_pin.type,
+                    direction="out",
+                    name=output_pin.name,
+                    module_instance_id=module.module_instance_id
+                )
+
+        # Index connections (input pin -> upstream output pin)
+        for connection in pipeline_state.connections:
+            input_to_upstream[connection.to_node_id] = connection.from_node_id
+
         return PipelineIndices(
-            pin_by_id={},
-            module_by_id={},
-            input_to_upstream={}
+            pin_by_id=pin_by_id,
+            module_by_id=module_by_id,
+            input_to_upstream=input_to_upstream
         )
 
     def _validate_modules(self, pipeline_state: PipelineState, indices: PipelineIndices) -> None:
@@ -123,9 +261,242 @@ class PipelineValidator:
         Raises:
             ModuleValidationError: If module validation fails
         """
-        # TODO: Implement module validation
-        # For now, validation always passes
-        pass
+        # Check 1: At least one action module must be present
+        self._check_action_modules(pipeline_state)
+
+        # Skip module catalog validation if no repository provided
+        if not self.module_catalog_repo:
+            return
+
+        for module in pipeline_state.modules:
+            # Parse module_ref (format: "module_id:version")
+            module_id, version = self._parse_module_ref(module.module_ref)
+
+            # Lookup module in catalog
+            template = self.module_catalog_repo.get_by_module_ref(module_id, version)
+            if not template:
+                raise ModuleValidationError(
+                    message=f"Module '{module_id}:{version}' not found in catalog",
+                    code="module_not_found",
+                    where={
+                        "module_instance_id": module.module_instance_id,
+                        "module_ref": module.module_ref,
+                    }
+                )
+
+            # Validate group cardinalities
+            self._check_group_cardinality(module, template)
+
+            # Validate type variable unification
+            self._check_type_variables(module, template)
+
+            # Validate config schema
+            self._check_config(module, template)
+
+    def _check_action_modules(self, pipeline_state: PipelineState) -> None:
+        """
+        Check that pipeline contains at least one action module.
+        Action modules are what actually DO something (send emails, etc).
+        Fails fast if no action modules present.
+
+        Args:
+            pipeline_state: Pipeline to validate
+
+        Raises:
+            ModuleValidationError: If no action modules found
+        """
+        # Skip if no catalog repo (can't determine module kinds)
+        if not self.module_catalog_repo:
+            return
+
+        # Count action modules
+        action_count = 0
+        for module in pipeline_state.modules:
+            module_id, version = self._parse_module_ref(module.module_ref)
+            template = self.module_catalog_repo.get_by_module_ref(module_id, version)
+
+            if template and template.module_kind.value == "action":
+                action_count += 1
+
+        if action_count == 0:
+            raise ModuleValidationError(
+                message="Pipeline must contain at least one action module",
+                code="no_action_modules",
+                where={"module_count": len(pipeline_state.modules)}
+            )
+
+    def _parse_module_ref(self, module_ref: str) -> tuple[str, str]:
+        """
+        Parse module_ref into (module_id, version).
+        Assumes format "module_id:version" (already validated in schema stage).
+
+        Args:
+            module_ref: Module reference string
+
+        Returns:
+            Tuple of (module_id, version)
+        """
+        parts = module_ref.split(":", 1)
+        return parts[0], parts[1]
+
+    def _check_group_cardinality(self, module, template) -> None:
+        """
+        Validate that pin counts match group cardinality constraints.
+        Fails fast on first violation.
+
+        Args:
+            module: ModuleInstance from pipeline
+            template: ModuleCatalog from database
+
+        Raises:
+            ModuleValidationError: If cardinality constraint violated
+        """
+        io_shape = template.meta.io_shape
+
+        # Validate input groups
+        for group_idx, group in enumerate(io_shape.inputs.nodes):
+            actual_pins = [p for p in module.inputs if p.group_index == group_idx]
+            actual_count = len(actual_pins)
+
+            if actual_count < group.min_count:
+                raise ModuleValidationError(
+                    message=f"Input group {group_idx} '{group.label}' in module '{module.module_instance_id}' has {actual_count} pin(s) (minimum: {group.min_count})",
+                    code="group_cardinality_violation",
+                    where={
+                        "module_instance_id": module.module_instance_id,
+                        "group_index": group_idx,
+                        "group_label": group.label,
+                        "actual_count": actual_count,
+                        "min_count": group.min_count,
+                        "direction": "input",
+                    }
+                )
+
+            if group.max_count is not None and actual_count > group.max_count:
+                raise ModuleValidationError(
+                    message=f"Input group {group_idx} '{group.label}' in module '{module.module_instance_id}' has {actual_count} pin(s) (maximum: {group.max_count})",
+                    code="group_cardinality_violation",
+                    where={
+                        "module_instance_id": module.module_instance_id,
+                        "group_index": group_idx,
+                        "group_label": group.label,
+                        "actual_count": actual_count,
+                        "max_count": group.max_count,
+                        "direction": "input",
+                    }
+                )
+
+        # Validate output groups
+        for group_idx, group in enumerate(io_shape.outputs.nodes):
+            actual_pins = [p for p in module.outputs if p.group_index == group_idx]
+            actual_count = len(actual_pins)
+
+            if actual_count < group.min_count:
+                raise ModuleValidationError(
+                    message=f"Output group {group_idx} '{group.label}' in module '{module.module_instance_id}' has {actual_count} pin(s) (minimum: {group.min_count})",
+                    code="group_cardinality_violation",
+                    where={
+                        "module_instance_id": module.module_instance_id,
+                        "group_index": group_idx,
+                        "group_label": group.label,
+                        "actual_count": actual_count,
+                        "min_count": group.min_count,
+                        "direction": "output",
+                    }
+                )
+
+            if group.max_count is not None and actual_count > group.max_count:
+                raise ModuleValidationError(
+                    message=f"Output group {group_idx} '{group.label}' in module '{module.module_instance_id}' has {actual_count} pin(s) (maximum: {group.max_count})",
+                    code="group_cardinality_violation",
+                    where={
+                        "module_instance_id": module.module_instance_id,
+                        "group_index": group_idx,
+                        "group_label": group.label,
+                        "actual_count": actual_count,
+                        "max_count": group.max_count,
+                        "direction": "output",
+                    }
+                )
+
+    def _check_type_variables(self, module, template) -> None:
+        """
+        Validate type variable unification.
+        If a module uses type variable T, all pins using T must have the same concrete type.
+        Fails fast on first conflict.
+
+        Args:
+            module: ModuleInstance from pipeline
+            template: ModuleCatalog from database
+
+        Raises:
+            ModuleValidationError: If type variable has conflicting types
+        """
+        io_shape = template.meta.io_shape
+        type_var_bindings: Dict[str, Set[str]] = {}
+
+        # Collect type variable bindings from input groups
+        for group_idx, group in enumerate(io_shape.inputs.nodes):
+            if group.typing.type_var:
+                type_var = group.typing.type_var
+                actual_pins = [p for p in module.inputs if p.group_index == group_idx]
+
+                for pin in actual_pins:
+                    if type_var not in type_var_bindings:
+                        type_var_bindings[type_var] = set()
+                    type_var_bindings[type_var].add(pin.type)
+
+        # Collect type variable bindings from output groups
+        for group_idx, group in enumerate(io_shape.outputs.nodes):
+            if group.typing.type_var:
+                type_var = group.typing.type_var
+                actual_pins = [p for p in module.outputs if p.group_index == group_idx]
+
+                for pin in actual_pins:
+                    if type_var not in type_var_bindings:
+                        type_var_bindings[type_var] = set()
+                    type_var_bindings[type_var].add(pin.type)
+
+        # Check that each type variable has exactly one concrete type (fail fast)
+        for type_var, types in type_var_bindings.items():
+            if len(types) > 1:
+                raise ModuleValidationError(
+                    message=f"Type variable '{type_var}' in module '{module.module_instance_id}' is used with conflicting types: {', '.join(sorted(types))}",
+                    code="type_variable_conflict",
+                    where={
+                        "module_instance_id": module.module_instance_id,
+                        "type_var": type_var,
+                        "conflicting_types": list(sorted(types)),
+                    }
+                )
+
+    def _check_config(self, module, template) -> None:
+        """
+        Validate module config against schema.
+        Checks that all required fields are present.
+        Fails fast on first missing field.
+
+        Args:
+            module: ModuleInstance from pipeline
+            template: ModuleCatalog from database
+
+        Raises:
+            ModuleValidationError: If required config field is missing
+        """
+        config_schema = template.config_schema
+
+        # Check if required fields are present
+        if "required" in config_schema:
+            for required_field in config_schema["required"]:
+                if required_field not in module.config:
+                    raise ModuleValidationError(
+                        message=f"Required config field '{required_field}' missing in module '{module.module_instance_id}'",
+                        code="missing_required_config",
+                        where={
+                            "module_instance_id": module.module_instance_id,
+                            "missing_field": required_field,
+                        }
+                    )
 
     def _validate_edges(self, pipeline_state: PipelineState, indices: PipelineIndices) -> None:
         """
@@ -143,9 +514,121 @@ class PipelineValidator:
         Raises:
             EdgeValidationError: If edge validation fails
         """
-        # TODO: Implement edge validation
-        # For now, validation always passes
-        pass
+        # Check 1: Self-loops (check first, simplest)
+        self._check_self_loops(pipeline_state)
+
+        # Check 2: Input cardinality (each input has exactly one upstream)
+        self._check_input_cardinality(pipeline_state, indices)
+
+        # Check 3: Type matching (connected pins have same type)
+        self._check_type_matching(pipeline_state, indices)
+
+    def _check_self_loops(self, pipeline_state: PipelineState) -> None:
+        """
+        Check that no pin connects to itself.
+        Fails fast on first self-loop.
+
+        Args:
+            pipeline_state: Pipeline state
+
+        Raises:
+            EdgeValidationError: If self-loop detected
+        """
+        for conn in pipeline_state.connections:
+            if conn.from_node_id == conn.to_node_id:
+                raise EdgeValidationError(
+                    message=f"Self-loop detected: Pin '{conn.from_node_id}' connects to itself",
+                    code="self_loop",
+                    where={
+                        "node_id": conn.from_node_id
+                    }
+                )
+
+    def _check_input_cardinality(self, pipeline_state: PipelineState, indices: PipelineIndices) -> None:
+        """
+        Check that each input pin has exactly one upstream connection.
+        Fails fast on first violation.
+
+        Args:
+            pipeline_state: Pipeline state
+            indices: Pipeline indices
+
+        Raises:
+            EdgeValidationError: If input cardinality violated
+        """
+        # Find all input pins (direction="in")
+        input_pins = [
+            pin_info for pin_info in indices.pin_by_id.values()
+            if pin_info.direction == "in"
+        ]
+
+        # Check for missing upstreams
+        for pin_info in input_pins:
+            if pin_info.node_id not in indices.input_to_upstream:
+                raise EdgeValidationError(
+                    message=f"Input pin '{pin_info.name}' in module '{pin_info.module_instance_id}' has no upstream connection",
+                    code="missing_upstream",
+                    where={
+                        "node_id": pin_info.node_id,
+                        "module_instance_id": pin_info.module_instance_id,
+                        "pin_name": pin_info.name
+                    }
+                )
+
+        # Check for multiple upstreams (count connections to each input)
+        input_connection_counts: Dict[str, int] = {}
+        for conn in pipeline_state.connections:
+            to_pin = indices.pin_by_id.get(conn.to_node_id)
+            if to_pin and to_pin.direction == "in":
+                input_connection_counts[conn.to_node_id] = input_connection_counts.get(conn.to_node_id, 0) + 1
+
+        for node_id, count in input_connection_counts.items():
+            if count > 1:
+                pin_info = indices.pin_by_id[node_id]
+                raise EdgeValidationError(
+                    message=f"Input pin '{pin_info.name}' in module '{pin_info.module_instance_id}' has {count} upstream connections (expected 1)",
+                    code="multiple_upstreams",
+                    where={
+                        "node_id": node_id,
+                        "module_instance_id": pin_info.module_instance_id,
+                        "pin_name": pin_info.name,
+                        "upstream_count": count
+                    }
+                )
+
+    def _check_type_matching(self, pipeline_state: PipelineState, indices: PipelineIndices) -> None:
+        """
+        Check that connected pins have matching types.
+        Fails fast on first type mismatch.
+
+        Args:
+            pipeline_state: Pipeline state
+            indices: Pipeline indices
+
+        Raises:
+            EdgeValidationError: If type mismatch detected
+        """
+        for conn in pipeline_state.connections:
+            from_pin = indices.pin_by_id.get(conn.from_node_id)
+            to_pin = indices.pin_by_id.get(conn.to_node_id)
+
+            # Pins should exist (validated in schema stage), but check anyway
+            if not from_pin or not to_pin:
+                continue
+
+            if from_pin.type != to_pin.type:
+                raise EdgeValidationError(
+                    message=f"Type mismatch: Cannot connect {from_pin.type} output '{from_pin.name}' to {to_pin.type} input '{to_pin.name}'",
+                    code="type_mismatch",
+                    where={
+                        "from_node_id": conn.from_node_id,
+                        "to_node_id": conn.to_node_id,
+                        "from_type": from_pin.type,
+                        "to_type": to_pin.type,
+                        "from_pin_name": from_pin.name,
+                        "to_pin_name": to_pin.name
+                    }
+                )
 
     def _validate_graph(self, pipeline_state: PipelineState, indices: PipelineIndices) -> None:
         """
@@ -161,6 +644,84 @@ class PipelineValidator:
         Raises:
             GraphValidationError: If graph has cycles
         """
-        # TODO: Implement graph validation
-        # For now, validation always passes
-        pass
+        self._check_for_cycles(pipeline_state, indices)
+
+    def _check_for_cycles(self, pipeline_state: PipelineState, indices: PipelineIndices) -> None:
+        """
+        Check for cycles in the pipeline graph using DFS.
+        Pipelines must be Directed Acyclic Graphs (DAGs).
+        Fails fast on first cycle detected.
+
+        Args:
+            pipeline_state: Pipeline to check
+            indices: Pre-built indices
+
+        Raises:
+            GraphValidationError: If a cycle is detected
+        """
+        # Build adjacency list (module -> downstream modules)
+        adjacency: Dict[str, Set[str]] = {
+            module.module_instance_id: set() for module in pipeline_state.modules
+        }
+
+        for connection in pipeline_state.connections:
+            source_pin = indices.pin_by_id.get(connection.from_node_id)
+            target_pin = indices.pin_by_id.get(connection.to_node_id)
+
+            # Skip if pins not found
+            if not source_pin or not target_pin:
+                continue
+
+            # Skip entry point connections (they're not modules)
+            if source_pin.module_instance_id is None:
+                continue
+
+            if target_pin.module_instance_id is None:
+                continue
+
+            adjacency[source_pin.module_instance_id].add(target_pin.module_instance_id)
+
+        # DFS to detect cycles using colors
+        # WHITE (0) = unvisited, GRAY (1) = visiting, BLACK (2) = visited
+        WHITE, GRAY, BLACK = 0, 1, 2
+        colors: Dict[str, int] = {module_id: WHITE for module_id in adjacency}
+
+        def dfs(node: str, path: List[str]) -> None:
+            """
+            Depth-first search to detect cycles.
+
+            Args:
+                node: Current module ID
+                path: Current path from root to current node
+
+            Raises:
+                GraphValidationError: If cycle detected
+            """
+            colors[node] = GRAY
+            path.append(node)
+
+            for neighbor in adjacency[node]:
+                if colors[neighbor] == GRAY:
+                    # Found a back edge - this is a cycle!
+                    cycle_start = path.index(neighbor)
+                    cycle_path = path[cycle_start:] + [neighbor]
+                    cycle_str = " → ".join(cycle_path)
+                    raise GraphValidationError(
+                        message=f"Cycle detected in pipeline: {cycle_str}",
+                        code="cycle_detected",
+                        where={
+                            "cycle": cycle_path,
+                            "cycle_length": len(cycle_path) - 1
+                        }
+                    )
+
+                if colors[neighbor] == WHITE:
+                    dfs(neighbor, path)
+
+            colors[node] = BLACK
+            path.pop()
+
+        # Run DFS from each unvisited node
+        for module_id in adjacency:
+            if colors[module_id] == WHITE:
+                dfs(module_id, [])

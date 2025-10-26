@@ -6,6 +6,7 @@ import { EntryPointModal } from '../../../features/pipelines/components/EntryPoi
 import { useModulesApi } from '../../../features/modules/hooks';
 import { usePipelinesApi, usePipelineValidation } from '../../../features/pipelines/hooks';
 import { serializePipelineData } from '../../../utils/pipelineSerializer';
+import { generateEntryPointId } from '../../../features/pipelines/utils/idGenerator';
 import type { ModuleTemplate } from '../../../types/moduleTypes';
 import type { EntryPoint, PipelineState } from '../../../types/pipelineTypes';
 
@@ -29,23 +30,11 @@ function PipelineCreatePage() {
   // Reference to PipelineGraph to extract state
   const pipelineGraphRef = useRef<PipelineGraphRef>(null);
 
-  // Poll pipeline state for validation
+  // Pipeline state for validation (updated via onChange callback)
   const [currentPipelineState, setCurrentPipelineState] = useState<PipelineState | null>(null);
 
-  // Auto-validate pipeline state whenever it changes
+  // Auto-validate pipeline state whenever it changes (debounced)
   const { isValid, error: validationError, isValidating } = usePipelineValidation(currentPipelineState);
-
-  // Poll pipeline state from PipelineGraph every 500ms
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (pipelineGraphRef.current) {
-        const state = pipelineGraphRef.current.getPipelineState();
-        setCurrentPipelineState(state);
-      }
-    }, 500);
-
-    return () => clearInterval(interval);
-  }, []);
 
   // Fetch module templates on mount from API
   useEffect(() => {
@@ -71,7 +60,7 @@ function PipelineCreatePage() {
   const handleEntryPointsConfirm = (points: Array<{ name: string }>) => {
     // Create entry points with IDs and str type
     const newEntryPoints: EntryPoint[] = points.map((p) => ({
-      node_id: crypto.randomUUID(),
+      node_id: generateEntryPointId(),
       name: p.name,
       type: 'str',
     }));
@@ -92,6 +81,7 @@ function PipelineCreatePage() {
 
     // Extract current pipeline state
     const pipelineState = pipelineGraphRef.current.getPipelineState();
+    console.log('[handleValidate] Manual validation - Pipeline state:', pipelineState);
 
     try {
       // Call validation endpoint using API hook
@@ -99,7 +89,7 @@ function PipelineCreatePage() {
         pipeline_json: pipelineState,
       });
 
-      console.log('Validation result:', validationResult);
+      console.log('[handleValidate] Validation result:', validationResult);
 
       if (validationResult.valid) {
         alert('✅ Pipeline is valid!');
@@ -268,6 +258,7 @@ function PipelineCreatePage() {
             moduleTemplates={moduleTemplates}
             selectedModuleId={selectedModuleId}
             onModulePlaced={handleModulePlaced}
+            onChange={setCurrentPipelineState}
             viewOnly={false}
             entryPoints={entryPoints}
           />

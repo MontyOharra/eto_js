@@ -2,7 +2,7 @@
 
 **Date**: 2025-10-24
 **Branch**: server_unification
-**Session Context**: Implementing auto-validation for pipeline builder
+**Session Context**: Fixed auto-validation to use onChange callback pattern with debouncing
 
 ## Current State
 
@@ -38,8 +38,19 @@
 5. **Frontend Auto-Validation** ✅
    - Created `usePipelineValidation` hook in `client/src/renderer/features/pipelines/hooks/usePipelineValidation.ts`
    - Implements debounced validation (500ms)
-   - Polls pipeline state every 500ms from PipelineGraph ref
+   - **FIXED**: Changed from polling to onChange callback pattern
    - Updates `create.tsx` to disable save button when invalid/validating
+
+6. **Fixed Validation Pattern** ✅ (Current Session)
+   - **Problem**: Originally implemented polling (checking state every 500ms regardless of changes)
+   - **User Request**: Validation should trigger on state changes, but debounced to prevent rapid API calls
+   - **Solution**:
+     - Added `onChange?: (state: PipelineState) => void` prop to PipelineGraph
+     - Added useEffect in PipelineGraph to call onChange when nodes/edges change
+     - Removed polling interval from create.tsx
+     - PipelineGraph now notifies parent of state changes via callback
+     - usePipelineValidation hook receives updated state and debounces validation calls
+   - **Result**: Validation triggers on actual changes, debounced to 500ms, no unnecessary polling
 
 ### Current Issues
 
@@ -68,19 +79,23 @@
 - `server-new/src/api/schemas/pipelines.py` - Updated (validation request/response schemas)
 - `server-new/src/api/routers/pipelines.py` - Updated (POST /validate endpoint, fixed error handling)
 
-**Frontend:**
+**Frontend (Previous Session):**
 - `client/src/renderer/features/pipelines/hooks/usePipelineValidation.ts` - NEW
 - `client/src/renderer/features/pipelines/hooks/usePipelinesApi.ts` - Updated (validatePipeline method)
 - `client/src/renderer/features/pipelines/hooks/index.ts` - Updated (export usePipelineValidation)
 - `client/src/renderer/features/pipelines/types.ts` - Updated (validation types)
-- `client/src/renderer/pages/dashboard/pipelines/create.tsx` - Updated (polling, auto-validation, button disable)
+- `client/src/renderer/pages/dashboard/pipelines/create.tsx` - Updated (polling → removed in current session)
+
+**Frontend (Current Session - Fixed Pattern):**
+- `client/src/renderer/features/pipelines/components/PipelineGraph.tsx` - Updated (added onChange prop and useEffect)
+- `client/src/renderer/pages/dashboard/pipelines/create.tsx` - Updated (removed polling, added onChange callback)
 
 ### Key Design Decisions
 
 1. **Fail-Fast Validation**: Each validation stage throws on first error, does not collect multiple errors
 2. **Single Error Response**: API returns one error at a time, not a list
-3. **Polling Pattern**: Parent component polls PipelineGraph state every 500ms (maintains PipelineGraph state ownership)
-4. **Debouncing**: Validation calls are debounced by 500ms to avoid excessive API requests
+3. **onChange Callback Pattern**: PipelineGraph notifies parent of state changes via callback (maintains state ownership in graph)
+4. **Debouncing**: Validation calls triggered on state change but debounced by 500ms to avoid rapid API calls during editing
 5. **Exception Hierarchy**: `ServiceError (500) → ValidationError (400) → PipelineValidationError → Stage-specific errors`
 
 ## Next Steps

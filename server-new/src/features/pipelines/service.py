@@ -14,6 +14,7 @@ from shared.database.repositories import (
     PipelineDefinitionRepository,
     PipelineCompiledPlanRepository,
     PipelineDefinitionStepRepository,
+    ModuleCatalogRepository,
 )
 from shared.types.pipelines import (
     PipelineState,
@@ -33,6 +34,7 @@ from shared.types.pipeline_compiled_plan import PipelineCompiledPlanCreate
 from shared.types.pipeline_definition_step import PipelineDefinitionStepCreate
 from shared.exceptions import ServiceError, ValidationError, ObjectNotFoundError, PipelineValidationError
 from .utils.validation import PipelineValidator
+from .utils.compilation import PipelineCompiler
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +59,7 @@ class PipelineService:
     definition_repository: PipelineDefinitionRepository
     compiled_plan_repository: PipelineCompiledPlanRepository
     step_repository: PipelineDefinitionStepRepository
+    module_catalog_repository: ModuleCatalogRepository
 
     def __init__(self, connection_manager: DatabaseConnectionManager) -> None:
         """
@@ -69,6 +72,7 @@ class PipelineService:
         self.definition_repository = PipelineDefinitionRepository(connection_manager=connection_manager)
         self.compiled_plan_repository = PipelineCompiledPlanRepository(connection_manager=connection_manager)
         self.step_repository = PipelineDefinitionStepRepository(connection_manager=connection_manager)
+        self.module_catalog_repository = ModuleCatalogRepository(connection_manager=connection_manager)
 
     # ==================== Internal Helper Methods ====================
 
@@ -152,8 +156,7 @@ class PipelineService:
         Raises:
             PipelineValidationError: If validation fails at any stage
         """
-        # TODO: Pass module catalog repository once available
-        validator = PipelineValidator(module_catalog_repo=None)
+        validator = PipelineValidator(module_catalog_repo=self.module_catalog_repository)
         validator.validate(pipeline_state)
 
     def _check_for_cycles(self, pipeline_state: PipelineState, indices: PipelineIndices) -> None:
@@ -212,104 +215,129 @@ class PipelineService:
 
     def _prune_dead_branches(self, pipeline_state: PipelineState) -> PipelineState:
         """
-        Remove unreachable nodes from the pipeline.
+        Remove unreachable modules from the pipeline (dead branch pruning).
 
-        A node is reachable if:
-        - It's an output module (no downstream connections), OR
-        - It's an action module (has side effects), OR
-        - It has a path to an output/action module
+        A module is reachable if it's an action module OR it has a path to an action module.
+        Dead branches are modules that don't contribute to any action execution.
 
-        This ensures we only compile the minimal execution graph.
+        Algorithm:
+        1. Find all action modules (using module catalog)
+        2. Work backwards from action inputs to find all upstream modules (BFS)
+        3. Filter pipeline to only include reachable modules and their connections
 
         Args:
-            pipeline_state: Original pipeline
+            pipeline_state: Original validated pipeline
 
         Returns:
-            New PipelineState with dead branches removed
+            New PipelineState with only action-reachable modules
+
+        Note:
+            Original pipeline_state is not modified (returns new instance)
         """
         indices = self._build_indices(pipeline_state)
 
-        # TODO: When module catalog exists, we can identify "action" modules
-        # For now, we'll consider all modules that have no downstream connections as "outputs"
+        # Step 1: Find all action modules using module catalog
+        action_modules: Set[str] = set()
+        for module in pipeline_state.modules:
+            # Parse module_ref to get module_id and version
+            if ":" not in module.module_ref:
+                continue  # Skip malformed refs (should be caught by validation)
 
-        # Build reverse adjacency (module -> upstream modules)
-        downstream_modules: Dict[str, Set[str]] = {
-            module.module_instance_id: set() for module in pipeline_state.modules
-        }
+            module_id, version = module.module_ref.split(":", 1)
 
-        for connection in pipeline_state.connections:
-            source_pin = indices.pin_by_id[connection.from_node_id]
-            target_pin = indices.pin_by_id[connection.to_node_id]
+            # Look up module in catalog
+            template = self.module_catalog_repository.get_by_module_ref(module_id, version)
+            if template and template.module_kind.value == "action":
+                action_modules.add(module.module_instance_id)
 
-            if source_pin.module_instance_id and target_pin.module_instance_id:
-                downstream_modules[source_pin.module_instance_id].add(target_pin.module_instance_id)
+        logger.debug(f"Found {len(action_modules)} action module(s)")
 
-        # Find output modules (modules with no downstream connections)
-        output_modules: Set[str] = {
-            module_id for module_id, downstream in downstream_modules.items()
-            if len(downstream) == 0
-        }
+        # Step 2: BFS backwards from action inputs to find all upstream modules
+        reachable_modules: Set[str] = set(action_modules)  # Actions are always reachable
+        queue: List[str] = []
 
-        # BFS backwards from output modules to find all reachable modules
-        reachable_modules: Set[str] = set()
-        queue = list(output_modules)
+        # Start BFS from all action input pins
+        for module in pipeline_state.modules:
+            if module.module_instance_id in action_modules:
+                # Add all input pins to queue
+                for input_pin in module.inputs:
+                    queue.append(input_pin.node_id)
+
+        visited_pins: Set[str] = set()
 
         while queue:
-            current = queue.pop(0)
-            if current in reachable_modules:
+            pin_id = queue.pop(0)
+
+            if pin_id in visited_pins:
                 continue
 
-            reachable_modules.add(current)
+            visited_pins.add(pin_id)
 
-            # Find all modules that feed into current
-            for connection in pipeline_state.connections:
-                source_pin = indices.pin_by_id[connection.from_node_id]
-                target_pin = indices.pin_by_id[connection.to_node_id]
+            # Get pin info to find its module
+            pin_info = indices.pin_by_id.get(pin_id)
+            if pin_info and pin_info.module_instance_id:
+                reachable_modules.add(pin_info.module_instance_id)
 
-                if target_pin.module_instance_id == current and source_pin.module_instance_id:
-                    queue.append(source_pin.module_instance_id)
+            # Find upstream pin (what feeds into this pin)
+            if pin_id in indices.input_to_upstream:
+                upstream_pin_id = indices.input_to_upstream[pin_id]
+                queue.append(upstream_pin_id)
 
-        # Filter modules to only include reachable ones
-        pruned_modules = [
-            module for module in pipeline_state.modules
-            if module.module_instance_id in reachable_modules
-        ]
+                # Also add all other output pins from the upstream module
+                # (since they're part of the same module execution)
+                upstream_pin = indices.pin_by_id.get(upstream_pin_id)
+                if upstream_pin and upstream_pin.module_instance_id:
+                    upstream_module = indices.module_by_id.get(upstream_pin.module_instance_id)
+                    if upstream_module:
+                        # Add all inputs of upstream module to continue traversal
+                        for input_pin in upstream_module.inputs:
+                            queue.append(input_pin.node_id)
 
-        # Filter connections to only include those between reachable modules or from entry points
+        modules_before = len(pipeline_state.modules)
+        modules_after = len(reachable_modules)
+        modules_pruned = modules_before - modules_after
+
+        if modules_pruned > 0:
+            logger.info(f"Pruned {modules_pruned} dead branch module(s) ({modules_after}/{modules_before} remain)")
+
+        # Step 3: Build set of reachable pin node_ids
         reachable_pins: Set[str] = set()
 
-        # Add entry point pins
+        for module in pipeline_state.modules:
+            if module.module_instance_id in reachable_modules:
+                # Add all pins from this reachable module
+                for pin in module.inputs:
+                    reachable_pins.add(pin.node_id)
+                for pin in module.outputs:
+                    reachable_pins.add(pin.node_id)
+
+        # Also add entry point node_ids (they can connect to reachable modules)
         for entry_point in pipeline_state.entry_points:
             reachable_pins.add(entry_point.node_id)
 
-        # Add pins from reachable modules
-        for module in pruned_modules:
-            for input_pin in module.inputs:
-                reachable_pins.add(input_pin.node_id)
-            for output_pin in module.outputs:
-                reachable_pins.add(output_pin.node_id)
+        # Step 4: Filter modules to reachable only
+        pruned_modules = [
+            module
+            for module in pipeline_state.modules
+            if module.module_instance_id in reachable_modules
+        ]
 
+        # Step 5: Filter connections to those between reachable pins
         pruned_connections = [
-            conn for conn in pipeline_state.connections
+            conn
+            for conn in pipeline_state.connections
             if conn.from_node_id in reachable_pins and conn.to_node_id in reachable_pins
         ]
 
-        # Prune entry points that are no longer connected
-        connected_entry_points: Set[str] = set()
-        for conn in pruned_connections:
-            source_pin = indices.pin_by_id[conn.from_node_id]
-            if source_pin.direction == "entry":
-                connected_entry_points.add(conn.from_node_id)
+        # Step 6: Keep all entry points (they're pipeline inputs, always needed)
+        # Note: Could prune unused entry points, but keeping them preserves interface
+        pruned_entry_points = pipeline_state.entry_points
 
-        pruned_entry_points = [
-            ep for ep in pipeline_state.entry_points
-            if ep.node_id in connected_entry_points
-        ]
-
+        # Return new PipelineState with pruned data
         return PipelineState(
             entry_points=pruned_entry_points,
             modules=pruned_modules,
-            connections=pruned_connections
+            connections=pruned_connections,
         )
 
     def _calculate_checksum(self, pruned_pipeline: PipelineState) -> str:
@@ -357,104 +385,37 @@ class PipelineService:
 
     def _compile_pipeline(self, pruned_pipeline: PipelineState) -> List[PipelineDefinitionStepCreate]:
         """
-        Compile pipeline into ordered execution steps via topological sort.
+        Compile pipeline into ordered execution steps via layer-based topological sort.
 
-        Performs Kahn's algorithm to determine execution order, then generates
-        step records with all metadata needed for execution.
+        Uses PipelineCompiler to generate steps with proper layer numbering for
+        parallel execution in Dask.
 
         Args:
             pruned_pipeline: Validated and pruned pipeline
 
         Returns:
-            List of steps in execution order (topologically sorted)
+            List of steps ordered by execution layer
 
         Raises:
-            ServiceError: If topological sort fails (shouldn't happen after validation)
+            ServiceError: If compilation fails
         """
-        indices = self._build_indices(pruned_pipeline)
+        try:
+            # Build indices for compilation
+            indices = self._build_indices(pruned_pipeline)
 
-        # Build adjacency and in-degree count for Kahn's algorithm
-        adjacency: Dict[str, Set[str]] = {
-            module.module_instance_id: set() for module in pruned_pipeline.modules
-        }
-        in_degree: Dict[str, int] = {
-            module.module_instance_id: 0 for module in pruned_pipeline.modules
-        }
+            # Compile using layer-based topological sort
+            steps = PipelineCompiler.compile(pruned_pipeline, indices)
 
-        for connection in pruned_pipeline.connections:
-            source_pin = indices.pin_by_id[connection.from_node_id]
-            target_pin = indices.pin_by_id[connection.to_node_id]
-
-            # Skip connections from entry points (they don't create dependencies)
-            if source_pin.module_instance_id is None:
-                continue
-
-            if target_pin.module_instance_id is None:
-                continue
-
-            # Add edge: source_module -> target_module
-            if target_pin.module_instance_id not in adjacency[source_pin.module_instance_id]:
-                adjacency[source_pin.module_instance_id].add(target_pin.module_instance_id)
-                in_degree[target_pin.module_instance_id] += 1
-
-        # Kahn's algorithm: Start with modules that have no dependencies
-        queue = [module_id for module_id, degree in in_degree.items() if degree == 0]
-        sorted_order: List[str] = []
-
-        while queue:
-            # Process modules with no remaining dependencies
-            # Sort to ensure deterministic ordering when multiple modules are ready
-            queue.sort()
-            current = queue.pop(0)
-            sorted_order.append(current)
-
-            # Decrease in-degree for downstream modules
-            for neighbor in adjacency[current]:
-                in_degree[neighbor] -= 1
-                if in_degree[neighbor] == 0:
-                    queue.append(neighbor)
-
-        # Sanity check: All modules should be processed
-        if len(sorted_order) != len(pruned_pipeline.modules):
-            raise ServiceError(
-                f"Topological sort failed: expected {len(pruned_pipeline.modules)} modules, "
-                f"got {len(sorted_order)}. This indicates a cycle (should have been caught in validation)."
+            logger.info(
+                f"Compiled {len(steps)} steps across "
+                f"{max((s.step_number for s in steps), default=-1) + 1} layers"
             )
 
-        # Generate step records
-        steps: List[PipelineDefinitionStepCreate] = []
+            return steps
 
-        for step_number, module_id in enumerate(sorted_order):
-            module = indices.module_by_id[module_id]
-
-            # Build input field mappings (input_pin_id -> upstream_pin_id)
-            input_field_mappings: Dict[str, str] = {}
-            for input_pin in module.inputs:
-                if input_pin.node_id in indices.input_to_upstream:
-                    input_field_mappings[input_pin.node_id] = indices.input_to_upstream[input_pin.node_id]
-
-            # Build node metadata (inputs and outputs for this module)
-            node_metadata: Dict[str, List[NodeInstance]] = {
-                "inputs": list(module.inputs),
-                "outputs": list(module.outputs)
-            }
-
-            # TODO: Extract module_kind from module catalog once it exists
-            # For now, parse from module_ref (e.g., "text_cleaner:1.0.0" -> kind might be in catalog)
-            module_kind = "unknown"  # Placeholder
-
-            step = PipelineDefinitionStepCreate(
-                pipeline_compiled_plan_id=0,  # Will be set by caller
-                module_instance_id=module.module_instance_id,
-                module_ref=module.module_ref,
-                module_config=module.config,
-                input_field_mappings=input_field_mappings,
-                node_metadata=node_metadata,
-                step_number=step_number
-            )
-            steps.append(step)
-
-        return steps
+        except Exception as e:
+            logger.error(f"Pipeline compilation failed: {e}", exc_info=True)
+            raise ServiceError(f"Failed to compile pipeline: {e}") from e
 
     def get_module_metadata(self, module_ref: str) -> Any:
         """
