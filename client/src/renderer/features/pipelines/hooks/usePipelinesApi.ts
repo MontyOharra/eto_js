@@ -36,6 +36,7 @@ interface UsePipelinesApiResult {
   updatePipeline: (id: number, data: UpdatePipelineRequest) => Promise<UpdatePipelineResponse>;
   deletePipeline: (id: number) => Promise<void>;
   validatePipeline: (data: ValidatePipelineRequest) => Promise<ValidatePipelineResponse>;
+  executePipeline: (id: number, entryValues: Record<string, any>) => Promise<any>;
 }
 
 export function usePipelinesApi(): UsePipelinesApiResult {
@@ -180,6 +181,23 @@ export function usePipelinesApi(): UsePipelinesApiResult {
     [baseUrl, withLoadingAndError]
   );
 
+  /**
+   * POST /api/pipelines/{id}/execute
+   * Execute pipeline with entry values (simulation mode)
+   */
+  const executePipeline = useCallback(
+    async (id: number, entryValues: Record<string, any>): Promise<any> => {
+      return withLoadingAndError(async () => {
+        const response = await apiClient.post<any>(
+          `${baseUrl}/${id}/execute`,
+          { entry_values: entryValues }
+        );
+        return response.data;
+      });
+    },
+    [baseUrl, withLoadingAndError]
+  );
+
   return {
     isLoading,
     error,
@@ -189,5 +207,6 @@ export function usePipelinesApi(): UsePipelinesApiResult {
     updatePipeline,
     deletePipeline,
     validatePipeline,
+    executePipeline,
   };
 }

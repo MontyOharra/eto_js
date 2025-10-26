@@ -138,3 +138,33 @@ class ValidatePipelineResponse(BaseModel):
     """Response for POST /pipelines/validate"""
     valid: bool
     errors: List[ValidationErrorDTO] = []
+
+
+# ============================================================================
+# Execution
+# ============================================================================
+
+class ExecutePipelineRequest(BaseModel):
+    """Request body for POST /pipelines/{id}/execute"""
+    entry_values: Dict[str, Any] = Field(
+        ...,
+        description="Entry point values keyed by entry point name",
+        example={"customer_name": "ACME Corp", "order_id": "12345"}
+    )
+
+
+class ExecutionStepResultDTO(BaseModel):
+    """Result of a single module execution"""
+    module_instance_id: str
+    step_number: int
+    inputs: Dict[str, Dict[str, Any]]  # {pin_name: {value, type}}
+    outputs: Dict[str, Dict[str, Any]]  # {pin_name: {value, type}}
+    error: Optional[str] = None
+
+
+class ExecutePipelineResponse(BaseModel):
+    """Response for POST /pipelines/{id}/execute"""
+    status: str  # "success" | "failed"
+    steps: List[ExecutionStepResultDTO]
+    executed_actions: Dict[str, Dict[str, Any]]  # {module_instance_id: {input_name: value}}
+    error: Optional[str] = None

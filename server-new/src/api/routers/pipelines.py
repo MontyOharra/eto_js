@@ -15,6 +15,9 @@ from api.schemas.pipelines import (
     ValidatePipelineRequest,
     ValidatePipelineResponse,
     ValidationErrorDTO,
+    ExecutePipelineRequest,
+    ExecutePipelineResponse,
+    ExecutionStepResultDTO,
 )
 
 from api.mappers.pipelines import (
@@ -161,4 +164,98 @@ async def validate_pipeline(
     return ValidatePipelineResponse(
         valid=validation_result["valid"],
         errors=error_dtos
+    )
+
+
+@router.post("/{id}/execute", response_model=ExecutePipelineResponse)
+async def execute_pipeline(
+    id: int,
+    request: ExecutePipelineRequest,
+    pipeline_service: PipelineService = Depends(
+        lambda: ServiceContainer.get_pipeline_service()
+    )
+) -> ExecutePipelineResponse:
+    """
+    Execute a pipeline with provided entry values (SIMULATION MODE).
+
+    This executes the pipeline without database persistence - used for testing
+    and development. Actions are NOT actually executed - only their input data
+    is collected to show what would happen.
+
+    **Entry Values**:
+    - Must provide values for all entry points defined in the pipeline
+    - Values should be keyed by entry point name
+    - Missing required entry points will cause validation error
+
+    **Returns**:
+    - Execution status (success/failed)
+    - Step-by-step execution trace with inputs/outputs
+    - Action data (what would be executed in production)
+    - Error message if execution failed
+
+    **Example Request**:
+    ```json
+    {
+      "entry_values": {
+        "customer_name": "ACME Corp",
+        "order_id": "12345"
+      }
+    }
+    ```
+    """
+    # Get execution service
+    from features.pipelines.service_execution import PipelineExecutionService
+    execution_service = PipelineExecutionService(
+        connection_manager=ServiceContainer.get_connection_manager(),
+        services=ServiceContainer
+    )
+
+    # Load pipeline definition
+    pipeline = pipeline_service.get_pipeline_definition(id)
+
+    if pipeline.compiled_plan_id is None:
+        from shared.exceptions import ServiceError
+        raise ServiceError(
+            f"Pipeline {id} is not compiled. Cannot execute uncompiled pipeline."
+        )
+
+    # Load compiled steps
+    from shared.database.repositories import PipelineDefinitionStepRepository
+    step_repo = PipelineDefinitionStepRepository(
+        connection_manager=ServiceContainer.get_connection_manager()
+    )
+    steps = step_repo.get_steps_by_plan_id(pipeline.compiled_plan_id)
+
+    if not steps:
+        from shared.exceptions import ServiceError
+        raise ServiceError(
+            f"No compiled steps found for pipeline {id} (plan {pipeline.compiled_plan_id})"
+        )
+
+    logger.info(f"Executing pipeline {id} with {len(steps)} steps")
+
+    # Execute pipeline
+    result = execution_service.execute_pipeline(
+        steps=steps,
+        entry_values_by_name=request.entry_values,
+        pipeline_state=pipeline.pipeline_state
+    )
+
+    # Convert result to API schema
+    step_dtos = [
+        ExecutionStepResultDTO(
+            module_instance_id=step.module_instance_id,
+            step_number=step.step_number,
+            inputs=step.inputs,
+            outputs=step.outputs,
+            error=step.error
+        )
+        for step in result.steps
+    ]
+
+    return ExecutePipelineResponse(
+        status=result.status,
+        steps=step_dtos,
+        executed_actions=result.executed_actions,
+        error=result.error
     )

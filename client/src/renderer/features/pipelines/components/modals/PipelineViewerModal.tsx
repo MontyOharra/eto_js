@@ -6,6 +6,7 @@
 
 import { useState, useEffect } from 'react';
 import { PipelineGraph } from '../PipelineGraph';
+import { ExecutePipelineModal } from './ExecutePipelineModal';
 import { usePipelinesApi } from '../../hooks/usePipelinesApi';
 import { useModulesApi } from '../../../modules/hooks';
 import type { ModuleTemplate } from '../../../../types/moduleTypes';
@@ -29,6 +30,7 @@ export function PipelineViewerModal({
   const [modules, setModules] = useState<ModuleTemplate[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showExecuteModal, setShowExecuteModal] = useState(false);
 
   // Load pipeline and modules when modal opens
   useEffect(() => {
@@ -83,14 +85,24 @@ export function PipelineViewerModal({
             </h2>
             <p className="text-sm text-gray-400 mt-1">Read-only view</p>
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-white transition-colors"
-          >
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          <div className="flex items-center gap-3">
+            {pipeline && (
+              <button
+                onClick={() => setShowExecuteModal(true)}
+                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded transition-colors font-medium"
+              >
+                Execute Pipeline
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-white transition-colors"
+            >
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {/* Content */}
@@ -125,6 +137,16 @@ export function PipelineViewerModal({
           )}
         </div>
       </div>
+
+      {/* Execute Pipeline Modal */}
+      {pipeline && (
+        <ExecutePipelineModal
+          isOpen={showExecuteModal}
+          pipelineId={pipelineId}
+          entryPoints={pipeline.pipeline_state.entry_points}
+          onClose={() => setShowExecuteModal(false)}
+        />
+      )}
     </div>
   );
 }
