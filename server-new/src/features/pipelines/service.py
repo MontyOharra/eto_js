@@ -344,9 +344,9 @@ class PipelineService:
         """
         Calculate SHA-256 checksum of pruned pipeline for deduplication.
 
-        The checksum is calculated from a deterministic JSON representation
-        of the pipeline structure (excluding visual state and IDs that don't
-        affect execution semantics).
+        The checksum is calculated from a canonical representation that is
+        ID-agnostic - only the logical structure matters (module types, configs,
+        connections), not the specific instance IDs or visual state.
 
         Args:
             pruned_pipeline: Pruned pipeline state
@@ -354,34 +354,113 @@ class PipelineService:
         Returns:
             SHA-256 hex digest
         """
-        # Convert to dict (dataclass asdict creates nested dicts)
-        pipeline_dict = asdict(pruned_pipeline)
-
-        # Sort all lists to ensure deterministic ordering
-        # (order doesn't matter for semantic equivalence)
-        pipeline_dict["entry_points"] = sorted(
-            pipeline_dict["entry_points"],
-            key=lambda ep: ep["node_id"]
-        )
-        pipeline_dict["modules"] = sorted(
-            pipeline_dict["modules"],
-            key=lambda mod: mod["module_instance_id"]
-        )
-        pipeline_dict["connections"] = sorted(
-            pipeline_dict["connections"],
-            key=lambda conn: (conn["from_node_id"], conn["to_node_id"])
+        # Step 1: Create canonical representation of entry points (sorted by name)
+        canonical_entry_points = sorted(
+            [{"name": ep.name} for ep in pruned_pipeline.entry_points],
+            key=lambda ep: ep["name"]
         )
 
-        # Sort module inputs/outputs
-        for module in pipeline_dict["modules"]:
-            module["inputs"] = sorted(module["inputs"], key=lambda pin: pin["node_id"])
-            module["outputs"] = sorted(module["outputs"], key=lambda pin: pin["node_id"])
+        # Build mapping from original entry point node_ids to canonical indices
+        entry_point_id_map = {}
+        sorted_eps = sorted(pruned_pipeline.entry_points, key=lambda ep: ep.name)
+        for idx, ep in enumerate(sorted_eps):
+            entry_point_id_map[ep.node_id] = f"EP_{idx}"
 
-        # Create deterministic JSON string
-        json_str = json.dumps(pipeline_dict, sort_keys=True, separators=(',', ':'))
+        # Step 2: Create canonical representation of modules
+        # Sort by (module_ref, config, pin structure) for deterministic ordering
+        def module_sort_key(module):
+            # Create a stable sort key from module semantics
+            config_str = json.dumps(module.config, sort_keys=True)
+            inputs_str = json.dumps(
+                [(pin.name, pin.type, pin.group_index, pin.position_index) for pin in module.inputs],
+                sort_keys=True
+            )
+            outputs_str = json.dumps(
+                [(pin.name, pin.type, pin.group_index, pin.position_index) for pin in module.outputs],
+                sort_keys=True
+            )
+            return (module.module_ref, config_str, inputs_str, outputs_str)
 
-        # Calculate SHA-256
-        return hashlib.sha256(json_str.encode('utf-8')).hexdigest()
+        sorted_modules = sorted(pruned_pipeline.modules, key=module_sort_key)
+
+        # Build mapping from original module instance IDs and node IDs to canonical IDs
+        module_instance_id_map = {}
+        node_id_map = {}  # Maps node_id to canonical module_pin reference
+
+        canonical_modules = []
+        for mod_idx, module in enumerate(sorted_modules):
+            canonical_mod_id = f"M_{mod_idx}"
+            module_instance_id_map[module.module_instance_id] = canonical_mod_id
+
+            # Create canonical pin representations (sorted by group_index, position_index)
+            canonical_inputs = []
+            for pin in sorted(module.inputs, key=lambda p: (p.group_index, p.position_index)):
+                canonical_pin = {
+                    "name": pin.name,
+                    "type": pin.type,
+                    "group_index": pin.group_index,
+                    "position_index": pin.position_index
+                }
+                canonical_inputs.append(canonical_pin)
+                # Map original node_id to canonical reference
+                node_id_map[pin.node_id] = f"{canonical_mod_id}.in.{pin.group_index}.{pin.position_index}"
+
+            canonical_outputs = []
+            for pin in sorted(module.outputs, key=lambda p: (p.group_index, p.position_index)):
+                canonical_pin = {
+                    "name": pin.name,
+                    "type": pin.type,
+                    "group_index": pin.group_index,
+                    "position_index": pin.position_index
+                }
+                canonical_outputs.append(canonical_pin)
+                # Map original node_id to canonical reference
+                node_id_map[pin.node_id] = f"{canonical_mod_id}.out.{pin.group_index}.{pin.position_index}"
+
+            canonical_modules.append({
+                "module_ref": module.module_ref,
+                "config": module.config,
+                "inputs": canonical_inputs,
+                "outputs": canonical_outputs
+            })
+
+        # Merge entry point ID map into node_id_map
+        node_id_map.update(entry_point_id_map)
+
+        # Step 3: Create canonical connections (using canonical node references)
+        canonical_connections = []
+        for conn in pruned_pipeline.connections:
+            from_canonical = node_id_map.get(conn.from_node_id)
+            to_canonical = node_id_map.get(conn.to_node_id)
+
+            if not from_canonical or not to_canonical:
+                logger.warning(
+                    f"Skipping connection with unmapped node IDs: "
+                    f"{conn.from_node_id} -> {conn.to_node_id}"
+                )
+                continue
+
+            canonical_connections.append({
+                "from": from_canonical,
+                "to": to_canonical
+            })
+
+        # Sort connections for deterministic ordering
+        canonical_connections.sort(key=lambda c: (c["from"], c["to"]))
+
+        # Step 4: Build final canonical representation
+        canonical_pipeline = {
+            "entry_points": canonical_entry_points,
+            "modules": canonical_modules,
+            "connections": canonical_connections
+        }
+
+        # Step 5: Create deterministic JSON and calculate SHA-256
+        json_str = json.dumps(canonical_pipeline, sort_keys=True, separators=(',', ':'))
+        checksum = hashlib.sha256(json_str.encode('utf-8')).hexdigest()
+
+        logger.debug(f"Canonical pipeline JSON: {json_str[:200]}...")
+        return checksum
 
     def _compile_pipeline(self, pruned_pipeline: PipelineState) -> List[PipelineDefinitionStepCreate]:
         """

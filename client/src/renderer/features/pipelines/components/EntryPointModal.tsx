@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 interface EntryPointModalProps {
   onConfirm: (entryPoints: Array<{ name: string }>) => void;
@@ -9,6 +9,28 @@ export const EntryPointModal: React.FC<EntryPointModalProps> = ({ onConfirm, onC
   const [entryPoints, setEntryPoints] = useState<Array<{ id: string; name: string }>>([
     { id: crypto.randomUUID(), name: '' }
   ]);
+  const firstInputRef = useRef<HTMLInputElement>(null);
+
+  // Autofocus first input when modal opens
+  useEffect(() => {
+    if (firstInputRef.current) {
+      firstInputRef.current.focus();
+    }
+  }, []);
+
+  // Handle keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onCancel();
+      } else if (e.key === 'Enter' && e.ctrlKey) {
+        handleConfirm();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onCancel, entryPoints]); // Include entryPoints in deps for handleConfirm
 
   const handleAddEntryPoint = () => {
     setEntryPoints([...entryPoints, { id: crypto.randomUUID(), name: '' }]);
@@ -36,8 +58,14 @@ export const EntryPointModal: React.FC<EntryPointModalProps> = ({ onConfirm, onC
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md border border-gray-600">
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      onClick={onCancel}
+    >
+      <div
+        className="bg-gray-800 rounded-lg p-6 w-full max-w-md border border-gray-600"
+        onClick={(e) => e.stopPropagation()}
+      >
         <h2 className="text-xl font-semibold text-white mb-4">Define Entry Points</h2>
 
         <p className="text-sm text-gray-400 mb-4">
@@ -45,9 +73,10 @@ export const EntryPointModal: React.FC<EntryPointModalProps> = ({ onConfirm, onC
         </p>
 
         <div className="space-y-3 mb-6">
-          {entryPoints.map((ep) => (
+          {entryPoints.map((ep, index) => (
             <div key={ep.id} className="flex items-center gap-2">
               <input
+                ref={index === 0 ? firstInputRef : null}
                 type="text"
                 value={ep.name}
                 onChange={(e) => handleNameChange(ep.id, e.target.value)}
