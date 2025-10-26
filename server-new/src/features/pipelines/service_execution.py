@@ -542,6 +542,23 @@ class PipelineExecutionService:
         # Gather upstream producers
         input_ids = list(step.input_field_mappings.keys())
         upstream_ids = [step.input_field_mappings[iid] for iid in input_ids]
+
+        # Debug logging to diagnose missing pin IDs
+        logger.debug(f"Step {step.module_instance_id}: Looking up upstream pins: {upstream_ids}")
+        logger.debug(f"Available pins in producer_of_pin: {list(producer_of_pin.keys())}")
+
+        # Check for missing pins before lookup
+        missing_pins = [uid for uid in upstream_ids if uid not in producer_of_pin]
+        if missing_pins:
+            logger.error(
+                f"Step {step.module_instance_id} requires pins {missing_pins} "
+                f"which are not available. Available pins: {list(producer_of_pin.keys())}"
+            )
+            raise KeyError(
+                f"Missing upstream pins {missing_pins} for step {step.module_instance_id}. "
+                f"This may indicate incorrect topological ordering or missing entry points."
+            )
+
         upstream_tasks = [producer_of_pin[uid] for uid in upstream_ids]
 
         if extra_dependencies:
