@@ -8,10 +8,8 @@ from fastapi import APIRouter, Depends, status
 
 from api.schemas.modules import SyncModulesResponse, ModuleSyncResult
 
-from shared.utils.registry import get_registry, auto_discover_modules, ModuleSecurityValidator
-from shared.database.repositories.module_catalog import ModuleCatalogRepository
-from shared.types import ModuleCatalogCreate
 from shared.services.service_container import ServiceContainer
+from features.modules.service import ModulesService
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +22,7 @@ router = APIRouter(
 @router.post("/sync-modules", response_model=SyncModulesResponse, status_code=status.HTTP_200_OK)
 async def sync_modules(
     refresh: bool = False,
-    connection_manager = Depends(lambda: ServiceContainer.get_connection_manager())
+    modules_service: ModulesService = Depends(lambda: ServiceContainer.get_modules_service())
 ) -> SyncModulesResponse:
     """
     Sync module definitions from code to database catalog.
@@ -48,11 +46,11 @@ async def sync_modules(
         # Step 1: Clear catalog if refresh requested
         if refresh:
             logger.info("Clearing module catalog...")
-            from shared.database.models import ModuleCatalogModel
+            from shared.database.models import ModuleModel
 
             try:
-                with connection_manager.session() as session:
-                    modules = session.query(ModuleCatalogModel).all()
+                with modules_service.connection_manager.session() as session:
+                    modules = session.query(ModuleModel).all()
                     count = len(modules)
                     for module in modules:
                         session.delete(module)
@@ -73,30 +71,19 @@ async def sync_modules(
         modules_to_clear = [
             key for key in list(sys.modules.keys())
             if key.startswith("features.modules.") and
-            not key.startswith("features.modules.core")
+            not key.startswith("features.modules.service")  # Don't clear the service itself
         ]
         for module_name in modules_to_clear:
             logger.debug(f"Removing {module_name} from Python cache")
             del sys.modules[module_name]
 
-        # Step 3: Clear and re-populate registry
-        logger.info("Clearing module registry...")
-        registry = get_registry()
-        registry.clear()
+        # Step 3: Clear and re-discover modules via service
+        logger.info("Clearing and re-discovering modules...")
+        modules_service._registry.clear()
+        modules_service._auto_discover_modules()
 
-        # Step 4: Auto-discover modules
-        logger.info("Auto-discovering modules...")
-        packages_to_scan = [
-            "features.modules.transform",
-            "features.modules.action",
-            "features.modules.logic",
-            "features.modules.comparator",
-        ]
-        auto_discover_modules(packages_to_scan)
-
-        # Get catalog entries from registry
-        registry = get_registry()
-        catalog_entries = registry.to_catalog_format()
+        # Step 4: Get discovered modules for tracking
+        catalog_entries = modules_service._registry.to_catalog_entries()
         logger.info(f"Found {len(catalog_entries)} modules to sync")
 
         if not catalog_entries:
@@ -110,42 +97,25 @@ async def sync_modules(
                 message="No modules found to sync. Check module packages and decorators."
             )
 
-        # Step 5: Create repository and sync modules
-        module_repository = ModuleCatalogRepository(connection_manager=connection_manager)
-
-        for entry in catalog_entries:
+        # Step 5: Sync modules to database and track results
+        for module_create in catalog_entries:
             try:
-                # Validate handler_name
-                if 'handler_name' in entry and entry['handler_name']:
-                    is_valid, error_msg = ModuleSecurityValidator.validate_handler_path(entry['handler_name'])
-                    if not is_valid:
-                        logger.warning(f"Skipping module {entry['id']} due to security: {error_msg}")
-                        results.append(ModuleSyncResult(
-                            id=entry['id'],
-                            name=entry['name'],
-                            status="skipped",
-                            message=f"Security validation failed: {error_msg}"
-                        ))
-                        continue
+                modules_service.module_repository.upsert(module_create)
 
-                # Convert to Pydantic model and upsert
-                module_create = ModuleCatalogCreate(**entry)
-                result = module_repository.upsert(module_create)
-
-                logger.info(f"Synced module: {entry['id']} ({entry['name']})")
+                logger.info(f"Synced module: {module_create.id} ({module_create.name})")
                 results.append(ModuleSyncResult(
-                    id=entry['id'],
-                    name=entry['name'],
+                    id=module_create.id,
+                    name=module_create.name,
                     status="success",
                     message=None
                 ))
                 success_count += 1
 
             except Exception as e:
-                logger.error(f"Failed to sync module {entry['id']}: {e}", exc_info=True)
+                logger.error(f"Failed to sync module {module_create.id}: {e}", exc_info=True)
                 results.append(ModuleSyncResult(
-                    id=entry['id'],
-                    name=entry.get('name', 'Unknown'),
+                    id=module_create.id,
+                    name=module_create.name,
                     status="error",
                     message=str(e)
                 ))
