@@ -6,7 +6,7 @@ from typing import Dict, Any
 from pydantic import BaseModel, Field
 import re
 from shared.types import ComparatorModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
-from shared.utils.registry import register
+from features.modules.service import register
 
 
 # String Equals

@@ -5,7 +5,7 @@ Simple action module for testing pipeline validation with no configuration
 from typing import Dict, Any
 from pydantic import BaseModel
 from shared.types import ActionModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
-from shared.utils.registry import register
+from features.modules.service import register
 
 
 class TestActionConfig(BaseModel):

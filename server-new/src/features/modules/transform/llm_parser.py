@@ -6,7 +6,7 @@ from typing import Dict, Any
 from pydantic import BaseModel, Field
 
 from shared.types import TransformModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
-from shared.utils.registry import register
+from features.modules.service import register
 from shared.exceptions import NotImplementedError
 
 
