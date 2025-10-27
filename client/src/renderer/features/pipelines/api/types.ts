@@ -161,7 +161,7 @@ export interface ValidatePipelineRequestDTO {
 
 export interface ValidatePipelineResponseDTO {
   valid: boolean;
-  errors: ValidationErrorDTO[];
+  error: ValidationErrorDTO | null;
 }
 
 // ============================================================================

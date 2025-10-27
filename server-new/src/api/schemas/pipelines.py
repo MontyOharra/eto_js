@@ -137,7 +137,7 @@ class ValidatePipelineRequest(BaseModel):
 class ValidatePipelineResponse(BaseModel):
     """Response for POST /pipelines/validate"""
     valid: bool
-    errors: List[ValidationErrorDTO] = []
+    error: Optional[ValidationErrorDTO] = None
 
 
 # ============================================================================

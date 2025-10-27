@@ -94,11 +94,13 @@ function PipelineCreatePage() {
       if (validationResult.valid) {
         alert('✅ Pipeline is valid!');
       } else {
-        console.error('❌ Pipeline validation failed:');
-        validationResult.errors.forEach((error) => {
-          console.error(`  - [${error.code}] ${error.message}`, error.where);
-        });
-        alert(`❌ Pipeline validation failed with ${validationResult.errors.length} error(s).\n\nCheck the browser console for details.`);
+        const error = validationResult.error;
+        if (error) {
+          console.error(`❌ Pipeline validation failed: [${error.code}] ${error.message}`, error.where);
+          alert(`❌ Pipeline validation failed:\n\n[${error.code}] ${error.message}\n\nCheck the browser console for details.`);
+        } else {
+          alert('❌ Pipeline validation failed with unknown error.');
+        }
       }
     } catch (error) {
       console.error('Validation request failed:', error);

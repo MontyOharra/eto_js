@@ -202,5 +202,5 @@ export interface ValidatePipelineRequest {
 
 export interface ValidatePipelineResponse {
   valid: boolean;
-  errors: ValidationError[];
+  error: ValidationError | null;
 }

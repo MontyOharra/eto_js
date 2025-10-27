@@ -4,6 +4,7 @@ Validates pipeline structure through multiple stages
 """
 from typing import Dict, List, Set, Optional
 from collections import Counter
+from pydantic import ValidationError as PydanticValidationError
 from shared.types.pipelines import PipelineState, PipelineIndices, PinInfo, ModuleInstance
 from shared.exceptions import (
     SchemaValidationError,
@@ -11,6 +12,7 @@ from shared.exceptions import (
     EdgeValidationError,
     GraphValidationError,
 )
+from shared.utils.registry import get_registry
 
 # Allowed types for module pins
 ALLOWED_PIN_TYPES = {"str", "int", "float", "bool", "datetime"}
@@ -38,6 +40,7 @@ class PipelineValidator:
             module_catalog_repo: Optional repository for module catalog lookups
         """
         self.module_catalog_repo = module_catalog_repo
+        self.module_registry = get_registry()
 
     def validate(self, pipeline_state: PipelineState) -> None:
         """
@@ -472,31 +475,56 @@ class PipelineValidator:
 
     def _check_config(self, module, template) -> None:
         """
-        Validate module config against schema.
-        Checks that all required fields are present.
-        Fails fast on first missing field.
+        Validate module config against schema using Pydantic.
+        Checks required fields AND validates types/formats/constraints.
+        Fails fast on first validation error.
 
         Args:
             module: ModuleInstance from pipeline
             template: ModuleCatalog from database
 
         Raises:
-            ModuleValidationError: If required config field is missing
+            ModuleValidationError: If config validation fails
         """
         config_schema = template.config_schema
 
-        # Check if required fields are present
-        if "required" in config_schema:
-            for required_field in config_schema["required"]:
-                if required_field not in module.config:
-                    raise ModuleValidationError(
-                        message=f"Required config field '{required_field}' missing in module '{module.module_instance_id}'",
-                        code="missing_required_config",
-                        where={
-                            "module_instance_id": module.module_instance_id,
-                            "missing_field": required_field,
-                        }
-                    )
+        # Parse module_ref to get module_id
+        module_id, _ = self._parse_module_ref(module.module_ref)
+
+        # Get module handler from registry
+        handler = self.module_registry.get(module_id)
+
+        if handler:
+            # Validate config using Pydantic (comprehensive validation)
+            try:
+                ConfigModel = handler.config_class()
+                ConfigModel(**module.config)
+            except PydanticValidationError as e:
+                # Take first error (fail fast)
+                first_error = e.errors()[0]
+                field_path = " -> ".join(str(loc) for loc in first_error["loc"])
+                raise ModuleValidationError(
+                    message=f"Config field '{field_path}': {first_error['msg']}",
+                    code="invalid_config",
+                    where={
+                        "module_instance_id": module.module_instance_id,
+                        "field": field_path,
+                        "type": first_error["type"]
+                    }
+                )
+        else:
+            # Fallback: Check required fields only (if handler not in registry)
+            if "required" in config_schema:
+                for required_field in config_schema["required"]:
+                    if required_field not in module.config:
+                        raise ModuleValidationError(
+                            message=f"Required config field '{required_field}' missing in module '{module.module_instance_id}'",
+                            code="missing_required_config",
+                            where={
+                                "module_instance_id": module.module_instance_id,
+                                "missing_field": required_field,
+                            }
+                        )
 
     def _validate_edges(self, pipeline_state: PipelineState, indices: PipelineIndices) -> None:
         """
