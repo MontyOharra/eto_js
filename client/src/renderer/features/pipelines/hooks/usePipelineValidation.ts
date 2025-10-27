@@ -43,11 +43,14 @@ export function usePipelineValidation(
       return;
     }
 
-    // Skip validation for empty pipelines (no modules added yet)
+    // Empty pipelines (only entry points, no modules) are invalid
     if (pipelineState.modules.length === 0) {
-      console.log('[usePipelineValidation] Skipping - empty pipeline (no modules)');
-      setIsValid(true);
-      setError(null);
+      console.log('[usePipelineValidation] Empty pipeline - setting invalid');
+      setIsValid(false);
+      setError({
+        code: 'empty_pipeline',
+        message: 'Pipeline must contain at least one module'
+      });
       return;
     }
 
