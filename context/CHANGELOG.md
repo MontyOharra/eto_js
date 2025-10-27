@@ -5,6 +5,99 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-10-26 17:15] — Add Auto-Validation to Template Builder Pipeline Step
+
+### Spec / Intent
+- Add real-time pipeline validation to template builder (same as pipeline create page)
+- Block Test button when pipeline is invalid or validating
+- Show validation error code and message in tooltip popup
+- Provide immediate feedback as users build pipelines
+
+### Changes Made
+
+**Pipeline Validation Integration** (`client/src/renderer/features/templates/components/builder/TemplateBuilderModal.tsx`):
+- Imported `usePipelineValidation` hook from pipelines features (line 12)
+- Added validation hook call after state declarations (line 84):
+  ```typescript
+  const { isValid: isPipelineValid, error: pipelineValidationError, isValidating: isPipelineValidating } = usePipelineValidation(pipelineState);
+  ```
+
+**Updated canProceed Logic** (lines 173-188):
+- Pipeline step now requires `isPipelineValid && !isPipelineValidating`
+- Test button automatically disabled when pipeline invalid or validating
+- Added validation state to useMemo dependencies
+
+**Updated validationMessage Logic** (lines 190-217):
+- Added case for `pipeline` step showing validation errors
+- Shows "Validating pipeline..." while validation in progress
+- Shows `[error_code] error_message` format when validation fails
+- Error appears in tooltip popup above disabled Test button
+
+### Technical Details
+
+**Validation Flow**:
+1. User modifies pipeline (adds module, creates connection, etc.)
+2. PipelineBuilderStep calls `onPipelineStateChange` callback
+3. TemplateBuilderModal updates `pipelineState`
+4. `usePipelineValidation` hook detects change and starts 500ms debounce timer
+5. After debounce, hook calls backend `POST /api/pipelines/validate` endpoint
+6. Backend performs validation (type checking, cycle detection, unconnected inputs)
+7. Hook updates `isPipelineValid` and `pipelineValidationError` state
+8. UI updates: Test button enabled/disabled, tooltip shows error if any
+
+**Validation Rules** (same as pipeline create page):
+- ✅ All connections reference valid pins
+- ✅ Type compatibility (str→str, int→int, etc.)
+- ✅ No duplicate connections
+- ✅ No cycles (DAG requirement)
+- ✅ All module inputs connected
+
+**Error Code Examples**:
+- `[invalid_reference]` - Non-existent pins or modules
+- `[type_mismatch]` - Incompatible connection types
+- `[duplicate_connection]` - Duplicate connections
+- `[cycle_detected]` - Circular dependencies
+- `[unconnected_input]` - Missing required connections
+- `[invalid_connection]` - Invalid pin directions
+
+### User Experience
+
+**Before**:
+- Test button always enabled (except during testing)
+- No validation until backend processes the test
+- Invalid pipelines would fail during test with generic errors
+
+**After**:
+- Test button disabled while validating (shows "Validating pipeline...")
+- Test button disabled if pipeline invalid (shows specific error with code)
+- Hover over disabled button shows validation error tooltip
+- Immediate feedback as pipeline is built (500ms debounce)
+- Prevents testing invalid pipelines (saves time and API calls)
+
+### Example Validation Messages
+
+```
+Validating pipeline...
+[type_mismatch] Cannot connect int output to str input
+[cycle_detected] Pipeline contains circular dependency
+[unconnected_input] Module 'uppercase' has unconnected required input 'text'
+Pipeline validation failed
+```
+
+### Next Actions
+- Test validation with various invalid pipeline scenarios
+- Verify error messages are clear and actionable
+- Consider adding visual indicators on invalid connections (red edges)
+- Continue with template simulate endpoint integration
+
+### Notes
+- TypeScript compilation: ✅ Passed with 0 errors
+- Uses same validation hook as pipeline create page (consistent behavior)
+- 500ms debounce prevents excessive API calls during rapid changes
+- Empty pipelines (no modules) are considered valid (skip validation)
+
+---
+
 ## [2025-10-26 16:45] — Fix Empty Type Array Handling in Pipeline Reconstruction
 
 ### Spec / Intent
