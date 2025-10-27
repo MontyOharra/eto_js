@@ -9,6 +9,7 @@ import { SignatureObjectsStep, ExtractionFieldsStep, PipelineBuilderStep, Testin
 import { TemplateBuilderHeader, TemplateBuilderStepper } from './components';
 import { usePdfData, usePdfFilesApi } from '../../../pdf-files/hooks';
 import { useMockModulesApi } from '../../../modules/hooks';
+import { usePipelineValidation } from '../../../pipelines/hooks';
 import type { ModuleTemplate } from '../../../../types/moduleTypes';
 import type { PipelineState, VisualState } from '../../../../types/pipelineTypes';
 
@@ -78,6 +79,9 @@ export function TemplateBuilderModal({
   const { data: pdfData, isLoading: pdfLoading, error: pdfError } = usePdfData(pdfFileId);
   const { getModules } = useMockModulesApi();
   const { processObjects } = usePdfFilesApi();
+
+  // Auto-validate pipeline as it's being built
+  const { isValid: isPipelineValid, error: pipelineValidationError, isValidating: isPipelineValidating } = usePipelineValidation(pipelineState);
 
   // Load module templates for pipeline execution visualization
   useEffect(() => {
@@ -174,13 +178,14 @@ export function TemplateBuilderModal({
       case 'extraction-fields':
         return extractionFields.length > 0;
       case 'pipeline':
-        return true;
+        // Pipeline step requires valid pipeline and not currently validating
+        return isPipelineValid && !isPipelineValidating;
       case 'testing':
         return testResults !== null;
       default:
         return false;
     }
-  }, [currentStep, signatureObjects.length, templateName, extractionFields.length, testResults]);
+  }, [currentStep, signatureObjects.length, templateName, extractionFields.length, testResults, isPipelineValid, isPipelineValidating]);
 
   // Get validation message for current step
   const validationMessage = useMemo(() => {
@@ -197,10 +202,19 @@ export function TemplateBuilderModal({
         return undefined;
       case 'extraction-fields':
         return 'Please define at least one extraction field';
+      case 'pipeline':
+        // Show validation error or validating status
+        if (isPipelineValidating) {
+          return 'Validating pipeline...';
+        }
+        if (pipelineValidationError) {
+          return `[${pipelineValidationError.code}] ${pipelineValidationError.message}`;
+        }
+        return 'Pipeline validation failed';
       default:
         return undefined;
     }
-  }, [currentStep, canProceed, templateName, signatureObjects.length]);
+  }, [currentStep, canProceed, templateName, signatureObjects.length, isPipelineValidating, pipelineValidationError]);
 
   const handleSave = async () => {
     setIsSaving(true);
