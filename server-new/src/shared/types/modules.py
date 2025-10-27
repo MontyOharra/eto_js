@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pydantic import BaseModel
 from enum import Enum
+from datetime import datetime
 
 class AllowedModuleNodeTypes(str, Enum):
     """Allowed module types"""
@@ -31,21 +32,6 @@ class NodeTypeRule:
     allowed_types: Optional[List[AllowedModuleNodeTypes]] = None  # per-pin whitelist; user picks independently
     type_var: Optional[str] = None             # e.g., "T" (unifies across pins)
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialization"""
-        return {
-            'allowed_types': [t.value if isinstance(t, AllowedModuleNodeTypes) else t for t in self.allowed_types] if self.allowed_types else None,
-            'type_var': self.type_var
-        }
-
-    @staticmethod
-    def from_dict(data: Dict[str, Any]) -> "NodeTypeRule":
-        """Create from dictionary"""
-        return NodeTypeRule(
-            allowed_types=[AllowedModuleNodeTypes(t) for t in data.get('allowed_types', [])] if data.get('allowed_types') else None,
-            type_var=data.get('type_var')
-        )
-
 
 @dataclass(frozen=True)
 class NodeGroup:
@@ -55,43 +41,11 @@ class NodeGroup:
     min_count: int = 1
     max_count: Optional[int] = 1
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialization"""
-        return {
-            'min_count': self.min_count,
-            'max_count': self.max_count,
-            'typing': self.typing.to_dict(),
-            'label': self.label
-        }
-
-    @staticmethod
-    def from_dict(data: Dict[str, Any]) -> "NodeGroup":
-        """Create from dictionary"""
-        return NodeGroup(
-            typing=NodeTypeRule.from_dict(data['typing']),
-            label=data['label'],
-            min_count=data.get('min_count', 1),
-            max_count=data.get('max_count', 1)
-        )
-
 
 @dataclass(frozen=True)
 class IOSideShape:
     """Shape definition for one side of I/O (inputs or outputs)"""
     nodes: List[NodeGroup] = field(default_factory=list)  # exact count, fixed order
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialization"""
-        return {
-            'nodes': [node.to_dict() for node in self.nodes]
-        }
-
-    @staticmethod
-    def from_dict(data: Dict[str, Any]) -> "IOSideShape":
-        """Create from dictionary"""
-        return IOSideShape(
-            nodes=[NodeGroup.from_dict(node) for node in data.get('nodes', [])]
-        )
 
 
 @dataclass(frozen=True)
@@ -101,47 +55,11 @@ class IOShape:
     outputs: IOSideShape = field(default_factory=IOSideShape)
     type_params: Dict[str, List[AllowedModuleNodeTypes]] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialization"""
-        return {
-            'inputs': self.inputs.to_dict(),
-            'outputs': self.outputs.to_dict(),
-            'type_params': {
-                key: [t.value if isinstance(t, AllowedModuleNodeTypes) else t for t in types]
-                for key, types in self.type_params.items()
-            }
-        }
-
-    @staticmethod
-    def from_dict(data: Dict[str, Any]) -> "IOShape":
-        """Create from dictionary"""
-        return IOShape(
-            inputs=IOSideShape.from_dict(data.get('inputs', {})),
-            outputs=IOSideShape.from_dict(data.get('outputs', {})),
-            type_params={
-                key: [AllowedModuleNodeTypes(t) for t in types]
-                for key, types in data.get('type_params', {}).items()
-            }
-        )
-
 
 @dataclass(frozen=True)
 class ModuleMeta:
     """Metadata defining I/O constraints for a module"""
     io_shape: IOShape = field(default_factory=IOShape)
-
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialization"""
-        return {
-            'io_shape': self.io_shape.to_dict()
-        }
-
-    @staticmethod
-    def from_dict(data: Dict[str, Any]) -> "ModuleMeta":
-        """Create from dictionary (replaces Pydantic model_validate)"""
-        return ModuleMeta(
-            io_shape=IOShape.from_dict(data.get('io_shape', {}))
-        )
 
 
 class BaseModule(ABC):
@@ -205,7 +123,7 @@ class BaseModule(ABC):
         return []
     
     @abstractmethod
-    def run(self, inputs: Dict[str, Any], cfg: Dict[str, Any], context: Optional[Any]) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: Any, context: Optional[Any]) -> Dict[str, Any]:
         """
         Execute the module logic
         """
@@ -238,3 +156,52 @@ class ComparatorModule(BaseModule):
     Comparator modules produce boolean outputs based on comparing inputs to config values
     """
     kind = ModuleKind.COMPARATOR
+
+
+
+@dataclass(frozen=True)
+class ModuleCreate:
+    """Domain type for creating new module catalog entries"""
+    id: str
+    version: str
+    name: str
+    description: Optional[str]
+    module_kind: ModuleKind
+    meta: ModuleMeta
+    config_schema: Dict[str, Any]
+    handler_name: str
+    color: str = "#3B82F6"
+    category: str = "Processing"
+    is_active: bool = True
+
+
+@dataclass(frozen=True)
+class ModuleUpdate:
+    """Domain type for updating module catalog entries"""
+    name: Optional[str] = None
+    description: Optional[str] = None
+    module_kind: Optional[ModuleKind] = None
+    meta: Optional[ModuleMeta] = None
+    config_schema: Optional[Dict[str, Any]] = None
+    handler_name: Optional[str] = None
+    color: Optional[str] = None
+    category: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+@dataclass(frozen=True)
+class Module:
+    """Full module catalog domain object retrieved from database"""
+    id: str
+    version: str
+    name: str
+    description: Optional[str]
+    module_kind: ModuleKind
+    meta: ModuleMeta
+    config_schema: Dict[str, Any]
+    handler_name: str
+    color: str
+    category: str
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime

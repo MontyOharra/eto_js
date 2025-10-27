@@ -6,11 +6,11 @@ import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, Query
 
-from api.schemas.modules import ModulesListResponse
-from api.mappers.modules import convert_module_catalog_list
+from api.schemas.modules import Module
+from api.mappers.modules import module_to_api
 
 from shared.services.service_container import ServiceContainer
-from shared.database.repositories.module_catalog import ModuleCatalogRepository
+from shared.database.repositories.module import ModuleRepository
 
 logger = logging.getLogger(__name__)
 
@@ -20,19 +20,19 @@ router = APIRouter(
 )
 
 
-@router.get("", response_model=ModulesListResponse)
+@router.get("", response_model=list[Module])
 async def list_modules(
     kind: Optional[str] = Query(None, description="Filter by module kind (transform, action, logic, comparator)"),
     only_active: bool = Query(True, description="Only return active modules"),
     connection_manager = Depends(lambda: ServiceContainer.get_connection_manager())
-) -> ModulesListResponse:
+) -> list[Module]:
     """
     Get all module catalog entries.
 
     Returns modules available for use in pipelines, filtered by kind if specified.
     """
     # Create repository with connection manager
-    module_repository = ModuleCatalogRepository(connection_manager=connection_manager)
+    module_repository = ModuleRepository(connection_manager=connection_manager)
 
     # Get modules based on filters
     if kind:
@@ -40,12 +40,7 @@ async def list_modules(
     else:
         modules = module_repository.get_all(only_active=only_active)
 
-    # Convert to DTOs
-    module_dtos = convert_module_catalog_list(modules)
-
     logger.info(f"Retrieved {len(modules)} modules (kind={kind}, only_active={only_active})")
 
-    return ModulesListResponse(
-        items=module_dtos,
-        total=len(module_dtos)
-    )
+    # List comprehension inline - no separate list conversion function
+    return [module_to_api(m) for m in modules]

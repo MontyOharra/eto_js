@@ -228,8 +228,8 @@ class PdfTemplateVersionModel(BaseModel):
 # module_catalog
 # =========================
 
-class ModuleCatalogModel(BaseModel):
-    __tablename__ = "module_catalog"
+class ModuleModel(BaseModel):
+    __tablename__ = "modules"
 
     id: Mapped[str] = mapped_column(String(100), primary_key=True)
     version: Mapped[str] = mapped_column(String(50), nullable=False)
@@ -239,7 +239,7 @@ class ModuleCatalogModel(BaseModel):
     category: Mapped[str] = mapped_column(String(100), default="Processing")
     module_kind: Mapped[str] = mapped_column(String(20), nullable=False)
     meta: Mapped[str] = mapped_column(Text, nullable=False)
-    config_schema: Mapped[Optional[str]] = mapped_column(Text)
+    config_schema: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
     handler_name: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
@@ -344,7 +344,7 @@ class PipelineDefinitionStepModel(BaseModel):
 
     # Relationships
     compiled_plan: Mapped["PipelineCompiledPlanModel"] = relationship(back_populates="steps")
-    module: Mapped["ModuleCatalogModel"] = relationship(back_populates="steps")
+    module: Mapped["ModuleModel"] = relationship(back_populates="steps")
 
     __table_args__ = (
         Index("idx_pipeline_compiled_plan_id", "pipeline_compiled_plan_id"),
