@@ -1,406 +1,384 @@
-# Template Simulate Endpoint Integration Continuity Document
+# Template Builder Pipeline Integration - Continuity Document
 
 **Date**: 2025-10-26
 **Branch**: server_unification
-**Commit**: 0748ee9 - "Complete pipeline execution visualization with real-time data overlay"
-**Session Context**: Attempted pipeline execution integration into template simulate endpoint, rolled back due to poor design
+**Session Context**: Fixed template builder pipeline integration with canonical type system and state persistence
 
 ---
 
-## Current State (After Rollback)
+## Current State ✅
 
-### What Works Independently ✅
+### What Works Now
 
-1. **PDF Text Extraction** - Fully functional
-   - `POST /api/pdf-templates/simulate` endpoint exists
-   - Extracts text from PDFs using pdfplumber
-   - Works with bounding box coordinates
-   - Handles both stored PDFs (by ID) and uploaded PDFs (multipart)
-   - Returns extracted data keyed by field name
-   - **Location**: `server-new/src/features/pdf_templates/service.py::simulate_extraction()`
-   - **Frontend**: ExtractionFieldsSidebar has "Simulate" button that calls this
-
-2. **Pipeline Execution** - Fully functional
-   - Pipeline compilation and validation works
-   - Topological sort and layer assignment
-   - Execution with entry values
-   - Action module data collection
-   - Visualization with ExecutedPipelineGraph
-   - **Location**: `server-new/src/features/pipelines/service_execution.py::execute_pipeline()`
-   - **Frontend**: ExecutePipelineModal provides manual testing UI
-
-3. **Pipeline Builder in Template Builder** - Works
-   - Users can build transformation pipelines in step 3 of template builder
-   - Entry points auto-created from extraction fields
-   - Modules can be placed and connected
-   - State preserved when navigating between steps
+1. **Template Builder Pipeline Integration** - Fully functional
+   - Step 3 (Pipeline Builder) uses canonical pipeline types from `types/pipelineTypes.ts`
+   - Entry points auto-generated from extraction fields (Step 2)
+   - Entry points are NOT deletable (by design - extraction fields define them)
+   - Modules can be dragged and dropped from module selector
+   - State persists when navigating between steps (Step 3 → Step 4 → back to Step 3)
    - **Location**: `client/src/renderer/features/templates/components/builder/steps/PipelineBuilderStep.tsx`
 
-### What Was Attempted (Then Rolled Back) ❌
+2. **Pipeline State Persistence** - Working
+   - Both `pipelineState` and `visualState` stored in TemplateBuilderModal parent component
+   - PipelineGraph uses `onChange` callback to update parent state reactively
+   - Visual state (node positions) captured via ref and updated alongside logical state
+   - `usePipelineInitialization` hook checks for meaningful state vs empty structures
+   - **Location**: `client/src/renderer/features/pipelines/hooks/usePipelineInitialization.ts`
 
-**Commits Removed:**
-- `f0c2a60` - fix: Data duplicator empty allowed types and infinite reconstruction loop
-- `2f7cde7` - fix: Preserve pipeline state when navigating between template builder steps
-- `15ddee9` - feat: Display full pipeline execution results in template simulate
-- `19279ee` - docs: Update CHANGELOG with pipeline execution integration
-- `fce361e` - feat: Integrate pipeline execution into PDF template simulate endpoint
+3. **Schema Unification** - Complete
+   - Removed duplicate `PipelineState` and `VisualState` from `features/templates/types.ts`
+   - All template builder components now import from canonical `types/pipelineTypes.ts`
+   - Entry points use standard `{node_id, name, type}` structure
+   - Module instances use full `ModuleInstance` type with proper pin metadata
+   - No more schema mismatches between features
 
-**What Went Wrong:**
-1. **Schema Mismatches**: Created duplicate pipeline schemas in `pdf_templates` that didn't match `pipelines` schemas
-   - `PipelineEntryPoint` had different fields (id/label/field_reference vs node_id/name)
-   - `PipelineNodePin` had wrong type (List[str] vs str)
-   - `PipelineModuleInstance` had wrong field names (instance_id/module_id vs module_instance_id/module_ref)
+4. **Module Node UI Improvements** - Complete
+   - Delete button only renders when node is removable (`canRemove && onRemove`)
+   - Label area expands to fill space when delete button is absent
+   - Output nodes initialize with empty strings (user fills in names)
+   - Input nodes show connected output name or "Not Connected"
 
-2. **Mapper Complexity**: Created complex mappers to convert between mismatched schemas
-   - Added `convert_pipeline_state_to_domain()` in `pdf_templates/mappers.py`
-   - Tried to add fields like `direction`, `label`, `allowed_types` to NodeInstance (they don't exist)
-   - Had to build lookup dictionaries to get module_ref from module_instance_id
+5. **Pipeline Execution** - Fully functional (unchanged)
+   - Standalone pipeline execution works via ExecutePipelineModal
+   - Compilation, validation, execution all working
+   - **Location**: `server-new/src/features/pipelines/service_execution.py`
 
-3. **Frontend/Backend Disconnect**:
-   - Page numbering mismatch (frontend 0-indexed, backend 1-indexed)
-   - Extraction field name vs entry point name mismatch
-   - Had to create custom serializers on top of existing `serializePipelineData()`
-
-4. **Poor Design**: Everything was "thrown together" rather than cleanly architected
-
-**Why We Rolled Back:**
-> "The work right now has kind of thrown stuff together in a manner that is not good design."
-
----
-
-## System Architecture (Current)
-
-### Backend Structure
-
-**PDF Template Flow:**
-```
-POST /api/pdf-templates/simulate
-  ↓
-PdfTemplateService.simulate_extraction()
-  ↓
-PdfFilesService.extract_text_from_pdf()
-  ↓
-extract_data_from_pdf_objects() (utils)
-  ↓
-Returns: {"field_name": "extracted_text"}
-```
-
-**Pipeline Execution Flow:**
-```
-POST /api/pipelines/{id}/execute
-  ↓
-PipelineService.get_pipeline_by_id()
-  ↓
-PipelineExecutionService.execute_pipeline()
-  ↓
-Returns: PipelineExecutionResult with steps and actions
-```
-
-**Key Separation:**
-- PDF templates service handles template matching and extraction
-- Pipeline service handles pipeline CRUD and compilation
-- Pipeline execution service handles runtime execution
-- **These are currently separate domains**
-
-### Frontend Structure
-
-**Template Builder Flow:**
-```
-TemplateBuilderModal
-  ├── Step 1: SignatureObjectsStep (PDF form matching)
-  ├── Step 2: ExtractionFieldsStep (draw bboxes on PDF)
-  │   └── Has "Simulate" button → calls extract endpoint
-  ├── Step 3: PipelineBuilderStep (build transformation pipeline)
-  │   └── Uses PipelineGraph component
-  └── Step 4: TestingStep (shows mock results)
-      └── Currently uses MOCK data, not real execution
-```
-
-**Pipeline Execution Flow:**
-```
-/dashboard/pipelines/{id} (detail page)
-  └── ExecutePipelineModal
-      ├── Manual entry point value input
-      ├── Calls POST /api/pipelines/{id}/execute
-      └── Shows ExecutedPipelineGraph with real results
-```
-
-### Data Type Mismatches
-
-**Frontend Pipeline Types:**
-- Location: `client/src/renderer/types/pipelineTypes.ts`
-- Entry points: `{node_id, name, type}`
-- Modules: Full `ModuleInstance` with all pin metadata
-- Pins: Include `direction`, `label`, `type_var`, `allowed_types`
-
-**Backend Domain Types:**
-- Location: `server-new/src/shared/types/pipelines.py`
-- Entry points: `{node_id, name}` (no type)
-- Modules: `ModuleInstance` with minimal data
-- Pins: Only `{node_id, type, name, position_index, group_index}`
-
-**Serialization:**
-- `serializePipelineData()` in `client/src/renderer/utils/pipelineSerializer.ts`
-- Strips frontend-only fields before sending to backend
-- This is the CORRECT way to convert (already working for pipeline create/execute)
+6. **PDF Text Extraction** - Fully functional (unchanged)
+   - Works in ExtractionFieldsStep with "Simulate" button
+   - **Location**: `server-new/src/features/pdf_templates/service.py`
 
 ---
 
-## Key Issues Identified
+## What Was Fixed This Session
 
-### 1. Page Number Indexing Mismatch
-- **Frontend**: React PDF viewer uses 0-indexed pages (0, 1, 2...)
-- **Backend**: pdfplumber uses 1-indexed pages (1, 2, 3...)
-- **Impact**: Extraction fields on page 0 won't match text words from page 1
-- **Solution Needed**: Convert page numbers when sending extraction fields to backend
+### 1. Schema Duplication Issue ❌ → ✅
 
-### 2. Extraction Field Name vs Entry Point Name
-- **Frontend**: Creates entry points with `name: field.label` (e.g., "hawb")
-- **Backend**: Expects extracted data keyed by entry point name
-- **Current**: Extraction fields use `field_id` (e.g., "field_1234")
-- **Solution Needed**: Extraction field `name` should be `field.label` to match entry point
+**Problem**: Template builder had its own incompatible pipeline schemas
+- `features/templates/types.ts` defined `PipelineState` with wrong field names
+- Entry points had `id/label/field_reference` instead of `node_id/name/type`
+- Module instances had `instance_id/module_id` instead of `module_instance_id/module_ref`
+- Pin types were `string[]` instead of `string`
 
-### 3. Schema Duplication
-- **Current**: `pdf_templates/schemas.py` has its own `PipelineState` schema
-- **Problem**: Doesn't match `pipelines/schemas.py` schema
-- **Solution Needed**: Either use the same schema or clearly document why they differ
+**Solution**:
+- Removed duplicate schemas from `features/templates/types.ts`
+- Updated all template imports to use `types/pipelineTypes.ts`
+- Added comment directing future developers to canonical location
 
-### 4. Testing Flow Incomplete
-- **Current**: TestingStep (step 4) shows mock data
-- **Needed**: Should call real simulate endpoint with:
-  - PDF (uploaded or stored)
-  - Extraction fields (from step 2)
-  - Pipeline state (from step 3)
-- **Returns**: Combined results (extracted data + pipeline execution + actions)
+**Files Changed**:
+- `client/src/renderer/features/templates/types.ts` - Removed duplicates
+- `client/src/renderer/features/templates/api/types.ts` - Updated imports
+- `client/src/renderer/features/templates/components/builder/steps/ExtractionFieldsStep.tsx` - Updated imports
+- `client/src/renderer/features/templates/components/builder/steps/ExtractionFieldsStep/ExtractionFieldsSidebar.tsx` - Updated imports
+- `client/src/renderer/features/templates/components/builder/TemplateBuilderModal.tsx` - Updated imports
 
----
+### 2. State Persistence Issue ❌ → ✅
 
-## Recommended Next Steps
+**Problem**: Pipeline builder couldn't drop modules and didn't persist state
+- PipelineGraph initialization treated empty state objects as "has saved state"
+- Visual state was never captured from graph (only pipeline state)
+- Navigation between steps lost module positions
 
-### Phase 1: Design Clean Integration (Planning) 🎯
+**Solution**:
 
-**Goal**: Design how template simulate should work WITHOUT writing code first
+**Part A - Initialization Logic** (`usePipelineInitialization.ts`):
+```typescript
+// Added hasMeaningfulState() function
+function hasMeaningfulState(pipelineState?, visualState?): boolean {
+  if (!pipelineState || !visualState) return false;
 
-**Questions to Answer:**
-1. Should template simulate endpoint:
-   - Option A: Do extraction only (current state)
-   - Option B: Do extraction + pipeline execution (attempted)
-   - Option C: Keep them separate, call two endpoints
+  const hasModules = pipelineState.modules.length > 0;
+  const hasConnections = pipelineState.connections.length > 0;
+  const hasVisualPositions = Object.keys(visualState.modules).length > 0;
 
-2. If integrating (Option B):
-   - Should we create a new endpoint `/api/pdf-templates/{id}/test` separate from `/simulate`?
-   - Or expand existing `/simulate` endpoint?
+  return hasModules || hasConnections || hasVisualPositions;
+}
+```
 
-3. Schema design:
-   - Should `pdf_templates` API use the same pipeline schemas as `pipelines` API?
-   - Or should they be different (template-specific vs pipeline-specific)?
+**Part B - Visual State Capture** (`PipelineBuilderStep.tsx`):
+```typescript
+const handlePipelineChange = useCallback((state: PipelineState) => {
+  // Save logical state
+  const stateWithEntryPoints: PipelineState = {
+    ...state,
+    entry_points: entryPoints,
+  };
+  onPipelineStateChange(stateWithEntryPoints);
 
-4. Frontend flow:
-   - Should TestingStep call one endpoint or multiple?
-   - Where should the integration happen (frontend or backend)?
+  // Also save visual state using ref
+  if (pipelineGraphRef.current) {
+    const currentVisualState = pipelineGraphRef.current.getVisualState();
+    onVisualStateChange(currentVisualState);  // ✅ NOW CAPTURED
+  }
+}, [entryPoints, onPipelineStateChange, onVisualStateChange]);
+```
 
-### Phase 2: Standardize Schemas (If Integrating) 📋
+**Result**:
+- First visit: Empty state → creates entry points → can drop modules
+- Return visit: Has modules → reconstructs saved state → preserves positions
 
-**If we decide to integrate:**
+### 3. Module Node UI Spacing ❌ → ✅
 
-1. **Backend Schema Alignment**:
-   - Decide: Use same schemas from `pipelines` or keep separate?
-   - If separate: Document the differences and why
-   - If same: Import from `pipelines/schemas.py` instead of duplicating
+**Problem**: Delete button wrapper always rendered with `invisible` class
+- Wrapper had `flex-shrink-0` so it reserved space even when hidden
+- Label couldn't expand into the empty space
 
-2. **Frontend Serialization**:
-   - Use existing `serializePipelineData()` utility
-   - Don't create custom mappers
-   - Handle page number conversion (0-indexed → 1-indexed)
-   - Handle field name mapping (field.label for entry points)
+**Solution**: Conditional rendering instead of hiding
+```typescript
+// Before
+{!executionMode && (
+  <div className="flex-shrink-0">  // Always rendered
+    <button className={canRemove ? 'visible' : 'invisible'}> // Hidden but takes space
 
-3. **Backend Mappers**:
-   - Minimize or eliminate custom mapping code
-   - Domain types should be shared between features
-   - Don't add fields that don't exist in dataclasses
+// After
+{!executionMode && canRemove && onRemove && (  // Only renders when removable
+  <div className="flex-shrink-0">
+    <button onClick={onRemove}>
+```
 
-### Phase 3: Implement Clean Integration (If Proceeding) 🛠️
+**Files Changed**:
+- `client/src/renderer/features/pipelines/components/module/nodes/NodeRow.tsx`
 
-**Backend Changes:**
+### 4. Output Node Naming ❌ → ✅
 
-1. **Template Service** (`server-new/src/features/pdf_templates/service.py`):
-   ```python
-   def simulate_with_pipeline(
-       self,
-       pdf_bytes: bytes,
-       extraction_fields: List[ExtractionField],
-       pipeline_state: PipelineState  # From shared types
-   ) -> TemplateSimulationResult:
-       # 1. Extract data
-       extracted_data = self.simulate_extraction(pdf_bytes, extraction_fields)
+**Problem**: Output nodes initialized with group label names
+- Made all outputs have same generic names like "Result"
+- User had to delete and retype for meaningful names
 
-       # 2. Compile pipeline (in-memory, no DB save)
-       compiled_steps, pruned_pipeline = self.pipeline_service.compile_for_simulation(
-           pipeline_state
-       )
+**Solution**: Initialize outputs with empty strings
+```typescript
+// moduleFactory.ts - createPins()
+const defaultName = direction === 'out'
+  ? ''  // Outputs start empty (user fills in)
+  : (nodeGroup.min_count > 1 ? `${nodeGroup.label}_${i}` : nodeGroup.label);
+```
 
-       # 3. Execute pipeline with extracted data as entry values
-       execution_result = self.pipeline_execution_service.execute_pipeline(
-           steps=compiled_steps,
-           entry_values_by_name=extracted_data,
-           pipeline_state=pruned_pipeline
-       )
-
-       # 4. Return combined results
-       return TemplateSimulationResult(
-           extraction=extracted_data,
-           execution=execution_result
-       )
-   ```
-
-2. **Router** (`server-new/src/api/routers/pdf_templates.py`):
-   - Keep extraction-only endpoint at `POST /simulate`
-   - Add new endpoint `POST /simulate-with-pipeline` for full testing
-   - Or: Add optional `pipeline_state` param to `/simulate`
-
-**Frontend Changes:**
-
-1. **TemplateBuilderModal** - Update `handleTest()`:
-   ```typescript
-   const handleTest = async () => {
-     // Serialize pipeline (strips frontend-only fields)
-     const serialized = serializePipelineData(pipelineState, visualState);
-
-     // Convert extraction fields
-     const fields = extractionFields.map(f => ({
-       name: f.label,  // Matches entry point name
-       bbox: f.bbox,
-       page: f.page + 1,  // 0-indexed → 1-indexed
-       description: f.label
-     }));
-
-     // Call simulate endpoint
-     const result = await simulateWithPipeline({
-       pdfSource: pdfFile ? 'upload' : 'stored',
-       pdfFileId,
-       pdfFile,
-       extractionFields: fields,
-       pipelineState: serialized.pipeline_state
-     });
-
-     // Display results in TestingStep
-     setTestResults(result);
-   };
-   ```
-
-2. **TestingStep** - Display real results instead of mock data
-
-### Phase 4: Testing & Validation ✅
-
-1. Test extraction-only flow (should still work)
-2. Test pipeline-only flow (should still work)
-3. Test combined flow (new functionality)
-4. Test error cases (extraction fails, pipeline fails, etc.)
+**Files Changed**:
+- `client/src/renderer/features/pipelines/utils/moduleFactory.ts`
 
 ---
 
-## Files Reference
+## Architecture Overview
 
-### Currently Working (Don't Touch)
+### State Flow in Template Builder
 
-**Backend:**
-- `server-new/src/features/pdf_files/service.py` - PDF extraction (✅ works)
-- `server-new/src/features/pdf_files/utils/extraction.py` - Text extraction from bbox (✅ works)
-- `server-new/src/features/pipelines/service.py` - Pipeline compilation/validation (✅ works)
-- `server-new/src/features/pipelines/service_execution.py` - Pipeline execution (✅ works)
+```
+TemplateBuilderModal (parent)
+  ├── State Storage:
+  │   ├── pipelineState: PipelineState (logical structure)
+  │   ├── visualState: VisualState (node positions)
+  │   └── extractionFields: ExtractionField[] (from step 2)
+  │
+  └── Step 3: PipelineBuilderStep
+      ├── Derives entry points from extractionFields
+      ├── Passes to PipelineGraph via props
+      │   ├── initialPipelineState (for reconstruction)
+      │   ├── initialVisualState (for positions)
+      │   └── entryPoints (for fresh creation)
+      │
+      └── Updates parent via callbacks:
+          ├── onChange → updates pipelineState
+          └── ref.getVisualState() → updates visualState
+```
 
-**Frontend:**
-- `client/src/renderer/utils/pipelineSerializer.ts` - Pipeline serialization (✅ works)
-- `client/src/renderer/features/pipelines/components/PipelineGraph.tsx` - Graph editor (✅ works)
-- `client/src/renderer/features/pipelines/components/ExecutedPipelineGraph.tsx` - Visualization (✅ works)
+### Type System Hierarchy
 
-### Needs Clean Implementation
+```
+Canonical Location: types/pipelineTypes.ts
+  ├── PipelineState { entry_points, modules, connections }
+  ├── VisualState { modules: {}, entryPoints: {} }
+  ├── EntryPoint { node_id, name, type }
+  ├── ModuleInstance (from moduleTypes.ts)
+  └── NodeConnection { from_node_id, to_node_id }
 
-**Backend:**
-- `server-new/src/api/routers/pdf_templates.py` - Add pipeline execution integration
-- `server-new/src/features/pdf_templates/service.py` - Add `simulate_with_pipeline()` method
-- `server-new/src/api/schemas/pdf_templates.py` - Align or document pipeline schemas
-
-**Frontend:**
-- `client/src/renderer/features/templates/components/builder/TemplateBuilderModal.tsx` - Update `handleTest()`
-- `client/src/renderer/features/templates/components/builder/steps/TestingStep.tsx` - Display real results
-- `client/src/renderer/features/templates/hooks/useTemplatesApi.ts` - Add `simulateWithPipeline()` method
+Used By:
+  ✅ features/pipelines/* (always used this)
+  ✅ features/templates/* (NOW uses this, was using duplicates)
+  ✅ pages/dashboard/pipelines/* (always used this)
+```
 
 ---
 
-## Design Principles (Learned from Rollback)
+## Design Principles Applied
 
-1. **Don't Duplicate Schemas**: If two features need the same data structure, share it
-2. **Use Existing Serialization**: Don't create custom mappers when standard ones exist
-3. **Domain Types Are Canonical**: API schemas map to domain types, not the other way around
-4. **Plan Before Coding**: Design the integration cleanly before implementing
-5. **Keep Features Separate Until Integration Is Designed**: Working independently is better than broken together
+1. **Single Source of Truth for Types**
+   - One `PipelineState` definition in `types/pipelineTypes.ts`
+   - All features import from this canonical location
+   - No duplicates, no divergence
+
+2. **State Ownership at Parent Level**
+   - TemplateBuilderModal owns state (survives step navigation)
+   - PipelineGraph is stateless from parent perspective
+   - Updates flow up via `onChange` callback
+
+3. **Meaningful State Detection**
+   - Don't just check if objects exist
+   - Check if they contain actual data
+   - Enables proper fresh vs restore behavior
+
+4. **Reactive Updates + Imperative Queries**
+   - `onChange` for logical structure (reactive)
+   - `ref.getVisualState()` for positions (imperative)
+   - Both captured together for full state
+
+5. **Conditional Rendering Over Hiding**
+   - Don't render with `invisible` class
+   - Use conditional rendering to remove from DOM
+   - Prevents layout space reservation
 
 ---
 
-## Questions for Next Session
+## Files Changed This Session
 
-1. **Do we want to integrate extraction + pipeline execution?**
-   - If yes: Design the integration cleanly first
-   - If no: Keep them separate, improve each independently
+### Backend
+- None (all changes were frontend)
 
-2. **What should the template "test" flow look like from a user perspective?**
-   - What do they see in TestingStep?
-   - What happens when they click "Test Template"?
+### Frontend
 
-3. **Should we create a new endpoint or expand existing one?**
-   - `/api/pdf-templates/simulate` (current, extraction only)
-   - `/api/pdf-templates/simulate-with-pipeline` (new, full testing)
-   - `/api/pdf-templates/test` (new, combined flow)
+**Type Definitions**:
+- `client/src/renderer/features/templates/types.ts` - Removed duplicate PipelineState/VisualState
+- `client/src/renderer/features/templates/api/types.ts` - Import from canonical location
 
-4. **Schema strategy:**
-   - Share schemas between `pdf_templates` and `pipelines`?
-   - Or keep separate with clear documentation of differences?
+**Template Builder Components**:
+- `client/src/renderer/features/templates/components/builder/TemplateBuilderModal.tsx` - Use canonical types
+- `client/src/renderer/features/templates/components/builder/steps/PipelineBuilderStep.tsx` - Reactive updates + visual state capture
+- `client/src/renderer/features/templates/components/builder/steps/ExtractionFieldsStep.tsx` - Import canonical types
+- `client/src/renderer/features/templates/components/builder/steps/ExtractionFieldsStep/ExtractionFieldsSidebar.tsx` - Import canonical types
+
+**Pipeline System**:
+- `client/src/renderer/features/pipelines/hooks/usePipelineInitialization.ts` - Meaningful state detection
+- `client/src/renderer/features/pipelines/components/module/nodes/NodeRow.tsx` - Conditional delete button rendering
+- `client/src/renderer/features/pipelines/utils/moduleFactory.ts` - Empty output node names
+
+---
+
+## Testing Checklist
+
+- [x] Template builder step 3 loads without errors
+- [x] Entry points appear from extraction fields
+- [x] Modules can be dragged and dropped
+- [x] Modules can be connected
+- [x] Navigation to step 4 and back preserves pipeline
+- [x] Node positions are preserved
+- [x] Delete buttons only show when removable
+- [x] Labels extend when delete button absent
+- [x] Output nodes start with empty names
+- [x] TypeScript compilation successful (0 errors)
+
+---
+
+## Next Steps (Template Simulate Integration)
+
+The template builder now works correctly with proper state management. The next phase is to integrate the full simulation flow:
+
+### Phase 1: Design Template Testing Flow
+
+**Questions to Answer**:
+1. Should "Test Template" button:
+   - Call extraction only (current behavior)
+   - Call extraction + pipeline execution together
+   - Keep them separate with two API calls
+
+2. Endpoint design:
+   - New endpoint `/api/pdf-templates/test`?
+   - Expand existing `/simulate`?
+   - Keep separate, call both from frontend?
+
+3. Entry point value mapping:
+   - Extraction returns: `{field_label: "extracted_text"}`
+   - Pipeline expects: `{entry_point_name: "value"}`
+   - Entry points use `field.label` as name
+   - Should work automatically if extraction uses label as key
+
+### Phase 2: Implement Clean Integration
+
+**Backend** (`server-new/src/features/pdf_templates/service.py`):
+```python
+def simulate_with_pipeline(
+    self,
+    pdf_bytes: bytes,
+    extraction_fields: List[ExtractionField],
+    pipeline_state: PipelineState
+) -> TemplateSimulationResult:
+    # 1. Extract data from PDF
+    extracted_data = self.simulate_extraction(...)
+
+    # 2. Compile pipeline (in-memory, no DB)
+    compiled_steps, pruned_pipeline = self.pipeline_service.compile_for_simulation(
+        pipeline_state
+    )
+
+    # 3. Execute with extracted data as entry values
+    execution_result = self.pipeline_execution_service.execute_pipeline(
+        steps=compiled_steps,
+        entry_values_by_name=extracted_data,
+        pipeline_state=pruned_pipeline
+    )
+
+    # 4. Return combined results
+    return TemplateSimulationResult(
+        extraction=extracted_data,
+        execution=execution_result
+    )
+```
+
+**Frontend** (`TemplateBuilderModal.tsx::handleTest()`):
+```typescript
+// Use existing serializePipelineData() to prepare pipeline state
+const serialized = serializePipelineData(pipelineState, visualState);
+
+// Convert extraction fields (handle page number 0→1 indexing)
+const fields = extractionFields.map(f => ({
+  name: f.label,
+  bbox: f.bbox,
+  page: f.page + 1,  // Convert to 1-indexed
+}));
+
+// Call combined endpoint
+const result = await simulateTemplate({
+  pdfSource: pdfFile ? 'upload' : 'stored',
+  pdfFileId,
+  pdfFile,
+  extractionFields: fields,
+  pipelineState: serialized.pipeline_state
+});
+
+// Display in TestingStep
+setTestResults(result);
+```
 
 ---
 
 ## Git Status
 
 **Branch**: server_unification
-**HEAD**: 0748ee9 - "Complete pipeline execution visualization with real-time data overlay"
-**Working Tree**: Clean (no uncommitted changes)
-**Commits Ahead of Origin**: 32 commits
-
-**Removed Commits** (rolled back):
-- f0c2a60 through fce361e (integration attempts)
-
-**Ready for**: Clean redesign and implementation
+**Working Tree**: Modified files ready for commit
+**Changes**:
+- Schema unification (removed duplicates)
+- State persistence fixes
+- UI improvements (delete button, output names)
 
 ---
 
 ## Commands Reference
 
-**Start Backend:**
+**Start Backend**:
 ```bash
 cd server-new
 python main.py
 ```
 
-**Start Frontend:**
+**Start Frontend**:
 ```bash
 cd client
 npm run dev
 ```
 
-**Test Extraction (currently works):**
-- Open template builder
-- Go to step 2 (Extraction Fields)
-- Click "Simulate" button
-- Should see extracted text
-
-**Test Pipeline Execution (currently works):**
-- Open pipeline detail page
-- Click "Execute Pipeline"
-- Enter entry point values
-- Should see execution results with visualization
-
-**Test Template Testing (currently mock data):**
-- Open template builder
-- Complete steps 1-3
-- Click "Test Template"
-- Shows mock results (needs real integration)
+**Test Template Builder**:
+1. Navigate to PDF Templates
+2. Click "Create Template" or select PDF
+3. Complete Step 1 (Signature Objects)
+4. Complete Step 2 (Extraction Fields)
+5. Build pipeline in Step 3
+6. Verify modules can be dropped
+7. Navigate to Step 4 and back
+8. Verify pipeline state persists

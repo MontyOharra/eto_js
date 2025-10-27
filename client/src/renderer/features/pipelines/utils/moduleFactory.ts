@@ -41,8 +41,12 @@ function createPins(
 
     // Create min_count pins for this group
     for (let i = 0; i < nodeGroup.min_count; i++) {
-      // Generate default name: use label with index if multiple pins in group
-      const defaultName = nodeGroup.min_count > 1 ? `${nodeGroup.label}_${i}` : nodeGroup.label;
+      // Generate default name
+      // Output nodes start with empty strings (user fills in)
+      // Input nodes use label (but display "Not Connected" until connected)
+      const defaultName = direction === 'out'
+        ? ''
+        : (nodeGroup.min_count > 1 ? `${nodeGroup.label}_${i}` : nodeGroup.label);
 
       pins.push({
         node_id: generateNodeId(),

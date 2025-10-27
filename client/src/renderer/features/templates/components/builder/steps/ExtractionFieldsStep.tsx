@@ -4,7 +4,8 @@
  */
 
 import { useState, useMemo } from 'react';
-import { ExtractionField, SignatureObject, PipelineState, VisualState } from '../../../types';
+import { ExtractionField, SignatureObject } from '../../../types';
+import type { PipelineState, VisualState } from '../../../../../types/pipelineTypes';
 import { PdfViewer } from '../../../../../shared/components/pdf';
 import { PdfObjectOverlay } from './SignatureObjectsStep/PdfObjectOverlay';
 import { ExtractionFieldsSidebar, SidebarMode } from './ExtractionFieldsStep/ExtractionFieldsSidebar';

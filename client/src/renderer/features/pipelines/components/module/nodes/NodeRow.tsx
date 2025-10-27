@@ -118,22 +118,17 @@ export function NodeRow({
       {direction === 'input' ? (
         // Input layout: [handle] name - delete - type (type and delete only show in edit mode)
         <div className="flex items-center w-full gap-2">
-          <div className={`${executionMode || !canRemove ? 'flex-1' : 'flex-[2]'} min-w-0 nodrag flex items-center ${executionMode ? 'justify-center' : ''}`}>
+          <div className="flex-1 min-w-0 nodrag flex items-center">
             <div className={`text-sm text-gray-300 px-1.5 py-0.5 w-full min-h-[24px] flex items-center ${executionMode ? 'justify-center' : ''}`}>
               {displayName}
             </div>
           </div>
-          {!executionMode && (
+          {!executionMode && canRemove && onRemove && (
             <div className="flex-shrink-0">
               <button
-                onClick={canRemove && onRemove ? onRemove : undefined}
-                className={`p-0.5 rounded transition-colors ${
-                  canRemove && onRemove
-                    ? 'text-gray-500 hover:text-red-400 hover:bg-red-900 cursor-pointer'
-                    : 'invisible cursor-default'
-                }`}
-                title={canRemove ? 'Remove node' : ''}
-                disabled={!canRemove || !onRemove}
+                onClick={onRemove}
+                className="p-0.5 rounded transition-colors text-gray-500 hover:text-red-400 hover:bg-red-900 cursor-pointer"
+                title="Remove node"
               >
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -169,17 +164,12 @@ export function NodeRow({
               />
             </div>
           )}
-          {!executionMode && (
+          {!executionMode && canRemove && onRemove && (
             <div className="flex-shrink-0">
               <button
-                onClick={canRemove && onRemove ? onRemove : undefined}
-                className={`p-0.5 rounded transition-colors ${
-                  canRemove && onRemove
-                    ? 'text-gray-500 hover:text-red-400 hover:bg-red-900 cursor-pointer'
-                    : 'invisible cursor-default'
-                }`}
-                title={canRemove ? 'Remove node' : ''}
-                disabled={!canRemove || !onRemove}
+                onClick={onRemove}
+                className="p-0.5 rounded transition-colors text-gray-500 hover:text-red-400 hover:bg-red-900 cursor-pointer"
+                title="Remove node"
               >
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -187,7 +177,7 @@ export function NodeRow({
               </button>
             </div>
           )}
-          <div className={`${executionMode || !canRemove ? 'flex-1' : 'flex-[2]'} min-w-0 nodrag flex items-center ${executionMode ? 'justify-center' : ''}`}>
+          <div className="flex-1 min-w-0 nodrag flex items-center">
             {executionMode ? (
               <div className="text-sm text-gray-300 px-1.5 py-0.5 w-full min-h-[24px] flex items-center justify-center">
                 {node.name}

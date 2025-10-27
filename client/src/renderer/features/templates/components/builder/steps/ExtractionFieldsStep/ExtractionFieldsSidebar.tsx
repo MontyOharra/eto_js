@@ -7,7 +7,8 @@
  */
 
 import { useRef, useEffect, useState } from 'react';
-import { ExtractionField, SignatureObject, PipelineState, VisualState } from '../../../../types';
+import { ExtractionField, SignatureObject } from '../../../../types';
+import type { PipelineState, VisualState } from '../../../../../../types/pipelineTypes';
 import { useTemplatesApi } from '../../../../hooks/useTemplatesApi';
 
 export type SidebarMode = 'list' | 'create' | 'detail';

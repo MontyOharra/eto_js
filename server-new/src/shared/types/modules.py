@@ -15,6 +15,7 @@ class AllowedModuleNodeTypes(str, Enum):
     BOOL = "bool"
     INT = "int"
 
+
 class ModuleKind(str, Enum):
     """Module kind"""
     TRANSFORM = "transform"
@@ -184,7 +185,7 @@ class BaseModule(ABC):
     @classmethod
     def validate_wiring(cls,
                        module_instance_id: str,
-                       config: Dict[str, Any],
+                       cfg: Dict[str, Any],
                        instance_inputs: List[Dict[str, Any]],
                        instance_outputs: List[Dict[str, Any]],
                        upstream_of_input: Dict[str, str]) -> List[Dict[str, Any]]:
@@ -204,7 +205,7 @@ class BaseModule(ABC):
         return []
     
     @abstractmethod
-    def run(self, inputs: Dict[str, Any], config: Dict[str, Any], context: Optional[Any]) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: Dict[str, Any], context: Optional[Any]) -> Dict[str, Any]:
         """
         Execute the module logic
         """

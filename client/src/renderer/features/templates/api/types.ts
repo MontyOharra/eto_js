@@ -12,9 +12,8 @@ import {
   TemplateVersionDetail,
   SignatureObject,
   ExtractionField,
-  PipelineState,
-  VisualState,
 } from '../types';
+import type { PipelineState, VisualState } from '../../../types/pipelineTypes';
 
 // =============================================================================
 // GET /pdf-templates - List templates with pagination

@@ -692,7 +692,7 @@ class PipelineExecutionService:
                 try:
                     outputs_dict = handlerInstance.run(
                         inputs=inputs_dict,
-                        cfg=ConfigModel(**step.module_config),
+                        cfg=ConfigModel(**step.module_config).model_dump(),
                         context=ctx
                     )
                     error = None

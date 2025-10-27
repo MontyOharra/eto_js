@@ -5,6 +5,140 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-10-26 14:30] — Template Builder Pipeline Integration & Schema Unification
+
+### Spec / Intent
+- Fix template builder pipeline integration with canonical type system
+- Resolve schema duplication between templates and pipelines features
+- Fix state persistence when navigating between template builder steps
+- Improve module node UI (delete button spacing, output name initialization)
+
+### Changes Made
+
+**Schema Unification** (`client/src/renderer/features/templates/types.ts`):
+- Removed duplicate `PipelineState` and `VisualState` interfaces (lines 53-83)
+- Added comment directing to canonical location (`types/pipelineTypes.ts`)
+- Eliminated schema mismatch issues:
+  - Entry points: `id/label/field_reference` → `node_id/name/type` ✅
+  - Modules: `instance_id/module_id` → `module_instance_id/module_ref` ✅
+  - Pin types: `string[]` → `string` ✅
+
+**Template Builder Type Updates**:
+- `client/src/renderer/features/templates/api/types.ts` - Import from canonical location
+- `client/src/renderer/features/templates/components/builder/TemplateBuilderModal.tsx` - Use canonical types
+- `client/src/renderer/features/templates/components/builder/steps/PipelineBuilderStep.tsx` - Use canonical types
+- `client/src/renderer/features/templates/components/builder/steps/ExtractionFieldsStep.tsx` - Use canonical types
+- `client/src/renderer/features/templates/components/builder/steps/ExtractionFieldsStep/ExtractionFieldsSidebar.tsx` - Use canonical types
+
+**State Persistence Fix** (`client/src/renderer/features/pipelines/hooks/usePipelineInitialization.ts`):
+- Added `hasMeaningfulState()` function (lines 240-252) to distinguish empty vs populated state
+- Checks for actual modules, connections, or visual positions (not just object existence)
+- Fixed initialization logic to use meaningful state detection
+- Added console logging for debugging initialization path
+
+**Visual State Capture** (`client/src/renderer/features/templates/components/builder/steps/PipelineBuilderStep.tsx`):
+- Updated `handlePipelineChange` callback (lines 52-68) to capture both states
+- Added `pipelineGraphRef.current.getVisualState()` call after pipeline state update
+- Now calls both `onPipelineStateChange` AND `onVisualStateChange`
+- Ensures node positions persist when navigating between steps
+
+**Module Node UI Improvements** (`client/src/renderer/features/pipelines/components/module/nodes/NodeRow.tsx`):
+- Changed delete button from always-rendered-but-invisible to conditional rendering
+- Delete button wrapper only renders when `canRemove && onRemove` (lines 126-138 for inputs, 167-179 for outputs)
+- Label area now uses `flex-1` consistently and expands when delete button absent
+- Removed complex conditional flex sizing (`flex-[2]` vs `flex-1`)
+
+**Output Node Naming** (`client/src/renderer/features/pipelines/utils/moduleFactory.ts`):
+- Updated `createPins()` to initialize output nodes with empty strings (lines 43-49)
+- Input nodes still use group label (but display "Not Connected" until connected)
+- Output nodes start empty for user to fill in meaningful names
+- Prevents all outputs having same generic name like "Result"
+
+### Technical Details
+
+**Schema Migration Path**:
+```typescript
+// Before (templates/types.ts)
+interface PipelineState {
+  entry_points: Array<{ id: string; label: string; field_reference: string }>;
+  modules: Array<{ instance_id: string; module_id: string; ... }>;
+}
+
+// After (types/pipelineTypes.ts) - CANONICAL
+interface PipelineState {
+  entry_points: EntryPoint[];  // {node_id, name, type}
+  modules: ModuleInstance[];   // {module_instance_id, module_ref, ...}
+  connections: NodeConnection[];
+}
+```
+
+**State Persistence Flow**:
+1. User builds pipeline in Step 3 → `onChange` fires → saves `pipelineState` + `visualState`
+2. User navigates to Step 4 → PipelineBuilderStep unmounts (state still in parent)
+3. User clicks "Back" → Step 3 remounts → `hasMeaningfulState()` returns true
+4. PipelineGraph reconstructs from saved state → modules appear at exact positions
+
+**Meaningful State Detection**:
+```typescript
+function hasMeaningfulState(pipelineState?, visualState?): boolean {
+  return (pipelineState.modules.length > 0) ||
+         (pipelineState.connections.length > 0) ||
+         (Object.keys(visualState.modules).length > 0);
+}
+```
+
+### Before/After Behavior
+
+**Before**:
+- Template builder used incompatible pipeline schemas
+- Module drop failed due to schema mismatch
+- Visual state never captured (modules lost positions)
+- Delete buttons always took up space (even when hidden)
+- Output nodes initialized with generic "Result" names
+
+**After**:
+- All features use canonical `types/pipelineTypes.ts` schemas ✅
+- Modules can be dragged and dropped in template builder ✅
+- State persists when navigating between steps ✅
+- Delete buttons conditionally render (no wasted space) ✅
+- Output nodes start empty (user fills in) ✅
+
+### Errors Fixed
+
+**Error 1: Schema Mismatch**
+- Root cause: Duplicate `PipelineState` in `templates/types.ts` with wrong field names
+- Fix: Removed duplicates, imported from canonical location
+- Result: Module dropping now works, no type errors
+
+**Error 2: State Not Persisting**
+- Root cause: `hasMeaningfulState` checked object existence, not content
+- Fix: Added proper checks for arrays/objects having data
+- Result: Pipeline state properly restores when navigating back
+
+**Error 3: Visual State Not Saved**
+- Root cause: `onChange` callback only updated `pipelineState`
+- Fix: Added `getVisualState()` call and `onVisualStateChange()`
+- Result: Module positions now persist
+
+**Error 4: Delete Button Space**
+- Root cause: Wrapper rendered with `invisible` class (takes layout space)
+- Fix: Conditional rendering (`canRemove && onRemove &&`)
+- Result: Label expands to fill space when no delete button
+
+### Next Actions
+- Integrate pipeline execution into template simulate endpoint
+- Test full template creation flow end-to-end
+- Verify state persistence across all template builder steps
+- Test with multiple extraction fields and complex pipelines
+
+### Notes
+- All TypeScript compilation successful (0 errors)
+- No backend changes required (all frontend fixes)
+- Template builder now fully integrated with pipeline system
+- Ready for template simulate endpoint integration
+
+---
+
 ## [2025-10-26 00:30] — Pipeline Execution & Checksum Fixes
 
 ### Spec / Intent

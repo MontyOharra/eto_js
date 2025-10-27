@@ -50,36 +50,9 @@ export interface ExtractionField {
   validation_regex: string | null;
 }
 
-export interface PipelineState {
-  entry_points: Array<{
-    id: string;
-    label: string;
-    field_reference: string;
-  }>;
-  modules: Array<{
-    instance_id: string;
-    module_id: string;
-    config: Record<string, any>;
-    inputs: Array<{
-      node_id: string;
-      name: string;
-      type: string[];
-    }>;
-    outputs: Array<{
-      node_id: string;
-      name: string;
-      type: string[];
-    }>;
-  }>;
-  connections: Array<{
-    from_node_id: string;
-    to_node_id: string;
-  }>;
-}
-
-export interface VisualState {
-  positions: Record<string, { x: number; y: number }>;
-}
+// Note: PipelineState and VisualState are now imported from the canonical location
+// Import from: '../../../types/pipelineTypes'
+// This avoids schema duplication and ensures consistency with the pipeline system
 
 export interface TemplateVersion {
   version_id: number;

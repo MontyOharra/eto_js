@@ -235,6 +235,23 @@ function reconstructPipeline(
 }
 
 /**
+ * Check if initial state has meaningful content (not just empty structures)
+ */
+function hasMeaningfulState(
+  pipelineState?: PipelineState,
+  visualState?: VisualState
+): boolean {
+  if (!pipelineState || !visualState) return false;
+
+  // Check if there are actual modules or connections
+  const hasModules = pipelineState.modules.length > 0;
+  const hasConnections = pipelineState.connections.length > 0;
+  const hasVisualPositions = Object.keys(visualState.modules).length > 0;
+
+  return hasModules || hasConnections || hasVisualPositions;
+}
+
+/**
  * Hook to initialize pipeline from state or entry points
  */
 export function usePipelineInitialization({
@@ -245,9 +262,19 @@ export function usePipelineInitialization({
   setNodes,
   setEdges,
 }: UsePipelineInitializationProps) {
-  // Reconstruct from initial state (view mode)
+  // Check if we have meaningful initial state
+  const hasSavedState = hasMeaningfulState(initialPipelineState, initialVisualState);
+
+  // Reconstruct from initial state (when there's meaningful saved state)
   useEffect(() => {
+    if (!hasSavedState) return;
     if (!initialPipelineState || !initialVisualState) return;
+
+    console.log('[usePipelineInitialization] Reconstructing from saved state:', {
+      modules: initialPipelineState.modules.length,
+      connections: initialPipelineState.connections.length,
+      visualPositions: Object.keys(initialVisualState.modules).length,
+    });
 
     const { nodes, edges } = reconstructPipeline(
       initialPipelineState,
@@ -257,14 +284,16 @@ export function usePipelineInitialization({
 
     setNodes(nodes);
     setEdges(edges);
-  }, [initialPipelineState, initialVisualState, moduleTemplates, setNodes, setEdges]);
+  }, [hasSavedState, initialPipelineState, initialVisualState, moduleTemplates, setNodes, setEdges]);
 
-  // Create entry point nodes (create mode)
+  // Create entry point nodes (when no saved state exists)
   useEffect(() => {
-    if (initialPipelineState || initialVisualState) return; // Skip if in view mode
+    if (hasSavedState) return; // Skip if we have saved state
     if (entryPoints.length === 0) return;
+
+    console.log('[usePipelineInitialization] Creating fresh entry points:', entryPoints.length);
 
     const entryPointNodes = createEntryPointNodes(entryPoints);
     setNodes(entryPointNodes);
-  }, [entryPoints, initialPipelineState, initialVisualState, setNodes]);
+  }, [hasSavedState, entryPoints, setNodes]);
 }

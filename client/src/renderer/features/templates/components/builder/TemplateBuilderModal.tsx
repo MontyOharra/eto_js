@@ -4,12 +4,13 @@
  */
 
 import { useState, useMemo, useEffect } from 'react';
-import { SignatureObject, ExtractionField, PipelineState, VisualState } from '../../types';
+import { SignatureObject, ExtractionField } from '../../types';
 import { SignatureObjectsStep, ExtractionFieldsStep, PipelineBuilderStep, TestingStep, TemplateSimulationResult } from './steps';
 import { TemplateBuilderHeader, TemplateBuilderStepper } from './components';
 import { usePdfData, usePdfFilesApi } from '../../../pdf-files/hooks';
 import { useMockModulesApi } from '../../../modules/hooks';
 import type { ModuleTemplate } from '../../../../types/moduleTypes';
+import type { PipelineState, VisualState } from '../../../../types/pipelineTypes';
 
 interface TemplateBuilderModalProps {
   isOpen: boolean;
@@ -51,7 +52,8 @@ export function TemplateBuilderModal({
     connections: [],
   });
   const [visualState, setVisualState] = useState<VisualState>({
-    positions: {},
+    modules: {},
+    entryPoints: {},
   });
   const [testResults, setTestResults] = useState<TemplateSimulationResult | null>(null);
   const [isTesting, setIsTesting] = useState(false);
@@ -312,7 +314,7 @@ export function TemplateBuilderModal({
     setSelectedObjectTypes([]);
     setExtractionFields([]);
     setPipelineState({ entry_points: [], modules: [], connections: [] });
-    setVisualState({ positions: {} });
+    setVisualState({ modules: {}, entryPoints: {} });
     setTestResults(null);
     setPdfScale(1.0);
     setPdfCurrentPage(1);

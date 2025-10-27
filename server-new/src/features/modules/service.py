@@ -222,7 +222,7 @@ class ModulesService:
 
             # Execute module
             logger.debug(f"Executing module {module_class.id} with {len(inputs)} inputs")
-            outputs = instance.run(inputs, validated_config, context)
+            outputs = instance.run(inputs, validated_config.model_dump(), context)
             logger.debug(f"Module {module_class.id} produced {len(outputs) if outputs else 0} outputs")
 
             return outputs or {}

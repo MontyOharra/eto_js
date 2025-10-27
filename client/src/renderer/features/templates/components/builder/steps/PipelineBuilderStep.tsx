@@ -1,10 +1,10 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
-import { PipelineState, VisualState, ExtractionField } from '../../../types';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { ExtractionField } from '../../../types';
 import { PipelineGraph, PipelineGraphRef } from '../../../../pipelines/components/PipelineGraph';
 import { ModuleSelectorPane } from '../../../../pipelines/components/ModuleSelectorPane';
 import { useModulesApi } from '../../../../../features/modules/hooks';
 import type { ModuleTemplate } from '../../../../../types/moduleTypes';
-import type { EntryPoint } from '../../../../../types/pipelineTypes';
+import type { EntryPoint, PipelineState, VisualState } from '../../../../../types/pipelineTypes';
 
 interface PipelineBuilderStepProps {
   extractionFields: ExtractionField[];
@@ -26,7 +26,7 @@ export function PipelineBuilderStep({
   const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null);
   const pipelineGraphRef = useRef<PipelineGraphRef>(null);
 
-  // Convert extraction fields to entry points
+  // Convert extraction fields to entry points (not deletable in pipeline builder)
   const entryPoints: EntryPoint[] = useMemo(() => {
     return extractionFields.map((field) => ({
       node_id: `entry_${field.field_id}`,
@@ -49,37 +49,23 @@ export function PipelineBuilderStep({
     loadModules();
   }, [getModules]);
 
-  // Sync graph state changes back to parent
-  useEffect(() => {
-    if (!pipelineGraphRef.current) return;
-
-    // Set up a periodic sync or use a callback mechanism
-    const syncState = () => {
-      if (!pipelineGraphRef.current) return;
-
-      try {
-        const currentPipelineState = pipelineGraphRef.current.getPipelineState();
-        const currentVisualState = pipelineGraphRef.current.getVisualState();
-
-        // Include entry points in the pipeline state
-        const stateWithEntryPoints = {
-          ...currentPipelineState,
-          entry_points: entryPoints,
-        };
-
-        // Update parent state
-        onPipelineStateChange(stateWithEntryPoints);
-        onVisualStateChange(currentVisualState);
-      } catch (error) {
-        // Graph might not be ready yet
-        console.debug('Graph state not ready for sync');
-      }
+  // Handle pipeline state changes from graph (reactive updates via onChange)
+  const handlePipelineChange = useCallback((state: PipelineState) => {
+    // Include entry points from extraction fields in the pipeline state
+    const stateWithEntryPoints: PipelineState = {
+      ...state,
+      entry_points: entryPoints,
     };
 
-    // Sync on a timer (this could be optimized with callbacks from the graph)
-    const interval = setInterval(syncState, 1000);
-    return () => clearInterval(interval);
-  }, [onPipelineStateChange, onVisualStateChange, entryPoints]);
+    onPipelineStateChange(stateWithEntryPoints);
+
+    // Also extract and save visual state
+    // We need to use the ref since onChange doesn't provide visual state
+    if (pipelineGraphRef.current) {
+      const currentVisualState = pipelineGraphRef.current.getVisualState();
+      onVisualStateChange(currentVisualState);
+    }
+  }, [entryPoints, onPipelineStateChange, onVisualStateChange]);
 
   const handleModuleSelect = (moduleId: string | null) => {
     setSelectedModuleId(moduleId);
@@ -116,6 +102,9 @@ export function PipelineBuilderStep({
           moduleTemplates={modules}
           selectedModuleId={selectedModuleId}
           onModulePlaced={handleModulePlaced}
+          onChange={handlePipelineChange}
+          initialPipelineState={pipelineState}
+          initialVisualState={visualState}
           viewOnly={false}
           entryPoints={entryPoints}
         />
