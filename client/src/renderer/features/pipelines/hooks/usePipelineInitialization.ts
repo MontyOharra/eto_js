@@ -9,6 +9,8 @@ import { ModuleTemplate, ModuleInstance, NodePin } from '../../../types/moduleTy
 import { PipelineState, VisualState, EntryPoint } from '../../../types/pipelineTypes';
 import { getTypeColor } from '../utils/edgeUtils';
 
+const ALL_TYPES = ['str', 'int', 'float', 'bool', 'datetime'];
+
 export interface UsePipelineInitializationProps {
   moduleTemplates: ModuleTemplate[];
   initialPipelineState?: PipelineState;
@@ -115,9 +117,17 @@ function reconstructPins(
     }
 
     const typeVar = group.typing.type_var;
-    const allowedTypes = typeVar
-      ? template.meta.io_shape.type_params[typeVar] || []
-      : group.typing.allowed_types || [];
+    let allowedTypes: string[];
+
+    if (typeVar) {
+      const typeParamTypes = template.meta.io_shape.type_params[typeVar] || [];
+      // Empty array means all types allowed (matches moduleFactory.ts logic)
+      allowedTypes = typeParamTypes.length === 0 ? ALL_TYPES : typeParamTypes;
+    } else {
+      const directTypes = group.typing.allowed_types || [];
+      // Empty array means all types allowed (matches moduleFactory.ts logic)
+      allowedTypes = directTypes.length === 0 ? ALL_TYPES : directTypes;
+    }
 
     return {
       ...pin,
