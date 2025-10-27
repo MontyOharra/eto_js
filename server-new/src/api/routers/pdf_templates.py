@@ -27,7 +27,10 @@ from api.mappers.pdf_templates import (
     convert_create_template_request,
     convert_update_template_request,
     convert_template_version,
+    convert_extraction_fields_to_domain,
 )
+from api.mappers.pipelines import convert_dto_to_pipeline_state
+from api.schemas.pipelines import PipelineStateDTO
 
 from shared.services.service_container import ServiceContainer
 from shared.exceptions.service import ValidationError
@@ -238,16 +241,21 @@ async def simulate_template(
     else:
         raise ValidationError(f"Invalid pdf_source: {pdf_source}. Must be 'stored' or 'upload'")
 
-    # Convert extraction fields to dict format for service method
-    extraction_fields_dict = [field.model_dump() for field in parsed_extraction_fields]
+    # Convert API schemas to domain types
+    extraction_fields_domain = convert_extraction_fields_to_domain(parsed_extraction_fields)
 
-    # Call simulate extraction (pipelines not implemented yet)
-    extracted_data = template_service.simulate_extraction(
+    # Convert pipeline_state dict to domain type
+    pipeline_state_dto = PipelineStateDTO(**pipeline_state_data)
+    pipeline_state_domain = convert_dto_to_pipeline_state(pipeline_state_dto)
+
+    # Call simulate service (extraction + compilation)
+    extracted_data, compiled_steps = template_service.simulate(
         pdf_bytes=pdf_bytes,
-        extraction_fields=extraction_fields_dict
+        extraction_fields=extraction_fields_domain,
+        pipeline_state=pipeline_state_domain
     )
 
-    # Build response (pipelines not implemented yet)
+    # Build response
     return SimulateTemplateResponse(
         template_matching={
             "status": "success",
@@ -260,8 +268,8 @@ async def simulate_template(
         ),
         pipeline_execution=PipelineExecutionSimulation(
             status="success",
-            message="Pipeline execution not yet implemented",
-            steps=[],
+            error_message=None,
+            steps=[],  # Execution not implemented yet - only compilation
             simulated_actions=[]
         )
     )

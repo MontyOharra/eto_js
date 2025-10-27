@@ -9,6 +9,7 @@ import { SignatureObjectsStep, ExtractionFieldsStep, PipelineBuilderStep, Testin
 import { TemplateBuilderHeader, TemplateBuilderStepper } from './components';
 import { usePdfData, usePdfFilesApi } from '../../../pdf-files/hooks';
 import { useMockModulesApi } from '../../../modules/hooks';
+import { useTemplatesApi } from '../../hooks';
 import { usePipelineValidation } from '../../../pipelines/hooks';
 import type { ModuleTemplate } from '../../../../types/moduleTypes';
 import type { PipelineState, VisualState } from '../../../../types/pipelineTypes';
@@ -79,6 +80,7 @@ export function TemplateBuilderModal({
   const { data: pdfData, isLoading: pdfLoading, error: pdfError } = usePdfData(pdfFileId);
   const { getModules } = useMockModulesApi();
   const { processObjects } = usePdfFilesApi();
+  const { simulateTemplate } = useTemplatesApi();
 
   // Auto-validate pipeline as it's being built
   const { isValid: isPipelineValid, error: pipelineValidationError, isValidating: isPipelineValidating } = usePipelineValidation(pipelineState);
@@ -247,73 +249,76 @@ export function TemplateBuilderModal({
     setTestedVisualState(visualSnapshot);
 
     try {
-      // TODO: Call simulate API endpoint with template data and PDF
-      // For now, simulate a successful test
-      await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate API call
+      // Build FormData request for simulate endpoint
+      const formData = new FormData();
 
-      // Mock test results - in production this would come from the API
-      // This format matches ETO run detail but without template/pipeline IDs
+      // Add PDF source info
+      if (pdfFileId) {
+        formData.append('pdf_source', 'stored');
+        formData.append('pdf_file_id', pdfFileId.toString());
+      } else if (pdfFile) {
+        formData.append('pdf_source', 'upload');
+        formData.append('pdf_file', pdfFile);
+      } else {
+        throw new Error('No PDF source available for testing');
+      }
 
-      // Create mock extracted data keyed by field_id
-      const mockExtractedData: Record<string, any> = {};
+      // Transform extraction fields to backend format (label → name)
+      const backendExtractionFields = extractionFields.map(field => ({
+        name: field.label,
+        description: field.description,
+        bbox: field.bbox,
+        page: field.page,
+      }));
+
+      // Add extraction fields and pipeline state as JSON strings
+      formData.append('extraction_fields', JSON.stringify(backendExtractionFields));
+      formData.append('pipeline_state', JSON.stringify(pipelineState));
+
+      // Call real simulate API
+      const response = await simulateTemplate(formData);
+
+      // Map API response to TemplateSimulationResult format
+      // Note: Backend returns extracted_data keyed by field name (label), but frontend expects field_id
+      const extractedDataByFieldId: Record<string, string> = {};
       extractionFields.forEach(field => {
-        mockExtractedData[field.field_id] = '  Hello World  ';
+        extractedDataByFieldId[field.field_id] = response.data_extraction.extracted_data?.[field.label] || '';
       });
 
-      const mockSimulationResult: TemplateSimulationResult = {
-        status: 'success',
+      const simulationResult: TemplateSimulationResult = {
+        status: response.pipeline_execution.status === 'success' ? 'success' : 'failure',
         data_extraction: {
-          extracted_data: mockExtractedData,
-          extracted_fields_with_boxes: extractionFields.map((field, idx) => ({
+          extracted_data: extractedDataByFieldId,
+          extracted_fields_with_boxes: extractionFields.map(field => ({
             field_id: field.field_id,
             label: field.label,
-            value: '  Hello World  ',
-            page: 0,
-            bbox: [250, 50 + idx * 50, 400, 70 + idx * 50] as [number, number, number, number],
+            value: response.data_extraction.extracted_data?.[field.label] || '',
+            page: field.page,
+            bbox: field.bbox,
           })),
         },
         pipeline_execution: {
-          status: 'success',
-          executed_actions: [
-            {
-              action_module_name: 'Print Action',
-              inputs: {
-                message: 'HELLO WORLD',
-                prefix: 'Result: ',
-              },
-            },
-          ],
-          steps: pipelineState.modules.map((module, idx) => ({
-            id: idx + 1,
-            step_number: idx + 1,
-            module_instance_id: module.module_instance_id,
-            inputs: module.inputs.reduce((acc, input) => {
-              acc[input.node_id] = {
-                name: input.name,
-                value: '  Hello World  ',
-                type: input.type,
-              };
-              return acc;
-            }, {} as Record<string, { name: string; value: any; type: string }>),
-            outputs: module.outputs.reduce((acc, output) => {
-              acc[output.node_id] = {
-                name: output.name,
-                value: 'HELLO WORLD',
-                type: output.type,
-              };
-              return acc;
-            }, {} as Record<string, { name: string; value: any; type: string }>),
-            error: null,
+          status: response.pipeline_execution.status,
+          executed_actions: response.pipeline_execution.simulated_actions.map(action => ({
+            action_module_name: action.action_module_name,
+            inputs: action.inputs,
+          })),
+          steps: response.pipeline_execution.steps.map(step => ({
+            id: step.step_number,
+            step_number: step.step_number,
+            module_instance_id: step.module_instance_id,
+            inputs: step.inputs,
+            outputs: step.outputs,
+            error: step.error,
           })),
         },
       };
 
-      setTestResults(mockSimulationResult);
-
-      // Navigate to testing step
+      setTestResults(simulationResult);
       setCurrentStep('testing');
     } catch (error) {
       console.error('Failed to test template:', error);
+      alert(`Template test failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsTesting(false);
     }

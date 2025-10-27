@@ -1,89 +1,158 @@
-# Template Builder Pipeline Integration - Continuity Document
-
-**Date**: 2025-10-26
-**Branch**: server_unification
-**Session Context**: Fixed template builder pipeline integration with canonical type system and state persistence
+# CONTINUITY DOCUMENT
+**Last Updated**: 2025-10-27
+**Session Summary**: Implemented pipeline compilation in simulate endpoint and wired up template builder test functionality
 
 ---
 
-## Current State ✅
+## What Was Accomplished This Session
 
-### What Works Now
+### 1. Pipeline Compilation in Simulate Endpoint ✅
 
-1. **Template Builder Pipeline Integration** - Fully functional
-   - Step 3 (Pipeline Builder) uses canonical pipeline types from `types/pipelineTypes.ts`
-   - Entry points auto-generated from extraction fields (Step 2)
-   - Entry points are NOT deletable (by design - extraction fields define them)
-   - Modules can be dragged and dropped from module selector
-   - State persists when navigating between steps (Step 3 → Step 4 → back to Step 3)
-   - **Location**: `client/src/renderer/features/templates/components/builder/steps/PipelineBuilderStep.tsx`
+**Goal**: Add pipeline compilation alongside PDF extraction in the simulate endpoint, with printed output of compiled steps.
 
-2. **Pipeline State Persistence** - Working
-   - Both `pipelineState` and `visualState` stored in TemplateBuilderModal parent component
-   - PipelineGraph uses `onChange` callback to update parent state reactively
-   - Visual state (node positions) captured via ref and updated alongside logical state
-   - `usePipelineInitialization` hook checks for meaningful state vs empty structures
-   - **Location**: `client/src/renderer/features/pipelines/hooks/usePipelineInitialization.ts`
+**Backend Changes:**
 
-3. **Schema Unification** - Complete
-   - Removed duplicate `PipelineState` and `VisualState` from `features/templates/types.ts`
-   - All template builder components now import from canonical `types/pipelineTypes.ts`
-   - Entry points use standard `{node_id, name, type}` structure
-   - Module instances use full `ModuleInstance` type with proper pin metadata
-   - No more schema mismatches between features
+1. **Service Layer** (`server-new/src/features/pdf_templates/service.py`):
+   - Replaced `simulate_extraction()` method with new `simulate()` method
+   - New method signature: `simulate(pdf_bytes, extraction_fields, pipeline_state) -> tuple[dict, list]`
+   - Added imports: `ExtractionFieldDomain`, `PipelineStateDomain`, `PipelineDefinitionStepCreate`
+   - Method now performs:
+     - PDF text extraction via PDF files service
+     - Pipeline validation via `pipeline_service._validate_pipeline()`
+     - Dead branch pruning via `pipeline_service._prune_dead_branches()`
+     - Pipeline compilation via `pipeline_service._compile_pipeline()`
+     - Prints extracted data and compiled steps to console
+   - Returns tuple of `(extracted_data, compiled_steps)`
 
-4. **Module Node UI Improvements** - Complete
-   - Delete button only renders when node is removable (`canRemove && onRemove`)
-   - Label area expands to fill space when delete button is absent
-   - Output nodes initialize with empty strings (user fills in names)
-   - Input nodes show connected output name or "Not Connected"
+2. **Endpoint** (`server-new/src/api/routers/pdf_templates.py`):
+   - Added imports: `convert_extraction_fields_to_domain`, `convert_dto_to_pipeline_state`, `PipelineStateDTO`
+   - Updated `simulate_template()` endpoint to:
+     - Convert Pydantic `ExtractionField` schemas to domain types using mapper
+     - Convert `pipeline_state` dict to `PipelineStateDTO` then to domain type
+     - Call new `simulate()` service method with domain types
+     - Handle tuple return value `(extracted_data, compiled_steps)`
+     - Updated response to show compilation success (no execution yet)
 
-5. **Pipeline Execution** - Fully functional (unchanged)
-   - Standalone pipeline execution works via ExecutePipelineModal
-   - Compilation, validation, execution all working
-   - **Location**: `server-new/src/features/pipelines/service_execution.py`
+**Frontend Changes:**
 
-6. **PDF Text Extraction** - Fully functional (unchanged)
-   - Works in ExtractionFieldsStep with "Simulate" button
-   - **Location**: `server-new/src/features/pdf_templates/service.py`
+1. **TemplateBuilderModal** (`client/src/renderer/features/templates/components/builder/TemplateBuilderModal.tsx`):
+   - Added import: `useTemplatesApi` hook
+   - Replaced mock test implementation in `handleTest()` with real API call
+   - Builds FormData with:
+     - `pdf_source`: "stored" or "upload"
+     - `pdf_file_id` or `pdf_file`: PDF source
+     - `extraction_fields`: JSON string (transforms `label` → `name` for backend)
+     - `pipeline_state`: JSON string
+   - Maps API response back to frontend format:
+     - Backend returns data keyed by field name
+     - Frontend needs data keyed by field_id
+     - Transforms extraction field names back to field_ids
+   - Shows error alert on failure
+
+**Key Architecture:**
+- Endpoint handles Pydantic validation and converts to domain types
+- Service works only with domain types (no Pydantic or dict conversions)
+- Compilation happens but execution steps remain empty (simulation mode)
+- No persistence - everything runs in memory
 
 ---
 
-## What Was Fixed This Session
+### 2. Pipeline State Persistence Issue 🚧 (IN PROGRESS)
 
-### 1. Schema Duplication Issue ❌ → ✅
+**Problem**: When user navigates away from pipeline step (step 3) and returns, the pipeline is cleared instead of being restored from saved state.
 
-**Problem**: Template builder had its own incompatible pipeline schemas
-- `features/templates/types.ts` defined `PipelineState` with wrong field names
-- Entry points had `id/label/field_reference` instead of `node_id/name/type`
-- Module instances had `instance_id/module_id` instead of `module_instance_id/module_ref`
-- Pin types were `string[]` instead of `string`
+**Root Cause**: The `usePipelineInitialization` hook was not properly preserving state on component remount.
 
-**Solution**:
-- Removed duplicate schemas from `features/templates/types.ts`
-- Updated all template imports to use `types/pipelineTypes.ts`
-- Added comment directing future developers to canonical location
+**Attempted Fixes**:
 
-**Files Changed**:
-- `client/src/renderer/features/templates/types.ts` - Removed duplicates
-- `client/src/renderer/features/templates/api/types.ts` - Updated imports
-- `client/src/renderer/features/templates/components/builder/steps/ExtractionFieldsStep.tsx` - Updated imports
-- `client/src/renderer/features/templates/components/builder/steps/ExtractionFieldsStep/ExtractionFieldsSidebar.tsx` - Updated imports
-- `client/src/renderer/features/templates/components/builder/TemplateBuilderModal.tsx` - Updated imports
+1. **First Attempt**: Split into two effects with computed `hasSavedState` - didn't work
+2. **Second Attempt**: Combined into single effect with `useRef` to track initialization
 
-### 2. State Persistence Issue ❌ → ✅
+**Current State** (`client/src/renderer/features/pipelines/hooks/usePipelineInitialization.ts`):
+- Uses `hasInitializedRef` to prevent re-initialization
+- Single effect with proper dependency array
+- Waits for modules to load before initializing
+- Checks `hasMeaningfulState()` to determine reconstruction vs fresh entry points
+- Should reconstruct from `initialPipelineState` and `initialVisualState` when present
 
-**Problem**: Pipeline builder couldn't drop modules and didn't persist state
-- PipelineGraph initialization treated empty state objects as "has saved state"
-- Visual state was never captured from graph (only pipeline state)
-- Navigation between steps lost module positions
+**Status**: User reports it's still not working - pipeline loads empty on return to step 3
 
-**Solution**:
+**Next Steps to Debug**:
+1. Check browser console logs when navigating to step 3:
+   - Look for: `[usePipelineInitialization] Reconstructing from saved state:`
+   - Look for: `[usePipelineInitialization] Waiting for modules to load...`
+   - Look for: `[usePipelineInitialization] Creating fresh entry points:`
+2. Add temporary logging in `TemplateBuilderModal` to verify `pipelineState` and `visualState` are being preserved
+3. Check if `hasMeaningfulState()` is correctly detecting saved state
+4. Verify `moduleTemplates` are loaded before initialization runs
 
-**Part A - Initialization Logic** (`usePipelineInitialization.ts`):
+---
+
+## Files Modified This Session
+
+### Backend Files
+
+1. **`server-new/src/features/pdf_templates/service.py`**
+   - Lines 14-24: Added imports for domain types
+   - Lines 430-490: Replaced `simulate_extraction()` with `simulate()` method
+
+2. **`server-new/src/api/routers/pdf_templates.py`**
+   - Lines 23-33: Added imports for mappers and schemas
+   - Lines 244-275: Updated simulate endpoint to convert types and call new service method
+
+### Frontend Files
+
+1. **`client/src/renderer/features/templates/components/builder/TemplateBuilderModal.tsx`**
+   - Line 12: Added `useTemplatesApi` import
+   - Line 83: Added `simulateTemplate` hook initialization
+   - Lines 242-311: Completely rewrote `handleTest()` to call real API
+
+2. **`client/src/renderer/features/pipelines/hooks/usePipelineInitialization.ts`**
+   - Line 6: Added `useRef` import
+   - Lines 264-323: Rewrote hook to use ref-based initialization tracking
+
+---
+
+## Current System State
+
+### What's Working ✅
+- Template builder test button calls real simulate endpoint
+- PDF extraction works for both stored and uploaded PDFs
+- Pipeline compilation runs successfully alongside extraction
+- Compiled steps are printed to console for verification
+- Frontend receives and displays extraction results
+- TypeScript compiles without errors
+
+### What's Not Working 🚧
+- Pipeline state not restoring when navigating back to step 3
+- User builds a pipeline, navigates away, comes back → pipeline is empty
+- `pipelineState` and `visualState` should be preserved by parent component
+- Initialization hook should reconstruct from these states but isn't
+
+---
+
+## Technical Context
+
+### Pipeline Initialization Flow
+1. User enters step 3 (`currentStep = 'pipeline'`)
+2. `PipelineBuilderStep` component mounts
+3. Passes `pipelineState` and `visualState` props to `PipelineGraph`
+4. `PipelineGraph` passes to `usePipelineInitialization` as `initialPipelineState` and `initialVisualState`
+5. Hook should detect meaningful state and reconstruct pipeline
+6. Currently detecting empty state instead
+
+### Expected Behavior
+- `TemplateBuilderModal` maintains `pipelineState` and `visualState` in useState
+- These states are updated via callbacks as user builds pipeline
+- When user navigates away and back, these states should still contain pipeline data
+- `usePipelineInitialization` should reconstruct pipeline from these states
+
+### hasMeaningfulState Function
 ```typescript
-// Added hasMeaningfulState() function
-function hasMeaningfulState(pipelineState?, visualState?): boolean {
+function hasMeaningfulState(
+  pipelineState?: PipelineState,
+  visualState?: VisualState
+): boolean {
   if (!pipelineState || !visualState) return false;
 
   const hasModules = pipelineState.modules.length > 0;
@@ -94,291 +163,79 @@ function hasMeaningfulState(pipelineState?, visualState?): boolean {
 }
 ```
 
-**Part B - Visual State Capture** (`PipelineBuilderStep.tsx`):
-```typescript
-const handlePipelineChange = useCallback((state: PipelineState) => {
-  // Save logical state
-  const stateWithEntryPoints: PipelineState = {
-    ...state,
-    entry_points: entryPoints,
-  };
-  onPipelineStateChange(stateWithEntryPoints);
+---
 
-  // Also save visual state using ref
-  if (pipelineGraphRef.current) {
-    const currentVisualState = pipelineGraphRef.current.getVisualState();
-    onVisualStateChange(currentVisualState);  // ✅ NOW CAPTURED
-  }
-}, [entryPoints, onPipelineStateChange, onVisualStateChange]);
-```
+## Next Session TODO
 
-**Result**:
-- First visit: Empty state → creates entry points → can drop modules
-- Return visit: Has modules → reconstructs saved state → preserves positions
+### Immediate Priority: Fix Pipeline State Persistence
 
-### 3. Module Node UI Spacing ❌ → ✅
+**Debug Steps**:
+1. Add console.log in `TemplateBuilderModal` before rendering `PipelineBuilderStep`:
+   ```typescript
+   console.log('[TemplateBuilderModal] Rendering pipeline step with state:', {
+     pipelineState,
+     visualState,
+     hasModules: pipelineState.modules.length,
+     hasVisualPositions: Object.keys(visualState.modules).length,
+   });
+   ```
 
-**Problem**: Delete button wrapper always rendered with `invisible` class
-- Wrapper had `flex-shrink-0` so it reserved space even when hidden
-- Label couldn't expand into the empty space
+2. Check if states are actually being preserved in parent or getting reset
 
-**Solution**: Conditional rendering instead of hiding
-```typescript
-// Before
-{!executionMode && (
-  <div className="flex-shrink-0">  // Always rendered
-    <button className={canRemove ? 'visible' : 'invisible'}> // Hidden but takes space
+3. Verify `usePipelineInitialization` logs show correct detection
 
-// After
-{!executionMode && canRemove && onRemove && (  // Only renders when removable
-  <div className="flex-shrink-0">
-    <button onClick={onRemove}>
-```
+**Potential Issues**:
+- Parent component might be resetting states when step changes
+- `useRef` might not be resetting properly on unmount
+- `moduleTemplates` might not be ready when effect runs
+- Prop references might be changing causing re-initialization
 
-**Files Changed**:
-- `client/src/renderer/features/pipelines/components/module/nodes/NodeRow.tsx`
+**Possible Solutions**:
+- Add key prop to `PipelineBuilderStep` based on `currentStep` to force remount
+- Store pipeline state in parent's ref instead of state
+- Use `useEffect` cleanup to reset `hasInitializedRef`
+- Add more defensive checks in initialization hook
 
-### 4. Output Node Naming ❌ → ✅
+### After Pipeline Persistence is Fixed
 
-**Problem**: Output nodes initialized with group label names
-- Made all outputs have same generic names like "Result"
-- User had to delete and retype for meaningful names
-
-**Solution**: Initialize outputs with empty strings
-```typescript
-// moduleFactory.ts - createPins()
-const defaultName = direction === 'out'
-  ? ''  // Outputs start empty (user fills in)
-  : (nodeGroup.min_count > 1 ? `${nodeGroup.label}_${i}` : nodeGroup.label);
-```
-
-**Files Changed**:
-- `client/src/renderer/features/pipelines/utils/moduleFactory.ts`
+**Next Feature: Pipeline Execution**
+- Currently only compilation happens in simulate endpoint
+- Need to add actual pipeline execution using compiled steps
+- Execute each step in order using entry values from extracted data
+- Collect outputs and action data
+- Return execution results in response
 
 ---
 
-## Architecture Overview
+## Important Notes
 
-### State Flow in Template Builder
-
-```
-TemplateBuilderModal (parent)
-  ├── State Storage:
-  │   ├── pipelineState: PipelineState (logical structure)
-  │   ├── visualState: VisualState (node positions)
-  │   └── extractionFields: ExtractionField[] (from step 2)
-  │
-  └── Step 3: PipelineBuilderStep
-      ├── Derives entry points from extractionFields
-      ├── Passes to PipelineGraph via props
-      │   ├── initialPipelineState (for reconstruction)
-      │   ├── initialVisualState (for positions)
-      │   └── entryPoints (for fresh creation)
-      │
-      └── Updates parent via callbacks:
-          ├── onChange → updates pipelineState
-          └── ref.getVisualState() → updates visualState
-```
-
-### Type System Hierarchy
-
-```
-Canonical Location: types/pipelineTypes.ts
-  ├── PipelineState { entry_points, modules, connections }
-  ├── VisualState { modules: {}, entryPoints: {} }
-  ├── EntryPoint { node_id, name, type }
-  ├── ModuleInstance (from moduleTypes.ts)
-  └── NodeConnection { from_node_id, to_node_id }
-
-Used By:
-  ✅ features/pipelines/* (always used this)
-  ✅ features/templates/* (NOW uses this, was using duplicates)
-  ✅ pages/dashboard/pipelines/* (always used this)
-```
+- **Do not create MD files unless user specifies**
+- **Do not push to remote unless user specifies**
+- **No imports inside functions** - all imports at top level
+- **Config validation should happen in existing module validation functions**
+- **Never run `npm run dev`** - user handles testing and server execution
 
 ---
 
-## Design Principles Applied
+## Git Status Before Commit
 
-1. **Single Source of Truth for Types**
-   - One `PipelineState` definition in `types/pipelineTypes.ts`
-   - All features import from this canonical location
-   - No duplicates, no divergence
+**Modified Files:**
+- `server-new/src/features/pdf_templates/service.py`
+- `server-new/src/api/routers/pdf_templates.py`
+- `client/src/renderer/features/templates/components/builder/TemplateBuilderModal.tsx`
+- `client/src/renderer/features/pipelines/hooks/usePipelineInitialization.ts`
 
-2. **State Ownership at Parent Level**
-   - TemplateBuilderModal owns state (survives step navigation)
-   - PipelineGraph is stateless from parent perspective
-   - Updates flow up via `onChange` callback
+**Branch**: `server_unification`
 
-3. **Meaningful State Detection**
-   - Don't just check if objects exist
-   - Check if they contain actual data
-   - Enables proper fresh vs restore behavior
-
-4. **Reactive Updates + Imperative Queries**
-   - `onChange` for logical structure (reactive)
-   - `ref.getVisualState()` for positions (imperative)
-   - Both captured together for full state
-
-5. **Conditional Rendering Over Hiding**
-   - Don't render with `invisible` class
-   - Use conditional rendering to remove from DOM
-   - Prevents layout space reservation
+**Main Branch**: `master`
 
 ---
 
-## Files Changed This Session
+## Environment
 
-### Backend
-- None (all changes were frontend)
-
-### Frontend
-
-**Type Definitions**:
-- `client/src/renderer/features/templates/types.ts` - Removed duplicate PipelineState/VisualState
-- `client/src/renderer/features/templates/api/types.ts` - Import from canonical location
-
-**Template Builder Components**:
-- `client/src/renderer/features/templates/components/builder/TemplateBuilderModal.tsx` - Use canonical types
-- `client/src/renderer/features/templates/components/builder/steps/PipelineBuilderStep.tsx` - Reactive updates + visual state capture
-- `client/src/renderer/features/templates/components/builder/steps/ExtractionFieldsStep.tsx` - Import canonical types
-- `client/src/renderer/features/templates/components/builder/steps/ExtractionFieldsStep/ExtractionFieldsSidebar.tsx` - Import canonical types
-
-**Pipeline System**:
-- `client/src/renderer/features/pipelines/hooks/usePipelineInitialization.ts` - Meaningful state detection
-- `client/src/renderer/features/pipelines/components/module/nodes/NodeRow.tsx` - Conditional delete button rendering
-- `client/src/renderer/features/pipelines/utils/moduleFactory.ts` - Empty output node names
-
----
-
-## Testing Checklist
-
-- [x] Template builder step 3 loads without errors
-- [x] Entry points appear from extraction fields
-- [x] Modules can be dragged and dropped
-- [x] Modules can be connected
-- [x] Navigation to step 4 and back preserves pipeline
-- [x] Node positions are preserved
-- [x] Delete buttons only show when removable
-- [x] Labels extend when delete button absent
-- [x] Output nodes start with empty names
-- [x] TypeScript compilation successful (0 errors)
-
----
-
-## Next Steps (Template Simulate Integration)
-
-The template builder now works correctly with proper state management. The next phase is to integrate the full simulation flow:
-
-### Phase 1: Design Template Testing Flow
-
-**Questions to Answer**:
-1. Should "Test Template" button:
-   - Call extraction only (current behavior)
-   - Call extraction + pipeline execution together
-   - Keep them separate with two API calls
-
-2. Endpoint design:
-   - New endpoint `/api/pdf-templates/test`?
-   - Expand existing `/simulate`?
-   - Keep separate, call both from frontend?
-
-3. Entry point value mapping:
-   - Extraction returns: `{field_label: "extracted_text"}`
-   - Pipeline expects: `{entry_point_name: "value"}`
-   - Entry points use `field.label` as name
-   - Should work automatically if extraction uses label as key
-
-### Phase 2: Implement Clean Integration
-
-**Backend** (`server-new/src/features/pdf_templates/service.py`):
-```python
-def simulate_with_pipeline(
-    self,
-    pdf_bytes: bytes,
-    extraction_fields: List[ExtractionField],
-    pipeline_state: PipelineState
-) -> TemplateSimulationResult:
-    # 1. Extract data from PDF
-    extracted_data = self.simulate_extraction(...)
-
-    # 2. Compile pipeline (in-memory, no DB)
-    compiled_steps, pruned_pipeline = self.pipeline_service.compile_for_simulation(
-        pipeline_state
-    )
-
-    # 3. Execute with extracted data as entry values
-    execution_result = self.pipeline_execution_service.execute_pipeline(
-        steps=compiled_steps,
-        entry_values_by_name=extracted_data,
-        pipeline_state=pruned_pipeline
-    )
-
-    # 4. Return combined results
-    return TemplateSimulationResult(
-        extraction=extracted_data,
-        execution=execution_result
-    )
-```
-
-**Frontend** (`TemplateBuilderModal.tsx::handleTest()`):
-```typescript
-// Use existing serializePipelineData() to prepare pipeline state
-const serialized = serializePipelineData(pipelineState, visualState);
-
-// Convert extraction fields (handle page number 0→1 indexing)
-const fields = extractionFields.map(f => ({
-  name: f.label,
-  bbox: f.bbox,
-  page: f.page + 1,  // Convert to 1-indexed
-}));
-
-// Call combined endpoint
-const result = await simulateTemplate({
-  pdfSource: pdfFile ? 'upload' : 'stored',
-  pdfFileId,
-  pdfFile,
-  extractionFields: fields,
-  pipelineState: serialized.pipeline_state
-});
-
-// Display in TestingStep
-setTestResults(result);
-```
-
----
-
-## Git Status
-
-**Branch**: server_unification
-**Working Tree**: Modified files ready for commit
-**Changes**:
-- Schema unification (removed duplicates)
-- State persistence fixes
-- UI improvements (delete button, output names)
-
----
-
-## Commands Reference
-
-**Start Backend**:
-```bash
-cd server-new
-python main.py
-```
-
-**Start Frontend**:
-```bash
-cd client
-npm run dev
-```
-
-**Test Template Builder**:
-1. Navigate to PDF Templates
-2. Click "Create Template" or select PDF
-3. Complete Step 1 (Signature Objects)
-4. Complete Step 2 (Extraction Fields)
-5. Build pipeline in Step 3
-6. Verify modules can be dropped
-7. Navigate to Step 4 and back
-8. Verify pipeline state persists
+- Working Directory: `C:\Users\Owner\Software_Projects\eto_js`
+- Platform: Windows (MINGW64_NT-10.0-26100)
+- Date: 2025-10-27
+- Backend: Python FastAPI
+- Frontend: React + TypeScript + React Flow
+- Database: PostgreSQL (via connection manager)

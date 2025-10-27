@@ -3,7 +3,7 @@
  * Reconstructs pipeline from saved state or creates from entry points
  */
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Node, Edge } from '@xyflow/react';
 import { ModuleTemplate, ModuleInstance, NodePin } from '../../../types/moduleTypes';
 import { PipelineState, VisualState, EntryPoint } from '../../../types/pipelineTypes';
@@ -272,38 +272,52 @@ export function usePipelineInitialization({
   setNodes,
   setEdges,
 }: UsePipelineInitializationProps) {
-  // Check if we have meaningful initial state
-  const hasSavedState = hasMeaningfulState(initialPipelineState, initialVisualState);
+  // Track if we've already initialized to prevent re-initialization
+  const hasInitializedRef = useRef(false);
 
-  // Reconstruct from initial state (when there's meaningful saved state)
   useEffect(() => {
-    if (!hasSavedState) return;
-    if (!initialPipelineState || !initialVisualState) return;
+    // Only initialize once per mount
+    if (hasInitializedRef.current) {
+      console.log('[usePipelineInitialization] Already initialized, skipping');
+      return;
+    }
 
-    console.log('[usePipelineInitialization] Reconstructing from saved state:', {
-      modules: initialPipelineState.modules.length,
-      connections: initialPipelineState.connections.length,
-      visualPositions: Object.keys(initialVisualState.modules).length,
-    });
+    // Wait for modules to load before initializing
+    if (moduleTemplates.length === 0) {
+      console.log('[usePipelineInitialization] Waiting for modules to load...');
+      return;
+    }
 
-    const { nodes, edges } = reconstructPipeline(
-      initialPipelineState,
-      initialVisualState,
-      moduleTemplates
-    );
+    const hasSavedState = hasMeaningfulState(initialPipelineState, initialVisualState);
 
-    setNodes(nodes);
-    setEdges(edges);
-  }, [hasSavedState, initialPipelineState, initialVisualState, moduleTemplates, setNodes, setEdges]);
+    if (hasSavedState) {
+      // Reconstruct from saved state
+      if (!initialPipelineState || !initialVisualState) return;
 
-  // Create entry point nodes (when no saved state exists)
-  useEffect(() => {
-    if (hasSavedState) return; // Skip if we have saved state
-    if (entryPoints.length === 0) return;
+      console.log('[usePipelineInitialization] Reconstructing from saved state:', {
+        modules: initialPipelineState.modules.length,
+        connections: initialPipelineState.connections.length,
+        visualPositions: Object.keys(initialVisualState.modules).length,
+      });
 
-    console.log('[usePipelineInitialization] Creating fresh entry points:', entryPoints.length);
+      const { nodes, edges } = reconstructPipeline(
+        initialPipelineState,
+        initialVisualState,
+        moduleTemplates
+      );
 
-    const entryPointNodes = createEntryPointNodes(entryPoints);
-    setNodes(entryPointNodes);
-  }, [hasSavedState, entryPoints, setNodes]);
+      setNodes(nodes);
+      setEdges(edges);
+      hasInitializedRef.current = true;
+    } else {
+      // Create fresh entry points
+      if (entryPoints.length === 0) return;
+
+      console.log('[usePipelineInitialization] Creating fresh entry points:', entryPoints.length);
+
+      const entryPointNodes = createEntryPointNodes(entryPoints);
+      setNodes(entryPointNodes);
+      hasInitializedRef.current = true;
+    }
+  }, [moduleTemplates, initialPipelineState, initialVisualState, entryPoints, setNodes, setEdges]);
 }

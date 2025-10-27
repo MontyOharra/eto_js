@@ -18,7 +18,10 @@ from shared.types.pdf_templates import (
     PdfTemplateUpdate,
     PdfTemplateVersion,
     PdfVersionSummary,
+    ExtractionField as ExtractionFieldDomain,
 )
+from shared.types.pipelines import PipelineState as PipelineStateDomain
+from shared.types.pipeline_definition_step import PipelineDefinitionStepCreate
 from shared.exceptions.service import ObjectNotFoundError, ConflictError, ServiceError
 from features.pipelines.service import PipelineService
 from features.pdf_files.service import PdfFilesService
@@ -424,47 +427,64 @@ class PdfTemplateService:
 
         return updated_template
 
-    def simulate_extraction(
+    def simulate(
         self,
         pdf_bytes: bytes,
-        extraction_fields: list[dict[str, Any]]
-    ) -> dict[str, str]:
+        extraction_fields: list[ExtractionFieldDomain],
+        pipeline_state: PipelineStateDomain
+    ) -> tuple[dict[str, str], list[PipelineDefinitionStepCreate]]:
         """
-        Simulate data extraction from PDF using extraction fields.
+        Simulate template processing: extract data from PDF and compile pipeline.
 
-        For now, this method only extracts text data and prints it.
-        Pipeline execution is not yet implemented.
+        This method performs both data extraction and pipeline compilation without
+        persistence. Used by the template builder to test templates before saving.
 
         Args:
             pdf_bytes: Raw PDF file bytes
-            extraction_fields: List of extraction field dicts with:
-                - name: Field name
-                - bbox: [x0, y0, x1, y1]
-                - page: Page number
+            extraction_fields: List of extraction field domain objects
+            pipeline_state: Pipeline state domain object
 
         Returns:
-            Dict mapping field names to extracted text values
-
-        Example:
-            extraction_fields = [
-                {"name": "hawb", "bbox": [100, 200, 300, 220], "page": 1},
-                {"name": "weight", "bbox": [100, 250, 200, 270], "page": 1}
-            ]
-
-            Returns: {"hawb": "ABC123", "weight": "150.5"}
+            Tuple of (extracted_data dict, compiled_steps list)
         """
-        logger.info(f"Simulating extraction for {len(extraction_fields)} fields")
+        logger.info(f"Simulating template with {len(extraction_fields)} fields and {len(pipeline_state.modules)} modules")
 
-        # Use PDF files service to extract only text words (efficient)
+        # Convert extraction fields domain objects to dict format for PDF service
+        extraction_fields_dicts = [
+            {
+                "name": field.name,
+                "bbox": list(field.bound_box),
+                "page": field.page
+            }
+            for field in extraction_fields
+        ]
+
+        # Extract text from PDF
         extracted_data = self.pdf_files_service.extract_text_from_pdf(
             pdf_bytes=pdf_bytes,
-            extraction_fields=extraction_fields
+            extraction_fields=extraction_fields_dicts
         )
 
-        # Print the results for debugging
+        # Print extracted data for debugging
         print(f"\n=== EXTRACTED DATA ===")
         for field_name, value in extracted_data.items():
             print(f"{field_name}: {value}")
         print(f"======================\n")
 
-        return extracted_data
+        # Validate pipeline
+        self.pipeline_service._validate_pipeline(pipeline_state)
+
+        # Prune dead branches
+        pruned_pipeline = self.pipeline_service._prune_dead_branches(pipeline_state)
+
+        # Compile pipeline to execution steps
+        compiled_steps = self.pipeline_service._compile_pipeline(pruned_pipeline)
+
+        # Print compiled steps for debugging
+        print(f"\n=== COMPILED PIPELINE STEPS ===")
+        print(f"Total steps: {len(compiled_steps)}")
+        for step in compiled_steps:
+            print(f"  Step {step.step_number}: {step.module_instance_id} (Layer {step.step_number})")
+        print(f"================================\n")
+
+        return extracted_data, compiled_steps
