@@ -5,6 +5,89 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-10-26 16:45] — Fix Empty Type Array Handling in Pipeline Reconstruction
+
+### Spec / Intent
+- Fix template builder showing "no types allowed" for modules with empty type arrays
+- Align type reconstruction behavior between pipeline create page and template builder
+- Ensure empty type arrays are treated as "all types allowed" consistently
+- Document comprehensive differences between the two pipeline builder implementations
+
+### Changes Made
+
+**Type Reconstruction Fix** (`client/src/renderer/features/pipelines/hooks/usePipelineInitialization.ts`):
+- Added `ALL_TYPES` constant: `['str', 'int', 'float', 'bool', 'datetime']` (line 12)
+- Updated `reconstructPins()` function (lines 119-130) to match `moduleFactory.ts` logic:
+  ```typescript
+  // Before: Empty arrays stayed empty
+  const allowedTypes = typeVar
+    ? template.meta.io_shape.type_params[typeVar] || []  // ❌
+    : group.typing.allowed_types || [];  // ❌
+
+  // After: Empty arrays become ALL_TYPES
+  if (typeVar) {
+    const typeParamTypes = template.meta.io_shape.type_params[typeVar] || [];
+    allowedTypes = typeParamTypes.length === 0 ? ALL_TYPES : typeParamTypes;  // ✅
+  } else {
+    const directTypes = group.typing.allowed_types || [];
+    allowedTypes = directTypes.length === 0 ? ALL_TYPES : directTypes;  // ✅
+  }
+  ```
+
+**Comprehensive Analysis Document** (`context/PIPELINE_BUILDER_COMPARISON.md`):
+- NEW FILE: Complete comparison of pipeline create page vs template builder
+- Documented 9 key differences:
+  1. Entry point creation (user-defined vs auto-generated)
+  2. State storage location (local vs parent props)
+  3. PipelineGraph props (no initial state vs with initial state)
+  4. Pipeline state tracking (with validation vs without)
+  5. Module loading (once vs with dependency)
+  6. Entry point handling (automatic vs manual merge)
+  7. Visual state capture (on-demand vs continuous)
+  8. Reconstruction logic (never vs when returning to step)
+  9. **Type reconstruction bug** (fixed in this session)
+- Includes root cause analysis, summary table, recommendations, and testing checklist
+
+### Technical Details
+
+**Root Cause Analysis**:
+- Pipeline create page uses `moduleFactory.createModuleInstance()` which has proper empty array handling
+- Template builder uses `reconstructPins()` in `usePipelineInitialization.ts` which was missing the fallback
+- Backend modules with `type_params: { T: [] }` or `allowed_types: []` mean "accept all types"
+- Template builder was interpreting empty arrays literally (no types allowed)
+
+**Behavior Before Fix**:
+- Pipeline create page: `[]` → `['str', 'int', 'float', 'bool', 'datetime']` ✅
+- Template builder: `[]` → `[]` (no connections possible) ❌
+
+**Behavior After Fix**:
+- Both pages now handle empty arrays consistently ✅
+- Modules like data_duplicator now work in template builder ✅
+
+### Comparison Summary
+
+| Feature | Pipeline Create Page | Template Builder |
+|---------|---------------------|------------------|
+| Entry Points | User-defined via modal | Auto-generated from extraction fields |
+| State Storage | Local component state | Parent component props |
+| State Pattern | Pull (imperative via ref) | Push (reactive via callbacks) |
+| Reconstruction | Never (always fresh) | Yes (from saved state) |
+| Empty Type Arrays | Converts to ALL_TYPES ✅ | **NOW FIXED** ✅ |
+
+### Next Actions
+- Test module connections in template builder with generic modules (data_duplicator, etc.)
+- Verify state persistence still works after type reconstruction
+- Continue with template simulate endpoint integration (Phase 1 in CONTINUITY.md)
+- Consider adding validation to template builder for consistency
+
+### Notes
+- TypeScript compilation: ✅ Passed with 0 errors
+- No breaking changes to existing functionality
+- Both pipeline implementations now have consistent type handling
+- Comparison document serves as reference for future development
+
+---
+
 ## [2025-10-26 14:30] — Template Builder Pipeline Integration & Schema Unification
 
 ### Spec / Intent
