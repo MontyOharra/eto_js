@@ -304,10 +304,24 @@ def convert_simulate_result_to_api(result: Any):
         for field in result.extraction_fields
     ]
 
+    # Convert domain PipelineExecutionStepResult to API ExecutionStepResult
+    from api.schemas.pipelines import ExecutionStepResult
+
+    pipeline_steps = [
+        ExecutionStepResult(
+            module_instance_id=step.module_instance_id,
+            step_number=step.step_number,
+            inputs=step.inputs,
+            outputs=step.outputs,
+            error=step.error
+        )
+        for step in result.execution_result.steps
+    ]
+
     return SimulateTemplateResponse(
         extraction_results=extraction_results,
         pipeline_status=result.execution_result.status,
-        pipeline_steps=result.execution_result.steps,
+        pipeline_steps=pipeline_steps,
         pipeline_actions=result.execution_result.executed_actions,
         pipeline_error=result.execution_result.error
     )
