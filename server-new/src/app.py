@@ -379,10 +379,27 @@ def setup_exception_handlers(app: FastAPI) -> None:
                     sanitized_error['input'] = f"<binary data, {len(input_bytes)} bytes>"
             sanitized_errors.append(sanitized_error)
 
-        logger.warning(
-            f"Validation error on {request.method} {request.url}: "
-            f"{len(sanitized_errors)} validation error(s) - {sanitized_errors[0]['msg'] if sanitized_errors else 'unknown'}"
-        )
+        # Log detailed validation errors
+        logger.error(f"=" * 80)
+        logger.error(f"REQUEST VALIDATION FAILED: {request.method} {request.url}")
+        logger.error(f"Total validation errors: {len(sanitized_errors)}")
+        logger.error(f"-" * 80)
+
+        for idx, error in enumerate(sanitized_errors, 1):
+            logger.error(f"Error {idx}:")
+            logger.error(f"  Location: {' -> '.join(str(loc) for loc in error.get('loc', []))}")
+            logger.error(f"  Type: {error.get('type', 'unknown')}")
+            logger.error(f"  Message: {error.get('msg', 'unknown')}")
+            if 'input' in error:
+                input_str = str(error['input'])
+                if len(input_str) > 200:
+                    logger.error(f"  Input (truncated): {input_str[:200]}...")
+                else:
+                    logger.error(f"  Input: {input_str}")
+            if 'ctx' in error:
+                logger.error(f"  Context: {error.get('ctx')}")
+
+        logger.error(f"=" * 80)
 
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
