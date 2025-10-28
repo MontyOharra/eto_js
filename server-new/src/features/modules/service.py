@@ -62,7 +62,7 @@ class ModulesService:
 
         # Create internal registry instance (not singleton)
         self._registry = ModuleRegistry()
-        logger.error(f"DEBUG: ModulesService registry instance ID: {id(self._registry)}")
+        logger.debug(f"ModulesService registry instance ID: {id(self._registry)}")
 
         # Auto-discover and register all available modules
         self._auto_discover_modules()
