@@ -9,7 +9,7 @@ from .pdf_template_version import PdfTemplateVersionRepository
 from .pipeline_definition import PipelineDefinitionRepository
 from .pipeline_compiled_plan import PipelineCompiledPlanRepository
 from .pipeline_definition_step import PipelineDefinitionStepRepository
-from .module_catalog import ModuleCatalogRepository
+from .module import ModuleRepository
 from .eto_run_pipeline_execution import EtoRunPipelineExecutionRepository
 from .eto_run_pipeline_execution_step import EtoRunPipelineExecutionStepRepository
 
@@ -23,7 +23,7 @@ __all__ = [
     'PipelineDefinitionRepository',
     'PipelineCompiledPlanRepository',
     'PipelineDefinitionStepRepository',
-    'ModuleCatalogRepository',
+    'ModuleRepository',
     'EtoRunPipelineExecutionRepository',
     'EtoRunPipelineExecutionStepRepository',
 ]

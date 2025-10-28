@@ -16,7 +16,7 @@ from .models import (
     PdfTemplateModel,
     PdfTemplateVersionModel,
     # Module catalog
-    ModuleCatalogModel,
+    ModuleModel,
     # Pipeline models
     PipelineCompiledPlanModel,
     PipelineDefinitionModel,
@@ -48,7 +48,7 @@ __all__ = [
     'PdfTemplateModel',
     'PdfTemplateVersionModel',
     # Module catalog
-    'ModuleCatalogModel',
+    'ModuleModel',
     # Pipeline models
     'PipelineCompiledPlanModel',
     'PipelineDefinitionModel',

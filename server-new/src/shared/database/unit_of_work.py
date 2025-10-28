@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from shared.database.repositories.pipeline_definition import PipelineDefinitionRepository
     from shared.database.repositories.pipeline_compiled_plan import PipelineCompiledPlanRepository
     from shared.database.repositories.pipeline_definition_step import PipelineDefinitionStepRepository
-    from shared.database.repositories.module_catalog import ModuleCatalogRepository
+    from shared.database.repositories.module import ModuleRepository
     # Add other repositories as they're created
 
 logger = logging.getLogger(__name__)
@@ -56,7 +56,7 @@ class UnitOfWork:
         self._pipeline_definition_repository: Optional['PipelineDefinitionRepository'] = None
         self._pipeline_compiled_plan_repository: Optional['PipelineCompiledPlanRepository'] = None
         self._pipeline_definition_step_repository: Optional['PipelineDefinitionStepRepository'] = None
-        self._module_catalog_repository: Optional['ModuleCatalogRepository'] = None
+        self._module_repository: Optional['ModuleRepository'] = None
         # Add other repositories as needed
 
         logger.debug("UnitOfWork initialized")
@@ -160,18 +160,18 @@ class UnitOfWork:
         return self._pipeline_definition_step_repository
 
     @property
-    def module_catalog(self) -> 'ModuleCatalogRepository':
+    def module_catalog(self) -> 'ModuleRepository':
         """
         Access to module catalog repository within this transaction.
 
         Returns:
-            ModuleCatalogRepository instance using this UoW's session
+            ModuleRepository instance using this UoW's session
         """
-        if not self._module_catalog_repository:
-            from shared.database.repositories.module_catalog import ModuleCatalogRepository
-            self._module_catalog_repository = ModuleCatalogRepository(session=self.session)
-            logger.debug("ModuleCatalogRepository loaded in UoW")
-        return self._module_catalog_repository
+        if not self._module_repository:
+            from shared.database.repositories.module import ModuleRepository
+            self._module_repository = ModuleRepository(session=self.session)
+            logger.debug("ModuleRepository loaded in UoW")
+        return self._module_repository
 
     # ========== Transaction Control ==========
     # Usually not needed - context manager handles commit/rollback
