@@ -13,9 +13,10 @@ export interface ModuleHeaderProps {
   executionMode?: boolean;
   onModuleMouseEnter?: (moduleId: string) => void;
   onModuleMouseLeave?: () => void;
+  hasFailed?: boolean;
 }
 
-export function ModuleHeader({ moduleInstance, template, onDeleteModule, executionMode = false, onModuleMouseEnter, onModuleMouseLeave }: ModuleHeaderProps) {
+export function ModuleHeader({ moduleInstance, template, onDeleteModule, executionMode = false, onModuleMouseEnter, onModuleMouseLeave, hasFailed = false }: ModuleHeaderProps) {
   const headerColor = template.color || '#4B5563';
   const textColor = getTextColor(headerColor);
 
@@ -27,7 +28,7 @@ export function ModuleHeader({ moduleInstance, template, onDeleteModule, executi
 
   return (
     <div
-      className={`px-3 py-2 rounded-t-lg border-b border-gray-600 flex items-center justify-between ${executionMode ? 'nodrag nopan' : ''}`}
+      className={`px-3 py-2 ${hasFailed ? 'rounded-t-[4px]' : 'rounded-t-[6px]'} border-b border-gray-600 flex items-center justify-between ${executionMode ? 'nodrag nopan' : ''}`}
       style={{ backgroundColor: headerColor, pointerEvents: 'auto' }}
       onMouseEnter={() => onModuleMouseEnter?.(moduleInstance.module_instance_id)}
       onMouseLeave={() => onModuleMouseLeave?.()}

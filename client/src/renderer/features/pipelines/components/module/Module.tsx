@@ -86,7 +86,7 @@ export function Module({ data }: ModuleProps) {
 
   return (
     <div
-      className={`bg-gray-800 rounded-lg border-2 ${hasFailed ? 'border-red-600' : 'border-gray-600'} ${isSingleSided ? 'min-w-[200px]' : 'min-w-[400px]'} w-min ${executionMode ? 'nodrag nopan' : ''}`}
+      className={`bg-gray-800 rounded-lg ${hasFailed ? 'border-4 border-red-600' : 'border-2 border-gray-600'} ${isSingleSided ? 'min-w-[200px]' : 'min-w-[400px]'} w-min ${executionMode ? 'nodrag nopan' : ''}`}
       onMouseEnter={() => onModuleMouseEnter?.(moduleInstance.module_instance_id)}
       onMouseLeave={() => onModuleMouseLeave?.()}
       style={{ pointerEvents: 'auto' }}
@@ -98,6 +98,7 @@ export function Module({ data }: ModuleProps) {
         executionMode={executionMode}
         onModuleMouseEnter={onModuleMouseEnter}
         onModuleMouseLeave={onModuleMouseLeave}
+        hasFailed={hasFailed}
       />
 
       <ModuleNodes

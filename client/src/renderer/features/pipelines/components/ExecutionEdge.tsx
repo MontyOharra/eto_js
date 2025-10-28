@@ -74,7 +74,7 @@ export function ExecutionEdge({
   const hasData = executionData?.hasExecutionData ?? true;
   const typeColor = hasData
     ? (executionData?.type ? TYPE_COLORS[executionData.type] || '#6B7280' : '#6B7280')
-    : '#4B5563'; // Dark gray for edges without execution data
+    : '#9CA3AF'; // Light gray for edges without execution data
 
   // Apply horizontal offset for parallel edges - only to the middle vertical section
   const horizontalOffset = executionData?.offset || 0;
