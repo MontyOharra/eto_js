@@ -615,6 +615,13 @@ class PipelineExecutionService:
         """
         # Resolve handler
         module_id = step.module_ref.split(":")[0] if ":" in step.module_ref else step.module_ref
+
+        # DEBUG: Log registry contents
+        all_modules = self.module_registry.get_all()
+        logger.error(f"DEBUG: Looking for module_id: {module_id}")
+        logger.error(f"DEBUG: Registry has {len(all_modules)} modules: {list(all_modules.keys())}")
+        logger.error(f"DEBUG: Registry instance ID: {id(self.module_registry)}")
+
         handler = self.module_registry.get(module_id)
         if not handler:
             raise RuntimeError(f"Module handler not found for {step.module_ref}")
