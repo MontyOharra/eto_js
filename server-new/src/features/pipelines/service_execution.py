@@ -438,9 +438,14 @@ class PipelineExecutionService:
             logger.exception(f"Pipeline execution failed: {e}")
 
         # Step 8: Return results
+        collected_steps = collector.get_all()
+        logger.info(f"Returning pipeline result: status={status}, steps_count={len(collected_steps)}, error={error}")
+        for step in collected_steps:
+            logger.info(f"  Step {step.step_number} ({step.module_instance_id}): error={step.error}")
+
         return PipelineExecutionResult(
             status=status,
-            steps=collector.get_all(),
+            steps=collected_steps,
             executed_actions=action_collector.to_executed_actions_dict(),
             error=error
         )
@@ -731,16 +736,19 @@ class PipelineExecutionService:
             audit_outputs = _serialize_io_for_audit(outputs_dict, ctx.outputs) if outputs_dict else {}
 
             # Collect step result
-            collector.add(PipelineExecutionStepResult(
+            step_result = PipelineExecutionStepResult(
                 module_instance_id=step.module_instance_id,
                 step_number=step.step_number,
                 inputs=audit_inputs,
                 outputs=audit_outputs,
                 error=error
-            ))
+            )
+            collector.add(step_result)
+            logger.info(f"Collected step result for {step.module_instance_id}: error={error}")
 
             # Fail fast on error
             if error:
+                logger.info(f"Raising RuntimeError due to module error: {error}")
                 raise RuntimeError(error)
 
             return outputs_dict
