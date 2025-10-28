@@ -49,9 +49,11 @@ export function ExtractedFieldsOverlay({ fields }: ExtractedFieldsOverlayProps) 
     };
 
     // Determine label position (above or below box)
+    // Popup height is approximately: 16px (top padding) + 20px (label) + 8px (margin) + 26px (value) + 16px (bottom padding) ≈ 86px
+    const popupHeight = 90;
     const showLabel = isHovered;
     const labelAtTop = y0 < 120; // Show below if bbox is near top of page
-    const labelY = labelAtTop ? y1 + 8 : y0 - 4; // Position below if at top, otherwise just above bbox top edge
+    const labelY = labelAtTop ? y1 + 8 : y0 - popupHeight; // Position below if at top, otherwise align popup bottom with bbox top
 
     return (
       <div key={field.field_id}>
