@@ -45,12 +45,12 @@ def convert_pdf_objects_to_domain(objects_dict: dict[str, list[dict[str, Any]]])
 
 
 def convert_extraction_fields_to_api(fields: list[ExtractionFieldDomain]) -> list[ExtractionFieldAPI]:
-    """Convert domain extraction fields to API format (bound_box → bbox)"""
+    """Convert domain extraction fields to API format"""
     return [
         ExtractionFieldAPI(
             name=field.name,
             description=field.description,
-            bbox=field.bound_box,
+            bbox=field.bbox,
             page=field.page
         )
         for field in fields
@@ -58,12 +58,12 @@ def convert_extraction_fields_to_api(fields: list[ExtractionFieldDomain]) -> lis
 
 
 def convert_extraction_fields_to_domain(fields: list[ExtractionFieldAPI]) -> list[ExtractionFieldDomain]:
-    """Convert API extraction fields to domain format (bbox → bound_box)"""
+    """Convert API extraction fields to domain format"""
     return [
         ExtractionFieldDomain(
             name=field.name,
             description=field.description,
-            bound_box=field.bbox,
+            bbox=field.bbox,
             page=field.page
         )
         for field in fields

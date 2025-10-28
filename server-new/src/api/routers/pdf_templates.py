@@ -95,12 +95,112 @@ async def get_template_versions(
 
 @router.post("", response_model=PdfTemplate, status_code=status.HTTP_201_CREATED)
 async def create_pdf_template(
-    request: CreatePdfTemplateRequest,
-    service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service())
+    pdf_source: str = Form(...),
+    name: str = Form(...),
+    description: Optional[str] = Form(None),
+    signature_objects: str = Form(...),
+    extraction_fields: str = Form(...),
+    pipeline_state: str = Form(...),
+    visual_state: str = Form(...),
+    pdf_file_id: Optional[int] = Form(None),
+    pdf_file: Optional[UploadFile] = File(None),
+    template_service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service()),
+    pdf_service: 'PdfFilesService' = Depends(lambda: ServiceContainer.get_pdf_files_service())
 ) -> PdfTemplate:
-    """Create new PDF template with wizard data (template + version 1 atomically)"""
+    """
+    Create new PDF template with wizard data (template + version 1 atomically).
+
+    Two modes:
+    1. Stored PDF: Uses existing PDF from database
+       - pdf_source: "stored"
+       - pdf_file_id: ID of stored PDF file
+
+    2. Uploaded PDF: Stores uploaded PDF file first
+       - pdf_source: "upload"
+       - pdf_file: PDF file (multipart)
+
+    Creates:
+    - PDF file record (if upload mode)
+    - Pipeline definition (with hash-based deduplication)
+    - Compiled plan + steps (if pipeline hash is new)
+    - Template record
+    - Template version 1
+
+    Returns created template with status="inactive"
+    """
+    # Parse JSON fields
+    try:
+        signature_objects_data = json.loads(signature_objects)
+        extraction_fields_data = json.loads(extraction_fields)
+        pipeline_state_data = json.loads(pipeline_state)
+        visual_state_data = json.loads(visual_state)
+    except json.JSONDecodeError as e:
+        raise ValidationError(f"Invalid JSON in request fields: {str(e)}")
+
+    # Validate and parse extraction fields using Pydantic
+    from api.schemas.pdf_templates import ExtractionField as ExtractionFieldSchema
+    try:
+        parsed_extraction_fields = [
+            ExtractionFieldSchema(**field) for field in extraction_fields_data
+        ]
+    except Exception as e:
+        raise ValidationError(f"Invalid extraction fields format: {str(e)}")
+
+    # Step 1: Determine or create PDF ID
+    if pdf_source == "stored":
+        if pdf_file_id is None:
+            raise ValidationError("pdf_file_id is required when pdf_source is 'stored'")
+        source_pdf_id = pdf_file_id
+        logger.info(f"Using stored PDF {source_pdf_id}")
+
+    elif pdf_source == "upload":
+        if pdf_file is None:
+            raise ValidationError("pdf_file is required when pdf_source is 'upload'")
+
+        # Validate file upload
+        if not pdf_file.filename or not pdf_file.filename.endswith('.pdf'):
+            raise ValidationError("Invalid file type - must be a PDF")
+
+        # Store PDF and get ID
+        logger.info(f"Uploading new PDF: {pdf_file.filename}")
+        pdf_bytes = await pdf_file.read()
+        pdf_metadata = pdf_service.store_pdf(
+            file_bytes=pdf_bytes,
+            filename=pdf_file.filename,
+            email_id=None  # No email association for manual uploads
+        )
+        source_pdf_id = pdf_metadata.id
+        logger.info(f"Stored PDF with ID {source_pdf_id}")
+
+    else:
+        raise ValidationError(f"Invalid pdf_source: {pdf_source}. Must be 'stored' or 'upload'")
+
+    # Step 2: Build CreatePdfTemplateRequest with resolved PDF ID
+    from api.schemas.pipelines import PipelineStateDTO, VisualStateDTO
+
+    # Convert to Pydantic models for validation
+    pipeline_state_dto = PipelineStateDTO(**pipeline_state_data)
+    visual_state_dto = VisualStateDTO(**visual_state_data)
+
+    # Create request object
+    request = CreatePdfTemplateRequest(
+        name=name,
+        description=description if description else None,
+        source_pdf_id=source_pdf_id,
+        signature_objects=signature_objects_data,
+        extraction_fields=parsed_extraction_fields,
+        pipeline_state=pipeline_state_dto,
+        visual_state=visual_state_dto
+    )
+
+    # Step 3: Convert to domain and create template
     template_create_data = convert_create_template_request(request)
-    template, version_num, pipeline_id = service.create_template(template_create_data)
+    template, version_num, pipeline_id = template_service.create_template(template_create_data)
+
+    logger.info(
+        f"Created template {template.id} (version {version_num}, pipeline {pipeline_id})"
+    )
+
     return convert_pdf_template(template)
 
 
@@ -248,12 +348,37 @@ async def simulate_template(
     pipeline_state_dto = PipelineStateDTO(**pipeline_state_data)
     pipeline_state_domain = convert_dto_to_pipeline_state(pipeline_state_dto)
 
-    # Call simulate service (extraction + compilation)
-    extracted_data, compiled_steps = template_service.simulate(
+    # Call simulate service (extraction + compilation + execution)
+    extracted_data, execution_result = template_service.simulate(
         pdf_bytes=pdf_bytes,
         extraction_fields=extraction_fields_domain,
         pipeline_state=pipeline_state_domain
     )
+
+    # Convert execution steps to API schema
+    from api.schemas.pdf_templates import PipelineStepSimulation, SimulatedAction
+
+    step_dtos = [
+        PipelineStepSimulation(
+            step_number=step.step_number,
+            module_instance_id=step.module_instance_id,
+            module_name="",  # Module name not needed for frontend visualization
+            inputs=step.inputs,
+            outputs=step.outputs,
+            error=step.error
+        )
+        for step in execution_result.steps
+    ]
+
+    # Convert executed actions to API schema
+    action_dtos = [
+        SimulatedAction(
+            action_module_name=action_name,
+            inputs=action_inputs,
+            simulation_note="Action not executed in simulation mode"
+        )
+        for action_name, action_inputs in execution_result.executed_actions.items()
+    ]
 
     # Build response
     return SimulateTemplateResponse(
@@ -267,9 +392,9 @@ async def simulate_template(
             validation_results=[]  # TODO: Add validation
         ),
         pipeline_execution=PipelineExecutionSimulation(
-            status="success",
-            error_message=None,
-            steps=[],  # Execution not implemented yet - only compilation
-            simulated_actions=[]
+            status=execution_result.status,
+            error_message=execution_result.error,
+            steps=step_dtos,
+            simulated_actions=action_dtos
         )
     )

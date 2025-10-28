@@ -29,8 +29,8 @@ export function PipelineBuilderStep({
   // Convert extraction fields to entry points (not deletable in pipeline builder)
   const entryPoints: EntryPoint[] = useMemo(() => {
     return extractionFields.map((field) => ({
-      node_id: `entry_${field.field_id}`,
-      name: field.label,
+      node_id: `entry_${field.name}`,
+      name: field.name,
       type: 'str', // Extraction fields always output strings
     }));
   }, [extractionFields]);

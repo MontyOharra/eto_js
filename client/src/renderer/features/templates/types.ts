@@ -41,13 +41,10 @@ export interface SignatureObject {
 }
 
 export interface ExtractionField {
-  field_id: string; // unique identifier
-  label: string; // e.g., "hawb", "customer_name"
+  name: string; // unique identifier - e.g., "hawb", "customer_name"
   description: string | null;
-  page: number;
+  page: number; // 1-indexed (page 1 = first page)
   bbox: BBox;
-  required: boolean;
-  validation_regex: string | null;
 }
 
 // Note: PipelineState and VisualState are now imported from the canonical location

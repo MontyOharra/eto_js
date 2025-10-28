@@ -13,7 +13,7 @@ interface ExtractionFieldOverlayProps {
   stagedFieldId: string | null;
   tempFieldData: { bbox: [number, number, number, number]; page: number } | null;
   drawingBox: { x: number; y: number; width: number; height: number } | null;
-  onFieldClick: (fieldId: string) => void;
+  onFieldClick: (fieldName: string) => void;
 }
 
 export function ExtractionFieldOverlay({
@@ -24,7 +24,7 @@ export function ExtractionFieldOverlay({
   onFieldClick,
 }: ExtractionFieldOverlayProps) {
   const { renderScale, currentPage, pdfDimensions } = usePdfViewer();
-  const [hoveredFieldId, setHoveredFieldId] = useState<string | null>(null);
+  const [hoveredFieldName, setHoveredFieldName] = useState<string | null>(null);
 
   if (!pdfDimensions) {
     return null;
@@ -34,15 +34,15 @@ export function ExtractionFieldOverlay({
 
   // Render saved extraction fields
   const renderField = (field: ExtractionField) => {
-    // Only show fields on current page
-    if (field.page !== currentPage - 1) return null;
+    // Only show fields on current page (both are 1-indexed now)
+    if (field.page !== currentPage) return null;
 
     const [x0, y0, x1, y1] = field.bbox;
 
     // Bbox is already in screen coordinates (y=0 at top)
     // No conversion needed - pdfplumber uses same coordinate system
-    const isStaged = stagedFieldId === field.field_id;
-    const isHovered = hoveredFieldId === field.field_id;
+    const isStaged = stagedFieldId === field.name;
+    const isHovered = hoveredFieldName === field.name;
 
     const style: React.CSSProperties = {
       position: 'absolute',
@@ -64,12 +64,12 @@ export function ExtractionFieldOverlay({
     const labelY = labelTop ? y1 + 2 : y0 - 8;
 
     return (
-      <div key={field.field_id}>
+      <div key={field.name}>
         <div
           style={style}
-          onClick={() => onFieldClick(field.field_id)}
-          onMouseEnter={() => setHoveredFieldId(field.field_id)}
-          onMouseLeave={() => setHoveredFieldId(null)}
+          onClick={() => onFieldClick(field.name)}
+          onMouseEnter={() => setHoveredFieldName(field.name)}
+          onMouseLeave={() => setHoveredFieldName(null)}
         />
         {showLabel && (
           <div
@@ -89,7 +89,7 @@ export function ExtractionFieldOverlay({
               pointerEvents: 'none',
             }}
           >
-            {field.label}
+            {field.name}
           </div>
         )}
       </div>
@@ -98,7 +98,7 @@ export function ExtractionFieldOverlay({
 
   // Render temporary field (after drawing, before saving)
   const renderTempField = () => {
-    if (!tempFieldData || tempFieldData.page !== currentPage - 1) return null;
+    if (!tempFieldData || tempFieldData.page !== currentPage) return null;
 
     const [x0, y0, x1, y1] = tempFieldData.bbox;
 
