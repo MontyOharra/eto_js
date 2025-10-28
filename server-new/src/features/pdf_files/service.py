@@ -269,7 +269,7 @@ class PdfFilesService:
 
                 with pdfplumber.open(tmp_path) as pdf:
                     for page in pdf.pages:
-                        page_num = page.page_number  # 1-indexed
+                        page_num = page.page_number - 1  # Convert to 0-indexed
 
                         # Extract only text words
                         words = page.extract_words()
@@ -499,7 +499,7 @@ class PdfFilesService:
         try:
             with pdfplumber.open(file_path) as pdf:
                 for page in pdf.pages:
-                    page_num = page.page_number  # 1-indexed (matches frontend)
+                    page_num = page.page_number - 1  # Convert to 0-indexed
 
                     # Extract text words → TextWord dataclasses
                     words = page.extract_words()
