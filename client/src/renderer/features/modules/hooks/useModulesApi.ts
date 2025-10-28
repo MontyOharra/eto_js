@@ -12,11 +12,6 @@ import type { ModuleCatalogResponse, ModulesQueryParams } from '../api/types';
 /**
  * Backend API response type (matches server-new/src/api/schemas/modules.py)
  */
-interface ModulesListResponse {
-  items: ModuleCatalogDTO[];
-  total: number;
-}
-
 interface ModuleCatalogDTO {
   id: string;
   version: string;
@@ -25,12 +20,8 @@ interface ModuleCatalogDTO {
   module_kind: string;
   meta: any;
   config_schema: any;
-  handler_name: string;
   color: string;
   category: string;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
 }
 
 /**
@@ -101,10 +92,10 @@ export function useModulesApi() {
         // Note: Backend uses 'only_active' param, defaults to true
         // Frontend filters for category and search are client-side for now
 
-        const response = await apiClient.get<ModulesListResponse>(baseUrl, { params });
+        const response = await apiClient.get<ModuleCatalogDTO[]>(baseUrl, { params });
 
         // Convert backend DTOs to frontend ModuleTemplate format
-        let modules = response.data.items.map(convertModuleCatalogToTemplate);
+        let modules = response.data.map(convertModuleCatalogToTemplate);
 
         // Apply client-side filters
         if (filters?.category) {
@@ -139,8 +130,8 @@ export function useModulesApi() {
   const getModuleById = useCallback(
     async (moduleId: string): Promise<ModuleTemplate | null> => {
       return withLoadingAndError(async () => {
-        const response = await apiClient.get<ModulesListResponse>(baseUrl);
-        const modules = response.data.items.map(convertModuleCatalogToTemplate);
+        const response = await apiClient.get<ModuleCatalogDTO[]>(baseUrl);
+        const modules = response.data.map(convertModuleCatalogToTemplate);
         const module = modules.find((m) => m.id === moduleId);
 
         if (!module) {
