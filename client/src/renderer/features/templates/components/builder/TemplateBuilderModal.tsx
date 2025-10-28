@@ -264,7 +264,7 @@ export function TemplateBuilderModal({
 
       // Build JSON request (NOT FormData!)
       const request = {
-        pdf_objects: pdfObjects,  // Already extracted from activePdfData
+        pdf_objects: pdfObjects.objects,  // Send just the objects part (text_words, text_lines, etc.)
         extraction_fields: backendExtractionFields,
         pipeline_state: pipelineState,
       };
