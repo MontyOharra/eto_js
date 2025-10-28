@@ -14,7 +14,7 @@ from shared.database.repositories import (
     PipelineDefinitionRepository,
     PipelineCompiledPlanRepository,
     PipelineDefinitionStepRepository,
-    ModuleCatalogRepository,
+    ModuleRepository,
 )
 from shared.types.pipelines import (
     PipelineState,
@@ -59,7 +59,7 @@ class PipelineService:
     definition_repository: PipelineDefinitionRepository
     compiled_plan_repository: PipelineCompiledPlanRepository
     step_repository: PipelineDefinitionStepRepository
-    module_catalog_repository: ModuleCatalogRepository
+    module_catalog_repository: ModuleRepository
 
     def __init__(self, connection_manager: DatabaseConnectionManager) -> None:
         """
@@ -72,7 +72,7 @@ class PipelineService:
         self.definition_repository = PipelineDefinitionRepository(connection_manager=connection_manager)
         self.compiled_plan_repository = PipelineCompiledPlanRepository(connection_manager=connection_manager)
         self.step_repository = PipelineDefinitionStepRepository(connection_manager=connection_manager)
-        self.module_catalog_repository = ModuleCatalogRepository(connection_manager=connection_manager)
+        self.module_catalog_repository = ModuleRepository(connection_manager=connection_manager)
 
     # ==================== Internal Helper Methods ====================
 

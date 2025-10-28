@@ -24,7 +24,7 @@ from shared.database.repositories import (
     PipelineDefinitionStepRepository,
     EtoRunPipelineExecutionRepository,
     EtoRunPipelineExecutionStepRepository,
-    ModuleCatalogRepository,
+    ModuleRepository,
 )
 from shared.utils.registry import ModuleRegistry
 from shared.types.pipeline_definition import PipelineDefinitionFull
@@ -211,7 +211,8 @@ def _convert_to_named_inputs(
 def _convert_to_upstream_named_inputs(
     inputs_dict: Dict[str, Any],
     input_field_mappings: Dict[str, str],
-    all_nodes_metadata: Dict[str, List[NodeInstance]]
+    all_nodes_metadata: Dict[str, List[NodeInstance]],
+    entry_points_lookup: Dict[str, str]
 ) -> Dict[str, Any]:
     """
     Convert action inputs to use upstream output pin names.
@@ -223,6 +224,7 @@ def _convert_to_upstream_named_inputs(
         inputs_dict: {input_pin_id: value}
         input_field_mappings: {input_pin_id: upstream_output_pin_id}
         all_nodes_metadata: All node metadata from pipeline state to look up pin names
+        entry_points_lookup: Mapping of entry point node_id -> name
 
     Returns:
         Dict in format: {upstream_pin_name: value}
@@ -242,6 +244,9 @@ def _convert_to_upstream_named_inputs(
     for node_list in all_nodes_metadata.values():
         for node in node_list:
             node_id_to_name[node.node_id] = node.name
+
+    # Add entry points to the lookup
+    node_id_to_name.update(entry_points_lookup)
 
     # For each input, find its upstream output pin name
     for input_pin_id, value in inputs_dict.items():
@@ -278,7 +283,7 @@ class PipelineExecutionService:
     step_repo: PipelineDefinitionStepRepository
     run_repo: EtoRunPipelineExecutionRepository
     exec_step_repo: EtoRunPipelineExecutionStepRepository
-    module_catalog_repo: ModuleCatalogRepository
+    module_catalog_repo: ModuleRepository
     module_registry: ModuleRegistry
     services: Optional[Any]
 
@@ -309,7 +314,7 @@ class PipelineExecutionService:
         self.step_repo = PipelineDefinitionStepRepository(connection_manager=connection_manager)
         self.run_repo = EtoRunPipelineExecutionRepository(connection_manager=connection_manager)
         self.exec_step_repo = EtoRunPipelineExecutionStepRepository(connection_manager=connection_manager)
-        self.module_catalog_repo = ModuleCatalogRepository(connection_manager=connection_manager)
+        self.module_catalog_repo = ModuleRepository(connection_manager=connection_manager)
 
         logger.info("PipelineExecutionService initialized")
 
@@ -378,6 +383,12 @@ class PipelineExecutionService:
                         all_nodes_metadata[key] = []
                     all_nodes_metadata[key].extend(nodes)
 
+        # Step 3.6: Build entry points lookup {node_id -> name}
+        # Actions connected to entry points need to look up entry point names
+        entry_points_lookup: Dict[str, str] = {
+            ep.node_id: ep.name for ep in pipeline_state.entry_points
+        }
+
         # Step 4: Build Dask graph
         task_of_step: Dict[str, Any] = {}
         non_action_tasks: List[Any] = []
@@ -391,7 +402,7 @@ class PipelineExecutionService:
                 action_steps.append(step)
             else:
                 # Transform or logic module
-                task = self._make_step_task(step, producer_of_pin, collector, action_collector, all_nodes_metadata)
+                task = self._make_step_task(step, producer_of_pin, collector, action_collector, all_nodes_metadata, entry_points_lookup)
                 task_of_step[step.module_instance_id] = task
                 self._publish_outputs_for_downstream(step, task, producer_of_pin)
                 non_action_tasks.append(task)
@@ -405,7 +416,7 @@ class PipelineExecutionService:
         # Step 6: Build action tasks (depend on barrier + upstreams)
         for step in action_steps:
             task = self._make_step_task(
-                step, producer_of_pin, collector, action_collector, all_nodes_metadata,
+                step, producer_of_pin, collector, action_collector, all_nodes_metadata, entry_points_lookup,
                 extra_dependencies=[barrier]
             )
             task_of_step[step.module_instance_id] = task
@@ -555,7 +566,7 @@ class PipelineExecutionService:
         missing = sorted(expected - provided)
         extras = sorted(provided - expected)
 
-        @delayed(pure=True)
+        @delayed(pure=True)  # type: ignore
         def _const(v):
             """Tiny wrapper so everything in the graph is delayed"""
             return v
@@ -581,6 +592,7 @@ class PipelineExecutionService:
         collector: StepResultCollector,
         action_collector: ActionDataCollector,
         all_nodes_metadata: Dict[str, List[NodeInstance]],
+        entry_points_lookup: Dict[str, str],
         extra_dependencies: Optional[List[Any]] = None,
     ) -> Any:
         """
@@ -594,6 +606,8 @@ class PipelineExecutionService:
             producer_of_pin: Map of pin_id -> delayed value
             collector: Collector for step results
             action_collector: Collector for action data
+            all_nodes_metadata: All node metadata for pin name lookups
+            entry_points_lookup: Entry point node_id -> name mapping
             extra_dependencies: Additional delayed dependencies (e.g., action barrier)
 
         Returns:
@@ -649,7 +663,7 @@ class PipelineExecutionService:
         if extra_dependencies:
             upstream_tasks = upstream_tasks + list(extra_dependencies)
 
-        @delayed(pure=False)
+        @delayed(pure=False)  # type: ignore
         def _run_module(*resolved):
             """
             Execute module (or collect action data).
@@ -668,7 +682,8 @@ class PipelineExecutionService:
                 upstream_named_inputs = _convert_to_upstream_named_inputs(
                     inputs_dict,
                     step.input_field_mappings,
-                    all_nodes_metadata
+                    all_nodes_metadata,
+                    entry_points_lookup
                 )
 
                 # Get module title from handler for display
@@ -690,9 +705,11 @@ class PipelineExecutionService:
             else:
                 # Transform/Logic module: Execute normally
                 try:
+                    # Create validated config instance (module expects Pydantic model, not dict)
+                    config_instance = ConfigModel(**step.module_config)
                     outputs_dict = handlerInstance.run(
                         inputs=inputs_dict,
-                        cfg=ConfigModel(**step.module_config).model_dump(),
+                        cfg=config_instance,
                         context=ctx
                     )
                     error = None
@@ -749,7 +766,7 @@ class PipelineExecutionService:
         for pin in output_pins:
             node_id = pin.node_id
 
-            @delayed(pure=True)
+            @delayed(pure=True)  # type: ignore
             def _select(outputs: Dict[str, Any], key: str):
                 """Select a specific output from the module's output dict"""
                 return outputs.get(key)
