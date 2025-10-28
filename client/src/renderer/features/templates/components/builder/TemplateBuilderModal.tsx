@@ -315,14 +315,33 @@ export function TemplateBuilderModal({
           status: response.pipeline_status,
           error_message: response.pipeline_error,
           executed_actions: simulatedActions,
-          steps: response.pipeline_steps.map(step => ({
-            id: step.step_number,
-            step_number: step.step_number,
-            module_instance_id: step.module_instance_id,
-            inputs: step.inputs,
-            outputs: step.outputs,
-            error: step.error,
-          })),
+          steps: response.pipeline_steps.map(step => {
+            // Parse step error from "ErrorType: message" format to object
+            let errorObj: { type: string; message: string } | null = null;
+            if (step.error) {
+              const colonIndex = step.error.indexOf(':');
+              if (colonIndex > 0) {
+                errorObj = {
+                  type: step.error.substring(0, colonIndex).trim(),
+                  message: step.error.substring(colonIndex + 1).trim(),
+                };
+              } else {
+                errorObj = {
+                  type: 'Error',
+                  message: step.error,
+                };
+              }
+            }
+
+            return {
+              id: step.step_number,
+              step_number: step.step_number,
+              module_instance_id: step.module_instance_id,
+              inputs: step.inputs,
+              outputs: step.outputs,
+              error: errorObj,
+            };
+          }),
         },
       };
 
