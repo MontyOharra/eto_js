@@ -4,7 +4,7 @@ Throws an error when executed - useful for testing error handling in pipelines
 """
 from typing import Dict, Any
 from pydantic import BaseModel, Field
-from shared.types import ActionModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
+from shared.types import TransformModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.utils.decorators import register
 
 
@@ -17,9 +17,9 @@ class ErrorTesterConfig(BaseModel):
 
 
 @register
-class ErrorTester(ActionModule):
+class ErrorTester(TransformModule):
     """
-    Action module that always throws an error when executed
+    Transform module that always throws an error when executed
 
     Useful for testing error handling, pipeline failure scenarios,
     and verifying that errors are properly caught and reported.
@@ -39,13 +39,20 @@ class ErrorTester(ActionModule):
             io_shape=IOShape(
                 inputs=IOSideShape(nodes=[
                     NodeGroup(
-                        label="trigger",
+                        label="input",
                         min_count=1,
                         max_count=1,
                         typing=NodeTypeRule(allowed_types=["str"])
                     )
                 ]),
-                outputs=IOSideShape(nodes=[])  # Actions typically have no outputs
+                outputs=IOSideShape(nodes=[
+                    NodeGroup(
+                        label="output",
+                        min_count=1,
+                        max_count=1,
+                        typing=NodeTypeRule(allowed_types=["str"])
+                    )
+                ])
             )
         )
 
@@ -54,7 +61,7 @@ class ErrorTester(ActionModule):
         Execute the error tester - always throws an error
 
         Args:
-            inputs: Dictionary with single 'trigger' input (unused)
+            inputs: Dictionary with single 'input' value (unused)
             cfg: Configuration with custom error message
             context: Execution context (unused)
 
