@@ -5,6 +5,275 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-10-27 14:45] — API Architecture Analysis & Refactoring Plan
+
+### Spec / Intent
+- Establish consistent API architecture pattern across all routers
+- Use email_configs and modules as reference standard (three-layer: schemas → mappers → routers)
+- Analyze pdf_files, pipelines, and pdf_templates for deviations
+- Create detailed refactoring plan with specific line numbers and code examples
+- Document all issues to enable seamless continuation in future sessions
+
+### Changes Made
+**No code changes** - Analysis and planning session only
+
+**Created Comprehensive Planning Document** (`context/API_ARCHITECTURE_REFACTORING_PLAN.md`):
+- Complete reference standard definition with examples
+- Line-by-line analysis of all routers (pdf_files, pipelines, pdf_templates)
+- Detailed issues with exact file paths and line numbers
+- Before/after code examples for all required changes
+- Phase-by-phase implementation plan with time estimates
+- Testing checklist and success criteria
+- Progress tracking section
+
+### Analysis Results
+
+**✅ pdf_files.py - COMPLIANT**
+- Clean service injection pattern
+- Consistent mapper usage throughout
+- No business logic in router
+- **No changes needed**
+
+**⚠️ pipelines.py - 3 ISSUES IDENTIFIED**
+1. **Direct Repository Access** (lines 221-231): Router accesses `PipelineDefinitionStepRepository` directly, bypassing service layer
+2. **Inline DTO Construction** (lines 243-259): Building `ExecutionStepResultDTO` in router instead of using mapper
+3. **Import Inside Function** (line 148): Import statement inside function instead of at top
+
+**⚠️ pdf_templates.py - 5 ISSUES IDENTIFIED**
+1. **JSON Parsing in Router** (lines 132-138, 311-316): Manual JSON parsing and validation logic in router
+2. **Pydantic Validation in Router** (lines 141-147): Schema validation happening in router instead of automatic
+3. **Complex Request Building** (lines 149-194): 45+ lines of business logic constructing requests
+4. **Inline DTO Construction** (lines 361-381): Building DTOs directly in router for simulation results
+5. **Form-Based Requests** (lines 98-109, 275-281): Mixed concerns with file uploads and JSON fields
+
+### Reference Standard Pattern
+
+**Key Principles Established:**
+1. Router has NO business logic (HTTP concerns only)
+2. Router does NO validation (Pydantic handles automatically)
+3. Router does NO data transformation (mappers handle it)
+4. Router does NO direct repository access (services handle it)
+5. Mappers are separate functions in `api/mappers/`
+6. Service layer returns domain types, not API schemas
+7. Response type explicitly declared with `response_model`
+
+**Standard Router Structure:**
+```python
+@router.post("", response_model=EntityAPI)
+async def create_entity(
+    request: CreateEntityRequest,
+    service: EntityService = Depends(lambda: ServiceContainer.get_entity_service())
+) -> EntityAPI:
+    entity_create = create_request_to_domain(request)  # Mapper: API → Domain
+    entity = service.create_entity(entity_create)       # Service: business logic
+    return entity_to_api(entity)                        # Mapper: Domain → API
+```
+
+### Implementation Plan Created
+
+**Phase 1: pipelines.py** (30-45 minutes)
+- Add `get_compiled_steps()` method to `PipelineService`
+- Create `convert_execution_result_to_api()` mapper function
+- Update router to use service method and mapper
+- Move import to top of file
+
+**Phase 2: pdf_templates.py** (1.5-2 hours)
+- Split create endpoint into `/from-stored` and `/from-upload`
+- Create new schemas for clean JSON request body
+- Move all parsing/validation logic to mappers
+- Create `convert_simulation_result_to_api()` mapper
+- Update frontend to use correct endpoints
+
+**Phase 3: Documentation & Cleanup** (30 minutes)
+- Update API documentation
+- Remove unused imports
+- Verify all routers follow standard pattern
+
+### Technical Details
+
+**Files Analyzed:**
+- Reference: `api/routers/email_configs.py`, `api/routers/modules.py`
+- Reference: `api/mappers/email_configs.py`, `api/mappers/modules.py`
+- Reference: `api/schemas/email_configs.py`, `api/schemas/modules.py`
+- Compare: `api/routers/pdf_files.py` (compliant)
+- Compare: `api/routers/pipelines.py` (3 issues)
+- Compare: `api/routers/pdf_templates.py` (5 issues)
+
+**Architecture Layers:**
+```
+Router (HTTP) → Mapper (Conversion) → Service (Business) → Repository (Data)
+```
+
+**Separation of Concerns:**
+- Router: HTTP concerns only (receive request, return response)
+- Mapper: Type conversions (API schemas ↔ domain types)
+- Service: Business logic (validation, orchestration)
+- Repository: Data access (database operations)
+
+### Recommended Endpoint Split for pdf_templates.py
+
+**Current:** Single `POST /api/pdf-templates` with form fields
+**Proposed:**
+- `POST /api/pdf-templates/from-stored` - Clean JSON body for stored PDFs
+- `POST /api/pdf-templates/from-upload` - Multipart form for file uploads
+
+**Benefits:**
+- Stored PDF endpoint uses clean Pydantic models
+- Upload endpoint isolated to file handling only
+- Better separation of concerns
+- Easier to test and maintain
+
+### Next Actions
+1. Begin Phase 1: Refactor pipelines.py
+2. Add service method for compiled steps
+3. Create mapper for execution results
+4. Test pipeline execution endpoint
+5. Move to Phase 2: Refactor pdf_templates.py
+
+### Notes
+- Complete continuity document created in `context/API_ARCHITECTURE_REFACTORING_PLAN.md`
+- All issues documented with exact line numbers
+- Code examples provided for all changes
+- Ready for immediate implementation pickup
+- Estimated total time: 2.5-3 hours for all changes
+
+---
+
+## [2025-10-27 02:30] — Template Builder Pipeline State Persistence & Simulate Execution Integration
+
+### Spec / Intent
+- Fix pipeline state being cleared when navigating back to pipeline builder step
+- Remove delete buttons from entry point modules (they depend on extraction fields)
+- Integrate full pipeline execution into template simulate endpoint
+- Follow dependency injection pattern for service dependencies
+- Clean up debug logging in template builder
+
+### Changes Made
+
+**Pipeline State Persistence Fix** (`client/src/renderer/features/pipelines/hooks/usePipelineInitialization.ts`):
+- Added `isInitialized` state to track when initialization completes
+- Created `UsePipelineInitializationReturn` interface with `isInitialized: boolean`
+- Set `isInitialized = true` only after nodes/edges are reconstructed or created
+- Reset `isInitialized = false` in cleanup function
+- Root cause: `onChange` was firing before reconstruction, wiping parent state
+
+**Pipeline Graph Guard** (`client/src/renderer/features/pipelines/components/PipelineGraph.tsx`):
+- Captured `isInitialized` from `usePipelineInitialization` hook
+- Added guard to `onChange` effect: `if (!isInitialized) return;`
+- Prevents premature state updates until reconstruction completes
+- Added `isInitialized` to effect dependency array
+
+**Entry Point Delete Button Removal**:
+- Updated `Module.tsx` to accept and pass `isEntryPoint?: boolean` prop
+- Updated `ModuleHeader.tsx` to conditionally hide delete button
+- Changed condition to: `{!executionMode && !isEntryPoint && <delete button>}`
+- Entry point nodes already have `isEntryPoint: true` in their data
+
+**Pipeline Execution Integration** (`server-new/src/shared/services/service_container.py`):
+- Added `PipelineExecutionService` to TYPE_CHECKING imports
+- Added `pipeline_execution` service definition with args `[cls._connection_manager]`
+- Updated `pdf_templates` service args to include `_service:pipeline_execution`
+- Added `get_pipeline_execution_service()` convenience method
+
+**PdfTemplateService Updates** (`server-new/src/features/pdf_templates/service.py`):
+- Added imports: `PipelineExecutionService`, `PipelineExecutionResult`
+- Added class attribute: `pipeline_execution_service: PipelineExecutionService`
+- Updated `__init__` to accept `pipeline_execution_service` parameter
+- Modified `simulate()` return type to `tuple[dict[str, str], PipelineExecutionResult]`
+- Added Step 5: Execute pipeline with extracted data using injected service
+- Added debug prints for execution results (status, steps, actions)
+
+**API Router Updates** (`server-new/src/api/routers/pdf_templates.py`):
+- Updated simulate endpoint to handle new return type from service
+- Converted `execution_result.steps` to `PipelineStepSimulation` DTOs
+- Converted `execution_result.executed_actions` to `SimulatedAction` DTOs
+- Updated response to include actual execution results instead of empty arrays
+- Response now shows: status, error_message, step trace, simulated actions
+
+**Frontend Cleanup** (`client/src/renderer/features/templates/components/builder/TemplateBuilderModal.tsx`):
+- Removed console.log debug wrappers from pipeline render
+- Removed debug wrapper functions `handlePipelineStateChange` and `handleVisualStateChange`
+- Changed to use `setPipelineState` and `setVisualState` directly
+- Cleaner code without debugging artifacts
+
+### Technical Details
+
+**Pipeline State Persistence Flow**:
+1. User navigates away from step 3 → PipelineGraph unmounts (state saved in parent)
+2. User navigates back → PipelineGraph remounts with empty nodes/edges initially
+3. `onChange` effect BLOCKED by `!isInitialized` guard (prevents wipe)
+4. `usePipelineInitialization` reconstructs nodes/edges from saved state
+5. Sets `isInitialized = true` after reconstruction completes
+6. `onChange` effect now allowed to fire (state properly synchronized)
+
+**Dependency Injection Pattern**:
+- Services injected via constructor through ServiceContainer
+- Never import services directly in methods
+- ServiceContainer definitions map service names to classes and dependencies
+- `_service:name` notation indicates dependency on another service
+- ServiceProxy used for lazy resolution to prevent circular dependencies
+
+**Execution Flow in Simulate Endpoint**:
+1. Extract text from PDF bytes (using extraction_fields bounding boxes)
+2. Validate pipeline structure (type checking, cycles, unconnected inputs)
+3. Prune dead branches (remove unreachable modules)
+4. Compile to execution steps (topological sort, step ordering)
+5. **NEW**: Execute pipeline with Dask task graph
+6. Return extracted_data + execution_result to endpoint
+7. Convert domain objects to API DTOs
+8. Return full simulation response with execution trace
+
+**Entry Point Values to Pipeline Execution**:
+- Extraction fields produce `extracted_data: dict[str, str]` (field name → text value)
+- Pipeline entry points have names matching extraction field names
+- `execute_pipeline(entry_values_by_name=extracted_data, ...)` - perfect mapping!
+- Pipeline execution automatically wires entry values to entry point nodes
+
+### Errors Fixed
+
+**Error 1: Pipeline State Wiped on Navigation**
+- Root cause: `onChange` fired before initialization, serialized empty arrays
+- User evidence: Console logs showing 3 modules → 0 modules
+- Fix: Added initialization guard to prevent premature state updates
+- Result: Pipeline now correctly persists across navigation
+
+**Error 2: Incorrect Dependency Injection**
+- Root cause: Initially planned to import service directly in method
+- User feedback: "do not import the service directly into the function"
+- Fix: Followed ServiceContainer pattern with constructor injection
+- Result: Proper separation of concerns, testable architecture
+
+### Before/After Behavior
+
+**Pipeline State Persistence**:
+- Before: Navigating back wiped pipeline → had to rebuild from scratch ❌
+- After: Pipeline fully restores with all modules and connections ✅
+
+**Entry Point Deletion**:
+- Before: Could delete entry points → broke connection to extraction fields ❌
+- After: Entry points locked (no delete button shown) ✅
+
+**Simulate Endpoint**:
+- Before: Only extraction + compilation (no execution) ❌
+- After: Full flow: extraction → compilation → execution ✅
+- Returns step-by-step trace with inputs/outputs for debugging
+
+### Next Actions
+- Test full template simulation flow end-to-end
+- Verify execution results display correctly in TestingStep component
+- Test with various pipeline configurations and extraction fields
+- Verify error handling for failed pipeline execution
+- Consider adding execution time metrics
+
+### Notes
+- TypeScript compilation: ✅ Passed with 0 errors
+- All changes follow established patterns in codebase
+- Pipeline execution uses Dask for lazy evaluation and parallel execution
+- Simulation mode: Actions collect data but don't execute (safe testing)
+- User confirmed fix: "great that is working"
+
+---
+
 ## [2025-10-26 17:15] — Add Auto-Validation to Template Builder Pipeline Step
 
 ### Spec / Intent
@@ -780,8 +1049,6 @@ python src/cli/sync_modules.py clear
 - Module catalog now populated and ready for frontend consumption
 
 ---
-
-## [2025-10-24 19:15] — Connect Pipeline Save Button to Backend API
 
 ### Spec / Intent
 - Connect the "Save Pipeline" button in pipeline builder to the new POST /api/pipelines endpoint
