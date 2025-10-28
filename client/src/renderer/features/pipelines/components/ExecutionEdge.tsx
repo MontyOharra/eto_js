@@ -18,6 +18,7 @@ export interface ExecutionEdgeData {
   type?: string;
   offset?: number;
   hoveredModuleId?: string | null;
+  hasExecutionData?: boolean;
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -69,7 +70,11 @@ export function ExecutionEdge({
   // Combined hover state - true if label, edge, or connected module is hovered
   const isHovered = isLabelHovered || isEdgeHovered || isModuleHovered;
 
-  const typeColor = executionData?.type ? TYPE_COLORS[executionData.type] || '#6B7280' : '#6B7280';
+  // Use gray color if no execution data, otherwise use type color
+  const hasData = executionData?.hasExecutionData ?? true;
+  const typeColor = hasData
+    ? (executionData?.type ? TYPE_COLORS[executionData.type] || '#6B7280' : '#6B7280')
+    : '#4B5563'; // Dark gray for edges without execution data
 
   // Apply horizontal offset for parallel edges - only to the middle vertical section
   const horizontalOffset = executionData?.offset || 0;
@@ -117,6 +122,7 @@ export function ExecutionEdge({
           ...style,
           stroke: typeColor,
           strokeWidth: isHovered ? 3 : 2,
+          opacity: hasData ? 1 : 0.3, // Dim edges without execution data
           filter: isHovered ? `drop-shadow(0 0 6px ${typeColor})` : 'none',
           transition: 'all 0.2s ease',
         }}

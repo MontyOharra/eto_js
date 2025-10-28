@@ -237,29 +237,24 @@ const ExecutedPipelineGraphInner = forwardRef<ExecutedPipelineGraphRef, Executed
       pipelineState.entry_points
     );
 
-    // Filter edges to only show where data actually flowed
     // Add execution data to edges (without offsets yet - we need layout positions first)
-    const edgesWithData = baseEdges
-      .filter((edge) => {
-        // Only show edge if there's execution data for the source node
-        // This hides connections from modules that failed or never executed
-        const executionData = executionValues.get(edge.sourceHandle || '');
-        return executionData !== undefined;
-      })
-      .map((edge) => {
-        const executionData = executionValues.get(edge.sourceHandle || '');
+    // Gray out edges where data didn't flow (no execution data)
+    const edgesWithData = baseEdges.map((edge) => {
+      const executionData = executionValues.get(edge.sourceHandle || '');
+      const hasExecutionData = executionData !== undefined;
 
-        return {
-          ...edge,
-          type: 'execution',
-          data: {
-            value: executionData?.value,
-            type: executionData?.type,
-            sourceHandle: edge.sourceHandle,
-            offset: 0, // Will be calculated after layout
-          },
-        };
-      });
+      return {
+        ...edge,
+        type: 'execution',
+        data: {
+          value: executionData?.value,
+          type: executionData?.type,
+          sourceHandle: edge.sourceHandle,
+          offset: 0, // Will be calculated after layout
+          hasExecutionData, // Flag to indicate if data flowed through this edge
+        },
+      };
+    });
 
     // Apply dagre auto-layout
     const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(newNodes, edgesWithData);
