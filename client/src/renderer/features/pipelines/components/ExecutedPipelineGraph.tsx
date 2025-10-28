@@ -203,7 +203,9 @@ const ExecutedPipelineGraphInner = forwardRef<ExecutedPipelineGraphRef, Executed
       const template = templateMap.get(templateId);
 
       if (!template) {
-        console.warn(`[ExecutedPipelineGraph] Template not found for module: ${moduleInstance.module_ref}`);
+        console.error(`[ExecutedPipelineGraph] Template not found for module: ${moduleInstance.module_ref}`);
+        console.error(`[ExecutedPipelineGraph] Looking for template ID: "${templateId}"`);
+        console.error(`[ExecutedPipelineGraph] Available template IDs:`, Array.from(templateMap.keys()));
         return;
       }
 
