@@ -340,10 +340,16 @@ export function TestingStep({
             <PdfViewer pdfUrl={pdfUrl}>
               <AutoFitOnResize isDragging={isDragging} />
               <PdfViewer.Canvas pdfUrl={pdfUrl}>
-                {/* Show extraction field overlay in detail view */}
-                {viewMode === 'detail' && simulationResult.data_extraction?.extracted_fields_with_boxes && (
+                {/* Show extraction field overlay */}
+                {simulationResult.data_extraction?.extracted_fields_with_boxes && (
                   <ExtractedFieldsOverlay
-                    fields={simulationResult.data_extraction.extracted_fields_with_boxes}
+                    fields={simulationResult.data_extraction.extracted_fields_with_boxes.map(field => ({
+                      field_id: field.name,
+                      label: field.name,
+                      value: field.value,
+                      page: field.page,
+                      bbox: field.bbox,
+                    }))}
                   />
                 )}
               </PdfViewer.Canvas>
