@@ -24,8 +24,8 @@ export function ExtractedFieldsOverlay({ fields }: ExtractedFieldsOverlayProps) 
 
   // Render extracted field boxes
   const renderField = (field: ExtractedFieldWithBox) => {
-    // Only show fields on current page
-    if (field.page !== currentPage - 1) return null;
+    // Only show fields on current page (both 1-indexed)
+    if (field.page !== currentPage) return null;
 
     const [x0, y0, x1, y1] = field.bbox;
 

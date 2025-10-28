@@ -24,7 +24,7 @@ def extract_text_from_bbox(
         text_words: List of text word objects from PDF (pdfplumber format)
                    Each word should have: page, bbox, text
         bbox: [x0, y0, x1, y1] coordinates of extraction area
-        page: Page number (0-indexed)
+        page: Page number (1-indexed)
 
     Returns:
         Concatenated text from all words within the bounding box
@@ -32,7 +32,7 @@ def extract_text_from_bbox(
     Example word dict:
         {
             "type": "text_word",
-            "page": 0,
+            "page": 1,
             "bbox": [100.0, 200.0, 150.0, 220.0],
             "text": "HAWB",
             "fontname": "Arial",
@@ -191,15 +191,15 @@ def extract_data_from_pdf_objects(
         extraction_fields: List of extraction field dicts with:
             - name: Field name
             - bbox: [x0, y0, x1, y1]
-            - page: Page number (0-indexed)
+            - page: Page number (1-indexed)
 
     Returns:
         Dict mapping field names to extracted text
 
     Example:
         extraction_fields = [
-            {"name": "hawb", "bbox": [100, 200, 300, 220], "page": 0},
-            {"name": "weight", "bbox": [100, 250, 200, 270], "page": 0}
+            {"name": "hawb", "bbox": [100, 200, 300, 220], "page": 1},
+            {"name": "weight", "bbox": [100, 250, 200, 270], "page": 1}
         ]
 
         Returns: {"hawb": "ABC123", "weight": "150.5"}
