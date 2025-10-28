@@ -249,21 +249,12 @@ export function TemplateBuilderModal({
     setTestedVisualState(visualSnapshot);
 
     try {
-      // Build FormData request for simulate endpoint
-      const formData = new FormData();
-
-      // Add PDF source info
-      if (pdfFileId) {
-        formData.append('pdf_source', 'stored');
-        formData.append('pdf_file_id', pdfFileId.toString());
-      } else if (pdfFile) {
-        formData.append('pdf_source', 'upload');
-        formData.append('pdf_file', pdfFile);
-      } else {
-        throw new Error('No PDF source available for testing');
+      // Ensure PDF objects are available (already extracted during upload/load)
+      if (!pdfObjects) {
+        throw new Error('PDF objects not available for testing. Please ensure PDF is loaded.');
       }
 
-      // Transform extraction fields to backend format (frontend and backend now use same structure)
+      // Transform extraction fields to backend format (already matches!)
       const backendExtractionFields = extractionFields.map(field => ({
         name: field.name,
         description: field.description,
@@ -271,38 +262,44 @@ export function TemplateBuilderModal({
         page: field.page,
       }));
 
-      // Add extraction fields and pipeline state as JSON strings
-      formData.append('extraction_fields', JSON.stringify(backendExtractionFields));
-      formData.append('pipeline_state', JSON.stringify(pipelineState));
+      // Build JSON request (NOT FormData!)
+      const request = {
+        pdf_objects: pdfObjects,  // Already extracted from activePdfData
+        extraction_fields: backendExtractionFields,
+        pipeline_state: pipelineState,
+      };
 
-      // Call real simulate API
-      const response = await simulateTemplate(formData);
+      // Call real simulate API with JSON body
+      const response = await simulateTemplate(request);
 
       // Map API response to TemplateSimulationResult format
-      // Backend returns extracted_data keyed by field name, frontend uses same
+      // Convert extraction_results array to extracted_data map
       const extractedDataByFieldName: Record<string, string> = {};
-      extractionFields.forEach(field => {
-        extractedDataByFieldName[field.name] = response.data_extraction.extracted_data?.[field.name] || '';
+      response.extraction_results.forEach(result => {
+        extractedDataByFieldName[result.name] = result.extracted_value;
       });
 
+      // Convert pipeline_actions (dict of module actions) to simulated_actions array
+      const simulatedActions = Object.entries(response.pipeline_actions).map(([moduleId, inputs]) => ({
+        action_module_name: moduleId,  // Using module_instance_id as action name
+        inputs: inputs,
+      }));
+
       const simulationResult: TemplateSimulationResult = {
-        status: response.pipeline_execution.status === 'success' ? 'success' : 'failure',
+        status: response.pipeline_status === 'success' ? 'success' : 'failure',
         data_extraction: {
           extracted_data: extractedDataByFieldName,
-          extracted_fields_with_boxes: extractionFields.map(field => ({
-            name: field.name,
-            value: response.data_extraction.extracted_data?.[field.name] || '',
-            page: field.page,
-            bbox: field.bbox,
+          extracted_fields_with_boxes: response.extraction_results.map(result => ({
+            name: result.name,
+            value: result.extracted_value,
+            page: result.page,
+            bbox: result.bbox,
           })),
         },
         pipeline_execution: {
-          status: response.pipeline_execution.status,
-          executed_actions: response.pipeline_execution.simulated_actions.map(action => ({
-            action_module_name: action.action_module_name,
-            inputs: action.inputs,
-          })),
-          steps: response.pipeline_execution.steps.map(step => ({
+          status: response.pipeline_status,
+          executed_actions: simulatedActions,
+          steps: response.pipeline_steps.map(step => ({
             id: step.step_number,
             step_number: step.step_number,
             module_instance_id: step.module_instance_id,

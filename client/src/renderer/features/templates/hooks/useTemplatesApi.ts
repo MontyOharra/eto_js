@@ -204,21 +204,26 @@ export function useTemplatesApi() {
 
   /**
    * POST /api/pdf-templates/simulate
-   * Simulate full ETO process
-   * Accepts FormData for multipart/form-data requests (both stored and uploaded PDFs)
+   * Simulate full ETO process with JSON request body
+   *
+   * Request must include:
+   * - pdf_objects: Pre-extracted PDF objects (not raw PDF file!)
+   * - extraction_fields: Field definitions with bbox coordinates
+   * - pipeline_state: Pipeline graph structure
+   *
+   * Backend expects application/json (not multipart/form-data)
    */
   const simulateTemplate = useCallback(
-    async (request: PostTemplateSimulateRequest | FormData): Promise<PostTemplateSimulateResponse> => {
+    async (request: PostTemplateSimulateRequest): Promise<PostTemplateSimulateResponse> => {
       return withLoadingAndError(async () => {
         const response = await apiClient.post<PostTemplateSimulateResponse>(
           `${baseUrl}/simulate`,
           request,
-          // Set correct content-type header for FormData
-          request instanceof FormData ? {
+          {
             headers: {
-              'Content-Type': 'multipart/form-data',
+              'Content-Type': 'application/json',
             },
-          } : undefined
+          }
         );
         return response.data;
       });

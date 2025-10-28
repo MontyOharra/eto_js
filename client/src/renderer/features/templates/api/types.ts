@@ -14,6 +14,7 @@ import {
   ExtractionField,
 } from '../types';
 import type { PipelineState, VisualState } from '../../../types/pipelineTypes';
+import type { PdfObjectsResponseDTO } from '../../pdf-files/api/types';
 
 // =============================================================================
 // GET /pdf-templates - List templates with pagination
@@ -149,72 +150,56 @@ export type GetTemplateVersionDetailResponse = TemplateVersionDetail;
 // POST /pdf-templates/simulate - Simulate full ETO process
 // =============================================================================
 
-// Base template data shared by both request types
-interface TemplateSimulationData {
+/**
+ * Request for template simulation (testing/preview only)
+ *
+ * The frontend must provide the extracted PDF objects (from either:
+ * - Stored PDF: fetched via GET /api/pdf-files/{id}/objects
+ * - Uploaded PDF: extracted via POST /api/pdf-files/process-objects
+ *
+ * Backend accepts JSON body with:
+ * - pdf_objects: Already-extracted PDF objects (no file upload!)
+ * - extraction_fields: Field definitions with bbox coordinates
+ * - pipeline_state: Pipeline graph structure
+ */
+export interface PostTemplateSimulateRequest {
+  pdf_objects: PdfObjectsResponseDTO['objects'];  // Pre-extracted PDF objects
   extraction_fields: ExtractionField[];
   pipeline_state: PipelineState;
 }
 
-// Request variant for stored PDFs (from database)
-export interface PostTemplateSimulateStoredRequest extends TemplateSimulationData {
-  pdf_source: 'stored';
-  pdf_file_id: number;
+/**
+ * Single extraction field result with bbox for visual display
+ * Matches backend: server-new/src/api/schemas/pdf_templates.py::ExtractedFieldResult
+ */
+export interface ExtractedFieldResult {
+  name: string;
+  description: string | null;
+  bbox: [number, number, number, number];  // [x0, y0, x1, y1]
+  page: number;
+  extracted_value: string;  // The actual extracted text
 }
 
-// Request variant for uploaded PDFs (template builder with local file)
-export interface PostTemplateSimulateUploadRequest extends TemplateSimulationData {
-  pdf_source: 'upload';
-  // pdf_file: File will be sent as multipart/form-data
-}
-
-// Discriminated union of both request types
-export type PostTemplateSimulateRequest =
-  | PostTemplateSimulateStoredRequest
-  | PostTemplateSimulateUploadRequest;
-
-export interface ValidationResult {
-  field_label: string;
-  required: boolean;
-  has_value: boolean;
-  regex_valid: boolean | null; // null if no regex
+/**
+ * Result of a single module execution
+ * Matches backend: server-new/src/api/schemas/pipelines.py::ExecutionStepResult
+ */
+export interface ExecutionStepResult {
+  module_instance_id: string;
+  step_number: number;
+  inputs: Record<string, { value: any; type: string }>;
+  outputs: Record<string, { value: any; type: string }>;
   error: string | null;
 }
 
-export interface SimulationStep {
-  step_number: number;
-  module_instance_id: string;
-  module_name: string; // Human-readable
-  inputs: Record<string, { value: any; type: string }>;
-  outputs: Record<string, { value: any; type: string }>;
-  error: object | null;
-}
-
-export interface SimulatedAction {
-  action_module_name: string;
-  inputs: Record<string, any>;
-  simulation_note: string; // "Action not executed - simulation mode"
-}
-
+/**
+ * Response for POST /pdf-templates/simulate
+ * Matches backend: server-new/src/api/schemas/pdf_templates.py::SimulateTemplateResponse
+ */
 export interface PostTemplateSimulateResponse {
-  // Stage 1: Template Matching (always succeeds)
-  template_matching: {
-    status: 'success';
-    message: string;
-  };
-
-  // Stage 2: Data Extraction
-  data_extraction: {
-    status: 'success' | 'failure';
-    extracted_data: Record<string, string> | null;
-    error_message: string | null;
-    validation_results: ValidationResult[];
-  };
-
-  // Stage 3: Pipeline Execution
-  pipeline_execution: {
-    status: 'success' | 'failure';
-    error_message: string | null;
-    steps: SimulationStep[];
-    simulated_actions: SimulatedAction[];
-  };
+  extraction_results: ExtractedFieldResult[];  // Fields with extracted values and bbox info
+  pipeline_status: string;  // "success" | "failed"
+  pipeline_steps: ExecutionStepResult[];
+  pipeline_actions: Record<string, Record<string, any>>;  // {module_instance_id: inputs}
+  pipeline_error: string | null;
 }
