@@ -18,8 +18,7 @@ export interface TemplateSimulationResult {
   data_extraction: {
     extracted_data: Record<string, any> | null;
     extracted_fields_with_boxes?: Array<{
-      field_id: string;
-      label: string;
+      name: string;
       value: any;
       page: number;
       bbox: [number, number, number, number];
@@ -171,12 +170,12 @@ export function TestingStep({
     }
 
     // Add entry point values from extracted data
-    // Entry points use node_id format: entry_${field_id}
-    // Extracted data is keyed by field_id
+    // Entry points use node_id format: entry_${field_name}
+    // Extracted data is keyed by field name
     if (simulationResult.data_extraction?.extracted_data && simulationResult.data_extraction?.extracted_fields_with_boxes) {
       simulationResult.data_extraction.extracted_fields_with_boxes.forEach(field => {
-        const entryNodeId = `entry_${field.field_id}`;
-        const fieldValue = simulationResult.data_extraction.extracted_data?.[field.field_id];
+        const entryNodeId = `entry_${field.name}`;
+        const fieldValue = simulationResult.data_extraction.extracted_data?.[field.name];
 
         if (fieldValue !== undefined) {
           // Determine type from the value
@@ -192,7 +191,7 @@ export function TestingStep({
           executionValuesMap.set(entryNodeId, {
             value: fieldValue,
             type: valueType,
-            name: field.label,
+            name: field.name,
           });
         }
       });

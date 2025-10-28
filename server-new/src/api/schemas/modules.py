@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 # Module Catalog Types
 # ============================================================================
 
-class ModuleCatalogDTO(BaseModel):
+class Module(BaseModel):
     """Module catalog entry for API responses"""
     id: str
     version: str
@@ -25,12 +25,6 @@ class ModuleCatalogDTO(BaseModel):
     is_active: bool
     created_at: str  # ISO 8601
     updated_at: str  # ISO 8601
-
-
-class ModulesListResponse(BaseModel):
-    """Response for GET /api/modules"""
-    items: List[ModuleCatalogDTO]
-    total: int
 
 
 # ============================================================================

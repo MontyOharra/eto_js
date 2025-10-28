@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from features.pdf_files.service import PdfFilesService
     from features.pdf_templates.service import PdfTemplateService
     from features.pipelines.service import PipelineService
+    from features.pipelines.service_execution import PipelineExecutionService
     from shared.database.connection import DatabaseConnectionManager
 
 logger = logging.getLogger(__name__)
@@ -131,9 +132,15 @@ class ServiceContainer:
                 'singleton': True,
                 'description': 'Pipeline compilation and execution service'
             },
+            'pipeline_execution': {
+                'class': 'features.pipelines.service_execution.PipelineExecutionService',
+                'args': [cls._connection_manager],
+                'singleton': True,
+                'description': 'Pipeline execution service for running compiled pipelines'
+            },
             'pdf_templates': {
                 'class': 'features.pdf_templates.service.PdfTemplateService',
-                'args': [cls._connection_manager, '_service:pipelines', '_service:pdf_files'],
+                'args': [cls._connection_manager, '_service:pipelines', '_service:pdf_files', '_service:pipeline_execution'],
                 'singleton': True,
                 'description': 'PDF template service with versioning and pipeline integration'
             },
@@ -336,6 +343,11 @@ class ServiceContainer:
     def get_pipeline_service(cls) -> 'PipelineService':
         """Get the pipeline service"""
         return cls.get('pipelines')
+
+    @classmethod
+    def get_pipeline_execution_service(cls) -> 'PipelineExecutionService':
+        """Get the pipeline execution service"""
+        return cls.get('pipeline_execution')
 
     @classmethod
     def get_connection_manager(cls) -> 'DatabaseConnectionManager':

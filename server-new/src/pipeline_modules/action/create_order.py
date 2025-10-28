@@ -8,7 +8,7 @@ from datetime import datetime
 from sqlalchemy import text
 
 from shared.types import ActionModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
-from features.modules.service import register
+from features.modules.utils.decorators import register
 
 
 class CreateOrderConfig(BaseModel):

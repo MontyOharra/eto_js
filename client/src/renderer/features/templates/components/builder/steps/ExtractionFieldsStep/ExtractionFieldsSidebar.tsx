@@ -27,26 +27,22 @@ interface ExtractionFieldsSidebarProps {
   showSignatureObjects: boolean;
 
   // Form state for create/edit
-  fieldLabel: string;
+  fieldName: string;
   fieldDescription: string;
-  fieldRequired: boolean;
-  fieldValidationRegex: string;
   tempFieldData: { bbox: [number, number, number, number]; page: number } | null;
 
   // Callbacks
   onTemplateNameChange: (name: string) => void;
   onTemplateDescriptionChange: (description: string) => void;
   onShowSignatureObjectsChange: (show: boolean) => void;
-  onFieldLabelChange: (label: string) => void;
+  onFieldNameChange: (name: string) => void;
   onFieldDescriptionChange: (description: string) => void;
-  onFieldRequiredChange: (required: boolean) => void;
-  onFieldValidationRegexChange: (regex: string) => void;
   onSaveField: () => void;
   onCancelField: () => void;
-  onDeleteField: (fieldId: string) => void;
-  onSelectField: (fieldId: string) => void;
+  onDeleteField: (fieldName: string) => void;
+  onSelectField: (fieldName: string) => void;
   onBackToList: () => void;
-  onUpdateField: (fieldId: string, updates: Partial<ExtractionField>) => void;
+  onUpdateField: (fieldName: string, updates: Partial<ExtractionField>) => void;
 }
 
 export function ExtractionFieldsSidebar({
@@ -61,18 +57,14 @@ export function ExtractionFieldsSidebar({
   mode,
   selectedFieldId,
   showSignatureObjects,
-  fieldLabel,
+  fieldName,
   fieldDescription,
-  fieldRequired,
-  fieldValidationRegex,
   tempFieldData,
   onTemplateNameChange,
   onTemplateDescriptionChange,
   onShowSignatureObjectsChange,
-  onFieldLabelChange,
+  onFieldNameChange,
   onFieldDescriptionChange,
-  onFieldRequiredChange,
-  onFieldValidationRegexChange,
   onSaveField,
   onCancelField,
   onDeleteField,
@@ -80,32 +72,32 @@ export function ExtractionFieldsSidebar({
   onBackToList,
   onUpdateField,
 }: ExtractionFieldsSidebarProps) {
-  const fieldLabelInputRef = useRef<HTMLInputElement>(null);
-  const [isEditingLabel, setIsEditingLabel] = useState(false);
-  const [editedLabel, setEditedLabel] = useState('');
+  const fieldNameInputRef = useRef<HTMLInputElement>(null);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editedName, setEditedName] = useState('');
   const [isSimulating, setIsSimulating] = useState(false);
   const [simulationResult, setSimulationResult] = useState<string | null>(null);
 
   const { simulateTemplate } = useTemplatesApi();
 
-  // Auto-focus field label input when entering create mode
+  // Auto-focus field name input when entering create mode
   useEffect(() => {
-    if (mode === 'create' && fieldLabelInputRef.current) {
-      fieldLabelInputRef.current.focus();
-      fieldLabelInputRef.current.select();
+    if (mode === 'create' && fieldNameInputRef.current) {
+      fieldNameInputRef.current.focus();
+      fieldNameInputRef.current.select();
     }
   }, [mode]);
 
   // Reset edit mode when selection changes
   useEffect(() => {
-    setIsEditingLabel(false);
+    setIsEditingName(false);
   }, [selectedFieldId]);
 
   // Handle Enter key press in form fields
   const handleFieldFormKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      if (fieldLabel.trim()) {
+      if (fieldName.trim()) {
         onSaveField();
       }
     }
@@ -123,13 +115,12 @@ export function ExtractionFieldsSidebar({
 
     try {
       // Map frontend ExtractionField to backend format
-      // Frontend uses 'label', backend uses 'name'
-      // Frontend uses 0-indexed pages, backend uses 1-indexed pages
+      // Frontend and backend now both use 1-indexed pages and 'name' field
       const mappedFields = extractionFields.map(field => ({
-        name: field.label,
+        name: field.name,
         description: field.description || undefined, // Convert null to undefined
         bbox: field.bbox,
-        page: field.page + 1, // Convert 0-indexed to 1-indexed
+        page: field.page, // Already 1-indexed
       }));
 
       // Determine if using stored PDF or uploaded PDF
@@ -173,7 +164,7 @@ export function ExtractionFieldsSidebar({
     }
   };
 
-  const selectedField = extractionFields.find(f => f.field_id === selectedFieldId);
+  const selectedField = extractionFields.find(f => f.name === selectedFieldId);
 
   return (
     <div className="flex flex-col h-full">
@@ -233,13 +224,13 @@ export function ExtractionFieldsSidebar({
               ) : (
                 extractionFields.map((field) => (
                   <button
-                    key={field.field_id}
-                    onClick={() => onSelectField(field.field_id)}
+                    key={field.name}
+                    onClick={() => onSelectField(field.name)}
                     className="w-full text-left px-3 py-2 rounded text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors"
                   >
-                    <div className="font-medium truncate">{field.label}</div>
+                    <div className="font-medium truncate">{field.name}</div>
                     <div className="text-xs text-gray-400 truncate mt-1">
-                      Page {field.page + 1}{field.required && ' • Required'}
+                      Page {field.page}
                     </div>
                   </button>
                 ))
@@ -294,7 +285,7 @@ export function ExtractionFieldsSidebar({
             {tempFieldData && (
               <div className="mb-4 p-3 bg-gray-800 border border-gray-600 rounded">
                 <div className="text-xs text-gray-400 mb-1">Extraction Area:</div>
-                <div className="text-sm text-white">Page {tempFieldData.page + 1}</div>
+                <div className="text-sm text-white">Page {tempFieldData.page}</div>
                 <div className="text-xs text-gray-500 mt-1">
                   Box: {tempFieldData.bbox.map(n => Math.round(n)).join(', ')}
                 </div>
@@ -303,12 +294,12 @@ export function ExtractionFieldsSidebar({
 
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-gray-300 mb-1">Field Label *</label>
+                <label className="block text-xs font-medium text-gray-300 mb-1">Field Name *</label>
                 <input
-                  ref={fieldLabelInputRef}
+                  ref={fieldNameInputRef}
                   type="text"
-                  value={fieldLabel}
-                  onChange={(e) => onFieldLabelChange(e.target.value)}
+                  value={fieldName}
+                  onChange={(e) => onFieldNameChange(e.target.value)}
                   onKeyDown={handleFieldFormKeyDown}
                   placeholder="e.g., hawb, carrier-name"
                   className="w-full px-3 py-2 text-sm bg-gray-800 border border-gray-600 rounded text-white focus:border-blue-500 focus:outline-none"
@@ -324,31 +315,10 @@ export function ExtractionFieldsSidebar({
                   className="w-full px-3 py-2 text-sm bg-gray-800 border border-gray-600 rounded text-white focus:border-blue-500 focus:outline-none resize-none"
                 />
               </div>
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="required"
-                  checked={fieldRequired}
-                  onChange={(e) => onFieldRequiredChange(e.target.checked)}
-                  className="mr-2"
-                />
-                <label htmlFor="required" className="text-xs text-gray-300">Required field</label>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-300 mb-1">Validation Regex (Optional)</label>
-                <input
-                  type="text"
-                  value={fieldValidationRegex}
-                  onChange={(e) => onFieldValidationRegexChange(e.target.value)}
-                  onKeyDown={handleFieldFormKeyDown}
-                  placeholder="^[A-Z0-9]+$"
-                  className="w-full px-3 py-2 text-sm bg-gray-800 border border-gray-600 rounded text-white focus:border-blue-500 focus:outline-none"
-                />
-              </div>
               <div className="flex space-x-2">
                 <button
                   onClick={onSaveField}
-                  disabled={!fieldLabel.trim()}
+                  disabled={!fieldName.trim()}
                   className="flex-1 px-3 py-2 text-sm bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded transition-colors"
                 >
                   Save Field
@@ -376,7 +346,7 @@ export function ExtractionFieldsSidebar({
               </button>
               <h3 className="text-sm font-semibold text-white flex-1 text-center">Extraction Field</h3>
               <button
-                onClick={() => onDeleteField(selectedField.field_id)}
+                onClick={() => onDeleteField(selectedField.name)}
                 className="w-8 h-8 bg-red-600 hover:bg-red-700 hover:scale-105 rounded text-white transition-all duration-200 flex items-center justify-center"
                 title="Delete field"
               >
@@ -393,12 +363,12 @@ export function ExtractionFieldsSidebar({
             <div className="space-y-3">
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-medium text-gray-400">Label</label>
-                  {!isEditingLabel && (
+                  <label className="block text-xs font-medium text-gray-400">Name</label>
+                  {!isEditingName && (
                     <button
                       onClick={() => {
-                        setIsEditingLabel(true);
-                        setEditedLabel(selectedField.label);
+                        setIsEditingName(true);
+                        setEditedName(selectedField.name);
                       }}
                       className="text-xs text-blue-400 hover:text-blue-300"
                     >
@@ -406,30 +376,30 @@ export function ExtractionFieldsSidebar({
                     </button>
                   )}
                 </div>
-                {isEditingLabel ? (
+                {isEditingName ? (
                   <div className="space-y-2">
                     <input
                       type="text"
-                      value={editedLabel}
-                      onChange={(e) => setEditedLabel(e.target.value)}
+                      value={editedName}
+                      onChange={(e) => setEditedName(e.target.value)}
                       className="w-full px-3 py-2 text-sm bg-gray-800 border border-gray-600 rounded text-white focus:border-blue-500 focus:outline-none"
                       autoFocus
                     />
                     <div className="flex space-x-2">
                       <button
                         onClick={() => {
-                          if (editedLabel.trim()) {
-                            onUpdateField(selectedField.field_id, { label: editedLabel });
-                            setIsEditingLabel(false);
+                          if (editedName.trim()) {
+                            onUpdateField(selectedField.name, { name: editedName });
+                            setIsEditingName(false);
                           }
                         }}
-                        disabled={!editedLabel.trim()}
+                        disabled={!editedName.trim()}
                         className="flex-1 px-3 py-1 text-xs bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded transition-colors"
                       >
                         Save
                       </button>
                       <button
-                        onClick={() => setIsEditingLabel(false)}
+                        onClick={() => setIsEditingName(false)}
                         className="px-3 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors"
                       >
                         Cancel
@@ -437,7 +407,7 @@ export function ExtractionFieldsSidebar({
                     </div>
                   </div>
                 ) : (
-                  <div className="text-sm text-white">{selectedField.label}</div>
+                  <div className="text-sm text-white">{selectedField.name}</div>
                 )}
               </div>
               <div>
@@ -445,19 +415,9 @@ export function ExtractionFieldsSidebar({
                 <div className="text-sm text-gray-300">{selectedField.description || 'No description'}</div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1">Required</label>
-                <div className="text-sm text-gray-300">{selectedField.required ? 'Yes' : 'No'}</div>
-              </div>
-              {selectedField.validation_regex && (
-                <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1">Validation</label>
-                  <div className="text-sm text-gray-300 font-mono">{selectedField.validation_regex}</div>
-                </div>
-              )}
-              <div>
                 <label className="block text-xs font-medium text-gray-400 mb-1">Extraction Area</label>
                 <div className="text-sm text-gray-300">
-                  Page {selectedField.page + 1}<br/>
+                  Page {selectedField.page}<br/>
                   Box: {selectedField.bbox.map(n => Math.round(n)).join(', ')}
                 </div>
               </div>

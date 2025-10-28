@@ -62,10 +62,8 @@ export function ExtractionFieldsStep({
   const [tempFieldData, setTempFieldData] = useState<{ bbox: [number, number, number, number]; page: number } | null>(null);
 
   // Form state for create/edit
-  const [fieldLabel, setFieldLabel] = useState('');
+  const [fieldName, setFieldName] = useState('');
   const [fieldDescription, setFieldDescription] = useState('');
-  const [fieldRequired, setFieldRequired] = useState(false);
-  const [fieldValidationRegex, setFieldValidationRegex] = useState('');
 
   // Signature objects visibility
   const [showSignatureObjects, setShowSignatureObjects] = useState(true);
@@ -157,17 +155,14 @@ export function ExtractionFieldsStep({
       // Store coordinates as-is (no Y-axis flip)
       // Backend text_words use pdfplumber coordinates (y=0 at top)
       // which matches screen coordinates, so no conversion needed
-      const newFieldId = `field_${Date.now()}`;
       setTempFieldData({
         bbox: [normalizedX0, normalizedY0, normalizedX1, normalizedY1],
-        page: currentPage - 1, // Convert to 0-based
+        page: currentPage, // Keep 1-indexed (currentPage is already 1-indexed)
       });
 
       // Reset form fields
-      setFieldLabel('');
+      setFieldName('');
       setFieldDescription('');
-      setFieldRequired(false);
-      setFieldValidationRegex('');
     }
 
     setIsDrawing(false);
@@ -176,52 +171,45 @@ export function ExtractionFieldsStep({
 
   // Field Management Handlers
   const handleSaveField = () => {
-    if (!tempFieldData || !fieldLabel.trim()) return;
+    if (!tempFieldData || !fieldName.trim()) return;
 
     const newField: ExtractionField = {
-      field_id: `field_${Date.now()}`,
-      label: fieldLabel,
+      name: fieldName,
       description: fieldDescription || null,
       page: tempFieldData.page,
       bbox: tempFieldData.bbox,
-      required: fieldRequired,
-      validation_regex: fieldValidationRegex || null,
     };
 
     onExtractionFieldsChange([...extractionFields, newField]);
 
     // Clear temp state
     setTempFieldData(null);
-    setFieldLabel('');
+    setFieldName('');
     setFieldDescription('');
-    setFieldRequired(false);
-    setFieldValidationRegex('');
   };
 
   const handleCancelField = () => {
     setTempFieldData(null);
-    setFieldLabel('');
+    setFieldName('');
     setFieldDescription('');
-    setFieldRequired(false);
-    setFieldValidationRegex('');
   };
 
-  const handleDeleteField = (fieldId: string) => {
-    onExtractionFieldsChange(extractionFields.filter(f => f.field_id !== fieldId));
+  const handleDeleteField = (fieldName: string) => {
+    onExtractionFieldsChange(extractionFields.filter(f => f.name !== fieldName));
     setStagedFieldId(null);
   };
 
-  const handleSelectField = (fieldId: string) => {
-    setStagedFieldId(fieldId);
+  const handleSelectField = (fieldName: string) => {
+    setStagedFieldId(fieldName);
   };
 
   const handleBackToList = () => {
     setStagedFieldId(null);
   };
 
-  const handleFieldClick = (fieldId: string) => {
+  const handleFieldClick = (fieldName: string) => {
     // Clicking a field selects it
-    setStagedFieldId(fieldId);
+    setStagedFieldId(fieldName);
   };
 
   const handleCanvasClick = () => {
@@ -243,9 +231,9 @@ export function ExtractionFieldsStep({
     }
   };
 
-  const handleUpdateField = (fieldId: string, updates: Partial<ExtractionField>) => {
+  const handleUpdateField = (fieldName: string, updates: Partial<ExtractionField>) => {
     const updatedFields = extractionFields.map(field =>
-      field.field_id === fieldId ? { ...field, ...updates } : field
+      field.name === fieldName ? { ...field, ...updates } : field
     );
     onExtractionFieldsChange(updatedFields);
   };
@@ -266,18 +254,14 @@ export function ExtractionFieldsStep({
           mode={sidebarMode}
           selectedFieldId={stagedFieldId}
           showSignatureObjects={showSignatureObjects}
-          fieldLabel={fieldLabel}
+          fieldName={fieldName}
           fieldDescription={fieldDescription}
-          fieldRequired={fieldRequired}
-          fieldValidationRegex={fieldValidationRegex}
           tempFieldData={tempFieldData}
           onTemplateNameChange={onTemplateNameChange}
           onTemplateDescriptionChange={onTemplateDescriptionChange}
           onShowSignatureObjectsChange={setShowSignatureObjects}
-          onFieldLabelChange={setFieldLabel}
+          onFieldNameChange={setFieldName}
           onFieldDescriptionChange={setFieldDescription}
-          onFieldRequiredChange={setFieldRequired}
-          onFieldValidationRegexChange={setFieldValidationRegex}
           onSaveField={handleSaveField}
           onCancelField={handleCancelField}
           onDeleteField={handleDeleteField}

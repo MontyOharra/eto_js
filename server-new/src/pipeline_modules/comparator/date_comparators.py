@@ -6,7 +6,7 @@ from typing import Dict, Any
 from pydantic import BaseModel, Field
 from datetime import datetime, date
 from shared.types import ComparatorModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
-from features.modules.service import register
+from features.modules.utils.decorators import register
 
 
 # Date Before

@@ -66,23 +66,8 @@ async def sync_modules(
                     message=f"Failed to clear catalog: {str(e)}"
                 )
 
-        # Step 2: Clear Python's module cache for our modules
-        logger.info("Clearing Python module cache...")
-        modules_to_clear = [
-            key for key in list(sys.modules.keys())
-            if key.startswith("features.modules.") and
-            not key.startswith("features.modules.service")  # Don't clear the service itself
-        ]
-        for module_name in modules_to_clear:
-            logger.debug(f"Removing {module_name} from Python cache")
-            del sys.modules[module_name]
-
-        # Step 3: Clear and re-discover modules via service
-        logger.info("Clearing and re-discovering modules...")
-        modules_service._registry.clear()
-        modules_service._auto_discover_modules()
-
-        # Step 4: Get discovered modules for tracking
+        # Step 2: Get already-registered modules from service registry
+        logger.info("Getting registered modules from service...")
         catalog_entries = modules_service._registry.to_catalog_entries()
         logger.info(f"Found {len(catalog_entries)} modules to sync")
 
@@ -97,7 +82,7 @@ async def sync_modules(
                 message="No modules found to sync. Check module packages and decorators."
             )
 
-        # Step 5: Sync modules to database and track results
+        # Step 3: Sync modules to database and track results
         for module_create in catalog_entries:
             try:
                 modules_service.module_repository.upsert(module_create)

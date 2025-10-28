@@ -263,9 +263,9 @@ export function TemplateBuilderModal({
         throw new Error('No PDF source available for testing');
       }
 
-      // Transform extraction fields to backend format (label → name)
+      // Transform extraction fields to backend format (frontend and backend now use same structure)
       const backendExtractionFields = extractionFields.map(field => ({
-        name: field.label,
+        name: field.name,
         description: field.description,
         bbox: field.bbox,
         page: field.page,
@@ -279,20 +279,19 @@ export function TemplateBuilderModal({
       const response = await simulateTemplate(formData);
 
       // Map API response to TemplateSimulationResult format
-      // Note: Backend returns extracted_data keyed by field name (label), but frontend expects field_id
-      const extractedDataByFieldId: Record<string, string> = {};
+      // Backend returns extracted_data keyed by field name, frontend uses same
+      const extractedDataByFieldName: Record<string, string> = {};
       extractionFields.forEach(field => {
-        extractedDataByFieldId[field.field_id] = response.data_extraction.extracted_data?.[field.label] || '';
+        extractedDataByFieldName[field.name] = response.data_extraction.extracted_data?.[field.name] || '';
       });
 
       const simulationResult: TemplateSimulationResult = {
         status: response.pipeline_execution.status === 'success' ? 'success' : 'failure',
         data_extraction: {
-          extracted_data: extractedDataByFieldId,
+          extracted_data: extractedDataByFieldName,
           extracted_fields_with_boxes: extractionFields.map(field => ({
-            field_id: field.field_id,
-            label: field.label,
-            value: response.data_extraction.extracted_data?.[field.label] || '',
+            name: field.name,
+            value: response.data_extraction.extracted_data?.[field.name] || '',
             page: field.page,
             bbox: field.bbox,
           })),

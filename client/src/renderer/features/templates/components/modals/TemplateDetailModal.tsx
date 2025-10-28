@@ -518,9 +518,9 @@ interface ExtractionFieldsViewProps {
 function ExtractionFieldsOverlay({ extractionFields }: { extractionFields: any[] }) {
   const { renderScale, currentPage, pdfDimensions } = usePdfViewer();
 
-  // Filter fields for current page (PDF viewer is 1-indexed, fields are 0-indexed)
+  // Filter fields for current page (both PDF viewer and fields are 1-indexed)
   const fieldsOnPage = useMemo(() => {
-    return extractionFields.filter(field => field.page === currentPage - 1);
+    return extractionFields.filter(field => field.page === currentPage);
   }, [extractionFields, currentPage]);
 
   if (!pdfDimensions) {
@@ -552,9 +552,9 @@ function ExtractionFieldsOverlay({ extractionFields }: { extractionFields: any[]
 
         return (
           <div
-            key={field.field_id}
+            key={field.name}
             style={style}
-            title={field.label}
+            title={field.name}
           />
         );
       })}
@@ -582,32 +582,20 @@ function ExtractionFieldsView({ versionDetail, pdfUrl, pdfObjects }: ExtractionF
         <div className="space-y-2">
           {versionDetail.extraction_fields.map((field) => (
             <div
-              key={field.field_id}
+              key={field.name}
               className="bg-gray-700 border border-green-600 rounded-lg p-3"
             >
               <div className="flex items-center justify-between mb-1">
                 <span className="text-sm font-medium text-white">
-                  {field.label}
+                  {field.name}
                 </span>
-                {field.required && (
-                  <span className="text-xs px-2 py-0.5 bg-red-900 text-red-300 rounded">
-                    Required
-                  </span>
-                )}
               </div>
               {field.description && (
                 <p className="text-xs text-gray-400 mb-1">{field.description}</p>
               )}
               <div className="text-xs text-gray-500">
-                Page {field.page + 1} • [{field.bbox.map(v => v.toFixed(0)).join(', ')}]
+                Page {field.page} • [{field.bbox.map(v => v.toFixed(0)).join(', ')}]
               </div>
-              {field.validation_regex && (
-                <div className="text-xs text-gray-400 mt-1">
-                  <code className="bg-gray-900 px-1 py-0.5 rounded">
-                    {field.validation_regex}
-                  </code>
-                </div>
-              )}
             </div>
           ))}
         </div>

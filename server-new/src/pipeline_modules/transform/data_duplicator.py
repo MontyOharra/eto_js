@@ -6,7 +6,7 @@ from typing import Dict, Any
 from pydantic import BaseModel
 
 from shared.types import TransformModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
-from features.modules.service import register
+from features.modules.utils.decorators import register
 
 
 class DataDuplicatorConfig(BaseModel):

@@ -24,7 +24,9 @@ from shared.types.pipelines import PipelineState as PipelineStateDomain
 from shared.types.pipeline_definition_step import PipelineDefinitionStepCreate
 from shared.exceptions.service import ObjectNotFoundError, ConflictError, ServiceError
 from features.pipelines.service import PipelineService
+from features.pipelines.service_execution import PipelineExecutionService
 from features.pdf_files.service import PdfFilesService
+from shared.types.pipeline_execution import PipelineExecutionResult
 
 logger = logging.getLogger(__name__)
 
@@ -41,12 +43,14 @@ class PdfTemplateService:
     template_repository: PdfTemplateRepository
     version_repository: PdfTemplateVersionRepository
     pipeline_repository: PipelineDefinitionRepository
+    pipeline_execution_service: PipelineExecutionService
 
     def __init__(
         self,
         connection_manager: DatabaseConnectionManager,
         pipeline_service: 'PipelineService',
-        pdf_files_service: 'PdfFilesService'
+        pdf_files_service: 'PdfFilesService',
+        pipeline_execution_service: PipelineExecutionService
     ) -> None:
         """
         Initialize PDF template service
@@ -55,6 +59,7 @@ class PdfTemplateService:
             connection_manager: Database connection manager
             pipeline_service: Pipeline service for pipeline operations
             pdf_files_service: PDF files service for text extraction
+            pipeline_execution_service: Pipeline execution service for running pipelines
         """
         self.connection_manager = connection_manager
         self.template_repository = PdfTemplateRepository(connection_manager=connection_manager)
@@ -62,6 +67,7 @@ class PdfTemplateService:
         self.pipeline_repository = PipelineDefinitionRepository(connection_manager=connection_manager)
         self.pipeline_service = pipeline_service
         self.pdf_files_service = pdf_files_service
+        self.pipeline_execution_service = pipeline_execution_service
 
     def list_templates(
         self,
@@ -323,15 +329,29 @@ class PdfTemplateService:
             ServiceError: If creation fails at any step
         """
         from shared.types.pdf_templates import PdfVersionCreate
+        from shared.types.pipeline_definition import PipelineDefinitionCreate
+        from shared.types.pipelines import PipelineState, VisualState
 
         try:
             with self.connection_manager.unit_of_work() as uow:
-                # TODO: Implement pipeline definition creation when pipeline database is built
-                # For now, use placeholder ID
-                logger.info("Create pipeline - placeholder (pipeline database not yet implemented)")
-                pipeline_definition_id = 1  # Placeholder
+                # Step 1: Create pipeline definition (validation, compilation, hash-based dedup)
+                logger.info("Creating pipeline definition for template")
 
-                # Step 1: Create template record (status=inactive, current_version_id=None initially)
+                # Convert dicts to proper domain types
+                pipeline_state_obj = PipelineState(**template_data.pipeline_state)
+                visual_state_obj = VisualState(**template_data.visual_state)
+
+                # Create pipeline definition (handles validation, compilation, and creation)
+                pipeline_create_data = PipelineDefinitionCreate(
+                    pipeline_state=pipeline_state_obj,
+                    visual_state=visual_state_obj
+                )
+
+                pipeline_definition = self.pipeline_service.create_pipeline_definition(pipeline_create_data)
+                pipeline_definition_id = pipeline_definition.id
+                logger.info(f"Created/reused pipeline definition {pipeline_definition_id}")
+
+                # Step 2: Create template record (status=inactive, current_version_id=None initially)
                 template = uow.pdf_templates.create(
                     name=template_data.name,
                     description=template_data.description,
@@ -339,7 +359,7 @@ class PdfTemplateService:
                     status="inactive"
                 )
 
-                # Step 2: Create version 1 with signature objects, extraction fields, and pipeline ID
+                # Step 3: Create version 1 with signature objects, extraction fields, and pipeline ID
                 version_data = PdfVersionCreate(
                     template_id=template.id,
                     version_number=1,
@@ -351,7 +371,7 @@ class PdfTemplateService:
 
                 version = uow.pdf_template_versions.create(version_data)
 
-                # Step 3: Update template to point to version 1 as current version
+                # Step 4: Update template to point to version 1 as current version
                 updated_template = uow.pdf_templates.update(
                     template.id,
                     {"current_version_id": version.id}
@@ -432,11 +452,11 @@ class PdfTemplateService:
         pdf_bytes: bytes,
         extraction_fields: list[ExtractionFieldDomain],
         pipeline_state: PipelineStateDomain
-    ) -> tuple[dict[str, str], list[PipelineDefinitionStepCreate]]:
+    ) -> tuple[dict[str, str], PipelineExecutionResult]:
         """
-        Simulate template processing: extract data from PDF and compile pipeline.
+        Simulate template processing: extract data, compile, and execute pipeline.
 
-        This method performs both data extraction and pipeline compilation without
+        This method performs data extraction, pipeline compilation, and execution without
         persistence. Used by the template builder to test templates before saving.
 
         Args:
@@ -445,7 +465,7 @@ class PdfTemplateService:
             pipeline_state: Pipeline state domain object
 
         Returns:
-            Tuple of (extracted_data dict, compiled_steps list)
+            Tuple of (extracted_data dict, execution_result)
         """
         logger.info(f"Simulating template with {len(extraction_fields)} fields and {len(pipeline_state.modules)} modules")
 
@@ -453,13 +473,13 @@ class PdfTemplateService:
         extraction_fields_dicts = [
             {
                 "name": field.name,
-                "bbox": list(field.bound_box),
+                "bbox": list(field.bbox),
                 "page": field.page
             }
             for field in extraction_fields
         ]
 
-        # Extract text from PDF
+        # Step 1: Extract text from PDF
         extracted_data = self.pdf_files_service.extract_text_from_pdf(
             pdf_bytes=pdf_bytes,
             extraction_fields=extraction_fields_dicts
@@ -471,20 +491,36 @@ class PdfTemplateService:
             print(f"{field_name}: {value}")
         print(f"======================\n")
 
-        # Validate pipeline
+        # Step 2: Validate pipeline
         self.pipeline_service._validate_pipeline(pipeline_state)
 
-        # Prune dead branches
+        # Step 3: Prune dead branches
         pruned_pipeline = self.pipeline_service._prune_dead_branches(pipeline_state)
 
-        # Compile pipeline to execution steps
+        # Step 4: Compile pipeline to execution steps
         compiled_steps = self.pipeline_service._compile_pipeline(pruned_pipeline)
 
         # Print compiled steps for debugging
         print(f"\n=== COMPILED PIPELINE STEPS ===")
         print(f"Total steps: {len(compiled_steps)}")
         for step in compiled_steps:
-            print(f"  Step {step.step_number}: {step.module_instance_id} (Layer {step.step_number})")
+            print(f"  Step {step.step_number}: {step.module_instance_id}")
         print(f"================================\n")
 
-        return extracted_data, compiled_steps
+        # Step 5: Execute pipeline with extracted data
+        execution_result = self.pipeline_execution_service.execute_pipeline(
+            steps=compiled_steps,
+            entry_values_by_name=extracted_data,
+            pipeline_state=pruned_pipeline
+        )
+
+        # Print execution result for debugging
+        print(f"\n=== EXECUTION RESULT ===")
+        print(f"Status: {execution_result.status}")
+        print(f"Steps executed: {len(execution_result.steps)}")
+        print(f"Actions collected: {len(execution_result.executed_actions)}")
+        if execution_result.error:
+            print(f"Error: {execution_result.error}")
+        print(f"========================\n")
+
+        return extracted_data, execution_result

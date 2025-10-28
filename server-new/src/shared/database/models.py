@@ -328,7 +328,7 @@ class PipelineDefinitionStepModel(BaseModel):
     )
 
     module_instance_id: Mapped[str] = mapped_column(String(100), nullable=False)
-    module_ref: Mapped[str] = mapped_column(ForeignKey("module_catalog.id", ondelete="CASCADE"), nullable=False, index=True)
+    module_ref: Mapped[str] = mapped_column(ForeignKey("modules.id", ondelete="CASCADE"), nullable=False, index=True)
 
     module_config: Mapped[str] = mapped_column(Text, nullable=False)
     input_field_mappings: Mapped[str] = mapped_column(Text, nullable=False)

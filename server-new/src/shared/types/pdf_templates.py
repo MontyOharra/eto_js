@@ -17,11 +17,13 @@ class ExtractionField:
 
     Domain model for extraction fields - simple structure for storage.
     API layer has matching ExtractionField Pydantic model with same structure.
+
+    Note: page is 1-indexed (page 1 = first page)
     """
     name: str
-    description: str
-    bound_box: tuple[float, float, float, float]  # [x0, y0, x1, y1]
-    page: int
+    description: str | None
+    bbox: tuple[float, float, float, float]  # [x0, y0, x1, y1]
+    page: int  # 1-indexed
 
 
 # ========== Template Version Dataclasses ==========
@@ -185,8 +187,8 @@ def deserialize_extraction_fields(data: dict[str, Any]) -> list[ExtractionField]
     return [
         ExtractionField(
             name=f["name"],
-            description=f["description"],
-            bound_box=tuple(f["bound_box"]),  # Convert list back to tuple
+            description=f.get("description"),  # Handle optional description
+            bbox=tuple(f["bbox"]),  # Convert list back to tuple
             page=f["page"]
         )
         for f in fields_data

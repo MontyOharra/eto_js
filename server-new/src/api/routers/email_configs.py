@@ -20,10 +20,10 @@ from api.schemas.email_configs import (
 )
 
 from api.mappers.email_configs import (
-    convert_email_config_summary_list,
-    convert_email_config,
-    convert_create_request,
-    convert_update_request,
+    email_config_summary_list_to_api,
+    email_config_to_api,
+    create_request_to_domain,
+    update_request_to_domain,
 )
 
 from shared.services.service_container import ServiceContainer
@@ -50,7 +50,7 @@ async def list_email_configs(
     """List all email configurations (summary)"""
 
     configs = config_service.list_configs_summary(order_by=order_by, desc=desc)
-    return convert_email_config_summary_list(configs)
+    return email_config_summary_list_to_api(configs)
 
 
 @router.get("/{id}", response_model=EmailConfig)
@@ -64,7 +64,7 @@ async def get_email_config(
 
     config = config_service.get_config(id)
 
-    return convert_email_config(config)
+    return email_config_to_api(config)
 
 
 @router.post("", response_model=EmailConfig, status_code=status.HTTP_201_CREATED)
@@ -75,9 +75,9 @@ async def create_email_config(
     )
 ) -> EmailConfig:
     """Create new email configuration"""
-    config_create = convert_create_request(request)
+    config_create = create_request_to_domain(request)
     config = config_service.create_config(config_create)
-    return convert_email_config(config)
+    return email_config_to_api(config)
 
 @router.put("/{id}", response_model=EmailConfig)
 async def update_email_config(
@@ -88,9 +88,9 @@ async def update_email_config(
     )
 ) -> EmailConfig:
     """Update email configuration"""
-    config_update = convert_update_request(request)
+    config_update = update_request_to_domain(request)
     config = config_service.update_config(id, config_update)
-    return convert_email_config(config)
+    return email_config_to_api(config)
 
 
 @router.delete("/{id}", response_model=EmailConfig)
@@ -102,7 +102,7 @@ async def delete_email_config(
 ) -> EmailConfig:
     """Delete email configuration (must be deactivated first)"""
 
-    return convert_email_config(config_service.delete_config(id))
+    return email_config_to_api(config_service.delete_config(id))
 
 
 
@@ -115,7 +115,7 @@ async def activate_email_config(
 ) -> EmailConfig:
     """Activate email configuration (starts email monitoring)"""
     config = config_service.activate_config(id)
-    return convert_email_config(config)
+    return email_config_to_api(config)
 
 
 @router.post("/{id}/deactivate", response_model=EmailConfig)
@@ -129,7 +129,7 @@ async def deactivate_email_config(
 
     config = config_service.deactivate_config(id)
 
-    return convert_email_config(config)
+    return email_config_to_api(config)
 
 
 @router.get("/discovery/accounts", response_model=list[EmailAccount])
