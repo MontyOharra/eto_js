@@ -8,7 +8,7 @@ import { SignatureObject, ExtractionField } from '../../types';
 import { SignatureObjectsStep, ExtractionFieldsStep, PipelineBuilderStep, TestingStep, TemplateSimulationResult } from './steps';
 import { TemplateBuilderHeader, TemplateBuilderStepper } from './components';
 import { usePdfData, usePdfFilesApi } from '../../../pdf-files/hooks';
-import { useMockModulesApi } from '../../../modules/hooks';
+import { useModulesApi } from '../../../modules/hooks';
 import { useTemplatesApi } from '../../hooks';
 import { usePipelineValidation } from '../../../pipelines/hooks';
 import type { ModuleTemplate } from '../../../../types/moduleTypes';
@@ -78,7 +78,7 @@ export function TemplateBuilderModal({
 
   // Use React Query to fetch and cache PDF data (only for stored PDFs)
   const { data: pdfData, isLoading: pdfLoading, error: pdfError } = usePdfData(pdfFileId);
-  const { getModules } = useMockModulesApi();
+  const { getModules } = useModulesApi();
   const { processObjects } = usePdfFilesApi();
   const { simulateTemplate } = useTemplatesApi();
 
