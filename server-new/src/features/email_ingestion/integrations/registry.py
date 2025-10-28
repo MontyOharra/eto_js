@@ -4,10 +4,9 @@ Registry pattern for managing email provider integrations
 Replaces factory pattern with self-registering providers
 """
 import logging
-from typing import Type, Optional, TYPE_CHECKING
+from typing import Type, Optional
 
-if TYPE_CHECKING:
-    from .base_integration import BaseEmailIntegration
+from .base_integration import BaseEmailIntegration
 
 logger = logging.getLogger(__name__)
 

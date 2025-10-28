@@ -51,16 +51,3 @@ class PipelineDefinitionCreate:
     """
     pipeline_state: PipelineState
     visual_state: VisualState
-
-
-@dataclass(frozen=True)
-class PipelineDefinitionUpdate:
-    """
-    Data for updating existing pipeline definition.
-
-    Replaces entire pipeline_state and visual_state.
-    Service layer will re-validate, re-prune, and potentially
-    link to a different compiled plan.
-    """
-    pipeline_state: PipelineState
-    visual_state: VisualState

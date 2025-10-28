@@ -695,6 +695,36 @@ class PipelineService:
 
         return result
 
+    def get_compiled_steps(self, pipeline_id: int):
+        """
+        Get compiled execution steps for a pipeline.
+
+        Args:
+            pipeline_id: Pipeline definition ID
+
+        Returns:
+            List of compiled steps
+
+        Raises:
+            ObjectNotFoundError: Pipeline not found
+            ServiceError: Pipeline not compiled or no steps found
+        """
+        pipeline = self.get_pipeline_definition(pipeline_id)
+
+        if pipeline.compiled_plan_id is None:
+            raise ServiceError(
+                f"Pipeline {pipeline_id} is not compiled. Cannot get steps for uncompiled pipeline."
+            )
+
+        steps = self.step_repository.get_steps_by_plan_id(pipeline.compiled_plan_id)
+
+        if not steps:
+            raise ServiceError(
+                f"No compiled steps found for pipeline {pipeline_id} (plan {pipeline.compiled_plan_id})"
+            )
+
+        return steps
+
     def list_pipeline_definitions(
         self,
         sort_by: str = "created_at",

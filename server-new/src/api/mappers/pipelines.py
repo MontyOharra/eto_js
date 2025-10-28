@@ -9,6 +9,7 @@ from shared.types.pipelines import (
     NodeConnection as NodeConnectionDomain,
     PipelineState as PipelineStateDomain,
     VisualState as VisualStateDomain,
+    Position as PositionDomain,
 )
 from shared.types.pipeline_definition import (
     PipelineDefinitionFull,
@@ -16,15 +17,15 @@ from shared.types.pipeline_definition import (
     PipelineDefinitionCreate,
 )
 from api.schemas.pipelines import (
-    NodeDTO,
-    EntryPointDTO,
-    ModuleInstanceDTO,
-    NodeConnectionDTO,
-    PipelineStateDTO,
-    VisualStateDTO,
-    PositionDTO,
-    PipelineSummaryDTO,
-    PipelineDetailDTO,
+    Node,
+    EntryPoint,
+    ModuleInstance,
+    NodeConnection,
+    PipelineState,
+    VisualState,
+    Position,
+    PipelineSummary,
+    PipelineDetail,
     CreatePipelineRequest,
     PipelinesListResponse,
 )
@@ -32,9 +33,9 @@ from api.schemas.pipelines import (
 
 # ========== Domain → API (Response) Conversions ==========
 
-def convert_node_to_dto(node: NodeInstanceDomain) -> NodeDTO:
-    """Convert domain NodeInstance to API NodeDTO"""
-    return NodeDTO(
+def convert_node(node: NodeInstanceDomain) -> Node:
+    """Convert domain NodeInstance to API Node"""
+    return Node(
         node_id=node.node_id,
         type=node.type,
         name=node.name,
@@ -43,140 +44,138 @@ def convert_node_to_dto(node: NodeInstanceDomain) -> NodeDTO:
     )
 
 
-def convert_entry_point_to_dto(entry_point: EntryPointDomain) -> EntryPointDTO:
-    """Convert domain EntryPoint to API EntryPointDTO"""
-    return EntryPointDTO(
+def convert_entry_point(entry_point: EntryPointDomain) -> EntryPoint:
+    """Convert domain EntryPoint to API EntryPoint"""
+    return EntryPoint(
         node_id=entry_point.node_id,
         name=entry_point.name
     )
 
 
-def convert_module_instance_to_dto(module: ModuleInstanceDomain) -> ModuleInstanceDTO:
-    """Convert domain ModuleInstance to API ModuleInstanceDTO"""
-    return ModuleInstanceDTO(
+def convert_module_instance(module: ModuleInstanceDomain) -> ModuleInstance:
+    """Convert domain ModuleInstance to API ModuleInstance"""
+    return ModuleInstance(
         module_instance_id=module.module_instance_id,
         module_ref=module.module_ref,
         config=module.config,
-        inputs=[convert_node_to_dto(node) for node in module.inputs],
-        outputs=[convert_node_to_dto(node) for node in module.outputs]
+        inputs=[convert_node(node) for node in module.inputs],
+        outputs=[convert_node(node) for node in module.outputs]
     )
 
 
-def convert_connection_to_dto(connection: NodeConnectionDomain) -> NodeConnectionDTO:
-    """Convert domain NodeConnection to API NodeConnectionDTO"""
-    return NodeConnectionDTO(
+def convert_connection(connection: NodeConnectionDomain) -> NodeConnection:
+    """Convert domain NodeConnection to API NodeConnection"""
+    return NodeConnection(
         from_node_id=connection.from_node_id,
         to_node_id=connection.to_node_id
     )
 
 
-def convert_pipeline_state_to_dto(pipeline_state: PipelineStateDomain) -> PipelineStateDTO:
-    """Convert domain PipelineState to API PipelineStateDTO"""
-    return PipelineStateDTO(
-        entry_points=[convert_entry_point_to_dto(ep) for ep in pipeline_state.entry_points],
-        modules=[convert_module_instance_to_dto(mod) for mod in pipeline_state.modules],
-        connections=[convert_connection_to_dto(conn) for conn in pipeline_state.connections]
+def convert_pipeline_state(pipeline_state: PipelineStateDomain) -> PipelineState:
+    """Convert domain PipelineState to API PipelineState"""
+    return PipelineState(
+        entry_points=[convert_entry_point(ep) for ep in pipeline_state.entry_points],
+        modules=[convert_module_instance(mod) for mod in pipeline_state.modules],
+        connections=[convert_connection(conn) for conn in pipeline_state.connections]
     )
 
 
-def convert_visual_state_to_dto(visual_state: VisualStateDomain) -> VisualStateDTO:
-    """Convert domain VisualState to API VisualStateDTO"""
-    return VisualStateDTO(
+def convert_visual_state(visual_state: VisualStateDomain) -> VisualState:
+    """Convert domain VisualState to API VisualState"""
+    return VisualState(
         modules={
-            key: PositionDTO(x=pos[0], y=pos[1])
+            key: Position(x=pos.x, y=pos.y)
             for key, pos in visual_state.modules.items()
         },
         entry_points={
-            key: PositionDTO(x=pos[0], y=pos[1])
+            key: Position(x=pos.x, y=pos.y)
             for key, pos in visual_state.entry_points.items()
         }
     )
 
 
-def convert_pipeline_summary(summary: PipelineDefinitionSummary) -> PipelineSummaryDTO:
-    """Convert domain PipelineDefinitionSummary to API PipelineSummaryDTO"""
-    return PipelineSummaryDTO(
+def convert_pipeline_summary(summary: PipelineDefinitionSummary) -> PipelineSummary:
+    """Convert domain PipelineDefinitionSummary to API PipelineSummary"""
+    return PipelineSummary(
         id=summary.id,
-        compiled_plan_id=summary.compiled_plan_id,
-        created_at=summary.created_at.isoformat(),
-        updated_at=summary.updated_at.isoformat()
+        compiled_plan_id=summary.compiled_plan_id
     )
 
 
-def convert_pipeline_summary_list(summaries: list[PipelineDefinitionSummary]) -> list[PipelineSummaryDTO]:
+def convert_pipeline_summary_list(summaries: list[PipelineDefinitionSummary]) -> list[PipelineSummary]:
     """Convert list of domain summaries to API schemas"""
     return [convert_pipeline_summary(summary) for summary in summaries]
 
 
-def convert_pipeline_detail(pipeline: PipelineDefinitionFull) -> PipelineDetailDTO:
-    """Convert domain PipelineDefinitionFull to API PipelineDetailDTO"""
-    return PipelineDetailDTO(
+def convert_pipeline_detail(pipeline: PipelineDefinitionFull) -> PipelineDetail:
+    """Convert domain PipelineDefinitionFull to API PipelineDetail"""
+    return PipelineDetail(
         id=pipeline.id,
         compiled_plan_id=pipeline.compiled_plan_id,
-        pipeline_state=convert_pipeline_state_to_dto(pipeline.pipeline_state),
-        visual_state=convert_visual_state_to_dto(pipeline.visual_state)
+        pipeline_state=convert_pipeline_state(pipeline.pipeline_state),
+        visual_state=convert_visual_state(pipeline.visual_state)
     )
 
 
 # ========== API (Request) → Domain Conversions ==========
 
-def convert_dto_to_node(node_dto: NodeDTO) -> NodeInstanceDomain:
-    """Convert API NodeDTO to domain NodeInstance"""
+def convert_node_to_domain(node: Node) -> NodeInstanceDomain:
+    """Convert API Node to domain NodeInstance"""
     return NodeInstanceDomain(
-        node_id=node_dto.node_id,
-        type=node_dto.type,
-        name=node_dto.name,
-        position_index=node_dto.position_index,
-        group_index=node_dto.group_index
+        node_id=node.node_id,
+        type=node.type,
+        name=node.name,
+        position_index=node.position_index,
+        group_index=node.group_index
     )
 
 
-def convert_dto_to_entry_point(entry_point_dto: EntryPointDTO) -> EntryPointDomain:
-    """Convert API EntryPointDTO to domain EntryPoint"""
+def convert_entry_point_to_domain(entry_point: EntryPoint) -> EntryPointDomain:
+    """Convert API EntryPoint to domain EntryPoint"""
     return EntryPointDomain(
-        node_id=entry_point_dto.node_id,
-        name=entry_point_dto.name
+        node_id=entry_point.node_id,
+        name=entry_point.name
     )
 
 
-def convert_dto_to_module_instance(module_dto: ModuleInstanceDTO) -> ModuleInstanceDomain:
-    """Convert API ModuleInstanceDTO to domain ModuleInstance"""
+def convert_module_instance_to_domain(module: ModuleInstance) -> ModuleInstanceDomain:
+    """Convert API ModuleInstance to domain ModuleInstance"""
     return ModuleInstanceDomain(
-        module_instance_id=module_dto.module_instance_id,
-        module_ref=module_dto.module_ref,
-        config=module_dto.config,
-        inputs=[convert_dto_to_node(node) for node in module_dto.inputs],
-        outputs=[convert_dto_to_node(node) for node in module_dto.outputs]
+        module_instance_id=module.module_instance_id,
+        module_ref=module.module_ref,
+        config=module.config,
+        inputs=[convert_node_to_domain(node) for node in module.inputs],
+        outputs=[convert_node_to_domain(node) for node in module.outputs]
     )
 
 
-def convert_dto_to_connection(connection_dto: NodeConnectionDTO) -> NodeConnectionDomain:
-    """Convert API NodeConnectionDTO to domain NodeConnection"""
+def convert_connection_to_domain(connection: NodeConnection) -> NodeConnectionDomain:
+    """Convert API NodeConnection to domain NodeConnection"""
     return NodeConnectionDomain(
-        from_node_id=connection_dto.from_node_id,
-        to_node_id=connection_dto.to_node_id
+        from_node_id=connection.from_node_id,
+        to_node_id=connection.to_node_id
     )
 
 
-def convert_dto_to_pipeline_state(pipeline_state_dto: PipelineStateDTO) -> PipelineStateDomain:
-    """Convert API PipelineStateDTO to domain PipelineState"""
+def convert_pipeline_state_to_domain(pipeline_state: PipelineState) -> PipelineStateDomain:
+    """Convert API PipelineState to domain PipelineState"""
     return PipelineStateDomain(
-        entry_points=[convert_dto_to_entry_point(ep) for ep in pipeline_state_dto.entry_points],
-        modules=[convert_dto_to_module_instance(mod) for mod in pipeline_state_dto.modules],
-        connections=[convert_dto_to_connection(conn) for conn in pipeline_state_dto.connections]
+        entry_points=[convert_entry_point_to_domain(ep) for ep in pipeline_state.entry_points],
+        modules=[convert_module_instance_to_domain(mod) for mod in pipeline_state.modules],
+        connections=[convert_connection_to_domain(conn) for conn in pipeline_state.connections]
     )
 
 
-def convert_dto_to_visual_state(visual_state_dto: VisualStateDTO) -> VisualStateDomain:
-    """Convert API VisualStateDTO to domain VisualState"""
+def convert_visual_state_to_domain(visual_state: VisualState) -> VisualStateDomain:
+    """Convert API VisualState to domain VisualState"""
     return VisualStateDomain(
         modules={
-            key: (pos.x, pos.y)
-            for key, pos in visual_state_dto.modules.items()
+            key: PositionDomain(x=pos.x, y=pos.y)
+            for key, pos in visual_state.modules.items()
         },
         entry_points={
-            key: (pos.x, pos.y)
-            for key, pos in visual_state_dto.entry_points.items()
+            key: PositionDomain(x=pos.x, y=pos.y)
+            for key, pos in visual_state.entry_points.items()
         }
     )
 
@@ -184,6 +183,37 @@ def convert_dto_to_visual_state(visual_state_dto: VisualStateDTO) -> VisualState
 def convert_create_request(request: CreatePipelineRequest) -> PipelineDefinitionCreate:
     """Convert API CreatePipelineRequest to domain PipelineDefinitionCreate"""
     return PipelineDefinitionCreate(
-        pipeline_state=convert_dto_to_pipeline_state(request.pipeline_state),
-        visual_state=convert_dto_to_visual_state(request.visual_state)
+        pipeline_state=convert_pipeline_state_to_domain(request.pipeline_state),
+        visual_state=convert_visual_state_to_domain(request.visual_state)
+    )
+
+
+def convert_execution_result(result):
+    """
+    Convert domain execution result to API ExecutePipelineResponse.
+
+    Args:
+        result: Domain execution result object
+
+    Returns:
+        ExecutePipelineResponse for API
+    """
+    from api.schemas.pipelines import ExecutePipelineResponse, ExecutionStepResult
+
+    steps = [
+        ExecutionStepResult(
+            module_instance_id=step.module_instance_id,
+            step_number=step.step_number,
+            inputs=step.inputs,
+            outputs=step.outputs,
+            error=step.error
+        )
+        for step in result.steps
+    ]
+
+    return ExecutePipelineResponse(
+        status=result.status,
+        steps=steps,
+        executed_actions=result.executed_actions,
+        error=result.error
     )

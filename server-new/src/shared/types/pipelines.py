@@ -41,6 +41,13 @@ class NodeConnection:
 
 
 @dataclass(frozen=True)
+class Position:
+    """2D position for visual layout"""
+    x: float
+    y: float
+
+
+@dataclass(frozen=True)
 class PipelineState:
     """The actual pipeline structure (execution data)"""
     entry_points: List[EntryPoint] = field(default_factory=list)
@@ -51,8 +58,8 @@ class PipelineState:
 @dataclass(frozen=True)
 class VisualState:
     """Visual positioning data for the UI"""
-    modules: Dict[str, tuple[float, float]] = field(default_factory=dict)
-    entry_points: Dict[str, tuple[float, float]] = field(default_factory=dict)
+    modules: Dict[str, Position] = field(default_factory=dict)
+    entry_points: Dict[str, Position] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

@@ -7,23 +7,25 @@ from typing import List, Literal
 from fastapi import APIRouter, Depends, status
 
 from api.schemas.pipelines import (
-    PipelineSummaryDTO,
+    PipelineSummary,
     PipelinesListResponse,
-    PipelineDetailDTO,
+    PipelineDetail,
     CreatePipelineRequest,
     CreatePipelineResponse,
     ValidatePipelineRequest,
     ValidatePipelineResponse,
-    ValidationErrorDTO,
+    ValidationError,
     ExecutePipelineRequest,
     ExecutePipelineResponse,
-    ExecutionStepResultDTO,
+    ExecutionStepResult,
 )
 
 from api.mappers.pipelines import (
     convert_pipeline_summary_list,
     convert_pipeline_detail,
     convert_create_request,
+    convert_pipeline_state_to_domain,
+    convert_execution_result,
 )
 
 from shared.services.service_container import ServiceContainer
@@ -79,13 +81,13 @@ async def list_pipelines(
     )
 
 
-@router.get("/{id}", response_model=PipelineDetailDTO)
+@router.get("/{id}", response_model=PipelineDetail)
 async def get_pipeline(
     id: int,
     pipeline_service: PipelineService = Depends(
         lambda: ServiceContainer.get_pipeline_service()
     )
-) -> PipelineDetailDTO:
+) -> PipelineDetail:
     """
     Get complete pipeline definition including pipeline_state and visual_state.
 
@@ -145,8 +147,7 @@ async def validate_pipeline(
     Returns validation results with detailed error messages if validation fails.
     """
     # Convert API request to domain type
-    from api.mappers.pipelines import convert_dto_to_pipeline_state
-    pipeline_state = convert_dto_to_pipeline_state(request.pipeline_json)
+    pipeline_state = convert_pipeline_state_to_domain(request.pipeline_json)
 
     # Call service - ALL validation happens in PipelineValidator
     validation_result = pipeline_service.validate_pipeline(pipeline_state)
@@ -157,7 +158,7 @@ async def validate_pipeline(
     else:
         return ValidatePipelineResponse(
             valid=False,
-            error=ValidationErrorDTO(
+            error=ValidationError(
                 code=validation_result["error"]["code"],
                 message=validation_result["error"]["message"],
                 where=validation_result["error"].get("where")

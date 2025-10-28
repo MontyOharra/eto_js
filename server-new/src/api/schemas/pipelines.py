@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 # Pipeline State Types (logical structure)
 # ============================================================================
 
-class NodeDTO(BaseModel):
+class Node(BaseModel):
     """Node (pin) in a module instance"""
     node_id: str
     type: str  # "str", "int", "float", "bool", "datetime", etc.
@@ -18,76 +18,74 @@ class NodeDTO(BaseModel):
     group_index: int
 
 
-class EntryPointDTO(BaseModel):
+class EntryPoint(BaseModel):
     """Entry point for pipeline input"""
     node_id: str
     name: str
 
 
-class ModuleInstanceDTO(BaseModel):
+class ModuleInstance(BaseModel):
     """Module instance placed on the canvas"""
     module_instance_id: str
     module_ref: str  # e.g., "text_cleaner:1.0.0"
     config: Dict[str, Any]  # Module-specific configuration
-    inputs: List[NodeDTO] = []
-    outputs: List[NodeDTO] = []
+    inputs: List[Node] = []
+    outputs: List[Node] = []
 
 
-class NodeConnectionDTO(BaseModel):
+class NodeConnection(BaseModel):
     """Connection between two nodes"""
     from_node_id: str
     to_node_id: str
 
 
-class PipelineStateDTO(BaseModel):
+class PipelineState(BaseModel):
     """Pipeline execution structure"""
-    entry_points: List[EntryPointDTO] = []
-    modules: List[ModuleInstanceDTO] = []
-    connections: List[NodeConnectionDTO] = []
+    entry_points: List[EntryPoint] = []
+    modules: List[ModuleInstance] = []
+    connections: List[NodeConnection] = []
 
 
 # ============================================================================
 # Visual State Types (UI layout)
 # ============================================================================
 
-class PositionDTO(BaseModel):
+class Position(BaseModel):
     """2D position for visual layout"""
     x: float
     y: float
 
 
-class VisualStateDTO(BaseModel):
+class VisualState(BaseModel):
     """Visual positioning data for the UI"""
-    modules: Dict[str, PositionDTO] = {}  # module_instance_id -> position
-    entry_points: Dict[str, PositionDTO] = {}  # entry_point node_id -> position
+    modules: Dict[str, Position] = {}  # module_instance_id -> position
+    entry_points: Dict[str, Position] = {}  # entry_point node_id -> position
 
 
 # ============================================================================
 # Pipeline Definition Types
 # ============================================================================
 
-class PipelineSummaryDTO(BaseModel):
+class PipelineSummary(BaseModel):
     """Lightweight pipeline summary for list views (GET /pipelines)"""
     id: int
     compiled_plan_id: Optional[int] = None  # null if not yet compiled
-    created_at: str  # ISO 8601 (dev/testing convenience)
-    updated_at: str  # ISO 8601 (dev/testing convenience)
 
 
 class PipelinesListResponse(BaseModel):
     """Response for GET /pipelines"""
-    items: List[PipelineSummaryDTO]
+    items: List[PipelineSummary]
     total: int
     limit: int
     offset: int
 
 
-class PipelineDetailDTO(BaseModel):
+class PipelineDetail(BaseModel):
     """Full pipeline definition details (GET /pipelines/{id})"""
     id: int
     compiled_plan_id: Optional[int] = None
-    pipeline_state: PipelineStateDTO
-    visual_state: VisualStateDTO
+    pipeline_state: PipelineState
+    visual_state: VisualState
 
 
 # ============================================================================
@@ -96,8 +94,8 @@ class PipelineDetailDTO(BaseModel):
 
 class CreatePipelineRequest(BaseModel):
     """Request body for POST /pipelines"""
-    pipeline_state: PipelineStateDTO
-    visual_state: VisualStateDTO
+    pipeline_state: PipelineState
+    visual_state: VisualState
 
 
 class CreatePipelineResponse(BaseModel):
@@ -106,23 +104,11 @@ class CreatePipelineResponse(BaseModel):
     compiled_plan_id: Optional[int] = None  # null initially, set on first compilation
 
 
-class UpdatePipelineRequest(BaseModel):
-    """Request body for PUT /pipelines/{id}"""
-    pipeline_state: PipelineStateDTO
-    visual_state: VisualStateDTO
-
-
-class UpdatePipelineResponse(BaseModel):
-    """Response for PUT /pipelines/{id}"""
-    id: int
-    compiled_plan_id: Optional[int] = None  # May change if pipeline logic changed
-
-
 # ============================================================================
 # Validation
 # ============================================================================
 
-class ValidationErrorDTO(BaseModel):
+class ValidationError(BaseModel):
     """Single validation error"""
     code: str  # Error code (e.g., "type_mismatch", "cycle_detected")
     message: str  # Human-readable error message
@@ -131,13 +117,13 @@ class ValidationErrorDTO(BaseModel):
 
 class ValidatePipelineRequest(BaseModel):
     """Request body for POST /pipelines/validate"""
-    pipeline_json: PipelineStateDTO = Field(..., alias="pipeline_json")
+    pipeline_json: PipelineState = Field(..., alias="pipeline_json")
 
 
 class ValidatePipelineResponse(BaseModel):
     """Response for POST /pipelines/validate"""
     valid: bool
-    error: Optional[ValidationErrorDTO] = None
+    error: Optional[ValidationError] = None
 
 
 # ============================================================================
@@ -153,7 +139,7 @@ class ExecutePipelineRequest(BaseModel):
     )
 
 
-class ExecutionStepResultDTO(BaseModel):
+class ExecutionStepResult(BaseModel):
     """Result of a single module execution"""
     module_instance_id: str
     step_number: int
@@ -165,6 +151,6 @@ class ExecutionStepResultDTO(BaseModel):
 class ExecutePipelineResponse(BaseModel):
     """Response for POST /pipelines/{id}/execute"""
     status: str  # "success" | "failed"
-    steps: List[ExecutionStepResultDTO]
+    steps: List[ExecutionStepResult]
     executed_actions: Dict[str, Dict[str, Any]]  # {module_instance_id: {input_name: value}}
     error: Optional[str] = None

@@ -73,10 +73,11 @@ class PipelineDefinitionRepository(BaseRepository[PipelineDefinitionModel]):
 
     def _deserialize_visual_state(self, json_str: str) -> VisualState:
         """Convert JSON string to VisualState dataclass"""
+        from shared.types.pipelines import Position
         data = json.loads(json_str)
-        # Convert lists back to tuples for positions
-        modules = {k: tuple(v) for k, v in data.get("modules", {}).items()}
-        entry_points = {k: tuple(v) for k, v in data.get("entry_points", {}).items()}
+        # Convert position dicts to Position dataclasses
+        modules = {k: Position(**v) for k, v in data.get("modules", {}).items()}
+        entry_points = {k: Position(**v) for k, v in data.get("entry_points", {}).items()}
         return VisualState(modules=modules, entry_points=entry_points)
 
     def _model_to_full(self, model: PipelineDefinitionModel) -> PipelineDefinitionFull:
