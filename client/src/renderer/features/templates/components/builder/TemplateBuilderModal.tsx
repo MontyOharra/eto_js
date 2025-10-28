@@ -285,8 +285,23 @@ export function TemplateBuilderModal({
         inputs: inputs,
       }));
 
+      // Parse error type and message from pipeline_error (format: "ErrorType: message")
+      let errorType: string | null = null;
+      let errorMessage: string | null = null;
+      if (response.pipeline_error) {
+        const colonIndex = response.pipeline_error.indexOf(':');
+        if (colonIndex > 0) {
+          errorType = response.pipeline_error.substring(0, colonIndex).trim();
+          errorMessage = response.pipeline_error.substring(colonIndex + 1).trim();
+        } else {
+          errorMessage = response.pipeline_error;
+        }
+      }
+
       const simulationResult: TemplateSimulationResult = {
         status: response.pipeline_status === 'success' ? 'success' : 'failure',
+        error_type: errorType,
+        error_message: errorMessage,
         data_extraction: {
           extracted_data: extractedDataByFieldName,
           extracted_fields_with_boxes: response.extraction_results.map(result => ({
@@ -298,6 +313,7 @@ export function TemplateBuilderModal({
         },
         pipeline_execution: {
           status: response.pipeline_status,
+          error_message: response.pipeline_error,
           executed_actions: simulatedActions,
           steps: response.pipeline_steps.map(step => ({
             id: step.step_number,
