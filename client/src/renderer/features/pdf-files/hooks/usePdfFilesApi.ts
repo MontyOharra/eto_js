@@ -36,6 +36,33 @@ export function usePdfFilesApi() {
   );
 
   /**
+   * POST /api/pdf-files
+   * Upload and store PDF file with automatic object extraction
+   * Returns stored PDF metadata with ID
+   */
+  const uploadPdf = useCallback(
+    async (pdfFile: File): Promise<PdfFileMetadataDTO> => {
+      return withLoadingAndError(async () => {
+        const formData = new FormData();
+        formData.append('pdf_file', pdfFile);
+
+        const response = await apiClient.post<PdfFileMetadataDTO>(
+          baseUrl,
+          formData,
+          {
+            headers: {
+              'Content-Type': 'multipart/form-data',
+            },
+          }
+        );
+
+        return response.data;
+      });
+    },
+    [baseUrl, withLoadingAndError]
+  );
+
+  /**
    * POST /api/pdf-files/process-objects
    * Process uploaded PDF and extract objects (no persistence)
    * Used during template creation wizard
@@ -114,6 +141,7 @@ export function usePdfFilesApi() {
     error,
 
     // API methods
+    uploadPdf,
     processObjects,
     getPdfMetadata,
     getPdfObjects,

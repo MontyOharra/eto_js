@@ -45,7 +45,23 @@ export function TemplateBuilderModal({
   const [currentStep, setCurrentStep] = useState<BuilderStep>('signature-objects');
   const [templateName, setTemplateName] = useState('');
   const [templateDescription, setTemplateDescription] = useState('');
-  const [signatureObjects, setSignatureObjects] = useState<SignatureObject[]>([]);
+  const [signatureObjects, setSignatureObjects] = useState<{
+    text_words: any[];
+    text_lines: any[];
+    graphic_rects: any[];
+    graphic_lines: any[];
+    graphic_curves: any[];
+    images: any[];
+    tables: any[];
+  }>({
+    text_words: [],
+    text_lines: [],
+    graphic_rects: [],
+    graphic_lines: [],
+    graphic_curves: [],
+    images: [],
+    tables: [],
+  });
   const [selectedObjectTypes, setSelectedObjectTypes] = useState<string[]>([]); // Step 1 state persistence
   const [extractionFields, setExtractionFields] = useState<ExtractionField[]>([]);
   const [pipelineState, setPipelineState] = useState<PipelineState>({
@@ -79,8 +95,8 @@ export function TemplateBuilderModal({
   // Use React Query to fetch and cache PDF data (only for stored PDFs)
   const { data: pdfData, isLoading: pdfLoading, error: pdfError } = usePdfData(pdfFileId);
   const { getModules } = useModulesApi();
-  const { processObjects } = usePdfFilesApi();
-  const { simulateTemplate } = useTemplatesApi();
+  const { uploadPdf, processObjects } = usePdfFilesApi();
+  const { simulateTemplate, createTemplate } = useTemplatesApi();
 
   // Auto-validate pipeline as it's being built
   const { isValid: isPipelineValid, error: pipelineValidationError, isValidating: isPipelineValidating } = usePipelineValidation(pipelineState);
@@ -165,18 +181,23 @@ export function TemplateBuilderModal({
   const isPdfLoading = pdfFile ? isProcessingUpload : pdfLoading;
 
   // Calculate completed steps
+  // Helper to count total signature objects
+  const signatureObjectsCount = useMemo(() => {
+    return Object.values(signatureObjects).reduce((sum, arr) => sum + arr.length, 0);
+  }, [signatureObjects]);
+
   const completedSteps = useMemo(() => {
     const completed = new Set<BuilderStep>();
-    if (signatureObjects.length > 0) completed.add('signature-objects');
+    if (signatureObjectsCount > 0) completed.add('signature-objects');
     if (extractionFields.length > 0) completed.add('extraction-fields');
     return completed;
-  }, [signatureObjects.length, extractionFields.length]);
+  }, [signatureObjectsCount, extractionFields.length]);
 
   // Determine if user can proceed from current step
   const canProceed = useMemo(() => {
     switch (currentStep) {
       case 'signature-objects':
-        return signatureObjects.length > 0 && templateName.trim().length > 0;
+        return signatureObjectsCount > 0 && templateName.trim().length > 0;
       case 'extraction-fields':
         return extractionFields.length > 0;
       case 'pipeline':
@@ -187,7 +208,7 @@ export function TemplateBuilderModal({
       default:
         return false;
     }
-  }, [currentStep, signatureObjects.length, templateName, extractionFields.length, testResults, isPipelineValid, isPipelineValidating]);
+  }, [currentStep, signatureObjectsCount, templateName, extractionFields.length, testResults, isPipelineValid, isPipelineValidating]);
 
   // Get validation message for current step
   const validationMessage = useMemo(() => {
@@ -198,7 +219,7 @@ export function TemplateBuilderModal({
         if (templateName.trim().length === 0) {
           return 'Please enter a template name';
         }
-        if (signatureObjects.length === 0) {
+        if (signatureObjectsCount === 0) {
           return 'Please select at least one signature object';
         }
         return undefined;
@@ -216,24 +237,42 @@ export function TemplateBuilderModal({
       default:
         return undefined;
     }
-  }, [currentStep, canProceed, templateName, signatureObjects.length, isPipelineValidating, pipelineValidationError]);
+  }, [currentStep, canProceed, templateName, signatureObjectsCount, isPipelineValidating, pipelineValidationError]);
 
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await onSave({
+      // Step 1: Upload PDF if needed (for newly uploaded files)
+      let sourcePdfId = pdfFileId;
+
+      if (!sourcePdfId && pdfFile) {
+        console.log('[TemplateBuilderModal] Uploading PDF file...');
+        const uploadResponse = await uploadPdf(pdfFile);
+        sourcePdfId = uploadResponse.id;
+        console.log('[TemplateBuilderModal] PDF uploaded with ID:', sourcePdfId);
+      }
+
+      if (!sourcePdfId) {
+        throw new Error('No PDF source available. Please ensure a PDF is loaded.');
+      }
+
+      // Step 2: Create template
+      console.log('[TemplateBuilderModal] Creating template...');
+      await createTemplate({
         name: templateName,
         description: templateDescription,
-        source_pdf_id: pdfFileId,
-        pdf_file: pdfFile,
+        source_pdf_id: sourcePdfId,
         signature_objects: signatureObjects,
         extraction_fields: extractionFields,
         pipeline_state: pipelineState,
         visual_state: visualState,
       });
+
+      console.log('[TemplateBuilderModal] Template created successfully');
       handleClose();
     } catch (error) {
-      console.error('Failed to save template:', error);
+      console.error('[TemplateBuilderModal] Failed to save template:', error);
+      alert(`Failed to save template: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsSaving(false);
     }
@@ -375,7 +414,7 @@ export function TemplateBuilderModal({
 
   const handleNext = () => {
     console.log('[TemplateBuilderModal] handleNext called, current step:', currentStep);
-    console.log('[TemplateBuilderModal] Current signature objects count:', signatureObjects.length);
+    console.log('[TemplateBuilderModal] Current signature objects count:', signatureObjectsCount);
     console.log('[TemplateBuilderModal] Signature objects:', signatureObjects);
     if (currentStep === 'signature-objects') {
       console.log('[TemplateBuilderModal] Moving to extraction-fields');
