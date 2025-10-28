@@ -209,4 +209,12 @@ async def simulate_template(
     result = template_service.simulate(simulate_data)
 
     # Convert to API response
-    return convert_simulate_result_to_api(result)
+    api_response = convert_simulate_result_to_api(result)
+
+    # Debug: Log what we're sending to frontend
+    logger.info(f"API Response: status={api_response.pipeline_status}, error={api_response.pipeline_error}")
+    logger.info(f"API Response steps: {len(api_response.pipeline_steps)} steps")
+    for step in api_response.pipeline_steps:
+        logger.info(f"  API Step {step.step_number} ({step.module_instance_id}): error={step.error}")
+
+    return api_response
