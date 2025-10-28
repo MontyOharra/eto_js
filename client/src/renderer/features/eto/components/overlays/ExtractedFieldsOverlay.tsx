@@ -67,20 +67,20 @@ export function ExtractedFieldsOverlay({ fields }: ExtractedFieldsOverlayProps) 
               left: `${x0 * renderScale}px`,
               top: `${labelY * renderScale}px`,
               backgroundColor: 'rgba(17, 24, 39, 0.95)',
-              border: '1px solid rgba(59, 130, 246, 0.8)',
-              borderRadius: '6px',
-              padding: '10px 14px',
-              fontSize: '14px',
+              border: '2px solid rgba(59, 130, 246, 0.8)',
+              borderRadius: '8px',
+              padding: '16px 20px',
+              fontSize: '24px',
               fontWeight: 500,
               color: 'white',
               whiteSpace: 'nowrap',
               zIndex: 20,
               pointerEvents: 'none',
-              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
             }}
           >
-            <div className="text-blue-400 mb-1" style={{ fontSize: '13px' }}>{field.label}</div>
-            <div className="text-white" style={{ fontSize: '15px', fontWeight: 600 }}>{field.value}</div>
+            <div className="text-blue-400 mb-2" style={{ fontSize: '20px' }}>{field.label}</div>
+            <div className="text-white" style={{ fontSize: '26px', fontWeight: 700 }}>{field.value}</div>
           </div>
         )}
       </div>
