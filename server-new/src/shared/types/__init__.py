@@ -43,13 +43,9 @@ from shared.types.modules import (
     ActionModule,
     LogicModule,
     ComparatorModule,
-)
-
-# Module catalog types
-from shared.types.module_catalog import (
-    ModuleCatalog,
-    ModuleCatalogCreate,
-    ModuleCatalogUpdate,
+    Module,
+    ModuleCreate,
+    ModuleUpdate
 )
 
 # Pipeline execution types
@@ -95,6 +91,9 @@ __all__ = [
     "ActionModule",
     "LogicModule",
     "ComparatorModule",
+    "Module",
+    "ModuleCreate",
+    "ModuleUpdate",
     # Pipeline execution
     "PipelineExecutionRun",
     "PipelineExecutionRunCreate",

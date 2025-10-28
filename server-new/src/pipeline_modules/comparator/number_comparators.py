@@ -5,7 +5,7 @@ All number comparison and boolean evaluation modules
 from typing import Dict, Any, Union
 from pydantic import BaseModel, Field
 from shared.types import ComparatorModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
-from features.modules.service import register
+from features.modules.utils.decorators import register
 
 
 # Number Equals

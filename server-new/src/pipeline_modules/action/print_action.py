@@ -5,7 +5,7 @@ Prints messages to server backend logs for testing pipeline execution
 from typing import Dict, Any
 from pydantic import BaseModel, Field
 from shared.types import ActionModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
-from features.modules.service import register
+from features.modules.utils.decorators import register
 
 
 class PrintActionConfig(BaseModel):

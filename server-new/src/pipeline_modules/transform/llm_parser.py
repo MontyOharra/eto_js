@@ -6,8 +6,7 @@ from typing import Dict, Any
 from pydantic import BaseModel, Field
 
 from shared.types import TransformModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
-from features.modules.service import register
-from shared.exceptions import NotImplementedError
+from features.modules.utils.decorators import register
 
 
 class LlmParserConfig(BaseModel):
@@ -80,4 +79,4 @@ class LlmParser(TransformModule):
         # Provide helpful error message with module information
         module_id = f"{self.id}:{self.version}"
         module_class_name = self.__class__.__name__
-        raise NotImplementedError(module_id=module_id, module_class_name=module_class_name)
+        raise NotImplementedError(f"Module {module_class_name} ({module_id}) is not yet implemented")

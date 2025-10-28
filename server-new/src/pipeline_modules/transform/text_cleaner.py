@@ -7,7 +7,7 @@ from typing import Dict, Any
 from pydantic import BaseModel, Field
 
 from shared.types import TransformModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule, AllowedModuleNodeTypes
-from features.modules.service import register
+from features.modules.utils.decorators import register
 
 
 class TextCleanerConfig(BaseModel):
