@@ -51,7 +51,7 @@ export function ExtractedFieldsOverlay({ fields }: ExtractedFieldsOverlayProps) 
     // Determine label position (above or below box)
     const showLabel = isHovered;
     const labelAtTop = y0 < 120; // Show below if bbox is near top of page
-    const labelY = labelAtTop ? y1 + 12 : y0 - 80; // Position below if at top, otherwise above (increased offset for larger text)
+    const labelY = labelAtTop ? y1 + 8 : y0 - 4; // Position below if at top, otherwise just above bbox top edge
 
     return (
       <div key={field.field_id}>
