@@ -13,13 +13,29 @@ interface SignatureObjectsStepProps {
   pdfFileId: number;
   templateName: string;
   templateDescription: string;
-  signatureObjects: SignatureObject[];
+  signatureObjects: {
+    text_words: any[];
+    text_lines: any[];
+    graphic_rects: any[];
+    graphic_lines: any[];
+    graphic_curves: any[];
+    images: any[];
+    tables: any[];
+  };
   selectedObjectTypes?: string[]; // Persisted visible types
   pdfObjects: any; // PDF objects data (loaded by parent)
   pdfUrl: string; // PDF URL (loaded by parent)
   onTemplateNameChange: (name: string) => void;
   onTemplateDescriptionChange: (description: string) => void;
-  onSignatureObjectsChange: (objects: SignatureObject[]) => void;
+  onSignatureObjectsChange: (objects: {
+    text_words: any[];
+    text_lines: any[];
+    graphic_rects: any[];
+    graphic_lines: any[];
+    graphic_curves: any[];
+    images: any[];
+    tables: any[];
+  }) => void;
   onSelectedTypesChange?: (types: string[]) => void; // Save visible types
   pdfScale: number; // Persisted PDF zoom level
   pdfCurrentPage: number; // Persisted PDF page number
@@ -51,7 +67,18 @@ export function SignatureObjectsStep({
 
   // Sync selectedObjectIds from signatureObjects when they change (e.g., navigating back to this step)
   useEffect(() => {
-    if (!pdfObjects || signatureObjects.length === 0) {
+    if (!pdfObjects) {
+      setSelectedObjectIds(new Set());
+      return;
+    }
+
+    // Count total signature objects
+    const totalSignatureObjects = Object.values(signatureObjects).reduce(
+      (sum, arr) => sum + arr.length,
+      0
+    );
+
+    if (totalSignatureObjects === 0) {
       setSelectedObjectIds(new Set());
       return;
     }
@@ -59,8 +86,19 @@ export function SignatureObjectsStep({
     const flatObjects = getFlattenedObjects();
     const idsToSelect = new Set<string>();
 
+    // Flatten signature objects to match against
+    const flatSignatureObjects: any[] = [
+      ...signatureObjects.text_words,
+      ...signatureObjects.text_lines,
+      ...signatureObjects.graphic_rects,
+      ...signatureObjects.graphic_lines,
+      ...signatureObjects.graphic_curves,
+      ...signatureObjects.images,
+      ...signatureObjects.tables,
+    ];
+
     // Find IDs that match the signatureObjects
-    signatureObjects.forEach((sigObj) => {
+    flatSignatureObjects.forEach((sigObj) => {
       flatObjects.forEach((obj, idx) => {
         if (
           obj.type === sigObj.type &&
@@ -115,24 +153,80 @@ export function SignatureObjectsStep({
         newSet.add(objectId);
       }
 
-      // Convert selected IDs to SignatureObject format
+      // Convert selected IDs to PdfObjects format (grouped by type)
       const flatObjects = getFlattenedObjects();
-      const selectedSignatureObjects = flatObjects
-        .map((obj, idx) => {
-          const id = `${obj.type}-${obj.page}-${obj.bbox.join('-')}-${idx}`;
-          if (newSet.has(id)) {
-            return {
-              type: obj.type,
+      const pdfObjectsFormat: {
+        text_words: any[];
+        text_lines: any[];
+        graphic_rects: any[];
+        graphic_lines: any[];
+        graphic_curves: any[];
+        images: any[];
+        tables: any[];
+      } = {
+        text_words: [],
+        text_lines: [],
+        graphic_rects: [],
+        graphic_lines: [],
+        graphic_curves: [],
+        images: [],
+        tables: [],
+      };
+
+      // Group selected objects by type
+      flatObjects.forEach((obj, idx) => {
+        const id = `${obj.type}-${obj.page}-${obj.bbox.join('-')}-${idx}`;
+        if (newSet.has(id)) {
+          // Map type names to PdfObjects field names
+          if (obj.type === 'text_word') {
+            pdfObjectsFormat.text_words.push({
+              type: 'text_word',
               page: obj.page,
               bbox: obj.bbox,
               text: obj.text,
-            };
+            });
+          } else if (obj.type === 'text_line') {
+            pdfObjectsFormat.text_lines.push({
+              type: 'text_line',
+              page: obj.page,
+              bbox: obj.bbox,
+              text: obj.text,
+            });
+          } else if (obj.type === 'graphic_rect') {
+            pdfObjectsFormat.graphic_rects.push({
+              type: 'graphic_rect',
+              page: obj.page,
+              bbox: obj.bbox,
+            });
+          } else if (obj.type === 'graphic_line') {
+            pdfObjectsFormat.graphic_lines.push({
+              type: 'graphic_line',
+              page: obj.page,
+              bbox: obj.bbox,
+            });
+          } else if (obj.type === 'graphic_curve') {
+            pdfObjectsFormat.graphic_curves.push({
+              type: 'graphic_curve',
+              page: obj.page,
+              bbox: obj.bbox,
+            });
+          } else if (obj.type === 'image') {
+            pdfObjectsFormat.images.push({
+              type: 'image',
+              page: obj.page,
+              bbox: obj.bbox,
+            });
+          } else if (obj.type === 'table') {
+            pdfObjectsFormat.tables.push({
+              type: 'table',
+              page: obj.page,
+              bbox: obj.bbox,
+            });
           }
-          return null;
-        })
-        .filter((obj): obj is SignatureObject => obj !== null);
+        }
+      });
 
-      onSignatureObjectsChange(selectedSignatureObjects);
+      onSignatureObjectsChange(pdfObjectsFormat);
 
       return newSet;
     });
