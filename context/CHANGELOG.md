@@ -5,6 +5,118 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-10-28 15:45] — Template Simulation API Refactoring (JSON + PDF Objects)
+
+### Spec / Intent
+- Fix 500 error in template simulation caused by bytes in validation error responses
+- Update frontend template simulation to match backend API refactoring
+- Backend now accepts JSON with pre-extracted pdf_objects (not FormData with PDF bytes)
+- Eliminate repeated PDF file uploads (objects already extracted during PDF load)
+- Improve error handling to prevent JSON serialization failures with binary data
+
+### Changes Made
+
+**Backend - Error Handler** (`server-new/src/app.py`, lines 364-394):
+- Fixed RequestValidationError handler to sanitize bytes in error details
+- Replaces bytes with string `"<binary data, X bytes>"` before JSON serialization
+- Prevents 500 errors when validation fails on binary data
+- Returns proper 422 validation errors instead of crashing
+
+**Frontend - API Types** (`client/src/renderer/features/templates/api/types.ts`):
+- Removed discriminated union (source_pdf_id vs pdf_file)
+- Replaced with single `PostTemplateSimulateRequest` interface accepting `pdf_objects`
+- Added `ExtractedFieldResult` interface matching backend format
+- Added `ExecutionStepResult` interface for pipeline execution trace
+- Updated `PostTemplateSimulateResponse` to match new backend format:
+  - `extraction_results: ExtractedFieldResult[]` (field name, bbox, extracted_value)
+  - `pipeline_status: string` (success/failed)
+  - `pipeline_steps: ExecutionStepResult[]` (step-by-step execution trace)
+  - `pipeline_actions: Record<string, Record<string, any>>` (action inputs)
+  - `pipeline_error: string | null`
+
+**Frontend - API Hook** (`client/src/renderer/features/templates/hooks/useTemplatesApi.ts`, lines 205-232):
+- Removed FormData support from `simulateTemplate` function
+- Always sends JSON with `Content-Type: application/json` header
+- Accepts `PostTemplateSimulateRequest` (not FormData builder)
+
+**Frontend - Template Builder Modal** (`client/src/renderer/features/templates/components/builder/TemplateBuilderModal.tsx`, lines 242-318):
+- Updated `handleTest` to use pre-extracted `pdfObjects` from `activePdfData`
+- Removed 32 lines of FormData construction code
+- Now builds clean JSON request object:
+  - `pdf_objects: pdfObjects` (already available from PDF load)
+  - `extraction_fields: ExtractionField[]`
+  - `pipeline_state: PipelineState`
+- Updated response mapping to convert new backend format to internal `TemplateSimulationResult`:
+  - Maps `extraction_results` array to `extracted_data` dict (field name → value)
+  - Maps `pipeline_actions` dict to `simulated_actions` array
+  - Maps `pipeline_steps` to execution trace format
+
+### Technical Details
+
+**Backend Error Flow (Before Fix)**:
+1. Frontend sends FormData with PDF bytes
+2. Pydantic raises `RequestValidationError` (correct)
+3. Error handler tries to return error details
+4. Error details include raw PDF bytes in `input` field
+5. JSON encoder throws: "Object of type bytes is not JSON serializable"
+6. 500 error crashes before CORS headers added → CORS error in browser
+
+**Backend Error Flow (After Fix)**:
+1. Frontend sends invalid request
+2. Pydantic raises `RequestValidationError`
+3. Error handler sanitizes bytes: `input` → `"<binary data, X bytes>"`
+4. Returns proper 422 validation error with sanitized details ✅
+
+**Frontend Simulation Flow (Before)**:
+1. Build FormData with PDF file/id + JSON strings
+2. Send multipart/form-data to backend
+3. Backend extracts objects from PDF bytes every time
+
+**Frontend Simulation Flow (After)**:
+1. Use `pdfObjects` already available from `activePdfData` (extracted once during PDF load)
+2. Build JSON request with `pdf_objects`, `extraction_fields`, `pipeline_state`
+3. Send application/json to backend
+4. Backend uses pre-extracted objects directly (no file processing)
+5. Map new response format to internal format
+
+**Key Insight**: PDF objects are already extracted and available in modal state at line 162 (`pdfObjects` from `activePdfData`). No need to send PDF file again - eliminates bandwidth waste and complexity.
+
+### Before/After Comparison
+
+**Error Handling**:
+- Before: 500 Internal Server Error with CORS issues ❌
+- After: 422 Validation Error with readable messages ✅
+
+**Request Format**:
+- Before: FormData with PDF bytes (multipart/form-data) ❌
+- After: JSON with pdf_objects (application/json) ✅
+
+**Bandwidth**:
+- Before: Send entire PDF file on every test ❌
+- After: Send only object references (already extracted) ✅
+
+**Code Complexity**:
+- Before: 32 lines of FormData construction ❌
+- After: 10 lines of JSON object building ✅
+
+### Next Actions
+- Test template simulation in browser with uploaded PDFs
+- Test with stored PDFs (from existing pdf_files)
+- Verify extraction results display correctly in TestingStep component
+- Verify pipeline execution trace shows proper step-by-step results
+- Test error handling for various validation failures
+
+### Notes
+- Both backend and frontend changes committed in separate commits
+- Backend commit: "fix: Sanitize bytes in validation error responses"
+- Frontend commit: "refactor(client): Update template simulation to use JSON with pdf_objects"
+- TypeScript compilation: ✅ Passed with 0 errors
+- All changes maintain consistency with backend API specification
+- User confirmed 422 errors now working correctly
+- Implementation completed and ready for testing
+
+---
+
 ## [2025-10-28] — PDF Template Router Refactoring
 
 ### Spec / Intent
