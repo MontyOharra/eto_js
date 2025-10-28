@@ -29,18 +29,16 @@ export function ExtractedFieldsOverlay({ fields }: ExtractedFieldsOverlayProps) 
 
     const [x0, y0, x1, y1] = field.bbox;
 
-    // Convert PDF coordinates to screen coordinates (flip Y-axis)
-    const screenY0 = pageHeight - y1;
-    const screenY1 = pageHeight - y0;
-
+    // Bbox is already in screen coordinates (y=0 at top)
+    // No conversion needed - pdfplumber uses same coordinate system
     const isHovered = hoveredFieldId === field.field_id;
 
     const boxStyle: React.CSSProperties = {
       position: 'absolute',
       left: `${x0 * renderScale}px`,
-      top: `${screenY0 * renderScale}px`,
+      top: `${y0 * renderScale}px`,
       width: `${(x1 - x0) * renderScale}px`,
-      height: `${(screenY1 - screenY0) * renderScale}px`,
+      height: `${(y1 - y0) * renderScale}px`,
       backgroundColor: 'rgba(59, 130, 246, 0.15)', // Blue with transparency
       border: `2px solid rgba(59, 130, 246, ${isHovered ? '1' : '0.6'})`,
       borderRadius: '2px',
@@ -52,8 +50,8 @@ export function ExtractedFieldsOverlay({ fields }: ExtractedFieldsOverlayProps) 
 
     // Determine label position (above or below box)
     const showLabel = isHovered;
-    const labelTop = screenY0 < 60; // Show below if too high on page
-    const labelY = labelTop ? screenY1 + 4 : screenY0 - 10;
+    const labelTop = y0 < 60; // Show below if too high on page
+    const labelY = labelTop ? y1 + 4 : y0 - 10;
 
     return (
       <div key={field.field_id}>
