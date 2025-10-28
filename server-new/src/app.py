@@ -390,12 +390,20 @@ def setup_exception_handlers(app: FastAPI) -> None:
             logger.error(f"  Location: {' -> '.join(str(loc) for loc in error.get('loc', []))}")
             logger.error(f"  Type: {error.get('type', 'unknown')}")
             logger.error(f"  Message: {error.get('msg', 'unknown')}")
+
+            # Smart input logging - don't log large structures
             if 'input' in error:
-                input_str = str(error['input'])
-                if len(input_str) > 200:
-                    logger.error(f"  Input (truncated): {input_str[:200]}...")
+                input_val = error['input']
+                # If it's a dict or list, just show type and size
+                if isinstance(input_val, dict):
+                    logger.error(f"  Input type: dict with {len(input_val)} keys")
+                elif isinstance(input_val, list):
+                    logger.error(f"  Input type: list with {len(input_val)} items")
+                elif isinstance(input_val, str) and len(input_val) > 100:
+                    logger.error(f"  Input (truncated): {input_val[:100]}...")
                 else:
-                    logger.error(f"  Input: {input_str}")
+                    logger.error(f"  Input: {input_val}")
+
             if 'ctx' in error:
                 logger.error(f"  Context: {error.get('ctx')}")
 
