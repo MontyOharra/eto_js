@@ -10,44 +10,143 @@ from shared.types.pdf_templates import (
     PdfTemplateCreate,
     PdfTemplateUpdate,
     PdfVersionSummary,
-    ExtractionField as ExtractionFieldDomain,
+    ExtractionField,
 )
-from shared.types.pdf_files import PdfObjects, serialize_pdf_objects, deserialize_pdf_objects
+from shared.types.pdf_files import PdfObjects, TextWord, TextLine, GraphicRect, GraphicLine, GraphicCurve, Image, Table
 from api.schemas.pdf_templates import (
     TemplateListItem,
     TemplateVersionSummary,
-    PdfTemplate as PdfTemplateAPI,
+    PdfTemplate as PdfTemplatePydantic,
     VersionListItem,
     CreatePdfTemplateRequest,
     UpdatePdfTemplateRequest,
     GetTemplateVersionResponse,
-    ExtractionField as ExtractionFieldAPI,
+    ExtractionField as ExtractionFieldPydantic,
+)
+from api.schemas.pdf_files import (
+    PdfObjects as PdfObjectsPydantic,
+    TextWord as TextWordPydantic,
+    TextLine as TextLinePydantic,
+    GraphicRect as GraphicRectPydantic,
+    GraphicLine as GraphicLinePydantic,
+    GraphicCurve as GraphicCurvePydantic,
+    Image as ImagePydantic,
+    Table as TablePydantic,
 )
 
 # ========== Helper Functions ==========
 
-def convert_pdf_objects_to_api(objects: PdfObjects) -> dict[str, list[dict[str, Any]]]:
-    """
-    Convert domain PdfObjects to API format (both use grouped dict).
+def convert_pdf_objects_to_api(objects: PdfObjects) -> PdfObjectsPydantic:
+    """Convert domain PdfObjects dataclass to API PdfObjects Pydantic schema"""
+    return PdfObjectsPydantic(
+        text_words=[
+            TextWordPydantic(
+                page=obj.page,
+                bbox=obj.bbox,
+                text=obj.text,
+                fontname=obj.fontname,
+                fontsize=obj.fontsize
+            )
+            for obj in objects.text_words
+        ],
+        text_lines=[
+            TextLinePydantic(page=obj.page, bbox=obj.bbox)
+            for obj in objects.text_lines
+        ],
+        graphic_rects=[
+            GraphicRectPydantic(page=obj.page, bbox=obj.bbox, linewidth=obj.linewidth)
+            for obj in objects.graphic_rects
+        ],
+        graphic_lines=[
+            GraphicLinePydantic(page=obj.page, bbox=obj.bbox, linewidth=obj.linewidth)
+            for obj in objects.graphic_lines
+        ],
+        graphic_curves=[
+            GraphicCurvePydantic(
+                page=obj.page,
+                bbox=obj.bbox,
+                points=list(obj.points),
+                linewidth=obj.linewidth
+            )
+            for obj in objects.graphic_curves
+        ],
+        images=[
+            ImagePydantic(
+                page=obj.page,
+                bbox=obj.bbox,
+                format=obj.format,
+                colorspace=obj.colorspace,
+                bits=obj.bits
+            )
+            for obj in objects.images
+        ],
+        tables=[
+            TablePydantic(
+                page=obj.page,
+                bbox=obj.bbox,
+                rows=obj.rows,
+                cols=obj.cols
+            )
+            for obj in objects.tables
+        ],
+    )
 
-    Format: {"text_words": [...], "graphic_rects": [...]}
-    """
-    return serialize_pdf_objects(objects)
+
+def convert_pdf_objects_to_domain(objects_schema: PdfObjectsPydantic) -> PdfObjects:
+    """Convert API PdfObjects Pydantic schema to domain PdfObjects dataclass"""
+    return PdfObjects(
+        text_words=[
+            TextWord(
+                page=obj.page,
+                bbox=obj.bbox,
+                text=obj.text,
+                fontname=obj.fontname,
+                fontsize=obj.fontsize
+            )
+            for obj in objects_schema.text_words
+        ],
+        text_lines=[
+            TextLine(page=obj.page, bbox=obj.bbox)
+            for obj in objects_schema.text_lines
+        ],
+        graphic_rects=[
+            GraphicRect(page=obj.page, bbox=obj.bbox, linewidth=obj.linewidth)
+            for obj in objects_schema.graphic_rects
+        ],
+        graphic_lines=[
+            GraphicLine(page=obj.page, bbox=obj.bbox, linewidth=obj.linewidth)
+            for obj in objects_schema.graphic_lines
+        ],
+        graphic_curves=[
+            GraphicCurve(
+                page=obj.page,
+                bbox=obj.bbox,
+                points=obj.points,
+                linewidth=obj.linewidth
+            )
+            for obj in objects_schema.graphic_curves
+        ],
+        images=[
+            Image(
+                page=obj.page,
+                bbox=obj.bbox,
+                format=obj.format,
+                colorspace=obj.colorspace,
+                bits=obj.bits
+            )
+            for obj in objects_schema.images
+        ],
+        tables=[
+            Table(page=obj.page, bbox=obj.bbox, rows=obj.rows, cols=obj.cols)
+            for obj in objects_schema.tables
+        ],
+    )
 
 
-def convert_pdf_objects_to_domain(objects_dict: dict[str, list[dict[str, Any]]]) -> PdfObjects:
-    """
-    Convert API grouped dict to domain PdfObjects.
-
-    Format: {"text_words": [...], "graphic_rects": [...]}
-    """
-    return deserialize_pdf_objects(objects_dict)
-
-
-def convert_extraction_fields_to_api(fields: list[ExtractionFieldDomain]) -> list[ExtractionFieldAPI]:
+def convert_extraction_fields_to_api(fields: list[ExtractionField]) -> list[ExtractionFieldPydantic]:
     """Convert domain extraction fields to API format"""
     return [
-        ExtractionFieldAPI(
+        ExtractionFieldPydantic(
             name=field.name,
             description=field.description,
             bbox=field.bbox,
@@ -57,10 +156,10 @@ def convert_extraction_fields_to_api(fields: list[ExtractionFieldDomain]) -> lis
     ]
 
 
-def convert_extraction_fields_to_domain(fields: list[ExtractionFieldAPI]) -> list[ExtractionFieldDomain]:
+def convert_extraction_fields_to_domain(fields: list[ExtractionFieldPydantic]) -> list[ExtractionField]:
     """Convert API extraction fields to domain format"""
     return [
-        ExtractionFieldDomain(
+        ExtractionField(
             name=field.name,
             description=field.description,
             bbox=field.bbox,
@@ -72,17 +171,19 @@ def convert_extraction_fields_to_domain(fields: list[ExtractionFieldAPI]) -> lis
 
 # ========== Domain → API (Response) Conversions ==========
 
-def convert_pdf_template(template: PdfTemplate) -> PdfTemplateAPI:
-    """Convert domain PdfTemplate to API PdfTemplate"""
-    return PdfTemplateAPI(
+def convert_pdf_template(
+    template: PdfTemplate,
+    version_list: list[tuple[int, int]]
+) -> PdfTemplatePydantic:
+    """Convert domain PdfTemplate to API PdfTemplate with version navigation (excludes audit timestamps)"""
+    return PdfTemplatePydantic(
         id=template.id,
         name=template.name,
         description=template.description,
         status=template.status,
         source_pdf_id=template.source_pdf_id,
         current_version_id=template.current_version_id,
-        created_at=template.created_at.isoformat(),
-        updated_at=template.updated_at.isoformat()
+        versions=convert_version_list(version_list)
     )
 
 
@@ -111,7 +212,7 @@ def convert_template_summary(summary: PdfTemplateListView) -> TemplateListItem:
             version_num=0,
             usage_count=0
         ),
-        total_versions=summary.version_count
+        total_versions=summary.version_count or 0
     )
 
 
@@ -128,7 +229,7 @@ def convert_template_version(
     version: PdfTemplateVersion,
     is_current: bool
 ) -> GetTemplateVersionResponse:
-    """Convert domain template version to API response"""
+    """Convert domain template version to API response (excludes audit timestamps)"""
     return GetTemplateVersionResponse(
         version_id=version.id,
         template_id=version.template_id,
@@ -137,8 +238,7 @@ def convert_template_version(
         is_current=is_current,
         signature_objects=convert_pdf_objects_to_api(version.signature_objects),
         extraction_fields=convert_extraction_fields_to_api(version.extraction_fields),
-        pipeline_definition_id=version.pipeline_definition_id,
-        created_at=version.created_at.isoformat()
+        pipeline_definition_id=version.pipeline_definition_id
     )
 
 
@@ -171,6 +271,45 @@ def convert_update_template_request(request: UpdatePdfTemplateRequest) -> PdfTem
         extraction_fields=convert_extraction_fields_to_domain(request.extraction_fields) if request.extraction_fields else None,
         pipeline_state=request.pipeline_state.model_dump() if request.pipeline_state else None,
         visual_state=request.visual_state.model_dump() if request.visual_state else None
+    )
+
+
+# ========== Simulation Conversions ==========
+
+def convert_simulate_request(request) -> Any:
+    """Convert API SimulateTemplateRequest to domain TemplateSimulateData"""
+    from shared.types.pdf_templates import TemplateSimulateData
+    from api.mappers.pipelines import convert_pipeline_state_to_domain
+
+    return TemplateSimulateData(
+        pdf_objects=convert_pdf_objects_to_domain(request.pdf_objects),
+        extraction_fields=convert_extraction_fields_to_domain(request.extraction_fields),
+        pipeline_state=convert_pipeline_state_to_domain(request.pipeline_state)
+    )
+
+
+def convert_simulate_result_to_api(result: Any):
+    """Convert domain TemplateSimulateResult to API SimulateTemplateResponse"""
+    from api.schemas.pdf_templates import SimulateTemplateResponse, ExtractedFieldResult
+
+    # Build extraction results with bbox info for visual display
+    extraction_results = [
+        ExtractedFieldResult(
+            name=field.name,
+            description=field.description,
+            bbox=field.bbox,
+            page=field.page,
+            extracted_value=result.extracted_data.get(field.name, "")
+        )
+        for field in result.extraction_fields
+    ]
+
+    return SimulateTemplateResponse(
+        extraction_results=extraction_results,
+        pipeline_status=result.execution_result.status,
+        pipeline_steps=result.execution_result.steps,
+        pipeline_actions=result.execution_result.executed_actions,
+        pipeline_error=result.execution_result.error
     )
 
 

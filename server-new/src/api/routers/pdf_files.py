@@ -3,16 +3,16 @@ PDF Files API Router
 API endpoints for PDF file access and object extraction
 """
 import logging
-from fastapi import APIRouter, Depends, UploadFile, File
+from fastapi import APIRouter, Depends, UploadFile, File, status
 from fastapi.responses import Response
 
 from api.schemas.pdf_files import (
-    GetPdfMetadataResponse,
+    PdfFile,
     GetPdfObjectsResponse,
     ProcessPdfObjectsResponse,
 )
 from api.mappers.pdf_files import (
-    convert_pdf_metadata,
+    pdf_file_to_api,
     convert_pdf_objects_response,
     convert_process_pdf_objects_response,
 )
@@ -30,16 +30,50 @@ router = APIRouter(
 )
 
 
-@router.get("/{id}", response_model=GetPdfMetadataResponse)
-async def get_pdf_metadata(
+@router.post("", response_model=PdfFile, status_code=status.HTTP_201_CREATED)
+async def upload_pdf_file(
+    pdf_file: UploadFile = File(...),
+    pdf_service: PdfFilesService = Depends(lambda: ServiceContainer.get_pdf_files_service())
+) -> PdfFile:
+    """
+    Upload and store PDF file with automatic object extraction.
+
+    Process:
+    - Validates PDF format
+    - Calculates SHA-256 hash for deduplication
+    - Stores file in date-based directory structure (YYYY/MM/DD/hash.pdf)
+    - Extracts objects using pdfplumber
+    - Returns complete PDF metadata
+
+    Note: email_id is not accepted here - only set by email ingestion service
+    """
+    # Validate file type
+    if not pdf_file.filename or not pdf_file.filename.endswith('.pdf'):
+        raise ValidationError("Invalid file type - must be a PDF")
+
+    # Read file bytes
+    pdf_bytes = await pdf_file.read()
+
+    # Store PDF (service handles validation, extraction, deduplication)
+    pdf = pdf_service.store_pdf(
+        file_bytes=pdf_bytes,
+        filename=pdf_file.filename,
+        email_id=None  # Manual uploads have no email association
+    )
+
+    return pdf_file_to_api(pdf)
+
+
+@router.get("/{id}", response_model=PdfFile)
+async def get_pdf_file(
     id: int,
     pdf_service: PdfFilesService = Depends(
         lambda: ServiceContainer.get_pdf_files_service()
     )
-) -> GetPdfMetadataResponse:
+) -> PdfFile:
     """Get PDF file metadata (filename, size, page count, etc.)"""
-    metadata = pdf_service.get_pdf_metadata(id)
-    return convert_pdf_metadata(metadata)
+    pdf = pdf_service.get_pdf_file(id)
+    return pdf_file_to_api(pdf)
 
 
 @router.get("/{id}/download")
@@ -71,10 +105,10 @@ async def get_pdf_objects(
 ) -> GetPdfObjectsResponse:
     """Get extracted PDF objects for template building"""
     objects = pdf_service.get_pdf_objects(id, object_type)
-    metadata = pdf_service.get_pdf_metadata(id)
+    pdf = pdf_service.get_pdf_file(id)
     return convert_pdf_objects_response(
         pdf_file_id=id,
-        page_count=metadata.page_count or 0,
+        page_count=pdf.page_count or 0,
         objects=objects
     )
 

@@ -25,13 +25,13 @@ from shared.types.email_integrations import (
 
 # PDF files types
 from shared.types.pdf_files import (
-    PdfMetadata,
-    PdfCreate,
+    PdfFile,
+    PdfFileCreate,
 )
 
 # Module types
 from shared.types.modules import (
-    AllowedModuleNodeTypes,
+    AllowedNodeType,
     ModuleKind,
     NodeTypeRule,
     NodeGroup,
@@ -76,10 +76,10 @@ __all__ = [
     "EmailMessage",
     "ConnectionTestResult",
     # PDF files
-    "PdfMetadata",
-    "PdfCreate",
+    "PdfFile",
+    "PdfFileCreate",
     # Module types
-    "AllowedModuleNodeTypes",
+    "AllowedNodeType",
     "ModuleKind",
     "NodeTypeRule",
     "NodeGroup",

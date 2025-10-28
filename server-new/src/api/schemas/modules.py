@@ -19,12 +19,8 @@ class Module(BaseModel):
     module_kind: str  # "transform", "action", "logic", "comparator"
     meta: Dict[str, Any]  # Module I/O metadata
     config_schema: Dict[str, Any]  # JSON schema for module configuration
-    handler_name: str
     color: str
     category: str
-    is_active: bool
-    created_at: str  # ISO 8601
-    updated_at: str  # ISO 8601
 
 
 # ============================================================================

@@ -2,13 +2,14 @@
 PDF Template Types
 Dataclasses for template management, versioning, and wizard data
 """
-import json
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal, Any
 
 # Import PDF object types - signature objects are just a subset of extracted objects
-from .pdf_files import PdfObjects, serialize_pdf_objects, deserialize_pdf_objects
+from .pdf_files import PdfObjects
+from .pipelines import PipelineState
+from .pipeline_execution import PipelineExecutionResult
 
 @dataclass(frozen=True)
 class ExtractionField:
@@ -162,34 +163,28 @@ class PdfTemplateUpdate:
     visual_state: dict[str, Any] | None = None  # Node positions
 
 
-# ========== Serialization Helpers ==========
+# ========== Template Simulation Dataclasses ==========
 
-def serialize_extraction_fields(fields: list[ExtractionField]) -> dict[str, Any]:
+@dataclass(frozen=True)
+class TemplateSimulateData:
     """
-    Convert list of ExtractionField dataclasses to JSON-serializable dict.
+    Data for template simulation (testing/preview).
 
-    Returns dict with 'fields' key containing list of field dicts.
+    Used by simulate endpoint to test extraction and pipeline execution
+    without persistence.
     """
-    return {"fields": [asdict(field) for field in fields]}
+    pdf_objects: PdfObjects
+    extraction_fields: list[ExtractionField]
+    pipeline_state: PipelineState
 
 
-def deserialize_extraction_fields(data: dict[str, Any]) -> list[ExtractionField]:
+@dataclass(frozen=True)
+class TemplateSimulateResult:
     """
-    Convert dict back to list of ExtractionField dataclasses.
+    Result of template simulation.
 
-    Handles both formats:
-    - New format: {"fields": [...]}
-    - Legacy format: [...]
+    Contains extraction results, extracted data, and pipeline execution result.
     """
-    # Support both wrapped and unwrapped formats
-    fields_data = data.get("fields", data) if isinstance(data, dict) else data
-
-    return [
-        ExtractionField(
-            name=f["name"],
-            description=f.get("description"),  # Handle optional description
-            bbox=tuple(f["bbox"]),  # Convert list back to tuple
-            page=f["page"]
-        )
-        for f in fields_data
-    ]
+    extraction_fields: list[ExtractionField]
+    extracted_data: dict[str, str]
+    execution_result: PipelineExecutionResult

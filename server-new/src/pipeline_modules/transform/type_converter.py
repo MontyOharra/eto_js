@@ -76,7 +76,7 @@ class TypeConverter(TransformModule):
         input_node_id = list(inputs.keys())[0]
         input_value = inputs[input_node_id]
 
-        output_type = context.get_output_type(0)
+        output_type = context.outputs[0].type
         output_node_id = context.outputs[0].node_id
 
 

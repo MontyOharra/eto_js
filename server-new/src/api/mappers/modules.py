@@ -29,10 +29,6 @@ def module_to_api(module: Module) -> ModulePydantic:
         module_kind=module.module_kind.value,  # Enum to string
         meta=meta_dict,
         config_schema=module.config_schema,  # Already a dict
-        handler_name=module.handler_name,
         color=module.color,
-        category=module.category,
-        is_active=module.is_active,
-        created_at=module.created_at.isoformat(),
-        updated_at=module.updated_at.isoformat()
+        category=module.category
     )

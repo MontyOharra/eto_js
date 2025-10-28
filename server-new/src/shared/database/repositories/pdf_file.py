@@ -9,8 +9,8 @@ from typing import Type, Any
 from shared.database.repositories.base import BaseRepository
 from shared.database.models import PdfFileModel
 from shared.types.pdf_files import (
-    PdfMetadata,
-    PdfCreate,
+    PdfFile,
+    PdfFileCreate,
     PdfObjects,
     TextWord,
     TextLine,
@@ -46,9 +46,9 @@ class PdfFileRepository(BaseRepository[PdfFileModel]):
 
     # ========== Serialization Methods ==========
 
-    def _serialize_pdf_objects(self, obj: PdfObjects) -> dict[str, Any]:
+    def _serialize_pdf_objects(self, obj: PdfObjects) -> str:
         """
-        Convert PdfObjects dataclass to JSON-serializable dict.
+        Convert PdfObjects dataclass directly to JSON string for DB storage.
 
         Uses dataclasses.asdict to recursively convert nested dataclasses.
         Tuples (like bbox) are automatically converted to lists for JSON compatibility.
@@ -58,15 +58,17 @@ class PdfFileRepository(BaseRepository[PdfFileModel]):
         so this is a simple conversion.
         """
         from dataclasses import asdict
-        return asdict(obj)
+        return json.dumps(asdict(obj))
 
-    def _deserialize_pdf_objects(self, data: dict[str, Any]) -> PdfObjects:
+    def _deserialize_pdf_objects(self, json_str: str) -> PdfObjects:
         """
-        Convert dict back to PdfObjects dataclass.
+        Convert JSON string from DB directly to PdfObjects dataclass.
 
         Reconstructs all nested dataclasses from dict representation.
         Lists are converted back to appropriate dataclass types.
         """
+        data = json.loads(json_str)
+
         return PdfObjects(
             text_words=[
                 TextWord(
@@ -133,13 +135,12 @@ class PdfFileRepository(BaseRepository[PdfFileModel]):
 
     # ========== Helper Methods ==========
 
-    def _model_to_dataclass(self, model: PdfFileModel) -> PdfMetadata:
-        """Convert ORM model to PdfMetadata dataclass"""
-        # Parse objects_json to dict, then deserialize to typed dataclass
+    def _model_to_dataclass(self, model: PdfFileModel) -> PdfFile:
+        """Convert ORM model to PdfFile dataclass"""
+        # Deserialize objects_json directly to typed dataclass
         if model.objects_json:
             try:
-                objects_dict = json.loads(model.objects_json)
-                extracted_objects = self._deserialize_pdf_objects(objects_dict)
+                extracted_objects = self._deserialize_pdf_objects(model.objects_json)
             except (json.JSONDecodeError, KeyError, ValueError) as e:
                 logger.error(f"Invalid JSON in objects_json for PDF {model.id}: {e}")
                 # Return empty typed structure
@@ -164,7 +165,7 @@ class PdfFileRepository(BaseRepository[PdfFileModel]):
                 tables=[]
             )
 
-        return PdfMetadata(
+        return PdfFile(
             id=model.id,
             email_id=model.email_id,
             original_filename=model.original_filename,
@@ -180,15 +181,15 @@ class PdfFileRepository(BaseRepository[PdfFileModel]):
 
     # ========== CRUD Operations ==========
 
-    def get_by_id(self, pdf_id: int) -> PdfMetadata | None:
+    def get_by_id(self, pdf_id: int) -> PdfFile | None:
         """
-        Get PDF metadata by ID.
+        Get PDF file by ID.
 
         Args:
             pdf_id: PDF record ID
 
         Returns:
-            PdfMetadata dataclass or None if not found
+            PdfFile dataclass or None if not found
         """
         with self._get_session() as session:
             model = session.get(self.model_class, pdf_id)
@@ -198,15 +199,15 @@ class PdfFileRepository(BaseRepository[PdfFileModel]):
 
             return self._model_to_dataclass(model)
 
-    def get_by_hash(self, file_hash: str) -> PdfMetadata | None:
+    def get_by_hash(self, file_hash: str) -> PdfFile | None:
         """
-        Get PDF metadata by file hash (for deduplication).
+        Get PDF file by file hash (for deduplication).
 
         Args:
             file_hash: SHA-256 hash of PDF file
 
         Returns:
-            PdfMetadata dataclass or None if not found
+            PdfFile dataclass or None if not found
         """
         with self._get_session() as session:
             model = session.query(self.model_class).filter_by(file_hash=file_hash).first()
@@ -216,20 +217,19 @@ class PdfFileRepository(BaseRepository[PdfFileModel]):
 
             return self._model_to_dataclass(model)
 
-    def create(self, pdf_data: PdfCreate) -> PdfMetadata:
+    def create(self, pdf_data: PdfFileCreate) -> PdfFile:
         """
         Create new PDF record.
 
         Args:
-            pdf_data: PdfCreate dataclass with PDF data
+            pdf_data: PdfFileCreate dataclass with PDF data
 
         Returns:
-            Created PdfMetadata dataclass
+            Created PdfFile dataclass
         """
         with self._get_session() as session:
-            # Serialize typed extracted_objects to dict, then to JSON string
-            objects_dict = self._serialize_pdf_objects(pdf_data.extracted_objects)
-            objects_json = json.dumps(objects_dict)
+            # Serialize typed extracted_objects directly to JSON string
+            objects_json = self._serialize_pdf_objects(pdf_data.extracted_objects)
 
             # Create ORM model
             model = self.model_class(

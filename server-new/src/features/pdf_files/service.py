@@ -13,8 +13,8 @@ import pdfplumber
 from shared.database import DatabaseConnectionManager
 from shared.database.repositories import PdfFileRepository
 from shared.types.pdf_files import (
-    PdfMetadata,
-    PdfCreate,
+    PdfFile,
+    PdfFileCreate,
     PdfObjects,
     TextWord,
     TextLine,
@@ -64,28 +64,28 @@ class PdfFilesService:
         self.base_storage_path = Path(storage_config.pdf_storage_path)
         self.base_storage_path.mkdir(parents=True, exist_ok=True)
 
-    def get_pdf_metadata(self, pdf_id: int) -> PdfMetadata:
+    def get_pdf_file(self, pdf_id: int) -> PdfFile:
         """
-        Get PDF metadata by ID.
+        Get PDF file by ID.
 
-        Returns complete metadata including file information, hash,
-        storage path, and timestamps.
+        Returns complete file data including metadata, hash,
+        storage path, and extracted objects.
 
         Args:
             pdf_id: PDF record ID
 
         Returns:
-            PdfMetadata dataclass
+            PdfFile dataclass
 
         Raises:
             ObjectNotFoundError: If PDF not found
         """
-        metadata = self.pdf_repository.get_by_id(pdf_id)
+        pdf = self.pdf_repository.get_by_id(pdf_id)
 
-        if not metadata:
+        if not pdf:
             raise ObjectNotFoundError(f"PDF {pdf_id} not found")
 
-        return metadata
+        return pdf
 
     def get_pdf_file_bytes(self, pdf_id: int) -> tuple[bytes, str]:
         """
@@ -308,7 +308,7 @@ class PdfFilesService:
         file_bytes: bytes,
         filename: str,
         email_id: int | None = None
-    ) -> PdfMetadata:
+    ) -> PdfFile:
         """
         Store PDF file with hash-based deduplication and extract objects.
 
@@ -316,12 +316,12 @@ class PdfFilesService:
         1. Validate PDF
         2. Calculate SHA-256 hash
         3. Check if hash already exists (deduplication)
-        4. If exists: return existing metadata
+        4. If exists: return existing file record
         5. If new:
            - Save file to date-based path (YYYY/MM/DD/hash.pdf)
            - Extract objects using pdfplumber (returns typed PdfObjects)
            - Create database record with typed extracted_objects
-           - Return metadata
+           - Return file record
 
         Args:
             file_bytes: Raw PDF file bytes
@@ -329,7 +329,7 @@ class PdfFilesService:
             email_id: Optional email_id (source tracking)
 
         Returns:
-            PdfMetadata dataclass with complete metadata
+            PdfFile dataclass with complete file data
 
         Raises:
             ValidationError: If PDF is invalid (400)
@@ -395,7 +395,7 @@ class PdfFilesService:
                     page_count = max(page_count, obj.page + 1)
 
             # Create database record with typed extracted_objects
-            pdf_create = PdfCreate(
+            pdf_create = PdfFileCreate(
                 original_filename=filename,
                 file_hash=file_hash,
                 file_size_bytes=len(file_bytes),
@@ -407,14 +407,14 @@ class PdfFilesService:
             )
 
             # Single repository call - no UoW needed
-            pdf_metadata = self.pdf_repository.create(pdf_create)
+            pdf = self.pdf_repository.create(pdf_create)
 
             logger.info(
                 f"Extracted {total_objects} objects from {filename} "
-                f"(PDF ID: {pdf_metadata.id})"
+                f"(PDF ID: {pdf.id})"
             )
 
-            return pdf_metadata
+            return pdf
 
         except ValidationError:
             # Re-raise validation errors unchanged

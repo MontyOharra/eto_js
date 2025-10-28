@@ -19,7 +19,6 @@ from shared.types.modules import (
     IOSideShape,
     NodeGroup,
     NodeTypeRule,
-    AllowedModuleNodeTypes,
 )
 from shared.exceptions.service import ObjectNotFoundError
 
@@ -31,7 +30,7 @@ class ModuleRepository(BaseRepository[ModuleModel]):
     Repository for module catalog operations.
     Manages CRUD operations for transformation pipeline modules.
 
-    Supports dual-mode operation:
+    Supports dual-mode operation:P
     - Standalone: Pass connection_manager, auto-commits
     - UoW: Pass session, caller controls transaction
     """
@@ -58,8 +57,7 @@ class ModuleRepository(BaseRepository[ModuleModel]):
         for node_data in io_shape_data.get('inputs', {}).get('nodes', []):
             typing_data = node_data['typing']
             typing = NodeTypeRule(
-                allowed_types=[AllowedModuleNodeTypes(t) for t in typing_data.get('allowed_types', [])]
-                    if typing_data.get('allowed_types') else None,
+                allowed_types=typing_data.get('allowed_types'),  # Already strings, no conversion needed
                 type_var=typing_data.get('type_var')
             )
             input_nodes.append(NodeGroup(
@@ -74,8 +72,7 @@ class ModuleRepository(BaseRepository[ModuleModel]):
         for node_data in io_shape_data.get('outputs', {}).get('nodes', []):
             typing_data = node_data['typing']
             typing = NodeTypeRule(
-                allowed_types=[AllowedModuleNodeTypes(t) for t in typing_data.get('allowed_types', [])]
-                    if typing_data.get('allowed_types') else None,
+                allowed_types=typing_data.get('allowed_types'),  # Already strings, no conversion needed
                 type_var=typing_data.get('type_var')
             )
             output_nodes.append(NodeGroup(
@@ -89,10 +86,7 @@ class ModuleRepository(BaseRepository[ModuleModel]):
         io_shape = IOShape(
             inputs=IOSideShape(nodes=input_nodes),
             outputs=IOSideShape(nodes=output_nodes),
-            type_params={
-                key: [AllowedModuleNodeTypes(t) for t in types]
-                for key, types in io_shape_data.get('type_params', {}).items()
-            }
+            type_params=io_shape_data.get('type_params', {})  # Already dict[str, list[str]], no conversion needed
         )
 
         return ModuleMeta(io_shape=io_shape)

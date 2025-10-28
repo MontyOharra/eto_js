@@ -5,7 +5,7 @@ Handles pipeline definition, compilation, validation, and lifecycle management
 import logging
 import hashlib
 import json
-from typing import List, Dict, Set, Optional, Any
+from typing import List, Dict, Set, Optional, Any, TYPE_CHECKING
 from datetime import datetime, timezone
 from dataclasses import asdict, replace
 
@@ -32,9 +32,13 @@ from shared.types.pipeline_definition import (
 )
 from shared.types.pipeline_compiled_plan import PipelineCompiledPlanCreate
 from shared.types.pipeline_definition_step import PipelineDefinitionStepCreate
+from shared.types.pipeline_execution import PipelineExecutionResult
 from shared.exceptions import ServiceError, ValidationError, ObjectNotFoundError, PipelineValidationError
 from .utils.validation import PipelineValidator
 from .utils.compilation import PipelineCompiler
+
+if TYPE_CHECKING:
+    from features.pipelines.service_execution import PipelineExecutionService
 
 logger = logging.getLogger(__name__)
 
@@ -60,15 +64,18 @@ class PipelineService:
     compiled_plan_repository: PipelineCompiledPlanRepository
     step_repository: PipelineDefinitionStepRepository
     module_catalog_repository: ModuleRepository
+    pipeline_execution_service: 'PipelineExecutionService'
 
-    def __init__(self, connection_manager: DatabaseConnectionManager) -> None:
+    def __init__(self, connection_manager: DatabaseConnectionManager, pipeline_execution_service: 'PipelineExecutionService') -> None:
         """
         Initialize pipeline service
 
         Args:
             connection_manager: Database connection manager
+            pipeline_execution_service: Pipeline execution service for running compiled pipelines
         """
         self.connection_manager = connection_manager
+        self.pipeline_execution_service = pipeline_execution_service
         self.definition_repository = PipelineDefinitionRepository(connection_manager=connection_manager)
         self.compiled_plan_repository = PipelineCompiledPlanRepository(connection_manager=connection_manager)
         self.step_repository = PipelineDefinitionStepRepository(connection_manager=connection_manager)
@@ -776,3 +783,43 @@ class PipelineService:
                 }
             }
         # Note: Other exceptions bubble up and trigger 500 error
+
+    def compile_and_execute(
+        self,
+        pipeline_state: PipelineState,
+        entry_values: Dict[str, str]
+    ) -> PipelineExecutionResult:
+        """
+        Compile and execute pipeline in one call.
+
+        Validates, prunes, compiles, and executes the pipeline without persistence.
+        Public interface for simulation and other use cases.
+
+        Args:
+            pipeline_state: Pipeline structure to compile and execute
+            entry_values: Entry point values (field name -> extracted text)
+
+        Returns:
+            PipelineExecutionResult with status, steps, actions, and error (if any)
+
+        Raises:
+            PipelineValidationError: If pipeline validation fails
+            ServiceError: If compilation or execution fails
+        """
+        # Validate pipeline structure
+        self._validate_pipeline(pipeline_state)
+
+        # Prune dead branches (unreachable modules)
+        pruned_pipeline = self._prune_dead_branches(pipeline_state)
+
+        # Compile to execution steps
+        compiled_steps = self._compile_pipeline(pruned_pipeline)
+
+        # Execute pipeline
+        execution_result = self.pipeline_execution_service.execute_pipeline(
+            steps=compiled_steps,
+            entry_values_by_name=entry_values,
+            pipeline_state=pruned_pipeline
+        )
+
+        return execution_result

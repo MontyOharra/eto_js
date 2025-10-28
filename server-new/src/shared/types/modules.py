@@ -1,20 +1,15 @@
 """
 Shared module type definitions and base classes
 """
-from typing import Optional, List, Dict, Type, Any
+from typing import Optional, List, Dict, Type, Any, Literal
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pydantic import BaseModel
 from enum import Enum
 from datetime import datetime
 
-class AllowedModuleNodeTypes(str, Enum):
-    """Allowed module types"""
-    STR = "str"
-    FLOAT = "float"
-    DATETIME = "datetime"
-    BOOL = "bool"
-    INT = "int"
+# Type alias for allowed node types - equivalent to TypeScript union: "str" | "float" | "datetime" | "bool" | "int"
+AllowedNodeType = Literal["str", "float", "datetime", "bool", "int"]
 
 
 class ModuleKind(str, Enum):
@@ -28,8 +23,7 @@ class ModuleKind(str, Enum):
 @dataclass(frozen=True)
 class NodeTypeRule:
     """Type rule for a node group - either allowed_types list or type_var"""
-    # exactly one of these is AllowedModuleNodeTypes
-    allowed_types: Optional[List[AllowedModuleNodeTypes]] = None  # per-pin whitelist; user picks independently
+    allowed_types: Optional[List[AllowedNodeType]] = None  # per-pin whitelist; user picks independently
     type_var: Optional[str] = None             # e.g., "T" (unifies across pins)
 
 
@@ -53,7 +47,7 @@ class IOShape:
     """Complete I/O shape definition for a module"""
     inputs: IOSideShape = field(default_factory=IOSideShape)
     outputs: IOSideShape = field(default_factory=IOSideShape)
-    type_params: Dict[str, List[AllowedModuleNodeTypes]] = field(default_factory=dict)
+    type_params: Dict[str, List[AllowedNodeType]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

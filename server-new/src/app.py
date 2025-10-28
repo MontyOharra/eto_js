@@ -364,13 +364,32 @@ def setup_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(RequestValidationError)
     async def schema_validation_exception_handler(request: Request, exc: RequestValidationError):
         """Handle Pydantic validation errors"""
-        logger.warning(f"Validation error on {request.method} {request.url}: {exc}")
+        # Sanitize error details to avoid logging/serializing large binary data
+        errors = exc.errors()
+        sanitized_errors = []
+        for error in errors:
+            sanitized_error = error.copy()
+            # If input is bytes, truncate for both logging and response
+            if 'input' in sanitized_error and isinstance(sanitized_error['input'], bytes):
+                input_bytes = sanitized_error['input']
+                if len(input_bytes) > 100:
+                    sanitized_error['input'] = f"<binary data, {len(input_bytes)} bytes>"
+                else:
+                    # Even small bytes can't be JSON serialized
+                    sanitized_error['input'] = f"<binary data, {len(input_bytes)} bytes>"
+            sanitized_errors.append(sanitized_error)
+
+        logger.warning(
+            f"Validation error on {request.method} {request.url}: "
+            f"{len(sanitized_errors)} validation error(s) - {sanitized_errors[0]['msg'] if sanitized_errors else 'unknown'}"
+        )
+
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content={
                 "error": "Validation error",
                 "message": "The request data failed validation",
-                "details": exc.errors(),
+                "details": sanitized_errors,  # Return sanitized details (bytes can't be JSON serialized)
             }
         )
 

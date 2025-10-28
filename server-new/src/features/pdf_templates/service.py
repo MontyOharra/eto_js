@@ -19,7 +19,10 @@ from shared.types.pdf_templates import (
     PdfTemplateVersion,
     PdfVersionSummary,
     ExtractionField as ExtractionFieldDomain,
+    TemplateSimulateData,
+    TemplateSimulateResult,
 )
+from shared.types.pdf_files import PdfObjects
 from shared.types.pipelines import PipelineState as PipelineStateDomain
 from shared.types.pipeline_definition_step import PipelineDefinitionStepCreate
 from shared.exceptions.service import ObjectNotFoundError, ConflictError, ServiceError
@@ -449,78 +452,80 @@ class PdfTemplateService:
 
     def simulate(
         self,
-        pdf_bytes: bytes,
-        extraction_fields: list[ExtractionFieldDomain],
-        pipeline_state: PipelineStateDomain
-    ) -> tuple[dict[str, str], PipelineExecutionResult]:
+        simulate_data: TemplateSimulateData
+    ) -> TemplateSimulateResult:
         """
-        Simulate template processing: extract data, compile, and execute pipeline.
+        Simulate template processing: extract data and execute pipeline.
 
-        This method performs data extraction, pipeline compilation, and execution without
+        This method performs data extraction and pipeline execution without
         persistence. Used by the template builder to test templates before saving.
 
         Args:
-            pdf_bytes: Raw PDF file bytes
-            extraction_fields: List of extraction field domain objects
-            pipeline_state: Pipeline state domain object
+            simulate_data: Template simulation data with pdf_objects, extraction_fields, and pipeline_state
 
         Returns:
-            Tuple of (extracted_data dict, execution_result)
+            TemplateSimulateResult with extraction fields, extracted data, and execution result
         """
-        logger.info(f"Simulating template with {len(extraction_fields)} fields and {len(pipeline_state.modules)} modules")
-
-        # Convert extraction fields domain objects to dict format for PDF service
-        extraction_fields_dicts = [
-            {
-                "name": field.name,
-                "bbox": list(field.bbox),
-                "page": field.page
-            }
-            for field in extraction_fields
-        ]
-
-        # Step 1: Extract text from PDF
-        extracted_data = self.pdf_files_service.extract_text_from_pdf(
-            pdf_bytes=pdf_bytes,
-            extraction_fields=extraction_fields_dicts
+        logger.info(
+            f"Simulating template: {len(simulate_data.extraction_fields)} fields, "
+            f"{len(simulate_data.pipeline_state.modules)} modules"
         )
 
-        # Print extracted data for debugging
-        print(f"\n=== EXTRACTED DATA ===")
-        for field_name, value in extracted_data.items():
-            print(f"{field_name}: {value}")
-        print(f"======================\n")
-
-        # Step 2: Validate pipeline
-        self.pipeline_service._validate_pipeline(pipeline_state)
-
-        # Step 3: Prune dead branches
-        pruned_pipeline = self.pipeline_service._prune_dead_branches(pipeline_state)
-
-        # Step 4: Compile pipeline to execution steps
-        compiled_steps = self.pipeline_service._compile_pipeline(pruned_pipeline)
-
-        # Print compiled steps for debugging
-        print(f"\n=== COMPILED PIPELINE STEPS ===")
-        print(f"Total steps: {len(compiled_steps)}")
-        for step in compiled_steps:
-            print(f"  Step {step.step_number}: {step.module_instance_id}")
-        print(f"================================\n")
-
-        # Step 5: Execute pipeline with extracted data
-        execution_result = self.pipeline_execution_service.execute_pipeline(
-            steps=compiled_steps,
-            entry_values_by_name=extracted_data,
-            pipeline_state=pruned_pipeline
+        # Extract text from PDF objects (no file I/O needed)
+        extracted_data = self._extract_text_from_objects(
+            pdf_objects=simulate_data.pdf_objects,
+            extraction_fields=simulate_data.extraction_fields
         )
 
-        # Print execution result for debugging
-        print(f"\n=== EXECUTION RESULT ===")
-        print(f"Status: {execution_result.status}")
-        print(f"Steps executed: {len(execution_result.steps)}")
-        print(f"Actions collected: {len(execution_result.executed_actions)}")
-        if execution_result.error:
-            print(f"Error: {execution_result.error}")
-        print(f"========================\n")
+        # Compile and execute pipeline
+        execution_result = self.pipeline_service.compile_and_execute(
+            pipeline_state=simulate_data.pipeline_state,
+            entry_values=extracted_data
+        )
 
-        return extracted_data, execution_result
+        # Return structured result
+        return TemplateSimulateResult(
+            extraction_fields=simulate_data.extraction_fields,
+            extracted_data=extracted_data,
+            execution_result=execution_result
+        )
+
+    def _extract_text_from_objects(
+        self,
+        pdf_objects: PdfObjects,
+        extraction_fields: list[ExtractionFieldDomain]
+    ) -> dict[str, str]:
+        """
+        Extract text from PDF objects based on extraction fields.
+
+        Args:
+            pdf_objects: PdfObjects dataclass with text_words and other objects
+            extraction_fields: List of extraction field domain objects
+
+        Returns:
+            Dict mapping field names to extracted text
+        """
+        from features.pdf_files.utils.extraction import extract_text_from_bbox
+
+        extracted = {}
+        for field in extraction_fields:
+            # Convert domain TextWord objects to dict format for extraction utility
+            text_words_dicts = [
+                {
+                    "page": word.page,
+                    "bbox": word.bbox,
+                    "text": word.text
+                }
+                for word in pdf_objects.text_words
+                if word.page == field.page
+            ]
+
+            # Extract text using existing utility
+            extracted_text = extract_text_from_bbox(
+                text_words=text_words_dicts,
+                bbox=field.bbox,
+                page=field.page
+            )
+            extracted[field.name] = extracted_text
+
+        return extracted

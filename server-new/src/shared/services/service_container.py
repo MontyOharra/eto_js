@@ -126,17 +126,17 @@ class ServiceContainer:
                 'singleton': True,
                 'description': 'Email configuration management service'
             },
-            'pipelines': {
-                'class': 'features.pipelines.service.PipelineService',
-                'args': [cls._connection_manager],
-                'singleton': True,
-                'description': 'Pipeline compilation and execution service'
-            },
             'pipeline_execution': {
                 'class': 'features.pipelines.service_execution.PipelineExecutionService',
                 'args': [cls._connection_manager],
                 'singleton': True,
                 'description': 'Pipeline execution service for running compiled pipelines'
+            },
+            'pipelines': {
+                'class': 'features.pipelines.service.PipelineService',
+                'args': [cls._connection_manager, '_service:pipeline_execution'],
+                'singleton': True,
+                'description': 'Pipeline compilation and execution service'
             },
             'pdf_templates': {
                 'class': 'features.pdf_templates.service.PdfTemplateService',

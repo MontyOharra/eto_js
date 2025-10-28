@@ -6,24 +6,8 @@ from typing import Optional, List, Tuple
 from pydantic import BaseModel
 
 
-# GET /pdf-files/{id} - Metadata Response
-class GetPdfMetadataResponse(BaseModel):
-    id: int
-    email_id: Optional[int] = None
-    filename: str
-    original_filename: str
-    relative_path: str
-    file_size: Optional[int] = None  # bytes
-    file_hash: Optional[str] = None
-    page_count: Optional[int] = None
-
-
-# GET /pdf-files/{id}/download
-# Returns StreamingResponse with raw PDF bytes - no Pydantic model needed
-
-
-# GET /pdf-files/{id}/objects - Objects Response
-class TextWordObject(BaseModel):
+# Nested Object Schemas
+class TextWord(BaseModel):
     page: int
     bbox: Tuple[float, float, float, float]  # [x0, y0, x1, y1]
     text: str
@@ -31,31 +15,31 @@ class TextWordObject(BaseModel):
     fontsize: float
 
 
-class TextLineObject(BaseModel):
+class TextLine(BaseModel):
     page: int
     bbox: Tuple[float, float, float, float]  # [x0, y0, x1, y1]
 
 
-class GraphicRectObject(BaseModel):
-    page: int
-    bbox: Tuple[float, float, float, float]  # [x0, y0, x1, y1]
-    linewidth: float
-
-
-class GraphicLineObject(BaseModel):
+class GraphicRect(BaseModel):
     page: int
     bbox: Tuple[float, float, float, float]  # [x0, y0, x1, y1]
     linewidth: float
 
 
-class GraphicCurveObject(BaseModel):
+class GraphicLine(BaseModel):
+    page: int
+    bbox: Tuple[float, float, float, float]  # [x0, y0, x1, y1]
+    linewidth: float
+
+
+class GraphicCurve(BaseModel):
     page: int
     bbox: Tuple[float, float, float, float]  # [x0, y0, x1, y1]
     points: List[Tuple[float, float]]  # Array of [x, y] coordinate pairs
     linewidth: float
 
 
-class ImageObject(BaseModel):
+class Image(BaseModel):
     page: int
     bbox: Tuple[float, float, float, float]  # [x0, y0, x1, y1]
     format: str  # e.g., "JPEG", "PNG"
@@ -63,7 +47,7 @@ class ImageObject(BaseModel):
     bits: int  # Bit depth
 
 
-class TableObject(BaseModel):
+class Table(BaseModel):
     page: int
     bbox: Tuple[float, float, float, float]  # [x0, y0, x1, y1]
     rows: int
@@ -71,13 +55,33 @@ class TableObject(BaseModel):
 
 
 class PdfObjects(BaseModel):
-    text_words: List[TextWordObject]
-    text_lines: List[TextLineObject]
-    graphic_rects: List[GraphicRectObject]
-    graphic_lines: List[GraphicLineObject]
-    graphic_curves: List[GraphicCurveObject]
-    images: List[ImageObject]
-    tables: List[TableObject]
+    text_words: List[TextWord]
+    text_lines: List[TextLine]
+    graphic_rects: List[GraphicRect]
+    graphic_lines: List[GraphicLine]
+    graphic_curves: List[GraphicCurve]
+    images: List[Image]
+    tables: List[Table]
+
+
+
+class PdfFile(BaseModel):
+    """
+    Complete PDF File API schema (matches domain PdfFile).
+    Used for GET /pdf-files/{id} endpoint response.
+
+    Note: created_at/updated_at are audit fields and not included in API responses.
+    """
+    id: int
+    email_id: Optional[int] = None
+    original_filename: str
+    file_hash: str
+    file_size_bytes: int
+    file_path: str
+    page_count: Optional[int] = None
+    stored_at: str  # ISO 8601
+    extracted_objects: PdfObjects
+
 
 
 class GetPdfObjectsResponse(BaseModel):

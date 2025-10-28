@@ -242,7 +242,7 @@ async def execute_pipeline(
 
     # Convert result to API schema
     step_dtos = [
-        ExecutionStepResultDTO(
+        ExecutionStepResult(
             module_instance_id=step.module_instance_id,
             step_number=step.step_number,
             inputs=step.inputs,

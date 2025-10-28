@@ -1,6 +1,5 @@
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
 
 
 # ========== PDF Object Type Dataclasses ==========
@@ -80,12 +79,12 @@ class PdfObjects:
     images: list[Image]
     tables: list[Table]
 
-# ========== PDF Metadata Dataclasses ==========
+# ========== PDF File Dataclasses ==========
 
 @dataclass(frozen=True)
-class PdfMetadata:
+class PdfFile:
     """
-    Complete PDF metadata (database record).
+    Complete PDF File (database record).
     Used by services and repositories for PDF file data.
 
     The extracted_objects field contains strongly-typed PDF objects grouped by type.
@@ -104,7 +103,7 @@ class PdfMetadata:
 
 
 @dataclass(frozen=True)
-class PdfCreate:
+class PdfFileCreate:
     """
     Data for creating a new PDF record.
     Used by store_pdf service method.
@@ -119,87 +118,3 @@ class PdfCreate:
     stored_at: datetime
     extracted_objects: PdfObjects
     page_count: int | None = None
-
-
-# ========== Serialization Helpers ==========
-
-def serialize_pdf_objects(obj: PdfObjects) -> dict[str, Any]:
-    """
-    Convert PdfObjects dataclass to JSON-serializable dict.
-
-    Uses dataclasses.asdict to recursively convert all nested dataclasses.
-    Tuples (like bbox) are automatically converted to lists.
-    """
-    return asdict(obj)
-
-
-def deserialize_pdf_objects(data: dict[str, Any]) -> PdfObjects:
-    """
-    Convert dict back to PdfObjects dataclass.
-
-    Reconstructs all nested dataclasses from dict representation.
-    Lists are converted back to appropriate dataclass types.
-    """
-    return PdfObjects(
-        text_words=[
-            TextWord(
-                page=w["page"],
-                bbox=tuple(w["bbox"]),  # Convert list back to tuple
-                text=w["text"],
-                fontname=w["fontname"],
-                fontsize=w["fontsize"]
-            )
-            for w in data.get("text_words", [])
-        ],
-        text_lines=[
-            TextLine(
-                page=l["page"],
-                bbox=tuple(l["bbox"])
-            )
-            for l in data.get("text_lines", [])
-        ],
-        graphic_rects=[
-            GraphicRect(
-                page=r["page"],
-                bbox=tuple(r["bbox"]),
-                linewidth=r["linewidth"]
-            )
-            for r in data.get("graphic_rects", [])
-        ],
-        graphic_lines=[
-            GraphicLine(
-                page=l["page"],
-                bbox=tuple(l["bbox"]),
-                linewidth=l["linewidth"]
-            )
-            for l in data.get("graphic_lines", [])
-        ],
-        graphic_curves=[
-            GraphicCurve(
-                page=c["page"],
-                bbox=tuple(c["bbox"]),
-                points=[tuple(p) for p in c["points"]],  # Convert list of lists to list of tuples
-                linewidth=c["linewidth"]
-            )
-            for c in data.get("graphic_curves", [])
-        ],
-        images=[
-            Image(
-                page=i["page"],
-                bbox=tuple(i["bbox"]),
-                format=i["format"],
-                colorspace=i["colorspace"],
-                bits=i["bits"]
-            )
-            for i in data.get("images", [])
-        ],
-        tables=[
-            Table(
-                page=t["page"],
-                bbox=tuple(t["bbox"]),
-                rows=t["rows"],
-                cols=t["cols"]
-            )
-            for t in data.get("tables", [])
-        ]
-    )

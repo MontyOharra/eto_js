@@ -6,7 +6,7 @@ import re
 from typing import Dict, Any
 from pydantic import BaseModel, Field
 
-from shared.types import TransformModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule, AllowedModuleNodeTypes
+from shared.types import TransformModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.utils.decorators import register
 
 
@@ -44,7 +44,7 @@ class BasicTextCleaner(TransformModule):
                     nodes=[
                         NodeGroup(
                             label="input_text",
-                            typing=NodeTypeRule(allowed_types=[AllowedModuleNodeTypes.STR]),
+                            typing=NodeTypeRule(allowed_types=["str"]),
                             min_count=1,
                             max_count=1
                         )
@@ -54,7 +54,7 @@ class BasicTextCleaner(TransformModule):
                     nodes=[
                         NodeGroup(
                             label="cleaned_text",
-                            typing=NodeTypeRule(allowed_types=[AllowedModuleNodeTypes.STR]),
+                            typing=NodeTypeRule(allowed_types=["str"]),
                             min_count=1,
                             max_count=1
                         )

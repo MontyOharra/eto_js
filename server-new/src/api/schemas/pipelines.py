@@ -135,7 +135,6 @@ class ExecutePipelineRequest(BaseModel):
     entry_values: Dict[str, Any] = Field(
         ...,
         description="Entry point values keyed by entry point name",
-        example={"customer_name": "ACME Corp", "order_id": "12345"}
     )
 
 

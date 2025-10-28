@@ -2,42 +2,43 @@
 PDF Files Mappers
 Convert between domain dataclasses and API Pydantic models
 """
-from shared.types.pdf_files import PdfMetadata, PdfObjects as PdfObjectsDomain
+from shared.types.pdf_files import PdfFile, PdfObjects, TextWord, TextLine, GraphicRect, GraphicLine, GraphicCurve, Image, Table
 from api.schemas.pdf_files import (
-    GetPdfMetadataResponse,
+    PdfFile as PdfFilePydantic,
     GetPdfObjectsResponse,
     ProcessPdfObjectsResponse,
-    PdfObjects as PdfObjectsSchema,
-    TextWordObject,
-    TextLineObject,
-    GraphicRectObject,
-    GraphicLineObject,
-    GraphicCurveObject,
-    ImageObject,
-    TableObject,
+    PdfObjects as PdfObjectsPydantic,
+    TextWord as TextWordPydantic,
+    TextLine as TextLinePydantic,
+    GraphicRect as GraphicRectPydantic,
+    GraphicLine as GraphicLinePydantic,
+    GraphicCurve as GraphicCurvePydantic,
+    Image as ImagePydantic,
+    Table as TablePydantic,
 )
 
 # ========== Domain → API (Response) Conversions ==========
 
-def convert_pdf_metadata(metadata: PdfMetadata) -> GetPdfMetadataResponse:
-    """Convert domain PdfMetadata to API GetPdfMetadataResponse"""
-    return GetPdfMetadataResponse(
-        id=metadata.id,
-        email_id=metadata.email_id,
-        filename=metadata.original_filename,
-        original_filename=metadata.original_filename,
-        relative_path=metadata.file_path,
-        file_size=metadata.file_size_bytes,
-        file_hash=metadata.file_hash,
-        page_count=metadata.page_count
+def pdf_file_to_api(pdf: PdfFile) -> PdfFilePydantic:
+    """Convert domain PdfFile to API PdfFile schema"""
+    return PdfFilePydantic(
+        id=pdf.id,
+        email_id=pdf.email_id,
+        original_filename=pdf.original_filename,
+        file_hash=pdf.file_hash,
+        file_size_bytes=pdf.file_size_bytes,
+        file_path=pdf.file_path,
+        page_count=pdf.page_count,
+        stored_at=pdf.stored_at.isoformat(),
+        extracted_objects=convert_pdf_objects(pdf.extracted_objects)
     )
 
 
-def convert_pdf_objects(objects: PdfObjectsDomain) -> PdfObjectsSchema:
+def convert_pdf_objects(objects: PdfObjects) -> PdfObjectsPydantic:
     """Convert domain PdfObjects to API PdfObjects schema"""
-    return PdfObjectsSchema(
+    return PdfObjectsPydantic(
         text_words=[
-            TextWordObject(
+            TextWordPydantic(
                 page=obj.page,
                 bbox=obj.bbox,
                 text=obj.text,
@@ -47,19 +48,19 @@ def convert_pdf_objects(objects: PdfObjectsDomain) -> PdfObjectsSchema:
             for obj in objects.text_words
         ],
         text_lines=[
-            TextLineObject(page=obj.page, bbox=obj.bbox)
+            TextLinePydantic(page=obj.page, bbox=obj.bbox)
             for obj in objects.text_lines
         ],
         graphic_rects=[
-            GraphicRectObject(page=obj.page, bbox=obj.bbox, linewidth=obj.linewidth)
+            GraphicRectPydantic(page=obj.page, bbox=obj.bbox, linewidth=obj.linewidth)
             for obj in objects.graphic_rects
         ],
         graphic_lines=[
-            GraphicLineObject(page=obj.page, bbox=obj.bbox, linewidth=obj.linewidth)
+            GraphicLinePydantic(page=obj.page, bbox=obj.bbox, linewidth=obj.linewidth)
             for obj in objects.graphic_lines
         ],
         graphic_curves=[
-            GraphicCurveObject(
+            GraphicCurvePydantic(
                 page=obj.page,
                 bbox=obj.bbox,
                 points=list(obj.points),
@@ -68,7 +69,7 @@ def convert_pdf_objects(objects: PdfObjectsDomain) -> PdfObjectsSchema:
             for obj in objects.graphic_curves
         ],
         images=[
-            ImageObject(
+            ImagePydantic(
                 page=obj.page,
                 bbox=obj.bbox,
                 format=obj.format,
@@ -78,7 +79,7 @@ def convert_pdf_objects(objects: PdfObjectsDomain) -> PdfObjectsSchema:
             for obj in objects.images
         ],
         tables=[
-            TableObject(
+            TablePydantic(
                 page=obj.page,
                 bbox=obj.bbox,
                 rows=obj.rows,
@@ -92,7 +93,7 @@ def convert_pdf_objects(objects: PdfObjectsDomain) -> PdfObjectsSchema:
 def convert_pdf_objects_response(
     pdf_file_id: int,
     page_count: int,
-    objects: PdfObjectsDomain
+    objects: PdfObjects
 ) -> GetPdfObjectsResponse:
     """Convert domain data to GetPdfObjectsResponse"""
     return GetPdfObjectsResponse(
@@ -104,7 +105,7 @@ def convert_pdf_objects_response(
 
 def convert_process_pdf_objects_response(
     page_count: int,
-    objects: PdfObjectsDomain
+    objects: PdfObjects
 ) -> ProcessPdfObjectsResponse:
     """Convert domain data to ProcessPdfObjectsResponse"""
     return ProcessPdfObjectsResponse(

@@ -12,10 +12,8 @@ from shared.types.pdf_templates import (
     PdfTemplateVersion,
     PdfVersionCreate,
     PdfVersionSummary,
-    serialize_extraction_fields,
-    deserialize_extraction_fields,
 )
-from shared.types.pdf_files import serialize_pdf_objects, deserialize_pdf_objects
+from shared.types.pdf_files import PdfObjects
 
 logger = logging.getLogger(__name__)
 
@@ -38,16 +36,116 @@ class PdfTemplateVersionRepository(BaseRepository[PdfTemplateVersionModel]):
         """Return the SQLAlchemy model class this repository manages"""
         return PdfTemplateVersionModel
 
+    # ========== Serialization Methods ==========
+
+    def _serialize_pdf_objects(self, obj: PdfObjects) -> str:
+        """Convert PdfObjects dataclass directly to JSON string for DB storage."""
+        from dataclasses import asdict
+        return json.dumps(asdict(obj))
+
+    def _deserialize_pdf_objects(self, json_str: str) -> PdfObjects:
+        """Convert JSON string from DB directly to PdfObjects dataclass."""
+        from shared.types.pdf_files import (
+            TextWord, TextLine, GraphicRect, GraphicLine,
+            GraphicCurve, Image, Table
+        )
+
+        data = json.loads(json_str)
+
+        return PdfObjects(
+            text_words=[
+                TextWord(
+                    page=w["page"],
+                    bbox=tuple(w["bbox"]),
+                    text=w["text"],
+                    fontname=w["fontname"],
+                    fontsize=w["fontsize"]
+                )
+                for w in data.get("text_words", [])
+            ],
+            text_lines=[
+                TextLine(
+                    page=l["page"],
+                    bbox=tuple(l["bbox"])
+                )
+                for l in data.get("text_lines", [])
+            ],
+            graphic_rects=[
+                GraphicRect(
+                    page=r["page"],
+                    bbox=tuple(r["bbox"]),
+                    linewidth=r["linewidth"]
+                )
+                for r in data.get("graphic_rects", [])
+            ],
+            graphic_lines=[
+                GraphicLine(
+                    page=l["page"],
+                    bbox=tuple(l["bbox"]),
+                    linewidth=l["linewidth"]
+                )
+                for l in data.get("graphic_lines", [])
+            ],
+            graphic_curves=[
+                GraphicCurve(
+                    page=c["page"],
+                    bbox=tuple(c["bbox"]),
+                    points=[tuple(p) for p in c["points"]],
+                    linewidth=c["linewidth"]
+                )
+                for c in data.get("graphic_curves", [])
+            ],
+            images=[
+                Image(
+                    page=i["page"],
+                    bbox=tuple(i["bbox"]),
+                    format=i["format"],
+                    colorspace=i["colorspace"],
+                    bits=i["bits"]
+                )
+                for i in data.get("images", [])
+            ],
+            tables=[
+                Table(
+                    page=t["page"],
+                    bbox=tuple(t["bbox"]),
+                    rows=t["rows"],
+                    cols=t["cols"]
+                )
+                for t in data.get("tables", [])
+            ],
+        )
+
+    def _serialize_extraction_fields(self, fields: list) -> str:
+        """Convert list of ExtractionField dataclasses directly to JSON string for DB storage."""
+        from dataclasses import asdict
+        return json.dumps({"fields": [asdict(field) for field in fields]})
+
+    def _deserialize_extraction_fields(self, json_str: str) -> list:
+        """Convert JSON string from DB directly to list of ExtractionField dataclasses."""
+        from shared.types.pdf_templates import ExtractionField
+
+        data = json.loads(json_str)
+        # Support both wrapped and unwrapped formats for backward compatibility
+        fields_data = data.get("fields", data) if isinstance(data, dict) else data
+
+        return [
+            ExtractionField(
+                name=f["name"],
+                description=f.get("description"),
+                bbox=tuple(f["bbox"]),
+                page=f["page"]
+            )
+            for f in fields_data
+        ]
+
     # ========== Helper Methods ==========
 
     def _model_to_version(self, model: PdfTemplateVersionModel) -> PdfTemplateVersion:
         """Convert ORM model to PdfTemplateVersion dataclass"""
         # Deserialize JSON fields
-        signature_objects_dict = json.loads(model.signature_objects)
-        signature_objects = deserialize_pdf_objects(signature_objects_dict)
-
-        extraction_fields_dict = json.loads(model.extraction_fields)
-        extraction_fields = deserialize_extraction_fields(extraction_fields_dict)
+        signature_objects = self._deserialize_pdf_objects(model.signature_objects)
+        extraction_fields = self._deserialize_extraction_fields(model.extraction_fields)
 
         # Get source_pdf_id from the template relationship
         source_pdf_id = model.pdf_template.source_pdf_id
@@ -77,11 +175,8 @@ class PdfTemplateVersionRepository(BaseRepository[PdfTemplateVersionModel]):
             PdfTemplateVersion dataclass
         """
         # Deserialize JSON fields
-        signature_objects_dict = json.loads(model.signature_objects)
-        signature_objects = deserialize_pdf_objects(signature_objects_dict)
-
-        extraction_fields_dict = json.loads(model.extraction_fields)
-        extraction_fields = deserialize_extraction_fields(extraction_fields_dict)
+        signature_objects = self._deserialize_pdf_objects(model.signature_objects)
+        extraction_fields = self._deserialize_extraction_fields(model.extraction_fields)
 
         return PdfTemplateVersion(
             id=model.id,
@@ -108,11 +203,8 @@ class PdfTemplateVersionRepository(BaseRepository[PdfTemplateVersionModel]):
         """
         with self._get_session() as session:
             # Serialize complex types to JSON
-            signature_objects_dict = serialize_pdf_objects(version_data.signature_objects)
-            signature_objects_json = json.dumps(signature_objects_dict)
-
-            extraction_fields_dict = serialize_extraction_fields(version_data.extraction_fields)
-            extraction_fields_json = json.dumps(extraction_fields_dict)
+            signature_objects_json = self._serialize_pdf_objects(version_data.signature_objects)
+            extraction_fields_json = self._serialize_extraction_fields(version_data.extraction_fields)
 
             # Create ORM model
             model = self.model_class(
