@@ -26,7 +26,7 @@ from shared.database.repositories import (
     EtoRunPipelineExecutionStepRepository,
     ModuleRepository,
 )
-from shared.utils.registry import ModuleRegistry
+from features.modules.utils.registry import ModuleRegistry
 from shared.types.pipeline_definition import PipelineDefinitionFull
 from shared.types.pipeline_definition_step import PipelineDefinitionStepFull
 from shared.types.pipelines import NodeInstance
