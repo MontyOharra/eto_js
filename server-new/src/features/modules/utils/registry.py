@@ -103,15 +103,26 @@ class ModuleCache:
 
 class ModuleRegistry:
     """
-    Registry for transformation pipeline modules
+    Singleton registry for transformation pipeline modules
     Handles registration, discovery, and retrieval of module classes
     """
 
+    _instance: Optional['ModuleRegistry'] = None
+    _initialized: bool = False
+
+    def __new__(cls) -> 'ModuleRegistry':
+        """Ensure singleton pattern"""
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
     def __init__(self):
-        """Initialize registry"""
-        self._registry: Dict[str, Type[BaseModule]] = {}
-        self._cache = ModuleCache()
-        logger.debug("ModuleRegistry initialized")
+        """Initialize registry (only once)"""
+        if not ModuleRegistry._initialized:
+            self._registry: Dict[str, Type[BaseModule]] = {}
+            self._cache = ModuleCache()
+            ModuleRegistry._initialized = True
+            logger.debug("ModuleRegistry initialized (singleton)")
 
     def register(self, module_class: Type[BaseModule]) -> Type[BaseModule]:
         """
