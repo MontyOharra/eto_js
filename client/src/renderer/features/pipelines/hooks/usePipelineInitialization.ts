@@ -3,7 +3,7 @@
  * Reconstructs pipeline from saved state or creates from entry points
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Node, Edge } from '@xyflow/react';
 import { ModuleTemplate, ModuleInstance, NodePin } from '../../../types/moduleTypes';
 import { PipelineState, VisualState, EntryPoint } from '../../../types/pipelineTypes';
@@ -258,8 +258,15 @@ export function usePipelineInitialization({
   setEdges,
 }: UsePipelineInitializationProps) {
   const [isInitialized, setIsInitialized] = useState(false);
+  const hasInitializedRef = useRef(false);
 
   useEffect(() => {
+    // Only initialize once per mount
+    if (hasInitializedRef.current) {
+      console.log('[usePipelineInitialization] Already initialized, skipping');
+      return;
+    }
+
     // Wait for modules to load before initializing
     if (moduleTemplates.length === 0) {
       console.log('[usePipelineInitialization] Waiting for modules to load...');
@@ -300,13 +307,18 @@ export function usePipelineInitialization({
       setEdges([]);
     }
 
+    hasInitializedRef.current = true;
     setIsInitialized(true);
+    console.log('[usePipelineInitialization] Initialization complete');
 
     // Cleanup on unmount
     return () => {
+      console.log('[usePipelineInitialization] Cleanup - resetting initialization flags');
+      hasInitializedRef.current = false;
       setIsInitialized(false);
     };
   }, [initialPipelineState, initialVisualState, entryPoints, moduleTemplates, setNodes, setEdges]);
 
+  console.log('[usePipelineInitialization] Current isInitialized:', isInitialized);
   return { isInitialized };
 }
