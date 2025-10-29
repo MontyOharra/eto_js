@@ -266,7 +266,12 @@ export function usePipelineInitialization({
       return;
     }
 
-    console.log('[usePipelineInitialization] Initializing pipeline graph');
+    console.log('[usePipelineInitialization] Initializing pipeline graph', {
+      hasInitialPipelineState: !!initialPipelineState,
+      entryPointsInState: initialPipelineState?.entry_points.length ?? 0,
+      entryPointsProp: entryPoints.length,
+      modulesInState: initialPipelineState?.modules.length ?? 0,
+    });
 
     // ALWAYS reconstruct from state if entry points are present
     if (initialPipelineState && initialPipelineState.entry_points.length > 0) {
@@ -275,6 +280,7 @@ export function usePipelineInitialization({
         connections: initialPipelineState.connections.length,
         entryPoints: initialPipelineState.entry_points.length,
         visualPositions: initialVisualState ? Object.keys(initialVisualState).length : 0,
+        entryPointDetails: initialPipelineState.entry_points,
       });
 
       const { nodes, edges } = reconstructPipeline(

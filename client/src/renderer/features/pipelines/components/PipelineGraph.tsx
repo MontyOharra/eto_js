@@ -102,7 +102,7 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
     const [mousePosition, setMousePosition] = useState<{ x: number; y: number } | null>(null);
 
     // Initialize pipeline from state or entry points
-    usePipelineInitialization({
+    const { isInitialized } = usePipelineInitialization({
       moduleTemplates,
       initialPipelineState,
       initialVisualState,
@@ -158,6 +158,13 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
     useEffect(() => {
       if (!onChange) return;
 
+      // GUARD: Don't fire onChange until initialization is complete
+      // This prevents clearing parent state on mount before we've loaded initial data
+      if (!isInitialized) {
+        console.log('[PipelineGraph onChange] Skipping - not initialized yet');
+        return;
+      }
+
       // Serialize to JSON for deep comparison
       const currentStateJson = JSON.stringify(pipelineState);
 
@@ -173,7 +180,7 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
         prevPipelineStateRef.current = currentStateJson;
         onChange(pipelineState);
       }
-    }, [pipelineState, onChange, nodes.length, edges.length]);
+    }, [pipelineState, onChange, nodes.length, edges.length, isInitialized]);
 
     // React Flow node/edge change handlers
     const onNodesChange = useCallback(

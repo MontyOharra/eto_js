@@ -432,9 +432,14 @@ export function TemplateBuilderModal({
     if (currentStep === 'signature-objects') {
       setCurrentStep('extraction-fields');
     } else if (currentStep === 'extraction-fields') {
-      console.log('[TemplateBuilderModal] Navigating to pipeline step. Current visual state:', {
-        nodeCount: Object.keys(visualState).length,
-        positions: visualState,
+      console.log('[TemplateBuilderModal] Navigating to pipeline step. Current state:', {
+        visualState: { nodeCount: Object.keys(visualState).length, positions: visualState },
+        pipelineState: {
+          entryPoints: pipelineState.entry_points.length,
+          modules: pipelineState.modules.length,
+          connections: pipelineState.connections.length,
+          entryPointDetails: pipelineState.entry_points,
+        },
       });
       setCurrentStep('pipeline');
     }

@@ -251,10 +251,16 @@ export function ExtractionFieldsStep({
 
     // Also update pipeline state entry points
     const newEntryPoint = extractionFieldToEntryPoint(newField);
-    onPipelineStateChange({
+    const updatedPipelineState = {
       ...pipelineState,
       entry_points: [...pipelineState.entry_points, newEntryPoint],
+    };
+    console.log('[ExtractionFieldsStep] Adding entry point:', {
+      newEntryPoint,
+      totalEntryPoints: updatedPipelineState.entry_points.length,
+      entryPoints: updatedPipelineState.entry_points,
     });
+    onPipelineStateChange(updatedPipelineState);
 
     // Clear temp state
     setTempFieldData(null);
