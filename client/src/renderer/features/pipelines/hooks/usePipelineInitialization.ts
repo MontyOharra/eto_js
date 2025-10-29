@@ -25,8 +25,9 @@ export interface UsePipelineInitializationProps {
  */
 function createEntryPointNodes(entryPoints: EntryPoint[], visualState?: VisualState): Node[] {
   return entryPoints.map((ep, index) => {
-    // Flat visual state: use entry point's node_id directly
-    const position = visualState?.[ep.node_id] || {
+    // Flat visual state: look up by React Flow node ID (entry-{node_id})
+    const reactFlowNodeId = `entry-${ep.node_id}`;
+    const position = visualState?.[reactFlowNodeId] || {
       x: 50 + index * 200,
       y: 50,
     };

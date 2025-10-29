@@ -76,7 +76,11 @@ export function TemplateBuilderModal({
   const setVisualState = (newState: VisualState) => {
     console.log('[TemplateBuilderModal] Visual state updated:', {
       nodeCount: Object.keys(newState).length,
-      positions: newState,
+      entryPointIds: Object.keys(newState).filter(id => id.startsWith('entry-')),
+      moduleIds: Object.keys(newState).filter(id => !id.startsWith('entry-')),
+      entryPointPositions: Object.fromEntries(
+        Object.entries(newState).filter(([id]) => id.startsWith('entry-'))
+      ),
     });
     setVisualStateInternal(newState);
   };
@@ -262,10 +266,6 @@ export function TemplateBuilderModal({
       }
 
       // Step 2: Create template via parent's onSave (handles creation + list reload)
-      console.log('[TemplateBuilderModal] Saving template with visual state:', {
-        nodeCount: Object.keys(visualState).length,
-        positions: visualState,
-      });
 
       await onSave({
         name: templateName,
@@ -432,13 +432,16 @@ export function TemplateBuilderModal({
     if (currentStep === 'signature-objects') {
       setCurrentStep('extraction-fields');
     } else if (currentStep === 'extraction-fields') {
-      console.log('[TemplateBuilderModal] Navigating to pipeline step. Current state:', {
-        visualState: { nodeCount: Object.keys(visualState).length, positions: visualState },
+      console.log('[TemplateBuilderModal] Navigating to pipeline step. Passing state:', {
         pipelineState: {
           entryPoints: pipelineState.entry_points.length,
           modules: pipelineState.modules.length,
-          connections: pipelineState.connections.length,
-          entryPointDetails: pipelineState.entry_points,
+        },
+        visualState: {
+          totalNodes: Object.keys(visualState).length,
+          entryPointPositions: Object.fromEntries(
+            Object.entries(visualState).filter(([id]) => id.startsWith('entry-'))
+          ),
         },
       });
       setCurrentStep('pipeline');
