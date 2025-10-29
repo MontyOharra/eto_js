@@ -29,6 +29,7 @@ interface ExtractionFieldsSidebarProps {
   // Form state for create/edit
   fieldName: string;
   fieldDescription: string;
+  fieldNameError: string | null;
   tempFieldData: { bbox: [number, number, number, number]; page: number } | null;
 
   // Callbacks
@@ -59,6 +60,7 @@ export function ExtractionFieldsSidebar({
   showSignatureObjects,
   fieldName,
   fieldDescription,
+  fieldNameError,
   tempFieldData,
   onTemplateNameChange,
   onTemplateDescriptionChange,
@@ -301,8 +303,15 @@ export function ExtractionFieldsSidebar({
                   onChange={(e) => onFieldNameChange(e.target.value)}
                   onKeyDown={handleFieldFormKeyDown}
                   placeholder="e.g., hawb, carrier-name"
-                  className="w-full px-3 py-2 text-sm bg-gray-800 border border-gray-600 rounded text-white focus:border-blue-500 focus:outline-none"
+                  className={`w-full px-3 py-2 text-sm bg-gray-800 border rounded text-white focus:outline-none ${
+                    fieldNameError ? 'border-red-500 focus:border-red-500' : 'border-gray-600 focus:border-blue-500'
+                  }`}
                 />
+                {fieldNameError && (
+                  <div className="mt-1 text-xs text-red-400">
+                    {fieldNameError}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-300 mb-1">Description</label>

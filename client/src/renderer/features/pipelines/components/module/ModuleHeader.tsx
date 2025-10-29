@@ -20,6 +20,9 @@ export function ModuleHeader({ moduleInstance, template, onDeleteModule, executi
   const headerColor = template.color || '#4B5563';
   const textColor = getTextColor(headerColor);
 
+  // Check if this is an entry point module (not deletable)
+  const isEntryPoint = moduleInstance.module_ref === 'entry_point:1.0.0';
+
   const handleDelete = () => {
     if (onDeleteModule) {
       onDeleteModule(moduleInstance.module_instance_id);
@@ -36,7 +39,7 @@ export function ModuleHeader({ moduleInstance, template, onDeleteModule, executi
       <div className="font-medium text-base" style={{ color: textColor }}>
         {template.title}
       </div>
-      {!executionMode && (
+      {!executionMode && !isEntryPoint && (
         <button
           onClick={handleDelete}
           className="p-1 rounded hover:bg-red-500 transition-colors"

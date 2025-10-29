@@ -63,6 +63,12 @@ export function PipelineBuilderStep({
     // We need to use the ref since onChange doesn't provide visual state
     if (pipelineGraphRef.current) {
       const currentVisualState = pipelineGraphRef.current.getVisualState();
+      console.log('[PipelineBuilderStep] Visual state changed:', {
+        moduleCount: Object.keys(currentVisualState.modules || {}).length,
+        entryPointCount: Object.keys(currentVisualState.entryPoints || {}).length,
+        modules: currentVisualState.modules,
+        entryPoints: currentVisualState.entryPoints,
+      });
       onVisualStateChange(currentVisualState);
     }
   }, [entryPoints, onPipelineStateChange, onVisualStateChange]);
