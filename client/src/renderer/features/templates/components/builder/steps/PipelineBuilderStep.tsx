@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { PipelineGraph, PipelineGraphRef } from '../../../../pipelines/components/PipelineGraph';
+import { useState, useEffect, useCallback } from 'react';
+import { PipelineGraph } from '../../../../pipelines/components/PipelineGraph';
 import { ModuleSelectorPane } from '../../../../pipelines/components/ModuleSelectorPane';
 import { useModulesApi } from '../../../../../features/modules/hooks';
 import type { ModuleTemplate } from '../../../../../types/moduleTypes';
@@ -21,7 +21,6 @@ export function PipelineBuilderStep({
   const { getModules, isLoading: isLoadingModules } = useModulesApi();
   const [modules, setModules] = useState<ModuleTemplate[]>([]);
   const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null);
-  const pipelineGraphRef = useRef<PipelineGraphRef>(null);
 
   // Load modules from API
   useEffect(() => {
@@ -83,7 +82,6 @@ export function PipelineBuilderStep({
       {/* Pipeline Graph */}
       <div className="flex-1">
         <PipelineGraph
-          ref={pipelineGraphRef}
           moduleTemplates={modules}
           selectedModuleId={selectedModuleId}
           onModulePlaced={handleModulePlaced}
