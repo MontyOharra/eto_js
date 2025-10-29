@@ -20,6 +20,24 @@ interface TemplateBuilderModalProps {
   pdfFile: File | null; // For new template creation with uploaded PDF
   onClose: () => void;
   onSave: (templateData: TemplateData) => Promise<void>;
+
+  // Edit mode support
+  mode?: 'create' | 'edit';
+  templateId?: number;
+  initialTemplateName?: string;
+  initialTemplateDescription?: string;
+  initialSignatureObjects?: {
+    text_words: any[];
+    text_lines: any[];
+    graphic_rects: any[];
+    graphic_lines: any[];
+    graphic_curves: any[];
+    images: any[];
+    tables: any[];
+  };
+  initialExtractionFields?: ExtractionField[];
+  initialPipelineState?: PipelineState;
+  initialVisualState?: VisualState;
 }
 
 export interface TemplateData {
@@ -31,6 +49,10 @@ export interface TemplateData {
   extraction_fields: ExtractionField[];
   pipeline_state: PipelineState;
   visual_state: VisualState;
+
+  // Edit mode metadata
+  mode?: 'create' | 'edit';
+  templateId?: number;
 }
 
 type BuilderStep = 'signature-objects' | 'extraction-fields' | 'pipeline' | 'testing';
@@ -41,10 +63,18 @@ export function TemplateBuilderModal({
   pdfFile,
   onClose,
   onSave,
+  mode = 'create',
+  templateId,
+  initialTemplateName = '',
+  initialTemplateDescription = '',
+  initialSignatureObjects,
+  initialExtractionFields,
+  initialPipelineState,
+  initialVisualState,
 }: TemplateBuilderModalProps) {
   const [currentStep, setCurrentStep] = useState<BuilderStep>('signature-objects');
-  const [templateName, setTemplateName] = useState('');
-  const [templateDescription, setTemplateDescription] = useState('');
+  const [templateName, setTemplateName] = useState(initialTemplateName);
+  const [templateDescription, setTemplateDescription] = useState(initialTemplateDescription);
   const [signatureObjects, setSignatureObjects] = useState<{
     text_words: any[];
     text_lines: any[];
@@ -53,7 +83,7 @@ export function TemplateBuilderModal({
     graphic_curves: any[];
     images: any[];
     tables: any[];
-  }>({
+  }>(initialSignatureObjects || {
     text_words: [],
     text_lines: [],
     graphic_rects: [],
@@ -63,14 +93,14 @@ export function TemplateBuilderModal({
     tables: [],
   });
   const [selectedObjectTypes, setSelectedObjectTypes] = useState<string[]>([]); // Step 1 state persistence
-  const [extractionFields, setExtractionFields] = useState<ExtractionField[]>([]);
-  const [pipelineState, setPipelineState] = useState<PipelineState>({
+  const [extractionFields, setExtractionFields] = useState<ExtractionField[]>(initialExtractionFields || []);
+  const [pipelineState, setPipelineState] = useState<PipelineState>(initialPipelineState || {
     entry_points: [],
     modules: [],
     connections: [],
   });
   // Flat visual state: all node positions in one object
-  const [visualState, setVisualStateInternal] = useState<VisualState>({});
+  const [visualState, setVisualStateInternal] = useState<VisualState>(initialVisualState || {});
 
   // Wrapper to log visual state changes
   const setVisualState = (newState: VisualState) => {
@@ -126,6 +156,34 @@ export function TemplateBuilderModal({
     loadModules();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only load once on mount
+
+  // Reset state when modal opens or when initial data changes
+  useEffect(() => {
+    if (isOpen) {
+      setTemplateName(initialTemplateName || '');
+      setTemplateDescription(initialTemplateDescription || '');
+      setSignatureObjects(initialSignatureObjects || {
+        text_words: [],
+        text_lines: [],
+        graphic_rects: [],
+        graphic_lines: [],
+        graphic_curves: [],
+        images: [],
+        tables: [],
+      });
+      setExtractionFields(initialExtractionFields || []);
+      setPipelineState(initialPipelineState || {
+        entry_points: [],
+        modules: [],
+        connections: [],
+      });
+      setVisualStateInternal(initialVisualState || {});
+
+      // Reset to step 1 when opening
+      setCurrentStep('signature-objects');
+      setTestResults(null);
+    }
+  }, [isOpen, initialTemplateName, initialTemplateDescription, initialSignatureObjects, initialExtractionFields, initialPipelineState, initialVisualState]);
 
   // Process uploaded PDF file
   useEffect(() => {
@@ -253,20 +311,19 @@ export function TemplateBuilderModal({
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      // Step 1: Upload PDF if needed (for newly uploaded files)
+      // Step 1: Upload PDF if needed (for newly uploaded files in create mode)
       let sourcePdfId = pdfFileId;
 
-      if (!sourcePdfId && pdfFile) {
+      if (mode === 'create' && !sourcePdfId && pdfFile) {
         const uploadResponse = await uploadPdf(pdfFile);
         sourcePdfId = uploadResponse.id;
       }
 
-      if (!sourcePdfId) {
+      if (mode === 'create' && !sourcePdfId) {
         throw new Error('No PDF source available. Please ensure a PDF is loaded.');
       }
 
-      // Step 2: Create template via parent's onSave (handles creation + list reload)
-
+      // Step 2: Save template via parent's onSave (handles API call + list reload)
       await onSave({
         name: templateName,
         description: templateDescription,
@@ -275,6 +332,8 @@ export function TemplateBuilderModal({
         extraction_fields: extractionFields,
         pipeline_state: pipelineState,
         visual_state: visualState,
+        mode,
+        templateId,
       });
 
       handleClose();
@@ -473,6 +532,7 @@ export function TemplateBuilderModal({
           pdfMetadata={activePdfData?.metadata ?? null}
           emailData={activePdfData?.emailData}
           onClose={handleClose}
+          mode={mode}
         />
 
         {/* Main Content */}
@@ -654,7 +714,7 @@ export function TemplateBuilderModal({
                 disabled={!canProceed || isSaving}
                 className="px-6 py-2 text-sm bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
               >
-                {isSaving ? 'Saving...' : 'Save Template'}
+                {isSaving ? 'Saving...' : (mode === 'edit' ? 'Save' : 'Save Template')}
               </button>
             ) : (
               <div className="relative group">

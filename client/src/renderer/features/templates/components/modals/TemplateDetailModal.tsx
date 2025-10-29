@@ -20,6 +20,9 @@ import { useModulesApi } from '../../../modules/hooks';
 import { PipelineGraph } from '../../../pipelines/components/PipelineGraph';
 import type { PipelineDetailResponse } from '../../../pipelines/types';
 import type { ModuleTemplate } from '../../../../types/moduleTypes';
+import { TemplateBuilderModal, TemplateData } from '../builder/TemplateBuilderModal';
+import type { PipelineState, VisualState } from '../../../../types/pipelineTypes';
+import API_CONFIG from '../../../../config/api';
 
 interface TemplateDetailModalProps {
   isOpen: boolean;
@@ -93,6 +96,15 @@ export function TemplateDetailModal({
   const [currentStep, setCurrentStep] = useState<ViewStep>('signature-objects');
   const [error, setError] = useState<string | null>(null);
 
+  // Edit mode state
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editInitialData, setEditInitialData] = useState<{
+    signatureObjects: PdfObjects;
+    extractionFields: any[];
+    pipelineState: PipelineState;
+    visualState: VisualState;
+  } | null>(null);
+
   // PDF data - fetch once using source_pdf_id from version detail
   const { data: pdfData, isLoading: pdfLoading, error: pdfError } = usePdfData(
     versionDetail?.source_pdf_id ?? null
@@ -151,6 +163,86 @@ export function TemplateDetailModal({
     setVersionDetail(null);
     setCurrentStep('signature-objects');
     setError(null);
+    setIsEditMode(false);
+    setEditInitialData(null);
+  };
+
+  const handleEditClick = async () => {
+    if (!template || !versionDetail) {
+      console.error('No template or version data available for editing');
+      return;
+    }
+
+    try {
+      // Fetch pipeline data from the pipeline endpoint
+      const pipelineResponse = await fetch(
+        `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.PIPELINES}/${versionDetail.pipeline_definition_id}`
+      );
+
+      if (!pipelineResponse.ok) {
+        throw new Error('Failed to load pipeline data');
+      }
+
+      const pipelineData = await pipelineResponse.json();
+
+      // Set initial data for the builder modal
+      setEditInitialData({
+        signatureObjects: versionDetail.signature_objects,
+        extractionFields: versionDetail.extraction_fields,
+        pipelineState: pipelineData.pipeline_state,
+        visualState: pipelineData.visual_state,
+      });
+
+      // Open edit mode
+      setIsEditMode(true);
+    } catch (error) {
+      console.error('Failed to load template edit data:', error);
+      alert('Failed to load template data for editing');
+    }
+  };
+
+  const handleEditClose = () => {
+    setIsEditMode(false);
+    setEditInitialData(null);
+  };
+
+  const handleEditSave = async (templateData: TemplateData) => {
+    if (!template) return;
+
+    try {
+      // Call PUT endpoint to create new version
+      const response = await fetch(
+        `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.TEMPLATES}/${template.id}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            signature_objects: templateData.signature_objects,
+            extraction_fields: templateData.extraction_fields,
+            pipeline_state: templateData.pipeline_state,
+            visual_state: templateData.visual_state,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to save template');
+      }
+
+      // Success! Refresh template data
+      await loadTemplate();
+
+      // Close edit modal
+      setIsEditMode(false);
+      setEditInitialData(null);
+
+      alert('Template updated successfully! New version created.');
+    } catch (error) {
+      console.error('Failed to save template:', error);
+      throw error; // Re-throw so TemplateBuilderModal can handle it
+    }
   };
 
   const handlePreviousVersion = () => {
@@ -235,12 +327,14 @@ export function TemplateDetailModal({
 
           {/* Action Buttons */}
           <div className="flex items-center space-x-2">
-            {onEdit && template && (
+            {template && versionDetail && (
               <button
-                onClick={() => onEdit(template.id)}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
+                onClick={handleEditClick}
+                disabled={template.status === 'active'}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
+                title={template.status === 'active' ? 'Deactivate template first to edit' : 'Edit template'}
               >
-                Edit Template
+                Edit
               </button>
             )}
             <button
@@ -323,6 +417,25 @@ export function TemplateDetailModal({
           </>
         )}
       </div>
+
+      {/* Edit Mode: Render TemplateBuilderModal */}
+      {isEditMode && editInitialData && template && versionDetail && (
+        <TemplateBuilderModal
+          isOpen={isEditMode}
+          pdfFileId={versionDetail.source_pdf_id}
+          pdfFile={null}
+          onClose={handleEditClose}
+          onSave={handleEditSave}
+          mode="edit"
+          templateId={template.id}
+          initialTemplateName={template.name}
+          initialTemplateDescription={template.description || ''}
+          initialSignatureObjects={editInitialData.signatureObjects}
+          initialExtractionFields={editInitialData.extractionFields}
+          initialPipelineState={editInitialData.pipelineState}
+          initialVisualState={editInitialData.visualState}
+        />
+      )}
     </div>
   );
 }
@@ -799,6 +912,13 @@ function PipelineView({ versionDetail }: PipelineViewProps) {
 
   // Loaded state - render pipeline graph
   if (pipeline) {
+    console.log('[TemplateDetailModal] Pipeline data:', {
+      pipelineState: pipeline.pipeline_state,
+      visualState: pipeline.visual_state,
+      visualStateType: typeof pipeline.visual_state,
+      visualStateKeys: pipeline.visual_state ? Object.keys(pipeline.visual_state) : 'null',
+    });
+
     return (
       <div className="h-full w-full bg-gray-900">
         <PipelineGraph

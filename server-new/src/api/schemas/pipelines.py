@@ -56,10 +56,13 @@ class Position(BaseModel):
     y: float
 
 
-class VisualState(BaseModel):
-    """Visual positioning data for the UI"""
-    modules: Dict[str, Position] = {}  # module_instance_id -> position
-    entry_points: Dict[str, Position] = {}  # entry_point node_id -> position
+# VisualState is now a simple Dict[str, Position] for flat structure
+# FLAT STRUCTURE (new format after refactoring):
+# All nodes (modules and entry points) stored in single flat dict
+# - Module positions: {"module_id": {x, y}}
+# - Entry point positions: {"entry-entry_id": {x, y}}
+# Note: This replaces the old nested format {modules: {...}, entry_points: {...}}
+VisualState = Dict[str, Position]
 
 
 # ============================================================================

@@ -146,18 +146,22 @@ function reconstructPins(
  * Handles backward compatibility with templates saved before refactoring
  */
 function normalizeVisualState(visualState: any): VisualState {
+  console.log('[normalizeVisualState] Input visual state:', visualState);
+
   // Check if this is the old nested format (has 'modules' or 'entryPoints' keys)
   if (visualState && (visualState.modules || visualState.entryPoints)) {
-    console.log('[normalizeVisualState] Converting old nested format to flat format');
+    console.log('[normalizeVisualState] Detected old nested format, converting to flat');
     const flatState: VisualState = {};
 
     // Copy module positions
     if (visualState.modules) {
+      console.log('[normalizeVisualState] Module positions:', Object.keys(visualState.modules));
       Object.assign(flatState, visualState.modules);
     }
 
     // Copy entry point positions with "entry-" prefix
     if (visualState.entryPoints) {
+      console.log('[normalizeVisualState] Entry point positions:', Object.keys(visualState.entryPoints));
       Object.entries(visualState.entryPoints).forEach(([key, value]) => {
         // Old format: key might be "entry_field_name"
         // New format: key should be "entry-entry_field_name"
@@ -166,10 +170,12 @@ function normalizeVisualState(visualState: any): VisualState {
       });
     }
 
+    console.log('[normalizeVisualState] Flattened state keys:', Object.keys(flatState));
     return flatState;
   }
 
   // Already in flat format or empty
+  console.log('[normalizeVisualState] Already in flat format or empty');
   return visualState || {};
 }
 
