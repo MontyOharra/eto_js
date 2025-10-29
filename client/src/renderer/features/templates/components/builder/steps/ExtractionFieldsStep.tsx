@@ -17,7 +17,15 @@ interface ExtractionFieldsStepProps {
   templateName: string;
   templateDescription: string;
   extractionFields: ExtractionField[];
-  signatureObjects: SignatureObject[];
+  signatureObjects: {
+    text_words: any[];
+    text_lines: any[];
+    graphic_rects: any[];
+    graphic_lines: any[];
+    graphic_curves: any[];
+    images: any[];
+    tables: any[];
+  };
   pdfObjects: any;
   pdfUrl: string;
   pipelineState: PipelineState;
@@ -50,7 +58,12 @@ export function ExtractionFieldsStep({
   onPdfScaleChange,
   onPdfCurrentPageChange,
 }: ExtractionFieldsStepProps) {
-  console.log('[ExtractionFieldsStep] Received signature objects:', signatureObjects.length, signatureObjects);
+  // Count total signature objects
+  const signatureObjectsCount = Object.values(signatureObjects).reduce(
+    (sum, arr) => sum + arr.length,
+    0
+  );
+  console.log('[ExtractionFieldsStep] Received signature objects:', signatureObjectsCount, signatureObjects);
 
   // Drawing state
   const [isDrawing, setIsDrawing] = useState(false);
@@ -74,10 +87,23 @@ export function ExtractionFieldsStep({
   // Get unique object types from signature objects
   const signatureObjectTypes = useMemo(() => {
     const types = new Set<string>();
-    signatureObjects.forEach((obj: any) => {
+
+    // Flatten PdfObjects structure to get all object types
+    const allObjects = [
+      ...signatureObjects.text_words,
+      ...signatureObjects.text_lines,
+      ...signatureObjects.graphic_rects,
+      ...signatureObjects.graphic_lines,
+      ...signatureObjects.graphic_curves,
+      ...signatureObjects.images,
+      ...signatureObjects.tables,
+    ];
+
+    allObjects.forEach((obj: any) => {
       types.add(obj.type); // Signature objects already have 'type', not 'object_type'
     });
-    console.log('[ExtractionFieldsStep] Signature objects:', signatureObjects.length);
+
+    console.log('[ExtractionFieldsStep] Signature objects count:', allObjects.length);
     console.log('[ExtractionFieldsStep] Signature object types:', Array.from(types));
     return types;
   }, [signatureObjects]);
