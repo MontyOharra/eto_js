@@ -260,6 +260,13 @@ export function usePipelineInitialization({
   const [isInitialized, setIsInitialized] = useState(false);
   const hasInitializedRef = useRef(false);
 
+  // Capture initial props in refs so they don't trigger re-initialization
+  const initialPropsRef = useRef({
+    initialPipelineState,
+    initialVisualState,
+    entryPoints,
+  });
+
   useEffect(() => {
     // Only initialize once per mount
     if (hasInitializedRef.current) {
@@ -272,6 +279,9 @@ export function usePipelineInitialization({
       console.log('[usePipelineInitialization] Waiting for modules to load...');
       return;
     }
+
+    // Use captured initial props, not current props
+    const { initialPipelineState, initialVisualState, entryPoints } = initialPropsRef.current;
 
     console.log('[usePipelineInitialization] Initializing pipeline graph', {
       hasInitialPipelineState: !!initialPipelineState,
@@ -311,13 +321,14 @@ export function usePipelineInitialization({
     setIsInitialized(true);
     console.log('[usePipelineInitialization] Initialization complete');
 
-    // Cleanup on unmount
+    // Cleanup on unmount only
     return () => {
-      console.log('[usePipelineInitialization] Cleanup - resetting initialization flags');
+      console.log('[usePipelineInitialization] Cleanup on unmount - resetting flags');
       hasInitializedRef.current = false;
       setIsInitialized(false);
     };
-  }, [initialPipelineState, initialVisualState, entryPoints, moduleTemplates, setNodes, setEdges]);
+    // Only depend on moduleTemplates, not the initial state props (captured in ref)
+  }, [moduleTemplates, setNodes, setEdges]);
 
   console.log('[usePipelineInitialization] Current isInitialized:', isInitialized);
   return { isInitialized };
