@@ -45,7 +45,8 @@ export interface PipelineGraphProps {
   initialVisualState?: VisualState;
   selectedModuleId?: string | null;
   onModulePlaced?: () => void;
-  onChange?: (state: PipelineState) => void;  // Called when pipeline state changes
+  onChange?: (state: PipelineState) => void;  // Called when pipeline state changes (modules, connections)
+  onVisualChange?: (state: VisualState) => void;  // Called when visual state changes (node positions)
   entryPoints?: EntryPoint[];
   failedModuleIds?: string[];  // For execution visualization - highlight failed modules
 }
@@ -75,6 +76,7 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
       selectedModuleId,
       onModulePlaced,
       onChange,
+      onVisualChange,
       initialPipelineState,
       initialVisualState,
       entryPoints = [],
@@ -369,10 +371,25 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
     const onNodesChange = useCallback(
       (changes: NodeChange[]) => {
         if (!viewOnly) {
-          setNodes((nds) => applyNodeChanges(changes, nds));
+          // Check if this is a drag end event (position change with dragging=false)
+          const isDragEnd = changes.some(
+            (change) => change.type === 'position' && 'dragging' in change && change.dragging === false
+          );
+
+          setNodes((nds) => {
+            const updatedNodes = applyNodeChanges(changes, nds);
+
+            // Only update visual state on drag end
+            if (isDragEnd && onVisualChange) {
+              const visualState = serializeToVisualState(updatedNodes);
+              onVisualChange(visualState);
+            }
+
+            return updatedNodes;
+          });
         }
       },
-      [viewOnly]
+      [viewOnly, onVisualChange]
     );
 
     const onEdgesChange = useCallback(

@@ -37,22 +37,20 @@ export function PipelineBuilderStep({
     loadModules();
   }, [getModules]);
 
-  // Handle pipeline state changes from graph (reactive updates via onChange)
+  // Handle pipeline state changes from graph (modules, connections)
   const handlePipelineChange = useCallback((state: PipelineState) => {
     // Entry points already in state from ExtractionFieldsStep, just pass through
     onPipelineStateChange(state);
+  }, [onPipelineStateChange]);
 
-    // Also extract and save visual state
-    // We need to use the ref since onChange doesn't provide visual state
-    if (pipelineGraphRef.current) {
-      const currentVisualState = pipelineGraphRef.current.getVisualState();
-      console.log('[PipelineBuilderStep] Visual state changed:', {
-        nodeCount: Object.keys(currentVisualState).length,
-        positions: currentVisualState,
-      });
-      onVisualStateChange(currentVisualState);
-    }
-  }, [onPipelineStateChange, onVisualStateChange]);
+  // Handle visual state changes (node positions on drag end)
+  const handleVisualChange = useCallback((visualState: VisualState) => {
+    console.log('[PipelineBuilderStep] Visual state changed:', {
+      nodeCount: Object.keys(visualState).length,
+      positions: visualState,
+    });
+    onVisualStateChange(visualState);
+  }, [onVisualStateChange]);
 
   const handleModuleSelect = (moduleId: string | null) => {
     setSelectedModuleId(moduleId);
@@ -90,6 +88,7 @@ export function PipelineBuilderStep({
           selectedModuleId={selectedModuleId}
           onModulePlaced={handleModulePlaced}
           onChange={handlePipelineChange}
+          onVisualChange={handleVisualChange}
           initialPipelineState={pipelineState}
           initialVisualState={visualState}
           viewOnly={false}
