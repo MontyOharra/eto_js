@@ -1,13 +1,11 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { ExtractionField } from '../../../types';
-import { PipelineGraph, PipelineGraphRef } from '../../../../pipelines/components/PipelineGraph';
+import { useState, useEffect, useCallback } from 'react';
+import { PipelineGraph } from '../../../../pipelines/components/PipelineGraph';
 import { ModuleSelectorPane } from '../../../../pipelines/components/ModuleSelectorPane';
 import { useModulesApi } from '../../../../../features/modules/hooks';
 import type { ModuleTemplate } from '../../../../../types/moduleTypes';
-import type { EntryPoint, PipelineState, VisualState } from '../../../../../types/pipelineTypes';
+import type { PipelineState, VisualState } from '../../../../../types/pipelineTypes';
 
 interface PipelineBuilderStepProps {
-  extractionFields: ExtractionField[];
   pipelineState: PipelineState;
   visualState: VisualState;
   onPipelineStateChange: (state: PipelineState) => void;
@@ -15,7 +13,6 @@ interface PipelineBuilderStepProps {
 }
 
 export function PipelineBuilderStep({
-  extractionFields,
   pipelineState,
   visualState,
   onPipelineStateChange,
@@ -24,16 +21,6 @@ export function PipelineBuilderStep({
   const { getModules, isLoading: isLoadingModules } = useModulesApi();
   const [modules, setModules] = useState<ModuleTemplate[]>([]);
   const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null);
-  const pipelineGraphRef = useRef<PipelineGraphRef>(null);
-
-  // Convert extraction fields to entry points (not deletable in pipeline builder)
-  const entryPoints: EntryPoint[] = useMemo(() => {
-    return extractionFields.map((field) => ({
-      node_id: `entry_${field.name}`,
-      name: field.name,
-      type: 'str', // Extraction fields always output strings
-    }));
-  }, [extractionFields]);
 
   // Load modules from API
   useEffect(() => {
@@ -49,23 +36,20 @@ export function PipelineBuilderStep({
     loadModules();
   }, [getModules]);
 
-  // Handle pipeline state changes from graph (reactive updates via onChange)
+  // Handle pipeline state changes from graph (modules, connections)
   const handlePipelineChange = useCallback((state: PipelineState) => {
-    // Include entry points from extraction fields in the pipeline state
-    const stateWithEntryPoints: PipelineState = {
-      ...state,
-      entry_points: entryPoints,
-    };
+    // Entry points already in state from ExtractionFieldsStep, just pass through
+    onPipelineStateChange(state);
+  }, [onPipelineStateChange]);
 
-    onPipelineStateChange(stateWithEntryPoints);
-
-    // Also extract and save visual state
-    // We need to use the ref since onChange doesn't provide visual state
-    if (pipelineGraphRef.current) {
-      const currentVisualState = pipelineGraphRef.current.getVisualState();
-      onVisualStateChange(currentVisualState);
-    }
-  }, [entryPoints, onPipelineStateChange, onVisualStateChange]);
+  // Handle visual state changes (node positions on drag end)
+  const handleVisualChange = useCallback((visualState: VisualState) => {
+    console.log('[PipelineBuilderStep] Visual state changed:', {
+      nodeCount: Object.keys(visualState).length,
+      positions: visualState,
+    });
+    onVisualStateChange(visualState);
+  }, [onVisualStateChange]);
 
   const handleModuleSelect = (moduleId: string | null) => {
     setSelectedModuleId(moduleId);
@@ -98,15 +82,15 @@ export function PipelineBuilderStep({
       {/* Pipeline Graph */}
       <div className="flex-1">
         <PipelineGraph
-          ref={pipelineGraphRef}
           moduleTemplates={modules}
           selectedModuleId={selectedModuleId}
           onModulePlaced={handleModulePlaced}
           onChange={handlePipelineChange}
+          onVisualChange={handleVisualChange}
           initialPipelineState={pipelineState}
           initialVisualState={visualState}
           viewOnly={false}
-          entryPoints={entryPoints}
+          entryPoints={pipelineState.entry_points}
         />
       </div>
     </div>

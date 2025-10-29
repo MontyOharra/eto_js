@@ -45,7 +45,8 @@ export interface PipelineGraphProps {
   initialVisualState?: VisualState;
   selectedModuleId?: string | null;
   onModulePlaced?: () => void;
-  onChange?: (state: PipelineState) => void;  // Called when pipeline state changes
+  onChange?: (state: PipelineState) => void;  // Called when pipeline state changes (modules, connections)
+  onVisualChange?: (state: VisualState) => void;  // Called when visual state changes (node positions)
   entryPoints?: EntryPoint[];
   failedModuleIds?: string[];  // For execution visualization - highlight failed modules
 }
@@ -75,6 +76,7 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
       selectedModuleId,
       onModulePlaced,
       onChange,
+      onVisualChange,
       initialPipelineState,
       initialVisualState,
       entryPoints = [],
@@ -100,7 +102,7 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
     const [mousePosition, setMousePosition] = useState<{ x: number; y: number } | null>(null);
 
     // Initialize pipeline from state or entry points
-    usePipelineInitialization({
+    const { isInitialized } = usePipelineInitialization({
       moduleTemplates,
       initialPipelineState,
       initialVisualState,
@@ -156,6 +158,13 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
     useEffect(() => {
       if (!onChange) return;
 
+      // GUARD: Don't fire onChange until initialization is complete
+      // This prevents clearing parent state on mount before we've loaded initial data
+      if (!isInitialized) {
+        console.log('[PipelineGraph onChange] Skipping - not initialized yet');
+        return;
+      }
+
       // Serialize to JSON for deep comparison
       const currentStateJson = JSON.stringify(pipelineState);
 
@@ -171,16 +180,31 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
         prevPipelineStateRef.current = currentStateJson;
         onChange(pipelineState);
       }
-    }, [pipelineState, onChange, nodes.length, edges.length]);
+    }, [pipelineState, onChange, nodes.length, edges.length, isInitialized]);
 
     // React Flow node/edge change handlers
     const onNodesChange = useCallback(
       (changes: NodeChange[]) => {
         if (!viewOnly) {
-          setNodes((nds) => applyNodeChanges(changes, nds));
+          // Check if this is a drag end event (position change with dragging=false)
+          const isDragEnd = changes.some(
+            (change) => change.type === 'position' && 'dragging' in change && change.dragging === false
+          );
+
+          setNodes((nds) => {
+            const updatedNodes = applyNodeChanges(changes, nds);
+
+            // Only update visual state on drag end
+            if (isDragEnd && onVisualChange) {
+              const visualState = serializeToVisualState(updatedNodes);
+              onVisualChange(visualState);
+            }
+
+            return updatedNodes;
+          });
         }
       },
-      [viewOnly]
+      [viewOnly, onVisualChange]
     );
 
     const onEdgesChange = useCallback(

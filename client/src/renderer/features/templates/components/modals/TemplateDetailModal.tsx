@@ -15,6 +15,11 @@ import { TemplateStatusBadge } from '../ui/TemplateStatusBadge';
 import { usePdfData } from '../../../pdf-files/hooks/usePdfData';
 import { PdfViewer } from '../../../../shared/components/pdf';
 import { usePdfViewer } from '../../../../shared/components/pdf/PdfViewer/PdfViewerContext';
+import { usePipelinesApi } from '../../../pipelines/hooks/usePipelinesApi';
+import { useModulesApi } from '../../../modules/hooks';
+import { PipelineGraph } from '../../../pipelines/components/PipelineGraph';
+import type { PipelineDetailResponse } from '../../../pipelines/types';
+import type { ModuleTemplate } from '../../../../types/moduleTypes';
 
 interface TemplateDetailModalProps {
   isOpen: boolean;
@@ -413,9 +418,26 @@ function SignatureObjectsOverlay({
       {objectsOnPage.map((obj, index) => {
         const [x0, y0, x1, y1] = obj.bbox;
 
-        // Coordinate transformation - text objects use pdfplumber coords (y=0 at top)
-        const screenY0 = y0;
-        const screenY1 = y1;
+        // Coordinate transformation
+        // Text objects, tables, and curves don't need Y-axis flipping
+        // Graphics (rects, lines) and images need flipping
+        let screenY0: number, screenY1: number;
+
+        // List of types that DON'T need Y-axis flipping
+        const noFlipping = obj.type === 'text_word' ||
+                           obj.type === 'text_line' ||
+                           obj.type === 'table' ||
+                           obj.type === 'graphic_curve';
+
+        if (noFlipping) {
+          // Don't flip Y coordinates for text, table, and curve objects
+          screenY0 = y0;
+          screenY1 = y1;
+        } else {
+          // Flip Y coordinates for graphic objects (rects, lines) and images
+          screenY0 = pageHeight - y1;
+          screenY1 = pageHeight - y0;
+        }
 
         const color = OBJECT_TYPE_COLORS[obj.type] || '#808080';
         const backgroundColor = hexToRgba(color, 0.2);
@@ -629,8 +651,8 @@ function ExtractionFieldsOverlay({ extractionFields }: { extractionFields: any[]
           top: `${screenY0 * renderScale}px`,
           width: `${(x1 - x0) * renderScale}px`,
           height: `${(screenY1 - screenY0) * renderScale}px`,
-          backgroundColor: 'rgba(34, 197, 94, 0.2)', // Green for extraction fields
-          border: '2px solid rgba(34, 197, 94, 0.7)',
+          backgroundColor: 'rgba(147, 51, 234, 0.2)', // Purple for extraction fields (matches builder)
+          border: '2px solid rgba(147, 51, 234, 0.8)',
           pointerEvents: 'none', // Read-only, not clickable
           zIndex: 5,
         };
@@ -714,45 +736,83 @@ interface PipelineViewProps {
 }
 
 function PipelineView({ versionDetail }: PipelineViewProps) {
-  return (
-    <div className="h-full w-full bg-gray-900 p-6">
-      <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-white mb-4">
-          Pipeline Visualization
-        </h3>
-        <p className="text-sm text-gray-400 mb-4">
-          Visual representation of the data transformation pipeline for this version.
-        </p>
-        <div className="text-sm text-gray-400">
-          Pipeline Definition ID: {versionDetail.pipeline_definition_id}
+  const { getPipeline } = usePipelinesApi();
+  const { getModules } = useModulesApi();
+
+  const [pipeline, setPipeline] = useState<PipelineDetailResponse | null>(null);
+  const [modules, setModules] = useState<ModuleTemplate[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Load pipeline data when component mounts or pipeline_definition_id changes
+  useEffect(() => {
+    async function loadPipelineData() {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        // Load pipeline and modules in parallel
+        const [pipelineData, modulesData] = await Promise.all([
+          getPipeline(versionDetail.pipeline_definition_id),
+          getModules(),
+        ]);
+
+        setPipeline(pipelineData);
+        setModules(modulesData.modules);
+      } catch (err) {
+        console.error('Failed to load pipeline:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load pipeline');
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    loadPipelineData();
+  }, [versionDetail.pipeline_definition_id, getPipeline, getModules]);
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="h-full w-full bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-white text-lg mb-2">Loading pipeline...</div>
+          <div className="text-gray-400 text-sm">Please wait</div>
         </div>
       </div>
+    );
+  }
 
-      <div className="bg-gray-800 border border-gray-700 rounded-lg p-8 flex items-center justify-center min-h-[400px] mt-6">
-        <div className="text-center">
-          <div className="text-gray-400 mb-2">
-            <svg
-              className="mx-auto h-16 w-16 text-gray-600"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"
-              />
-            </svg>
-          </div>
-          <h4 className="text-lg font-medium text-white mb-2">
-            Pipeline Visualization Coming Soon
-          </h4>
-          <p className="text-sm text-gray-400">
-            Interactive pipeline graph will be displayed here
+  // Error state
+  if (error) {
+    return (
+      <div className="h-full w-full bg-gray-900 flex items-center justify-center p-6">
+        <div className="bg-red-900 border border-red-700 rounded-lg p-6 max-w-md">
+          <h3 className="text-xl font-bold text-red-300 mb-2">Error Loading Pipeline</h3>
+          <p className="text-red-200">{error}</p>
+          <p className="text-sm text-red-300 mt-3">
+            Pipeline ID: {versionDetail.pipeline_definition_id}
           </p>
         </div>
       </div>
-    </div>
-  );
+    );
+  }
+
+  // Loaded state - render pipeline graph
+  if (pipeline) {
+    return (
+      <div className="h-full w-full bg-gray-900">
+        <PipelineGraph
+          moduleTemplates={modules}
+          selectedModuleId={null}
+          onModulePlaced={() => {}}
+          viewOnly={true}
+          initialPipelineState={pipeline.pipeline_state}
+          initialVisualState={pipeline.visual_state}
+        />
+      </div>
+    );
+  }
+
+  // Fallback (shouldn't reach here)
+  return null;
 }

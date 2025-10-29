@@ -5,6 +5,142 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-10-29 Current] — Template Builder Architecture Documentation
+
+### Spec / Intent
+- Document template builder architecture comprehensively for refactoring
+- Identify root causes of entry point state management issues
+- Catalog all design issues and intricacies that accumulated
+- Create reference document for cleaning up "spaghetti code"
+- Support user's planned refactoring based on new design principles
+
+### Changes Made
+
+**Architecture Documentation** (`context/docs/template-builder-architecture.md`):
+- Created comprehensive 350+ line documentation of template builder architecture
+- Documented component hierarchy: TemplateBuilderModal → PipelineBuilderStep → PipelineGraph
+- Mapped all state management flows and data transformations
+- Identified 4 major architectural issues:
+  1. Entry point management split across components
+  2. "Meaningful state" check creating unpredictability
+  3. Visual state updates too broad (all onChange vs targeted drag/drop)
+  4. Visual state structure unnecessarily nested (modules/entryPoints separation)
+- Documented entry point positioning algorithm with code examples
+- Mapped serialization functions and their purposes
+- Catalogued all file locations with line numbers for refactoring
+- Included type definitions (current and proposed)
+- Created file reference map showing purpose of each component
+
+**Key Sections**:
+- Component Hierarchy (with visual tree)
+- State Management (all 10+ state variables documented)
+- Current Issues (4 major problems with root cause analysis)
+- Entry Point Positioning Logic (algorithm walkthrough)
+- Entry Point Representation (fake module structure)
+- Serialization Functions (domain ↔ API conversion)
+- Imperative API via Ref (useImperativeHandle methods)
+- Mount/Unmount Pattern (current implementation and problems)
+- Identified Root Causes (why entry points not saving, why infinite loops)
+- File Reference Map (6 key files with purposes)
+- Design Principles for Refactor (user's 4 requirements)
+- Type Definitions (current and proposed structures)
+
+### Design Principles Established (User Requirements)
+
+1. **Entry point state in ExtractionFieldsStep**: Extraction field step should directly update entry_points in pipelineState when user adds/removes fields (not PipelineBuilderStep)
+2. **Remove meaningful state check**: Always reconstruct pipeline graph predictably from parent state
+3. **Target visual state to drag/drop**: Only update visual state on specific drag end events, not all onChange
+4. **Flatten visual state**: Change from `{modules: {}, entryPoints: {}}` to `{"node_id": {x: int, y: int}}`
+
+### Root Causes Identified
+
+**Why Entry Point Positions Not Persisting**:
+1. Dynamic entry point sync disabled (commented out to avoid infinite loops)
+2. Initialization runs once via `hasInitializedRef` - doesn't re-run when entry points change
+3. onChange timing - entry point additions don't reliably trigger onChange callback
+4. Mount/unmount destroys React Flow state, reconstruction doesn't populate visual state
+
+**Why Infinite Loops Occurred**:
+1. useEffect triggered onChange after entry points synced
+2. onChange updated parent state
+3. Parent re-rendered PipelineBuilderStep
+4. useEffect triggered again
+5. Cycle repeated indefinitely
+
+**Design Issues**:
+- Too many layers of abstraction (TemplateBuilderModal → PipelineBuilderStep → PipelineGraph → usePipelineInitialization)
+- Entry point conversion in wrong place (should be in ExtractionFieldsStep)
+- Reactive updates crossing component boundaries without proper memoization
+- Nested visual state structure adds complexity to serialization
+
+### File Reference Map
+
+| File | Lines | Purpose | Key Issues |
+|------|-------|---------|------------|
+| `TemplateBuilderModal.tsx` | 507-564 | Root state container, conditional rendering | Mount/unmount clears state |
+| `PipelineBuilderStep.tsx` | 30-73 | Adapter, converts fields→entries | Entry point conversion in wrong layer |
+| `PipelineGraph.tsx` | 107-302 | Visual editor, React Flow integration | Dynamic sync disabled, onChange timing |
+| `usePipelineInitialization.ts` | 60-111 | Mount logic, positioning | Meaningful state check, one-time init |
+| `serialization.ts` | 53-69 | State conversion | Nested structure complexity |
+| `ExtractionFieldsStep.tsx` | - | Extraction field drawing | Should update entry points directly |
+
+### Technical Details
+
+**Entry Point Flow (Current - Problematic)**:
+```
+ExtractionFieldsStep (user creates fields)
+  ↓ extractionFields passed as prop
+PipelineBuilderStep (useMemo converts to entry points)
+  ↓ entryPoints derived
+PipelineGraph (renders as fake modules)
+  ↓ onChange callback
+Parent state updated
+```
+
+**Entry Point Flow (Proposed)**:
+```
+ExtractionFieldsStep (user creates fields)
+  ↓ directly updates pipelineState.entry_points
+  ↓ also updates extractionFields
+TemplateBuilderModal (single source of truth)
+  ↓ passes both to PipelineBuilderStep
+PipelineGraph (renders from state, updates visual on drag only)
+```
+
+**Visual State Structure**:
+```typescript
+// Current (nested)
+{
+  modules: { "module-1": {x: 100, y: 100} },
+  entryPoints: { "entry_field1": {x: 50, y: 50} }
+}
+
+// Proposed (flat)
+{
+  "module-1": {x: 100, y: 100},
+  "entry_field1": {x: 50, y: 50}
+}
+```
+
+### Next Actions
+
+User plans to refactor based on documented architecture:
+1. Move entry point state updates from PipelineBuilderStep to ExtractionFieldsStep
+2. Remove `hasMeaningfulState()` function and `hasInitializedRef` guard
+3. Change visual state updates from onChange to specific drag/drop event handlers
+4. Flatten visual state structure to eliminate modules/entryPoints separation
+5. Clean up unnecessary abstractions and intricacies
+
+### Notes
+- Documentation provides complete reference for refactoring
+- All issues traced to root causes with code locations
+- User will handle implementation of refactoring
+- Document preserved in `context/docs/` for future sessions
+- Previous session work: Entry point positioning fixes, validation, color fixes, coordinate transformations
+- Infinite loop issue attempted fix but led to architectural rethink
+
+---
+
 ## [2025-10-28 18:30] — Template Viewer UI Enhancement & Visibility Toggles
 
 ### Spec / Intent

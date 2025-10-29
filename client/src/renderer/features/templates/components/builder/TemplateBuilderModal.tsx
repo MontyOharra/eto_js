@@ -69,10 +69,21 @@ export function TemplateBuilderModal({
     modules: [],
     connections: [],
   });
-  const [visualState, setVisualState] = useState<VisualState>({
-    modules: {},
-    entryPoints: {},
-  });
+  // Flat visual state: all node positions in one object
+  const [visualState, setVisualStateInternal] = useState<VisualState>({});
+
+  // Wrapper to log visual state changes
+  const setVisualState = (newState: VisualState) => {
+    console.log('[TemplateBuilderModal] Visual state updated:', {
+      nodeCount: Object.keys(newState).length,
+      entryPointIds: Object.keys(newState).filter(id => id.startsWith('entry-')),
+      moduleIds: Object.keys(newState).filter(id => !id.startsWith('entry-')),
+      entryPointPositions: Object.fromEntries(
+        Object.entries(newState).filter(([id]) => id.startsWith('entry-'))
+      ),
+    });
+    setVisualStateInternal(newState);
+  };
   const [testResults, setTestResults] = useState<TemplateSimulationResult | null>(null);
   const [isTesting, setIsTesting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -255,6 +266,7 @@ export function TemplateBuilderModal({
       }
 
       // Step 2: Create template via parent's onSave (handles creation + list reload)
+
       await onSave({
         name: templateName,
         description: templateDescription,
@@ -420,6 +432,18 @@ export function TemplateBuilderModal({
     if (currentStep === 'signature-objects') {
       setCurrentStep('extraction-fields');
     } else if (currentStep === 'extraction-fields') {
+      console.log('[TemplateBuilderModal] Navigating to pipeline step. Passing state:', {
+        pipelineState: {
+          entryPoints: pipelineState.entry_points.length,
+          modules: pipelineState.modules.length,
+        },
+        visualState: {
+          totalNodes: Object.keys(visualState).length,
+          entryPointPositions: Object.fromEntries(
+            Object.entries(visualState).filter(([id]) => id.startsWith('entry-'))
+          ),
+        },
+      });
       setCurrentStep('pipeline');
     }
   };
@@ -479,58 +503,64 @@ export function TemplateBuilderModal({
             </div>
           )}
 
-          {/* Steps - render all but show only active one (keeps components mounted to preserve state) */}
+          {/* Steps - conditionally render based on currentStep (components mount/unmount as needed) */}
           {pdfDataLoaded && !pdfError && (
             <>
-              <div style={{ display: currentStep === 'signature-objects' ? 'block' : 'none', height: '100%' }}>
-                <SignatureObjectsStep
-                  pdfFileId={pdfFileId}
-                  templateName={templateName}
-                  templateDescription={templateDescription}
-                  signatureObjects={signatureObjects}
-                  selectedObjectTypes={selectedObjectTypes}
-                  pdfObjects={pdfObjects}
-                  pdfUrl={pdfUrl}
-                  onTemplateNameChange={setTemplateName}
-                  onTemplateDescriptionChange={setTemplateDescription}
-                  onSignatureObjectsChange={setSignatureObjects}
-                  onSelectedTypesChange={setSelectedObjectTypes}
-                  pdfScale={pdfScale}
-                  pdfCurrentPage={pdfCurrentPage}
-                  onPdfScaleChange={setPdfScale}
-                  onPdfCurrentPageChange={setPdfCurrentPage}
-                />
-              </div>
-              <div style={{ display: currentStep === 'extraction-fields' ? 'block' : 'none', height: '100%' }}>
-                <ExtractionFieldsStep
-                  pdfFileId={pdfFileId}
-                  pdfFile={pdfFile}
-                  templateName={templateName}
-                  templateDescription={templateDescription}
-                  extractionFields={extractionFields}
-                  signatureObjects={signatureObjects}
-                  pdfObjects={pdfObjects}
-                  pdfUrl={pdfUrl}
-                  pipelineState={pipelineState}
-                  visualState={visualState}
-                  onTemplateNameChange={setTemplateName}
-                  onTemplateDescriptionChange={setTemplateDescription}
-                  onExtractionFieldsChange={setExtractionFields}
-                  pdfScale={pdfScale}
-                  pdfCurrentPage={pdfCurrentPage}
-                  onPdfScaleChange={setPdfScale}
-                  onPdfCurrentPageChange={setPdfCurrentPage}
-                />
-              </div>
-              <div style={{ display: currentStep === 'pipeline' ? 'block' : 'none', height: '100%' }}>
-                <PipelineBuilderStep
-                  extractionFields={extractionFields}
-                  pipelineState={pipelineState}
-                  visualState={visualState}
-                  onPipelineStateChange={setPipelineState}
-                  onVisualStateChange={setVisualState}
-                />
-              </div>
+              {currentStep === 'signature-objects' && (
+                <div style={{ height: '100%' }}>
+                  <SignatureObjectsStep
+                    pdfFileId={pdfFileId}
+                    templateName={templateName}
+                    templateDescription={templateDescription}
+                    signatureObjects={signatureObjects}
+                    selectedObjectTypes={selectedObjectTypes}
+                    pdfObjects={pdfObjects}
+                    pdfUrl={pdfUrl}
+                    onTemplateNameChange={setTemplateName}
+                    onTemplateDescriptionChange={setTemplateDescription}
+                    onSignatureObjectsChange={setSignatureObjects}
+                    onSelectedTypesChange={setSelectedObjectTypes}
+                    pdfScale={pdfScale}
+                    pdfCurrentPage={pdfCurrentPage}
+                    onPdfScaleChange={setPdfScale}
+                    onPdfCurrentPageChange={setPdfCurrentPage}
+                  />
+                </div>
+              )}
+              {currentStep === 'extraction-fields' && (
+                <div style={{ height: '100%' }}>
+                  <ExtractionFieldsStep
+                    pdfFileId={pdfFileId}
+                    pdfFile={pdfFile}
+                    templateName={templateName}
+                    templateDescription={templateDescription}
+                    extractionFields={extractionFields}
+                    signatureObjects={signatureObjects}
+                    pdfObjects={pdfObjects}
+                    pdfUrl={pdfUrl}
+                    pipelineState={pipelineState}
+                    visualState={visualState}
+                    onTemplateNameChange={setTemplateName}
+                    onTemplateDescriptionChange={setTemplateDescription}
+                    onExtractionFieldsChange={setExtractionFields}
+                    onPipelineStateChange={setPipelineState}
+                    pdfScale={pdfScale}
+                    pdfCurrentPage={pdfCurrentPage}
+                    onPdfScaleChange={setPdfScale}
+                    onPdfCurrentPageChange={setPdfCurrentPage}
+                  />
+                </div>
+              )}
+              {currentStep === 'pipeline' && (
+                <div style={{ height: '100%' }}>
+                  <PipelineBuilderStep
+                    pipelineState={pipelineState}
+                    visualState={visualState}
+                    onPipelineStateChange={setPipelineState}
+                    onVisualStateChange={setVisualState}
+                  />
+                </div>
+              )}
               {currentStep === 'testing' && (
                 testResults && pdfUrl && testedPipelineState && testedVisualState ? (
                   <TestingStep

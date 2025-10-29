@@ -3,7 +3,7 @@
  * Reconstructs pipeline from saved state or creates from entry points
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Node, Edge } from '@xyflow/react';
 import { ModuleTemplate, ModuleInstance, NodePin } from '../../../types/moduleTypes';
 import { PipelineState, VisualState, EntryPoint } from '../../../types/pipelineTypes';
@@ -25,7 +25,9 @@ export interface UsePipelineInitializationProps {
  */
 function createEntryPointNodes(entryPoints: EntryPoint[], visualState?: VisualState): Node[] {
   return entryPoints.map((ep, index) => {
-    const position = visualState?.entryPoints?.[ep.node_id] || {
+    // Flat visual state: look up by React Flow node ID (entry-{node_id})
+    const reactFlowNodeId = `entry-${ep.node_id}`;
+    const position = visualState?.[reactFlowNodeId] || {
       x: 50 + index * 200,
       y: 50,
     };
@@ -169,8 +171,8 @@ function reconstructPipeline(
         return null;
       }
 
-      // Get position from visual state
-      const position = visualState.modules[moduleInstance.module_instance_id];
+      // Get position from flat visual state
+      const position = visualState[moduleInstance.module_instance_id];
       if (!position) {
         console.warn(`Position not found for module: ${moduleInstance.module_instance_id}`);
         return null;
@@ -245,24 +247,8 @@ function reconstructPipeline(
 }
 
 /**
- * Check if initial state has meaningful content (not just empty structures)
- */
-function hasMeaningfulState(
-  pipelineState?: PipelineState,
-  visualState?: VisualState
-): boolean {
-  if (!pipelineState || !visualState) return false;
-
-  // Check if there are actual modules or connections
-  const hasModules = pipelineState.modules.length > 0;
-  const hasConnections = pipelineState.connections.length > 0;
-  const hasVisualPositions = Object.keys(visualState.modules).length > 0;
-
-  return hasModules || hasConnections || hasVisualPositions;
-}
-
-/**
  * Hook to initialize pipeline from state or entry points
+ * Always reconstructs predictably from parent state
  */
 export function usePipelineInitialization({
   moduleTemplates,
@@ -272,8 +258,15 @@ export function usePipelineInitialization({
   setNodes,
   setEdges,
 }: UsePipelineInitializationProps) {
-  // Track if we've already initialized to prevent re-initialization
+  const [isInitialized, setIsInitialized] = useState(false);
   const hasInitializedRef = useRef(false);
+
+  // Capture initial props in refs so they don't trigger re-initialization
+  const initialPropsRef = useRef({
+    initialPipelineState,
+    initialVisualState,
+    entryPoints,
+  });
 
   useEffect(() => {
     // Only initialize once per mount
@@ -288,36 +281,56 @@ export function usePipelineInitialization({
       return;
     }
 
-    const hasSavedState = hasMeaningfulState(initialPipelineState, initialVisualState);
+    // Use captured initial props, not current props
+    const { initialPipelineState, initialVisualState, entryPoints } = initialPropsRef.current;
 
-    if (hasSavedState) {
-      // Reconstruct from saved state
-      if (!initialPipelineState || !initialVisualState) return;
+    console.log('[usePipelineInitialization] Initializing pipeline graph', {
+      hasInitialPipelineState: !!initialPipelineState,
+      entryPointsInState: initialPipelineState?.entry_points.length ?? 0,
+      entryPointsProp: entryPoints.length,
+      modulesInState: initialPipelineState?.modules.length ?? 0,
+    });
 
+    // ALWAYS reconstruct from state if entry points are present
+    if (initialPipelineState && initialPipelineState.entry_points.length > 0) {
       console.log('[usePipelineInitialization] Reconstructing from saved state:', {
         modules: initialPipelineState.modules.length,
         connections: initialPipelineState.connections.length,
-        visualPositions: Object.keys(initialVisualState.modules).length,
+        entryPoints: initialPipelineState.entry_points.length,
+        visualPositions: initialVisualState ? Object.keys(initialVisualState).length : 0,
+        entryPointDetails: initialPipelineState.entry_points,
       });
 
       const { nodes, edges } = reconstructPipeline(
         initialPipelineState,
-        initialVisualState,
+        initialVisualState || {},
         moduleTemplates
       );
 
       setNodes(nodes);
       setEdges(edges);
-      hasInitializedRef.current = true;
     } else {
-      // Create fresh entry points
-      if (entryPoints.length === 0) return;
-
+      // Create fresh entry points if no saved state
       console.log('[usePipelineInitialization] Creating fresh entry points:', entryPoints.length);
 
-      const entryPointNodes = createEntryPointNodes(entryPoints);
+      const entryPointNodes = createEntryPointNodes(entryPoints, initialVisualState);
       setNodes(entryPointNodes);
-      hasInitializedRef.current = true;
+      setEdges([]);
     }
-  }, [moduleTemplates, initialPipelineState, initialVisualState, entryPoints, setNodes, setEdges]);
+
+    hasInitializedRef.current = true;
+    setIsInitialized(true);
+    console.log('[usePipelineInitialization] Initialization complete');
+
+    // Cleanup on unmount only
+    return () => {
+      console.log('[usePipelineInitialization] Cleanup on unmount - resetting flags');
+      hasInitializedRef.current = false;
+      setIsInitialized(false);
+    };
+    // Only depend on moduleTemplates, not the initial state props (captured in ref)
+  }, [moduleTemplates, setNodes, setEdges]);
+
+  console.log('[usePipelineInitialization] Current isInitialized:', isInitialized);
+  return { isInitialized };
 }

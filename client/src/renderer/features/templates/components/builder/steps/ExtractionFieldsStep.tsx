@@ -3,9 +3,9 @@
  * Step 2: Define extraction fields by drawing boxes on the PDF
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { ExtractionField, SignatureObject } from '../../../types';
-import type { PipelineState, VisualState } from '../../../../../types/pipelineTypes';
+import type { PipelineState, VisualState, EntryPoint } from '../../../../../types/pipelineTypes';
 import { PdfViewer } from '../../../../../shared/components/pdf';
 import { PdfObjectOverlay } from './SignatureObjectsStep/PdfObjectOverlay';
 import { ExtractionFieldsSidebar, SidebarMode } from './ExtractionFieldsStep/ExtractionFieldsSidebar';
@@ -33,10 +33,20 @@ interface ExtractionFieldsStepProps {
   onTemplateNameChange: (name: string) => void;
   onTemplateDescriptionChange: (description: string) => void;
   onExtractionFieldsChange: (fields: ExtractionField[]) => void;
+  onPipelineStateChange: (state: PipelineState) => void;
   pdfScale: number;
   pdfCurrentPage: number;
   onPdfScaleChange: (scale: number) => void;
   onPdfCurrentPageChange: (page: number) => void;
+}
+
+// Helper: Convert extraction field to entry point
+function extractionFieldToEntryPoint(field: ExtractionField): EntryPoint {
+  return {
+    node_id: `entry_${field.name}`,
+    name: field.name,
+    type: 'str', // Extraction fields always output strings
+  };
 }
 
 export function ExtractionFieldsStep({
@@ -53,6 +63,7 @@ export function ExtractionFieldsStep({
   onTemplateNameChange,
   onTemplateDescriptionChange,
   onExtractionFieldsChange,
+  onPipelineStateChange,
   pdfScale,
   pdfCurrentPage,
   onPdfScaleChange,
@@ -76,6 +87,7 @@ export function ExtractionFieldsStep({
   // Form state for create/edit
   const [fieldName, setFieldName] = useState('');
   const [fieldDescription, setFieldDescription] = useState('');
+  const [fieldNameError, setFieldNameError] = useState<string | null>(null);
 
   // Signature objects visibility
   const [showSignatureObjects, setShowSignatureObjects] = useState(true);
@@ -106,6 +118,27 @@ export function ExtractionFieldsStep({
 
     return types;
   }, [flatSignatureObjects]);
+
+  // Keyboard handler for Delete key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only handle Delete key when a field is selected and not in create mode
+      if (e.key === 'Delete' && stagedFieldId && !tempFieldData) {
+        // Don't delete if user is typing in an input or textarea
+        const target = e.target as HTMLElement;
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+          return;
+        }
+
+        // Delete the selected field
+        onExtractionFieldsChange(extractionFields.filter(f => f.name !== stagedFieldId));
+        setStagedFieldId(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [stagedFieldId, tempFieldData, extractionFields, onExtractionFieldsChange]);
 
   // Mouse Handlers for Drawing
   const handleMouseDown = (
@@ -198,29 +231,71 @@ export function ExtractionFieldsStep({
   const handleSaveField = () => {
     if (!tempFieldData || !fieldName.trim()) return;
 
+    // Check for duplicate field names
+    const isDuplicate = extractionFields.some(field => field.name === fieldName.trim());
+    if (isDuplicate) {
+      setFieldNameError(`A field named "${fieldName.trim()}" already exists. Please choose a different name.`);
+      return;
+    }
+
     const newField: ExtractionField = {
-      name: fieldName,
+      name: fieldName.trim(),
       description: fieldDescription || null,
       page: tempFieldData.page,
       bbox: tempFieldData.bbox,
     };
 
-    onExtractionFieldsChange([...extractionFields, newField]);
+    // Update extraction fields
+    const updatedFields = [...extractionFields, newField];
+    onExtractionFieldsChange(updatedFields);
+
+    // Also update pipeline state entry points
+    const newEntryPoint = extractionFieldToEntryPoint(newField);
+    const updatedPipelineState = {
+      ...pipelineState,
+      entry_points: [...pipelineState.entry_points, newEntryPoint],
+    };
+    console.log('[ExtractionFieldsStep] Adding entry point:', {
+      newEntryPoint,
+      totalEntryPoints: updatedPipelineState.entry_points.length,
+      entryPoints: updatedPipelineState.entry_points,
+    });
+    onPipelineStateChange(updatedPipelineState);
 
     // Clear temp state
     setTempFieldData(null);
     setFieldName('');
     setFieldDescription('');
+    setFieldNameError(null);
   };
 
   const handleCancelField = () => {
     setTempFieldData(null);
     setFieldName('');
     setFieldDescription('');
+    setFieldNameError(null);
+  };
+
+  const handleFieldNameChange = (name: string) => {
+    setFieldName(name);
+    // Clear error as user types
+    if (fieldNameError) {
+      setFieldNameError(null);
+    }
   };
 
   const handleDeleteField = (fieldName: string) => {
-    onExtractionFieldsChange(extractionFields.filter(f => f.name !== fieldName));
+    // Remove from extraction fields
+    const updatedFields = extractionFields.filter(f => f.name !== fieldName);
+    onExtractionFieldsChange(updatedFields);
+
+    // Also remove from pipeline state entry points
+    const entryPointNodeId = `entry_${fieldName}`;
+    onPipelineStateChange({
+      ...pipelineState,
+      entry_points: pipelineState.entry_points.filter(ep => ep.node_id !== entryPointNodeId),
+    });
+
     setStagedFieldId(null);
   };
 
@@ -257,10 +332,38 @@ export function ExtractionFieldsStep({
   };
 
   const handleUpdateField = (fieldName: string, updates: Partial<ExtractionField>) => {
+    // If updating the name, check for duplicates
+    if (updates.name && updates.name !== fieldName) {
+      const isDuplicate = extractionFields.some(
+        field => field.name !== fieldName && field.name === updates.name.trim()
+      );
+      if (isDuplicate) {
+        // Validation error will be handled by the sidebar component
+        console.error(`Cannot rename to "${updates.name}": name already exists`);
+        return;
+      }
+    }
+
+    // Update extraction fields
     const updatedFields = extractionFields.map(field =>
       field.name === fieldName ? { ...field, ...updates } : field
     );
     onExtractionFieldsChange(updatedFields);
+
+    // If name changed, also update entry point
+    if (updates.name) {
+      const oldEntryPointNodeId = `entry_${fieldName}`;
+      const newEntryPointNodeId = `entry_${updates.name}`;
+
+      onPipelineStateChange({
+        ...pipelineState,
+        entry_points: pipelineState.entry_points.map(ep =>
+          ep.node_id === oldEntryPointNodeId
+            ? { ...ep, node_id: newEntryPointNodeId, name: updates.name }
+            : ep
+        ),
+      });
+    }
   };
 
   return (
@@ -281,11 +384,12 @@ export function ExtractionFieldsStep({
           showSignatureObjects={showSignatureObjects}
           fieldName={fieldName}
           fieldDescription={fieldDescription}
+          fieldNameError={fieldNameError}
           tempFieldData={tempFieldData}
           onTemplateNameChange={onTemplateNameChange}
           onTemplateDescriptionChange={onTemplateDescriptionChange}
           onShowSignatureObjectsChange={setShowSignatureObjects}
-          onFieldNameChange={setFieldName}
+          onFieldNameChange={handleFieldNameChange}
           onFieldDescriptionChange={setFieldDescription}
           onSaveField={handleSaveField}
           onCancelField={handleCancelField}
