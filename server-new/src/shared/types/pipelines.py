@@ -3,7 +3,7 @@ Pipeline Structure Types
 Core data structures for pipeline execution and visualization using dataclasses
 """
 from dataclasses import dataclass, field
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, TypeAlias
 
 
 @dataclass(frozen=True)
@@ -55,11 +55,7 @@ class PipelineState:
     connections: List[NodeConnection] = field(default_factory=list)
 
 
-@dataclass(frozen=True)
-class VisualState:
-    """Visual positioning data for the UI"""
-    modules: Dict[str, Position] = field(default_factory=dict)
-    entry_points: Dict[str, Position] = field(default_factory=dict)
+VisualState: TypeAlias = Dict[str, Position]
 
 
 @dataclass(frozen=True)

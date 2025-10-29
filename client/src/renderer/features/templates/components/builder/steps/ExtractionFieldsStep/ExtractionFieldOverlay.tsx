@@ -30,8 +30,6 @@ export function ExtractionFieldOverlay({
     return null;
   }
 
-  const pageHeight = pdfDimensions.height;
-
   // Render saved extraction fields
   const renderField = (field: ExtractionField) => {
     // Only show fields on current page (both are 1-indexed now)

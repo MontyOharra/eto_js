@@ -182,6 +182,27 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
       }
     }, [pipelineState, onChange, nodes.length, edges.length, isInitialized]);
 
+    // Track if we've captured initial visual state
+    const hasCapturedInitialVisualState = useRef(false);
+
+    // Capture visual state after initialization completes
+    useEffect(() => {
+      if (!onVisualChange) return;
+      if (!isInitialized) return;
+      if (hasCapturedInitialVisualState.current) return; // Only capture once after init
+
+      // Capture initial visual state (entry point positions, any loaded module positions)
+      const visualState = serializeToVisualState(nodes);
+      if (Object.keys(visualState).length > 0) {
+        console.log('[PipelineGraph] Capturing initial visual state after initialization:', {
+          nodeCount: nodes.length,
+          visualState
+        });
+        hasCapturedInitialVisualState.current = true;
+        onVisualChange(visualState);
+      }
+    }, [isInitialized, nodes, onVisualChange]); // Run when nodes change after initialization
+
     // React Flow node/edge change handlers
     const onNodesChange = useCallback(
       (changes: NodeChange[]) => {
@@ -466,8 +487,24 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
 
         moduleOps.addModule(template, position);
         onModulePlaced?.();
+
+        // Capture visual state after adding module
+        // Need to wait for next tick to ensure state has updated
+        setTimeout(() => {
+          if (onVisualChange) {
+            setNodes((currentNodes) => {
+              const visualState = serializeToVisualState(currentNodes);
+              console.log('[PipelineGraph onDrop] Capturing visual state after module added:', {
+                nodeCount: currentNodes.length,
+                visualState
+              });
+              onVisualChange(visualState);
+              return currentNodes;
+            });
+          }
+        }, 0);
       },
-      [viewOnly, screenToFlowPosition, moduleTemplates, moduleOps, onModulePlaced]
+      [viewOnly, screenToFlowPosition, moduleTemplates, moduleOps, onModulePlaced, onVisualChange]
     );
 
     // Prepare nodes with callbacks

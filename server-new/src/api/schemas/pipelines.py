@@ -2,7 +2,7 @@
 Pipelines API Schemas
 Pydantic models for pipeline definition endpoints
 """
-from typing import List, Dict, Any, Optional, Literal
+from typing import List, Dict, Any, Optional, Literal, TypeAlias
 from pydantic import BaseModel, Field
 
 # ============================================================================
@@ -56,10 +56,10 @@ class Position(BaseModel):
     y: float
 
 
-class VisualState(BaseModel):
-    """Visual positioning data for the UI"""
-    modules: Dict[str, Position] = {}  # module_instance_id -> position
-    entry_points: Dict[str, Position] = {}  # entry_point node_id -> position
+# Flat visual state structure - all node positions in one dictionary
+# Key: node_id (for both modules and entry points)
+# Value: Position {x, y}
+VisualState: TypeAlias = Dict[str, Position]
 
 
 # ============================================================================

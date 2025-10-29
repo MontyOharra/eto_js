@@ -39,9 +39,11 @@ class PipelineDefinitionRepository(BaseRepository[PipelineDefinitionModel]):
         return json.dumps(asdict(pipeline_state))
 
     def _serialize_visual_state(self, visual_state: VisualState) -> str:
-        """Convert VisualState dataclass to JSON string"""
+        """Convert VisualState (flat dict) to JSON string"""
         from dataclasses import asdict
-        return json.dumps(asdict(visual_state))
+        # visual_state is a dict of {node_id: Position}
+        # Convert Position dataclasses to dicts
+        return json.dumps({k: asdict(v) for k, v in visual_state.items()})
 
     def _deserialize_pipeline_state(self, json_str: str) -> PipelineState:
         """Convert JSON string to PipelineState dataclass"""
@@ -72,13 +74,20 @@ class PipelineDefinitionRepository(BaseRepository[PipelineDefinitionModel]):
         )
 
     def _deserialize_visual_state(self, json_str: str) -> VisualState:
-        """Convert JSON string to VisualState dataclass"""
+        """Convert JSON string to VisualState (flat dict structure)"""
         from shared.types.pipelines import Position
         data = json.loads(json_str)
-        # Convert position dicts to Position dataclasses
-        modules = {k: Position(**v) for k, v in data.get("modules", {}).items()}
-        entry_points = {k: Position(**v) for k, v in data.get("entry_points", {}).items()}
-        return VisualState(modules=modules, entry_points=entry_points)
+
+        # Handle both old nested structure and new flat structure
+        if "modules" in data or "entry_points" in data:
+            # Old nested structure - flatten it
+            result = {}
+            result.update({k: Position(**v) for k, v in data.get("modules", {}).items()})
+            result.update({k: Position(**v) for k, v in data.get("entry_points", {}).items()})
+            return result
+        else:
+            # New flat structure
+            return {k: Position(**v) for k, v in data.items()}
 
     def _model_to_full(self, model: PipelineDefinitionModel) -> PipelineDefinitionFull:
         """Convert ORM model to PipelineDefinitionFull dataclass"""

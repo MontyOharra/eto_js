@@ -252,7 +252,7 @@ def convert_create_template_request(request: CreatePdfTemplateRequest) -> PdfTem
         signature_objects=convert_pdf_objects_to_domain(request.signature_objects),
         extraction_fields=convert_extraction_fields_to_domain(request.extraction_fields),
         pipeline_state=request.pipeline_state.model_dump(),
-        visual_state=request.visual_state.model_dump(),
+        visual_state=request.visual_state if isinstance(request.visual_state, dict) else dict(request.visual_state),
         source_pdf_id=request.source_pdf_id or 0
     )
 
@@ -270,7 +270,7 @@ def convert_update_template_request(request: UpdatePdfTemplateRequest) -> PdfTem
         signature_objects=convert_pdf_objects_to_domain(request.signature_objects) if request.signature_objects else None,
         extraction_fields=convert_extraction_fields_to_domain(request.extraction_fields) if request.extraction_fields else None,
         pipeline_state=request.pipeline_state.model_dump() if request.pipeline_state else None,
-        visual_state=request.visual_state.model_dump() if request.visual_state else None
+        visual_state=(request.visual_state if isinstance(request.visual_state, dict) else dict(request.visual_state)) if request.visual_state else None
     )
 
 
