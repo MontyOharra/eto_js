@@ -142,44 +142,6 @@ function reconstructPins(
 }
 
 /**
- * Normalize visual state from old nested format to new flat format
- * Handles backward compatibility with templates saved before refactoring
- */
-function normalizeVisualState(visualState: any): VisualState {
-  console.log('[normalizeVisualState] Input visual state:', visualState);
-
-  // Check if this is the old nested format (has 'modules' or 'entryPoints' keys)
-  if (visualState && (visualState.modules || visualState.entryPoints)) {
-    console.log('[normalizeVisualState] Detected old nested format, converting to flat');
-    const flatState: VisualState = {};
-
-    // Copy module positions
-    if (visualState.modules) {
-      console.log('[normalizeVisualState] Module positions:', Object.keys(visualState.modules));
-      Object.assign(flatState, visualState.modules);
-    }
-
-    // Copy entry point positions with "entry-" prefix
-    if (visualState.entryPoints) {
-      console.log('[normalizeVisualState] Entry point positions:', Object.keys(visualState.entryPoints));
-      Object.entries(visualState.entryPoints).forEach(([key, value]) => {
-        // Old format: key might be "entry_field_name"
-        // New format: key should be "entry-entry_field_name"
-        const newKey = key.startsWith('entry-') ? key : `entry-${key}`;
-        flatState[newKey] = value as { x: number; y: number };
-      });
-    }
-
-    console.log('[normalizeVisualState] Flattened state keys:', Object.keys(flatState));
-    return flatState;
-  }
-
-  // Already in flat format or empty
-  console.log('[normalizeVisualState] Already in flat format or empty');
-  return visualState || {};
-}
-
-/**
  * Reconstruct pipeline from saved state
  */
 function reconstructPipeline(
@@ -189,13 +151,10 @@ function reconstructPipeline(
 ): { nodes: Node[]; edges: Edge[] } {
   console.log('Reconstructing pipeline from initial state...');
 
-  // Normalize visual state to handle both old and new formats
-  const normalizedVisualState = normalizeVisualState(visualState);
-
   // Build entry point nodes
   const entryPointNodes = createEntryPointNodes(
     pipelineState.entry_points || [],
-    normalizedVisualState
+    visualState
   );
 
   // Build nodes from module instances
@@ -212,8 +171,8 @@ function reconstructPipeline(
         return null;
       }
 
-      // Get position from normalized flat visual state
-      const position = normalizedVisualState[moduleInstance.module_instance_id];
+      // Get position from flat visual state
+      const position = visualState[moduleInstance.module_instance_id];
       if (!position) {
         console.warn(`Position not found for module: ${moduleInstance.module_instance_id}`);
         return null;
@@ -354,9 +313,7 @@ export function usePipelineInitialization({
       // Create fresh entry points if no saved state
       console.log('[usePipelineInitialization] Creating fresh entry points:', entryPoints.length);
 
-      // Normalize visual state for backward compatibility
-      const normalizedVisualState = normalizeVisualState(initialVisualState);
-      const entryPointNodes = createEntryPointNodes(entryPoints, normalizedVisualState);
+      const entryPointNodes = createEntryPointNodes(entryPoints, initialVisualState);
       setNodes(entryPointNodes);
       setEdges([]);
     }

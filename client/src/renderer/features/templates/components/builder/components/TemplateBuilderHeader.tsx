@@ -10,14 +10,12 @@ interface TemplateBuilderHeaderProps {
   pdfMetadata: PdfFileMetadataDTO | null;
   emailData?: EmailData | null;
   onClose: () => void;
-  mode?: 'create' | 'edit';
 }
 
 export function TemplateBuilderHeader({
   pdfMetadata,
   emailData,
   onClose,
-  mode = 'create',
 }: TemplateBuilderHeaderProps) {
   // Format file size
   const formatFileSize = (bytes: number | null): string => {
@@ -26,12 +24,10 @@ export function TemplateBuilderHeader({
     return `${mb.toFixed(2)} MB`;
   };
 
-  const title = mode === 'edit' ? 'Edit Template' : 'Template Builder';
-
   return (
     <div className="flex items-center justify-between p-4 border-b border-gray-700 flex-shrink-0">
       <div className="flex items-center space-x-4">
-        <h2 className="text-xl font-semibold text-white">{title}</h2>
+        <h2 className="text-xl font-semibold text-white">Template Builder</h2>
 
         {pdfMetadata && (
           <>

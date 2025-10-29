@@ -246,24 +246,13 @@ def convert_template_version(
 
 def convert_create_template_request(request: CreatePdfTemplateRequest) -> PdfTemplateCreate:
     """Convert API create request to domain PdfTemplateCreate"""
-    # Convert visual_state Dict[str, Position] to dict with plain dicts
-    visual_state_dict = {
-        node_id: {"x": pos.x, "y": pos.y}
-        for node_id, pos in request.visual_state.items()
-    }
-
-    print(f"[convert_create_template_request] Visual state conversion:")
-    print(f"  Input keys: {list(request.visual_state.keys())}")
-    print(f"  Output keys: {list(visual_state_dict.keys())}")
-    print(f"  Sample positions: {dict(list(visual_state_dict.items())[:3])}")
-
     return PdfTemplateCreate(
         name=request.name,
         description=request.description,
         signature_objects=convert_pdf_objects_to_domain(request.signature_objects),
         extraction_fields=convert_extraction_fields_to_domain(request.extraction_fields),
         pipeline_state=request.pipeline_state.model_dump(),
-        visual_state=visual_state_dict,
+        visual_state=request.visual_state.model_dump(),
         source_pdf_id=request.source_pdf_id or 0
     )
 
@@ -275,21 +264,13 @@ def convert_update_template_request(request: UpdatePdfTemplateRequest) -> PdfTem
     All fields (metadata + wizard data + pipeline) are included in a single object.
     Service layer will detect what changed and handle versioning/pipeline creation accordingly.
     """
-    # Convert visual_state if present
-    visual_state_dict = None
-    if request.visual_state is not None:
-        visual_state_dict = {
-            node_id: {"x": pos.x, "y": pos.y}
-            for node_id, pos in request.visual_state.items()
-        }
-
     return PdfTemplateUpdate(
         name=request.name,
         description=request.description,
         signature_objects=convert_pdf_objects_to_domain(request.signature_objects) if request.signature_objects else None,
         extraction_fields=convert_extraction_fields_to_domain(request.extraction_fields) if request.extraction_fields else None,
         pipeline_state=request.pipeline_state.model_dump() if request.pipeline_state else None,
-        visual_state=visual_state_dict
+        visual_state=request.visual_state.model_dump() if request.visual_state else None
     )
 
 

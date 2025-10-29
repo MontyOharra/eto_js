@@ -55,13 +55,11 @@ class PipelineState:
     connections: List[NodeConnection] = field(default_factory=list)
 
 
-# VisualState is now a simple Dict[str, Position] for flat structure
-# FLAT STRUCTURE (new format after refactoring):
-# All nodes (modules and entry points) stored in single flat dict
-# - Module positions: {"module_id": {"x": float, "y": float}}
-# - Entry point positions: {"entry-entry_id": {"x": float, "y": float}}
-# Note: This replaces the old nested format {modules: {...}, entry_points: {...}}
-VisualState = Dict[str, Position]
+@dataclass(frozen=True)
+class VisualState:
+    """Visual positioning data for the UI"""
+    modules: Dict[str, Position] = field(default_factory=dict)
+    entry_points: Dict[str, Position] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
