@@ -2,16 +2,15 @@
 ETO Run Pipeline Execution Step Repository
 Repository for eto_run_pipeline_execution_steps table with CRUD operations
 """
-import json
 import logging
-from typing import Type, List, Optional, Dict, Any
-from sqlalchemy import select
+from typing import Type, Optional, List
 
 from shared.database.repositories.base import BaseRepository
 from shared.database.models import EtoRunPipelineExecutionStepModel
-from shared.types.pipeline_execution import (
-    PipelineExecutionStep,
-    PipelineExecutionStepCreate,
+from shared.types.eto_run_pipeline_execution_steps import (
+    EtoRunPipelineExecutionStep,
+    EtoRunPipelineExecutionStepCreate,
+    EtoRunPipelineExecutionStepUpdate,
 )
 
 logger = logging.getLogger(__name__)
@@ -19,14 +18,12 @@ logger = logging.getLogger(__name__)
 
 class EtoRunPipelineExecutionStepRepository(BaseRepository[EtoRunPipelineExecutionStepModel]):
     """
-    Repository for Pipeline Execution Step CRUD operations.
+    Repository for pipeline execution step CRUD operations.
 
-    Supports dual-mode operation:
-    - Standalone: Pass connection_manager, auto-commits
-    - UoW: Pass session, caller controls transaction
-
-    This table stores audit trail of module executions during pipeline runs.
-    Each step records inputs, outputs, and any errors that occurred.
+    Handles:
+    - Basic CRUD for eto_run_pipeline_execution_steps table
+    - Conversion between ORM models and domain dataclasses
+    - Query operations (get by run_id, ordered steps)
     """
 
     @property
@@ -34,143 +31,141 @@ class EtoRunPipelineExecutionStepRepository(BaseRepository[EtoRunPipelineExecuti
         """Return the SQLAlchemy model class this repository manages"""
         return EtoRunPipelineExecutionStepModel
 
-    def _serialize_io(self, io_dict: Dict[str, Dict[str, Any]]) -> str:
+    # ========== Conversion Methods ==========
+
+    def _model_to_domain(self, model: EtoRunPipelineExecutionStepModel) -> EtoRunPipelineExecutionStep:
         """
-        Convert inputs/outputs dict to JSON string for database storage.
-
-        Args:
-            io_dict: Dict in format {node_name: {value, type}}
-
-        Returns:
-            JSON string representation
+        Convert ORM model to EtoRunPipelineExecutionStep dataclass.
+        No enum conversions needed for this table.
         """
-        return json.dumps(io_dict)
-
-    def _deserialize_io(self, json_str: Optional[str]) -> Dict[str, Dict[str, Any]]:
-        """
-        Convert JSON string to inputs/outputs dict.
-
-        Args:
-            json_str: JSON string from database (or None)
-
-        Returns:
-            Dict in format {node_name: {value, type}} or empty dict if None
-        """
-        if json_str is None:
-            return {}
-
-        return json.loads(json_str)
-
-    def _model_to_domain(self, model: EtoRunPipelineExecutionStepModel) -> PipelineExecutionStep:
-        """Convert ORM model to PipelineExecutionStep dataclass"""
-        return PipelineExecutionStep(
+        return EtoRunPipelineExecutionStep(
             id=model.id,
             run_id=model.run_id,
             module_instance_id=model.module_instance_id,
             step_number=model.step_number,
-            inputs=self._deserialize_io(model.inputs),
-            outputs=self._deserialize_io(model.outputs),
+            inputs=model.inputs,
+            outputs=model.outputs,
             error=model.error,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
 
-    def create(self, data: PipelineExecutionStepCreate) -> PipelineExecutionStep:
-        """
-        Create execution step audit record.
+    # ========== CRUD Operations ==========
 
-        Called during module execution to record inputs, outputs, and any errors.
+    def create(self, data: EtoRunPipelineExecutionStepCreate) -> EtoRunPipelineExecutionStep:
+        """
+        Create new pipeline execution step record.
 
         Args:
-            data: Step creation data
+            data: EtoRunPipelineExecutionStepCreate with step details
 
         Returns:
-            Created execution step with full details
+            Created EtoRunPipelineExecutionStep dataclass
         """
         with self._get_session() as session:
-            # Create ORM model
-            step_model = self.model_class(
+            # Create model
+            model = self.model_class(
                 run_id=data.run_id,
                 module_instance_id=data.module_instance_id,
                 step_number=data.step_number,
-                inputs=self._serialize_io(data.inputs),
-                outputs=self._serialize_io(data.outputs),
+                inputs=data.inputs,
+                outputs=data.outputs,
                 error=data.error,
+                # timestamps auto-set by server_default
             )
 
-            session.add(step_model)
-            session.commit()
-            session.refresh(step_model)
+            session.add(model)
+            session.flush()  # Get ID without committing
 
-            return self._model_to_domain(step_model)
+            return self._model_to_domain(model)
 
-    def get_steps_by_run_id(self, run_id: int) -> List[PipelineExecutionStep]:
+    def get_by_id(self, record_id: int) -> Optional[EtoRunPipelineExecutionStep]:
         """
-        Get all execution steps for a run, ordered by step_number.
-
-        Retrieves the complete audit trail for a pipeline execution.
+        Get pipeline execution step record by ID.
 
         Args:
-            run_id: Execution run ID
+            record_id: Step record ID
 
         Returns:
-            List of execution steps ordered by step_number (execution order)
+            EtoRunPipelineExecutionStep dataclass or None if not found
         """
         with self._get_session() as session:
-            stmt = select(self.model_class).where(
-                self.model_class.run_id == run_id
-            ).order_by(self.model_class.step_number, self.model_class.created_at)
+            model = session.get(self.model_class, record_id)
 
-            result = session.execute(stmt)
-            models = result.scalars().all()
+            if model is None:
+                return None
+
+            return self._model_to_domain(model)
+
+    def update(self, record_id: int, data: EtoRunPipelineExecutionStepUpdate) -> Optional[EtoRunPipelineExecutionStep]:
+        """
+        Update pipeline execution step record. Only updates provided fields.
+
+        Args:
+            record_id: Step record ID
+            data: EtoRunPipelineExecutionStepUpdate with fields to update (all optional)
+
+        Returns:
+            Updated EtoRunPipelineExecutionStep dataclass or None if not found
+        """
+        with self._get_session() as session:
+            model = session.get(self.model_class, record_id)
+
+            if model is None:
+                return None
+
+            # Update only provided fields
+            if data.inputs is not None:
+                model.inputs = data.inputs
+            if data.outputs is not None:
+                model.outputs = data.outputs
+            if data.error is not None:
+                model.error = data.error
+
+            session.flush()  # Persist changes
+
+            return self._model_to_domain(model)
+
+    # ========== Query Operations ==========
+
+    def get_by_run_id(self, run_id: int, ordered: bool = True) -> List[EtoRunPipelineExecutionStep]:
+        """
+        Get all pipeline execution steps for a specific pipeline execution run.
+
+        Args:
+            run_id: Pipeline execution run ID (FK to eto_run_pipeline_executions.id)
+            ordered: If True, order by step_number (default: True)
+
+        Returns:
+            List of EtoRunPipelineExecutionStep dataclasses
+        """
+        with self._get_session() as session:
+            query = session.query(self.model_class).filter_by(run_id=run_id)
+
+            if ordered:
+                query = query.order_by(self.model_class.step_number.asc())
+
+            models = query.all()
 
             return [self._model_to_domain(model) for model in models]
 
-    def get_by_id(self, step_id: int) -> Optional[PipelineExecutionStep]:
+    def get_by_module_instance_id(self, module_instance_id: str) -> List[EtoRunPipelineExecutionStep]:
         """
-        Get execution step by ID.
+        Get all steps for a specific module instance.
+        Useful for debugging specific module executions across runs.
 
         Args:
-            step_id: Step ID
+            module_instance_id: Module instance identifier
 
         Returns:
-            Execution step with full details or None if not found
+            List of EtoRunPipelineExecutionStep dataclasses
         """
         with self._get_session() as session:
-            step = session.get(self.model_class, step_id)
-
-            if step is None:
-                return None
-
-            return self._model_to_domain(step)
-
-    def get_by_module_instance_id(
-        self,
-        run_id: int,
-        module_instance_id: str
-    ) -> Optional[PipelineExecutionStep]:
-        """
-        Get execution step for a specific module in a run.
-
-        Useful for looking up a specific module's execution details.
-
-        Args:
-            run_id: Execution run ID
-            module_instance_id: Module instance ID
-
-        Returns:
-            Execution step or None if not found
-        """
-        with self._get_session() as session:
-            stmt = select(self.model_class).where(
-                self.model_class.run_id == run_id,
-                self.model_class.module_instance_id == module_instance_id
+            models = (
+                session.query(self.model_class)
+                .filter_by(module_instance_id=module_instance_id)
+                .order_by(self.model_class.created_at.desc())
+                .all()
             )
 
-            result = session.execute(stmt)
-            step = result.scalars().first()
-
-            if step is None:
-                return None
-
-            return self._model_to_domain(step)
+            return [self._model_to_domain(model) for model in models]

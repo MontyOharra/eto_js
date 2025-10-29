@@ -1,51 +1,53 @@
 """
-ETO Run Pipeline Execution Repository
-Repository for eto_run_pipeline_executions table with CRUD operations
+ETO Run Extraction Repository
+Repository for eto_run_extractions table with CRUD operations
 """
 import logging
 from typing import Type, Optional, List
 
 from shared.database.repositories.base import BaseRepository
-from shared.database.models import EtoRunPipelineExecutionModel
-from shared.types.eto_run_pipeline_executions import (
-    EtoRunPipelineExecution,
-    EtoRunPipelineExecutionCreate,
-    EtoRunPipelineExecutionUpdate,
+from shared.database.models import EtoRunExtractionModel
+from shared.types.eto_run_extractions import (
+    EtoRunExtraction,
+    EtoRunExtractionCreate,
+    EtoRunExtractionUpdate,
     EtoStepStatus,
 )
 
 logger = logging.getLogger(__name__)
 
 
-class EtoRunPipelineExecutionRepository(BaseRepository[EtoRunPipelineExecutionModel]):
+class EtoRunExtractionRepository(BaseRepository[EtoRunExtractionModel]):
     """
-    Repository for pipeline execution CRUD operations.
+    Repository for ETO extraction run CRUD operations.
 
     Handles:
-    - Basic CRUD for eto_run_pipeline_executions table
+    - Basic CRUD for eto_run_extractions table
     - Conversion between ORM models and domain dataclasses
-    - Query operations for finding executions by eto_run_id
+    - Query operations for finding extractions by run ID and status
+
+    Manages Stage 2 (Data Extraction) of ETO processing workflow.
     """
 
     @property
-    def model_class(self) -> Type[EtoRunPipelineExecutionModel]:
+    def model_class(self) -> Type[EtoRunExtractionModel]:
         """Return the SQLAlchemy model class this repository manages"""
-        return EtoRunPipelineExecutionModel
+        return EtoRunExtractionModel
 
     # ========== Conversion Methods ==========
 
-    def _model_to_domain(self, model: EtoRunPipelineExecutionModel) -> EtoRunPipelineExecution:
+    def _model_to_domain(self, model: EtoRunExtractionModel) -> EtoRunExtraction:
         """
-        Convert ORM model to EtoRunPipelineExecution dataclass.
+        Convert ORM model to EtoRunExtraction dataclass.
 
         Handles enum to string conversion:
         - model.status (EtoStepStatus enum) -> dataclass (string literal)
         """
-        return EtoRunPipelineExecution(
+        return EtoRunExtraction(
             id=model.id,
             eto_run_id=model.eto_run_id,
             status=model.status.value,  # Enum to string
-            executed_actions=model.executed_actions,
+            extracted_data=model.extracted_data,
             started_at=model.started_at,
             completed_at=model.completed_at,
             created_at=model.created_at,
@@ -54,22 +56,22 @@ class EtoRunPipelineExecutionRepository(BaseRepository[EtoRunPipelineExecutionMo
 
     # ========== CRUD Operations ==========
 
-    def create(self, data: EtoRunPipelineExecutionCreate) -> EtoRunPipelineExecution:
+    def create(self, data: EtoRunExtractionCreate) -> EtoRunExtraction:
         """
-        Create new pipeline execution record with status = "processing".
+        Create new extraction run with status = "processing".
 
         Args:
-            data: EtoRunPipelineExecutionCreate with eto_run_id
+            data: EtoRunExtractionCreate with eto_run_id
 
         Returns:
-            Created EtoRunPipelineExecution dataclass
+            Created EtoRunExtraction dataclass
         """
         with self._get_session() as session:
             # Create model with defaults
             model = self.model_class(
                 eto_run_id=data.eto_run_id,
-                started_at=data.started_at,
                 # status defaults to PROCESSING via model default
+                # extracted_data starts as None
                 # timestamps auto-set by server_default
             )
 
@@ -78,37 +80,37 @@ class EtoRunPipelineExecutionRepository(BaseRepository[EtoRunPipelineExecutionMo
 
             return self._model_to_domain(model)
 
-    def get_by_id(self, execution_id: int) -> Optional[EtoRunPipelineExecution]:
+    def get_by_id(self, extraction_id: int) -> Optional[EtoRunExtraction]:
         """
-        Get pipeline execution by ID.
+        Get extraction run by ID.
 
         Args:
-            execution_id: Pipeline execution ID
+            extraction_id: Extraction run ID
 
         Returns:
-            EtoRunPipelineExecution dataclass or None if not found
+            EtoRunExtraction dataclass or None if not found
         """
         with self._get_session() as session:
-            model = session.get(self.model_class, execution_id)
+            model = session.get(self.model_class, extraction_id)
 
             if model is None:
                 return None
 
             return self._model_to_domain(model)
 
-    def update(self, execution_id: int, data: EtoRunPipelineExecutionUpdate) -> Optional[EtoRunPipelineExecution]:
+    def update(self, extraction_id: int, data: EtoRunExtractionUpdate) -> Optional[EtoRunExtraction]:
         """
-        Update pipeline execution. Only updates provided fields.
+        Update extraction run. Only updates provided fields.
 
         Args:
-            execution_id: Pipeline execution ID
-            data: EtoRunPipelineExecutionUpdate with fields to update (all optional)
+            extraction_id: Extraction run ID
+            data: EtoRunExtractionUpdate with fields to update (all optional)
 
         Returns:
-            Updated EtoRunPipelineExecution dataclass or None if not found
+            Updated EtoRunExtraction dataclass or None if not found
         """
         with self._get_session() as session:
-            model = session.get(self.model_class, execution_id)
+            model = session.get(self.model_class, extraction_id)
 
             if model is None:
                 return None
@@ -116,8 +118,10 @@ class EtoRunPipelineExecutionRepository(BaseRepository[EtoRunPipelineExecutionMo
             # Update only provided fields
             if data.status is not None:
                 model.status = data.status  # SQLAlchemy will convert string to enum  # type: ignore
-            if data.executed_actions is not None:
-                model.executed_actions = data.executed_actions
+            if data.extracted_data is not None:
+                model.extracted_data = data.extracted_data
+            if data.started_at is not None:
+                model.started_at = data.started_at
             if data.completed_at is not None:
                 model.completed_at = data.completed_at
 
@@ -127,16 +131,16 @@ class EtoRunPipelineExecutionRepository(BaseRepository[EtoRunPipelineExecutionMo
 
     # ========== Query Operations ==========
 
-    def get_by_eto_run_id(self, eto_run_id: int) -> Optional[EtoRunPipelineExecution]:
+    def get_by_eto_run_id(self, eto_run_id: int) -> Optional[EtoRunExtraction]:
         """
-        Get pipeline execution by ETO run ID.
-        Expects only one pipeline execution per ETO run.
+        Get extraction run by ETO run ID.
+        Each ETO run should have at most one extraction record.
 
         Args:
             eto_run_id: ETO run ID
 
         Returns:
-            EtoRunPipelineExecution dataclass or None if not found
+            EtoRunExtraction dataclass or None if not found
         """
         with self._get_session() as session:
             model = session.query(self.model_class).filter_by(eto_run_id=eto_run_id).first()
@@ -146,16 +150,17 @@ class EtoRunPipelineExecutionRepository(BaseRepository[EtoRunPipelineExecutionMo
 
             return self._model_to_domain(model)
 
-    def get_by_status(self, status: EtoStepStatus, limit: Optional[int] = None) -> List[EtoRunPipelineExecution]:
+    def get_by_status(self, status: EtoStepStatus, limit: Optional[int] = None) -> List[EtoRunExtraction]:
         """
-        Get pipeline executions by status.
+        Get extraction runs by status.
+        Useful for monitoring/debugging extraction processing.
 
         Args:
             status: Status to filter by (e.g., "processing", "success", "failure")
             limit: Optional limit on number of results
 
         Returns:
-            List of EtoRunPipelineExecution dataclasses
+            List of EtoRunExtraction dataclasses
         """
         with self._get_session() as session:
             query = session.query(self.model_class).filter_by(status=status)

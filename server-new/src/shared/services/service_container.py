@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from features.pdf_files.service import PdfFilesService
     from features.pdf_templates.service import PdfTemplateService
     from features.pipelines.service import PipelineService
-    from features.pipelines.service_execution import PipelineExecutionService
+    from features.pipeline_execution.service import PipelineExecutionService
     from shared.database.connection import DatabaseConnectionManager
 
 logger = logging.getLogger(__name__)
@@ -127,7 +127,7 @@ class ServiceContainer:
                 'description': 'Email configuration management service'
             },
             'pipeline_execution': {
-                'class': 'features.pipelines.service_execution.PipelineExecutionService',
+                'class': 'features.pipeline_execution.service.PipelineExecutionService',
                 'args': [cls._connection_manager],
                 'singleton': True,
                 'description': 'Pipeline execution service for running compiled pipelines'

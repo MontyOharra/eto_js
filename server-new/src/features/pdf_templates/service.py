@@ -27,7 +27,7 @@ from shared.types.pipelines import PipelineState as PipelineStateDomain
 from shared.types.pipeline_definition_step import PipelineDefinitionStepCreate
 from shared.exceptions.service import ObjectNotFoundError, ConflictError, ServiceError
 from features.pipelines.service import PipelineService
-from features.pipelines.service_execution import PipelineExecutionService
+from features.pipeline_execution.service import PipelineExecutionService
 from features.pdf_files.service import PdfFilesService
 from shared.types.pipeline_execution import PipelineExecutionResult
 from api.mappers.pipelines import (

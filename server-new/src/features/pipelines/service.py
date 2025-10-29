@@ -38,7 +38,7 @@ from .utils.validation import PipelineValidator
 from .utils.compilation import PipelineCompiler
 
 if TYPE_CHECKING:
-    from features.pipelines.service_execution import PipelineExecutionService
+    from features.pipeline_execution.service import PipelineExecutionService
 
 logger = logging.getLogger(__name__)
 

@@ -398,7 +398,9 @@ Each status table shows:
 - `error` (JSON - error details if step failed)
 
 **PDF Access:**
-- View PDF (only in `success` and `failure` detail views)
+- View PDF via existing `/api/pdf-files/{pdf_file_id}` endpoint
+- PDF file ID available in run data
+- Only shown in `success` and `failure` detail views
 
 ---
 
@@ -544,8 +546,10 @@ Six status-based tables with distinct interactions:
 5. **Skip behavior**: Marks as skipped, excludes from bulk reprocessing
 6. **Stage isolation**: Not supported (sequential processing only)
 7. **Template assignment**: Not supported (must create new template)
-8. **PDF viewing**: Only in `success` and `failure` detail views
+8. **PDF viewing**: Via existing `/api/pdf-files/{pdf_file_id}` endpoint (no separate ETO endpoint)
 9. **Deletion**: Only from `skipped` status (permanent)
+10. **Stage data**: All stages returned in single `GET /{id}` response (no separate stage endpoints)
+11. **Statistics**: Not implemented (future enhancement if needed)
 
 ---
 
