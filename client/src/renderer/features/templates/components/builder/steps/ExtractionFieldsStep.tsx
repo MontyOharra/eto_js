@@ -5,7 +5,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { ExtractionField, SignatureObject } from '../../../types';
-import type { PipelineState, VisualState } from '../../../../../types/pipelineTypes';
+import type { PipelineState, VisualState, EntryPoint } from '../../../../../types/pipelineTypes';
 import { PdfViewer } from '../../../../../shared/components/pdf';
 import { PdfObjectOverlay } from './SignatureObjectsStep/PdfObjectOverlay';
 import { ExtractionFieldsSidebar, SidebarMode } from './ExtractionFieldsStep/ExtractionFieldsSidebar';
@@ -33,10 +33,20 @@ interface ExtractionFieldsStepProps {
   onTemplateNameChange: (name: string) => void;
   onTemplateDescriptionChange: (description: string) => void;
   onExtractionFieldsChange: (fields: ExtractionField[]) => void;
+  onPipelineStateChange: (state: PipelineState) => void;
   pdfScale: number;
   pdfCurrentPage: number;
   onPdfScaleChange: (scale: number) => void;
   onPdfCurrentPageChange: (page: number) => void;
+}
+
+// Helper: Convert extraction field to entry point
+function extractionFieldToEntryPoint(field: ExtractionField): EntryPoint {
+  return {
+    node_id: `entry_${field.name}`,
+    name: field.name,
+    type: 'str', // Extraction fields always output strings
+  };
 }
 
 export function ExtractionFieldsStep({
@@ -53,6 +63,7 @@ export function ExtractionFieldsStep({
   onTemplateNameChange,
   onTemplateDescriptionChange,
   onExtractionFieldsChange,
+  onPipelineStateChange,
   pdfScale,
   pdfCurrentPage,
   onPdfScaleChange,
@@ -234,7 +245,16 @@ export function ExtractionFieldsStep({
       bbox: tempFieldData.bbox,
     };
 
-    onExtractionFieldsChange([...extractionFields, newField]);
+    // Update extraction fields
+    const updatedFields = [...extractionFields, newField];
+    onExtractionFieldsChange(updatedFields);
+
+    // Also update pipeline state entry points
+    const newEntryPoint = extractionFieldToEntryPoint(newField);
+    onPipelineStateChange({
+      ...pipelineState,
+      entry_points: [...pipelineState.entry_points, newEntryPoint],
+    });
 
     // Clear temp state
     setTempFieldData(null);
@@ -259,7 +279,17 @@ export function ExtractionFieldsStep({
   };
 
   const handleDeleteField = (fieldName: string) => {
-    onExtractionFieldsChange(extractionFields.filter(f => f.name !== fieldName));
+    // Remove from extraction fields
+    const updatedFields = extractionFields.filter(f => f.name !== fieldName);
+    onExtractionFieldsChange(updatedFields);
+
+    // Also remove from pipeline state entry points
+    const entryPointNodeId = `entry_${fieldName}`;
+    onPipelineStateChange({
+      ...pipelineState,
+      entry_points: pipelineState.entry_points.filter(ep => ep.node_id !== entryPointNodeId),
+    });
+
     setStagedFieldId(null);
   };
 
@@ -308,10 +338,26 @@ export function ExtractionFieldsStep({
       }
     }
 
+    // Update extraction fields
     const updatedFields = extractionFields.map(field =>
       field.name === fieldName ? { ...field, ...updates } : field
     );
     onExtractionFieldsChange(updatedFields);
+
+    // If name changed, also update entry point
+    if (updates.name) {
+      const oldEntryPointNodeId = `entry_${fieldName}`;
+      const newEntryPointNodeId = `entry_${updates.name}`;
+
+      onPipelineStateChange({
+        ...pipelineState,
+        entry_points: pipelineState.entry_points.map(ep =>
+          ep.node_id === oldEntryPointNodeId
+            ? { ...ep, node_id: newEntryPointNodeId, name: updates.name }
+            : ep
+        ),
+      });
+    }
   };
 
   return (

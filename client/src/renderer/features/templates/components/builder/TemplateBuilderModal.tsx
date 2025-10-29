@@ -535,6 +535,7 @@ export function TemplateBuilderModal({
                     onTemplateNameChange={setTemplateName}
                     onTemplateDescriptionChange={setTemplateDescription}
                     onExtractionFieldsChange={setExtractionFields}
+                    onPipelineStateChange={setPipelineState}
                     pdfScale={pdfScale}
                     pdfCurrentPage={pdfCurrentPage}
                     onPdfScaleChange={setPdfScale}
@@ -545,7 +546,6 @@ export function TemplateBuilderModal({
               {currentStep === 'pipeline' && (
                 <div style={{ height: '100%' }}>
                   <PipelineBuilderStep
-                    extractionFields={extractionFields}
                     pipelineState={pipelineState}
                     visualState={visualState}
                     onPipelineStateChange={setPipelineState}
