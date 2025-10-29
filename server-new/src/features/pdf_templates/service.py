@@ -3,7 +3,7 @@ PDF Template Service
 Outward-facing service for managing PDF template CRUD and lifecycle
 """
 import logging
-from typing import Literal, Any
+from typing import Literal, Any, Optional
 
 from shared.database import DatabaseConnectionManager
 from shared.database.repositories import (
@@ -451,6 +451,417 @@ class PdfTemplateService:
             raise ServiceError(f"Failed to deactivate template {template_id}")
 
         return updated_template
+
+    # ==================== Template Matching ====================
+
+    def match_template(self, pdf_objects: PdfObjects) -> Optional[tuple[int, int]]:
+        """
+        Find the best matching template for a PDF document.
+
+        A template matches if ALL signature objects are found in the PDF.
+        Among matching templates, ranking:
+        1. First by total object count (more objects = better match)
+        2. For ties, weighted ranking by object type priority
+
+        Args:
+            pdf_objects: PDF objects extracted from the document
+
+        Returns:
+            Tuple of (template_id, version_id) if match found, None otherwise
+        """
+        logger.info("Starting template matching")
+
+        try:
+            # Get all active templates
+            active_templates = self.template_repository.list_templates(status="active")
+
+            if not active_templates:
+                logger.info("No active templates found for matching")
+                return None
+
+            matching_templates: list[tuple[PdfTemplateListView, PdfTemplateVersion, int]] = []
+
+            # Check each template's current version for complete match
+            for template in active_templates:
+                try:
+                    # Skip if no current version
+                    if template.current_version_id is None:
+                        logger.debug(f"Template {template.id} has no current version, skipping")
+                        continue
+
+                    # Get the current version
+                    current_version = self.version_repository.get_by_id(template.current_version_id)
+                    if not current_version:
+                        logger.debug(f"Template {template.id} current version not found, skipping")
+                        continue
+
+                    # Check if all signature objects from current version are found in PDF
+                    if self._is_complete_subset_match(pdf_objects, current_version.signature_objects):
+                        total_count = self._count_total_objects(current_version.signature_objects)
+                        matching_templates.append((template, current_version, total_count))
+                        logger.debug(
+                            f"Template {template.id} (version {current_version.version_number}): "
+                            f"COMPLETE MATCH with {total_count} objects"
+                        )
+                    else:
+                        logger.debug(
+                            f"Template {template.id} (version {current_version.version_number}): "
+                            f"incomplete match - skipped"
+                        )
+
+                except Exception as e:
+                    logger.warning(f"Error checking template {template.id}: {e}")
+                    continue
+
+            if not matching_templates:
+                logger.info("No template match found - no templates had all signature objects present")
+                return None
+
+            # Find the best match using ranking algorithm
+            try:
+                best_match = self._find_best_match(matching_templates)
+                template, version, total_count = best_match
+            except ValueError as e:
+                logger.error(f"Error finding best match: {e}")
+                return None
+
+            # Update version usage statistics
+            self.version_repository.increment_usage_count(version.id)
+
+            logger.info(
+                f"Template match found: {template.id} (version {version.version_number}) "
+                f"with {total_count} total objects"
+            )
+
+            return (template.id, version.id)
+
+        except Exception as e:
+            logger.error(f"Error in template matching: {e}", exc_info=True)
+            return None
+
+    def _is_complete_subset_match(self, pdf_objects: PdfObjects, template_objects: PdfObjects) -> bool:
+        """
+        Check if template signature objects are a complete subset of PDF objects.
+
+        Args:
+            pdf_objects: PDF objects from target document
+            template_objects: Template signature objects
+
+        Returns:
+            True if ALL template objects are found in PDF, False otherwise
+        """
+        # Check each object type
+        return (
+            self._match_text_words(pdf_objects.text_words, template_objects.text_words) and
+            self._match_text_lines(pdf_objects.text_lines, template_objects.text_lines) and
+            self._match_graphic_rects(pdf_objects.graphic_rects, template_objects.graphic_rects) and
+            self._match_graphic_lines(pdf_objects.graphic_lines, template_objects.graphic_lines) and
+            self._match_graphic_curves(pdf_objects.graphic_curves, template_objects.graphic_curves) and
+            self._match_images(pdf_objects.images, template_objects.images) and
+            self._match_tables(pdf_objects.tables, template_objects.tables)
+        )
+
+    def _find_best_match(
+        self,
+        matching_templates: list[tuple[PdfTemplateListView, PdfTemplateVersion, int]]
+    ) -> tuple[PdfTemplateListView, PdfTemplateVersion, int]:
+        """
+        Find best match using ranking algorithm:
+        1. First by total object count (more objects = better)
+        2. For ties, weighted ranking by object type priority
+
+        Args:
+            matching_templates: List of tuples (template, version, total_count), must be non-empty
+
+        Returns:
+            Best match tuple (template, version, total_count)
+
+        Raises:
+            ValueError: If matching_templates is empty
+        """
+        if not matching_templates:
+            raise ValueError("Cannot find best match from empty list")
+
+        # Sort by total count descending first
+        matching_templates.sort(key=lambda x: x[2], reverse=True)
+
+        # Get the highest count
+        max_count = matching_templates[0][2]
+
+        # Find all templates with the max count (ties)
+        tied_templates = [match for match in matching_templates if match[2] == max_count]
+
+        if len(tied_templates) == 1:
+            # No tie, return the winner
+            return tied_templates[0]
+
+        # Break ties using weighted ranking
+        logger.debug(f"Breaking tie between {len(tied_templates)} templates with {max_count} objects each")
+
+        best_match: Optional[tuple[PdfTemplateListView, PdfTemplateVersion, int]] = None
+        best_weighted_score = -1.0
+
+        for template, version, total_count in tied_templates:
+            weighted_score = self._calculate_weighted_score(version.signature_objects)
+            logger.debug(f"Template {template.id}: weighted score = {weighted_score}")
+
+            if weighted_score > best_weighted_score:
+                best_weighted_score = weighted_score
+                best_match = (template, version, total_count)
+
+        # This should never happen since we have at least one tied template
+        if best_match is None:
+            raise ValueError("Failed to determine best match from tied templates")
+
+        return best_match
+
+    def _count_total_objects(self, objects: PdfObjects) -> int:
+        """Count total objects across all types"""
+        return (
+            len(objects.text_words) +
+            len(objects.text_lines) +
+            len(objects.graphic_rects) +
+            len(objects.graphic_lines) +
+            len(objects.graphic_curves) +
+            len(objects.images) +
+            len(objects.tables)
+        )
+
+    def _calculate_weighted_score(self, objects: PdfObjects) -> float:
+        """
+        Calculate weighted score for tie-breaking.
+        Higher priority object types get more weight.
+        """
+        weights = {
+            'text_words': 1.0,
+            'text_lines': 2.0,
+            'graphic_rects': 1.5,
+            'graphic_lines': 1.2,
+            'graphic_curves': 1.3,
+            'images': 3.0,
+            'tables': 4.0
+        }
+
+        score = (
+            len(objects.text_words) * weights['text_words'] +
+            len(objects.text_lines) * weights['text_lines'] +
+            len(objects.graphic_rects) * weights['graphic_rects'] +
+            len(objects.graphic_lines) * weights['graphic_lines'] +
+            len(objects.graphic_curves) * weights['graphic_curves'] +
+            len(objects.images) * weights['images'] +
+            len(objects.tables) * weights['tables']
+        )
+
+        return score
+
+    # === Type-specific matching methods ===
+
+    def _match_text_words(self, pdf_words: list, template_words: list) -> bool:
+        """Match text word objects - returns True if all template words found"""
+        if not template_words:
+            return True  # Empty requirement always passes
+
+        for template_word in template_words:
+            if not self._find_text_word_match(pdf_words, template_word):
+                return False
+        return True
+
+    def _match_text_lines(self, pdf_lines: list, template_lines: list) -> bool:
+        """Match text line objects - returns True if all template lines found"""
+        if not template_lines:
+            return True
+
+        for template_line in template_lines:
+            if not self._find_text_line_match(pdf_lines, template_line):
+                return False
+        return True
+
+    def _match_graphic_rects(self, pdf_rects: list, template_rects: list) -> bool:
+        """Match graphic rectangle objects"""
+        if not template_rects:
+            return True
+
+        for template_rect in template_rects:
+            if not self._find_graphic_rect_match(pdf_rects, template_rect):
+                return False
+        return True
+
+    def _match_graphic_lines(self, pdf_lines: list, template_lines: list) -> bool:
+        """Match graphic line objects"""
+        if not template_lines:
+            return True
+
+        for template_line in template_lines:
+            if not self._find_graphic_line_match(pdf_lines, template_line):
+                return False
+        return True
+
+    def _match_graphic_curves(self, pdf_curves: list, template_curves: list) -> bool:
+        """Match graphic curve objects"""
+        if not template_curves:
+            return True
+
+        for template_curve in template_curves:
+            if not self._find_graphic_curve_match(pdf_curves, template_curve):
+                return False
+        return True
+
+    def _match_images(self, pdf_images: list, template_images: list) -> bool:
+        """Match image objects"""
+        if not template_images:
+            return True
+
+        for template_image in template_images:
+            if not self._find_image_match(pdf_images, template_image):
+                return False
+        return True
+
+    def _match_tables(self, pdf_tables: list, template_tables: list) -> bool:
+        """Match table objects"""
+        if not template_tables:
+            return True
+
+        for template_table in template_tables:
+            if not self._find_table_match(pdf_tables, template_table):
+                return False
+        return True
+
+    # === Individual object matching methods ===
+
+    def _find_text_word_match(self, pdf_words: list, template_word) -> bool:
+        """Find matching text word with content and position tolerance"""
+        position_tolerance = 10.0
+        content_similarity_threshold = 0.8
+
+        for pdf_word in pdf_words:
+            if pdf_word.page != template_word.page:
+                continue
+
+            # Position matching
+            if self._positions_match(pdf_word.bbox, template_word.bbox, position_tolerance):
+                # Content matching
+                if hasattr(template_word, 'text') and hasattr(pdf_word, 'text'):
+                    if template_word.text and pdf_word.text:
+                        similarity = self._calculate_text_similarity(template_word.text, pdf_word.text)
+                        if similarity >= content_similarity_threshold:
+                            return True
+        return False
+
+    def _find_text_line_match(self, pdf_lines: list, template_line) -> bool:
+        """Find matching text line with content and position tolerance"""
+        position_tolerance = 15.0  # Slightly more tolerance for lines
+        content_similarity_threshold = 0.7  # Slightly lower for longer text
+
+        for pdf_line in pdf_lines:
+            if pdf_line.page != template_line.page:
+                continue
+
+            if self._positions_match(pdf_line.bbox, template_line.bbox, position_tolerance):
+                if hasattr(template_line, 'text') and hasattr(pdf_line, 'text'):
+                    if template_line.text and pdf_line.text:
+                        similarity = self._calculate_text_similarity(template_line.text, pdf_line.text)
+                        if similarity >= content_similarity_threshold:
+                            return True
+        return False
+
+    def _find_graphic_rect_match(self, pdf_rects: list, template_rect) -> bool:
+        """Find matching graphic rectangle by position and size"""
+        position_tolerance = 5.0  # Tighter tolerance for graphics
+
+        for pdf_rect in pdf_rects:
+            if pdf_rect.page != template_rect.page:
+                continue
+
+            if self._positions_match(pdf_rect.bbox, template_rect.bbox, position_tolerance):
+                return True
+        return False
+
+    def _find_graphic_line_match(self, pdf_lines: list, template_line) -> bool:
+        """Find matching graphic line by position"""
+        position_tolerance = 5.0
+
+        for pdf_line in pdf_lines:
+            if pdf_line.page != template_line.page:
+                continue
+
+            if self._positions_match(pdf_line.bbox, template_line.bbox, position_tolerance):
+                return True
+        return False
+
+    def _find_graphic_curve_match(self, pdf_curves: list, template_curve) -> bool:
+        """Find matching graphic curve by position"""
+        position_tolerance = 8.0  # Curves might have slight variations
+
+        for pdf_curve in pdf_curves:
+            if pdf_curve.page != template_curve.page:
+                continue
+
+            if self._positions_match(pdf_curve.bbox, template_curve.bbox, position_tolerance):
+                return True
+        return False
+
+    def _find_image_match(self, pdf_images: list, template_image) -> bool:
+        """Find matching image by position and size"""
+        position_tolerance = 3.0  # Very tight tolerance for images
+
+        for pdf_image in pdf_images:
+            if pdf_image.page != template_image.page:
+                continue
+
+            if self._positions_match(pdf_image.bbox, template_image.bbox, position_tolerance):
+                return True
+        return False
+
+    def _find_table_match(self, pdf_tables: list, template_table) -> bool:
+        """Find matching table by position"""
+        position_tolerance = 10.0  # Tables might have slight layout variations
+
+        for pdf_table in pdf_tables:
+            if pdf_table.page != template_table.page:
+                continue
+
+            if self._positions_match(pdf_table.bbox, template_table.bbox, position_tolerance):
+                return True
+        return False
+
+    def _positions_match(self, bbox1: tuple[float, float, float, float], bbox2: tuple[float, float, float, float], tolerance: float) -> bool:
+        """Check if two bounding boxes match within tolerance"""
+        center1_x = (bbox1[0] + bbox1[2]) / 2
+        center1_y = (bbox1[1] + bbox1[3]) / 2
+        center2_x = (bbox2[0] + bbox2[2]) / 2
+        center2_y = (bbox2[1] + bbox2[3]) / 2
+
+        x_diff = abs(center1_x - center2_x)
+        y_diff = abs(center1_y - center2_y)
+
+        return x_diff <= tolerance and y_diff <= tolerance
+
+    def _calculate_text_similarity(self, text1: str, text2: str) -> float:
+        """Calculate text similarity using character bigrams (Jaccard similarity)"""
+        if not text1 or not text2:
+            return 0.0
+
+        text1 = text1.lower().strip()
+        text2 = text2.lower().strip()
+
+        if text1 == text2:
+            return 1.0
+
+        # Character bigram similarity
+        set1 = set(text1[i:i+2] for i in range(len(text1)-1))
+        set2 = set(text2[i:i+2] for i in range(len(text2)-1))
+
+        if not set1 and not set2:
+            return 1.0
+        if not set1 or not set2:
+            return 0.0
+
+        intersection = len(set1 & set2)
+        union = len(set1 | set2)
+
+        return intersection / union
+
+    # ==================== Template Simulation ====================
 
     def simulate(
         self,

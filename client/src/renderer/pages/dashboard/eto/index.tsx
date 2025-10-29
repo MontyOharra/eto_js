@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
-import { useMockEtoApi } from '../../../features/eto/hooks';
+import { useEtoApi } from '../../../features/eto/hooks';
 import { EtoRunsTable, RunDetailModal } from '../../../features/eto/components';
 import { EtoRunListItem, EtoRunStatus } from '../../../features/eto/types';
 import { TemplateBuilderModal } from '../../../features/templates/components';
@@ -18,7 +18,7 @@ function EtoPage() {
     deleteRuns,
     isLoading,
     error,
-  } = useMockEtoApi();
+  } = useEtoApi();
 
   // State to hold runs grouped by status
   const [runsByStatus, setRunsByStatus] = useState<

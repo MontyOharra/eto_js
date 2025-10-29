@@ -107,11 +107,12 @@ class PipelineExecutionStepResult:
 @dataclass(frozen=True)
 class ActionExecutionData:
     """
-    Data about an action module that would execute.
+    Data about an action module execution.
 
-    During simulation, action modules collect their data but don't actually
-    execute. This holds the data that would be passed to the action handler
-    if it were to execute in production.
+    Tracks whether the action was actually executed or just simulated.
+
+    - In simulation mode: executed=False, outputs=None (just shows what would happen)
+    - In production mode: executed=True, outputs contains actual results (side effects occurred)
 
     Format for executed_actions field:
         {"module_title": {"upstream_pin_name": "value", ...}, ...}
@@ -121,6 +122,9 @@ class ActionExecutionData:
     action_module_id: str  # e.g., "print_action" - for handler lookup
     inputs: Dict[str, Any]  # {upstream_pin_name: value} - using connected output pin names
     config: Dict[str, Any]  # Module configuration
+    executed: bool  # True if actually executed, False if simulation only
+    outputs: Optional[Dict[str, Any]] = None  # Outputs if executed, None if simulation
+    error: Optional[str] = None  # Error message if execution failed
 
 
 @dataclass(frozen=True)

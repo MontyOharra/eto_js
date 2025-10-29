@@ -37,18 +37,17 @@ export interface GetEtoRunsResponse {
 export type GetEtoRunDetailResponse = EtoRunDetail;
 
 // =============================================================================
-// POST /eto-runs/upload - Create run via manual PDF upload
+// POST /eto-runs - Create run from uploaded PDF
 // =============================================================================
 
-// Request: multipart/form-data with pdf_file: File
+// Request: { pdf_file_id: number }
 
 export interface PostEtoRunUploadResponse {
   id: number;
   pdf_file_id: number;
   status: 'not_started';
-  processing_step: null;
-  started_at: null;
-  completed_at: null;
+  started_at: string | null;  // ISO 8601, null for not_started runs
+  created_at: string;  // ISO 8601
 }
 
 // =============================================================================

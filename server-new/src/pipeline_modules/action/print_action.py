@@ -2,10 +2,13 @@
 Print Action Module
 Prints messages to server backend logs for testing pipeline execution
 """
+import logging
 from typing import Dict, Any
 from pydantic import BaseModel, Field
 from shared.types import ActionModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.utils.decorators import register
+
+logger = logging.getLogger(__name__)
 
 
 class PrintActionConfig(BaseModel):
@@ -60,11 +63,14 @@ class PrintAction(ActionModule):
         # Get the single input value (first value from inputs dict)
         message = list(inputs.values())[0]
 
-        # Print with optional prefix
+        # Log message with optional prefix (using WARNING level to ensure visibility)
         if cfg.prefix:
-            print(f"[ACTION] {cfg.prefix}{message}")
+            log_message = f"[ACTION] {cfg.prefix}{message}"
         else:
-            print(f"[ACTION] {message}")
+            log_message = f"[ACTION] {message}"
+
+        logger.warning(log_message)  # Using WARNING to ensure it shows in logs
+        print(log_message)  # Also print to stdout for console visibility
 
         # Actions return empty dict
         return {}

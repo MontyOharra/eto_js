@@ -62,3 +62,47 @@ class EtoRun:
     completed_at: Optional[datetime]
     created_at: datetime
     updated_at: datetime
+
+
+@dataclass
+class EtoRunListView:
+    """
+    ETO run with all joined data for API list view.
+
+    This is a flattened view combining data from:
+    - eto_runs table (core fields)
+    - pdf_files table (PDF info)
+    - emails table (source info, if email-sourced)
+    - eto_run_template_matchings (template matching result)
+    - pdf_template_versions (matched template version)
+    - pdf_templates (template details)
+
+    Used by repository's get_all_with_relations() method.
+    """
+    # Core ETO run fields
+    id: int
+    status: EtoRunStatus
+    processing_step: Optional[EtoProcessingStep]
+    started_at: Optional[datetime]
+    completed_at: Optional[datetime]
+    error_type: Optional[str]
+    error_message: Optional[str]
+
+    # PDF file info
+    pdf_file_id: int
+    pdf_original_filename: str
+    pdf_file_size: Optional[int]
+    pdf_page_count: Optional[int]
+
+    # Source info (email fields - all None if manual upload)
+    email_id: Optional[int]
+    email_sender_email: Optional[str]
+    email_received_date: Optional[datetime]
+    email_subject: Optional[str]
+    email_folder_name: Optional[str]
+
+    # Matched template info (all None if no successful match)
+    template_id: Optional[int]
+    template_name: Optional[str]
+    template_version_id: Optional[int]
+    template_version_num: Optional[int]

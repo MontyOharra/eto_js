@@ -87,6 +87,22 @@ class PdfFilesService:
 
         return pdf
 
+    def get_by_ids(self, pdf_ids: list[int]) -> dict[int, PdfFile]:
+        """
+        Batch fetch PDF files by IDs.
+
+        Args:
+            pdf_ids: List of PDF record IDs
+
+        Returns:
+            Dict mapping pdf_id to PdfFile dataclass
+        """
+        if not pdf_ids:
+            return {}
+
+        pdfs = self.pdf_repository.get_by_ids(pdf_ids)
+        return {pdf.id: pdf for pdf in pdfs}
+
     def get_pdf_file_bytes(self, pdf_id: int) -> tuple[bytes, str]:
         """
         Get PDF file bytes for streaming/download.

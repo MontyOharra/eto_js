@@ -815,8 +815,8 @@ class PipelineService:
         # Compile to execution steps
         compiled_steps = self._compile_pipeline(pruned_pipeline)
 
-        # Execute pipeline
-        execution_result = self.pipeline_execution_service.execute_pipeline(
+        # Simulate pipeline (compile_and_execute is for testing/simulation)
+        execution_result = self.pipeline_execution_service.simulate_pipeline(
             steps=compiled_steps,
             entry_values_by_name=entry_values,
             pipeline_state=pruned_pipeline

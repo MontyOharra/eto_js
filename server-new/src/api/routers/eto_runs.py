@@ -7,14 +7,17 @@ from typing import Optional, Literal, Any
 from fastapi import APIRouter, Query, status, Depends, File, UploadFile
 
 from api.schemas.eto_runs import (
-    # TODO: Import schemas once defined
-    # EtoRunListItem,
+    GetEtoRunsResponse,
+    BulkRunIdsRequest,
+    CreateEtoRunRequest,
+    CreateEtoRunResponse,
+    # TODO: Import additional schemas once defined
     # EtoRunDetail,
-    # CreateEtoRunResponse,
 )
 from api.mappers.eto_runs import (
-    # TODO: Import mappers once defined
-    # eto_run_list_to_api,
+    eto_run_list_to_api,
+    eto_run_to_create_response,
+    # TODO: Import additional mappers once defined
     # eto_run_detail_to_api,
 )
 
@@ -30,7 +33,7 @@ router = APIRouter(
 )
 
 
-@router.get("")  # , response_model=list[EtoRunListItem])
+@router.get("", response_model=GetEtoRunsResponse)
 async def list_eto_runs(
     status_filter: Optional[Literal["not_started", "processing", "success", "failure", "needs_template", "skipped"]] = Query(
         None,
@@ -38,10 +41,10 @@ async def list_eto_runs(
     ),
     limit: int = Query(50, ge=1, le=200, description="Number of runs to return"),
     offset: int = Query(0, ge=0, description="Number of runs to skip"),
-    sort_by: Literal["started_at", "completed_at"] = Query("started_at", description="Field to sort by"),
+    sort_by: Literal["started_at", "completed_at", "created_at"] = Query("created_at", description="Field to sort by"),
     sort_order: Literal["asc", "desc"] = Query("desc", description="Sort order"),
-    # service: EtoProcessingService = Depends(lambda: ServiceContainer.get_eto_processing_service())
-) -> Any:  # list[EtoRunListItem]:
+    service = Depends(lambda: ServiceContainer.get_eto_runs_service())
+) -> GetEtoRunsResponse:
     """
     List ETO runs with filtering by status and pagination.
 
@@ -53,17 +56,34 @@ async def list_eto_runs(
     - needs_template: No matching template found
     - skipped: Manually skipped by user
     """
-    # runs = service.list_runs(
-    #     status=status_filter,
-    #     limit=limit,
-    #     offset=offset,
-    #     sort_by=sort_by,
-    #     sort_order=sort_order
-    # )
-    # return eto_run_list_to_api(runs)
-
     logger.info(f"List ETO runs: status={status_filter}, limit={limit}, offset={offset}")
-    return []  # TODO: Implement
+
+    # Get runs with all related data using efficient SQL joins
+    runs = service.list_runs_with_relations(
+        status=status_filter,
+        limit=limit,
+        offset=offset,
+        order_by=sort_by,
+        desc=(sort_order == "desc")
+    )
+
+    # Get total count for pagination (using same filters but no limit/offset)
+    all_runs = service.list_runs(
+        status=status_filter,
+        limit=None,
+        offset=None
+    )
+    total = len(all_runs)
+
+    # Convert domain objects to API schema
+    items = eto_run_list_to_api(runs)
+
+    return GetEtoRunsResponse(
+        items=items,
+        total=total,
+        limit=limit,
+        offset=offset
+    )
 
 
 @router.get("/{id}")  # , response_model=EtoRunDetail)
@@ -92,70 +112,84 @@ async def get_eto_run(
     return {}  # TODO: Implement
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)  # , response_model=CreateEtoRunResponse)
+@router.post("", status_code=status.HTTP_201_CREATED, response_model=CreateEtoRunResponse)
 async def create_eto_run(
-    file: UploadFile = File(..., description="PDF file to process"),
-    # service: EtoProcessingService = Depends(lambda: ServiceContainer.get_eto_processing_service())
-) -> Any:  # CreateEtoRunResponse:
+    request: CreateEtoRunRequest,
+    service = Depends(lambda: ServiceContainer.get_eto_runs_service())
+) -> CreateEtoRunResponse:
     """
-    Create new ETO run via manual PDF upload.
+    Create new ETO run from an already-uploaded PDF.
+
+    Prerequisites:
+    1. PDF must be uploaded first via POST /api/pdf-files
+    2. Use the returned pdf_file_id in this request
 
     Flow:
-    1. Upload PDF file and create pdf_files record
-    2. Create eto_runs record with status="not_started"
+    1. Validates PDF file exists
+    2. Creates eto_runs record with status="not_started"
     3. Background worker automatically picks up and processes run
 
     Returns:
     - Created run ID
     - Initial status: "not_started"
     - PDF file ID
+    - Created timestamp
     """
-    # run = service.create_run_from_upload(file)
-    # return {
-    #     "id": run.id,
-    #     "status": run.status,
-    #     "pdf_file_id": run.pdf_file_id
-    # }
+    logger.info(f"Creating ETO run for PDF file {request.pdf_file_id}")
 
-    logger.info(f"Create ETO run from upload: filename={file.filename}")
-    return {}  # TODO: Implement
+    # Create the run using the service
+    run = service.create_run(request.pdf_file_id)
+
+    # Convert to API response
+    response = eto_run_to_create_response(run)
+
+    logger.info(f"Created ETO run {response.id} for PDF {response.pdf_file_id}")
+    return response
 
 
-@router.post("/{id}/reprocess")  # , response_model=EtoRunDetail)
-async def reprocess_eto_run(
-    id: int,
+@router.post("/reprocess", status_code=status.HTTP_204_NO_CONTENT)
+async def reprocess_eto_runs(
+    # request: ReprocessEtoRunsRequest,
     # service: EtoProcessingService = Depends(lambda: ServiceContainer.get_eto_processing_service())
-) -> Any:  # EtoRunDetail:
+) -> None:
     """
-    Reprocess failed or skipped ETO run.
+    Reprocess failed or skipped ETO runs (bulk operation).
 
-    Flow:
+    Request body: { run_ids: [1, 2, 3] }
+
+    For single run, send array with one ID: { run_ids: [1] }
+
+    Flow (for each run):
     1. Verify run status is "failure" or "skipped"
     2. Delete all stage records (template_matching, extraction, pipeline_execution + steps)
     3. Reset status to "not_started"
     4. Clear error fields
     5. Worker picks up and reprocesses from beginning
 
+    Response: 204 No Content
+
     Errors:
-    - 404: Run not found
-    - 400: Invalid status (can only reprocess failure/skipped runs)
+    - 404: One or more runs not found
+    - 400: One or more runs have invalid status (can only reprocess failure/skipped runs)
     """
-    # run = service.reprocess_run(id)
-    # return eto_run_detail_to_api(run)
-
-    logger.info(f"Reprocess ETO run: id={id}")
-    return {}  # TODO: Implement
+    # service.reprocess_runs(request.run_ids)
+    logger.info("Reprocess ETO runs")
+    return None  # TODO: Implement
 
 
-@router.post("/{id}/skip")  # , response_model=EtoRunDetail)
-async def skip_eto_run(
-    id: int,
+@router.post("/skip", status_code=status.HTTP_204_NO_CONTENT)
+async def skip_eto_runs(
+    # request: SkipEtoRunsRequest,
     # service: EtoProcessingService = Depends(lambda: ServiceContainer.get_eto_processing_service())
-) -> Any:  # EtoRunDetail:
+) -> None:
     """
-    Mark ETO run as skipped.
+    Mark ETO runs as skipped (bulk operation).
 
-    Flow:
+    Request body: { run_ids: [1, 2, 3] }
+
+    For single run, send array with one ID: { run_ids: [1] }
+
+    Flow (for each run):
     1. Verify run status is "failure" or "needs_template"
     2. Set status to "skipped"
     3. Preserves all stage data (for historical reference)
@@ -165,26 +199,30 @@ async def skip_eto_run(
     - Indicate intentional decision to not process this PDF
     - Can be reprocessed or deleted later
 
+    Response: 204 No Content
+
     Errors:
-    - 404: Run not found
-    - 400: Invalid status (can only skip failure/needs_template runs)
+    - 404: One or more runs not found
+    - 400: One or more runs have invalid status (can only skip failure/needs_template runs)
     """
-    # run = service.skip_run(id)
-    # return eto_run_detail_to_api(run)
-
-    logger.info(f"Skip ETO run: id={id}")
-    return {}  # TODO: Implement
+    # service.skip_runs(request.run_ids)
+    logger.info("Skip ETO runs")
+    return None  # TODO: Implement
 
 
-@router.delete("/{id}")  # , response_model=EtoRunDetail)
-async def delete_eto_run(
-    id: int,
+@router.delete("", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_eto_runs(
+    # request: DeleteEtoRunsRequest,
     # service: EtoProcessingService = Depends(lambda: ServiceContainer.get_eto_processing_service())
-) -> Any:  # EtoRunDetail:
+) -> None:
     """
-    Permanently delete ETO run.
+    Permanently delete ETO runs (bulk operation).
 
-    Flow:
+    Request body: { run_ids: [1, 2, 3] }
+
+    For single run, send array with one ID: { run_ids: [1] }
+
+    Flow (for each run):
     1. Verify run status is "skipped"
     2. Cascade delete all stage records
     3. Delete run record
@@ -194,42 +232,12 @@ async def delete_eto_run(
     - Can only delete runs with status="skipped"
     - Deletion is permanent (no recovery)
 
+    Response: 204 No Content
+
     Errors:
-    - 404: Run not found
-    - 400: Invalid status (can only delete skipped runs)
+    - 404: One or more runs not found
+    - 400: One or more runs have invalid status (can only delete skipped runs)
     """
-    # deleted_run = service.delete_run(id)
-    # return eto_run_detail_to_api(deleted_run)
-
-    logger.info(f"Delete ETO run: id={id}")
-    return {}  # TODO: Implement
-
-
-# ========== Bulk Operations (Future) ==========
-
-@router.post("/bulk-reprocess")
-async def bulk_reprocess_runs(
-    # run_ids: list[int],
-    # service: EtoProcessingService = Depends(lambda: ServiceContainer.get_eto_processing_service())
-) -> Any:
-    """
-    Reprocess multiple failed runs in bulk.
-
-    Future enhancement - not required for MVP.
-    """
-    logger.info("Bulk reprocess runs")
-    return {}  # TODO: Implement
-
-
-@router.post("/bulk-skip")
-async def bulk_skip_runs(
-    # run_ids: list[int],
-    # service: EtoProcessingService = Depends(lambda: ServiceContainer.get_eto_processing_service())
-) -> Any:
-    """
-    Skip multiple failed/needs_template runs in bulk.
-
-    Future enhancement - not required for MVP.
-    """
-    logger.info("Bulk skip runs")
-    return {}  # TODO: Implement
+    # service.delete_runs(request.run_ids)
+    logger.info("Delete ETO runs")
+    return None  # TODO: Implement

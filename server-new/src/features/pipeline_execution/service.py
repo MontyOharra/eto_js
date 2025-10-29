@@ -320,6 +320,49 @@ class PipelineExecutionService:
 
     # ==================== Public API ====================
 
+    def simulate_pipeline(
+        self,
+        steps: List[PipelineDefinitionStepFull],
+        entry_values_by_name: Dict[str, Any],
+        pipeline_state,  # PipelineState from pipelines module
+    ) -> PipelineExecutionResult:
+        """
+        Execute a compiled pipeline WITHOUT executing actions (SIMULATION MODE).
+
+        Used for:
+        - Template builder preview
+        - Pipeline testing
+        - Dry runs
+
+        Actions are NOT executed - only their input data is collected
+        to show users what would happen in production.
+
+        Policy:
+          - Fail fast on missing required entry names
+          - Extra entry names are ignored (logged)
+          - All Action modules run only after all Transform/Logic modules succeed
+          - Actions collect data but DON'T execute
+          - On any module error, the whole run is marked failed
+
+        Args:
+            steps: Compiled pipeline steps to execute
+            entry_values_by_name: Entry point values keyed by entry point name
+            pipeline_state: Pipeline state containing entry points for mapping
+
+        Returns:
+            PipelineExecutionResult with steps and action data (actions.executed=False)
+
+        Raises:
+            ValueError: Missing required entry values
+            RuntimeError: Module not found or execution failed
+        """
+        return self._execute_pipeline_internal(
+            steps=steps,
+            entry_values_by_name=entry_values_by_name,
+            pipeline_state=pipeline_state,
+            execute_actions=False
+        )
+
     def execute_pipeline(
         self,
         steps: List[PipelineDefinitionStepFull],
@@ -327,22 +370,55 @@ class PipelineExecutionService:
         pipeline_state,  # PipelineState from pipelines module
     ) -> PipelineExecutionResult:
         """
-        Execute a compiled pipeline with the provided entry values (SIMULATION MODE).
+        Execute a compiled pipeline WITH actions (PRODUCTION MODE).
 
-        This method executes the pipeline without any database persistence.
-        Used for template simulation to show users what would happen.
+        Used for:
+        - ETO production runs
+        - Any workflow requiring actual action execution
+
+        Actions ARE executed - side effects will occur (emails sent, API calls made, etc.)
 
         Policy:
           - Fail fast on missing required entry names
           - Extra entry names are ignored (logged)
           - All Action modules run only after all Transform/Logic modules succeed
-          - Actions collect data but DON'T execute (simulation only)
+          - Actions execute and produce side effects
           - On any module error, the whole run is marked failed
 
         Args:
             steps: Compiled pipeline steps to execute
             entry_values_by_name: Entry point values keyed by entry point name
             pipeline_state: Pipeline state containing entry points for mapping
+
+        Returns:
+            PipelineExecutionResult with steps and executed action results
+
+        Raises:
+            ValueError: Missing required entry values
+            RuntimeError: Module not found or execution failed
+        """
+        return self._execute_pipeline_internal(
+            steps=steps,
+            entry_values_by_name=entry_values_by_name,
+            pipeline_state=pipeline_state,
+            execute_actions=True
+        )
+
+    def _execute_pipeline_internal(
+        self,
+        steps: List[PipelineDefinitionStepFull],
+        entry_values_by_name: Dict[str, Any],
+        pipeline_state,  # PipelineState from pipelines module
+        execute_actions: bool,
+    ) -> PipelineExecutionResult:
+        """
+        Internal pipeline execution implementation.
+
+        Args:
+            steps: Compiled pipeline steps to execute
+            entry_values_by_name: Entry point values keyed by entry point name
+            pipeline_state: Pipeline state containing entry points for mapping
+            execute_actions: If True, execute actions; if False, only collect action data
 
         Returns:
             PipelineExecutionResult with steps and action data
@@ -402,7 +478,7 @@ class PipelineExecutionService:
                 action_steps.append(step)
             else:
                 # Transform or logic module
-                task = self._make_step_task(step, producer_of_pin, collector, action_collector, all_nodes_metadata, entry_points_lookup)
+                task = self._make_step_task(step, producer_of_pin, collector, action_collector, all_nodes_metadata, entry_points_lookup, execute_actions=execute_actions)
                 task_of_step[step.module_instance_id] = task
                 self._publish_outputs_for_downstream(step, task, producer_of_pin)
                 non_action_tasks.append(task)
@@ -417,7 +493,8 @@ class PipelineExecutionService:
         for step in action_steps:
             task = self._make_step_task(
                 step, producer_of_pin, collector, action_collector, all_nodes_metadata, entry_points_lookup,
-                extra_dependencies=[barrier]
+                extra_dependencies=[barrier],
+                execute_actions=execute_actions
             )
             task_of_step[step.module_instance_id] = task
             self._publish_outputs_for_downstream(step, task, producer_of_pin)
@@ -599,12 +676,13 @@ class PipelineExecutionService:
         all_nodes_metadata: Dict[str, List[NodeInstance]],
         entry_points_lookup: Dict[str, str],
         extra_dependencies: Optional[List[Any]] = None,
+        execute_actions: bool = False,
     ) -> Any:
         """
         Create delayed task for a module execution.
 
         For transforms/logic: Execute handler and return outputs
-        For actions: Collect data for later (simulation shows what would happen)
+        For actions: Execute (if execute_actions=True) or just collect data (if False)
 
         Args:
             step: Pipeline step to execute
@@ -614,6 +692,7 @@ class PipelineExecutionService:
             all_nodes_metadata: All node metadata for pin name lookups
             entry_points_lookup: Entry point node_id -> name mapping
             extra_dependencies: Additional delayed dependencies (e.g., action barrier)
+            execute_actions: If True, execute action handlers; if False, only collect data
 
         Returns:
             Delayed task that produces {output_pin_id: value}
@@ -689,8 +768,7 @@ class PipelineExecutionService:
             inputs_dict = {inp_id: val for inp_id, val in zip(input_ids, values)}
 
             if is_action:
-                # Action module: Collect data, don't execute
-                # Use upstream pin names (not action input names) for better UX
+                # Convert inputs to upstream pin names for better UX
                 upstream_named_inputs = _convert_to_upstream_named_inputs(
                     inputs_dict,
                     step.input_field_mappings,
@@ -701,19 +779,68 @@ class PipelineExecutionService:
                 # Get module title from handler for display
                 module_title = getattr(handler, 'title', module_id)
 
-                action_collector.add(ActionExecutionData(
-                    module_instance_id=step.module_instance_id,
-                    module_title=module_title,
-                    action_module_id=module_id,
-                    inputs=upstream_named_inputs,
-                    config=step.module_config
-                ))
+                if execute_actions:
+                    # ============ PRODUCTION MODE: Execute action ============
+                    try:
+                        # Create validated config instance
+                        config_instance = ConfigModel(**step.module_config)
 
-                # Actions don't produce outputs
-                outputs_dict = {}
-                error = None
+                        # Execute action handler (SIDE EFFECTS OCCUR HERE)
+                        outputs_dict = handlerInstance.run(
+                            inputs=inputs_dict,  # Use raw node_id keyed inputs
+                            cfg=config_instance,
+                            context=ctx
+                        )
+                        error = None
 
-                logger.debug(f"Collected action data for {step.module_instance_id}")
+                        logger.info(f"Executed action {step.module_instance_id}: {module_title}")
+
+                        # Collect for audit trail with execution flag
+                        action_collector.add(ActionExecutionData(
+                            module_instance_id=step.module_instance_id,
+                            module_title=module_title,
+                            action_module_id=module_id,
+                            inputs=upstream_named_inputs,
+                            config=step.module_config,
+                            executed=True,
+                            outputs=outputs_dict,
+                            error=None
+                        ))
+
+                    except Exception as e:
+                        outputs_dict = {}
+                        error = f"{type(e).__name__}: {e}"
+                        logger.exception(f"Action {step.module_instance_id} failed: {e}")
+
+                        # Collect failure for audit
+                        action_collector.add(ActionExecutionData(
+                            module_instance_id=step.module_instance_id,
+                            module_title=module_title,
+                            action_module_id=module_id,
+                            inputs=upstream_named_inputs,
+                            config=step.module_config,
+                            executed=True,
+                            outputs=None,
+                            error=error
+                        ))
+                else:
+                    # ============ SIMULATION MODE: Just collect data ============
+                    action_collector.add(ActionExecutionData(
+                        module_instance_id=step.module_instance_id,
+                        module_title=module_title,
+                        action_module_id=module_id,
+                        inputs=upstream_named_inputs,
+                        config=step.module_config,
+                        executed=False,  # Flag: simulation only
+                        outputs=None,
+                        error=None
+                    ))
+
+                    # Actions don't produce outputs in simulation
+                    outputs_dict = {}
+                    error = None
+
+                    logger.debug(f"Collected action data for {step.module_instance_id} (simulation)")
             else:
                 # Transform/Logic module: Execute normally
                 try:

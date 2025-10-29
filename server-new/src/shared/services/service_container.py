@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from features.pdf_templates.service import PdfTemplateService
     from features.pipelines.service import PipelineService
     from features.pipeline_execution.service import PipelineExecutionService
+    from features.eto_runs.service import EtoRunsService
     from shared.database.connection import DatabaseConnectionManager
 
 logger = logging.getLogger(__name__)
@@ -143,6 +144,12 @@ class ServiceContainer:
                 'args': [cls._connection_manager, '_service:pipelines', '_service:pdf_files', '_service:pipeline_execution'],
                 'singleton': True,
                 'description': 'PDF template service with versioning and pipeline integration'
+            },
+            'eto_runs': {
+                'class': 'features.eto_runs.service.EtoRunsService',
+                'args': [cls._connection_manager, '_service:pdf_templates', '_service:pdf_files', '_service:pipeline_execution'],
+                'singleton': True,
+                'description': 'ETO runs service for processing lifecycle management'
             },
         }
 
@@ -348,6 +355,11 @@ class ServiceContainer:
     def get_pipeline_execution_service(cls) -> 'PipelineExecutionService':
         """Get the pipeline execution service"""
         return cls.get('pipeline_execution')
+
+    @classmethod
+    def get_eto_runs_service(cls) -> 'EtoRunsService':
+        """Get the ETO runs service"""
+        return cls.get('eto_runs')
 
     @classmethod
     def get_connection_manager(cls) -> 'DatabaseConnectionManager':

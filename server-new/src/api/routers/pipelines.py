@@ -231,10 +231,10 @@ async def execute_pipeline(
             f"No compiled steps found for pipeline {id} (plan {pipeline.compiled_plan_id})"
         )
 
-    logger.info(f"Executing pipeline {id} with {len(steps)} steps")
+    logger.info(f"Simulating pipeline {id} with {len(steps)} steps")
 
-    # Execute pipeline
-    result = execution_service.execute_pipeline(
+    # Simulate pipeline (testing endpoint - no action execution)
+    result = execution_service.simulate_pipeline(
         steps=steps,
         entry_values_by_name=request.entry_values,
         pipeline_state=pipeline.pipeline_state

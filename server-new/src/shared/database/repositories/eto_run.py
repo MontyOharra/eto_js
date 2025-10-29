@@ -3,18 +3,31 @@ ETO Run Repository
 Repository for eto_runs table with CRUD operations
 """
 import logging
-from typing import Type, Optional, List
+from typing import Type, Optional, List, Tuple
 from datetime import datetime
+from sqlalchemy.orm import joinedload, selectinload
 
 from shared.database.repositories.base import BaseRepository
-from shared.database.models import EtoRunModel
+from shared.database.models import (
+    EtoRunModel,
+    PdfFileModel,
+    EmailModel,
+    EtoRunTemplateMatchingModel,
+    PdfTemplateVersionModel,
+    PdfTemplateModel,
+)
 from shared.types.eto_runs import (
     EtoRun,
     EtoRunCreate,
     EtoRunUpdate,
     EtoRunStatus,
     EtoProcessingStep,
+    EtoRunListView,
 )
+from shared.types.pdf_files import PdfFile
+from shared.types.email import Email
+from shared.types.eto_run_template_matchings import EtoRunTemplateMatching
+from shared.types.pdf_templates import PdfTemplate, PdfTemplateVersion
 
 logger = logging.getLogger(__name__)
 
@@ -46,14 +59,16 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
         Convert ORM model to EtoRun dataclass.
 
         Handles enum to string conversion:
-        - model.status (EtoRunStatus enum) -> dataclass (string literal)
-        - model.processing_step (EtoRunProcessingStep enum) -> dataclass (string literal)
+        - model.status (EtoRunStatus enum or str) -> dataclass (string literal)
+        - model.processing_step (EtoRunProcessingStep enum or str) -> dataclass (string literal)
+
+        Note: With native_enum=False, SQLAlchemy may return string values instead of Enum instances
         """
         return EtoRun(
             id=model.id,
             pdf_file_id=model.pdf_file_id,
-            status=model.status.value,  # Enum to string
-            processing_step=model.processing_step.value if model.processing_step else None,  # Enum to string
+            status=model.status.value if hasattr(model.status, 'value') else model.status,
+            processing_step=model.processing_step.value if (model.processing_step and hasattr(model.processing_step, 'value')) else model.processing_step,
             error_type=model.error_type,
             error_message=model.error_message,
             error_details=model.error_details,
@@ -146,6 +161,56 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
 
     # ========== Query Operations ==========
 
+    def get_all(
+        self,
+        status: Optional[EtoRunStatus] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
+        order_by: str = "created_at",
+        desc: bool = True
+    ) -> List[EtoRun]:
+        """
+        Get all ETO runs with optional filtering, pagination, and sorting.
+
+        Args:
+            status: Filter by status (optional)
+            limit: Maximum number of results (optional)
+            offset: Number of results to skip (optional)
+            order_by: Field to order by (default: created_at)
+            desc: Sort descending if True (default: True - newest first)
+
+        Returns:
+            List of EtoRun dataclasses
+        """
+        with self._get_session() as session:
+            # Build base query
+            query = session.query(self.model_class)
+
+            # Apply status filter if provided
+            if status is not None:
+                query = query.filter_by(status=status)
+
+            # Apply ordering
+            if hasattr(self.model_class, order_by):
+                order_column = getattr(self.model_class, order_by)
+                if desc:
+                    query = query.order_by(order_column.desc())
+                else:
+                    query = query.order_by(order_column)
+            else:
+                logger.warning(f"Field '{order_by}' does not exist on {self.model_class.__name__}, using created_at")
+                query = query.order_by(self.model_class.created_at.desc())
+
+            # Apply pagination
+            if offset is not None:
+                query = query.offset(offset)
+            if limit is not None:
+                query = query.limit(limit)
+
+            # Execute and convert
+            models = query.all()
+            return [self._model_to_domain(model) for model in models]
+
     def get_by_status(self, status: EtoRunStatus, limit: Optional[int] = None) -> List[EtoRun]:
         """
         Get ETO runs by status.
@@ -167,3 +232,131 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
             models = query.all()
 
             return [self._model_to_domain(model) for model in models]
+
+    def get_all_with_relations(
+        self,
+        status: Optional[EtoRunStatus] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
+        order_by: str = "created_at",
+        desc: bool = True
+    ) -> List[EtoRunListView]:
+        """
+        Get all ETO runs with all related data in a single query.
+
+        Performs LEFT JOINs to collect data from:
+        - pdf_files (required)
+        - emails (optional - NULL for manual uploads)
+        - eto_run_template_matchings (optional - NULL if no match)
+        - pdf_template_versions (optional - NULL if no version)
+        - pdf_templates (optional - NULL if no template)
+
+        Args:
+            status: Filter by status (optional)
+            limit: Maximum number of results (optional)
+            offset: Number of results to skip (optional)
+            order_by: Field to order by (default: created_at)
+            desc: Sort descending if True (default: True - newest first)
+
+        Returns:
+            List of EtoRunListView dataclasses with all joined data
+        """
+        with self._get_session() as session:
+            # Build query with LEFT JOINs
+            query = (
+                session.query(
+                    # ETO run fields
+                    EtoRunModel.id,
+                    EtoRunModel.status,
+                    EtoRunModel.processing_step,
+                    EtoRunModel.started_at,
+                    EtoRunModel.completed_at,
+                    EtoRunModel.error_type,
+                    EtoRunModel.error_message,
+                    # PDF file fields
+                    PdfFileModel.id.label("pdf_file_id"),
+                    PdfFileModel.original_filename,
+                    PdfFileModel.file_size,
+                    PdfFileModel.page_count,
+                    # Email fields (optional)
+                    EmailModel.id.label("email_id"),
+                    EmailModel.sender_email,
+                    EmailModel.received_date,
+                    EmailModel.subject,
+                    EmailModel.folder_name,
+                    # Template matching fields (optional)
+                    PdfTemplateModel.id.label("template_id"),
+                    PdfTemplateModel.name.label("template_name"),
+                    PdfTemplateVersionModel.id.label("template_version_id"),
+                    PdfTemplateVersionModel.version_num,
+                )
+                .join(PdfFileModel, EtoRunModel.pdf_file_id == PdfFileModel.id)
+                .outerjoin(EmailModel, PdfFileModel.email_id == EmailModel.id)
+                .outerjoin(
+                    EtoRunTemplateMatchingModel,
+                    EtoRunModel.id == EtoRunTemplateMatchingModel.eto_run_id
+                )
+                .outerjoin(
+                    PdfTemplateVersionModel,
+                    EtoRunTemplateMatchingModel.matched_template_version_id == PdfTemplateVersionModel.id
+                )
+                .outerjoin(
+                    PdfTemplateModel,
+                    PdfTemplateVersionModel.pdf_template_id == PdfTemplateModel.id
+                )
+            )
+
+            # Apply status filter if provided
+            if status is not None:
+                query = query.filter(EtoRunModel.status == status)
+
+            # Apply ordering
+            if hasattr(EtoRunModel, order_by):
+                order_column = getattr(EtoRunModel, order_by)
+                if desc:
+                    query = query.order_by(order_column.desc())
+                else:
+                    query = query.order_by(order_column)
+            else:
+                logger.warning(f"Field '{order_by}' does not exist on EtoRunModel, using created_at")
+                query = query.order_by(EtoRunModel.created_at.desc())
+
+            # Apply pagination
+            if offset is not None:
+                query = query.offset(offset)
+            if limit is not None:
+                query = query.limit(limit)
+
+            # Execute query
+            rows = query.all()
+
+            # Convert rows to EtoRunListView dataclasses
+            return [
+                EtoRunListView(
+                    # Core ETO run fields
+                    id=row.id,
+                    status=row.status.value,  # Enum to string
+                    processing_step=row.processing_step.value if row.processing_step else None,  # Enum to string
+                    started_at=row.started_at,
+                    completed_at=row.completed_at,
+                    error_type=row.error_type,
+                    error_message=row.error_message,
+                    # PDF file info
+                    pdf_file_id=row.pdf_file_id,
+                    pdf_original_filename=row.original_filename,
+                    pdf_file_size=row.file_size,
+                    pdf_page_count=row.page_count,
+                    # Source info (email fields - all None if manual upload)
+                    email_id=row.email_id,
+                    email_sender_email=row.sender_email,
+                    email_received_date=row.received_date,
+                    email_subject=row.subject,
+                    email_folder_name=row.folder_name,
+                    # Matched template info (all None if no successful match)
+                    template_id=row.template_id,
+                    template_name=row.template_name,
+                    template_version_id=row.template_version_id,
+                    template_version_num=row.version_num,
+                )
+                for row in rows
+            ]

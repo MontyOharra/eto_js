@@ -282,6 +282,13 @@ async def initialize_services() -> None:
         except Exception as e:
             logger.warning(f"Failed to initialize email config service: {e}")
 
+        # 4. Initialize ETO processing services
+        try:
+            eto_runs_service = ServiceContainer.get_eto_runs_service()
+            logger.info("ETO runs service initialized")
+        except Exception as e:
+            logger.warning(f"Failed to initialize ETO runs service: {e}")
+
         logger.info("All services initialized successfully")
 
         # Start email ingestion service (background workers)
@@ -291,6 +298,17 @@ async def initialize_services() -> None:
             logger.info("Email ingestion service started successfully")
         except Exception as service_error:
             logger.warning(f"Email ingestion service startup failed: {service_error}")
+
+        # Start ETO processing worker (background polling)
+        try:
+            eto_runs_service = ServiceContainer.get_eto_runs_service()
+            worker_started = await eto_runs_service.startup()
+            if worker_started:
+                logger.info("ETO processing worker started successfully")
+            else:
+                logger.warning("ETO processing worker failed to start or is disabled")
+        except Exception as service_error:
+            logger.warning(f"ETO processing worker startup failed: {service_error}")
 
 
     except Exception as e:
@@ -313,6 +331,15 @@ async def cleanup_services() -> None:
                     logger.info("Email ingestion service stopped")
             except Exception as e:
                 logger.warning(f"Failed to stop email ingestion service: {e}")
+
+            # Stop ETO processing worker if running
+            try:
+                eto_runs_service = ServiceContainer.get_eto_runs_service()
+                if hasattr(eto_runs_service, 'shutdown'):
+                    await eto_runs_service.shutdown(graceful=True)
+                    logger.info("ETO processing worker stopped gracefully")
+            except Exception as e:
+                logger.warning(f"Failed to stop ETO processing worker: {e}")
 
 
         if _connection_manager:
@@ -499,6 +526,7 @@ def register_routers(app: FastAPI) -> None:
             pipelines_router,
             modules_router,
             admin_router,
+            eto_runs_router,
         )
 
         # Register all routers
@@ -519,6 +547,9 @@ def register_routers(app: FastAPI) -> None:
 
         app.include_router(admin_router, prefix="/api")
         logger.info("Registered admin router at /api/admin")
+
+        app.include_router(eto_runs_router, prefix="/api")
+        logger.info("Registered eto runs router at /api/eto-runs")
 
     except ImportError as e:
         logger.error(f"Could not import routers: {e}", exc_info=True)
@@ -547,7 +578,8 @@ def register_info_endpoint(app: FastAPI) -> None:
                 "pdf_templates": "/api/pdf-templates",
                 "pipelines": "/api/pipelines",
                 "modules": "/api/modules",
-                "admin": "/api/admin"
+                "admin": "/api/admin",
+                "eto_runs": "/api/eto-runs"
             },
             "documentation": {
                 "email_configs": "Email ingestion configuration management (CRUD, activation, discovery)",
@@ -555,7 +587,8 @@ def register_info_endpoint(app: FastAPI) -> None:
                 "pdf_templates": "PDF template creation, versioning, and activation",
                 "pipelines": "Pipeline definition management (dev/testing - CRUD, compilation)",
                 "modules": "Module catalog access (GET modules for pipeline building)",
-                "admin": "Administrative endpoints (module sync, system management)"
+                "admin": "Administrative endpoints (module sync, system management)",
+                "eto_runs": "ETO run lifecycle management (list, view, reprocess, skip, delete)"
             },
             "features": {
                 "email_ingestion": "Automated email monitoring with Outlook COM integration",

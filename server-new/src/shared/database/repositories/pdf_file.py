@@ -217,6 +217,28 @@ class PdfFileRepository(BaseRepository[PdfFileModel]):
 
             return self._model_to_dataclass(model)
 
+    def get_by_ids(self, pdf_ids: list[int]) -> list[PdfFile]:
+        """
+        Batch fetch PDF files by IDs.
+
+        Args:
+            pdf_ids: List of PDF record IDs
+
+        Returns:
+            List of PdfFile dataclasses (excludes not found)
+        """
+        if not pdf_ids:
+            return []
+
+        with self._get_session() as session:
+            models = (
+                session.query(self.model_class)
+                .filter(self.model_class.id.in_(pdf_ids))
+                .all()
+            )
+
+            return [self._model_to_dataclass(model) for model in models]
+
     def create(self, pdf_data: PdfFileCreate) -> PdfFile:
         """
         Create new PDF record.

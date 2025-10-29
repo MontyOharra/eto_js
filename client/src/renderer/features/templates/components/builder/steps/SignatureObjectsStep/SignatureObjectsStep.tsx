@@ -68,6 +68,7 @@ export function SignatureObjectsStep({
   // Sync selectedObjectIds from signatureObjects when they change (e.g., navigating back to this step)
   useEffect(() => {
     if (!pdfObjects) {
+      console.log('[SignatureObjectsStep] No pdfObjects available');
       setSelectedObjectIds(new Set());
       return;
     }
@@ -78,12 +79,16 @@ export function SignatureObjectsStep({
       0
     );
 
+    console.log('[SignatureObjectsStep] Total signature objects to match:', totalSignatureObjects);
+
     if (totalSignatureObjects === 0) {
       setSelectedObjectIds(new Set());
       return;
     }
 
     const flatObjects = getFlattenedObjects();
+    console.log('[SignatureObjectsStep] Total PDF objects available:', flatObjects.length);
+
     const idsToSelect = new Set<string>();
 
     // Flatten signature objects to match against
@@ -97,8 +102,12 @@ export function SignatureObjectsStep({
       ...signatureObjects.tables,
     ];
 
+    console.log('[SignatureObjectsStep] Signature objects to match:', flatSignatureObjects);
+    console.log('[SignatureObjectsStep] Sample PDF object:', flatObjects[0]);
+
     // Find IDs that match the signatureObjects
     flatSignatureObjects.forEach((sigObj) => {
+      let matchFound = false;
       flatObjects.forEach((obj, idx) => {
         if (
           obj.type === sigObj.type &&
@@ -110,10 +119,15 @@ export function SignatureObjectsStep({
         ) {
           const id = `${obj.type}-${obj.page}-${obj.bbox.join('-')}-${idx}`;
           idsToSelect.add(id);
+          matchFound = true;
         }
       });
+      if (!matchFound) {
+        console.warn('[SignatureObjectsStep] No match found for signature object:', sigObj);
+      }
     });
 
+    console.log('[SignatureObjectsStep] Matched IDs:', Array.from(idsToSelect));
     setSelectedObjectIds(idsToSelect);
   }, [signatureObjects, pdfObjects]);
 

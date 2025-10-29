@@ -51,9 +51,9 @@ class PdfTemplateRepository(BaseRepository[PdfTemplateModel]):
 
     def list_templates(
         self,
-        status: str | None,
-        sort_by: str,
-        sort_order: str
+        status: str | None = None,
+        sort_by: str | None = None,
+        sort_order: str | None = None
     ) -> list[PdfTemplateListView]:
         """
         List templates with filtering and sorting.
@@ -104,6 +104,11 @@ class PdfTemplateRepository(BaseRepository[PdfTemplateModel]):
             # Apply status filter
             if status:
                 query = query.filter(PdfTemplateModel.status == PdfTemplateStatus(status))
+
+            if not sort_by:
+                sort_by = "name"
+            if not sort_order:
+                sort_order = "desc"
 
             # Apply sorting
             sort_column = {

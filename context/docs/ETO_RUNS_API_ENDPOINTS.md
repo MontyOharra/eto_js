@@ -68,82 +68,93 @@ POST /api/eto-runs
 
 ---
 
-### 4. Reprocess ETO Run
+### 4. Reprocess ETO Runs (Bulk)
 ```
-POST /api/eto-runs/{id}/reprocess
+POST /api/eto-runs/reprocess
 ```
 
-**Flow:**
+**Request Body:**
+```json
+{
+  "run_ids": [1, 2, 3]
+}
+```
+
+**For single run:** `{ "run_ids": [1] }`
+
+**Flow (for each run):**
 1. Verify status is "failure" or "skipped"
 2. Delete all stage records (template_matching, extraction, pipeline_execution + steps)
 3. Reset status to "not_started"
 4. Clear error fields
 5. Worker picks up and reprocesses from beginning
 
-**Response:** Updated run detail
+**Response:** 204 No Content
 
 **Errors:**
-- 404: Run not found
-- 400: Invalid status (can only reprocess failure/skipped)
+- 404: One or more runs not found
+- 400: One or more runs have invalid status (can only reprocess failure/skipped)
 
 ---
 
-### 5. Skip ETO Run
+### 5. Skip ETO Runs (Bulk)
 ```
-POST /api/eto-runs/{id}/skip
+POST /api/eto-runs/skip
 ```
 
-**Flow:**
+**Request Body:**
+```json
+{
+  "run_ids": [1, 2, 3]
+}
+```
+
+**For single run:** `{ "run_ids": [1] }`
+
+**Flow (for each run):**
 1. Verify status is "failure" or "needs_template"
 2. Set status to "skipped"
 3. Preserve all stage data
 
-**Response:** Updated run detail
+**Response:** 204 No Content
 
 **Purpose:** Exclude from bulk reprocessing, indicate intentional decision
 
 **Errors:**
-- 404: Run not found
-- 400: Invalid status (can only skip failure/needs_template)
+- 404: One or more runs not found
+- 400: One or more runs have invalid status (can only skip failure/needs_template)
 
 ---
 
-### 6. Delete ETO Run
+### 6. Delete ETO Runs (Bulk)
 ```
-DELETE /api/eto-runs/{id}
+DELETE /api/eto-runs
 ```
 
-**Flow:**
+**Request Body:**
+```json
+{
+  "run_ids": [1, 2, 3]
+}
+```
+
+**For single run:** `{ "run_ids": [1] }`
+
+**Flow (for each run):**
 1. Verify status is "skipped"
 2. Cascade delete all stage records
 3. Delete run record
 4. Optionally delete PDF file if not referenced elsewhere
 
-**Response:** Deleted run detail
+**Response:** 204 No Content
 
 **Restrictions:**
 - Can only delete "skipped" runs
 - Permanent deletion (no recovery)
 
 **Errors:**
-- 404: Run not found
-- 400: Invalid status (can only delete skipped)
-
----
-
-## Future Endpoints (Not MVP)
-
-### Bulk Reprocess
-```
-POST /api/eto-runs/bulk-reprocess
-```
-Reprocess multiple failed runs
-
-### Bulk Skip
-```
-POST /api/eto-runs/bulk-skip
-```
-Skip multiple failed/needs_template runs
+- 404: One or more runs not found
+- 400: One or more runs have invalid status (can only delete skipped)
 
 ---
 
@@ -177,8 +188,12 @@ skipped → not_started (reprocess)
 
 ## Design Notes
 
-1. **No separate stage endpoints** - All stage data in `GET /{id}`
-2. **No statistics endpoint** - Future enhancement if needed
-3. **PDF viewing** - Via existing `/api/pdf-files/{pdf_file_id}` endpoint
-4. **Worker-driven** - All processing automatic via background worker
-5. **Status-based views** - Frontend shows 6 separate tables (one per status)
+1. **Bulk operations only** - All state-changing operations (reprocess/skip/delete) use bulk endpoints
+   - Single operations send array with one ID: `{run_ids: [1]}`
+   - Reduces endpoint count, simplifies API surface
+2. **No separate stage endpoints** - All stage data in `GET /{id}`
+3. **No statistics endpoint** - Future enhancement if needed
+4. **PDF viewing** - Via existing `/api/pdf-files/{pdf_file_id}` endpoint
+5. **Worker-driven** - All processing automatic via background worker
+6. **Status-based views** - Frontend shows 6 separate tables (one per status)
+7. **204 No Content** - Bulk operations return 204 (not updated run details)

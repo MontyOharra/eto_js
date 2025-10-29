@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { useTemplatesApi } from '../../../features/templates/hooks';
+import { usePipelinesApi } from '../../../features/pipelines/hooks/usePipelinesApi';
 import { TemplateCard, TemplateBuilderModal, TemplateDetailModal, TemplateData } from '../../../features/templates/components';
 import { TemplateListItem, TemplateStatus } from '../../../features/templates/types';
 
@@ -14,12 +15,17 @@ type SortOrder = 'asc' | 'desc';
 function TemplatesPage() {
   const {
     getTemplates,
+    getTemplateDetail,
     createTemplate,
+    updateTemplate,
+    getTemplateVersionDetail,
     activateTemplate,
     deactivateTemplate,
     isLoading,
     error,
   } = useTemplatesApi();
+
+  const { getPipeline } = usePipelinesApi();
 
   const [allTemplates, setAllTemplates] = useState<TemplateListItem[]>([]);
   const [statusFilter, setStatusFilter] = useState<TemplateStatus | 'all'>('all');
@@ -28,6 +34,9 @@ function TemplatesPage() {
 
   // Template Builder Modal State
   const [isBuilderOpen, setIsBuilderOpen] = useState(false);
+  const [builderMode, setBuilderMode] = useState<'create' | 'edit'>('create');
+  const [builderTemplateId, setBuilderTemplateId] = useState<number | undefined>(undefined);
+  const [builderInitialData, setBuilderInitialData] = useState<TemplateData | undefined>(undefined);
   const [builderPdfFileId, setBuilderPdfFileId] = useState<number | null>(null);
   const [builderPdfFile, setBuilderPdfFile] = useState<File | null>(null);
 
@@ -106,14 +115,51 @@ function TemplatesPage() {
     setDetailTemplateId(null);
   };
 
-  const handleEditFromDetail = (templateId: number) => {
-    // Close detail modal
-    setIsDetailOpen(false);
-    setDetailTemplateId(null);
+  const handleEditFromDetail = async (templateId: number) => {
+    try {
+      // Close detail modal
+      setIsDetailOpen(false);
+      setDetailTemplateId(null);
 
-    // TODO: Open template editor/wizard
-    console.log('Edit template:', templateId);
-    // This would navigate to the template editor or open the builder in edit mode
+      // Load template detail, version detail, and pipeline in parallel
+      const templateDetail = await getTemplateDetail(templateId);
+
+      if (!templateDetail.current_version_id) {
+        alert('Cannot edit template: No current version found');
+        return;
+      }
+
+      const [versionDetail, pipelineData] = await Promise.all([
+        getTemplateVersionDetail(templateDetail.current_version_id),
+        // We need to get the pipeline to access pipeline_state and visual_state
+        (async () => {
+          const versionData = await getTemplateVersionDetail(templateDetail.current_version_id!);
+          return getPipeline(versionData.pipeline_definition_id);
+        })()
+      ]);
+
+      // Build initialData for the builder modal
+      const initialData: TemplateData = {
+        name: templateDetail.name,
+        description: templateDetail.description || '',
+        source_pdf_id: versionDetail.source_pdf_id,
+        signature_objects: versionDetail.signature_objects,
+        extraction_fields: versionDetail.extraction_fields,
+        pipeline_state: pipelineData.pipeline_state,
+        visual_state: pipelineData.visual_state,
+      };
+
+      // Open builder in edit mode
+      setBuilderMode('edit');
+      setBuilderTemplateId(templateId);
+      setBuilderInitialData(initialData);
+      setBuilderPdfFileId(versionDetail.source_pdf_id);
+      setBuilderPdfFile(null); // No uploaded file for edit mode
+      setIsBuilderOpen(true);
+    } catch (err) {
+      console.error('Failed to load template for editing:', err);
+      alert(`Failed to load template: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
   };
 
   const handleActivate = async (templateId: number) => {
@@ -166,17 +212,25 @@ function TemplatesPage() {
 
   const handleCloseBuilder = () => {
     setIsBuilderOpen(false);
+    setBuilderMode('create');
+    setBuilderTemplateId(undefined);
+    setBuilderInitialData(undefined);
     setBuilderPdfFileId(null);
     setBuilderPdfFile(null);
   };
 
   const handleSaveTemplate = async (templateData: TemplateData) => {
     try {
-      await createTemplate(templateData);
+      if (builderMode === 'create') {
+        await createTemplate(templateData);
+        console.log('Template created successfully');
+      } else if (builderMode === 'edit' && builderTemplateId) {
+        await updateTemplate(builderTemplateId, templateData);
+        console.log('Template updated successfully');
+      }
       await loadTemplates();
-      console.log('Template created successfully');
     } catch (err) {
-      console.error('Failed to create template:', err);
+      console.error(`Failed to ${builderMode} template:`, err);
       throw err; // Re-throw to let modal handle error
     }
   };
@@ -357,6 +411,9 @@ function TemplatesPage() {
       {/* Template Builder Modal */}
       <TemplateBuilderModal
         isOpen={isBuilderOpen}
+        mode={builderMode}
+        templateId={builderTemplateId}
+        initialData={builderInitialData}
         pdfFileId={builderPdfFileId}
         pdfFile={builderPdfFile}
         onClose={handleCloseBuilder}

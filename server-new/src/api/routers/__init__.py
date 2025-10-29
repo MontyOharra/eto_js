@@ -6,6 +6,7 @@ from .pdf_templates import router as pdf_templates_router
 from .pipelines import router as pipelines_router
 from .modules import router as modules_router
 from .admin import router as admin_router
+from .eto_runs import router as eto_runs_router
 
 __all__ = [
     'email_configs_router',
@@ -14,4 +15,5 @@ __all__ = [
     'pipelines_router',
     'modules_router',
     'admin_router',
+    'eto_runs_router',
 ]

@@ -332,3 +332,23 @@ class PdfTemplateVersionRepository(BaseRepository[PdfTemplateVersionModel]):
                 return None
 
             return self._model_to_version(model)
+
+    def increment_usage_count(self, version_id: int) -> None:
+        """
+        Increment usage count and update last_used_at for a template version.
+
+        Called when a template is matched during ETO processing to track
+        template usage statistics.
+
+        Args:
+            version_id: Template version ID
+        """
+        from datetime import datetime, timezone
+
+        with self._get_session() as session:
+            model = session.get(self.model_class, version_id)
+            if model:
+                model.usage_count += 1
+                model.last_used_at = datetime.now(timezone.utc)
+                session.flush()  # Persist changes
+                logger.debug(f"Incremented usage count for version {version_id} to {model.usage_count}")

@@ -172,3 +172,35 @@ class EtoRunTemplateMatchingRepository(BaseRepository[EtoRunTemplateMatchingMode
             models = query.all()
 
             return [self._model_to_domain(model) for model in models]
+
+    def get_by_run_ids(self, run_ids: List[int]) -> dict[int, EtoRunTemplateMatching]:
+        """
+        Batch fetch template matching records by ETO run IDs.
+        Returns dict keyed by eto_run_id.
+
+        Args:
+            run_ids: List of ETO run IDs
+
+        Returns:
+            Dict mapping eto_run_id to EtoRunTemplateMatching
+            (returns most recent if multiple records exist per run)
+        """
+        if not run_ids:
+            return {}
+
+        with self._get_session() as session:
+            # Query all matching records
+            models = (
+                session.query(self.model_class)
+                .filter(self.model_class.eto_run_id.in_(run_ids))
+                .order_by(self.model_class.eto_run_id, self.model_class.created_at.desc())
+                .all()
+            )
+
+            # Build dict, keeping only the most recent per run_id
+            result = {}
+            for model in models:
+                if model.eto_run_id not in result:
+                    result[model.eto_run_id] = self._model_to_domain(model)
+
+            return result

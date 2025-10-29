@@ -16,10 +16,13 @@ import type { PipelineState, VisualState } from '../../../../types/pipelineTypes
 
 interface TemplateBuilderModalProps {
   isOpen: boolean;
+  mode: 'create' | 'edit'; // NEW: Determines if creating new or editing existing
+  templateId?: number; // NEW: Required for edit mode
   pdfFileId: number | null;
   pdfFile: File | null; // For new template creation with uploaded PDF
   onClose: () => void;
   onSave: (templateData: TemplateData) => Promise<void>;
+  initialData?: TemplateData; // NEW: Pre-populate wizard in edit mode
 }
 
 export interface TemplateData {
@@ -37,10 +40,13 @@ type BuilderStep = 'signature-objects' | 'extraction-fields' | 'pipeline' | 'tes
 
 export function TemplateBuilderModal({
   isOpen,
+  mode,
+  templateId,
   pdfFileId,
   pdfFile,
   onClose,
   onSave,
+  initialData,
 }: TemplateBuilderModalProps) {
   const [currentStep, setCurrentStep] = useState<BuilderStep>('signature-objects');
   const [templateName, setTemplateName] = useState('');
@@ -126,6 +132,59 @@ export function TemplateBuilderModal({
     loadModules();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only load once on mount
+
+  // Initialize state from initialData when in edit mode
+  useEffect(() => {
+    if (mode === 'edit' && initialData && isOpen) {
+      console.log('[TemplateBuilderModal] Initializing edit mode with data:', {
+        name: initialData.name,
+        description: initialData.description,
+        signatureObjectsKeys: Object.keys(initialData.signature_objects),
+        signatureObjectsCounts: {
+          text_words: initialData.signature_objects.text_words?.length || 0,
+          text_lines: initialData.signature_objects.text_lines?.length || 0,
+          graphic_rects: initialData.signature_objects.graphic_rects?.length || 0,
+          graphic_lines: initialData.signature_objects.graphic_lines?.length || 0,
+          graphic_curves: initialData.signature_objects.graphic_curves?.length || 0,
+          images: initialData.signature_objects.images?.length || 0,
+          tables: initialData.signature_objects.tables?.length || 0,
+        },
+        extractionFields: initialData.extraction_fields.length,
+        pipelineModules: initialData.pipeline_state.modules.length,
+      });
+
+      setTemplateName(initialData.name);
+      setTemplateDescription(initialData.description);
+
+      // Deep copy to avoid reference issues
+      setSignatureObjects({
+        text_words: [...(initialData.signature_objects.text_words || [])],
+        text_lines: [...(initialData.signature_objects.text_lines || [])],
+        graphic_rects: [...(initialData.signature_objects.graphic_rects || [])],
+        graphic_lines: [...(initialData.signature_objects.graphic_lines || [])],
+        graphic_curves: [...(initialData.signature_objects.graphic_curves || [])],
+        images: [...(initialData.signature_objects.images || [])],
+        tables: [...(initialData.signature_objects.tables || [])],
+      });
+
+      setExtractionFields([...initialData.extraction_fields]);
+      setPipelineState(initialData.pipeline_state);
+      setVisualState(initialData.visual_state);
+
+      // Determine which object types are selected based on signature_objects
+      const selectedTypes: string[] = [];
+      if (initialData.signature_objects.text_words?.length > 0) selectedTypes.push('text_words');
+      if (initialData.signature_objects.text_lines?.length > 0) selectedTypes.push('text_lines');
+      if (initialData.signature_objects.graphic_rects?.length > 0) selectedTypes.push('graphic_rects');
+      if (initialData.signature_objects.graphic_lines?.length > 0) selectedTypes.push('graphic_lines');
+      if (initialData.signature_objects.graphic_curves?.length > 0) selectedTypes.push('graphic_curves');
+      if (initialData.signature_objects.images?.length > 0) selectedTypes.push('images');
+      if (initialData.signature_objects.tables?.length > 0) selectedTypes.push('tables');
+
+      console.log('[TemplateBuilderModal] Setting selectedObjectTypes:', selectedTypes);
+      setSelectedObjectTypes(selectedTypes);
+    }
+  }, [mode, initialData, isOpen]);
 
   // Process uploaded PDF file
   useEffect(() => {
@@ -253,10 +312,10 @@ export function TemplateBuilderModal({
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      // Step 1: Upload PDF if needed (for newly uploaded files)
+      // Step 1: Upload PDF if needed (for newly uploaded files in create mode)
       let sourcePdfId = pdfFileId;
 
-      if (!sourcePdfId && pdfFile) {
+      if (!sourcePdfId && pdfFile && mode === 'create') {
         const uploadResponse = await uploadPdf(pdfFile);
         sourcePdfId = uploadResponse.id;
       }
@@ -265,8 +324,8 @@ export function TemplateBuilderModal({
         throw new Error('No PDF source available. Please ensure a PDF is loaded.');
       }
 
-      // Step 2: Create template via parent's onSave (handles creation + list reload)
-
+      // Step 2: Call parent's onSave with template data
+      // Parent will handle the actual API call (create or update) and list reload
       await onSave({
         name: templateName,
         description: templateDescription,
@@ -279,8 +338,8 @@ export function TemplateBuilderModal({
 
       handleClose();
     } catch (error) {
-      console.error('[TemplateBuilderModal] Failed to save template:', error);
-      alert(`Failed to save template: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error(`[TemplateBuilderModal] Failed to ${mode} template:`, error);
+      alert(`Failed to ${mode} template: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsSaving(false);
     }
@@ -654,7 +713,7 @@ export function TemplateBuilderModal({
                 disabled={!canProceed || isSaving}
                 className="px-6 py-2 text-sm bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
               >
-                {isSaving ? 'Saving...' : 'Save Template'}
+                {isSaving ? (mode === 'edit' ? 'Updating...' : 'Saving...') : (mode === 'edit' ? 'Update Template' : 'Save Template')}
               </button>
             ) : (
               <div className="relative group">
