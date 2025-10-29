@@ -81,17 +81,14 @@ def convert_pipeline_state(pipeline_state: PipelineStateDomain) -> PipelineState
 
 
 def convert_visual_state(visual_state: VisualStateDomain) -> VisualState:
-    """Convert domain VisualState to API VisualState"""
-    return VisualState(
-        modules={
-            key: Position(x=pos.x, y=pos.y)
-            for key, pos in visual_state.modules.items()
-        },
-        entry_points={
-            key: Position(x=pos.x, y=pos.y)
-            for key, pos in visual_state.entry_points.items()
-        }
-    )
+    """
+    Convert domain VisualState to API VisualState
+    Both are now flat Dict[str, Position] so just convert Position objects
+    """
+    return {
+        node_id: Position(x=pos.x, y=pos.y)
+        for node_id, pos in visual_state.items()
+    }
 
 
 def convert_pipeline_summary(summary: PipelineDefinitionSummary) -> PipelineSummary:
@@ -232,39 +229,21 @@ def convert_pipeline_state_to_domain(pipeline_state: PipelineState | dict) -> Pi
 def convert_visual_state_to_domain(visual_state: VisualState | dict) -> VisualStateDomain:
     """
     Convert API VisualState to domain VisualState.
-    Converts nested position dictionaries.
-    Handles both Pydantic models and dictionaries.
+    Both are now flat Dict[str, Position] structures.
+    Converts Position objects or dicts to domain Position objects.
     """
-    if isinstance(visual_state, dict):
-        modules_dict = {}
-        for key, pos in visual_state.get('modules', {}).items():
-            if isinstance(pos, dict):
-                modules_dict[key] = PositionDomain(x=pos['x'], y=pos['y'])
-            else:
-                modules_dict[key] = PositionDomain(x=pos.x, y=pos.y)
+    result = {}
 
-        entry_points_dict = {}
-        for key, pos in visual_state.get('entry_points', {}).items():
-            if isinstance(pos, dict):
-                entry_points_dict[key] = PositionDomain(x=pos['x'], y=pos['y'])
-            else:
-                entry_points_dict[key] = PositionDomain(x=pos.x, y=pos.y)
+    # Handle flat structure directly
+    for node_id, pos in visual_state.items():
+        if isinstance(pos, dict):
+            # Plain dict with x, y keys
+            result[node_id] = PositionDomain(x=pos['x'], y=pos['y'])
+        else:
+            # Position object (Pydantic model)
+            result[node_id] = PositionDomain(x=pos.x, y=pos.y)
 
-        return VisualStateDomain(
-            modules=modules_dict,
-            entry_points=entry_points_dict
-        )
-
-    return VisualStateDomain(
-        modules={
-            key: PositionDomain(x=pos.x, y=pos.y)
-            for key, pos in visual_state.modules.items()
-        },
-        entry_points={
-            key: PositionDomain(x=pos.x, y=pos.y)
-            for key, pos in visual_state.entry_points.items()
-        }
-    )
+    return result
 
 
 def convert_create_request(request: CreatePipelineRequest) -> PipelineDefinitionCreate:

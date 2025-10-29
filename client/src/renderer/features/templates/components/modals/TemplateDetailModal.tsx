@@ -22,7 +22,6 @@ import type { PipelineDetailResponse } from '../../../pipelines/types';
 import type { ModuleTemplate } from '../../../../types/moduleTypes';
 import { TemplateBuilderModal, TemplateData } from '../builder/TemplateBuilderModal';
 import type { PipelineState, VisualState } from '../../../../types/pipelineTypes';
-import API_CONFIG from '../../../../config/api';
 
 interface TemplateDetailModalProps {
   isOpen: boolean;
@@ -85,7 +84,8 @@ export function TemplateDetailModal({
   onClose,
   onEdit,
 }: TemplateDetailModalProps) {
-  const { getTemplateDetail, getTemplateVersionDetail, isLoading } = useTemplatesApi();
+  const { getTemplateDetail, getTemplateVersionDetail, updateTemplate, isLoading } = useTemplatesApi();
+  const { getPipeline } = usePipelinesApi();
 
   // Template and version state
   const [template, setTemplate] = useState<TemplateDetail | null>(null);
@@ -174,16 +174,8 @@ export function TemplateDetailModal({
     }
 
     try {
-      // Fetch pipeline data from the pipeline endpoint
-      const pipelineResponse = await fetch(
-        `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.PIPELINES}/${versionDetail.pipeline_definition_id}`
-      );
-
-      if (!pipelineResponse.ok) {
-        throw new Error('Failed to load pipeline data');
-      }
-
-      const pipelineData = await pipelineResponse.json();
+      // Fetch pipeline data using the existing hook
+      const pipelineData = await getPipeline(versionDetail.pipeline_definition_id);
 
       // Set initial data for the builder modal
       setEditInitialData({
@@ -210,26 +202,13 @@ export function TemplateDetailModal({
     if (!template) return;
 
     try {
-      // Call PUT endpoint to create new version
-      const response = await fetch(
-        `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.TEMPLATES}/${template.id}`,
-        {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            signature_objects: templateData.signature_objects,
-            extraction_fields: templateData.extraction_fields,
-            pipeline_state: templateData.pipeline_state,
-            visual_state: templateData.visual_state,
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to save template');
-      }
+      // Call PUT endpoint using the existing hook
+      await updateTemplate(template.id, {
+        signature_objects: templateData.signature_objects,
+        extraction_fields: templateData.extraction_fields,
+        pipeline_state: templateData.pipeline_state,
+        visual_state: templateData.visual_state,
+      });
 
       // Success! Refresh template data
       await loadTemplate();

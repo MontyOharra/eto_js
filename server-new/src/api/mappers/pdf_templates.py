@@ -252,6 +252,11 @@ def convert_create_template_request(request: CreatePdfTemplateRequest) -> PdfTem
         for node_id, pos in request.visual_state.items()
     }
 
+    print(f"[convert_create_template_request] Visual state conversion:")
+    print(f"  Input keys: {list(request.visual_state.keys())}")
+    print(f"  Output keys: {list(visual_state_dict.keys())}")
+    print(f"  Sample positions: {dict(list(visual_state_dict.items())[:3])}")
+
     return PdfTemplateCreate(
         name=request.name,
         description=request.description,
