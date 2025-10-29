@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useState, useEffect } from 'react';
-import { useEmailConfigsApiHook } from '../../../features/email-configs/hooks';
+import { useEmailConfigsApi } from '../../../features/email-configs/hooks';
 import {
   EmailConfigCard,
   EmailConfigWizard,
@@ -26,7 +26,7 @@ function ConfigurationsPage() {
     getEmailFolders,
     isLoading,
     error,
-  } = useEmailConfigsApiHook();
+  } = useEmailConfigsApi();
 
   const [configs, setConfigs] = useState<EmailConfigDetail[]>([]);
   const [showCreateWizard, setShowCreateWizard] = useState(false);

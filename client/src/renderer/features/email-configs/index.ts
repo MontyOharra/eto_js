@@ -14,9 +14,6 @@ export type {
   EmailFolder,
 } from './types';
 
-// API Hook
-export { useMockEmailConfigsApi } from './hooks/useMockEmailConfigsApi';
-
 // Components
 export {
   EmailConfigCard,
@@ -25,11 +22,3 @@ export {
   EditConfigModal,
 } from './components';
 export type { WizardData } from './components';
-
-// Mock Data (for testing/reference)
-export {
-  mockEmailAccounts,
-  mockEmailFoldersByAccount,
-  allMockEmailConfigs,
-  allMockEmailConfigsSummary,
-} from './mocks/data';

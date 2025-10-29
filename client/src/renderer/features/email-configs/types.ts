@@ -7,9 +7,9 @@
 export type {
   FilterRuleField,
   FilterRuleOperation,
-  FilterRuleDTO as FilterRule,
-  EmailConfigSummaryDTO as EmailConfigListItem,
-  EmailConfigDetailDTO as EmailConfigDetail,
-  EmailAccountDTO as EmailAccount,
-  EmailFolderDTO as EmailFolder,
+  FilterRule,
+  EmailConfigListItem,
+  EmailConfigDetail,
+  EmailAccount,
+  EmailFolder,
 } from './api/types';

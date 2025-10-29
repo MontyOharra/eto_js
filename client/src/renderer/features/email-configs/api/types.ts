@@ -1,5 +1,5 @@
 /**
- * Email Configs API Types (DTOs)
+ * Email Configs API Types (s)
  * Request and response types matching the backend API
  */
 
@@ -19,7 +19,7 @@ export type FilterRuleOperation =
   | 'starts_with'
   | 'ends_with';
 
-export interface FilterRuleDTO {
+export interface FilterRule {
   field: FilterRuleField;
   operation: FilterRuleOperation;
   value: string;
@@ -30,7 +30,7 @@ export interface FilterRuleDTO {
 // List Response (GET /email-configs)
 // ============================================================================
 
-export interface EmailConfigSummaryDTO {
+export interface EmailConfigListItem {
   id: number;
   name: string;
   is_active: boolean;
@@ -41,13 +41,13 @@ export interface EmailConfigSummaryDTO {
 // Detail Response (GET /email-configs/{id})
 // ============================================================================
 
-export interface EmailConfigDetailDTO {
+export interface EmailConfigDetail {
   id: number;
   name: string;
   description: string | null;
   email_address: string;
   folder_name: string;
-  filter_rules: FilterRuleDTO[];
+  filter_rules: FilterRule[];
   poll_interval_seconds: number;
   is_active: boolean;
   activated_at: string | null; // ISO 8601
@@ -60,12 +60,12 @@ export interface EmailConfigDetailDTO {
 // Create Request (POST /email-configs)
 // ============================================================================
 
-export interface CreateEmailConfigRequestDTO {
+export interface CreateEmailConfigRequest {
   name: string; // required, 1-255 chars
   description?: string; // optional, max 1000 chars
   email_address: string; // required, valid email
   folder_name: string; // required, min 1 char
-  filter_rules?: FilterRuleDTO[]; // optional, default: []
+  filter_rules?: FilterRule[]; // optional, default: []
   poll_interval_seconds?: number; // optional, min: 5, default: 5
 }
 
@@ -73,9 +73,9 @@ export interface CreateEmailConfigRequestDTO {
 // Update Request (PUT /email-configs/{id})
 // ============================================================================
 
-export interface UpdateEmailConfigRequestDTO {
+export interface UpdateEmailConfigRequest {
   description?: string | null;
-  filter_rules?: FilterRuleDTO[];
+  filter_rules?: FilterRule[];
   poll_interval_seconds?: number; // min: 5
 }
 
@@ -83,7 +83,7 @@ export interface UpdateEmailConfigRequestDTO {
 // Discovery: Email Accounts (GET /email-configs/discovery/accounts)
 // ============================================================================
 
-export interface EmailAccountDTO {
+export interface EmailAccount {
   email_address: string;
   display_name: string | null;
 }
@@ -92,7 +92,7 @@ export interface EmailAccountDTO {
 // Discovery: Folders (GET /email-configs/discovery/folders)
 // ============================================================================
 
-export interface EmailFolderDTO {
+export interface EmailFolder {
   folder_name: string;
   folder_path: string; // full path
 }
@@ -101,12 +101,12 @@ export interface EmailFolderDTO {
 // Validation Request/Response (POST /email-configs/validate)
 // ============================================================================
 
-export interface ValidateEmailConfigRequestDTO {
+export interface ValidateEmailConfigRequest {
   email_address: string;
   folder_name: string;
 }
 
-export interface ValidateEmailConfigResponseDTO {
+export interface ValidateEmailConfigResponse {
   email_address: string;
   folder_name: string;
   message: string; // "Configuration is valid"

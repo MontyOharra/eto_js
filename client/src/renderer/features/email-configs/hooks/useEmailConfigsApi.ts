@@ -7,14 +7,14 @@ import { useState, useCallback } from 'react';
 import { apiClient } from '../../../shared/api/client';
 import { API_CONFIG } from '../../../shared/api/config';
 import type {
-  EmailConfigSummaryDTO,
-  EmailConfigDetailDTO,
-  CreateEmailConfigRequestDTO,
-  UpdateEmailConfigRequestDTO,
-  EmailAccountDTO,
-  EmailFolderDTO,
-  ValidateEmailConfigRequestDTO,
-  ValidateEmailConfigResponseDTO,
+  EmailConfigListItem,
+  EmailConfigDetail,
+  CreateEmailConfigRequest,
+  UpdateEmailConfigRequest,
+  EmailAccount,
+  EmailFolder,
+  ValidateEmailConfigRequest,
+  ValidateEmailConfigResponse,
   EmailConfigsListQueryParams,
   EmailFoldersQueryParams,
 } from '../api/types';
@@ -25,24 +25,24 @@ interface UseEmailConfigsApiResult {
   error: string | null;
 
   // List operations
-  getEmailConfigs: (params?: EmailConfigsListQueryParams) => Promise<EmailConfigSummaryDTO[]>;
-  getEmailConfigDetail: (id: number) => Promise<EmailConfigDetailDTO>;
+  getEmailConfigs: (params?: EmailConfigsListQueryParams) => Promise<EmailConfigListItem[]>;
+  getEmailConfigDetail: (id: number) => Promise<EmailConfigDetail>;
 
   // CRUD operations
-  createEmailConfig: (data: CreateEmailConfigRequestDTO) => Promise<EmailConfigDetailDTO>;
-  updateEmailConfig: (id: number, data: UpdateEmailConfigRequestDTO) => Promise<EmailConfigDetailDTO>;
+  createEmailConfig: (data: CreateEmailConfigRequest) => Promise<EmailConfigDetail>;
+  updateEmailConfig: (id: number, data: UpdateEmailConfigRequest) => Promise<EmailConfigDetail>;
   deleteEmailConfig: (id: number) => Promise<void>;
 
   // Activation operations
-  activateEmailConfig: (id: number) => Promise<EmailConfigDetailDTO>;
-  deactivateEmailConfig: (id: number) => Promise<EmailConfigDetailDTO>;
+  activateEmailConfig: (id: number) => Promise<EmailConfigDetail>;
+  deactivateEmailConfig: (id: number) => Promise<EmailConfigDetail>;
 
   // Discovery operations
-  getEmailAccounts: () => Promise<EmailAccountDTO[]>;
-  getEmailFolders: (params: EmailFoldersQueryParams) => Promise<EmailFolderDTO[]>;
+  getEmailAccounts: () => Promise<EmailAccount[]>;
+  getEmailFolders: (params: EmailFoldersQueryParams) => Promise<EmailFolder[]>;
 
   // Validation operations
-  validateEmailConfig: (data: ValidateEmailConfigRequestDTO) => Promise<ValidateEmailConfigResponseDTO>;
+  validateEmailConfig: (data: ValidateEmailConfigRequest) => Promise<ValidateEmailConfigResponse>;
 }
 
 export function useEmailConfigsApi(): UseEmailConfigsApiResult {
@@ -77,9 +77,9 @@ export function useEmailConfigsApi(): UseEmailConfigsApiResult {
    * List all email configurations with optional filtering and sorting
    */
   const getEmailConfigs = useCallback(
-    async (params?: EmailConfigsListQueryParams): Promise<EmailConfigSummaryDTO[]> => {
+    async (params?: EmailConfigsListQueryParams): Promise<EmailConfigListItem[]> => {
       return withLoadingAndError(async () => {
-        const response = await apiClient.get<EmailConfigSummaryDTO[]>(baseUrl, { params });
+        const response = await apiClient.get<EmailConfigListItem[]>(baseUrl, { params });
         return response.data;
       });
     },
@@ -91,9 +91,9 @@ export function useEmailConfigsApi(): UseEmailConfigsApiResult {
    * Get detailed information about a specific email configuration
    */
   const getEmailConfigDetail = useCallback(
-    async (id: number): Promise<EmailConfigDetailDTO> => {
+    async (id: number): Promise<EmailConfigDetail> => {
       return withLoadingAndError(async () => {
-        const response = await apiClient.get<EmailConfigDetailDTO>(`${baseUrl}/${id}`);
+        const response = await apiClient.get<EmailConfigDetail>(`${baseUrl}/${id}`);
         return response.data;
       });
     },
@@ -105,9 +105,9 @@ export function useEmailConfigsApi(): UseEmailConfigsApiResult {
    * Create a new email configuration
    */
   const createEmailConfig = useCallback(
-    async (data: CreateEmailConfigRequestDTO): Promise<EmailConfigDetailDTO> => {
+    async (data: CreateEmailConfigRequest): Promise<EmailConfigDetail> => {
       return withLoadingAndError(async () => {
-        const response = await apiClient.post<EmailConfigDetailDTO>(baseUrl, data);
+        const response = await apiClient.post<EmailConfigDetail>(baseUrl, data);
         return response.data;
       });
     },
@@ -119,9 +119,9 @@ export function useEmailConfigsApi(): UseEmailConfigsApiResult {
    * Update an existing email configuration
    */
   const updateEmailConfig = useCallback(
-    async (id: number, data: UpdateEmailConfigRequestDTO): Promise<EmailConfigDetailDTO> => {
+    async (id: number, data: UpdateEmailConfigRequest): Promise<EmailConfigDetail> => {
       return withLoadingAndError(async () => {
-        const response = await apiClient.put<EmailConfigDetailDTO>(`${baseUrl}/${id}`, data);
+        const response = await apiClient.put<EmailConfigDetail>(`${baseUrl}/${id}`, data);
         return response.data;
       });
     },
@@ -146,9 +146,9 @@ export function useEmailConfigsApi(): UseEmailConfigsApiResult {
    * Activate an email configuration to start monitoring
    */
   const activateEmailConfig = useCallback(
-    async (id: number): Promise<EmailConfigDetailDTO> => {
+    async (id: number): Promise<EmailConfigDetail> => {
       return withLoadingAndError(async () => {
-        const response = await apiClient.post<EmailConfigDetailDTO>(`${baseUrl}/${id}/activate`);
+        const response = await apiClient.post<EmailConfigDetail>(`${baseUrl}/${id}/activate`);
         return response.data;
       });
     },
@@ -160,9 +160,9 @@ export function useEmailConfigsApi(): UseEmailConfigsApiResult {
    * Deactivate an email configuration to stop monitoring
    */
   const deactivateEmailConfig = useCallback(
-    async (id: number): Promise<EmailConfigDetailDTO> => {
+    async (id: number): Promise<EmailConfigDetail> => {
       return withLoadingAndError(async () => {
-        const response = await apiClient.post<EmailConfigDetailDTO>(`${baseUrl}/${id}/deactivate`);
+        const response = await apiClient.post<EmailConfigDetail>(`${baseUrl}/${id}/deactivate`);
         return response.data;
       });
     },
@@ -174,9 +174,9 @@ export function useEmailConfigsApi(): UseEmailConfigsApiResult {
    * Get list of available email accounts from Outlook
    */
   const getEmailAccounts = useCallback(
-    async (): Promise<EmailAccountDTO[]> => {
+    async (): Promise<EmailAccount[]> => {
       return withLoadingAndError(async () => {
-        const response = await apiClient.get<EmailAccountDTO[]>(`${baseUrl}/discovery/accounts`);
+        const response = await apiClient.get<EmailAccount[]>(`${baseUrl}/discovery/accounts`);
         return response.data;
       });
     },
@@ -188,9 +188,9 @@ export function useEmailConfigsApi(): UseEmailConfigsApiResult {
    * Get list of available folders for a specific email account
    */
   const getEmailFolders = useCallback(
-    async (params: EmailFoldersQueryParams): Promise<EmailFolderDTO[]> => {
+    async (params: EmailFoldersQueryParams): Promise<EmailFolder[]> => {
       return withLoadingAndError(async () => {
-        const response = await apiClient.get<EmailFolderDTO[]>(`${baseUrl}/discovery/folders`, {
+        const response = await apiClient.get<EmailFolder[]>(`${baseUrl}/discovery/folders`, {
           params,
         });
         return response.data;
@@ -204,9 +204,9 @@ export function useEmailConfigsApi(): UseEmailConfigsApiResult {
    * Validate email configuration settings (checks connectivity and folder access)
    */
   const validateEmailConfig = useCallback(
-    async (data: ValidateEmailConfigRequestDTO): Promise<ValidateEmailConfigResponseDTO> => {
+    async (data: ValidateEmailConfigRequest): Promise<ValidateEmailConfigResponse> => {
       return withLoadingAndError(async () => {
-        const response = await apiClient.post<ValidateEmailConfigResponseDTO>(
+        const response = await apiClient.post<ValidateEmailConfigResponse>(
           `${baseUrl}/validate`,
           data
         );
