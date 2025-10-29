@@ -331,6 +331,72 @@ export function usePipelineInitialization({
     // Only depend on moduleTemplates, not the initial state props (captured in ref)
   }, [moduleTemplates, setNodes, setEdges]);
 
+  // Sync entry points dynamically after initial load
+  // This allows adding/removing entry points without full re-initialization
+  const entryPointsKey = JSON.stringify(entryPoints.map(ep => ep.node_id).sort());
+
+  useEffect(() => {
+    // Don't sync until initial load is complete
+    if (!isInitialized) {
+      console.log('[usePipelineInitialization] Skipping sync - not initialized yet');
+      return;
+    }
+
+    console.log('[usePipelineInitialization] Syncing entry points after initialization', {
+      entryPointsInProp: entryPoints.length,
+      entryPointIds: entryPoints.map(ep => ep.node_id),
+    });
+
+    // Update nodes to match current entry points
+    setNodes((currentNodes) => {
+      // Separate entry point nodes from regular module nodes
+      const moduleNodes = currentNodes.filter((node) => !node.data.isEntryPoint);
+      const currentEntryPointIds = new Set(currentNodes.filter((node) => node.data.isEntryPoint).map((node) => node.id));
+
+      console.log('[usePipelineInitialization] Current state:', {
+        currentEntryPointIds: Array.from(currentEntryPointIds),
+        moduleNodesCount: moduleNodes.length,
+      });
+
+      // Create nodes for current entry points
+      const newEntryPointNodes = createEntryPointNodes(entryPoints, initialVisualState);
+      const newEntryPointIds = new Set(newEntryPointNodes.map((node) => node.id));
+
+      // Check if entry points actually changed
+      const added = newEntryPointNodes.filter((node) => !currentEntryPointIds.has(node.id));
+      const removed = currentNodes.filter((node) => node.data.isEntryPoint && !newEntryPointIds.has(node.id));
+
+      if (added.length === 0 && removed.length === 0) {
+        console.log('[usePipelineInitialization] No changes detected');
+        return currentNodes;
+      }
+
+      console.log('[usePipelineInitialization] Entry points changed:', {
+        added: added.length,
+        removed: removed.length,
+        removedIds: removed.map((n) => n.id),
+      });
+
+      // Remove edges connected to deleted entry points
+      if (removed.length > 0) {
+        const removedIds = new Set(removed.map((n) => n.id));
+        setEdges((currentEdges) => {
+          const filteredEdges = currentEdges.filter(
+            (edge) => !removedIds.has(edge.source) && !removedIds.has(edge.target)
+          );
+          if (filteredEdges.length !== currentEdges.length) {
+            console.log('[usePipelineInitialization] Removed edges connected to deleted entry points');
+          }
+          return filteredEdges;
+        });
+      }
+
+      // Combine new entry point nodes with existing module nodes
+      return [...newEntryPointNodes, ...moduleNodes];
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entryPointsKey, isInitialized]);
+
   console.log('[usePipelineInitialization] Current isInitialized:', isInitialized);
   return { isInitialized };
 }

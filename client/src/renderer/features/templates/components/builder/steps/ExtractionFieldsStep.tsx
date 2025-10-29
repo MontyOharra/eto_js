@@ -3,7 +3,7 @@
  * Step 2: Define extraction fields by drawing boxes on the PDF
  */
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { ExtractionField, SignatureObject } from '../../../types';
 import type { PipelineState, VisualState, EntryPoint } from '../../../../../types/pipelineTypes';
 import { PdfViewer } from '../../../../../shared/components/pdf';
@@ -119,6 +119,32 @@ export function ExtractionFieldsStep({
     return types;
   }, [flatSignatureObjects]);
 
+  // Delete field handler (defined early so it can be used in keyboard handler)
+  const handleDeleteField = useCallback((fieldName: string) => {
+    console.log('[ExtractionFieldsStep] Deleting field:', fieldName);
+
+    // Remove from extraction fields
+    const updatedFields = extractionFields.filter(f => f.name !== fieldName);
+    onExtractionFieldsChange(updatedFields);
+
+    // Also remove from pipeline state entry points
+    const entryPointNodeId = `entry_${fieldName}`;
+    const updatedEntryPoints = pipelineState.entry_points.filter(ep => ep.node_id !== entryPointNodeId);
+
+    console.log('[ExtractionFieldsStep] Updating pipeline state:', {
+      oldEntryPoints: pipelineState.entry_points.map(ep => ep.node_id),
+      newEntryPoints: updatedEntryPoints.map(ep => ep.node_id),
+      removedId: entryPointNodeId,
+    });
+
+    onPipelineStateChange({
+      ...pipelineState,
+      entry_points: updatedEntryPoints,
+    });
+
+    setStagedFieldId(null);
+  }, [extractionFields, pipelineState, onExtractionFieldsChange, onPipelineStateChange]);
+
   // Keyboard handler for Delete key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -130,15 +156,14 @@ export function ExtractionFieldsStep({
           return;
         }
 
-        // Delete the selected field
-        onExtractionFieldsChange(extractionFields.filter(f => f.name !== stagedFieldId));
-        setStagedFieldId(null);
+        // Delete the selected field (this also removes from pipeline state entry points)
+        handleDeleteField(stagedFieldId);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [stagedFieldId, tempFieldData, extractionFields, onExtractionFieldsChange]);
+  }, [stagedFieldId, tempFieldData, handleDeleteField]);
 
   // Mouse Handlers for Drawing
   const handleMouseDown = (
@@ -282,21 +307,6 @@ export function ExtractionFieldsStep({
     if (fieldNameError) {
       setFieldNameError(null);
     }
-  };
-
-  const handleDeleteField = (fieldName: string) => {
-    // Remove from extraction fields
-    const updatedFields = extractionFields.filter(f => f.name !== fieldName);
-    onExtractionFieldsChange(updatedFields);
-
-    // Also remove from pipeline state entry points
-    const entryPointNodeId = `entry_${fieldName}`;
-    onPipelineStateChange({
-      ...pipelineState,
-      entry_points: pipelineState.entry_points.filter(ep => ep.node_id !== entryPointNodeId),
-    });
-
-    setStagedFieldId(null);
   };
 
   const handleSelectField = (fieldName: string) => {

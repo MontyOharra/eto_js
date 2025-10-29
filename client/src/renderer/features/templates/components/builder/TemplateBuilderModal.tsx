@@ -64,11 +64,20 @@ export function TemplateBuilderModal({
   });
   const [selectedObjectTypes, setSelectedObjectTypes] = useState<string[]>([]); // Step 1 state persistence
   const [extractionFields, setExtractionFields] = useState<ExtractionField[]>([]);
-  const [pipelineState, setPipelineState] = useState<PipelineState>({
+  const [pipelineState, setPipelineStateInternal] = useState<PipelineState>({
     entry_points: [],
     modules: [],
     connections: [],
   });
+
+  // Wrapper to log pipeline state changes
+  const setPipelineState = (newState: PipelineState) => {
+    console.log('[TemplateBuilderModal] Pipeline state changing:', {
+      oldEntryPoints: pipelineState.entry_points.map(ep => ep.node_id),
+      newEntryPoints: newState.entry_points.map(ep => ep.node_id),
+    });
+    setPipelineStateInternal(newState);
+  };
   // Flat visual state: all node positions in one object
   const [visualState, setVisualStateInternal] = useState<VisualState>({});
 
@@ -418,8 +427,8 @@ export function TemplateBuilderModal({
     });
     setSelectedObjectTypes([]);
     setExtractionFields([]);
-    setPipelineState({ entry_points: [], modules: [], connections: [] });
-    setVisualState({ modules: {}, entryPoints: {} });
+    setPipelineStateInternal({ entry_points: [], modules: [], connections: [] });
+    setVisualStateInternal({});
     setTestResults(null);
     setPdfScale(1.0);
     setPdfCurrentPage(1);
@@ -551,16 +560,15 @@ export function TemplateBuilderModal({
                   />
                 </div>
               )}
-              {currentStep === 'pipeline' && (
-                <div style={{ height: '100%' }}>
-                  <PipelineBuilderStep
-                    pipelineState={pipelineState}
-                    visualState={visualState}
-                    onPipelineStateChange={setPipelineState}
-                    onVisualStateChange={setVisualState}
-                  />
-                </div>
-              )}
+              <div style={{ display: currentStep === 'pipeline' ? 'block' : 'none', height: '100%' }}>
+                <PipelineBuilderStep
+                  pipelineState={pipelineState}
+                  visualState={visualState}
+                  moduleTemplates={moduleTemplates}
+                  onPipelineStateChange={setPipelineState}
+                  onVisualStateChange={setVisualState}
+                />
+              </div>
               {currentStep === 'testing' && (
                 testResults && pdfUrl && testedPipelineState && testedVisualState ? (
                   <TestingStep

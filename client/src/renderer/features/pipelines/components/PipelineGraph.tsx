@@ -86,6 +86,11 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
   ) => {
     const { screenToFlowPosition } = useReactFlow();
 
+    console.log('[PipelineGraph] Render with props:', {
+      entryPointsCount: entryPoints.length,
+      entryPointIds: entryPoints.map(ep => ep.node_id),
+    });
+
     // State
     const [nodes, setNodes] = useState<Node[]>([]);
     const [edges, setEdges] = useState<Edge[]>([]);
