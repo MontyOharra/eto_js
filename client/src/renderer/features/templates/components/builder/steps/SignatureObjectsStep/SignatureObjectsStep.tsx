@@ -173,55 +173,26 @@ export function SignatureObjectsStep({
         tables: [],
       };
 
-      // Group selected objects by type
+      // Group selected objects by type (preserving all fields)
       flatObjects.forEach((obj, idx) => {
         const id = `${obj.type}-${obj.page}-${obj.bbox.join('-')}-${idx}`;
         if (newSet.has(id)) {
           // Map type names to PdfObjects field names
+          // Use spread operator to preserve all original fields (format, colorspace, bits, etc.)
           if (obj.type === 'text_word') {
-            pdfObjectsFormat.text_words.push({
-              type: 'text_word',
-              page: obj.page,
-              bbox: obj.bbox,
-              text: obj.text,
-            });
+            pdfObjectsFormat.text_words.push({ ...obj });
           } else if (obj.type === 'text_line') {
-            pdfObjectsFormat.text_lines.push({
-              type: 'text_line',
-              page: obj.page,
-              bbox: obj.bbox,
-              text: obj.text,
-            });
+            pdfObjectsFormat.text_lines.push({ ...obj });
           } else if (obj.type === 'graphic_rect') {
-            pdfObjectsFormat.graphic_rects.push({
-              type: 'graphic_rect',
-              page: obj.page,
-              bbox: obj.bbox,
-            });
+            pdfObjectsFormat.graphic_rects.push({ ...obj });
           } else if (obj.type === 'graphic_line') {
-            pdfObjectsFormat.graphic_lines.push({
-              type: 'graphic_line',
-              page: obj.page,
-              bbox: obj.bbox,
-            });
+            pdfObjectsFormat.graphic_lines.push({ ...obj });
           } else if (obj.type === 'graphic_curve') {
-            pdfObjectsFormat.graphic_curves.push({
-              type: 'graphic_curve',
-              page: obj.page,
-              bbox: obj.bbox,
-            });
+            pdfObjectsFormat.graphic_curves.push({ ...obj });
           } else if (obj.type === 'image') {
-            pdfObjectsFormat.images.push({
-              type: 'image',
-              page: obj.page,
-              bbox: obj.bbox,
-            });
+            pdfObjectsFormat.images.push({ ...obj });
           } else if (obj.type === 'table') {
-            pdfObjectsFormat.tables.push({
-              type: 'table',
-              page: obj.page,
-              bbox: obj.bbox,
-            });
+            pdfObjectsFormat.tables.push({ ...obj });
           }
         }
       });
@@ -251,22 +222,16 @@ export function SignatureObjectsStep({
   const getFlattenedObjects = () => {
     if (!pdfObjects) return [];
 
-    const flatObjects: Array<{
-      type: string;
-      page: number;
-      bbox: [number, number, number, number];
-      text?: string;
-    }> = [];
+    const flatObjects: Array<any> = [];
 
-    // Helper to add objects with their type
+    // Helper to add objects with their type (preserving all original fields)
     const addObjects = (objects: any[] | undefined, type: string) => {
       if (!objects) return;
       objects.forEach((obj) => {
         flatObjects.push({
+          ...obj, // Preserve all original fields
           type,
           page: obj.page || 1,
-          bbox: obj.bbox,
-          text: obj.text,
         });
       });
     };

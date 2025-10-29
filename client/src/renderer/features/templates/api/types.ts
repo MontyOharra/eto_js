@@ -8,9 +8,8 @@ import {
   TemplateStatus,
   TemplateListItem,
   TemplateDetail,
-  TemplateVersionListItem,
   TemplateVersionDetail,
-  SignatureObject,
+  PdfObjects,
   ExtractionField,
 } from '../types';
 import type { PipelineState, VisualState } from '../../../types/pipelineTypes';
@@ -49,13 +48,10 @@ export type GetTemplateDetailResponse = TemplateDetail;
 export interface PostTemplateCreateRequest {
   name: string; // required, 1-255 chars
   description?: string; // optional, max 1000 chars
+  source_pdf_id: number; // required - PDF must be uploaded first via POST /pdf-files
 
-  // PDF source - either existing file or new upload
-  // If source_pdf_id is null, pdf_file must be provided as multipart/form-data
-  source_pdf_id?: number | null; // optional - for templates from existing PDFs
-
-  // Step 1: Signature objects
-  signature_objects: SignatureObject[]; // required, min: 1
+  // Step 1: Signature objects (PdfObjects format)
+  signature_objects: PdfObjects;
 
   // Step 2: Extraction fields
   extraction_fields: ExtractionField[]; // required, min: 1
@@ -63,18 +59,10 @@ export interface PostTemplateCreateRequest {
   // Step 3: Pipeline definition
   pipeline_state: PipelineState;
   visual_state: VisualState;
-
-  // Note: pdf_file (File) will be sent as multipart/form-data when source_pdf_id is null
 }
 
-export interface PostTemplateCreateResponse {
-  id: number; // Created template ID
-  name: string;
-  status: 'inactive'; // Always starts as inactive
-  current_version_id: number; // Version 1 ID
-  current_version_num: 1;
-  pipeline_definition_id: number;
-}
+// Response is TemplateDetail (PdfTemplate from backend)
+export type PostTemplateCreateResponse = TemplateDetail;
 
 // =============================================================================
 // PUT /pdf-templates/{id} - Update template (creates new version)
@@ -85,21 +73,15 @@ export interface PutTemplateUpdateRequest {
   name?: string; // optional, 1-255 chars
   description?: string; // optional, max 1000 chars
 
-  // Required: New version data (all 3 wizard steps)
-  signature_objects: SignatureObject[]; // required, min: 1
-  extraction_fields: ExtractionField[]; // required, min: 1
-  pipeline_state: PipelineState;
-  visual_state: VisualState;
+  // Optional: New version data (wizard steps)
+  signature_objects?: PdfObjects;
+  extraction_fields?: ExtractionField[];
+  pipeline_state?: PipelineState;
+  visual_state?: VisualState;
 }
 
-export interface PutTemplateUpdateResponse {
-  id: number;
-  name: string;
-  status: TemplateStatus; // Status unchanged
-  current_version_id: number; // Updated to new version ID
-  current_version_num: number; // Incremented
-  pipeline_definition_id: number; // New pipeline ID
-}
+// Response is TemplateDetail (PdfTemplate from backend)
+export type PutTemplateUpdateResponse = TemplateDetail;
 
 // =============================================================================
 // DELETE /pdf-templates/{id} - Delete template
@@ -113,37 +95,22 @@ export interface PutTemplateUpdateResponse {
 // =============================================================================
 
 // No request body
-
-export interface PostTemplateActivateResponse {
-  id: number;
-  status: 'active';
-  current_version_id: number;
-}
+// Response is TemplateDetail (PdfTemplate from backend)
+export type PostTemplateActivateResponse = TemplateDetail;
 
 // =============================================================================
 // POST /pdf-templates/{id}/deactivate - Deactivate template
 // =============================================================================
 
 // No request body
-
-export interface PostTemplateDeactivateResponse {
-  id: number;
-  status: 'inactive';
-  current_version_id: number;
-}
+// Response is TemplateDetail (PdfTemplate from backend)
+export type PostTemplateDeactivateResponse = TemplateDetail;
 
 // =============================================================================
-// GET /pdf-templates/{id}/versions - List all versions
+// GET /pdf-templates/versions/{version_id} - Get version details
 // =============================================================================
 
-// Response is array of TemplateVersionListItem from domain types
-export type GetTemplateVersionsResponse = TemplateVersionListItem[];
-
-// =============================================================================
-// GET /pdf-templates/{id}/versions/{version_id} - Get version details
-// =============================================================================
-
-// Response type is TemplateVersionDetail from domain types
+// Response matches backend GetTemplateVersionResponse
 export type GetTemplateVersionDetailResponse = TemplateVersionDetail;
 
 // =============================================================================

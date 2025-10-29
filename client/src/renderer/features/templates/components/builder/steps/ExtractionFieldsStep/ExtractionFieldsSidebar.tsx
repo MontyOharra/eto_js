@@ -152,7 +152,6 @@ export function ExtractionFieldsSidebar({
       if (response.data_extraction.status === 'success' && response.data_extraction.extracted_data) {
         const formattedData = JSON.stringify(response.data_extraction.extracted_data, null, 2);
         setSimulationResult(formattedData);
-        console.log('[Simulate] Extracted Data:', response.data_extraction.extracted_data);
       } else {
         setSimulationResult('Extraction failed: ' + (response.data_extraction.error_message || 'Unknown error'));
       }

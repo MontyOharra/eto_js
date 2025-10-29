@@ -168,33 +168,14 @@ export function useTemplatesApi() {
   );
 
   /**
-   * GET /api/pdf-templates/{id}/versions
-   * List all versions
-   */
-  const getTemplateVersions = useCallback(
-    async (templateId: number): Promise<GetTemplateVersionsResponse> => {
-      return withLoadingAndError(async () => {
-        const response = await apiClient.get<GetTemplateVersionsResponse>(
-          `${baseUrl}/${templateId}/versions`
-        );
-        return response.data;
-      });
-    },
-    [baseUrl, withLoadingAndError]
-  );
-
-  /**
-   * GET /api/pdf-templates/{id}/versions/{version_id}
-   * Get version detail
+   * GET /api/pdf-templates/versions/{version_id}
+   * Get version detail by version ID
    */
   const getTemplateVersionDetail = useCallback(
-    async (
-      templateId: number,
-      versionId: number
-    ): Promise<GetTemplateVersionDetailResponse> => {
+    async (versionId: number): Promise<GetTemplateVersionDetailResponse> => {
       return withLoadingAndError(async () => {
         const response = await apiClient.get<GetTemplateVersionDetailResponse>(
-          `${baseUrl}/${templateId}/versions/${versionId}`
+          `${baseUrl}/versions/${versionId}`
         );
         return response.data;
       });
@@ -244,7 +225,6 @@ export function useTemplatesApi() {
     deleteTemplate,
     activateTemplate,
     deactivateTemplate,
-    getTemplateVersions,
     getTemplateVersionDetail,
     simulateTemplate,
   };

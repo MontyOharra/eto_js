@@ -30,6 +30,10 @@ from features.pipelines.service import PipelineService
 from features.pipelines.service_execution import PipelineExecutionService
 from features.pdf_files.service import PdfFilesService
 from shared.types.pipeline_execution import PipelineExecutionResult
+from api.mappers.pipelines import (
+    convert_pipeline_state_to_domain,
+    convert_visual_state_to_domain,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -192,7 +196,6 @@ class PdfTemplateService:
         """
         from shared.types.pdf_templates import PdfVersionCreate
         from shared.types.pipeline_definition import PipelineDefinitionCreate
-        from shared.types.pipelines import PipelineState, VisualState
 
         # Get current template
         template = self.template_repository.get_by_id(template_id)
@@ -249,9 +252,9 @@ class PdfTemplateService:
                         "Both pipeline_state and visual_state must be provided when updating pipeline"
                     )
 
-                # Convert dicts to proper types
-                pipeline_state_obj = PipelineState(**update_data.pipeline_state)
-                visual_state_obj = VisualState(**update_data.visual_state)
+                # Convert API types to domain types (handles both Pydantic models and dicts)
+                pipeline_state_obj = convert_pipeline_state_to_domain(update_data.pipeline_state)
+                visual_state_obj = convert_visual_state_to_domain(update_data.visual_state)
 
                 # Create pipeline definition (validation, compilation, creation all handled)
                 pipeline_create_data = PipelineDefinitionCreate(
@@ -333,16 +336,15 @@ class PdfTemplateService:
         """
         from shared.types.pdf_templates import PdfVersionCreate
         from shared.types.pipeline_definition import PipelineDefinitionCreate
-        from shared.types.pipelines import PipelineState, VisualState
 
         try:
             with self.connection_manager.unit_of_work() as uow:
                 # Step 1: Create pipeline definition (validation, compilation, hash-based dedup)
                 logger.info("Creating pipeline definition for template")
 
-                # Convert dicts to proper domain types
-                pipeline_state_obj = PipelineState(**template_data.pipeline_state)
-                visual_state_obj = VisualState(**template_data.visual_state)
+                # Convert API types to domain types (handles both Pydantic models and dicts)
+                pipeline_state_obj = convert_pipeline_state_to_domain(template_data.pipeline_state)
+                visual_state_obj = convert_visual_state_to_domain(template_data.visual_state)
 
                 # Create pipeline definition (handles validation, compilation, and creation)
                 pipeline_create_data = PipelineDefinitionCreate(

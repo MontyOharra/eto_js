@@ -23,6 +23,66 @@ export interface TemplateVersionSummary {
   usage_count: number; // ETO runs that used this version
 }
 
+// Version identifier for navigation (lightweight)
+export interface VersionListItem {
+  version_id: number;
+  version_number: number;
+}
+
+// PdfObjects format (matches backend storage)
+export interface PdfObjects {
+  text_words: Array<{
+    type: 'text_word';
+    page: number;
+    bbox: BBox;
+    text: string;
+    fontname?: string;
+    fontsize?: number;
+  }>;
+  text_lines: Array<{
+    type: 'text_line';
+    page: number;
+    bbox: BBox;
+    text?: string;
+  }>;
+  graphic_rects: Array<{
+    type: 'graphic_rect';
+    page: number;
+    bbox: BBox;
+    linewidth?: number;
+  }>;
+  graphic_lines: Array<{
+    type: 'graphic_line';
+    page: number;
+    bbox: BBox;
+    linewidth?: number;
+  }>;
+  graphic_curves: Array<{
+    type: 'graphic_curve';
+    page: number;
+    bbox: BBox;
+    points?: Array<[number, number]>;
+    linewidth?: number;
+  }>;
+  images: Array<{
+    type: 'image';
+    page: number;
+    bbox: BBox;
+    format: string;
+    colorspace: string;
+    bits: number;
+  }>;
+  tables: Array<{
+    type: 'table';
+    page: number;
+    bbox: BBox;
+    rows: number;
+    cols: number;
+  }>;
+}
+
+// Legacy SignatureObject type - kept for backward compatibility but deprecated
+// Use PdfObjects instead
 export interface SignatureObject {
   object_type: PdfObjectType;
   page: number;
@@ -54,16 +114,15 @@ export interface ExtractionField {
 export interface TemplateVersion {
   version_id: number;
   version_num: number;
-  usage_count: number;
-  last_used_at: string | null; // ISO 8601
-  signature_objects: SignatureObject[];
+  source_pdf_id: number;
+  is_current: boolean;
+  signature_objects: PdfObjects; // Uses PdfObjects format (not flat array)
   extraction_fields: ExtractionField[];
   pipeline_definition_id: number;
 }
 
 export interface TemplateVersionDetail extends TemplateVersion {
   template_id: number;
-  is_current: boolean; // true if this is template's current_version_id
 }
 
 // =============================================================================
@@ -81,33 +140,15 @@ export interface TemplateListItem {
 }
 
 // =============================================================================
-// Detail View
+// Detail View (matches backend PdfTemplate)
 // =============================================================================
 
 export interface TemplateDetail {
-  // Template metadata
   id: number;
   name: string;
   description: string | null;
-  source_pdf_id: number;
   status: TemplateStatus;
-  current_version_id: number;
-
-  // Current version details (denormalized for convenience)
-  current_version: TemplateVersion;
-
-  // Version history summary
-  total_versions: number;
-}
-
-// =============================================================================
-// Version Summary (for version list)
-// =============================================================================
-
-export interface TemplateVersionListItem {
-  version_id: number;
-  version_num: number;
-  usage_count: number; // ETO runs that used this version
-  last_used_at: string | null; // ISO 8601
-  is_current: boolean; // true if this is current_version_id
+  source_pdf_id: number;
+  current_version_id: number | null;
+  versions: VersionListItem[]; // All versions for navigation (IDs + numbers only)
 }

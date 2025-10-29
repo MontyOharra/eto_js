@@ -63,7 +63,6 @@ export function ExtractionFieldsStep({
     (sum, arr) => sum + arr.length,
     0
   );
-  console.log('[ExtractionFieldsStep] Received signature objects:', signatureObjectsCount, signatureObjects);
 
   // Drawing state
   const [isDrawing, setIsDrawing] = useState(false);
@@ -105,8 +104,6 @@ export function ExtractionFieldsStep({
       types.add(obj.type); // Signature objects already have 'type', not 'object_type'
     });
 
-    console.log('[ExtractionFieldsStep] Signature objects count:', flatSignatureObjects.length);
-    console.log('[ExtractionFieldsStep] Signature object types:', Array.from(types));
     return types;
   }, [flatSignatureObjects]);
 

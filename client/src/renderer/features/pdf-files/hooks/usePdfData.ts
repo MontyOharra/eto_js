@@ -5,18 +5,19 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
-import { useMockPdfApi } from '../mocks/useMockPdfApi';
-import { PdfFileMetadataDTO } from '../api/types';
-import { useMockEmailApi, EmailData } from '../../emails/mocks/useMockEmailApi';
+import { apiClient } from '../../../shared/api/client';
+import { API_CONFIG } from '../../../shared/api/config';
+import { PdfFileMetadataDTO, PdfObjectsResponseDTO } from '../api/types';
 
 export interface PdfData {
-  objectsData: any;
+  objectsData: PdfObjectsResponseDTO;
   url: string;
   metadata: PdfFileMetadataDTO;
-  emailData?: EmailData | null;
 }
 
 export function usePdfData(pdfFileId: number | null) {
+  const baseUrl = API_CONFIG.ENDPOINTS.PDF_FILES;
+
   return useQuery({
     queryKey: ['pdf', pdfFileId],
     queryFn: async (): Promise<PdfData> => {
@@ -24,23 +25,16 @@ export function usePdfData(pdfFileId: number | null) {
         throw new Error('No PDF file ID provided');
       }
 
-      console.log('[usePdfData] Fetching PDF data for ID:', pdfFileId);
-
+      // Fetch PDF objects and metadata in parallel
       const [objectsData, metadata] = await Promise.all([
-        useMockPdfApi.getPdfObjects(pdfFileId),
-        useMockPdfApi.getPdfMetadata(pdfFileId),
+        apiClient.get<PdfObjectsResponseDTO>(`${baseUrl}/${pdfFileId}/objects`).then(res => res.data),
+        apiClient.get<PdfFileMetadataDTO>(`${baseUrl}/${pdfFileId}`).then(res => res.data),
       ]);
-      const url = useMockPdfApi.getPdfDownloadUrl(pdfFileId);
 
-      // Fetch email data if PDF has an associated email
-      let emailData: EmailData | null = null;
-      if (metadata.email_id !== null) {
-        emailData = await useMockEmailApi.getEmailById(metadata.email_id);
-      }
+      // Construct download URL
+      const url = `${API_CONFIG.BASE_URL}${baseUrl}/${pdfFileId}/download`;
 
-      console.log('[usePdfData] PDF data fetched successfully');
-
-      return { objectsData, url, metadata, emailData };
+      return { objectsData, url, metadata };
     },
     enabled: !!pdfFileId, // Only run query if pdfFileId exists
     staleTime: Infinity, // Never refetch (perfect for static PDFs)

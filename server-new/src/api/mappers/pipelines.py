@@ -119,8 +119,20 @@ def convert_pipeline_detail(pipeline: PipelineDefinitionFull) -> PipelineDetail:
 
 # ========== API (Request) → Domain Conversions ==========
 
-def convert_node_to_domain(node: Node) -> NodeInstanceDomain:
-    """Convert API Node to domain NodeInstance"""
+def convert_node_to_domain(node: Node | dict) -> NodeInstanceDomain:
+    """
+    Convert API Node to domain NodeInstance.
+    Handles both Pydantic models and dictionaries.
+    """
+    if isinstance(node, dict):
+        return NodeInstanceDomain(
+            node_id=node['node_id'],
+            type=node['type'],
+            name=node['name'],
+            position_index=node['position_index'],
+            group_index=node['group_index']
+        )
+
     return NodeInstanceDomain(
         node_id=node.node_id,
         type=node.type,
@@ -130,16 +142,38 @@ def convert_node_to_domain(node: Node) -> NodeInstanceDomain:
     )
 
 
-def convert_entry_point_to_domain(entry_point: EntryPoint) -> EntryPointDomain:
-    """Convert API EntryPoint to domain EntryPoint"""
+def convert_entry_point_to_domain(entry_point: EntryPoint | dict) -> EntryPointDomain:
+    """
+    Convert API EntryPoint to domain EntryPoint.
+    Handles both Pydantic models and dictionaries.
+    """
+    if isinstance(entry_point, dict):
+        return EntryPointDomain(
+            node_id=entry_point['node_id'],
+            name=entry_point['name']
+        )
+
     return EntryPointDomain(
         node_id=entry_point.node_id,
         name=entry_point.name
     )
 
 
-def convert_module_instance_to_domain(module: ModuleInstance) -> ModuleInstanceDomain:
-    """Convert API ModuleInstance to domain ModuleInstance"""
+def convert_module_instance_to_domain(module: ModuleInstance | dict) -> ModuleInstanceDomain:
+    """
+    Convert API ModuleInstance to domain ModuleInstance.
+    Recursively converts nested inputs/outputs.
+    Handles both Pydantic models and dictionaries.
+    """
+    if isinstance(module, dict):
+        return ModuleInstanceDomain(
+            module_instance_id=module['module_instance_id'],
+            module_ref=module['module_ref'],
+            config=module['config'],
+            inputs=[convert_node_to_domain(node) for node in module.get('inputs', [])],
+            outputs=[convert_node_to_domain(node) for node in module.get('outputs', [])]
+        )
+
     return ModuleInstanceDomain(
         module_instance_id=module.module_instance_id,
         module_ref=module.module_ref,
@@ -149,16 +183,45 @@ def convert_module_instance_to_domain(module: ModuleInstance) -> ModuleInstanceD
     )
 
 
-def convert_connection_to_domain(connection: NodeConnection) -> NodeConnectionDomain:
-    """Convert API NodeConnection to domain NodeConnection"""
+def convert_connection_to_domain(connection: NodeConnection | dict) -> NodeConnectionDomain:
+    """
+    Convert API NodeConnection to domain NodeConnection.
+    Handles both Pydantic models and dictionaries.
+    """
+    if isinstance(connection, dict):
+        return NodeConnectionDomain(
+            from_node_id=connection['from_node_id'],
+            to_node_id=connection['to_node_id']
+        )
+
     return NodeConnectionDomain(
         from_node_id=connection.from_node_id,
         to_node_id=connection.to_node_id
     )
 
 
-def convert_pipeline_state_to_domain(pipeline_state: PipelineState) -> PipelineStateDomain:
-    """Convert API PipelineState to domain PipelineState"""
+def convert_pipeline_state_to_domain(pipeline_state: PipelineState | dict) -> PipelineStateDomain:
+    """
+    Convert API PipelineState to domain PipelineState.
+    Recursively converts all nested structures.
+    Handles both Pydantic models and dictionaries.
+    """
+    if isinstance(pipeline_state, dict):
+        return PipelineStateDomain(
+            entry_points=[
+                convert_entry_point_to_domain(ep)
+                for ep in pipeline_state.get('entry_points', [])
+            ],
+            modules=[
+                convert_module_instance_to_domain(mod)
+                for mod in pipeline_state.get('modules', [])
+            ],
+            connections=[
+                convert_connection_to_domain(conn)
+                for conn in pipeline_state.get('connections', [])
+            ]
+        )
+
     return PipelineStateDomain(
         entry_points=[convert_entry_point_to_domain(ep) for ep in pipeline_state.entry_points],
         modules=[convert_module_instance_to_domain(mod) for mod in pipeline_state.modules],
@@ -166,8 +229,32 @@ def convert_pipeline_state_to_domain(pipeline_state: PipelineState) -> PipelineS
     )
 
 
-def convert_visual_state_to_domain(visual_state: VisualState) -> VisualStateDomain:
-    """Convert API VisualState to domain VisualState"""
+def convert_visual_state_to_domain(visual_state: VisualState | dict) -> VisualStateDomain:
+    """
+    Convert API VisualState to domain VisualState.
+    Converts nested position dictionaries.
+    Handles both Pydantic models and dictionaries.
+    """
+    if isinstance(visual_state, dict):
+        modules_dict = {}
+        for key, pos in visual_state.get('modules', {}).items():
+            if isinstance(pos, dict):
+                modules_dict[key] = PositionDomain(x=pos['x'], y=pos['y'])
+            else:
+                modules_dict[key] = PositionDomain(x=pos.x, y=pos.y)
+
+        entry_points_dict = {}
+        for key, pos in visual_state.get('entry_points', {}).items():
+            if isinstance(pos, dict):
+                entry_points_dict[key] = PositionDomain(x=pos['x'], y=pos['y'])
+            else:
+                entry_points_dict[key] = PositionDomain(x=pos.x, y=pos.y)
+
+        return VisualStateDomain(
+            modules=modules_dict,
+            entry_points=entry_points_dict
+        )
+
     return VisualStateDomain(
         modules={
             key: PositionDomain(x=pos.x, y=pos.y)

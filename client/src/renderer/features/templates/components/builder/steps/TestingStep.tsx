@@ -127,13 +127,6 @@ export function TestingStep({
   const [executionValues, setExecutionValues] = useState<Map<string, { value: any; type: string; name: string }>>(new Map());
   const [failedModuleIds, setFailedModuleIds] = useState<string[]>([]);
 
-  // Debug logging
-  useEffect(() => {
-    console.log('[TestingStep] Pipeline state:', pipelineState);
-    console.log('[TestingStep] Visual state:', visualState);
-    console.log('[TestingStep] Module templates:', moduleTemplates);
-  }, [pipelineState, visualState, moduleTemplates]);
-
   useEffect(() => {
     const executionValuesMap = new Map<string, { value: any; type: string; name: string }>();
     const failedModules: string[] = [];
@@ -196,9 +189,6 @@ export function TestingStep({
         }
       });
     }
-
-    console.log('[TestingStep] Execution values:', Array.from(executionValuesMap.entries()));
-    console.log('[TestingStep] Failed modules:', failedModules);
 
     setExecutionValues(executionValuesMap);
     setFailedModuleIds(failedModules);

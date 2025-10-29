@@ -62,10 +62,6 @@ export function PdfObjectOverlay({
   const { renderScale, currentPage, pdfDimensions } = usePdfViewer();
   const [hoveredObjectId, setHoveredObjectId] = useState<string | null>(null);
 
-  console.log('[PdfObjectOverlay] Received objects:', objects.length);
-  console.log('[PdfObjectOverlay] Selected types:', Array.from(selectedTypes));
-  console.log('[PdfObjectOverlay] Current page:', currentPage);
-
   // Objects to render: visible (selected types) + hidden selected
   const objectsToRender = useMemo(() => {
     return objects

@@ -5,6 +5,152 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-10-28 18:30] — Template Viewer UI Enhancement & Visibility Toggles
+
+### Spec / Intent
+- Update template viewer modal to match template builder UI structure
+- Add object type visibility toggles for signature objects view
+- Simplify stepper to show only step numbers (1, 2, 3) without testing section
+- Enable users to selectively show/hide signature object types on PDF overlay
+- Improve consistency between builder and viewer experiences
+
+### Changes Made
+
+**TemplateDetailModal UI Overhaul** (`client/src/renderer/features/templates/components/modals/TemplateDetailModal.tsx`):
+
+**1. Sidebar Structure Update (lines 476-547)**:
+- Changed from expandable grouped list to flat type count display
+- Added "Template Information" section showing total signature object count
+- Added "Object Visibility" section with "Show All" / "Hide All" buttons
+- Converted static type displays to interactive toggle buttons
+- Each button shows: color square, type label, count, and active/inactive state
+- Buttons use same styling as builder: bright when visible, dim when hidden
+
+**2. Visibility State Management (lines 446-471)**:
+- Added `selectedTypes` state (Set<string>) initialized with all types visible
+- Implemented `handleTypeToggle()` for individual type visibility control
+- Implemented `handleShowAll()` to make all types visible at once
+- Implemented `handleHideAll()` to hide all overlays
+- State persists during user interaction within current version
+
+**3. Signature Object Overlay Filtering (lines 364-403)**:
+- Updated `SignatureObjectsOverlay` component to accept `selectedTypes` prop
+- Modified flattening logic to only include objects of selected types
+- Conditional assembly: checks `selectedTypes.has(type)` before adding to array
+- Overlay now respects visibility toggles in real-time
+- Performance optimized with useMemo dependency on selectedTypes
+
+**4. Stepper Simplification (lines 28-72, 296)**:
+- Created `TemplateViewerStepper` component (replaces TemplateBuilderStepper)
+- Shows only numbers 1, 2, 3 (no checkmarks, no testing step)
+- Three steps: Signature Objects, Extraction Fields, Pipeline
+- Active step highlighted in blue (bg-blue-600), inactive in gray
+- Removed all testing/validation UI elements from viewer
+- Footer integration: replaced old stepper with new simplified version
+
+### Technical Details
+
+**Visibility Toggle Flow**:
+1. User clicks object type button → `handleTypeToggle(type)` fires
+2. State updates: `selectedTypes` Set adds or removes type
+3. React re-renders with new selectedTypes
+4. `SignatureObjectsOverlay` useMemo recalculates filtered objects
+5. Only selected types appear on PDF canvas overlay
+
+**State Initialization**:
+- `selectedTypes` starts with all types that have count > 0
+- Uses functional initialization: `useState(() => new Set(allTypes))`
+- Prevents showing toggles for types with zero objects
+- All visible by default for best initial user experience
+
+**Button Styling**:
+```typescript
+// Active: bg-gray-700 text-white (bright, clearly selected)
+// Inactive: bg-gray-800 text-gray-400 hover:bg-gray-700 (dim, can hover to activate)
+```
+
+**Overlay Performance**:
+- useMemo with `[signatureObjects, currentPage, selectedTypes]` dependencies
+- Only recalculates when types toggled or page changed
+- Conditional forEach loops prevent unnecessary object processing
+- No performance impact from visibility toggles
+
+### Before/After Comparison
+
+**Sidebar Structure**:
+- Before: Expandable sections with all objects listed individually ❌
+- After: Flat list with type counts and visibility toggles ✅
+
+**Object Visibility Control**:
+- Before: All signature objects always visible (no control) ❌
+- After: Click to show/hide individual types, Show All / Hide All buttons ✅
+
+**Stepper Display**:
+- Before: Shows checkmarks, includes "Testing" step with validation status ❌
+- After: Shows only numbers 1-2-3, no testing section (viewer is read-only) ✅
+
+**UI Consistency**:
+- Before: Viewer sidebar had different structure than builder ❌
+- After: Viewer sidebar matches builder structure exactly ✅
+
+### User Experience
+
+**Visibility Control Benefits**:
+- Users can focus on specific object types (e.g., only text_words for text analysis)
+- Reduces visual clutter when many overlapping objects
+- Quick toggle between "show all" and "show specific types"
+- Helps identify which objects contribute to signature matching
+
+**UI Improvements**:
+- Consistent experience between building and viewing templates
+- Simpler navigation (3 steps vs 4, no testing complexity)
+- Clear visual feedback on active/inactive types
+- Professional, polished appearance matching builder
+
+### Next Actions (Planned for Next Session)
+
+**Template Viewer Enhancements**:
+1. **Version Navigation Improvements**:
+   - Currently works but needs polish
+   - Consider adding version comparison view
+   - Show changelog between versions
+
+2. **Pipeline Viewer Implementation**:
+   - Currently shows placeholder "Coming Soon" message
+   - Need to integrate PipelineGraph component in read-only mode
+   - Display pipeline execution flow visualization
+   - Show module connections and data flow
+
+3. **Template Edit Functionality**:
+   - Add "Edit Template" workflow
+   - Create new version via PUT /api/pdf-templates/{id}
+   - Allow updating: name, description, signature objects, extraction fields, pipeline
+   - Version management: create new version vs update current
+   - Handle version increment logic
+
+4. **Version Comparison**:
+   - Side-by-side diff of two versions
+   - Highlight changes in signature objects, fields, pipeline
+   - Help users understand what changed between versions
+
+### Files Modified
+- `client/src/renderer/features/templates/components/modals/TemplateDetailModal.tsx` (major updates)
+  - Line 28-72: Created TemplateViewerStepper component
+  - Line 296: Integrated new stepper in footer
+  - Line 364-403: Updated SignatureObjectsOverlay with visibility filtering
+  - Line 446-471: Added visibility state management
+  - Line 476-547: Rebuilt sidebar with toggle buttons
+
+### Notes
+- All changes are frontend-only (no backend modifications)
+- TypeScript compilation: ✅ Passed with 0 errors
+- No breaking changes to existing functionality
+- Viewer now provides same level of control as builder
+- Ready for next phase: pipeline viewer and edit functionality
+- User switching computers - this entry provides full context for continuation
+
+---
+
 ## [2025-10-28 15:45] — Template Simulation API Refactoring (JSON + PDF Objects)
 
 ### Spec / Intent

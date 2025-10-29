@@ -96,7 +96,7 @@ export function TemplateBuilderModal({
   const { data: pdfData, isLoading: pdfLoading, error: pdfError } = usePdfData(pdfFileId);
   const { getModules } = useModulesApi();
   const { uploadPdf, processObjects } = usePdfFilesApi();
-  const { simulateTemplate, createTemplate } = useTemplatesApi();
+  const { simulateTemplate } = useTemplatesApi();
 
   // Auto-validate pipeline as it's being built
   const { isValid: isPipelineValid, error: pipelineValidationError, isValidating: isPipelineValidating } = usePipelineValidation(pipelineState);
@@ -246,19 +246,16 @@ export function TemplateBuilderModal({
       let sourcePdfId = pdfFileId;
 
       if (!sourcePdfId && pdfFile) {
-        console.log('[TemplateBuilderModal] Uploading PDF file...');
         const uploadResponse = await uploadPdf(pdfFile);
         sourcePdfId = uploadResponse.id;
-        console.log('[TemplateBuilderModal] PDF uploaded with ID:', sourcePdfId);
       }
 
       if (!sourcePdfId) {
         throw new Error('No PDF source available. Please ensure a PDF is loaded.');
       }
 
-      // Step 2: Create template
-      console.log('[TemplateBuilderModal] Creating template...');
-      await createTemplate({
+      // Step 2: Create template via parent's onSave (handles creation + list reload)
+      await onSave({
         name: templateName,
         description: templateDescription,
         source_pdf_id: sourcePdfId,
@@ -268,7 +265,6 @@ export function TemplateBuilderModal({
         visual_state: visualState,
       });
 
-      console.log('[TemplateBuilderModal] Template created successfully');
       handleClose();
     } catch (error) {
       console.error('[TemplateBuilderModal] Failed to save template:', error);
@@ -399,7 +395,15 @@ export function TemplateBuilderModal({
     setCurrentStep('signature-objects');
     setTemplateName('');
     setTemplateDescription('');
-    setSignatureObjects([]);
+    setSignatureObjects({
+      text_words: [],
+      text_lines: [],
+      graphic_rects: [],
+      graphic_lines: [],
+      graphic_curves: [],
+      images: [],
+      tables: [],
+    });
     setSelectedObjectTypes([]);
     setExtractionFields([]);
     setPipelineState({ entry_points: [], modules: [], connections: [] });
@@ -413,28 +417,19 @@ export function TemplateBuilderModal({
   };
 
   const handleNext = () => {
-    console.log('[TemplateBuilderModal] handleNext called, current step:', currentStep);
-    console.log('[TemplateBuilderModal] Current signature objects count:', signatureObjectsCount);
-    console.log('[TemplateBuilderModal] Signature objects:', signatureObjects);
     if (currentStep === 'signature-objects') {
-      console.log('[TemplateBuilderModal] Moving to extraction-fields');
       setCurrentStep('extraction-fields');
     } else if (currentStep === 'extraction-fields') {
-      console.log('[TemplateBuilderModal] Moving to pipeline');
       setCurrentStep('pipeline');
     }
   };
 
   const handleBack = () => {
-    console.log('[TemplateBuilderModal] handleBack called, current step:', currentStep);
     if (currentStep === 'extraction-fields') {
-      console.log('[TemplateBuilderModal] Moving back to signature-objects');
       setCurrentStep('signature-objects');
     } else if (currentStep === 'pipeline') {
-      console.log('[TemplateBuilderModal] Moving back to extraction-fields');
       setCurrentStep('extraction-fields');
     } else if (currentStep === 'testing') {
-      console.log('[TemplateBuilderModal] Moving back to pipeline');
       // Clear test snapshots when leaving testing step
       setTestedPipelineState(null);
       setTestedVisualState(null);
@@ -484,10 +479,10 @@ export function TemplateBuilderModal({
             </div>
           )}
 
-          {/* Steps - render all but show only active one (keeps PdfCanvas mounted) */}
+          {/* Steps - render all but show only active one (keeps components mounted to preserve state) */}
           {pdfDataLoaded && !pdfError && (
             <>
-              {currentStep === 'signature-objects' && (
+              <div style={{ display: currentStep === 'signature-objects' ? 'block' : 'none', height: '100%' }}>
                 <SignatureObjectsStep
                   pdfFileId={pdfFileId}
                   templateName={templateName}
@@ -505,8 +500,8 @@ export function TemplateBuilderModal({
                   onPdfScaleChange={setPdfScale}
                   onPdfCurrentPageChange={setPdfCurrentPage}
                 />
-              )}
-              {currentStep === 'extraction-fields' && (
+              </div>
+              <div style={{ display: currentStep === 'extraction-fields' ? 'block' : 'none', height: '100%' }}>
                 <ExtractionFieldsStep
                   pdfFileId={pdfFileId}
                   pdfFile={pdfFile}
@@ -526,8 +521,8 @@ export function TemplateBuilderModal({
                   onPdfScaleChange={setPdfScale}
                   onPdfCurrentPageChange={setPdfCurrentPage}
                 />
-              )}
-              {currentStep === 'pipeline' && (
+              </div>
+              <div style={{ display: currentStep === 'pipeline' ? 'block' : 'none', height: '100%' }}>
                 <PipelineBuilderStep
                   extractionFields={extractionFields}
                   pipelineState={pipelineState}
@@ -535,7 +530,7 @@ export function TemplateBuilderModal({
                   onPipelineStateChange={setPipelineState}
                   onVisualStateChange={setVisualState}
                 />
-              )}
+              </div>
               {currentStep === 'testing' && (
                 testResults && pdfUrl && testedPipelineState && testedVisualState ? (
                   <TestingStep
@@ -605,13 +600,24 @@ export function TemplateBuilderModal({
             )}
 
             {currentStep === 'pipeline' ? (
-              <button
-                onClick={handleTest}
-                disabled={!canProceed || isTesting}
-                className="px-6 py-2 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
-              >
-                {isTesting ? 'Testing...' : 'Test Template →'}
-              </button>
+              <div className="relative group">
+                <button
+                  onClick={handleTest}
+                  disabled={!canProceed || isTesting}
+                  className="px-6 py-2 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
+                >
+                  {isTesting ? 'Testing...' : 'Test Template →'}
+                </button>
+                {/* Tooltip on hover when disabled */}
+                {!canProceed && validationMessage && (
+                  <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block z-10">
+                    <div className="bg-gray-800 text-amber-400 text-xs px-3 py-2 rounded shadow-lg whitespace-nowrap border border-amber-400/30">
+                      {validationMessage}
+                      <div className="absolute top-full right-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-gray-800"></div>
+                    </div>
+                  </div>
+                )}
+              </div>
             ) : currentStep === 'testing' ? (
               <button
                 onClick={handleSave}
