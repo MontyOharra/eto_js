@@ -25,7 +25,8 @@ export interface UsePipelineInitializationProps {
  */
 function createEntryPointNodes(entryPoints: EntryPoint[], visualState?: VisualState): Node[] {
   return entryPoints.map((ep, index) => {
-    const position = visualState?.entryPoints?.[ep.node_id] || {
+    // Flat visual state: use entry point's node_id directly
+    const position = visualState?.[ep.node_id] || {
       x: 50 + index * 200,
       y: 50,
     };
@@ -169,8 +170,8 @@ function reconstructPipeline(
         return null;
       }
 
-      // Get position from visual state
-      const position = visualState.modules[moduleInstance.module_instance_id];
+      // Get position from flat visual state
+      const position = visualState[moduleInstance.module_instance_id];
       if (!position) {
         console.warn(`Position not found for module: ${moduleInstance.module_instance_id}`);
         return null;
@@ -256,7 +257,8 @@ function hasMeaningfulState(
   // Check if there are actual modules or connections
   const hasModules = pipelineState.modules.length > 0;
   const hasConnections = pipelineState.connections.length > 0;
-  const hasVisualPositions = Object.keys(visualState.modules).length > 0;
+  // Flat visual state: check if there are any positions stored
+  const hasVisualPositions = Object.keys(visualState).length > 0;
 
   return hasModules || hasConnections || hasVisualPositions;
 }
@@ -297,7 +299,7 @@ export function usePipelineInitialization({
       console.log('[usePipelineInitialization] Reconstructing from saved state:', {
         modules: initialPipelineState.modules.length,
         connections: initialPipelineState.connections.length,
-        visualPositions: Object.keys(initialVisualState.modules).length,
+        visualPositions: Object.keys(initialVisualState).length,
       });
 
       const { nodes, edges } = reconstructPipeline(

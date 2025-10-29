@@ -69,18 +69,14 @@ export function TemplateBuilderModal({
     modules: [],
     connections: [],
   });
-  const [visualState, setVisualStateInternal] = useState<VisualState>({
-    modules: {},
-    entryPoints: {},
-  });
+  // Flat visual state: all node positions in one object
+  const [visualState, setVisualStateInternal] = useState<VisualState>({});
 
   // Wrapper to log visual state changes
   const setVisualState = (newState: VisualState) => {
     console.log('[TemplateBuilderModal] Visual state updated:', {
-      moduleCount: Object.keys(newState.modules || {}).length,
-      entryPointCount: Object.keys(newState.entryPoints || {}).length,
-      modules: newState.modules,
-      entryPoints: newState.entryPoints,
+      nodeCount: Object.keys(newState).length,
+      positions: newState,
     });
     setVisualStateInternal(newState);
   };
@@ -267,11 +263,8 @@ export function TemplateBuilderModal({
 
       // Step 2: Create template via parent's onSave (handles creation + list reload)
       console.log('[TemplateBuilderModal] Saving template with visual state:', {
-        moduleCount: Object.keys(visualState.modules || {}).length,
-        entryPointCount: Object.keys(visualState.entryPoints || {}).length,
-        modules: visualState.modules,
-        entryPoints: visualState.entryPoints,
-        fullVisualState: visualState,
+        nodeCount: Object.keys(visualState).length,
+        positions: visualState,
       });
 
       await onSave({
@@ -440,10 +433,8 @@ export function TemplateBuilderModal({
       setCurrentStep('extraction-fields');
     } else if (currentStep === 'extraction-fields') {
       console.log('[TemplateBuilderModal] Navigating to pipeline step. Current visual state:', {
-        moduleCount: Object.keys(visualState.modules || {}).length,
-        entryPointCount: Object.keys(visualState.entryPoints || {}).length,
-        modules: visualState.modules,
-        entryPoints: visualState.entryPoints,
+        nodeCount: Object.keys(visualState).length,
+        positions: visualState,
       });
       setCurrentStep('pipeline');
     }

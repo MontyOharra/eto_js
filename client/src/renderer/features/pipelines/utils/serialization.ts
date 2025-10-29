@@ -38,30 +38,21 @@ export function serializeToPipelineState(nodes: Node[], edges: Edge[]): Pipeline
 
 /**
  * Serialize React Flow state to VisualState (positions)
+ * Flat structure: all nodes stored by their ID
  */
 export function serializeToVisualState(nodes: Node[]): VisualState {
-  const modules: Record<string, { x: number; y: number }> = {};
-  const entryPoints: Record<string, { x: number; y: number }> = {};
+  const positions: VisualState = {};
 
   nodes.forEach((node) => {
-    if (node.type === 'module' && !node.data.isEntryPoint) {
-      // Regular module
-      modules[node.id] = {
-        x: node.position.x,
-        y: node.position.y,
-      };
-    } else if (node.data.isEntryPoint && node.data.entryPoint) {
-      // Entry point node - store using entryPoint's node_id
-      const entryPoint = node.data.entryPoint as EntryPoint;
-      entryPoints[entryPoint.node_id] = {
+    if (node.type === 'module') {
+      // All module nodes go into flat structure
+      // Use node.id as the key for both regular modules and entry points
+      positions[node.id] = {
         x: node.position.x,
         y: node.position.y,
       };
     }
   });
 
-  return {
-    modules,
-    entryPoints,
-  };
+  return positions;
 }
