@@ -84,12 +84,9 @@ export function ExtractionFieldsStep({
   // Determine sidebar mode
   const sidebarMode: SidebarMode = tempFieldData ? 'create' : stagedFieldId ? 'detail' : 'list';
 
-  // Get unique object types from signature objects
-  const signatureObjectTypes = useMemo(() => {
-    const types = new Set<string>();
-
-    // Flatten PdfObjects structure to get all object types
-    const allObjects = [
+  // Flatten signature objects for overlay rendering
+  const flatSignatureObjects = useMemo(() => {
+    return [
       ...signatureObjects.text_words,
       ...signatureObjects.text_lines,
       ...signatureObjects.graphic_rects,
@@ -98,15 +95,20 @@ export function ExtractionFieldsStep({
       ...signatureObjects.images,
       ...signatureObjects.tables,
     ];
+  }, [signatureObjects]);
 
-    allObjects.forEach((obj: any) => {
+  // Get unique object types from signature objects
+  const signatureObjectTypes = useMemo(() => {
+    const types = new Set<string>();
+
+    flatSignatureObjects.forEach((obj: any) => {
       types.add(obj.type); // Signature objects already have 'type', not 'object_type'
     });
 
-    console.log('[ExtractionFieldsStep] Signature objects count:', allObjects.length);
+    console.log('[ExtractionFieldsStep] Signature objects count:', flatSignatureObjects.length);
     console.log('[ExtractionFieldsStep] Signature object types:', Array.from(types));
     return types;
-  }, [signatureObjects]);
+  }, [flatSignatureObjects]);
 
   // Mouse Handlers for Drawing
   const handleMouseDown = (
@@ -316,7 +318,7 @@ export function ExtractionFieldsStep({
             {/* Show signature objects in original colors when checkbox is checked */}
             {showSignatureObjects && (
               <PdfObjectOverlay
-                objects={signatureObjects as any}
+                objects={flatSignatureObjects}
                 selectedTypes={signatureObjectTypes} // Show all selected types
                 selectedObjects={new Set()} // No selected objects (show in original colors)
                 onObjectClick={() => {}} // Non-interactive
