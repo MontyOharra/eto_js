@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useState, useMemo } from "react";
-import { useTemplatesApi } from "../../hooks";
+import { useTemplateDetail, useTemplateVersionDetail } from "../../api";
 import { TemplateDetail, TemplateVersionDetail, PdfObjects } from "../../types";
 import { TemplateStatusBadge } from "../ui/TemplateStatusBadge";
 import { usePdfData, PdfViewer, usePdfViewer } from "../../../pdf";
@@ -84,18 +84,32 @@ export function TemplateDetailModal({
   onClose,
   onEdit,
 }: TemplateDetailModalProps) {
-  const { getTemplateDetail, getTemplateVersionDetail, isLoading } =
-    useTemplatesApi();
+  // Fetch template using TanStack Query
+  const {
+    data: template,
+    isLoading: templateLoading,
+    error: templateError,
+  } = useTemplateDetail(isOpen ? templateId : null);
 
-  // Template and version state
-  const [template, setTemplate] = useState<TemplateDetail | null>(null);
+  // Version selection state
   const [currentVersionIndex, setCurrentVersionIndex] = useState<number>(0);
-  const [versionDetail, setVersionDetail] =
-    useState<TemplateVersionDetail | null>(null);
+
+  // Compute version ID from template data
+  const versionId = template?.versions[currentVersionIndex]?.version_id ?? null;
+
+  // Fetch version detail using TanStack Query
+  const {
+    data: versionDetail,
+    isLoading: versionLoading,
+    error: versionError,
+  } = useTemplateVersionDetail(versionId);
 
   // UI state
   const [currentStep, setCurrentStep] = useState<ViewStep>("signature-objects");
-  const [error, setError] = useState<string | null>(null);
+
+  // Combined loading and error states
+  const isLoading = templateLoading || versionLoading;
+  const error = templateError || versionError;
 
   // PDF data - fetch once using source_pdf_id from version detail
   const {
@@ -104,62 +118,23 @@ export function TemplateDetailModal({
     error: pdfError,
   } = usePdfData(versionDetail?.source_pdf_id ?? null);
 
-  // Fetch template when modal opens
+  // Reset state when modal closes
   useEffect(() => {
-    if (isOpen && templateId) {
-      loadTemplate();
-    } else {
-      // Reset state when modal closes
-      resetState();
+    if (!isOpen) {
+      setCurrentVersionIndex(0);
+      setCurrentStep("signature-objects");
     }
-  }, [isOpen, templateId]);
+  }, [isOpen]);
 
-  // Fetch version detail when version changes
+  // Set current version index to the template's current version when template loads
   useEffect(() => {
     if (template && template.versions.length > 0) {
-      const versionId = template.versions[currentVersionIndex].version_id;
-      loadVersionDetail(versionId);
-    }
-  }, [currentVersionIndex, template]);
-
-  const loadTemplate = async () => {
-    if (!templateId) return;
-
-    setError(null);
-    try {
-      // Fetch template details (includes versions list)
-      const templateData = await getTemplateDetail(templateId);
-      setTemplate(templateData);
-
-      // Find the current version index
-      const currentIdx = templateData.versions.findIndex(
-        (v) => v.version_id === templateData.current_version_id
+      const currentIdx = template.versions.findIndex(
+        (v) => v.version_id === template.current_version_id
       );
       setCurrentVersionIndex(currentIdx >= 0 ? currentIdx : 0);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load template");
     }
-  };
-
-  const loadVersionDetail = async (versionId: number) => {
-    setError(null);
-    try {
-      const detail = await getTemplateVersionDetail(versionId);
-      setVersionDetail(detail);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to load version details"
-      );
-    }
-  };
-
-  const resetState = () => {
-    setTemplate(null);
-    setCurrentVersionIndex(0);
-    setVersionDetail(null);
-    setCurrentStep("signature-objects");
-    setError(null);
-  };
+  }, [template]);
 
   const handlePreviousVersion = () => {
     if (currentVersionIndex > 0) {

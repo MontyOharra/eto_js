@@ -15,7 +15,7 @@ import {
 import { TemplateBuilderHeader, TemplateBuilderStepper } from "./components";
 import { usePdfData, useUploadPdf, useProcessPdfObjects } from "../../../pdf";
 import { useModulesApi } from "../../../modules/hooks";
-import { useTemplatesApi } from "../../hooks";
+import { useSimulateTemplate } from "../../api";
 import { usePipelineValidation } from "../../../pipelines/hooks";
 import type { ModuleTemplate } from "../../../modules/types";
 import type {
@@ -150,7 +150,7 @@ export function TemplateBuilderModal({
   const { getModules } = useModulesApi();
   const { mutateAsync: uploadPdf } = useUploadPdf();
   const { mutateAsync: processObjects } = useProcessPdfObjects();
-  const { simulateTemplate } = useTemplatesApi();
+  const simulateTemplate = useSimulateTemplate();
 
   // Auto-validate pipeline as it's being built
   const {
@@ -466,7 +466,7 @@ export function TemplateBuilderModal({
       };
 
       // Call real simulate API with JSON body
-      const response = await simulateTemplate(request);
+      const response = await simulateTemplate.mutateAsync(request as any); // TODO: Fix type mismatch with backend
 
       // Map API response to TemplateSimulationResult format
       // Convert extraction_results array to extracted_data map

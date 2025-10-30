@@ -12,7 +12,7 @@ import type {
   PipelineState,
   VisualState,
 } from "../../../../../pipelines/types";
-import { useTemplatesApi } from "../../../../api/useTemplatesApi";
+import { useSimulateTemplate } from "../../../../api";
 
 export type SidebarMode = "list" | "create" | "detail";
 
@@ -86,7 +86,7 @@ export function ExtractionFieldsSidebar({
   const [isSimulating, setIsSimulating] = useState(false);
   const [simulationResult, setSimulationResult] = useState<string | null>(null);
 
-  const { simulateTemplate } = useTemplatesApi();
+  const simulateTemplate = useSimulateTemplate();
 
   // Auto-focus field name input when entering create mode
   useEffect(() => {
@@ -156,7 +156,7 @@ export function ExtractionFieldsSidebar({
         formData.append("pdf_file", pdfFile!);
       }
 
-      const response = await simulateTemplate(formData);
+      const response = await simulateTemplate.mutateAsync(formData as any); // TODO: Fix type - API expects JSON not FormData
 
       // Display extracted data
       if (
