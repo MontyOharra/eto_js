@@ -405,7 +405,10 @@ export function ExtractionFieldsSidebar({
                 Extraction Field
               </h3>
               <button
-                onClick={() => onDeleteField(selectedField.name)}
+                onClick={() => {
+                  console.log('[ExtractionFieldsSidebar] Delete button clicked for:', selectedField.name);
+                  onDeleteField(selectedField.name);
+                }}
                 className="w-8 h-8 bg-red-600 hover:bg-red-700 hover:scale-105 rounded text-white transition-all duration-200 flex items-center justify-center"
                 title="Delete field"
               >

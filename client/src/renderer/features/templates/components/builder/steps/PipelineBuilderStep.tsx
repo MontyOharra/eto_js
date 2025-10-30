@@ -1,13 +1,13 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { PipelineGraph } from '../../../../pipelines/components/PipelineGraph';
 import { ModuleSelectorPane } from '../../../../pipelines/components/ModuleSelectorPane';
-import { useModulesApi } from '../../../../../features/modules/hooks';
 import type { ModuleTemplate } from '../../../../../types/moduleTypes';
 import type { PipelineState, VisualState } from '../../../../../types/pipelineTypes';
 
 interface PipelineBuilderStepProps {
   pipelineState: PipelineState;
   visualState: VisualState;
+  moduleTemplates: ModuleTemplate[]; // Passed from parent instead of loading here
   onPipelineStateChange: (state: PipelineState) => void;
   onVisualStateChange: (state: VisualState) => void;
 }
@@ -15,26 +15,11 @@ interface PipelineBuilderStepProps {
 export function PipelineBuilderStep({
   pipelineState,
   visualState,
+  moduleTemplates,
   onPipelineStateChange,
   onVisualStateChange,
 }: PipelineBuilderStepProps) {
-  const { getModules, isLoading: isLoadingModules } = useModulesApi();
-  const [modules, setModules] = useState<ModuleTemplate[]>([]);
   const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null);
-
-  // Load modules from API
-  useEffect(() => {
-    async function loadModules() {
-      try {
-        const response = await getModules();
-        setModules(response.modules);
-      } catch (error) {
-        console.error('Failed to load modules:', error);
-        setModules([]);
-      }
-    }
-    loadModules();
-  }, [getModules]);
 
   // Handle pipeline state changes from graph (modules, connections)
   const handlePipelineChange = useCallback((state: PipelineState) => {
@@ -59,22 +44,11 @@ export function PipelineBuilderStep({
     setSelectedModuleId(null);
   };
 
-  if (isLoadingModules) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-white text-lg mb-2">Loading modules...</div>
-          <div className="text-gray-400 text-sm">Please wait</div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="h-full w-full flex overflow-hidden">
       {/* Module Selector Pane */}
       <ModuleSelectorPane
-        modules={modules}
+        modules={moduleTemplates}
         selectedModuleId={selectedModuleId}
         onModuleSelect={handleModuleSelect}
       />
@@ -82,7 +56,7 @@ export function PipelineBuilderStep({
       {/* Pipeline Graph */}
       <div className="flex-1">
         <PipelineGraph
-          moduleTemplates={modules}
+          moduleTemplates={moduleTemplates}
           selectedModuleId={selectedModuleId}
           onModulePlaced={handleModulePlaced}
           onChange={handlePipelineChange}
