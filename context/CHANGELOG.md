@@ -5,6 +5,111 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-10-30 17:15] — ETO API Conversion to TanStack Query
+
+### Spec / Intent
+- Convert ETO API from imperative callbacks to declarative TanStack Query hooks
+- Remove all mock data references and use real backend API
+- Match the pattern established by PDF API (useQuery for GET, useMutation for POST/DELETE)
+- Leverage TanStack Query's automatic caching, refetching, and state management
+
+### Changes Made
+
+**New ETO API Hooks (useEtoApi.ts):**
+```typescript
+// Query hooks (GET operations)
+- useEtoRuns(params?) - List runs with filtering/pagination
+- useEtoRunDetail(runId) - Get single run detail
+
+// Mutation hooks (POST/DELETE operations)
+- useCreateEtoRun() - Upload PDF and create ETO run (2-step)
+- useReprocessRuns() - Bulk reprocess failed/skipped runs
+- useSkipRuns() - Bulk skip runs
+- useDeleteRuns() - Bulk delete skipped runs
+
+// Utility
+- getPdfDownloadUrl(pdfFileId) - Re-exported from PDF feature
+```
+
+**Deleted:**
+- `useMockEtoApi.ts` - 384 lines of mock implementation
+- `EtoRunsTable copy.tsx` - Duplicate file
+- All references to `../mocks/data` imports
+
+**RunDetailModal.tsx:**
+- Before: Imperative `useMockEtoApi()` with manual state (`runDetail`, `error`, `isLoading`)
+- After: Declarative `useEtoRunDetail(runId)` with automatic data fetching
+- Removed `loadRunDetail()` function and manual error handling
+- TanStack Query manages all loading and error states
+
+**ETO Page (pages/dashboard/eto/index.tsx):**
+- Before: Imperative `useEtoApi()` with callbacks (`getEtoRuns()`, `uploadPdf()`, etc.)
+- After: Declarative hooks with automatic state management
+  - `useEtoRuns()` for data fetching
+  - `useCreateEtoRun()`, `useReprocessRuns()`, etc. for mutations
+- Removed manual `runsByStatus` state - now derived via `useMemo` from query data
+- Removed `loadRuns()` function - TanStack Query auto-refetches on mutations
+- Updated all button handlers to use `mutation.mutateAsync()`
+- Simplified SSE handlers - query invalidation handles cache updates
+
+**Benefits Achieved:**
+1. **Automatic caching** - Runs cached for 5 minutes, reducing API calls
+2. **Request deduplication** - Multiple components requesting same data = 1 API call
+3. **Automatic refetch** - Mutations auto-invalidate and refetch affected queries
+4. **Built-in states** - No manual `isLoading`, `error` state management
+5. **Consistent pattern** - ETO API now matches PDF API architecture
+6. **Less code** - 592 lines removed (944 deleted, 352 added)
+
+### Technical Details
+
+**Before (Imperative):**
+```typescript
+const { getEtoRuns, uploadPdf, isLoading, error } = useEtoApi();
+
+const loadRuns = async () => {
+  const response = await getEtoRuns();
+  setRunsByStatus(groupByStatus(response.items));
+};
+
+const handleUpload = async (file: File) => {
+  await uploadPdf(file);
+  await loadRuns(); // Manual refetch
+};
+```
+
+**After (Declarative):**
+```typescript
+const { data, isLoading, error } = useEtoRuns();
+const createEtoRun = useCreateEtoRun();
+
+const runsByStatus = useMemo(() =>
+  groupByStatus(data?.items), [data]
+);
+
+const handleUpload = async (file: File) => {
+  await createEtoRun.mutateAsync(file);
+  // TanStack Query auto-invalidates and refetches
+};
+```
+
+**Query Configuration:**
+- `useEtoRuns()`: staleTime 30s, gcTime 5min
+- `useEtoRunDetail()`: staleTime 30s, gcTime 5min
+- All mutations invalidate `['eto-runs']` and `['eto-run']` queries on success
+
+### Next Actions
+- Test real API integration with backend
+- Add error toast notifications for better UX
+- Consider implementing optimistic updates for instant feedback
+
+### Notes
+- TypeScript compilation: ✅ Zero errors
+- 10 files changed: 352 insertions, 944 deletions
+- SSE handlers simplified but still connected for real-time updates
+- Backend API fully implemented and ready (all 7 endpoints)
+
+---
+
 ## [2025-10-30 16:25] — Client Architecture Refactoring: Feature-First Organization
 
 ### Spec / Intent
