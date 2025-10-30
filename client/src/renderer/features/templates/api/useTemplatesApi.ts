@@ -3,10 +3,11 @@
  * Real API implementation for pdf-templates endpoints
  */
 
-import { useState, useCallback } from 'react';
-import { apiClient } from '../../../shared/api/client';
-import { API_CONFIG } from '../../../shared/api/config';
-import { TemplateListItem } from '../types';
+import { useState, useCallback } from "react";
+import { apiClient } from "../../../shared/api/client";
+import { API_CONFIG } from "../../../shared/api/config";
+import { TemplateListItem } from "../types";
+
 import {
   GetTemplatesQueryParams,
   GetTemplateDetailResponse,
@@ -20,7 +21,7 @@ import {
   GetTemplateVersionDetailResponse,
   PostTemplateSimulateRequest,
   PostTemplateSimulateResponse,
-} from '../api/types';
+} from "./types";
 
 export function useTemplatesApi() {
   const [isLoading, setIsLoading] = useState(false);
@@ -32,14 +33,15 @@ export function useTemplatesApi() {
    * Helper to handle API calls with loading and error states
    */
   const withLoadingAndError = useCallback(
-    async <T,>(apiCall: () => Promise<T>): Promise<T> => {
+    async <T>(apiCall: () => Promise<T>): Promise<T> => {
       setIsLoading(true);
       setError(null);
       try {
         const result = await apiCall();
         return result;
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
+        const errorMessage =
+          err instanceof Error ? err.message : "An unknown error occurred";
         setError(errorMessage);
         throw err;
       } finally {
@@ -90,7 +92,9 @@ export function useTemplatesApi() {
    * Create new template
    */
   const createTemplate = useCallback(
-    async (request: PostTemplateCreateRequest): Promise<PostTemplateCreateResponse> => {
+    async (
+      request: PostTemplateCreateRequest
+    ): Promise<PostTemplateCreateResponse> => {
       return withLoadingAndError(async () => {
         const response = await apiClient.post<PostTemplateCreateResponse>(
           baseUrl,
@@ -195,14 +199,16 @@ export function useTemplatesApi() {
    * Backend expects application/json (not multipart/form-data)
    */
   const simulateTemplate = useCallback(
-    async (request: PostTemplateSimulateRequest): Promise<PostTemplateSimulateResponse> => {
+    async (
+      request: PostTemplateSimulateRequest
+    ): Promise<PostTemplateSimulateResponse> => {
       return withLoadingAndError(async () => {
         const response = await apiClient.post<PostTemplateSimulateResponse>(
           `${baseUrl}/simulate`,
           request,
           {
             headers: {
-              'Content-Type': 'application/json',
+              "Content-Type": "application/json",
             },
           }
         );

@@ -6,12 +6,15 @@
  * - Detail: View/delete existing extraction field
  */
 
-import { useRef, useEffect, useState } from 'react';
-import { ExtractionField, SignatureObject } from '../../../../types';
-import type { PipelineState, VisualState } from '../../../../../../types/pipelineTypes';
-import { useTemplatesApi } from '../../../../hooks/useTemplatesApi';
+import { useRef, useEffect, useState } from "react";
+import { ExtractionField, SignatureObject } from "../../../../types";
+import type {
+  PipelineState,
+  VisualState,
+} from "../../../../../../types/pipelineTypes";
+import { useTemplatesApi } from "../../../../api/useTemplatesApi";
 
-export type SidebarMode = 'list' | 'create' | 'detail';
+export type SidebarMode = "list" | "create" | "detail";
 
 interface ExtractionFieldsSidebarProps {
   pdfFileId: number | null;
@@ -30,7 +33,10 @@ interface ExtractionFieldsSidebarProps {
   fieldName: string;
   fieldDescription: string;
   fieldNameError: string | null;
-  tempFieldData: { bbox: [number, number, number, number]; page: number } | null;
+  tempFieldData: {
+    bbox: [number, number, number, number];
+    page: number;
+  } | null;
 
   // Callbacks
   onTemplateNameChange: (name: string) => void;
@@ -76,7 +82,7 @@ export function ExtractionFieldsSidebar({
 }: ExtractionFieldsSidebarProps) {
   const fieldNameInputRef = useRef<HTMLInputElement>(null);
   const [isEditingName, setIsEditingName] = useState(false);
-  const [editedName, setEditedName] = useState('');
+  const [editedName, setEditedName] = useState("");
   const [isSimulating, setIsSimulating] = useState(false);
   const [simulationResult, setSimulationResult] = useState<string | null>(null);
 
@@ -84,7 +90,7 @@ export function ExtractionFieldsSidebar({
 
   // Auto-focus field name input when entering create mode
   useEffect(() => {
-    if (mode === 'create' && fieldNameInputRef.current) {
+    if (mode === "create" && fieldNameInputRef.current) {
       fieldNameInputRef.current.focus();
       fieldNameInputRef.current.select();
     }
@@ -97,7 +103,7 @@ export function ExtractionFieldsSidebar({
 
   // Handle Enter key press in form fields
   const handleFieldFormKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       if (fieldName.trim()) {
         onSaveField();
@@ -108,7 +114,7 @@ export function ExtractionFieldsSidebar({
   // Handle simulate button click
   const handleSimulate = async () => {
     if (extractionFields.length === 0) {
-      alert('Please define at least one extraction field before simulating.');
+      alert("Please define at least one extraction field before simulating.");
       return;
     }
 
@@ -118,7 +124,7 @@ export function ExtractionFieldsSidebar({
     try {
       // Map frontend ExtractionField to backend format
       // Frontend and backend now both use 1-indexed pages and 'name' field
-      const mappedFields = extractionFields.map(field => ({
+      const mappedFields = extractionFields.map((field) => ({
         name: field.name,
         description: field.description || undefined, // Convert null to undefined
         bbox: field.bbox,
@@ -130,51 +136,71 @@ export function ExtractionFieldsSidebar({
       const isUploadedPdf = pdfFile !== null;
 
       if (!isStoredPdf && !isUploadedPdf) {
-        alert('No PDF source available. Please provide either a stored PDF ID or upload a PDF file.');
+        alert(
+          "No PDF source available. Please provide either a stored PDF ID or upload a PDF file."
+        );
         setIsSimulating(false);
         return;
       }
 
       // Build FormData for multipart/form-data request
       const formData = new FormData();
-      formData.append('extraction_fields', JSON.stringify(mappedFields));
-      formData.append('pipeline_state', JSON.stringify(pipelineState));
+      formData.append("extraction_fields", JSON.stringify(mappedFields));
+      formData.append("pipeline_state", JSON.stringify(pipelineState));
 
       if (isStoredPdf) {
-        formData.append('pdf_source', 'stored');
-        formData.append('pdf_file_id', pdfFileId!.toString());
+        formData.append("pdf_source", "stored");
+        formData.append("pdf_file_id", pdfFileId!.toString());
       } else if (isUploadedPdf) {
-        formData.append('pdf_source', 'upload');
-        formData.append('pdf_file', pdfFile!);
+        formData.append("pdf_source", "upload");
+        formData.append("pdf_file", pdfFile!);
       }
 
       const response = await simulateTemplate(formData);
 
       // Display extracted data
-      if (response.data_extraction.status === 'success' && response.data_extraction.extracted_data) {
-        const formattedData = JSON.stringify(response.data_extraction.extracted_data, null, 2);
+      if (
+        response.data_extraction.status === "success" &&
+        response.data_extraction.extracted_data
+      ) {
+        const formattedData = JSON.stringify(
+          response.data_extraction.extracted_data,
+          null,
+          2
+        );
         setSimulationResult(formattedData);
       } else {
-        setSimulationResult('Extraction failed: ' + (response.data_extraction.error_message || 'Unknown error'));
+        setSimulationResult(
+          "Extraction failed: " +
+            (response.data_extraction.error_message || "Unknown error")
+        );
       }
     } catch (error) {
-      console.error('[Simulate] Error:', error);
-      setSimulationResult('Error: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      console.error("[Simulate] Error:", error);
+      setSimulationResult(
+        "Error: " + (error instanceof Error ? error.message : "Unknown error")
+      );
     } finally {
       setIsSimulating(false);
     }
   };
 
-  const selectedField = extractionFields.find(f => f.name === selectedFieldId);
+  const selectedField = extractionFields.find(
+    (f) => f.name === selectedFieldId
+  );
 
   return (
     <div className="flex flex-col h-full">
       {/* Template Information - Editable */}
       <div className="pb-4 mb-4 border-b border-gray-700">
-        <h3 className="text-sm font-semibold text-white mb-3">Template Information</h3>
+        <h3 className="text-sm font-semibold text-white mb-3">
+          Template Information
+        </h3>
         <div className="space-y-3">
           <div>
-            <label className="block text-xs font-medium text-gray-300 mb-1">Template Name</label>
+            <label className="block text-xs font-medium text-gray-300 mb-1">
+              Template Name
+            </label>
             <input
               type="text"
               value={templateName}
@@ -184,7 +210,9 @@ export function ExtractionFieldsSidebar({
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-300 mb-1">Description</label>
+            <label className="block text-xs font-medium text-gray-300 mb-1">
+              Description
+            </label>
             <textarea
               value={templateDescription}
               onChange={(e) => onTemplateDescriptionChange(e.target.value)}
@@ -201,7 +229,12 @@ export function ExtractionFieldsSidebar({
               onChange={(e) => onShowSignatureObjectsChange(e.target.checked)}
               className="mr-2"
             />
-            <label htmlFor="showSignatureObjects" className="text-xs text-gray-300">Show signature objects</label>
+            <label
+              htmlFor="showSignatureObjects"
+              className="text-xs text-gray-300"
+            >
+              Show signature objects
+            </label>
           </div>
         </div>
       </div>
@@ -209,7 +242,7 @@ export function ExtractionFieldsSidebar({
       {/* Dynamic Content Area */}
       <div className="flex-1 overflow-hidden flex flex-col">
         {/* List Mode */}
-        {mode === 'list' && (
+        {mode === "list" && (
           <>
             <h3 className="text-sm font-semibold text-white mb-2">
               Extraction Fields ({extractionFields.length})
@@ -217,7 +250,9 @@ export function ExtractionFieldsSidebar({
             <div className="flex-1 overflow-y-auto space-y-2 mb-4">
               {extractionFields.length === 0 ? (
                 <div className="bg-gray-800 rounded p-3 text-center">
-                  <div className="text-sm text-gray-400">No fields defined yet</div>
+                  <div className="text-sm text-gray-400">
+                    No fields defined yet
+                  </div>
                   <div className="text-xs text-gray-500 mt-1">
                     Draw areas on the PDF to create fields
                   </div>
@@ -245,14 +280,16 @@ export function ExtractionFieldsSidebar({
                 disabled={isSimulating || extractionFields.length === 0}
                 className="w-full px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded transition-colors font-medium"
               >
-                {isSimulating ? 'Simulating...' : 'Simulate'}
+                {isSimulating ? "Simulating..." : "Simulate"}
               </button>
 
               {/* Simulation Results */}
               {simulationResult && (
                 <div className="mt-3 p-3 bg-gray-800 border border-gray-600 rounded max-h-64 overflow-y-auto">
                   <div className="flex items-center justify-between mb-2">
-                    <div className="text-xs font-semibold text-gray-400">Extracted Data:</div>
+                    <div className="text-xs font-semibold text-gray-400">
+                      Extracted Data:
+                    </div>
                     <button
                       onClick={() => setSimulationResult(null)}
                       className="text-xs text-gray-400 hover:text-white"
@@ -270,7 +307,7 @@ export function ExtractionFieldsSidebar({
         )}
 
         {/* Create Mode */}
-        {mode === 'create' && (
+        {mode === "create" && (
           <div className="flex-1 overflow-y-auto">
             <div className="flex items-center mb-4">
               <button
@@ -279,23 +316,31 @@ export function ExtractionFieldsSidebar({
               >
                 ← Back
               </button>
-              <h3 className="text-sm font-semibold text-white">Create Extraction Field</h3>
+              <h3 className="text-sm font-semibold text-white">
+                Create Extraction Field
+              </h3>
             </div>
 
             {/* Show the drawn area information */}
             {tempFieldData && (
               <div className="mb-4 p-3 bg-gray-800 border border-gray-600 rounded">
-                <div className="text-xs text-gray-400 mb-1">Extraction Area:</div>
-                <div className="text-sm text-white">Page {tempFieldData.page}</div>
+                <div className="text-xs text-gray-400 mb-1">
+                  Extraction Area:
+                </div>
+                <div className="text-sm text-white">
+                  Page {tempFieldData.page}
+                </div>
                 <div className="text-xs text-gray-500 mt-1">
-                  Box: {tempFieldData.bbox.map(n => Math.round(n)).join(', ')}
+                  Box: {tempFieldData.bbox.map((n) => Math.round(n)).join(", ")}
                 </div>
               </div>
             )}
 
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-gray-300 mb-1">Field Name *</label>
+                <label className="block text-xs font-medium text-gray-300 mb-1">
+                  Field Name *
+                </label>
                 <input
                   ref={fieldNameInputRef}
                   type="text"
@@ -304,7 +349,9 @@ export function ExtractionFieldsSidebar({
                   onKeyDown={handleFieldFormKeyDown}
                   placeholder="e.g., hawb, carrier-name"
                   className={`w-full px-3 py-2 text-sm bg-gray-800 border rounded text-white focus:outline-none ${
-                    fieldNameError ? 'border-red-500 focus:border-red-500' : 'border-gray-600 focus:border-blue-500'
+                    fieldNameError
+                      ? "border-red-500 focus:border-red-500"
+                      : "border-gray-600 focus:border-blue-500"
                   }`}
                 />
                 {fieldNameError && (
@@ -314,7 +361,9 @@ export function ExtractionFieldsSidebar({
                 )}
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-300 mb-1">Description</label>
+                <label className="block text-xs font-medium text-gray-300 mb-1">
+                  Description
+                </label>
                 <textarea
                   value={fieldDescription}
                   onChange={(e) => onFieldDescriptionChange(e.target.value)}
@@ -343,7 +392,7 @@ export function ExtractionFieldsSidebar({
         )}
 
         {/* Detail Mode */}
-        {mode === 'detail' && selectedField && (
+        {mode === "detail" && selectedField && (
           <div className="flex-1 overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <button
@@ -352,13 +401,19 @@ export function ExtractionFieldsSidebar({
               >
                 ← Back
               </button>
-              <h3 className="text-sm font-semibold text-white flex-1 text-center">Extraction Field</h3>
+              <h3 className="text-sm font-semibold text-white flex-1 text-center">
+                Extraction Field
+              </h3>
               <button
                 onClick={() => onDeleteField(selectedField.name)}
                 className="w-8 h-8 bg-red-600 hover:bg-red-700 hover:scale-105 rounded text-white transition-all duration-200 flex items-center justify-center"
                 title="Delete field"
               >
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <svg
+                  className="w-4 h-4"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
                   <path
                     fillRule="evenodd"
                     d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
@@ -371,7 +426,9 @@ export function ExtractionFieldsSidebar({
             <div className="space-y-3">
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-medium text-gray-400">Name</label>
+                  <label className="block text-xs font-medium text-gray-400">
+                    Name
+                  </label>
                   {!isEditingName && (
                     <button
                       onClick={() => {
@@ -397,7 +454,9 @@ export function ExtractionFieldsSidebar({
                       <button
                         onClick={() => {
                           if (editedName.trim()) {
-                            onUpdateField(selectedField.name, { name: editedName });
+                            onUpdateField(selectedField.name, {
+                              name: editedName,
+                            });
                             setIsEditingName(false);
                           }
                         }}
@@ -419,14 +478,21 @@ export function ExtractionFieldsSidebar({
                 )}
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1">Description</label>
-                <div className="text-sm text-gray-300">{selectedField.description || 'No description'}</div>
+                <label className="block text-xs font-medium text-gray-400 mb-1">
+                  Description
+                </label>
+                <div className="text-sm text-gray-300">
+                  {selectedField.description || "No description"}
+                </div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1">Extraction Area</label>
+                <label className="block text-xs font-medium text-gray-400 mb-1">
+                  Extraction Area
+                </label>
                 <div className="text-sm text-gray-300">
-                  Page {selectedField.page}<br/>
-                  Box: {selectedField.bbox.map(n => Math.round(n)).join(', ')}
+                  Page {selectedField.page}
+                  <br />
+                  Box: {selectedField.bbox.map((n) => Math.round(n)).join(", ")}
                 </div>
               </div>
             </div>

@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
-import { useEtoApi } from '../../../features/eto/hooks';
+import { useEffect, useState, useCallback } from 'react';
+import { useEtoApi, useEtoEvents } from '../../../features/eto/hooks';
 import { EtoRunsTable, RunDetailModal } from '../../../features/eto/components';
 import { EtoRunListItem, EtoRunStatus } from '../../../features/eto/types';
 import { TemplateBuilderModal } from '../../../features/templates/components';
@@ -38,6 +38,9 @@ function EtoPage() {
   // State for template builder modal
   const [templateBuilderPdfId, setTemplateBuilderPdfId] = useState<number | null>(null);
 
+  // SSE connection status
+  const [isLiveConnected, setIsLiveConnected] = useState(false);
+
   // Fetch runs on mount
   useEffect(() => {
     loadRuns();
@@ -66,6 +69,119 @@ function EtoPage() {
       console.error('Failed to load ETO runs:', err);
     }
   };
+
+  // ==========================================================================
+  // Real-time Event Handlers (SSE)
+  // ==========================================================================
+
+  const handleRunCreated = useCallback((data: any) => {
+    console.log('[ETO] New run created:', data.id);
+
+    // Create a new run item from the event data
+    const newRun: EtoRunListItem = {
+      id: data.id,
+      pdf_file_id: data.pdf_file_id,
+      status: data.status as EtoRunStatus,
+      processing_step: data.processing_step || null,
+      started_at: data.started_at || null,
+      completed_at: data.completed_at || null,
+      created_at: data.created_at,
+      error_type: null,
+      error_message: null,
+      // PDF data will be filled when we reload or when we fetch the full run
+      pdf: {
+        id: data.pdf_file_id,
+        filename: 'Unknown',
+        file_size: 0,
+        page_count: 0,
+        file_hash: '',
+        uploaded_at: data.created_at,
+      },
+      email: null,
+      template_match: null,
+    };
+
+    // Add to appropriate status table
+    setRunsByStatus((prev) => ({
+      ...prev,
+      [data.status]: [...prev[data.status], newRun],
+    }));
+  }, []);
+
+  const handleRunUpdated = useCallback((data: any) => {
+    console.log('[ETO] Run updated:', data);
+
+    setRunsByStatus((prev) => {
+      // Find the run in all status tables
+      let foundRun: EtoRunListItem | null = null;
+      let oldStatus: EtoRunStatus | null = null;
+
+      for (const [status, runs] of Object.entries(prev)) {
+        const run = runs.find((r) => r.id === data.id);
+        if (run) {
+          foundRun = run;
+          oldStatus = status as EtoRunStatus;
+          break;
+        }
+      }
+
+      if (!foundRun) {
+        console.warn('[ETO] Updated run not found in state:', data.id);
+        return prev;
+      }
+
+      // Create updated run by merging with existing data
+      const updatedRun: EtoRunListItem = {
+        ...foundRun,
+        ...(data.status !== undefined && { status: data.status }),
+        ...(data.processing_step !== undefined && { processing_step: data.processing_step }),
+        ...(data.started_at !== undefined && { started_at: data.started_at }),
+        ...(data.completed_at !== undefined && { completed_at: data.completed_at }),
+        ...(data.error_type !== undefined && { error_type: data.error_type }),
+        ...(data.error_message !== undefined && { error_message: data.error_message }),
+      };
+
+      // If status changed, move to different table
+      if (data.status && data.status !== oldStatus) {
+        return {
+          ...prev,
+          [oldStatus!]: prev[oldStatus!].filter((r) => r.id !== data.id),
+          [data.status]: [...prev[data.status], updatedRun],
+        };
+      }
+
+      // Status didn't change, just update in place
+      return {
+        ...prev,
+        [oldStatus!]: prev[oldStatus!].map((r) =>
+          r.id === data.id ? updatedRun : r
+        ),
+      };
+    });
+  }, []);
+
+  const handleRunDeleted = useCallback((runId: number) => {
+    console.log('[ETO] Run deleted:', runId);
+
+    setRunsByStatus((prev) => {
+      const newState = { ...prev };
+      for (const status in newState) {
+        newState[status as EtoRunStatus] = newState[status as EtoRunStatus].filter(
+          (r) => r.id !== runId
+        );
+      }
+      return newState;
+    });
+  }, []);
+
+  // Connect to SSE stream for real-time updates
+  useEtoEvents({
+    onRunCreated: handleRunCreated,
+    onRunUpdated: handleRunUpdated,
+    onRunDeleted: handleRunDeleted,
+    onConnected: () => setIsLiveConnected(true),
+    onDisconnected: () => setIsLiveConnected(false),
+  });
 
   // ==========================================================================
   // Button Handlers
@@ -195,7 +311,26 @@ function EtoPage() {
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white">ETO Runs</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold text-white">ETO Runs</h1>
+            {/* Real-time connection status */}
+            <div className="flex items-center gap-2 text-sm">
+              {isLiveConnected ? (
+                <>
+                  <span className="flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-green-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                  </span>
+                  <span className="text-green-400 font-medium">Live</span>
+                </>
+              ) : (
+                <>
+                  <span className="inline-flex h-2 w-2 rounded-full bg-yellow-500"></span>
+                  <span className="text-yellow-400 font-medium">Connecting...</span>
+                </>
+              )}
+            </div>
+          </div>
           <p className="text-gray-400 mt-2">
             Monitor and manage extraction, transformation, and orchestration runs
           </p>
