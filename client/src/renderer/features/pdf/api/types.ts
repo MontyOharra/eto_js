@@ -1,5 +1,5 @@
 /**
- * PDF API Types (DTOs)
+ * PDF API Types (s)
  * Request and response types matching the backend API
  */
 
@@ -13,7 +13,7 @@ export type BBox = [number, number, number, number]; // [x0, y0, x1, y1]
 // PDF Metadata (GET /pdf-files/{id})
 // ============================================================================
 
-export interface PdfFileMetadataDTO {
+export interface PdfFileMetadata {
   id: number;
   email_id: number | null;
   filename: string;
@@ -28,7 +28,7 @@ export interface PdfFileMetadataDTO {
 // PDF Objects (GET /pdf-files/{id}/objects)
 // ============================================================================
 
-export interface TextWordObjectDTO {
+export interface TextWordObject {
   page: number;
   bbox: BBox;
   text: string;
@@ -36,31 +36,31 @@ export interface TextWordObjectDTO {
   fontsize: number;
 }
 
-export interface TextLineObjectDTO {
+export interface TextLineObject {
   page: number;
   bbox: BBox;
 }
 
-export interface GraphicRectObjectDTO {
-  page: number;
-  bbox: BBox;
-  linewidth: number;
-}
-
-export interface GraphicLineObjectDTO {
+export interface GraphicRectObject {
   page: number;
   bbox: BBox;
   linewidth: number;
 }
 
-export interface GraphicCurveObjectDTO {
+export interface GraphicLineObject {
+  page: number;
+  bbox: BBox;
+  linewidth: number;
+}
+
+export interface GraphicCurveObject {
   page: number;
   bbox: BBox;
   points: [number, number][]; // Array of [x, y] coordinate pairs
   linewidth: number;
 }
 
-export interface ImageObjectDTO {
+export interface ImageObject {
   page: number;
   bbox: BBox;
   format: string; // e.g., "JPEG", "PNG"
@@ -68,50 +68,36 @@ export interface ImageObjectDTO {
   bits: number; // Bit depth
 }
 
-export interface TableObjectDTO {
+export interface TableObject {
   page: number;
   bbox: BBox;
   rows: number;
   cols: number;
 }
 
-export interface PdfObjectsResponseDTO {
+export interface PdfObjects {
+  text_words: TextWordObject[];
+  text_lines: TextLineObject[];
+  graphic_rects: GraphicRectObject[];
+  graphic_lines: GraphicLineObject[];
+  graphic_curves: GraphicCurveObject[];
+  images: ImageObject[];
+  tables: TableObject[];
+}
+
+// ============================================================================
+// PDF Processing (GET /pdf-files/{id}/objects)
+// ============================================================================
+export interface PdfObjectsResponse {
   pdf_file_id: number;
   page_count: number;
-  objects: {
-    text_words: TextWordObjectDTO[];
-    text_lines: TextLineObjectDTO[];
-    graphic_rects: GraphicRectObjectDTO[];
-    graphic_lines: GraphicLineObjectDTO[];
-    graphic_curves: GraphicCurveObjectDTO[];
-    images: ImageObjectDTO[];
-    tables: TableObjectDTO[];
-  };
+  objects: PdfObjects;
 }
 
 // ============================================================================
 // PDF Processing (POST /pdf-files/process)
 // ============================================================================
-
-// Response for processing uploaded PDFs (no pdf_file_id since not stored)
-export interface PdfProcessResponseDTO {
+export interface PdfProcessResponse {
   page_count: number;
-  objects: {
-    text_words: TextWordObjectDTO[];
-    text_lines: TextLineObjectDTO[];
-    graphic_rects: GraphicRectObjectDTO[];
-    graphic_lines: GraphicLineObjectDTO[];
-    graphic_curves: GraphicCurveObjectDTO[];
-    images: ImageObjectDTO[];
-    tables: TableObjectDTO[];
-  };
+  objects: PdfObjects;
 }
-
-// ============================================================================
-// PDF Download (GET /pdf-files/{id}/download)
-// ============================================================================
-
-// Note: Download endpoint returns raw PDF bytes with headers:
-// - Content-Type: application/pdf
-// - Content-Disposition: inline; filename="<original_filename>"
-// Frontend handles as Blob/ArrayBuffer for PDF.js or iframe embedding

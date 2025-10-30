@@ -1,6 +1,13 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { useEffect, useState, useCallback } from 'react';
-import { useEtoApi, useEtoEvents } from '../../../features/eto/hooks';
+import { useMemo, useState, useCallback } from 'react';
+import {
+  useEtoRuns,
+  useCreateEtoRun,
+  useReprocessRuns,
+  useSkipRuns,
+  useDeleteRuns,
+  useEtoEvents,
+} from '../../../features/eto/hooks';
 import { EtoRunsTable, RunDetailModal } from '../../../features/eto/components';
 import { EtoRunListItem, EtoRunStatus } from '../../../features/eto/types';
 import { TemplateBuilderModal } from '../../../features/templates/components';
@@ -10,27 +17,12 @@ export const Route = createFileRoute('/dashboard/eto/')({
 });
 
 function EtoPage() {
-  const {
-    getEtoRuns,
-    uploadPdf,
-    reprocessRuns,
-    skipRuns,
-    deleteRuns,
-    isLoading,
-    error,
-  } = useEtoApi();
-
-  // State to hold runs grouped by status
-  const [runsByStatus, setRunsByStatus] = useState<
-    Record<EtoRunStatus, EtoRunListItem[]>
-  >({
-    not_started: [],
-    processing: [],
-    success: [],
-    failure: [],
-    needs_template: [],
-    skipped: [],
-  });
+  // TanStack Query hooks
+  const { data: etoRunsData, isLoading, error } = useEtoRuns();
+  const createEtoRun = useCreateEtoRun();
+  const reprocessMutation = useReprocessRuns();
+  const skipMutation = useSkipRuns();
+  const deleteMutation = useDeleteRuns();
 
   // State for run detail modal
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
@@ -41,137 +33,46 @@ function EtoPage() {
   // SSE connection status
   const [isLiveConnected, setIsLiveConnected] = useState(false);
 
-  // Fetch runs on mount
-  useEffect(() => {
-    loadRuns();
-  }, []);
+  // Derive grouped runs from query data
+  const runsByStatus = useMemo(() => {
+    const grouped: Record<EtoRunStatus, EtoRunListItem[]> = {
+      not_started: [],
+      processing: [],
+      success: [],
+      failure: [],
+      needs_template: [],
+      skipped: [],
+    };
 
-  const loadRuns = async () => {
-    try {
-      const response = await getEtoRuns();
-
-      // Group runs by status
-      const grouped: Record<EtoRunStatus, EtoRunListItem[]> = {
-        not_started: [],
-        processing: [],
-        success: [],
-        failure: [],
-        needs_template: [],
-        skipped: [],
-      };
-
-      response.items.forEach((run) => {
+    if (etoRunsData?.items) {
+      etoRunsData.items.forEach((run) => {
         grouped[run.status].push(run);
       });
-
-      setRunsByStatus(grouped);
-    } catch (err) {
-      console.error('Failed to load ETO runs:', err);
     }
-  };
+
+    return grouped;
+  }, [etoRunsData]);
 
   // ==========================================================================
   // Real-time Event Handlers (SSE)
   // ==========================================================================
+  // Note: SSE updates are optimistic - TanStack Query will invalidate and refetch
+  // automatically, so we don't need to manually update the cache here.
+  // The queries will refetch when mutations complete (onSuccess callbacks handle this).
 
   const handleRunCreated = useCallback((data: any) => {
-    console.log('[ETO] New run created:', data.id);
-
-    // Create a new run item from the event data
-    const newRun: EtoRunListItem = {
-      id: data.id,
-      pdf_file_id: data.pdf_file_id,
-      status: data.status as EtoRunStatus,
-      processing_step: data.processing_step || null,
-      started_at: data.started_at || null,
-      completed_at: data.completed_at || null,
-      created_at: data.created_at,
-      error_type: null,
-      error_message: null,
-      // PDF data will be filled when we reload or when we fetch the full run
-      pdf: {
-        id: data.pdf_file_id,
-        filename: 'Unknown',
-        file_size: 0,
-        page_count: 0,
-        file_hash: '',
-        uploaded_at: data.created_at,
-      },
-      email: null,
-      template_match: null,
-    };
-
-    // Add to appropriate status table
-    setRunsByStatus((prev) => ({
-      ...prev,
-      [data.status]: [...prev[data.status], newRun],
-    }));
+    console.log('[ETO] New run created via SSE:', data.id);
+    // TanStack Query will auto-invalidate on mutations, SSE just provides real-time feedback
   }, []);
 
   const handleRunUpdated = useCallback((data: any) => {
-    console.log('[ETO] Run updated:', data);
-
-    setRunsByStatus((prev) => {
-      // Find the run in all status tables
-      let foundRun: EtoRunListItem | null = null;
-      let oldStatus: EtoRunStatus | null = null;
-
-      for (const [status, runs] of Object.entries(prev)) {
-        const run = runs.find((r) => r.id === data.id);
-        if (run) {
-          foundRun = run;
-          oldStatus = status as EtoRunStatus;
-          break;
-        }
-      }
-
-      if (!foundRun) {
-        console.warn('[ETO] Updated run not found in state:', data.id);
-        return prev;
-      }
-
-      // Create updated run by merging with existing data
-      const updatedRun: EtoRunListItem = {
-        ...foundRun,
-        ...(data.status !== undefined && { status: data.status }),
-        ...(data.processing_step !== undefined && { processing_step: data.processing_step }),
-        ...(data.started_at !== undefined && { started_at: data.started_at }),
-        ...(data.completed_at !== undefined && { completed_at: data.completed_at }),
-        ...(data.error_type !== undefined && { error_type: data.error_type }),
-        ...(data.error_message !== undefined && { error_message: data.error_message }),
-      };
-
-      // If status changed, move to different table
-      if (data.status && data.status !== oldStatus) {
-        return {
-          ...prev,
-          [oldStatus!]: prev[oldStatus!].filter((r) => r.id !== data.id),
-          [data.status]: [...prev[data.status], updatedRun],
-        };
-      }
-
-      // Status didn't change, just update in place
-      return {
-        ...prev,
-        [oldStatus!]: prev[oldStatus!].map((r) =>
-          r.id === data.id ? updatedRun : r
-        ),
-      };
-    });
+    console.log('[ETO] Run updated via SSE:', data);
+    // TanStack Query will auto-invalidate on mutations, SSE just provides real-time feedback
   }, []);
 
   const handleRunDeleted = useCallback((runId: number) => {
-    console.log('[ETO] Run deleted:', runId);
-
-    setRunsByStatus((prev) => {
-      const newState = { ...prev };
-      for (const status in newState) {
-        newState[status as EtoRunStatus] = newState[status as EtoRunStatus].filter(
-          (r) => r.id !== runId
-        );
-      }
-      return newState;
-    });
+    console.log('[ETO] Run deleted via SSE:', runId);
+    // TanStack Query will auto-invalidate on mutations, SSE just provides real-time feedback
   }, []);
 
   // Connect to SSE stream for real-time updates
@@ -198,9 +99,8 @@ function EtoPage() {
 
   const handleSkip = async (runId: number) => {
     try {
-      await skipRuns({ run_ids: [runId] });
-      // Reload runs after successful skip
-      await loadRuns();
+      await skipMutation.mutateAsync({ run_ids: [runId] });
+      // TanStack Query auto-invalidates and refetches on success
     } catch (err) {
       console.error('Failed to skip run:', err);
     }
@@ -221,9 +121,8 @@ function EtoPage() {
 
   const handleReprocess = async (runId: number) => {
     try {
-      await reprocessRuns({ run_ids: [runId] });
-      // Reload runs after successful reprocess
-      await loadRuns();
+      await reprocessMutation.mutateAsync({ run_ids: [runId] });
+      // TanStack Query auto-invalidates and refetches on success
     } catch (err) {
       console.error('Failed to reprocess run:', err);
     }
@@ -231,9 +130,8 @@ function EtoPage() {
 
   const handleDelete = async (runId: number) => {
     try {
-      await deleteRuns({ run_ids: [runId] });
-      // Reload runs after successful delete
-      await loadRuns();
+      await deleteMutation.mutateAsync({ run_ids: [runId] });
+      // TanStack Query auto-invalidates and refetches on success
     } catch (err) {
       console.error('Failed to delete run:', err);
     }
@@ -247,8 +145,7 @@ function EtoPage() {
     // Close modal
     setTemplateBuilderPdfId(null);
 
-    // Reload runs to update status
-    await loadRuns();
+    // TanStack Query will auto-refetch when mutations complete
   };
 
   const handleManualUpload = () => {
@@ -270,10 +167,8 @@ function EtoPage() {
 
         try {
           // Upload PDF and create ETO run
-          await uploadPdf(file);
-
-          // Reload runs to show the new run
-          await loadRuns();
+          await createEtoRun.mutateAsync(file);
+          // TanStack Query auto-invalidates and refetches on success
         } catch (err) {
           console.error('Failed to upload PDF:', err);
           alert('Failed to upload PDF. Please try again.');
@@ -294,9 +189,11 @@ function EtoPage() {
       <div className="p-6">
         <div className="bg-red-900 border border-red-700 rounded-lg p-4">
           <h2 className="text-xl font-bold text-red-300 mb-2">Error</h2>
-          <p className="text-red-200">{error}</p>
+          <p className="text-red-200">
+            {error instanceof Error ? error.message : 'Failed to load ETO runs'}
+          </p>
           <button
-            onClick={loadRuns}
+            onClick={() => window.location.reload()}
             className="mt-4 px-4 py-2 bg-red-700 hover:bg-red-600 text-white rounded transition-colors"
           >
             Retry
@@ -336,11 +233,11 @@ function EtoPage() {
           </p>
         </div>
         <button
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={handleManualUpload}
-          disabled={isLoading}
+          disabled={isLoading || createEtoRun.isPending}
         >
-          + Upload PDF
+          {createEtoRun.isPending ? 'Uploading...' : '+ Upload PDF'}
         </button>
       </div>
 

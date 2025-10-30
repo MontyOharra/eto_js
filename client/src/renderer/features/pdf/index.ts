@@ -17,16 +17,16 @@ export {
 export type { PdfData } from './api';
 export type {
   BBox,
-  PdfFileMetadataDTO,
-  PdfObjectsResponseDTO,
-  PdfProcessResponseDTO,
-  TextWordObjectDTO,
-  TextLineObjectDTO,
-  GraphicRectObjectDTO,
-  GraphicLineObjectDTO,
-  GraphicCurveObjectDTO,
-  ImageObjectDTO,
-  TableObjectDTO,
+  PdfFileMetadata,
+  PdfObjectsResponse,
+  PdfProcessResponse,
+  TextWordObject,
+  TextLineObject,
+  GraphicRectObject,
+  GraphicLineObject,
+  GraphicCurveObject,
+  ImageObject,
+  TableObject,
 } from './api/types';
 
 // Components

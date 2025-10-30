@@ -6,7 +6,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../../shared/api/client';
 import { API_CONFIG } from '../../../shared/api/config';
-import { PdfFileMetadataDTO, PdfObjectsResponseDTO, PdfProcessResponseDTO } from './types';
+import { PdfFileMetadata, PdfObjectsResponse, PdfProcessResponse } from './types';
 
 const baseUrl = API_CONFIG.ENDPOINTS.PDF_FILES;
 
@@ -19,9 +19,9 @@ const baseUrl = API_CONFIG.ENDPOINTS.PDF_FILES;
  * Convenient for components that need all PDF data at once
  */
 export interface PdfData {
-  objectsData: PdfObjectsResponseDTO;
+  objectsData: PdfObjectsResponse;
   url: string;
-  metadata: PdfFileMetadataDTO;
+  metadata: PdfFileMetadata;
 }
 
 export function usePdfData(pdfFileId: number | null) {
@@ -34,8 +34,8 @@ export function usePdfData(pdfFileId: number | null) {
 
       // Fetch PDF objects and metadata in parallel
       const [objectsData, metadata] = await Promise.all([
-        apiClient.get<PdfObjectsResponseDTO>(`${baseUrl}/${pdfFileId}/objects`).then(res => res.data),
-        apiClient.get<PdfFileMetadataDTO>(`${baseUrl}/${pdfFileId}`).then(res => res.data),
+        apiClient.get<PdfObjectsResponse>(`${baseUrl}/${pdfFileId}/objects`).then(res => res.data),
+        apiClient.get<PdfFileMetadata>(`${baseUrl}/${pdfFileId}`).then(res => res.data),
       ]);
 
       // Construct download URL
@@ -56,12 +56,12 @@ export function usePdfData(pdfFileId: number | null) {
 export function usePdfMetadata(pdfFileId: number | null) {
   return useQuery({
     queryKey: ['pdf', 'metadata', pdfFileId],
-    queryFn: async (): Promise<PdfFileMetadataDTO> => {
+    queryFn: async (): Promise<PdfFileMetadata> => {
       if (!pdfFileId) {
         throw new Error('No PDF file ID provided');
       }
 
-      const response = await apiClient.get<PdfFileMetadataDTO>(
+      const response = await apiClient.get<PdfFileMetadata>(
         `${baseUrl}/${pdfFileId}`
       );
       return response.data;
@@ -82,12 +82,12 @@ export function usePdfObjects(
 ) {
   return useQuery({
     queryKey: ['pdf', 'objects', pdfFileId, objectType],
-    queryFn: async (): Promise<PdfObjectsResponseDTO> => {
+    queryFn: async (): Promise<PdfObjectsResponse> => {
       if (!pdfFileId) {
         throw new Error('No PDF file ID provided');
       }
 
-      const response = await apiClient.get<PdfObjectsResponseDTO>(
+      const response = await apiClient.get<PdfObjectsResponse>(
         `${baseUrl}/${pdfFileId}/objects`,
         {
           params: objectType ? { object_type: objectType } : undefined,
@@ -113,11 +113,11 @@ export function useUploadPdf() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (pdfFile: File): Promise<PdfFileMetadataDTO> => {
+    mutationFn: async (pdfFile: File): Promise<PdfFileMetadata> => {
       const formData = new FormData();
       formData.append('pdf_file', pdfFile);
 
-      const response = await apiClient.post<PdfFileMetadataDTO>(
+      const response = await apiClient.post<PdfFileMetadata>(
         baseUrl,
         formData,
         {
@@ -142,11 +142,11 @@ export function useUploadPdf() {
  */
 export function useProcessPdfObjects() {
   return useMutation({
-    mutationFn: async (pdfFile: File): Promise<PdfProcessResponseDTO> => {
+    mutationFn: async (pdfFile: File): Promise<PdfProcessResponse> => {
       const formData = new FormData();
       formData.append('pdf_file', pdfFile);
 
-      const response = await apiClient.post<PdfProcessResponseDTO>(
+      const response = await apiClient.post<PdfProcessResponse>(
         `${baseUrl}/process-objects`,
         formData,
         {

@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { PdfViewer, usePdfViewer } from '../../../pdf';
-import { useMockEtoApi } from '../../hooks/useMockEtoApi';
+import { useEtoRunDetail, getPdfDownloadUrl } from '../../hooks';
 import { StatusBadge } from '../ui/StatusBadge';
 import { ExtractedFieldsOverlay } from '../overlays/ExtractedFieldsOverlay';
 import { ExecutedPipelineViewer, ExecutedPipelineViewerRef } from '../../../pipelines/components/ExecutedPipelineViewer';
@@ -77,15 +77,16 @@ function AutoFitOnResize({ isDragging }: { isDragging: boolean }) {
 }
 
 export function RunDetailModal({ isOpen, runId, onClose }: RunDetailModalProps) {
-  const { getEtoRunDetail, getPdfDownloadUrl, isLoading } = useMockEtoApi();
-  const [runDetail, setRunDetail] = useState<EtoRunDetail | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // Use TanStack Query hook to fetch run details
+  const { data: runDetail, isLoading, error: queryError } = useEtoRunDetail(isOpen ? runId : null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('summary');
   const [specificsWidth, setSpecificsWidth] = useState(60); // Percentage
   const [isDragging, setIsDragging] = useState(false);
   const pdfContainerRef = useRef<HTMLDivElement>(null);
   const pipelineViewerRef = useRef<ExecutedPipelineViewerRef>(null);
+
+  const error = queryError ? 'Failed to load run details' : null;
 
   // Reset to summary view when modal opens
   useEffect(() => {
@@ -94,37 +95,18 @@ export function RunDetailModal({ isOpen, runId, onClose }: RunDetailModalProps) 
     }
   }, [isOpen]);
 
-  // Fetch run details when modal opens
-  useEffect(() => {
-    if (isOpen && runId) {
-      loadRunDetail();
-    }
-  }, [isOpen, runId]);
-
   // Set PDF URL when run detail is loaded
   useEffect(() => {
     if (runDetail?.pdf.id) {
       const url = getPdfDownloadUrl(runDetail.pdf.id);
       setPdfUrl(url);
     }
-  }, [runDetail?.pdf.id, getPdfDownloadUrl]);
-
-  const loadRunDetail = async () => {
-    if (!runId) return;
-
-    setError(null);
-    try {
-      const detail = await getEtoRunDetail(runId);
-      setRunDetail(detail);
-    } catch (err) {
-      setError('Failed to load run details');
-      console.error('Failed to load run details:', err);
-    }
-  };
+  }, [runDetail?.pdf.id]);
 
   const handlePdfError = (pdfError: Error) => {
     console.error('PDF load error:', pdfError);
-    setError(`Failed to load PDF: ${pdfError.message}`);
+    // PDF errors are logged but don't update the error state
+    // TanStack Query handles API errors
   };
 
   // Resizable divider handlers

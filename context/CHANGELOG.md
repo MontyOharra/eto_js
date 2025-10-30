@@ -5,6 +5,95 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-10-30 16:25] — Client Architecture Refactoring: Feature-First Organization
+
+### Spec / Intent
+- Establish feature-first architecture with shared/ as pure infrastructure only
+- Move PDF feature from shared/ to features/pdf/ with consolidated API hooks
+- Move moduleTypes and pipelineTypes from shared/types/ to respective feature directories
+- Update all import statements across 15+ files to use new feature-relative paths
+- Delete unused mock data (3.5 MB) and empty directories
+
+### Changes Made
+
+**Files Created:**
+- `client/src/renderer/features/pdf/api/hooks.ts` - Consolidated all PDF API hooks into single file (usePdfData, usePdfMetadata, usePdfObjects, useUploadPdf, useProcessPdfObjects)
+- `client/src/renderer/features/pdf/index.ts` - Unified export point for entire PDF feature
+- `client/src/renderer/features/modules/types.ts` - Moved from shared/types/moduleTypes.ts
+- `client/src/renderer/features/modules/index.ts` - Export file for modules feature
+- `client/src/renderer/features/pipelines/types.ts` - Moved from shared/types/pipelineTypes.ts (imports and re-exports module types)
+- `client/src/renderer/features/pipelines/index.ts` - Export file for pipelines feature
+
+**PDF Feature Consolidation:**
+- Moved PDF API, components, and hooks from shared/ to features/pdf/
+- Consolidated separate hook files into single hooks.ts file (user preference)
+- Updated 14 import statements across templates and eto features
+- Moved PdfViewer components from shared/components/pdf/ to features/pdf/components/
+
+**Type System Migration:**
+- Moved moduleTypes.ts → features/modules/types.ts
+- Moved pipelineTypes.ts → features/pipelines/types.ts (imports from modules, adds pipeline-specific types)
+- Updated 15 files with new import paths using Edit tool
+- Files updated: modules (2), pipelines (7), templates (6)
+
+**Directories Deleted:**
+- `client/src/renderer/features/pdf-files/` (entire feature with 3.5 MB mock data)
+- `client/src/renderer/shared/api/pdf/`
+- `client/src/renderer/shared/components/pdf/`
+- `client/src/renderer/shared/components/` (empty after PDF move)
+- `client/src/renderer/shared/types/` (empty after types migration)
+
+### Technical Details
+
+**Import Path Changes:**
+```typescript
+// Before: shared/types/moduleTypes
+import { ModuleTemplate } from "../../../../shared/types/moduleTypes";
+
+// After: features/modules/types
+import { ModuleTemplate } from "../../../modules/types";
+
+// Before: types/pipelineTypes
+import { PipelineState } from '../../../types/pipelineTypes';
+
+// After: features/pipelines/types
+import { PipelineState } from '../../pipelines/types';
+```
+
+**Architecture Pattern Established:**
+```
+shared/
+  api/ - Pure infrastructure (Axios client, config, interceptors)
+  utils/ - Pure utilities
+
+features/
+  {feature-name}/
+    api/ - Feature-specific API logic
+    components/ - Feature-specific UI components
+    hooks/ - Feature-specific React hooks
+    types.ts - Feature-specific types
+    index.ts - Unified exports
+```
+
+**74 Files Changed:**
+- 410 insertions
+- 196,317 deletions (mostly mock data)
+- Zero TypeScript errors after all changes
+
+### Next Actions
+- Continue client directory cleanup (check for remaining shared/ issues)
+- Consider moving other shared items to features if feature-specific
+- Update documentation to reflect new architecture pattern
+
+### Notes
+- TypeScript compilation: ✅ Zero errors
+- All imports updated systematically using Edit tool (not bulk sed commands)
+- Followed "shared when needed, not by default" principle
+- PDF hooks consolidated into single file per user preference
+- Line ending warnings (CRLF) are normal Git behavior on Windows
+
+---
+
 ## [2025-10-29 Current] — Template Builder Architecture Documentation
 
 ### Spec / Intent
