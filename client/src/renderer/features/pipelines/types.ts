@@ -1,206 +1,84 @@
-// Domain types for Pipelines feature
-// Note: Pipelines are dev/testing only - no name/description/status
-// In production, pipelines are embedded in PDF templates
+/**
+ * Type definitions for the Transformation Pipeline system
+ */
 
-// =============================================================================
-// List/Summary View (matches GET /pipelines backend response)
-// =============================================================================
+import {
+  NodeTypeRule as _NodeTypeRule,
+  NodeGroup as _NodeGroup,
+  IOSideShape as _IOSideShape,
+  IOShape as _IOShape,
+  ModuleTemplate as _ModuleTemplate,
+  ModuleInstance as _ModuleInstance,
+  NodePin as _NodePin,
+} from "../modules/types";
 
-export interface PipelineListItem {
-  id: number;
-  compiled_plan_id: number | null;
-  created_at: string; // ISO 8601
-  updated_at: string; // ISO 8601
+// Re-export module type definitions
+export type NodeTypeRule = _NodeTypeRule;
+export type NodeGroup = _NodeGroup;
+export type IOSideShape = _IOSideShape;
+export type IOShape = _IOShape;
+export type ModuleTemplate = _ModuleTemplate;
+export type ModuleInstance = _ModuleInstance;
+export type NodePin = _NodePin;
+
+// Connection between nodes
+export interface NodeConnection {
+  from_node_id: string;
+  to_node_id: string;
 }
 
-// =============================================================================
-// Detail View (matches GET /pipelines/{id} backend response)
-// =============================================================================
-
-export interface PipelineDetail extends PipelineListItem {
-  // Pipeline state (logical structure)
-  pipeline_state: {
-    entry_points: Array<{
-      node_id: string;
-      name: string;
-    }>;
-    modules: Array<{
-      module_instance_id: string;
-      module_ref: string; // e.g., "trim_text:1.0.0"
-      module_kind: string; // "transform" | "action" | "logic"
-      config: Record<string, any>;
-      inputs: Array<{
-        node_id: string;
-        name: string;
-        type: string;
-        position_index: number;
-        group_index: number;
-      }>;
-      outputs: Array<{
-        node_id: string;
-        name: string;
-        type: string;
-        position_index: number;
-        group_index: number;
-      }>;
-    }>;
-    connections: Array<{
-      from_node_id: string;
-      to_node_id: string;
-    }>;
-  };
-  // Visual state (UI positioning)
-  visual_state: {
-    modules: Record<string, { x: number; y: number }>;
-    entryPoints?: Record<string, { x: number; y: number }>;
-  };
+// Entry point for pipeline (frontend - includes type for UI)
+export interface EntryPoint {
+  node_id: string;
+  name: string;
+  type: string;
 }
 
-// =============================================================================
-// API Response Types (matches backend API_ENDPOINTS.md)
-// =============================================================================
-
-export interface PipelinesListResponse {
-  items: PipelineListItem[];
-  total: number;
-  limit: number;
-  offset: number;
+// Backend-compatible types for serialization
+export interface InstanceNodePin {
+  node_id: string;
+  type: string;
+  name: string;
+  position_index: number;
+  group_index: number;
 }
 
-export interface PipelineDetailResponse extends PipelineDetail {}
+export interface BackendEntryPoint {
+  node_id: string;
+  name: string;
+}
 
-// =============================================================================
-// API Request Types (matches POST /pipelines backend)
-// =============================================================================
+// Pipeline state (execution data)
+export interface PipelineState {
+  entry_points: EntryPoint[];
+  modules: ModuleInstance[];
+  connections: NodeConnection[];
+}
 
-export interface CreatePipelineRequest {
-  pipeline_state: {
-    entry_points: Array<{
-      node_id: string;
-      name: string;
-    }>;
-    modules: Array<{
-      module_instance_id: string;
-      module_ref: string;
-      module_kind: string;
-      config: Record<string, any>;
-      inputs: Array<{
-        node_id: string;
-        name: string;
-        type: string;
-        position_index: number;
-        group_index: number;
-      }>;
-      outputs: Array<{
-        node_id: string;
-        name: string;
-        type: string;
-        position_index: number;
-        group_index: number;
-      }>;
-    }>;
-    connections: Array<{
-      from_node_id: string;
-      to_node_id: string;
-    }>;
-  };
-  visual_state: {
-    modules: Record<string, { x: number; y: number }>;
-    entryPoints?: Record<string, { x: number; y: number }>;
+// Visual state (UI positioning) - flat structure with all node positions
+export type VisualState = Record<string, { x: number; y: number }>;
+
+// Complete pipeline data (for saving/loading)
+export interface PipelineData {
+  schema_version?: string;
+  name?: string;
+  description?: string;
+  pipeline_json: PipelineState;
+  visual_json: VisualState;
+}
+
+// API response for modules endpoint
+export interface ModulesResponse {
+  modules: ModuleTemplate[];
+  total_count: number;
+  stats: {
+    total_modules: number;
+    transform_modules: number;
+    action_modules: number;
+    logic_modules: number;
+    module_refs: string[];
   };
 }
 
-export interface CreatePipelineResponse {
-  id: number;
-  compiled_plan_id: number | null;
-}
-
-export interface UpdatePipelineRequest {
-  pipeline_state: {
-    entry_points: Array<{
-      node_id: string;
-      name: string;
-    }>;
-    modules: Array<{
-      module_instance_id: string;
-      module_ref: string;
-      module_kind: string;
-      config: Record<string, any>;
-      inputs: Array<{
-        node_id: string;
-        name: string;
-        type: string;
-        position_index: number;
-        group_index: number;
-      }>;
-      outputs: Array<{
-        node_id: string;
-        name: string;
-        type: string;
-        position_index: number;
-        group_index: number;
-      }>;
-    }>;
-    connections: Array<{
-      from_node_id: string;
-      to_node_id: string;
-    }>;
-  };
-  visual_state: {
-    modules: Record<string, { x: number; y: number }>;
-    entryPoints?: Record<string, { x: number; y: number }>;
-  };
-}
-
-export interface UpdatePipelineResponse {
-  id: number;
-  compiled_plan_id: number | null;
-}
-
-// =============================================================================
-// Validation Types (matches POST /pipelines/validate backend)
-// =============================================================================
-
-export interface ValidationError {
-  code: string; // Error code (e.g., "type_mismatch", "cycle_detected")
-  message: string; // Human-readable error message
-  where?: Record<string, any> | null; // Additional context (connection, module, etc.)
-}
-
-export interface ValidatePipelineRequest {
-  pipeline_json: {
-    entry_points: Array<{
-      node_id: string;
-      name: string;
-    }>;
-    modules: Array<{
-      module_instance_id: string;
-      module_ref: string;
-      module_kind: string;
-      config: Record<string, any>;
-      inputs: Array<{
-        node_id: string;
-        name: string;
-        type: string;
-        position_index: number;
-        group_index: number;
-      }>;
-      outputs: Array<{
-        node_id: string;
-        name: string;
-        type: string;
-        position_index: number;
-        group_index: number;
-      }>;
-    }>;
-    connections: Array<{
-      from_node_id: string;
-      to_node_id: string;
-    }>;
-  };
-}
-
-export interface ValidatePipelineResponse {
-  valid: boolean;
-  error: ValidationError | null;
-}
+// Type alias for compatibility
+export type Connection = NodeConnection;

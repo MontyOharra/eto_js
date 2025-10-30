@@ -13,8 +13,8 @@ import {
 } from "../../../features/pipelines/hooks";
 import { serializePipelineData } from "../../../features/pipelines/utils/pipelineSerializer";
 import { generateEntryPointId } from "../../../features/pipelines/utils/idGenerator";
-import type { ModuleTemplate } from "../../../shared/types/moduleTypes";
-import type { EntryPoint, PipelineState } from "../../../types/pipelineTypes";
+import type { ModuleTemplate } from "../../../features/modules/types";
+import type { EntryPoint, PipelineState } from "../../../features/pipelines/types";
 
 export const Route = createFileRoute("/dashboard/pipelines/create")({
   component: PipelineCreatePage,

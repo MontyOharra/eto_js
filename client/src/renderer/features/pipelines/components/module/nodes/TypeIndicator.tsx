@@ -4,7 +4,7 @@
  */
 
 import { useState } from "react";
-import { NodePin } from "../../../../../shared/types/moduleTypes";
+import { NodePin } from "../../../../modules/types";
 import { getTypeColor } from "../../../utils/edgeUtils";
 
 export interface TypeIndicatorProps {

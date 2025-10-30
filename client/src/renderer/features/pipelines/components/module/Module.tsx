@@ -8,7 +8,7 @@ import {
   ModuleTemplate,
   ModuleInstance,
   NodePin,
-} from "../../../../shared/types/moduleTypes";
+} from "../../../modules/types";
 import { ModuleHeader } from "./ModuleHeader";
 import { ModuleNodes } from "./ModuleNodes";
 import { ModuleConfig } from "./ModuleConfig";

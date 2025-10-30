@@ -9,12 +9,12 @@ import {
   ModuleTemplate,
   ModuleInstance,
   NodePin,
-} from "../../../shared/types/moduleTypes";
+} from "../../modules/types";
 import {
   PipelineState,
   VisualState,
   EntryPoint,
-} from "../../../types/pipelineTypes";
+} from "../types";
 import { getTypeColor } from "../utils/edgeUtils";
 
 const ALL_TYPES = ["str", "int", "float", "bool", "datetime"];

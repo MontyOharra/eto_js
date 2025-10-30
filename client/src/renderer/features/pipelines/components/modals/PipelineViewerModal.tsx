@@ -9,7 +9,7 @@ import { PipelineGraph } from "../PipelineGraph";
 import { ExecutePipelineModal } from "./ExecutePipelineModal";
 import { usePipelinesApi } from "../../hooks/usePipelinesApi";
 import { useModulesApi } from "../../../modules/hooks";
-import type { ModuleTemplate } from "../../../../shared/types/moduleTypes";
+import type { ModuleTemplate } from "../../../modules/types";
 import type { PipelineDetailResponse } from "../../types";
 
 interface PipelineViewerModalProps {

@@ -29,12 +29,12 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-import { ModuleTemplate } from "../../../shared/types/moduleTypes";
+import { ModuleTemplate } from "../../modules/types";
 import {
   PipelineState,
   VisualState,
   EntryPoint,
-} from "../../../types/pipelineTypes";
+} from "../types";
 import { Module } from "./module/Module";
 import { TYPE_COLORS } from "../utils/moduleUtils";
 

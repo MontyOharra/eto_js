@@ -7,7 +7,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { usePipelinesApi } from '../../hooks/usePipelinesApi';
 import { ExecutedPipelineViewer, ExecutedPipelineViewerRef } from '../ExecutedPipelineViewer';
-import type { EntryPoint } from '../../../../types/pipelineTypes';
+import type { EntryPoint } from '../../types';
 
 interface ExecutePipelineModalProps {
   isOpen: boolean;

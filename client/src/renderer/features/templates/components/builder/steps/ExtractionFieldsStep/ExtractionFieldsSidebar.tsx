@@ -11,7 +11,7 @@ import { ExtractionField, SignatureObject } from "../../../../types";
 import type {
   PipelineState,
   VisualState,
-} from "../../../../../../types/pipelineTypes";
+} from "../../../../../pipelines/types";
 import { useTemplatesApi } from "../../../../api/useTemplatesApi";
 
 export type SidebarMode = "list" | "create" | "detail";

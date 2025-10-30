@@ -4,7 +4,7 @@
  */
 
 import { Node, Edge, Position } from "@xyflow/react";
-import { ModuleInstance } from "../../../shared/types/moduleTypes";
+import { ModuleInstance } from "../../modules/types";
 import { findPin } from "./typeSystem";
 import { TYPE_COLORS } from "./moduleUtils";
 

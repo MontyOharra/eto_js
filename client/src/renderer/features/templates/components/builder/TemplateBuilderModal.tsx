@@ -13,15 +13,15 @@ import {
   TemplateSimulationResult,
 } from "./steps";
 import { TemplateBuilderHeader, TemplateBuilderStepper } from "./components";
-import { usePdfData, usePdfFilesApi } from "../../../pdf-files/hooks";
+import { usePdfData, useUploadPdf, useProcessPdfObjects } from "../../../pdf";
 import { useModulesApi } from "../../../modules/hooks";
 import { useTemplatesApi } from "../../hooks";
 import { usePipelineValidation } from "../../../pipelines/hooks";
-import type { ModuleTemplate } from "../../../../shared/types/moduleTypes";
+import type { ModuleTemplate } from "../../../modules/types";
 import type {
   PipelineState,
   VisualState,
-} from "../../../../types/pipelineTypes";
+} from "../../../pipelines/types";
 
 interface TemplateBuilderModalProps {
   isOpen: boolean;
@@ -148,7 +148,8 @@ export function TemplateBuilderModal({
     error: pdfError,
   } = usePdfData(pdfFileId);
   const { getModules } = useModulesApi();
-  const { uploadPdf, processObjects } = usePdfFilesApi();
+  const { mutateAsync: uploadPdf } = useUploadPdf();
+  const { mutateAsync: processObjects } = useProcessPdfObjects();
   const { simulateTemplate } = useTemplatesApi();
 
   // Auto-validate pipeline as it's being built

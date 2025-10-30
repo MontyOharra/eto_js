@@ -3,7 +3,7 @@
  * Type definitions for the modules catalog API
  */
 
-import type { ModuleTemplate } from "../../../shared/types/moduleTypes";
+import type { ModuleTemplate } from "../types";
 
 /**
  * Response from GET /modules endpoint

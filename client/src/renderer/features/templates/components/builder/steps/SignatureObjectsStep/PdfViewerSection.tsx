@@ -3,7 +3,7 @@
  * PDF viewer with object overlays on the right side
  */
 
-import { PdfViewer } from '../../../../../../shared/components/pdf';
+import { PdfViewer } from '../../../../../pdf';
 import { PdfObjectOverlay } from './PdfObjectOverlay';
 
 interface PdfObject {

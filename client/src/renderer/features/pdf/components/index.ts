@@ -4,4 +4,3 @@
  */
 
 export * from './PdfViewer';
-export * from './hooks';

@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { usePipelinesApi } from './usePipelinesApi';
-import type { PipelineState } from '../../../types/pipelineTypes';
+import type { PipelineState } from '../types';
 
 interface ValidationError {
   code: string;

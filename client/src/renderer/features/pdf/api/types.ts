@@ -1,5 +1,5 @@
 /**
- * PDF Files API Types (DTOs)
+ * PDF API Types (DTOs)
  * Request and response types matching the backend API
  */
 

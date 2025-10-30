@@ -7,7 +7,7 @@ import {
   ModuleTemplate,
   ModuleInstance,
   NodePin,
-} from "../../../../shared/types/moduleTypes";
+} from "../../../modules/types";
 import { groupNodesByIndex } from "../../utils/moduleUtils";
 import { NodeGroupSection } from "./nodes/NodeGroupSection";
 

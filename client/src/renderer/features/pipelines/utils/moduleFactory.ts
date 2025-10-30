@@ -8,7 +8,7 @@ import {
   ModuleInstance,
   NodePin,
   IOSideShape,
-} from "../../../shared/types/moduleTypes";
+} from "../../modules/types";
 import { generateModuleId, generateNodeId } from "./idGenerator";
 
 const ALL_TYPES = ["str", "int", "float", "bool", "datetime"];

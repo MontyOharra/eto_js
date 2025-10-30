@@ -12,8 +12,8 @@ import {
   PdfObjects,
   ExtractionField,
 } from '../types';
-import type { PipelineState, VisualState } from '../../../types/pipelineTypes';
-import type { PdfObjectsResponseDTO } from '../../pdf-files/api/types';
+import type { PipelineState, VisualState } from '../../pipelines/types';
+import type { PdfObjectsResponseDTO } from '../../pdf';
 
 // =============================================================================
 // GET /pdf-templates - List templates with pagination

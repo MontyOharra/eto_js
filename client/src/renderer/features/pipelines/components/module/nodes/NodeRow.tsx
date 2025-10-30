@@ -5,7 +5,7 @@
 
 import React, { useRef, useEffect } from "react";
 import { Handle, Position } from "@xyflow/react";
-import { NodePin } from "../../../../../shared/types/moduleTypes";
+import { NodePin } from "../../../../modules/types";
 import { TYPE_COLORS } from "../../../utils/moduleUtils";
 import { TypeIndicator } from "./TypeIndicator";
 

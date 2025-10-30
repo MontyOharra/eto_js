@@ -8,7 +8,7 @@ import { Node } from "@xyflow/react";
 import {
   ModuleTemplate,
   ModuleInstance,
-} from "../../../shared/types/moduleTypes";
+} from "../../modules/types";
 import {
   createModuleInstance,
   addPinToModule,

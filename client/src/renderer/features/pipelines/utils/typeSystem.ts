@@ -4,7 +4,7 @@
  */
 
 import { Node, Edge } from "@xyflow/react";
-import { ModuleInstance, NodePin } from "../../../shared/types/moduleTypes";
+import { ModuleInstance, NodePin } from "../../modules/types";
 
 /**
  * Calculate intersection of two type arrays

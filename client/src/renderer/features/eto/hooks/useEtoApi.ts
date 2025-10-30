@@ -28,7 +28,7 @@ import {
   DeleteEtoRunsRequest,
 } from '../api/types';
 import { useMockEtoApi } from './useMockEtoApi';
-import { usePdfFilesApi } from '../../pdf-files/hooks/usePdfFilesApi';
+import { useUploadPdf } from '../../pdf';
 
 export function useEtoApi() {
   const [isLoading, setIsLoading] = useState(false);
@@ -37,8 +37,8 @@ export function useEtoApi() {
   // Get mock API for methods not yet implemented
   const mockApi = useMockEtoApi();
 
-  // Get PDF files API for upload
-  const pdfFilesApi = usePdfFilesApi();
+  // Get PDF upload mutation
+  const { mutateAsync: uploadPdfMutation } = useUploadPdf();
 
   const baseUrl = API_CONFIG.ENDPOINTS.ETO_RUNS;
 
@@ -102,7 +102,7 @@ export function useEtoApi() {
     async (file: File): Promise<PostEtoRunUploadResponse> => {
       return withLoadingAndError(async () => {
         // Step 1: Upload PDF to pdf-files endpoint
-        const pdfMetadata = await pdfFilesApi.uploadPdf(file);
+        const pdfMetadata = await uploadPdfMutation(file);
 
         // Step 2: Create ETO run with the PDF ID
         const response = await apiClient.post<PostEtoRunUploadResponse>(
@@ -113,7 +113,7 @@ export function useEtoApi() {
         return response.data;
       });
     },
-    [baseUrl, withLoadingAndError, pdfFilesApi]
+    [baseUrl, withLoadingAndError, uploadPdfMutation]
   );
 
   // ==========================================================================

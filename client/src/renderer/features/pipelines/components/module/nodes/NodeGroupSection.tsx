@@ -6,7 +6,7 @@
 import {
   NodePin,
   ModuleTemplate,
-} from "../../../../../shared/types/moduleTypes";
+} from "../../../../modules/types";
 import { NodeRow } from "./NodeRow";
 
 export interface NodeGroupSectionProps {

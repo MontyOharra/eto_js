@@ -8,14 +8,12 @@ import { useEffect, useState, useMemo } from "react";
 import { useTemplatesApi } from "../../hooks";
 import { TemplateDetail, TemplateVersionDetail, PdfObjects } from "../../types";
 import { TemplateStatusBadge } from "../ui/TemplateStatusBadge";
-import { usePdfData } from "../../../pdf-files/hooks/usePdfData";
-import { PdfViewer } from "../../../../shared/components/pdf";
-import { usePdfViewer } from "../../../../shared/components/pdf/PdfViewer/PdfViewerContext";
+import { usePdfData, PdfViewer, usePdfViewer } from "../../../pdf";
 import { usePipelinesApi } from "../../../pipelines/hooks/usePipelinesApi";
 import { useModulesApi } from "../../../modules/hooks";
 import { PipelineGraph } from "../../../pipelines/components/PipelineGraph";
 import type { PipelineDetailResponse } from "../../../pipelines/types";
-import type { ModuleTemplate } from "../../../../shared/types/moduleTypes";
+import type { ModuleTemplate } from "../../../modules/types";
 
 interface TemplateDetailModalProps {
   isOpen: boolean;

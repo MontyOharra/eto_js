@@ -6,7 +6,7 @@
 import { useState, useCallback } from "react";
 import { apiClient } from "../../../shared/api/client";
 import { API_CONFIG } from "../../../shared/api/config";
-import type { ModuleTemplate } from "../../../shared/types/moduleTypes";
+import type { ModuleTemplate } from "../types";
 import type { ModuleCatalogResponse, ModulesQueryParams } from "../api/types";
 
 /**

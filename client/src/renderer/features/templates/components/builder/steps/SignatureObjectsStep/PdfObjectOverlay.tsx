@@ -5,7 +5,7 @@
  */
 
 import { useMemo, useState } from 'react';
-import { usePdfViewer } from '../../../../../../shared/components/pdf/PdfViewer/PdfViewerContext';
+import { usePdfViewer } from '../../../../../pdf';
 
 // Object type color mappings (with transparency)
 const OBJECT_COLORS: Record<string, string> = {

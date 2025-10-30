@@ -3,7 +3,7 @@
  * Header section with title, PDF info, and close button
  */
 
-import { PdfFileMetadataDTO } from '../../../../pdf-files/api/types';
+import { PdfFileMetadataDTO } from '../../../../pdf';
 import { EmailData } from '../../../../emails/mocks/useMockEmailApi';
 
 interface TemplateBuilderHeaderProps {

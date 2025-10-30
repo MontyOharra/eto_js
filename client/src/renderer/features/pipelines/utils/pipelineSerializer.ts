@@ -2,7 +2,7 @@
  * Serialization utilities to convert between frontend and backend pipeline formats
  */
 
-import { NodePin, ModuleInstance } from "../../../shared/types/moduleTypes";
+import { NodePin, ModuleInstance } from "../../modules/types";
 import {
   PipelineState,
   VisualState,
@@ -10,7 +10,7 @@ import {
   EntryPoint,
   InstanceNodePin,
   BackendEntryPoint,
-} from "../../../types/pipelineTypes";
+} from "../types";
 
 // Backend-compatible types
 export interface BackendModuleInstance {

@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { PdfViewer, usePdfViewer } from '../../../../shared/components/pdf';
+import { PdfViewer, usePdfViewer } from '../../../pdf';
 import { useMockEtoApi } from '../../hooks/useMockEtoApi';
 import { StatusBadge } from '../ui/StatusBadge';
 import { ExtractedFieldsOverlay } from '../overlays/ExtractedFieldsOverlay';

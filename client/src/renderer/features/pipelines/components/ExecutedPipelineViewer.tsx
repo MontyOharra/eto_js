@@ -9,7 +9,8 @@ import { usePipelinesApi } from '../hooks/usePipelinesApi';
 import { useModulesApi } from '../../modules/hooks/useModulesApi';
 import { ExecutedPipelineGraph, ExecutedPipelineGraphRef } from './ExecutedPipelineGraph';
 import { applyLayeredLayout } from '../utils/layeredLayout';
-import type { PipelineState, VisualState, ModuleTemplate } from '../../../types/pipelineTypes';
+import type { PipelineState, VisualState } from '../types';
+import type { ModuleTemplate } from '../../modules/types';
 import type { EtoPipelineExecutionStep } from '../../eto/types';
 
 export interface ExecutedPipelineViewerProps {

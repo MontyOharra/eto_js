@@ -5,7 +5,7 @@
  */
 
 import { useState } from 'react';
-import { usePdfViewer } from '../../../../shared/components/pdf/PdfViewer/PdfViewerContext';
+import { usePdfViewer } from '../../../pdf';
 import { ExtractedFieldWithBox } from '../../types';
 
 interface ExtractedFieldsOverlayProps {

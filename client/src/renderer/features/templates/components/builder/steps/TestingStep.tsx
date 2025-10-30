@@ -5,10 +5,11 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { PdfViewer, usePdfViewer } from '../../../../../shared/components/pdf';
+import { PdfViewer, usePdfViewer } from '../../../../pdf';
 import { ExtractedFieldsOverlay } from '../../../../eto/components/overlays/ExtractedFieldsOverlay';
 import { ExecutedPipelineGraph, ExecutedPipelineGraphRef } from '../../../../pipelines/components/ExecutedPipelineGraph';
-import type { PipelineState, VisualState, ModuleTemplate } from '../../../../../../types/pipelineTypes';
+import type { PipelineState, VisualState } from '../../../../../pipelines/types';
+import type { ModuleTemplate } from '../../../../../modules/types';
 
 // Simulation result type (matches ETO run detail but without template/pipeline IDs)
 export interface TemplateSimulationResult {
