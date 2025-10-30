@@ -3,11 +3,11 @@
  * Real API integration for /api/modules endpoint
  */
 
-import { useState, useCallback } from 'react';
-import { apiClient } from '../../../shared/api/client';
-import { API_CONFIG } from '../../../shared/api/config';
-import type { ModuleTemplate } from '../../../types/moduleTypes';
-import type { ModuleCatalogResponse, ModulesQueryParams } from '../api/types';
+import { useState, useCallback } from "react";
+import { apiClient } from "../../../shared/api/client";
+import { API_CONFIG } from "../../../shared/api/config";
+import type { ModuleTemplate } from "../../../shared/types/moduleTypes";
+import type { ModuleCatalogResponse, ModulesQueryParams } from "../api/types";
 
 /**
  * Backend API response type (matches server-new/src/api/schemas/modules.py)
@@ -32,7 +32,7 @@ function convertModuleCatalogToTemplate(dto: ModuleCatalogDTO): ModuleTemplate {
     id: dto.id,
     version: dto.version,
     title: dto.name,
-    description: dto.description || '',
+    description: dto.description || "",
     kind: dto.module_kind,
     color: dto.color,
     category: dto.category,
@@ -55,14 +55,15 @@ export function useModulesApi() {
    * Wrapper for API calls with loading and error handling
    */
   const withLoadingAndError = useCallback(
-    async <T,>(apiCall: () => Promise<T>): Promise<T> => {
+    async <T>(apiCall: () => Promise<T>): Promise<T> => {
       setIsLoading(true);
       setError(null);
       try {
         const result = await apiCall();
         return result;
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'An error occurred';
+        const errorMessage =
+          err instanceof Error ? err.message : "An error occurred";
         setError(errorMessage);
         throw err;
       } finally {
@@ -92,7 +93,9 @@ export function useModulesApi() {
         // Note: Backend uses 'only_active' param, defaults to true
         // Frontend filters for category and search are client-side for now
 
-        const response = await apiClient.get<ModuleCatalogDTO[]>(baseUrl, { params });
+        const response = await apiClient.get<ModuleCatalogDTO[]>(baseUrl, {
+          params,
+        });
 
         // Convert backend DTOs to frontend ModuleTemplate format
         let modules = response.data.map(convertModuleCatalogToTemplate);
@@ -158,12 +161,14 @@ export function useModulesApi() {
    * Get modules grouped by category
    * Utility method for UI organization
    */
-  const getModulesByCategory = useCallback(async (): Promise<Record<string, ModuleTemplate[]>> => {
+  const getModulesByCategory = useCallback(async (): Promise<
+    Record<string, ModuleTemplate[]>
+  > => {
     const result = await getModules();
     const grouped: Record<string, ModuleTemplate[]> = {};
 
     for (const module of result.modules) {
-      const category = module.category || 'Uncategorized';
+      const category = module.category || "Uncategorized";
       if (!grouped[category]) {
         grouped[category] = [];
       }
@@ -177,7 +182,9 @@ export function useModulesApi() {
    * Get modules grouped by kind
    * Utility method for UI organization
    */
-  const getModulesByKind = useCallback(async (): Promise<Record<string, ModuleTemplate[]>> => {
+  const getModulesByKind = useCallback(async (): Promise<
+    Record<string, ModuleTemplate[]>
+  > => {
     const result = await getModules();
     const grouped: Record<string, ModuleTemplate[]> = {};
 

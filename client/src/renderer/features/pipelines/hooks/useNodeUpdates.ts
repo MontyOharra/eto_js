@@ -3,12 +3,17 @@
  * Handles updates to individual pins (type changes, name changes)
  */
 
-import { useCallback } from 'react';
-import { Node, Edge } from '@xyflow/react';
-import { ModuleInstance, NodePin } from '../../../types/moduleTypes';
-import { calculateTypePropagation, applyTypeUpdates, findPin, getPinsWithTypeVar } from '../utils/typeSystem';
-import { updateEdgeColors } from '../utils/edgeUtils';
-import { updatePinInModule } from '../utils/moduleFactory';
+import { useCallback } from "react";
+import { Node, Edge } from "@xyflow/react";
+import { ModuleInstance, NodePin } from "../../../shared/types/moduleTypes";
+import {
+  calculateTypePropagation,
+  applyTypeUpdates,
+  findPin,
+  getPinsWithTypeVar,
+} from "../utils/typeSystem";
+import { updateEdgeColors } from "../utils/edgeUtils";
+import { updatePinInModule } from "../utils/moduleFactory";
 
 export interface UseNodeUpdatesProps {
   nodes: Node[];
@@ -21,7 +26,11 @@ export interface UseNodeUpdatesProps {
 export interface NodeUpdatesActions {
   updateNodeType: (moduleId: string, pinId: string, newType: string) => void;
   updateNodeName: (moduleId: string, pinId: string, newName: string) => void;
-  updateNode: (moduleId: string, pinId: string, updates: Partial<NodePin>) => void;
+  updateNode: (
+    moduleId: string,
+    pinId: string,
+    updates: Partial<NodePin>
+  ) => void;
 }
 
 export function useNodeUpdates({
@@ -85,7 +94,9 @@ export function useNodeUpdates({
           if (node.id !== moduleId || !node.data?.moduleInstance) return node;
 
           const moduleInstance = node.data.moduleInstance as ModuleInstance;
-          const updatedModule = updatePinInModule(moduleInstance, pinId, { name: newName });
+          const updatedModule = updatePinInModule(moduleInstance, pinId, {
+            name: newName,
+          });
 
           return {
             ...node,
@@ -119,10 +130,15 @@ export function useNodeUpdates({
         if (Object.keys(otherUpdates).length > 0) {
           setNodes((nds) =>
             nds.map((node) => {
-              if (node.id !== moduleId || !node.data?.moduleInstance) return node;
+              if (node.id !== moduleId || !node.data?.moduleInstance)
+                return node;
 
               const moduleInstance = node.data.moduleInstance as ModuleInstance;
-              const updatedModule = updatePinInModule(moduleInstance, pinId, otherUpdates);
+              const updatedModule = updatePinInModule(
+                moduleInstance,
+                pinId,
+                otherUpdates
+              );
 
               return {
                 ...node,
@@ -141,7 +157,11 @@ export function useNodeUpdates({
             if (node.id !== moduleId || !node.data?.moduleInstance) return node;
 
             const moduleInstance = node.data.moduleInstance as ModuleInstance;
-            const updatedModule = updatePinInModule(moduleInstance, pinId, updates);
+            const updatedModule = updatePinInModule(
+              moduleInstance,
+              pinId,
+              updates
+            );
 
             return {
               ...node,

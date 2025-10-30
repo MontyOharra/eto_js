@@ -3,15 +3,18 @@
  * Handles adding/removing modules and pins
  */
 
-import { useCallback } from 'react';
-import { Node } from '@xyflow/react';
-import { ModuleTemplate, ModuleInstance } from '../../../types/moduleTypes';
+import { useCallback } from "react";
+import { Node } from "@xyflow/react";
+import {
+  ModuleTemplate,
+  ModuleInstance,
+} from "../../../shared/types/moduleTypes";
 import {
   createModuleInstance,
   addPinToModule,
   removePinFromModule,
   updateModuleConfig,
-} from '../utils/moduleFactory';
+} from "../utils/moduleFactory";
 
 export interface UseModuleOperationsProps {
   nodes: Node[];
@@ -20,9 +23,17 @@ export interface UseModuleOperationsProps {
 }
 
 export interface ModuleOperationsActions {
-  addModule: (template: ModuleTemplate, position: { x: number; y: number }) => string | null;
+  addModule: (
+    template: ModuleTemplate,
+    position: { x: number; y: number }
+  ) => string | null;
   deleteModule: (moduleId: string) => void;
-  addPin: (moduleId: string, template: ModuleTemplate, direction: 'input' | 'output', groupIndex: number) => void;
+  addPin: (
+    moduleId: string,
+    template: ModuleTemplate,
+    direction: "input" | "output",
+    groupIndex: number
+  ) => void;
   removePin: (moduleId: string, pinId: string) => void;
   updateConfig: (moduleId: string, configKey: string, value: any) => void;
 }
@@ -36,13 +47,16 @@ export function useModuleOperations({
    * Add a new module to the graph
    */
   const addModule = useCallback(
-    (template: ModuleTemplate, position: { x: number; y: number }): string | null => {
+    (
+      template: ModuleTemplate,
+      position: { x: number; y: number }
+    ): string | null => {
       if (viewOnly) return null;
 
       const moduleInstance = createModuleInstance(template);
       const newNode: Node = {
         id: moduleInstance.module_instance_id,
-        type: 'module',
+        type: "module",
         position,
         data: {
           moduleInstance,
@@ -73,7 +87,12 @@ export function useModuleOperations({
    * Add a pin to a module
    */
   const addPin = useCallback(
-    (moduleId: string, template: ModuleTemplate, direction: 'input' | 'output', groupIndex: number) => {
+    (
+      moduleId: string,
+      template: ModuleTemplate,
+      direction: "input" | "output",
+      groupIndex: number
+    ) => {
       if (viewOnly) return;
 
       setNodes((nds) =>
@@ -81,7 +100,12 @@ export function useModuleOperations({
           if (node.id !== moduleId || !node.data?.moduleInstance) return node;
 
           const moduleInstance = node.data.moduleInstance as ModuleInstance;
-          const updatedModule = addPinToModule(moduleInstance, template, direction, groupIndex);
+          const updatedModule = addPinToModule(
+            moduleInstance,
+            template,
+            direction,
+            groupIndex
+          );
 
           return {
             ...node,
@@ -136,7 +160,11 @@ export function useModuleOperations({
           if (node.id !== moduleId || !node.data?.moduleInstance) return node;
 
           const moduleInstance = node.data.moduleInstance as ModuleInstance;
-          const updatedModule = updateModuleConfig(moduleInstance, configKey, value);
+          const updatedModule = updateModuleConfig(
+            moduleInstance,
+            configKey,
+            value
+          );
 
           return {
             ...node,

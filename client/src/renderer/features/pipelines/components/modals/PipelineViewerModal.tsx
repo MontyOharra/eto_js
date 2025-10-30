@@ -4,13 +4,13 @@
  * Displays pipeline graph without module selector or edit capabilities
  */
 
-import { useState, useEffect } from 'react';
-import { PipelineGraph } from '../PipelineGraph';
-import { ExecutePipelineModal } from './ExecutePipelineModal';
-import { usePipelinesApi } from '../../hooks/usePipelinesApi';
-import { useModulesApi } from '../../../modules/hooks';
-import type { ModuleTemplate } from '../../../../types/moduleTypes';
-import type { PipelineDetailResponse } from '../../types';
+import { useState, useEffect } from "react";
+import { PipelineGraph } from "../PipelineGraph";
+import { ExecutePipelineModal } from "./ExecutePipelineModal";
+import { usePipelinesApi } from "../../hooks/usePipelinesApi";
+import { useModulesApi } from "../../../modules/hooks";
+import type { ModuleTemplate } from "../../../../shared/types/moduleTypes";
+import type { PipelineDetailResponse } from "../../types";
 
 interface PipelineViewerModalProps {
   isOpen: boolean;
@@ -54,8 +54,10 @@ export function PipelineViewerModal({
         setPipeline(pipelineData);
         setModules(modulesData.modules);
       } catch (err) {
-        console.error('Failed to load pipeline:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load pipeline');
+        console.error("Failed to load pipeline:", err);
+        setError(
+          err instanceof Error ? err.message : "Failed to load pipeline"
+        );
       } finally {
         setIsLoading(false);
       }
@@ -98,8 +100,18 @@ export function PipelineViewerModal({
               onClick={onClose}
               className="text-gray-400 hover:text-white transition-colors"
             >
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              <svg
+                className="w-6 h-6"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
               </svg>
             </button>
           </div>
@@ -110,7 +122,9 @@ export function PipelineViewerModal({
           {isLoading && (
             <div className="h-full flex items-center justify-center">
               <div className="text-center">
-                <div className="text-white text-lg mb-2">Loading pipeline...</div>
+                <div className="text-white text-lg mb-2">
+                  Loading pipeline...
+                </div>
                 <div className="text-gray-400 text-sm">Please wait</div>
               </div>
             </div>

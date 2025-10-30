@@ -3,26 +3,49 @@
  * Displays inputs and outputs sections side by side
  */
 
-import { ModuleTemplate, ModuleInstance, NodePin } from '../../../../types/moduleTypes';
-import { groupNodesByIndex } from '../../../../utils/pipeline/moduleUtils';
-import { NodeGroupSection } from './nodes/NodeGroupSection';
+import {
+  ModuleTemplate,
+  ModuleInstance,
+  NodePin,
+} from "../../../../shared/types/moduleTypes";
+import { groupNodesByIndex } from "../../utils/moduleUtils";
+import { NodeGroupSection } from "./nodes/NodeGroupSection";
 
 export interface ModuleNodesProps {
   moduleInstance: ModuleInstance;
   template: ModuleTemplate;
-  onUpdateNode?: (moduleId: string, nodeId: string, updates: Partial<NodePin>) => void;
-  onAddNode?: (moduleId: string, direction: 'input' | 'output', groupIndex: number) => void;
+  onUpdateNode?: (
+    moduleId: string,
+    nodeId: string,
+    updates: Partial<NodePin>
+  ) => void;
+  onAddNode?: (
+    moduleId: string,
+    direction: "input" | "output",
+    groupIndex: number
+  ) => void;
   onRemoveNode?: (moduleId: string, nodeId: string) => void;
   onTextFocus?: () => void;
   onTextBlur?: () => void;
-  onHandleClick?: (nodeId: string, handleId: string, handleType: 'source' | 'target') => void;
+  onHandleClick?: (
+    nodeId: string,
+    handleId: string,
+    handleType: "source" | "target"
+  ) => void;
   pendingConnection?: {
     sourceHandleId: string;
     sourceNodeId: string;
-    handleType: 'source' | 'target';
+    handleType: "source" | "target";
   } | null;
-  getEffectiveAllowedTypes?: (moduleId: string, pinId: string, baseAllowedTypes: string[]) => string[];
-  getConnectedOutputName?: (moduleId: string, inputPinId: string) => string | undefined;
+  getEffectiveAllowedTypes?: (
+    moduleId: string,
+    pinId: string,
+    baseAllowedTypes: string[]
+  ) => string[];
+  getConnectedOutputName?: (
+    moduleId: string,
+    inputPinId: string
+  ) => string | undefined;
   highlightedTypeVar: string | null;
   onTypeVarFocus: (typeVar: string | null) => void;
   executionMode?: boolean;
@@ -63,7 +86,9 @@ export function ModuleNodes({
 
     if (!changedNode || !changedNode.type_var) {
       // No typevar, just update this node
-      onUpdateNode(moduleInstance.module_instance_id, nodeId, { type: newType });
+      onUpdateNode(moduleInstance.module_instance_id, nodeId, {
+        type: newType,
+      });
       return;
     }
 
@@ -71,21 +96,28 @@ export function ModuleNodes({
     const typeVar = changedNode.type_var;
     allNodes.forEach((node) => {
       if (node.type_var === typeVar) {
-        onUpdateNode(moduleInstance.module_instance_id, node.node_id, { type: newType });
+        onUpdateNode(moduleInstance.module_instance_id, node.node_id, {
+          type: newType,
+        });
       }
     });
   };
 
   const handleNameChange = (nodeId: string, newName: string) => {
     if (onUpdateNode) {
-      onUpdateNode(moduleInstance.module_instance_id, nodeId, { name: newName });
+      onUpdateNode(moduleInstance.module_instance_id, nodeId, {
+        name: newName,
+      });
     }
   };
 
   // Wrapper to get connected output name
   const getConnectedName = (inputNodeId: string): string | undefined => {
     if (!getConnectedOutputName) return undefined;
-    return getConnectedOutputName(moduleInstance.module_instance_id, inputNodeId);
+    return getConnectedOutputName(
+      moduleInstance.module_instance_id,
+      inputNodeId
+    );
   };
 
   const hasInputs = moduleInstance.inputs.length > 0;
@@ -93,19 +125,23 @@ export function ModuleNodes({
 
   return (
     <div
-      className={`flex relative ${executionMode ? 'nodrag nopan' : ''}`}
-      style={{ pointerEvents: 'auto' }}
-      onMouseEnter={() => onModuleMouseEnter?.(moduleInstance.module_instance_id)}
+      className={`flex relative ${executionMode ? "nodrag nopan" : ""}`}
+      style={{ pointerEvents: "auto" }}
+      onMouseEnter={() =>
+        onModuleMouseEnter?.(moduleInstance.module_instance_id)
+      }
       onMouseLeave={() => onModuleMouseLeave?.()}
     >
       {/* Inputs Section - only render if has inputs */}
       {hasInputs && (
-        <div className={`${hasOutputs ? 'w-1/2 border-r border-gray-600' : 'w-full'} p-3`}>
+        <div
+          className={`${hasOutputs ? "w-1/2 border-r border-gray-600" : "w-full"} p-3`}
+        >
           {Array.from(inputGroups.entries()).map(([groupIndex, nodes]) => (
             <NodeGroupSection
               key={groupIndex}
               groupIndex={groupIndex}
-              groupLabel={nodes[0]?.label || 'Group'}
+              groupLabel={nodes[0]?.label || "Group"}
               nodes={nodes}
               direction="input"
               moduleId={moduleInstance.module_instance_id}
@@ -131,12 +167,12 @@ export function ModuleNodes({
 
       {/* Outputs Section - only render if has outputs */}
       {hasOutputs && (
-        <div className={`${hasInputs ? 'w-1/2' : 'w-full'} p-3`}>
+        <div className={`${hasInputs ? "w-1/2" : "w-full"} p-3`}>
           {Array.from(outputGroups.entries()).map(([groupIndex, nodes]) => (
             <NodeGroupSection
               key={groupIndex}
               groupIndex={groupIndex}
-              groupLabel={nodes[0]?.label || 'Group'}
+              groupLabel={nodes[0]?.label || "Group"}
               nodes={nodes}
               direction="output"
               moduleId={moduleInstance.module_instance_id}

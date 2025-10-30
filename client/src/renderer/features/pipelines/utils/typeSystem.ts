@@ -3,13 +3,16 @@
  * Pure functions for type constraint validation and propagation
  */
 
-import { Node, Edge } from '@xyflow/react';
-import { ModuleInstance, NodePin } from '../../../types/moduleTypes';
+import { Node, Edge } from "@xyflow/react";
+import { ModuleInstance, NodePin } from "../../../shared/types/moduleTypes";
 
 /**
  * Calculate intersection of two type arrays
  */
-export function getTypeIntersection(types1: string[], types2: string[]): string[] {
+export function getTypeIntersection(
+  types1: string[],
+  types2: string[]
+): string[] {
   return types1.filter((type) => types2.includes(type));
 }
 
@@ -23,7 +26,10 @@ export function getAllPins(moduleInstance: ModuleInstance): NodePin[] {
 /**
  * Find a pin by ID within a module instance
  */
-export function findPin(moduleInstance: ModuleInstance, pinId: string): NodePin | undefined {
+export function findPin(
+  moduleInstance: ModuleInstance,
+  pinId: string
+): NodePin | undefined {
   const allPins = getAllPins(moduleInstance);
   return allPins.find((p) => p.node_id === pinId);
 }
@@ -31,7 +37,10 @@ export function findPin(moduleInstance: ModuleInstance, pinId: string): NodePin 
 /**
  * Get all pins with the same typevar within a module
  */
-export function getPinsWithTypeVar(moduleInstance: ModuleInstance, typeVar: string): NodePin[] {
+export function getPinsWithTypeVar(
+  moduleInstance: ModuleInstance,
+  typeVar: string
+): NodePin[] {
   const allPins = getAllPins(moduleInstance);
   return allPins.filter((p) => p.type_var === typeVar);
 }
@@ -93,7 +102,10 @@ export function getEffectiveAllowedTypes(
     if (!pin) continue;
 
     // Intersect with this pin's allowed types
-    effectiveTypes = getTypeIntersection(effectiveTypes, pin.allowed_types || []);
+    effectiveTypes = getTypeIntersection(
+      effectiveTypes,
+      pin.allowed_types || []
+    );
 
     // If this pin has a typevar, add all typevar siblings
     if (pin.type_var) {
@@ -105,9 +117,15 @@ export function getEffectiveAllowedTypes(
 
     // Find all connected pins via edges
     edges.forEach((edge) => {
-      if (edge.source === current.moduleId && edge.sourceHandle === current.pinId) {
+      if (
+        edge.source === current.moduleId &&
+        edge.sourceHandle === current.pinId
+      ) {
         queue.push({ moduleId: edge.target!, pinId: edge.targetHandle! });
-      } else if (edge.target === current.moduleId && edge.targetHandle === current.pinId) {
+      } else if (
+        edge.target === current.moduleId &&
+        edge.targetHandle === current.pinId
+      ) {
         queue.push({ moduleId: edge.source!, pinId: edge.sourceHandle! });
       }
     });
@@ -146,7 +164,7 @@ export function validateConnection(
     edges,
     sourceModuleId,
     sourcePin.node_id,
-    sourcePin.allowed_types || ['str']
+    sourcePin.allowed_types || ["str"]
   );
 
   const targetEffectiveTypes = getEffectiveAllowedTypes(
@@ -154,11 +172,14 @@ export function validateConnection(
     edges,
     targetModuleId,
     targetPin.node_id,
-    targetPin.allowed_types || ['str']
+    targetPin.allowed_types || ["str"]
   );
 
   // Find intersection of effective types
-  const typeIntersection = getTypeIntersection(sourceEffectiveTypes, targetEffectiveTypes);
+  const typeIntersection = getTypeIntersection(
+    sourceEffectiveTypes,
+    targetEffectiveTypes
+  );
 
   if (typeIntersection.length === 0) {
     return { valid: false };
@@ -232,13 +253,19 @@ export function calculateTypePropagation(
     if (targetPin.type === update.newType) {
       // Still need to propagate to connections
       edges.forEach((edge) => {
-        if (edge.source === update.moduleId && edge.sourceHandle === update.pinId) {
+        if (
+          edge.source === update.moduleId &&
+          edge.sourceHandle === update.pinId
+        ) {
           queue.push({
             moduleId: edge.target!,
             pinId: edge.targetHandle!,
             newType: update.newType,
           });
-        } else if (edge.target === update.moduleId && edge.targetHandle === update.pinId) {
+        } else if (
+          edge.target === update.moduleId &&
+          edge.targetHandle === update.pinId
+        ) {
           queue.push({
             moduleId: edge.source!,
             pinId: edge.sourceHandle!,
@@ -260,7 +287,10 @@ export function calculateTypePropagation(
 
     // If pin has typevar, add all typevar siblings to queue
     if (targetPin.type_var) {
-      const typeVarPins = getPinsWithTypeVar(moduleInstance, targetPin.type_var);
+      const typeVarPins = getPinsWithTypeVar(
+        moduleInstance,
+        targetPin.type_var
+      );
       typeVarPins.forEach((pin) => {
         if (pin.node_id !== update.pinId) {
           queue.push({
@@ -274,13 +304,19 @@ export function calculateTypePropagation(
 
     // Add all connected pins to queue
     edges.forEach((edge) => {
-      if (edge.source === update.moduleId && edge.sourceHandle === update.pinId) {
+      if (
+        edge.source === update.moduleId &&
+        edge.sourceHandle === update.pinId
+      ) {
         queue.push({
           moduleId: edge.target!,
           pinId: edge.targetHandle!,
           newType: update.newType,
         });
-      } else if (edge.target === update.moduleId && edge.targetHandle === update.pinId) {
+      } else if (
+        edge.target === update.moduleId &&
+        edge.targetHandle === update.pinId
+      ) {
         queue.push({
           moduleId: edge.source!,
           pinId: edge.sourceHandle!,

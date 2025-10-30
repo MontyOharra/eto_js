@@ -3,20 +3,29 @@
  * 3-step wizard for creating PDF templates
  */
 
-import { useState, useMemo, useEffect } from 'react';
-import { SignatureObject, ExtractionField } from '../../types';
-import { SignatureObjectsStep, ExtractionFieldsStep, PipelineBuilderStep, TestingStep, TemplateSimulationResult } from './steps';
-import { TemplateBuilderHeader, TemplateBuilderStepper } from './components';
-import { usePdfData, usePdfFilesApi } from '../../../pdf-files/hooks';
-import { useModulesApi } from '../../../modules/hooks';
-import { useTemplatesApi } from '../../hooks';
-import { usePipelineValidation } from '../../../pipelines/hooks';
-import type { ModuleTemplate } from '../../../../types/moduleTypes';
-import type { PipelineState, VisualState } from '../../../../types/pipelineTypes';
+import { useState, useMemo, useEffect } from "react";
+import { SignatureObject, ExtractionField } from "../../types";
+import {
+  SignatureObjectsStep,
+  ExtractionFieldsStep,
+  PipelineBuilderStep,
+  TestingStep,
+  TemplateSimulationResult,
+} from "./steps";
+import { TemplateBuilderHeader, TemplateBuilderStepper } from "./components";
+import { usePdfData, usePdfFilesApi } from "../../../pdf-files/hooks";
+import { useModulesApi } from "../../../modules/hooks";
+import { useTemplatesApi } from "../../hooks";
+import { usePipelineValidation } from "../../../pipelines/hooks";
+import type { ModuleTemplate } from "../../../../shared/types/moduleTypes";
+import type {
+  PipelineState,
+  VisualState,
+} from "../../../../types/pipelineTypes";
 
 interface TemplateBuilderModalProps {
   isOpen: boolean;
-  mode: 'create' | 'edit'; // NEW: Determines if creating new or editing existing
+  mode: "create" | "edit"; // NEW: Determines if creating new or editing existing
   templateId?: number; // NEW: Required for edit mode
   pdfFileId: number | null;
   pdfFile: File | null; // For new template creation with uploaded PDF
@@ -36,7 +45,11 @@ export interface TemplateData {
   visual_state: VisualState;
 }
 
-type BuilderStep = 'signature-objects' | 'extraction-fields' | 'pipeline' | 'testing';
+type BuilderStep =
+  | "signature-objects"
+  | "extraction-fields"
+  | "pipeline"
+  | "testing";
 
 export function TemplateBuilderModal({
   isOpen,
@@ -48,9 +61,10 @@ export function TemplateBuilderModal({
   onSave,
   initialData,
 }: TemplateBuilderModalProps) {
-  const [currentStep, setCurrentStep] = useState<BuilderStep>('signature-objects');
-  const [templateName, setTemplateName] = useState('');
-  const [templateDescription, setTemplateDescription] = useState('');
+  const [currentStep, setCurrentStep] =
+    useState<BuilderStep>("signature-objects");
+  const [templateName, setTemplateName] = useState("");
+  const [templateDescription, setTemplateDescription] = useState("");
   const [signatureObjects, setSignatureObjects] = useState<{
     text_words: any[];
     text_lines: any[];
@@ -69,7 +83,9 @@ export function TemplateBuilderModal({
     tables: [],
   });
   const [selectedObjectTypes, setSelectedObjectTypes] = useState<string[]>([]); // Step 1 state persistence
-  const [extractionFields, setExtractionFields] = useState<ExtractionField[]>([]);
+  const [extractionFields, setExtractionFields] = useState<ExtractionField[]>(
+    []
+  );
   const [pipelineState, setPipelineStateInternal] = useState<PipelineState>({
     entry_points: [],
     modules: [],
@@ -78,9 +94,9 @@ export function TemplateBuilderModal({
 
   // Wrapper to log pipeline state changes
   const setPipelineState = (newState: PipelineState) => {
-    console.log('[TemplateBuilderModal] Pipeline state changing:', {
-      oldEntryPoints: pipelineState.entry_points.map(ep => ep.node_id),
-      newEntryPoints: newState.entry_points.map(ep => ep.node_id),
+    console.log("[TemplateBuilderModal] Pipeline state changing:", {
+      oldEntryPoints: pipelineState.entry_points.map((ep) => ep.node_id),
+      newEntryPoints: newState.entry_points.map((ep) => ep.node_id),
     });
     setPipelineStateInternal(newState);
   };
@@ -89,25 +105,32 @@ export function TemplateBuilderModal({
 
   // Wrapper to log visual state changes
   const setVisualState = (newState: VisualState) => {
-    console.log('[TemplateBuilderModal] Visual state updated:', {
+    console.log("[TemplateBuilderModal] Visual state updated:", {
       nodeCount: Object.keys(newState).length,
-      entryPointIds: Object.keys(newState).filter(id => id.startsWith('entry-')),
-      moduleIds: Object.keys(newState).filter(id => !id.startsWith('entry-')),
+      entryPointIds: Object.keys(newState).filter((id) =>
+        id.startsWith("entry-")
+      ),
+      moduleIds: Object.keys(newState).filter((id) => !id.startsWith("entry-")),
       entryPointPositions: Object.fromEntries(
-        Object.entries(newState).filter(([id]) => id.startsWith('entry-'))
+        Object.entries(newState).filter(([id]) => id.startsWith("entry-"))
       ),
     });
     setVisualStateInternal(newState);
   };
-  const [testResults, setTestResults] = useState<TemplateSimulationResult | null>(null);
+  const [testResults, setTestResults] =
+    useState<TemplateSimulationResult | null>(null);
   const [isTesting, setIsTesting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [testViewMode, setTestViewMode] = useState<'summary' | 'detail'>('summary');
+  const [testViewMode, setTestViewMode] = useState<"summary" | "detail">(
+    "summary"
+  );
   const [moduleTemplates, setModuleTemplates] = useState<ModuleTemplate[]>([]);
 
   // Snapshot of pipeline/visual state when test is run (frozen for testing view)
-  const [testedPipelineState, setTestedPipelineState] = useState<PipelineState | null>(null);
-  const [testedVisualState, setTestedVisualState] = useState<VisualState | null>(null);
+  const [testedPipelineState, setTestedPipelineState] =
+    useState<PipelineState | null>(null);
+  const [testedVisualState, setTestedVisualState] =
+    useState<VisualState | null>(null);
 
   // PDF viewer state persistence across steps
   const [pdfScale, setPdfScale] = useState<number>(1.0);
@@ -119,13 +142,21 @@ export function TemplateBuilderModal({
   const [isProcessingUpload, setIsProcessingUpload] = useState(false);
 
   // Use React Query to fetch and cache PDF data (only for stored PDFs)
-  const { data: pdfData, isLoading: pdfLoading, error: pdfError } = usePdfData(pdfFileId);
+  const {
+    data: pdfData,
+    isLoading: pdfLoading,
+    error: pdfError,
+  } = usePdfData(pdfFileId);
   const { getModules } = useModulesApi();
   const { uploadPdf, processObjects } = usePdfFilesApi();
   const { simulateTemplate } = useTemplatesApi();
 
   // Auto-validate pipeline as it's being built
-  const { isValid: isPipelineValid, error: pipelineValidationError, isValidating: isPipelineValidating } = usePipelineValidation(pipelineState);
+  const {
+    isValid: isPipelineValid,
+    error: pipelineValidationError,
+    isValidating: isPipelineValidating,
+  } = usePipelineValidation(pipelineState);
 
   // Load module templates for pipeline execution visualization
   useEffect(() => {
@@ -134,7 +165,7 @@ export function TemplateBuilderModal({
         const response = await getModules();
         setModuleTemplates(response.modules);
       } catch (error) {
-        console.error('Failed to load modules:', error);
+        console.error("Failed to load modules:", error);
         setModuleTemplates([]);
       }
     }
@@ -144,17 +175,20 @@ export function TemplateBuilderModal({
 
   // Initialize state from initialData when in edit mode
   useEffect(() => {
-    if (mode === 'edit' && initialData && isOpen) {
-      console.log('[TemplateBuilderModal] Initializing edit mode with data:', {
+    if (mode === "edit" && initialData && isOpen) {
+      console.log("[TemplateBuilderModal] Initializing edit mode with data:", {
         name: initialData.name,
         description: initialData.description,
         signatureObjectsKeys: Object.keys(initialData.signature_objects),
         signatureObjectsCounts: {
           text_words: initialData.signature_objects.text_words?.length || 0,
           text_lines: initialData.signature_objects.text_lines?.length || 0,
-          graphic_rects: initialData.signature_objects.graphic_rects?.length || 0,
-          graphic_lines: initialData.signature_objects.graphic_lines?.length || 0,
-          graphic_curves: initialData.signature_objects.graphic_curves?.length || 0,
+          graphic_rects:
+            initialData.signature_objects.graphic_rects?.length || 0,
+          graphic_lines:
+            initialData.signature_objects.graphic_lines?.length || 0,
+          graphic_curves:
+            initialData.signature_objects.graphic_curves?.length || 0,
           images: initialData.signature_objects.images?.length || 0,
           tables: initialData.signature_objects.tables?.length || 0,
         },
@@ -171,7 +205,9 @@ export function TemplateBuilderModal({
         text_lines: [...(initialData.signature_objects.text_lines || [])],
         graphic_rects: [...(initialData.signature_objects.graphic_rects || [])],
         graphic_lines: [...(initialData.signature_objects.graphic_lines || [])],
-        graphic_curves: [...(initialData.signature_objects.graphic_curves || [])],
+        graphic_curves: [
+          ...(initialData.signature_objects.graphic_curves || []),
+        ],
         images: [...(initialData.signature_objects.images || [])],
         tables: [...(initialData.signature_objects.tables || [])],
       });
@@ -182,15 +218,25 @@ export function TemplateBuilderModal({
 
       // Determine which object types are selected based on signature_objects
       const selectedTypes: string[] = [];
-      if (initialData.signature_objects.text_words?.length > 0) selectedTypes.push('text_words');
-      if (initialData.signature_objects.text_lines?.length > 0) selectedTypes.push('text_lines');
-      if (initialData.signature_objects.graphic_rects?.length > 0) selectedTypes.push('graphic_rects');
-      if (initialData.signature_objects.graphic_lines?.length > 0) selectedTypes.push('graphic_lines');
-      if (initialData.signature_objects.graphic_curves?.length > 0) selectedTypes.push('graphic_curves');
-      if (initialData.signature_objects.images?.length > 0) selectedTypes.push('images');
-      if (initialData.signature_objects.tables?.length > 0) selectedTypes.push('tables');
+      if (initialData.signature_objects.text_words?.length > 0)
+        selectedTypes.push("text_words");
+      if (initialData.signature_objects.text_lines?.length > 0)
+        selectedTypes.push("text_lines");
+      if (initialData.signature_objects.graphic_rects?.length > 0)
+        selectedTypes.push("graphic_rects");
+      if (initialData.signature_objects.graphic_lines?.length > 0)
+        selectedTypes.push("graphic_lines");
+      if (initialData.signature_objects.graphic_curves?.length > 0)
+        selectedTypes.push("graphic_curves");
+      if (initialData.signature_objects.images?.length > 0)
+        selectedTypes.push("images");
+      if (initialData.signature_objects.tables?.length > 0)
+        selectedTypes.push("tables");
 
-      console.log('[TemplateBuilderModal] Setting selectedObjectTypes:', selectedTypes);
+      console.log(
+        "[TemplateBuilderModal] Setting selectedObjectTypes:",
+        selectedTypes
+      );
       setSelectedObjectTypes(selectedTypes);
     }
   }, [mode, initialData, isOpen]);
@@ -219,7 +265,7 @@ export function TemplateBuilderModal({
           email_id: null,
           filename: pdfFile.name,
           original_filename: pdfFile.name,
-          relative_path: '', // No path for uploaded files
+          relative_path: "", // No path for uploaded files
           file_size: pdfFile.size,
           file_hash: null, // Not calculated for uploaded files
           page_count: objectsData.page_count,
@@ -232,7 +278,10 @@ export function TemplateBuilderModal({
           emailData: null,
         });
       } catch (error) {
-        console.error('[TemplateBuilderModal] Failed to process uploaded PDF:', error);
+        console.error(
+          "[TemplateBuilderModal] Failed to process uploaded PDF:",
+          error
+        );
         // Keep URL but show empty objects on error
         const blobUrl = URL.createObjectURL(pdfFile);
         setUploadedPdfUrl(blobUrl);
@@ -255,68 +304,86 @@ export function TemplateBuilderModal({
   // Extract PDF data from either stored PDF or uploaded file
   const activePdfData = pdfFile ? uploadedPdfData : pdfData;
   const pdfObjects = activePdfData?.objectsData;
-  const pdfUrl = activePdfData?.url || '';
+  const pdfUrl = activePdfData?.url || "";
   const pdfDataLoaded = !!activePdfData;
   const isPdfLoading = pdfFile ? isProcessingUpload : pdfLoading;
 
   // Calculate completed steps
   // Helper to count total signature objects
   const signatureObjectsCount = useMemo(() => {
-    return Object.values(signatureObjects).reduce((sum, arr) => sum + arr.length, 0);
+    return Object.values(signatureObjects).reduce(
+      (sum, arr) => sum + arr.length,
+      0
+    );
   }, [signatureObjects]);
 
   const completedSteps = useMemo(() => {
     const completed = new Set<BuilderStep>();
-    if (signatureObjectsCount > 0) completed.add('signature-objects');
-    if (extractionFields.length > 0) completed.add('extraction-fields');
+    if (signatureObjectsCount > 0) completed.add("signature-objects");
+    if (extractionFields.length > 0) completed.add("extraction-fields");
     return completed;
   }, [signatureObjectsCount, extractionFields.length]);
 
   // Determine if user can proceed from current step
   const canProceed = useMemo(() => {
     switch (currentStep) {
-      case 'signature-objects':
+      case "signature-objects":
         return signatureObjectsCount > 0 && templateName.trim().length > 0;
-      case 'extraction-fields':
+      case "extraction-fields":
         return extractionFields.length > 0;
-      case 'pipeline':
+      case "pipeline":
         // Pipeline step requires valid pipeline and not currently validating
         return isPipelineValid && !isPipelineValidating;
-      case 'testing':
+      case "testing":
         return testResults !== null;
       default:
         return false;
     }
-  }, [currentStep, signatureObjectsCount, templateName, extractionFields.length, testResults, isPipelineValid, isPipelineValidating]);
+  }, [
+    currentStep,
+    signatureObjectsCount,
+    templateName,
+    extractionFields.length,
+    testResults,
+    isPipelineValid,
+    isPipelineValidating,
+  ]);
 
   // Get validation message for current step
   const validationMessage = useMemo(() => {
     if (canProceed) return undefined;
 
     switch (currentStep) {
-      case 'signature-objects':
+      case "signature-objects":
         if (templateName.trim().length === 0) {
-          return 'Please enter a template name';
+          return "Please enter a template name";
         }
         if (signatureObjectsCount === 0) {
-          return 'Please select at least one signature object';
+          return "Please select at least one signature object";
         }
         return undefined;
-      case 'extraction-fields':
-        return 'Please define at least one extraction field';
-      case 'pipeline':
+      case "extraction-fields":
+        return "Please define at least one extraction field";
+      case "pipeline":
         // Show validation error or validating status
         if (isPipelineValidating) {
-          return 'Validating pipeline...';
+          return "Validating pipeline...";
         }
         if (pipelineValidationError) {
           return `[${pipelineValidationError.code}] ${pipelineValidationError.message}`;
         }
-        return 'Pipeline validation failed';
+        return "Pipeline validation failed";
       default:
         return undefined;
     }
-  }, [currentStep, canProceed, templateName, signatureObjectsCount, isPipelineValidating, pipelineValidationError]);
+  }, [
+    currentStep,
+    canProceed,
+    templateName,
+    signatureObjectsCount,
+    isPipelineValidating,
+    pipelineValidationError,
+  ]);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -324,13 +391,15 @@ export function TemplateBuilderModal({
       // Step 1: Upload PDF if needed (for newly uploaded files in create mode)
       let sourcePdfId = pdfFileId;
 
-      if (!sourcePdfId && pdfFile && mode === 'create') {
+      if (!sourcePdfId && pdfFile && mode === "create") {
         const uploadResponse = await uploadPdf(pdfFile);
         sourcePdfId = uploadResponse.id;
       }
 
       if (!sourcePdfId) {
-        throw new Error('No PDF source available. Please ensure a PDF is loaded.');
+        throw new Error(
+          "No PDF source available. Please ensure a PDF is loaded."
+        );
       }
 
       // Step 2: Call parent's onSave with template data
@@ -347,8 +416,13 @@ export function TemplateBuilderModal({
 
       handleClose();
     } catch (error) {
-      console.error(`[TemplateBuilderModal] Failed to ${mode} template:`, error);
-      alert(`Failed to ${mode} template: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error(
+        `[TemplateBuilderModal] Failed to ${mode} template:`,
+        error
+      );
+      alert(
+        `Failed to ${mode} template: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     } finally {
       setIsSaving(false);
     }
@@ -358,19 +432,25 @@ export function TemplateBuilderModal({
     setIsTesting(true);
 
     // Snapshot the current pipeline state (frozen for the test)
-    const pipelineSnapshot = JSON.parse(JSON.stringify(pipelineState)) as PipelineState;
-    const visualSnapshot = JSON.parse(JSON.stringify(visualState)) as VisualState;
+    const pipelineSnapshot = JSON.parse(
+      JSON.stringify(pipelineState)
+    ) as PipelineState;
+    const visualSnapshot = JSON.parse(
+      JSON.stringify(visualState)
+    ) as VisualState;
     setTestedPipelineState(pipelineSnapshot);
     setTestedVisualState(visualSnapshot);
 
     try {
       // Ensure PDF objects are available (already extracted during upload/load)
       if (!pdfObjects) {
-        throw new Error('PDF objects not available for testing. Please ensure PDF is loaded.');
+        throw new Error(
+          "PDF objects not available for testing. Please ensure PDF is loaded."
+        );
       }
 
       // Transform extraction fields to backend format (already matches!)
-      const backendExtractionFields = extractionFields.map(field => ({
+      const backendExtractionFields = extractionFields.map((field) => ({
         name: field.name,
         description: field.description,
         bbox: field.bbox,
@@ -379,7 +459,7 @@ export function TemplateBuilderModal({
 
       // Build JSON request (NOT FormData!)
       const request = {
-        pdf_objects: pdfObjects.objects,  // Send just the objects part (text_words, text_lines, etc.)
+        pdf_objects: pdfObjects.objects, // Send just the objects part (text_words, text_lines, etc.)
         extraction_fields: backendExtractionFields,
         pipeline_state: pipelineState,
       };
@@ -390,51 +470,57 @@ export function TemplateBuilderModal({
       // Map API response to TemplateSimulationResult format
       // Convert extraction_results array to extracted_data map
       const extractedDataByFieldName: Record<string, string> = {};
-      response.extraction_results.forEach(result => {
+      response.extraction_results.forEach((result) => {
         extractedDataByFieldName[result.name] = result.extracted_value;
       });
 
       // Convert pipeline_actions (dict of module actions) to simulated_actions array
-      const simulatedActions = Object.entries(response.pipeline_actions).map(([moduleId, inputs]) => ({
-        action_module_name: moduleId,  // Using module_instance_id as action name
-        inputs: inputs,
-      }));
+      const simulatedActions = Object.entries(response.pipeline_actions).map(
+        ([moduleId, inputs]) => ({
+          action_module_name: moduleId, // Using module_instance_id as action name
+          inputs: inputs,
+        })
+      );
 
       // Parse error type and message from pipeline_error (format: "ErrorType: message")
       let errorType: string | null = null;
       let errorMessage: string | null = null;
       if (response.pipeline_error) {
-        const colonIndex = response.pipeline_error.indexOf(':');
+        const colonIndex = response.pipeline_error.indexOf(":");
         if (colonIndex > 0) {
           errorType = response.pipeline_error.substring(0, colonIndex).trim();
-          errorMessage = response.pipeline_error.substring(colonIndex + 1).trim();
+          errorMessage = response.pipeline_error
+            .substring(colonIndex + 1)
+            .trim();
         } else {
           errorMessage = response.pipeline_error;
         }
       }
 
       const simulationResult: TemplateSimulationResult = {
-        status: response.pipeline_status === 'success' ? 'success' : 'failure',
+        status: response.pipeline_status === "success" ? "success" : "failure",
         error_type: errorType,
         error_message: errorMessage,
         data_extraction: {
           extracted_data: extractedDataByFieldName,
-          extracted_fields_with_boxes: response.extraction_results.map(result => ({
-            name: result.name,
-            value: result.extracted_value,
-            page: result.page,
-            bbox: result.bbox,
-          })),
+          extracted_fields_with_boxes: response.extraction_results.map(
+            (result) => ({
+              name: result.name,
+              value: result.extracted_value,
+              page: result.page,
+              bbox: result.bbox,
+            })
+          ),
         },
         pipeline_execution: {
           status: response.pipeline_status,
           error_message: response.pipeline_error,
           executed_actions: simulatedActions,
-          steps: response.pipeline_steps.map(step => {
+          steps: response.pipeline_steps.map((step) => {
             // Parse step error from "ErrorType: message" format to object
             let errorObj: { type: string; message: string } | null = null;
             if (step.error) {
-              const colonIndex = step.error.indexOf(':');
+              const colonIndex = step.error.indexOf(":");
               if (colonIndex > 0) {
                 errorObj = {
                   type: step.error.substring(0, colonIndex).trim(),
@@ -442,7 +528,7 @@ export function TemplateBuilderModal({
                 };
               } else {
                 errorObj = {
-                  type: 'Error',
+                  type: "Error",
                   message: step.error,
                 };
               }
@@ -461,10 +547,12 @@ export function TemplateBuilderModal({
       };
 
       setTestResults(simulationResult);
-      setCurrentStep('testing');
+      setCurrentStep("testing");
     } catch (error) {
-      console.error('Failed to test template:', error);
-      alert(`Template test failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Failed to test template:", error);
+      alert(
+        `Template test failed: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     } finally {
       setIsTesting(false);
     }
@@ -472,9 +560,9 @@ export function TemplateBuilderModal({
 
   const handleClose = () => {
     // Reset all state (PDF data is cached by React Query, no need to reset)
-    setCurrentStep('signature-objects');
-    setTemplateName('');
-    setTemplateDescription('');
+    setCurrentStep("signature-objects");
+    setTemplateName("");
+    setTemplateDescription("");
     setSignatureObjects({
       text_words: [],
       text_lines: [],
@@ -486,7 +574,11 @@ export function TemplateBuilderModal({
     });
     setSelectedObjectTypes([]);
     setExtractionFields([]);
-    setPipelineStateInternal({ entry_points: [], modules: [], connections: [] });
+    setPipelineStateInternal({
+      entry_points: [],
+      modules: [],
+      connections: [],
+    });
     setVisualStateInternal({});
     setTestResults(null);
     setPdfScale(1.0);
@@ -497,36 +589,41 @@ export function TemplateBuilderModal({
   };
 
   const handleNext = () => {
-    if (currentStep === 'signature-objects') {
-      setCurrentStep('extraction-fields');
-    } else if (currentStep === 'extraction-fields') {
-      console.log('[TemplateBuilderModal] Navigating to pipeline step. Passing state:', {
-        pipelineState: {
-          entryPoints: pipelineState.entry_points.length,
-          modules: pipelineState.modules.length,
-        },
-        visualState: {
-          totalNodes: Object.keys(visualState).length,
-          entryPointPositions: Object.fromEntries(
-            Object.entries(visualState).filter(([id]) => id.startsWith('entry-'))
-          ),
-        },
-      });
-      setCurrentStep('pipeline');
+    if (currentStep === "signature-objects") {
+      setCurrentStep("extraction-fields");
+    } else if (currentStep === "extraction-fields") {
+      console.log(
+        "[TemplateBuilderModal] Navigating to pipeline step. Passing state:",
+        {
+          pipelineState: {
+            entryPoints: pipelineState.entry_points.length,
+            modules: pipelineState.modules.length,
+          },
+          visualState: {
+            totalNodes: Object.keys(visualState).length,
+            entryPointPositions: Object.fromEntries(
+              Object.entries(visualState).filter(([id]) =>
+                id.startsWith("entry-")
+              )
+            ),
+          },
+        }
+      );
+      setCurrentStep("pipeline");
     }
   };
 
   const handleBack = () => {
-    if (currentStep === 'extraction-fields') {
-      setCurrentStep('signature-objects');
-    } else if (currentStep === 'pipeline') {
-      setCurrentStep('extraction-fields');
-    } else if (currentStep === 'testing') {
+    if (currentStep === "extraction-fields") {
+      setCurrentStep("signature-objects");
+    } else if (currentStep === "pipeline") {
+      setCurrentStep("extraction-fields");
+    } else if (currentStep === "testing") {
       // Clear test snapshots when leaving testing step
       setTestedPipelineState(null);
       setTestedVisualState(null);
       setTestResults(null);
-      setCurrentStep('pipeline');
+      setCurrentStep("pipeline");
     }
   };
 
@@ -549,7 +646,7 @@ export function TemplateBuilderModal({
           {!pdfDataLoaded && isPdfLoading && (
             <div className="h-full flex items-center justify-center">
               <div className="text-white text-lg">
-                {pdfFile ? 'Processing PDF...' : 'Loading PDF...'}
+                {pdfFile ? "Processing PDF..." : "Loading PDF..."}
               </div>
             </div>
           )}
@@ -559,7 +656,9 @@ export function TemplateBuilderModal({
             <div className="h-full flex items-center justify-center">
               <div className="text-center">
                 <div className="text-red-400 mb-4">
-                  {pdfError instanceof Error ? pdfError.message : 'Failed to load PDF data'}
+                  {pdfError instanceof Error
+                    ? pdfError.message
+                    : "Failed to load PDF data"}
                 </div>
                 <button
                   onClick={handleClose}
@@ -574,8 +673,8 @@ export function TemplateBuilderModal({
           {/* Steps - conditionally render based on currentStep (components mount/unmount as needed) */}
           {pdfDataLoaded && !pdfError && (
             <>
-              {currentStep === 'signature-objects' && (
-                <div style={{ height: '100%' }}>
+              {currentStep === "signature-objects" && (
+                <div style={{ height: "100%" }}>
                   <SignatureObjectsStep
                     pdfFileId={pdfFileId}
                     templateName={templateName}
@@ -595,8 +694,8 @@ export function TemplateBuilderModal({
                   />
                 </div>
               )}
-              {currentStep === 'extraction-fields' && (
-                <div style={{ height: '100%' }}>
+              {currentStep === "extraction-fields" && (
+                <div style={{ height: "100%" }}>
                   <ExtractionFieldsStep
                     pdfFileId={pdfFileId}
                     pdfFile={pdfFile}
@@ -619,7 +718,12 @@ export function TemplateBuilderModal({
                   />
                 </div>
               )}
-              <div style={{ display: currentStep === 'pipeline' ? 'block' : 'none', height: '100%' }}>
+              <div
+                style={{
+                  display: currentStep === "pipeline" ? "block" : "none",
+                  height: "100%",
+                }}
+              >
                 <PipelineBuilderStep
                   pipelineState={pipelineState}
                   visualState={visualState}
@@ -628,8 +732,11 @@ export function TemplateBuilderModal({
                   onVisualStateChange={setVisualState}
                 />
               </div>
-              {currentStep === 'testing' && (
-                testResults && pdfUrl && testedPipelineState && testedVisualState ? (
+              {currentStep === "testing" &&
+                (testResults &&
+                pdfUrl &&
+                testedPipelineState &&
+                testedVisualState ? (
                   <TestingStep
                     pdfUrl={pdfUrl}
                     viewMode={testViewMode}
@@ -640,10 +747,11 @@ export function TemplateBuilderModal({
                   />
                 ) : (
                   <div className="flex items-center justify-center py-12">
-                    <div className="text-gray-400">No test results available</div>
+                    <div className="text-gray-400">
+                      No test results available
+                    </div>
                   </div>
-                )
-              )}
+                ))}
             </>
           )}
         </div>
@@ -654,28 +762,34 @@ export function TemplateBuilderModal({
             <TemplateBuilderStepper
               currentStep={currentStep}
               completedSteps={completedSteps}
-              testStatus={testResults?.status === 'success' ? 'success' : testResults?.status === 'failure' ? 'failure' : null}
+              testStatus={
+                testResults?.status === "success"
+                  ? "success"
+                  : testResults?.status === "failure"
+                    ? "failure"
+                    : null
+              }
             />
 
             {/* View Mode Toggle - Only show in testing step */}
-            {currentStep === 'testing' && testResults && (
+            {currentStep === "testing" && testResults && (
               <div className="flex items-center bg-gray-800 rounded-lg p-1 border-l border-gray-600 ml-4">
                 <button
-                  onClick={() => setTestViewMode('summary')}
+                  onClick={() => setTestViewMode("summary")}
                   className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                    testViewMode === 'summary'
-                      ? 'bg-blue-600 text-white'
-                      : 'text-gray-400 hover:text-gray-200'
+                    testViewMode === "summary"
+                      ? "bg-blue-600 text-white"
+                      : "text-gray-400 hover:text-gray-200"
                   }`}
                 >
                   Summary
                 </button>
                 <button
-                  onClick={() => setTestViewMode('detail')}
+                  onClick={() => setTestViewMode("detail")}
                   className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                    testViewMode === 'detail'
-                      ? 'bg-blue-600 text-white'
-                      : 'text-gray-400 hover:text-gray-200'
+                    testViewMode === "detail"
+                      ? "bg-blue-600 text-white"
+                      : "text-gray-400 hover:text-gray-200"
                   }`}
                 >
                   Detail
@@ -686,7 +800,7 @@ export function TemplateBuilderModal({
 
           {/* Navigation Buttons */}
           <div className="flex items-center space-x-3">
-            {currentStep !== 'signature-objects' && (
+            {currentStep !== "signature-objects" && (
               <button
                 onClick={handleBack}
                 disabled={isSaving || isTesting}
@@ -696,14 +810,14 @@ export function TemplateBuilderModal({
               </button>
             )}
 
-            {currentStep === 'pipeline' ? (
+            {currentStep === "pipeline" ? (
               <div className="relative group">
                 <button
                   onClick={handleTest}
                   disabled={!canProceed || isTesting}
                   className="px-6 py-2 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
                 >
-                  {isTesting ? 'Testing...' : 'Test Template →'}
+                  {isTesting ? "Testing..." : "Test Template →"}
                 </button>
                 {/* Tooltip on hover when disabled */}
                 {!canProceed && validationMessage && (
@@ -715,13 +829,19 @@ export function TemplateBuilderModal({
                   </div>
                 )}
               </div>
-            ) : currentStep === 'testing' ? (
+            ) : currentStep === "testing" ? (
               <button
                 onClick={handleSave}
                 disabled={!canProceed || isSaving}
                 className="px-6 py-2 text-sm bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
               >
-                {isSaving ? (mode === 'edit' ? 'Updating...' : 'Saving...') : (mode === 'edit' ? 'Update Template' : 'Save Template')}
+                {isSaving
+                  ? mode === "edit"
+                    ? "Updating..."
+                    : "Saving..."
+                  : mode === "edit"
+                    ? "Update Template"
+                    : "Save Template"}
               </button>
             ) : (
               <div className="relative group">

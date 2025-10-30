@@ -3,13 +3,21 @@
  * Reconstructs pipeline from saved state or creates from entry points
  */
 
-import { useEffect, useRef, useState } from 'react';
-import { Node, Edge } from '@xyflow/react';
-import { ModuleTemplate, ModuleInstance, NodePin } from '../../../types/moduleTypes';
-import { PipelineState, VisualState, EntryPoint } from '../../../types/pipelineTypes';
-import { getTypeColor } from '../utils/edgeUtils';
+import { useEffect, useRef, useState } from "react";
+import { Node, Edge } from "@xyflow/react";
+import {
+  ModuleTemplate,
+  ModuleInstance,
+  NodePin,
+} from "../../../shared/types/moduleTypes";
+import {
+  PipelineState,
+  VisualState,
+  EntryPoint,
+} from "../../../types/pipelineTypes";
+import { getTypeColor } from "../utils/edgeUtils";
 
-const ALL_TYPES = ['str', 'int', 'float', 'bool', 'datetime'];
+const ALL_TYPES = ["str", "int", "float", "bool", "datetime"];
 
 export interface UsePipelineInitializationProps {
   moduleTemplates: ModuleTemplate[];
@@ -23,7 +31,10 @@ export interface UsePipelineInitializationProps {
 /**
  * Create entry point nodes from EntryPoint data
  */
-function createEntryPointNodes(entryPoints: EntryPoint[], visualState?: VisualState): Node[] {
+function createEntryPointNodes(
+  entryPoints: EntryPoint[],
+  visualState?: VisualState
+): Node[] {
   return entryPoints.map((ep, index) => {
     // Flat visual state: look up by React Flow node ID (entry-{node_id})
     const reactFlowNodeId = `entry-${ep.node_id}`;
@@ -34,36 +45,36 @@ function createEntryPointNodes(entryPoints: EntryPoint[], visualState?: VisualSt
 
     // Create fake module instance for visual rendering
     // Backend entry points don't have 'type', default to 'str'
-    const entryPointType = (ep as any).type || 'str';
+    const entryPointType = (ep as any).type || "str";
 
     const fakeModuleInstance: ModuleInstance = {
       module_instance_id: `entry-${ep.node_id}`,
-      module_ref: 'entry_point:1.0.0',
-      module_kind: 'transform',
+      module_ref: "entry_point:1.0.0",
+      module_kind: "transform",
       config: {},
       inputs: [],
       outputs: [
         {
           node_id: ep.node_id,
-          direction: 'out',
+          direction: "out",
           type: entryPointType,
           name: ep.name,
           label: ep.name,
           position_index: 0,
           group_index: 0,
-          allowed_types: ['str'],
+          allowed_types: ["str"],
         },
       ],
     };
 
     // Create fake template for entry point
     const fakeTemplate: ModuleTemplate = {
-      id: 'entry_point',
-      version: '1.0.0',
-      kind: 'transform',
-      title: 'Entry Point',
-      description: 'Pipeline entry point',
-      color: '#000000',
+      id: "entry_point",
+      version: "1.0.0",
+      kind: "transform",
+      title: "Entry Point",
+      description: "Pipeline entry point",
+      color: "#000000",
       config_schema: {},
       meta: {
         io_shape: {
@@ -75,7 +86,7 @@ function createEntryPointNodes(entryPoints: EntryPoint[], visualState?: VisualSt
                 min_count: 1,
                 max_count: 1,
                 typing: {
-                  allowed_types: ['str'],
+                  allowed_types: ["str"],
                 },
               },
             ],
@@ -87,7 +98,7 @@ function createEntryPointNodes(entryPoints: EntryPoint[], visualState?: VisualSt
 
     return {
       id: `entry-${ep.node_id}`,
-      type: 'module',
+      type: "module",
       position: { x: position.x, y: position.y },
       data: {
         moduleInstance: fakeModuleInstance,
@@ -105,11 +116,13 @@ function createEntryPointNodes(entryPoints: EntryPoint[], visualState?: VisualSt
  */
 function reconstructPins(
   pins: any[],
-  direction: 'in' | 'out',
+  direction: "in" | "out",
   template: ModuleTemplate
 ): NodePin[] {
   const ioSide =
-    direction === 'in' ? template.meta.io_shape.inputs : template.meta.io_shape.outputs;
+    direction === "in"
+      ? template.meta.io_shape.inputs
+      : template.meta.io_shape.outputs;
 
   return pins.map((pin) => {
     const group = ioSide.nodes[pin.group_index];
@@ -149,7 +162,7 @@ function reconstructPipeline(
   visualState: VisualState,
   moduleTemplates: ModuleTemplate[]
 ): { nodes: Node[]; edges: Edge[] } {
-  console.log('Reconstructing pipeline from initial state...');
+  console.log("Reconstructing pipeline from initial state...");
 
   // Build entry point nodes
   const entryPointNodes = createEntryPointNodes(
@@ -161,32 +174,36 @@ function reconstructPipeline(
   const moduleNodes: Node[] = pipelineState.modules
     .map((moduleInstance) => {
       // Find the template for this module
-      const [templateId, version] = moduleInstance.module_ref.split(':');
+      const [templateId, version] = moduleInstance.module_ref.split(":");
       const template = moduleTemplates.find(
         (t) => t.id === templateId && t.version === version
       );
 
       if (!template) {
-        console.warn(`Template not found for module: ${moduleInstance.module_ref}`);
+        console.warn(
+          `Template not found for module: ${moduleInstance.module_ref}`
+        );
         return null;
       }
 
       // Get position from flat visual state
       const position = visualState[moduleInstance.module_instance_id];
       if (!position) {
-        console.warn(`Position not found for module: ${moduleInstance.module_instance_id}`);
+        console.warn(
+          `Position not found for module: ${moduleInstance.module_instance_id}`
+        );
         return null;
       }
 
       const fullModuleInstance: ModuleInstance = {
         ...moduleInstance,
-        inputs: reconstructPins(moduleInstance.inputs, 'in', template),
-        outputs: reconstructPins(moduleInstance.outputs, 'out', template),
+        inputs: reconstructPins(moduleInstance.inputs, "in", template),
+        outputs: reconstructPins(moduleInstance.outputs, "out", template),
       };
 
       return {
         id: moduleInstance.module_instance_id,
-        type: 'module',
+        type: "module",
         position: { x: position.x, y: position.y },
         data: {
           moduleInstance: fullModuleInstance,
@@ -200,41 +217,49 @@ function reconstructPipeline(
   const reconstructedNodes = [...entryPointNodes, ...moduleNodes];
 
   // Build edges from connections
-  const reconstructedEdges: Edge[] = pipelineState.connections.map((connection, index) => {
-    // Find source and target modules
-    let sourceModuleId = '';
-    let targetModuleId = '';
-    let edgeColor = '#6B7280'; // default gray
+  const reconstructedEdges: Edge[] = pipelineState.connections.map(
+    (connection, index) => {
+      // Find source and target modules
+      let sourceModuleId = "";
+      let targetModuleId = "";
+      let edgeColor = "#6B7280"; // default gray
 
-    reconstructedNodes.forEach((node) => {
-      const moduleInstance = node.data.moduleInstance as ModuleInstance;
+      reconstructedNodes.forEach((node) => {
+        const moduleInstance = node.data.moduleInstance as ModuleInstance;
 
-      if (moduleInstance.outputs.some((p) => p.node_id === connection.from_node_id)) {
-        sourceModuleId = node.id;
+        if (
+          moduleInstance.outputs.some(
+            (p) => p.node_id === connection.from_node_id
+          )
+        ) {
+          sourceModuleId = node.id;
 
-        // Get type for edge color
-        const sourcePin = moduleInstance.outputs.find(
-          (p) => p.node_id === connection.from_node_id
-        );
-        if (sourcePin) {
-          edgeColor = getTypeColor(sourcePin.type);
+          // Get type for edge color
+          const sourcePin = moduleInstance.outputs.find(
+            (p) => p.node_id === connection.from_node_id
+          );
+          if (sourcePin) {
+            edgeColor = getTypeColor(sourcePin.type);
+          }
         }
-      }
 
-      if (moduleInstance.inputs.some((p) => p.node_id === connection.to_node_id)) {
-        targetModuleId = node.id;
-      }
-    });
+        if (
+          moduleInstance.inputs.some((p) => p.node_id === connection.to_node_id)
+        ) {
+          targetModuleId = node.id;
+        }
+      });
 
-    return {
-      id: `edge-${index}`,
-      source: sourceModuleId,
-      sourceHandle: connection.from_node_id,
-      target: targetModuleId,
-      targetHandle: connection.to_node_id,
-      style: { stroke: edgeColor, strokeWidth: 2 },
-    };
-  });
+      return {
+        id: `edge-${index}`,
+        source: sourceModuleId,
+        sourceHandle: connection.from_node_id,
+        target: targetModuleId,
+        targetHandle: connection.to_node_id,
+        style: { stroke: edgeColor, strokeWidth: 2 },
+      };
+    }
+  );
 
   console.log(
     `Reconstructed ${entryPointNodes.length} entry points, ${moduleNodes.length} modules (${reconstructedNodes.length} total nodes), and ${reconstructedEdges.length} edges`
@@ -271,20 +296,21 @@ export function usePipelineInitialization({
   useEffect(() => {
     // Only initialize once per mount
     if (hasInitializedRef.current) {
-      console.log('[usePipelineInitialization] Already initialized, skipping');
+      console.log("[usePipelineInitialization] Already initialized, skipping");
       return;
     }
 
     // Wait for modules to load before initializing
     if (moduleTemplates.length === 0) {
-      console.log('[usePipelineInitialization] Waiting for modules to load...');
+      console.log("[usePipelineInitialization] Waiting for modules to load...");
       return;
     }
 
     // Use captured initial props, not current props
-    const { initialPipelineState, initialVisualState, entryPoints } = initialPropsRef.current;
+    const { initialPipelineState, initialVisualState, entryPoints } =
+      initialPropsRef.current;
 
-    console.log('[usePipelineInitialization] Initializing pipeline graph', {
+    console.log("[usePipelineInitialization] Initializing pipeline graph", {
       hasInitialPipelineState: !!initialPipelineState,
       entryPointsInState: initialPipelineState?.entry_points.length ?? 0,
       entryPointsProp: entryPoints.length,
@@ -293,13 +319,18 @@ export function usePipelineInitialization({
 
     // ALWAYS reconstruct from state if entry points are present
     if (initialPipelineState && initialPipelineState.entry_points.length > 0) {
-      console.log('[usePipelineInitialization] Reconstructing from saved state:', {
-        modules: initialPipelineState.modules.length,
-        connections: initialPipelineState.connections.length,
-        entryPoints: initialPipelineState.entry_points.length,
-        visualPositions: initialVisualState ? Object.keys(initialVisualState).length : 0,
-        entryPointDetails: initialPipelineState.entry_points,
-      });
+      console.log(
+        "[usePipelineInitialization] Reconstructing from saved state:",
+        {
+          modules: initialPipelineState.modules.length,
+          connections: initialPipelineState.connections.length,
+          entryPoints: initialPipelineState.entry_points.length,
+          visualPositions: initialVisualState
+            ? Object.keys(initialVisualState).length
+            : 0,
+          entryPointDetails: initialPipelineState.entry_points,
+        }
+      );
 
       const { nodes, edges } = reconstructPipeline(
         initialPipelineState,
@@ -311,20 +342,28 @@ export function usePipelineInitialization({
       setEdges(edges);
     } else {
       // Create fresh entry points if no saved state
-      console.log('[usePipelineInitialization] Creating fresh entry points:', entryPoints.length);
+      console.log(
+        "[usePipelineInitialization] Creating fresh entry points:",
+        entryPoints.length
+      );
 
-      const entryPointNodes = createEntryPointNodes(entryPoints, initialVisualState);
+      const entryPointNodes = createEntryPointNodes(
+        entryPoints,
+        initialVisualState
+      );
       setNodes(entryPointNodes);
       setEdges([]);
     }
 
     hasInitializedRef.current = true;
     setIsInitialized(true);
-    console.log('[usePipelineInitialization] Initialization complete');
+    console.log("[usePipelineInitialization] Initialization complete");
 
     // Cleanup on unmount only
     return () => {
-      console.log('[usePipelineInitialization] Cleanup on unmount - resetting flags');
+      console.log(
+        "[usePipelineInitialization] Cleanup on unmount - resetting flags"
+      );
       hasInitializedRef.current = false;
       setIsInitialized(false);
     };
@@ -333,45 +372,67 @@ export function usePipelineInitialization({
 
   // Sync entry points dynamically after initial load
   // This allows adding/removing entry points without full re-initialization
-  const entryPointsKey = JSON.stringify(entryPoints.map(ep => ep.node_id).sort());
+  const entryPointsKey = JSON.stringify(
+    entryPoints.map((ep) => ep.node_id).sort()
+  );
 
   useEffect(() => {
     // Don't sync until initial load is complete
     if (!isInitialized) {
-      console.log('[usePipelineInitialization] Skipping sync - not initialized yet');
+      console.log(
+        "[usePipelineInitialization] Skipping sync - not initialized yet"
+      );
       return;
     }
 
-    console.log('[usePipelineInitialization] Syncing entry points after initialization', {
-      entryPointsInProp: entryPoints.length,
-      entryPointIds: entryPoints.map(ep => ep.node_id),
-    });
+    console.log(
+      "[usePipelineInitialization] Syncing entry points after initialization",
+      {
+        entryPointsInProp: entryPoints.length,
+        entryPointIds: entryPoints.map((ep) => ep.node_id),
+      }
+    );
 
     // Update nodes to match current entry points
     setNodes((currentNodes) => {
       // Separate entry point nodes from regular module nodes
-      const moduleNodes = currentNodes.filter((node) => !node.data.isEntryPoint);
-      const currentEntryPointIds = new Set(currentNodes.filter((node) => node.data.isEntryPoint).map((node) => node.id));
+      const moduleNodes = currentNodes.filter(
+        (node) => !node.data.isEntryPoint
+      );
+      const currentEntryPointIds = new Set(
+        currentNodes
+          .filter((node) => node.data.isEntryPoint)
+          .map((node) => node.id)
+      );
 
-      console.log('[usePipelineInitialization] Current state:', {
+      console.log("[usePipelineInitialization] Current state:", {
         currentEntryPointIds: Array.from(currentEntryPointIds),
         moduleNodesCount: moduleNodes.length,
       });
 
       // Create nodes for current entry points
-      const newEntryPointNodes = createEntryPointNodes(entryPoints, initialVisualState);
-      const newEntryPointIds = new Set(newEntryPointNodes.map((node) => node.id));
+      const newEntryPointNodes = createEntryPointNodes(
+        entryPoints,
+        initialVisualState
+      );
+      const newEntryPointIds = new Set(
+        newEntryPointNodes.map((node) => node.id)
+      );
 
       // Check if entry points actually changed
-      const added = newEntryPointNodes.filter((node) => !currentEntryPointIds.has(node.id));
-      const removed = currentNodes.filter((node) => node.data.isEntryPoint && !newEntryPointIds.has(node.id));
+      const added = newEntryPointNodes.filter(
+        (node) => !currentEntryPointIds.has(node.id)
+      );
+      const removed = currentNodes.filter(
+        (node) => node.data.isEntryPoint && !newEntryPointIds.has(node.id)
+      );
 
       if (added.length === 0 && removed.length === 0) {
-        console.log('[usePipelineInitialization] No changes detected');
+        console.log("[usePipelineInitialization] No changes detected");
         return currentNodes;
       }
 
-      console.log('[usePipelineInitialization] Entry points changed:', {
+      console.log("[usePipelineInitialization] Entry points changed:", {
         added: added.length,
         removed: removed.length,
         removedIds: removed.map((n) => n.id),
@@ -382,10 +443,13 @@ export function usePipelineInitialization({
         const removedIds = new Set(removed.map((n) => n.id));
         setEdges((currentEdges) => {
           const filteredEdges = currentEdges.filter(
-            (edge) => !removedIds.has(edge.source) && !removedIds.has(edge.target)
+            (edge) =>
+              !removedIds.has(edge.source) && !removedIds.has(edge.target)
           );
           if (filteredEdges.length !== currentEdges.length) {
-            console.log('[usePipelineInitialization] Removed edges connected to deleted entry points');
+            console.log(
+              "[usePipelineInitialization] Removed edges connected to deleted entry points"
+            );
           }
           return filteredEdges;
         });
@@ -397,6 +461,9 @@ export function usePipelineInitialization({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entryPointsKey, isInitialized]);
 
-  console.log('[usePipelineInitialization] Current isInitialized:', isInitialized);
+  console.log(
+    "[usePipelineInitialization] Current isInitialized:",
+    isInitialized
+  );
   return { isInitialized };
 }

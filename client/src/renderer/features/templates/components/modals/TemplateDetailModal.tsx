@@ -4,22 +4,18 @@
  * Displays signature objects, extraction fields, and pipeline for each version
  */
 
-import { useEffect, useState, useMemo } from 'react';
-import { useTemplatesApi } from '../../hooks';
-import {
-  TemplateDetail,
-  TemplateVersionDetail,
-  PdfObjects,
-} from '../../types';
-import { TemplateStatusBadge } from '../ui/TemplateStatusBadge';
-import { usePdfData } from '../../../pdf-files/hooks/usePdfData';
-import { PdfViewer } from '../../../../shared/components/pdf';
-import { usePdfViewer } from '../../../../shared/components/pdf/PdfViewer/PdfViewerContext';
-import { usePipelinesApi } from '../../../pipelines/hooks/usePipelinesApi';
-import { useModulesApi } from '../../../modules/hooks';
-import { PipelineGraph } from '../../../pipelines/components/PipelineGraph';
-import type { PipelineDetailResponse } from '../../../pipelines/types';
-import type { ModuleTemplate } from '../../../../types/moduleTypes';
+import { useEffect, useState, useMemo } from "react";
+import { useTemplatesApi } from "../../hooks";
+import { TemplateDetail, TemplateVersionDetail, PdfObjects } from "../../types";
+import { TemplateStatusBadge } from "../ui/TemplateStatusBadge";
+import { usePdfData } from "../../../pdf-files/hooks/usePdfData";
+import { PdfViewer } from "../../../../shared/components/pdf";
+import { usePdfViewer } from "../../../../shared/components/pdf/PdfViewer/PdfViewerContext";
+import { usePipelinesApi } from "../../../pipelines/hooks/usePipelinesApi";
+import { useModulesApi } from "../../../modules/hooks";
+import { PipelineGraph } from "../../../pipelines/components/PipelineGraph";
+import type { PipelineDetailResponse } from "../../../pipelines/types";
+import type { ModuleTemplate } from "../../../../shared/types/moduleTypes";
 
 interface TemplateDetailModalProps {
   isOpen: boolean;
@@ -28,13 +24,21 @@ interface TemplateDetailModalProps {
   onEdit?: (templateId: number) => void;
 }
 
-type ViewStep = 'signature-objects' | 'extraction-fields' | 'pipeline';
+type ViewStep = "signature-objects" | "extraction-fields" | "pipeline";
 
 // Simple viewer stepper (numbers only, no testing step)
 const VIEWER_STEPS = [
-  { id: 'signature-objects' as ViewStep, number: 1, label: 'Signature Objects' },
-  { id: 'extraction-fields' as ViewStep, number: 2, label: 'Extraction Fields' },
-  { id: 'pipeline' as ViewStep, number: 3, label: 'Pipeline' },
+  {
+    id: "signature-objects" as ViewStep,
+    number: 1,
+    label: "Signature Objects",
+  },
+  {
+    id: "extraction-fields" as ViewStep,
+    number: 2,
+    label: "Extraction Fields",
+  },
+  { id: "pipeline" as ViewStep, number: 3, label: "Pipeline" },
 ];
 
 function TemplateViewerStepper({ currentStep }: { currentStep: ViewStep }) {
@@ -50,15 +54,15 @@ function TemplateViewerStepper({ currentStep }: { currentStep: ViewStep }) {
               <div
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-colors ${
                   isActive
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-700 text-gray-400'
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-700 text-gray-400"
                 }`}
               >
                 {step.number}
               </div>
               <span
                 className={`ml-2 text-sm font-medium ${
-                  isActive ? 'text-white' : 'text-gray-400'
+                  isActive ? "text-white" : "text-gray-400"
                 }`}
               >
                 {step.label}
@@ -82,21 +86,25 @@ export function TemplateDetailModal({
   onClose,
   onEdit,
 }: TemplateDetailModalProps) {
-  const { getTemplateDetail, getTemplateVersionDetail, isLoading } = useTemplatesApi();
+  const { getTemplateDetail, getTemplateVersionDetail, isLoading } =
+    useTemplatesApi();
 
   // Template and version state
   const [template, setTemplate] = useState<TemplateDetail | null>(null);
   const [currentVersionIndex, setCurrentVersionIndex] = useState<number>(0);
-  const [versionDetail, setVersionDetail] = useState<TemplateVersionDetail | null>(null);
+  const [versionDetail, setVersionDetail] =
+    useState<TemplateVersionDetail | null>(null);
 
   // UI state
-  const [currentStep, setCurrentStep] = useState<ViewStep>('signature-objects');
+  const [currentStep, setCurrentStep] = useState<ViewStep>("signature-objects");
   const [error, setError] = useState<string | null>(null);
 
   // PDF data - fetch once using source_pdf_id from version detail
-  const { data: pdfData, isLoading: pdfLoading, error: pdfError } = usePdfData(
-    versionDetail?.source_pdf_id ?? null
-  );
+  const {
+    data: pdfData,
+    isLoading: pdfLoading,
+    error: pdfError,
+  } = usePdfData(versionDetail?.source_pdf_id ?? null);
 
   // Fetch template when modal opens
   useEffect(() => {
@@ -131,7 +139,7 @@ export function TemplateDetailModal({
       );
       setCurrentVersionIndex(currentIdx >= 0 ? currentIdx : 0);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load template');
+      setError(err instanceof Error ? err.message : "Failed to load template");
     }
   };
 
@@ -141,7 +149,9 @@ export function TemplateDetailModal({
       const detail = await getTemplateVersionDetail(versionId);
       setVersionDetail(detail);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load version details');
+      setError(
+        err instanceof Error ? err.message : "Failed to load version details"
+      );
     }
   };
 
@@ -149,7 +159,7 @@ export function TemplateDetailModal({
     setTemplate(null);
     setCurrentVersionIndex(0);
     setVersionDetail(null);
-    setCurrentStep('signature-objects');
+    setCurrentStep("signature-objects");
     setError(null);
   };
 
@@ -166,25 +176,25 @@ export function TemplateDetailModal({
   };
 
   const handleNext = () => {
-    if (currentStep === 'signature-objects') {
-      setCurrentStep('extraction-fields');
-    } else if (currentStep === 'extraction-fields') {
-      setCurrentStep('pipeline');
+    if (currentStep === "signature-objects") {
+      setCurrentStep("extraction-fields");
+    } else if (currentStep === "extraction-fields") {
+      setCurrentStep("pipeline");
     }
   };
 
   const handleBack = () => {
-    if (currentStep === 'extraction-fields') {
-      setCurrentStep('signature-objects');
-    } else if (currentStep === 'pipeline') {
-      setCurrentStep('extraction-fields');
+    if (currentStep === "extraction-fields") {
+      setCurrentStep("signature-objects");
+    } else if (currentStep === "pipeline") {
+      setCurrentStep("extraction-fields");
     }
   };
 
   if (!isOpen) return null;
 
   const currentVersion = template?.versions[currentVersionIndex];
-  const pdfUrl = pdfData?.url || '';
+  const pdfUrl = pdfData?.url || "";
   const pdfObjects = pdfData?.objectsData;
 
   return (
@@ -194,44 +204,50 @@ export function TemplateDetailModal({
         <div className="flex items-center justify-between p-6 border-b border-gray-700">
           <div className="flex items-center space-x-4">
             <h2 className="text-2xl font-bold text-white">
-              {template?.name || 'Template Details'}
+              {template?.name || "Template Details"}
             </h2>
             {template && <TemplateStatusBadge status={template.status} />}
           </div>
 
           {/* Version Navigation */}
-          {template && template.versions.length > 0 && currentVersion && versionDetail && (
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={handleNextVersion}
-                disabled={currentVersionIndex === template.versions.length - 1}
-                className="px-3 py-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-white rounded transition-colors"
-                title="Decrement version"
-              >
-                ←
-              </button>
-              <div className="text-center">
-                <div className="text-sm font-medium text-white">
-                  Version {currentVersion.version_number} of {template.versions.length}
+          {template &&
+            template.versions.length > 0 &&
+            currentVersion &&
+            versionDetail && (
+              <div className="flex items-center space-x-4">
+                <button
+                  onClick={handleNextVersion}
+                  disabled={
+                    currentVersionIndex === template.versions.length - 1
+                  }
+                  className="px-3 py-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-white rounded transition-colors"
+                  title="Decrement version"
+                >
+                  ←
+                </button>
+                <div className="text-center">
+                  <div className="text-sm font-medium text-white">
+                    Version {currentVersion.version_number} of{" "}
+                    {template.versions.length}
+                  </div>
+                  <div className="text-xs text-gray-400 flex items-center space-x-2">
+                    {versionDetail.is_current && (
+                      <span className="px-2 py-0.5 bg-blue-900 text-blue-300 rounded text-xs">
+                        Current
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div className="text-xs text-gray-400 flex items-center space-x-2">
-                  {versionDetail.is_current && (
-                    <span className="px-2 py-0.5 bg-blue-900 text-blue-300 rounded text-xs">
-                      Current
-                    </span>
-                  )}
-                </div>
+                <button
+                  onClick={handlePreviousVersion}
+                  disabled={currentVersionIndex === 0}
+                  className="px-3 py-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-white rounded transition-colors"
+                  title="Increment version"
+                >
+                  →
+                </button>
               </div>
-              <button
-                onClick={handlePreviousVersion}
-                disabled={currentVersionIndex === 0}
-                className="px-3 py-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-white rounded transition-colors"
-                title="Increment version"
-              >
-                →
-              </button>
-            </div>
-          )}
+            )}
 
           {/* Action Buttons */}
           <div className="flex items-center space-x-2">
@@ -256,7 +272,7 @@ export function TemplateDetailModal({
         {(isLoading || pdfLoading) && (
           <div className="flex items-center justify-center p-12">
             <div className="text-gray-400">
-              {pdfLoading ? 'Loading PDF...' : 'Loading template details...'}
+              {pdfLoading ? "Loading PDF..." : "Loading template details..."}
             </div>
           </div>
         )}
@@ -267,61 +283,70 @@ export function TemplateDetailModal({
             <div className="bg-red-900 border border-red-700 rounded-lg p-4">
               <h3 className="text-xl font-bold text-red-300 mb-2">Error</h3>
               <p className="text-red-200">
-                {error || (pdfError instanceof Error ? pdfError.message : 'Failed to load PDF')}
+                {error ||
+                  (pdfError instanceof Error
+                    ? pdfError.message
+                    : "Failed to load PDF")}
               </p>
             </div>
           </div>
         )}
 
         {/* Main Content - Step Views */}
-        {!isLoading && !pdfLoading && !error && !pdfError && template && versionDetail && pdfData && (
-          <>
-            <div className="flex-1 overflow-y-auto">
-              {currentStep === 'signature-objects' && (
-                <SignatureObjectsView
-                  versionDetail={versionDetail}
-                  pdfUrl={pdfUrl}
-                  pdfObjects={pdfObjects}
-                />
-              )}
-              {currentStep === 'extraction-fields' && (
-                <ExtractionFieldsView
-                  versionDetail={versionDetail}
-                  pdfUrl={pdfUrl}
-                  pdfObjects={pdfObjects}
-                />
-              )}
-              {currentStep === 'pipeline' && (
-                <PipelineView versionDetail={versionDetail} />
-              )}
-            </div>
-
-            {/* Footer - Stepper with Navigation */}
-            <div className="flex items-center justify-between px-6 py-4 border-t border-gray-700 bg-gray-900">
-              <TemplateViewerStepper currentStep={currentStep} />
-
-              {/* Navigation Buttons */}
-              <div className="flex items-center space-x-3">
-                {currentStep !== 'signature-objects' && (
-                  <button
-                    onClick={handleBack}
-                    className="px-4 py-2 text-sm bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
-                  >
-                    ← Back
-                  </button>
+        {!isLoading &&
+          !pdfLoading &&
+          !error &&
+          !pdfError &&
+          template &&
+          versionDetail &&
+          pdfData && (
+            <>
+              <div className="flex-1 overflow-y-auto">
+                {currentStep === "signature-objects" && (
+                  <SignatureObjectsView
+                    versionDetail={versionDetail}
+                    pdfUrl={pdfUrl}
+                    pdfObjects={pdfObjects}
+                  />
                 )}
-                {currentStep !== 'pipeline' && (
-                  <button
-                    onClick={handleNext}
-                    className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
-                  >
-                    Next →
-                  </button>
+                {currentStep === "extraction-fields" && (
+                  <ExtractionFieldsView
+                    versionDetail={versionDetail}
+                    pdfUrl={pdfUrl}
+                    pdfObjects={pdfObjects}
+                  />
+                )}
+                {currentStep === "pipeline" && (
+                  <PipelineView versionDetail={versionDetail} />
                 )}
               </div>
-            </div>
-          </>
-        )}
+
+              {/* Footer - Stepper with Navigation */}
+              <div className="flex items-center justify-between px-6 py-4 border-t border-gray-700 bg-gray-900">
+                <TemplateViewerStepper currentStep={currentStep} />
+
+                {/* Navigation Buttons */}
+                <div className="flex items-center space-x-3">
+                  {currentStep !== "signature-objects" && (
+                    <button
+                      onClick={handleBack}
+                      className="px-4 py-2 text-sm bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                    >
+                      ← Back
+                    </button>
+                  )}
+                  {currentStep !== "pipeline" && (
+                    <button
+                      onClick={handleNext}
+                      className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
+                    >
+                      Next →
+                    </button>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
       </div>
     </div>
   );
@@ -333,23 +358,23 @@ export function TemplateDetailModal({
 
 // Object type colors from template builder
 const OBJECT_TYPE_COLORS: Record<string, string> = {
-  text_word: '#ff0000',
-  text_line: '#00ff00',
-  graphic_rect: '#0000ff',
-  graphic_line: '#ffff00',
-  graphic_curve: '#ff00ff',
-  image: '#00ffff',
-  table: '#ffa500',
+  text_word: "#ff0000",
+  text_line: "#00ff00",
+  graphic_rect: "#0000ff",
+  graphic_line: "#ffff00",
+  graphic_curve: "#ff00ff",
+  image: "#00ffff",
+  table: "#ffa500",
 };
 
 const OBJECT_TYPE_NAMES: Record<string, string> = {
-  text_word: 'Text Words',
-  text_line: 'Text Lines',
-  graphic_rect: 'Rectangles',
-  graphic_line: 'Lines',
-  graphic_curve: 'Curves',
-  image: 'Images',
-  table: 'Tables',
+  text_word: "Text Words",
+  text_line: "Text Lines",
+  graphic_rect: "Rectangles",
+  graphic_line: "Lines",
+  graphic_curve: "Curves",
+  image: "Images",
+  table: "Tables",
 };
 
 interface SignatureObjectsViewProps {
@@ -369,7 +394,7 @@ function hexToRgba(hex: string, alpha: number): string {
 // Read-only overlay for signature objects (PdfObjects format)
 function SignatureObjectsOverlay({
   signatureObjects,
-  selectedTypes
+  selectedTypes,
 }: {
   signatureObjects: PdfObjects;
   selectedTypes: Set<string>;
@@ -378,33 +403,52 @@ function SignatureObjectsOverlay({
 
   // Flatten PdfObjects and filter for current page + visible types
   const objectsOnPage = useMemo(() => {
-    const flattened: Array<{ type: string; page: number; bbox: [number, number, number, number]; text?: string }> = [];
+    const flattened: Array<{
+      type: string;
+      page: number;
+      bbox: [number, number, number, number];
+      text?: string;
+    }> = [];
 
     // Only add objects of selected types
-    if (selectedTypes.has('text_word')) {
-      signatureObjects.text_words.forEach(obj => flattened.push({ ...obj, type: 'text_word' }));
+    if (selectedTypes.has("text_word")) {
+      signatureObjects.text_words.forEach((obj) =>
+        flattened.push({ ...obj, type: "text_word" })
+      );
     }
-    if (selectedTypes.has('text_line')) {
-      signatureObjects.text_lines.forEach(obj => flattened.push({ ...obj, type: 'text_line' }));
+    if (selectedTypes.has("text_line")) {
+      signatureObjects.text_lines.forEach((obj) =>
+        flattened.push({ ...obj, type: "text_line" })
+      );
     }
-    if (selectedTypes.has('graphic_rect')) {
-      signatureObjects.graphic_rects.forEach(obj => flattened.push({ ...obj, type: 'graphic_rect' }));
+    if (selectedTypes.has("graphic_rect")) {
+      signatureObjects.graphic_rects.forEach((obj) =>
+        flattened.push({ ...obj, type: "graphic_rect" })
+      );
     }
-    if (selectedTypes.has('graphic_line')) {
-      signatureObjects.graphic_lines.forEach(obj => flattened.push({ ...obj, type: 'graphic_line' }));
+    if (selectedTypes.has("graphic_line")) {
+      signatureObjects.graphic_lines.forEach((obj) =>
+        flattened.push({ ...obj, type: "graphic_line" })
+      );
     }
-    if (selectedTypes.has('graphic_curve')) {
-      signatureObjects.graphic_curves.forEach(obj => flattened.push({ ...obj, type: 'graphic_curve' }));
+    if (selectedTypes.has("graphic_curve")) {
+      signatureObjects.graphic_curves.forEach((obj) =>
+        flattened.push({ ...obj, type: "graphic_curve" })
+      );
     }
-    if (selectedTypes.has('image')) {
-      signatureObjects.images.forEach(obj => flattened.push({ ...obj, type: 'image' }));
+    if (selectedTypes.has("image")) {
+      signatureObjects.images.forEach((obj) =>
+        flattened.push({ ...obj, type: "image" })
+      );
     }
-    if (selectedTypes.has('table')) {
-      signatureObjects.tables.forEach(obj => flattened.push({ ...obj, type: 'table' }));
+    if (selectedTypes.has("table")) {
+      signatureObjects.tables.forEach((obj) =>
+        flattened.push({ ...obj, type: "table" })
+      );
     }
 
     // Filter for current page (1-indexed)
-    return flattened.filter(obj => obj.page === currentPage);
+    return flattened.filter((obj) => obj.page === currentPage);
   }, [signatureObjects, currentPage, selectedTypes]);
 
   if (!pdfDimensions) {
@@ -424,10 +468,11 @@ function SignatureObjectsOverlay({
         let screenY0: number, screenY1: number;
 
         // List of types that DON'T need Y-axis flipping
-        const noFlipping = obj.type === 'text_word' ||
-                           obj.type === 'text_line' ||
-                           obj.type === 'table' ||
-                           obj.type === 'graphic_curve';
+        const noFlipping =
+          obj.type === "text_word" ||
+          obj.type === "text_line" ||
+          obj.type === "table" ||
+          obj.type === "graphic_curve";
 
         if (noFlipping) {
           // Don't flip Y coordinates for text, table, and curve objects
@@ -439,35 +484,33 @@ function SignatureObjectsOverlay({
           screenY1 = pageHeight - y0;
         }
 
-        const color = OBJECT_TYPE_COLORS[obj.type] || '#808080';
+        const color = OBJECT_TYPE_COLORS[obj.type] || "#808080";
         const backgroundColor = hexToRgba(color, 0.2);
         const borderColor = hexToRgba(color, 0.6);
 
         const style: React.CSSProperties = {
-          position: 'absolute',
+          position: "absolute",
           left: `${x0 * renderScale}px`,
           top: `${screenY0 * renderScale}px`,
           width: `${(x1 - x0) * renderScale}px`,
           height: `${(screenY1 - screenY0) * renderScale}px`,
           backgroundColor,
           border: `2px solid ${borderColor}`,
-          pointerEvents: 'none',
+          pointerEvents: "none",
           zIndex: 5,
         };
 
-        return (
-          <div
-            key={index}
-            style={style}
-            title={obj.text || obj.type}
-          />
-        );
+        return <div key={index} style={style} title={obj.text || obj.type} />;
       })}
     </>
   );
 }
 
-function SignatureObjectsView({ versionDetail, pdfUrl, pdfObjects }: SignatureObjectsViewProps) {
+function SignatureObjectsView({
+  versionDetail,
+  pdfUrl,
+  pdfObjects,
+}: SignatureObjectsViewProps) {
   const [pdfScale, setPdfScale] = useState(1.0);
   const [pdfCurrentPage, setPdfCurrentPage] = useState(1);
 
@@ -484,11 +527,16 @@ function SignatureObjectsView({ versionDetail, pdfUrl, pdfObjects }: SignatureOb
     };
   }, [versionDetail.signature_objects]);
 
-  const totalCount = Object.values(typeCounts).reduce((sum, count) => sum + count, 0);
+  const totalCount = Object.values(typeCounts).reduce(
+    (sum, count) => sum + count,
+    0
+  );
 
   // Visibility toggles - start with all types visible
   const [selectedTypes, setSelectedTypes] = useState<Set<string>>(() => {
-    const allTypes = Object.keys(typeCounts).filter((type) => typeCounts[type as keyof typeof typeCounts] > 0);
+    const allTypes = Object.keys(typeCounts).filter(
+      (type) => typeCounts[type as keyof typeof typeCounts] > 0
+    );
     return new Set(allTypes);
   });
 
@@ -505,7 +553,9 @@ function SignatureObjectsView({ versionDetail, pdfUrl, pdfObjects }: SignatureOb
   };
 
   const handleShowAll = () => {
-    const allTypes = Object.keys(typeCounts).filter((type) => typeCounts[type as keyof typeof typeCounts] > 0);
+    const allTypes = Object.keys(typeCounts).filter(
+      (type) => typeCounts[type as keyof typeof typeCounts] > 0
+    );
     setSelectedTypes(new Set(allTypes));
   };
 
@@ -519,21 +569,23 @@ function SignatureObjectsView({ versionDetail, pdfUrl, pdfObjects }: SignatureOb
       <div className="w-80 flex-shrink-0 bg-gray-900 border-r border-gray-700 p-4 overflow-y-auto">
         {/* Template Information (read-only) */}
         <div className="mb-6 pb-4 border-b border-gray-700">
-          <h3 className="text-sm font-semibold text-white mb-3">Template Information</h3>
+          <h3 className="text-sm font-semibold text-white mb-3">
+            Template Information
+          </h3>
           <div className="space-y-3">
             <div>
               <label className="block text-xs font-medium text-gray-400 mb-1.5">
                 Total Signature Objects
               </label>
-              <div className="text-sm text-white">
-                {totalCount} objects
-              </div>
+              <div className="text-sm text-white">{totalCount} objects</div>
             </div>
           </div>
         </div>
 
         {/* Object Visibility Section */}
-        <h3 className="text-sm font-semibold text-white mb-3">Object Visibility</h3>
+        <h3 className="text-sm font-semibold text-white mb-3">
+          Object Visibility
+        </h3>
 
         {/* Show/Hide All Buttons */}
         <div className="space-y-2 mb-4">
@@ -559,7 +611,7 @@ function SignatureObjectsView({ versionDetail, pdfUrl, pdfObjects }: SignatureOb
             // Don't render if no objects of this type
             if (count === 0) return null;
 
-            const color = OBJECT_TYPE_COLORS[type] || '#808080';
+            const color = OBJECT_TYPE_COLORS[type] || "#808080";
             const isSelected = selectedTypes.has(type);
 
             return (
@@ -568,8 +620,8 @@ function SignatureObjectsView({ versionDetail, pdfUrl, pdfObjects }: SignatureOb
                 onClick={() => handleTypeToggle(type)}
                 className={`w-full flex items-center justify-between p-2.5 text-xs rounded transition-colors ${
                   isSelected
-                    ? 'bg-gray-700 text-white'
-                    : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                    ? "bg-gray-700 text-white"
+                    : "bg-gray-800 text-gray-400 hover:bg-gray-700"
                 }`}
                 aria-label={`Toggle ${label}`}
                 aria-pressed={isSelected}
@@ -582,7 +634,9 @@ function SignatureObjectsView({ versionDetail, pdfUrl, pdfObjects }: SignatureOb
                   />
                   <span className="text-left">{label}</span>
                 </div>
-                <span className="font-medium ml-2">{count.toLocaleString()}</span>
+                <span className="font-medium ml-2">
+                  {count.toLocaleString()}
+                </span>
               </button>
             );
           })}
@@ -622,12 +676,16 @@ interface ExtractionFieldsViewProps {
 }
 
 // Read-only overlay for extraction fields
-function ExtractionFieldsOverlay({ extractionFields }: { extractionFields: any[] }) {
+function ExtractionFieldsOverlay({
+  extractionFields,
+}: {
+  extractionFields: any[];
+}) {
   const { renderScale, currentPage, pdfDimensions } = usePdfViewer();
 
   // Filter fields for current page (both PDF viewer and fields are 1-indexed)
   const fieldsOnPage = useMemo(() => {
-    return extractionFields.filter(field => field.page === currentPage);
+    return extractionFields.filter((field) => field.page === currentPage);
   }, [extractionFields, currentPage]);
 
   if (!pdfDimensions) {
@@ -646,30 +704,28 @@ function ExtractionFieldsOverlay({ extractionFields }: { extractionFields: any[]
         const screenY1 = y1;
 
         const style: React.CSSProperties = {
-          position: 'absolute',
+          position: "absolute",
           left: `${x0 * renderScale}px`,
           top: `${screenY0 * renderScale}px`,
           width: `${(x1 - x0) * renderScale}px`,
           height: `${(screenY1 - screenY0) * renderScale}px`,
-          backgroundColor: 'rgba(147, 51, 234, 0.2)', // Purple for extraction fields (matches builder)
-          border: '2px solid rgba(147, 51, 234, 0.8)',
-          pointerEvents: 'none', // Read-only, not clickable
+          backgroundColor: "rgba(147, 51, 234, 0.2)", // Purple for extraction fields (matches builder)
+          border: "2px solid rgba(147, 51, 234, 0.8)",
+          pointerEvents: "none", // Read-only, not clickable
           zIndex: 5,
         };
 
-        return (
-          <div
-            key={field.name}
-            style={style}
-            title={field.name}
-          />
-        );
+        return <div key={field.name} style={style} title={field.name} />;
       })}
     </>
   );
 }
 
-function ExtractionFieldsView({ versionDetail, pdfUrl, pdfObjects }: ExtractionFieldsViewProps) {
+function ExtractionFieldsView({
+  versionDetail,
+  pdfUrl,
+  pdfObjects,
+}: ExtractionFieldsViewProps) {
   const [pdfScale, setPdfScale] = useState(1.0);
   const [pdfCurrentPage, setPdfCurrentPage] = useState(1);
 
@@ -698,10 +754,13 @@ function ExtractionFieldsView({ versionDetail, pdfUrl, pdfObjects }: ExtractionF
                 </span>
               </div>
               {field.description && (
-                <p className="text-xs text-gray-400 mb-1">{field.description}</p>
+                <p className="text-xs text-gray-400 mb-1">
+                  {field.description}
+                </p>
               )}
               <div className="text-xs text-gray-500">
-                Page {field.page} • [{field.bbox.map(v => v.toFixed(0)).join(', ')}]
+                Page {field.page} • [
+                {field.bbox.map((v) => v.toFixed(0)).join(", ")}]
               </div>
             </div>
           ))}
@@ -718,7 +777,9 @@ function ExtractionFieldsView({ versionDetail, pdfUrl, pdfObjects }: ExtractionF
           onPageChange={setPdfCurrentPage}
         >
           <PdfViewer.Canvas pdfUrl={pdfUrl}>
-            <ExtractionFieldsOverlay extractionFields={versionDetail.extraction_fields} />
+            <ExtractionFieldsOverlay
+              extractionFields={versionDetail.extraction_fields}
+            />
           </PdfViewer.Canvas>
           <PdfViewer.ControlsSidebar position="right" />
         </PdfViewer>
@@ -760,8 +821,10 @@ function PipelineView({ versionDetail }: PipelineViewProps) {
         setPipeline(pipelineData);
         setModules(modulesData.modules);
       } catch (err) {
-        console.error('Failed to load pipeline:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load pipeline');
+        console.error("Failed to load pipeline:", err);
+        setError(
+          err instanceof Error ? err.message : "Failed to load pipeline"
+        );
       } finally {
         setIsLoading(false);
       }
@@ -787,7 +850,9 @@ function PipelineView({ versionDetail }: PipelineViewProps) {
     return (
       <div className="h-full w-full bg-gray-900 flex items-center justify-center p-6">
         <div className="bg-red-900 border border-red-700 rounded-lg p-6 max-w-md">
-          <h3 className="text-xl font-bold text-red-300 mb-2">Error Loading Pipeline</h3>
+          <h3 className="text-xl font-bold text-red-300 mb-2">
+            Error Loading Pipeline
+          </h3>
           <p className="text-red-200">{error}</p>
           <p className="text-sm text-red-300 mt-3">
             Pipeline ID: {versionDetail.pipeline_definition_id}

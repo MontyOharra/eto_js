@@ -3,7 +3,7 @@
  * Vertical sidebar with page navigation and zoom slider
  */
 
-import { useRef, useEffect } from 'react';
+import { useRef } from 'react';
 import Slider from 'rc-slider';
 import 'rc-slider/assets/index.css';
 import { usePdfViewer } from './PdfViewerContext';
@@ -45,23 +45,19 @@ export function PdfControlsSidebar({
 
   // Fit PDF width to viewport
   const handleFitToWidth = () => {
-    console.log('[PdfControlsSidebar] Fit to width button clicked');
     if (!pdfDimensions || !sidebarRef.current) {
-      console.log('[PdfControlsSidebar] Missing pdfDimensions or sidebarRef');
       return;
     }
 
     // Get the parent container (the flex container with PDF canvas + sidebar)
     const parentContainer = sidebarRef.current.parentElement;
     if (!parentContainer) {
-      console.log('[PdfControlsSidebar] No parent container');
       return;
     }
 
     // Use the context's fitToWidth function
     const containerWidth = parentContainer.clientWidth;
     const sidebarWidth = sidebarRef.current.clientWidth;
-    console.log('[PdfControlsSidebar] Calling fitToWidth with containerWidth:', containerWidth, 'sidebarWidth:', sidebarWidth);
     fitToWidth(containerWidth, sidebarWidth);
   };
 

@@ -6,7 +6,6 @@
 
 import { useCallback } from 'react';
 import { usePdfViewer } from '../PdfViewer/PdfViewerContext';
-import type { PdfPoint } from '../PdfViewer/PdfViewerContext';
 
 export interface BoundingBox {
   x: number;

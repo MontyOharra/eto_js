@@ -12,6 +12,7 @@
 
 import { useState } from 'react';
 import { BaseEdge, EdgeLabelRenderer, EdgeProps, getSmoothStepPath } from '@xyflow/react';
+import { TYPE_COLORS } from '../utils/moduleUtils';
 
 export interface ExecutionEdgeData {
   value?: any;
@@ -20,14 +21,6 @@ export interface ExecutionEdgeData {
   hoveredModuleId?: string | null;
   hasExecutionData?: boolean;
 }
-
-const TYPE_COLORS: Record<string, string> = {
-  str: '#3B82F6',
-  int: '#EF4444',
-  float: '#F59E0B',
-  bool: '#10B981',
-  datetime: '#8B5CF6',
-};
 
 const formatValue = (value: any, truncate: boolean = true): string => {
   if (value === null) return 'null';

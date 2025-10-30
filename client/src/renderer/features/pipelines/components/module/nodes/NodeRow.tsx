@@ -3,15 +3,15 @@
  * Displays an individual input or output pin row
  */
 
-import React, { useRef, useEffect } from 'react';
-import { Handle, Position } from '@xyflow/react';
-import { NodePin } from '../../../../../types/moduleTypes';
-import { TYPE_COLORS } from '../../../../../utils/pipeline/moduleUtils';
-import { TypeIndicator } from './TypeIndicator';
+import React, { useRef, useEffect } from "react";
+import { Handle, Position } from "@xyflow/react";
+import { NodePin } from "../../../../../shared/types/moduleTypes";
+import { TYPE_COLORS } from "../../../utils/moduleUtils";
+import { TypeIndicator } from "./TypeIndicator";
 
 export interface NodeRowProps {
   node: NodePin;
-  direction: 'input' | 'output';
+  direction: "input" | "output";
   moduleId: string;
   canRemove: boolean;
   onTypeChange: (nodeId: string, newType: string) => void;
@@ -22,13 +22,21 @@ export interface NodeRowProps {
   onTypeVarFocus: (typeVar: string | null) => void;
   onTextFocus?: () => void;
   onTextBlur?: () => void;
-  onHandleClick?: (nodeId: string, handleId: string, handleType: 'source' | 'target') => void;
+  onHandleClick?: (
+    nodeId: string,
+    handleId: string,
+    handleType: "source" | "target"
+  ) => void;
   pendingConnection?: {
     sourceHandleId: string;
     sourceNodeId: string;
-    handleType: 'source' | 'target';
+    handleType: "source" | "target";
   } | null;
-  getEffectiveAllowedTypes?: (moduleId: string, pinId: string, baseAllowedTypes: string[]) => string[];
+  getEffectiveAllowedTypes?: (
+    moduleId: string,
+    pinId: string,
+    baseAllowedTypes: string[]
+  ) => string[];
   executionMode?: boolean;
   executionValue?: { value: any; type: string; name: string };
 }
@@ -53,16 +61,18 @@ export function NodeRow({
   executionValue,
 }: NodeRowProps) {
   const isHighlighted = node.type_var && node.type_var === highlightedTypeVar;
-  const handleColor = TYPE_COLORS[node.type] || '#6B7280';
+  const handleColor = TYPE_COLORS[node.type] || "#6B7280";
 
   // Format execution value for display
   const formatExecutionValue = (value: any): string => {
-    if (value === null) return 'null';
-    if (value === undefined) return 'undefined';
-    if (typeof value === 'string') return `"${value.length > 20 ? value.substring(0, 20) + '...' : value}"`;
-    if (typeof value === 'number') return value.toString();
-    if (typeof value === 'boolean') return value.toString();
-    if (typeof value === 'object') return JSON.stringify(value).substring(0, 20) + '...';
+    if (value === null) return "null";
+    if (value === undefined) return "undefined";
+    if (typeof value === "string")
+      return `"${value.length > 20 ? value.substring(0, 20) + "..." : value}"`;
+    if (typeof value === "number") return value.toString();
+    if (typeof value === "boolean") return value.toString();
+    if (typeof value === "object")
+      return JSON.stringify(value).substring(0, 20) + "...";
     return String(value);
   };
 
@@ -73,28 +83,30 @@ export function NodeRow({
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (onHandleClick) {
-      const handleType = direction === 'input' ? 'target' : 'source';
+      const handleType = direction === "input" ? "target" : "source";
       onHandleClick(moduleId, node.node_id, handleType);
     }
   };
 
   // For input nodes, display connected output name or "Not Connected"
-  const connectedOutputName = direction === 'input' ? getConnectedOutputName?.(node.node_id) : undefined;
+  const connectedOutputName =
+    direction === "input" ? getConnectedOutputName?.(node.node_id) : undefined;
   const displayName =
-    direction === 'input'
+    direction === "input"
       ? connectedOutputName !== undefined
         ? connectedOutputName
-        : 'Not Connected'
-      : node.name || '';
+        : "Not Connected"
+      : node.name || "";
 
   // Ref for input textarea to auto-resize
   const inputTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Auto-resize input textarea when displayName changes
   useEffect(() => {
-    if (inputTextareaRef.current && direction === 'input') {
-      inputTextareaRef.current.style.height = 'auto';
-      inputTextareaRef.current.style.height = inputTextareaRef.current.scrollHeight + 'px';
+    if (inputTextareaRef.current && direction === "input") {
+      inputTextareaRef.current.style.height = "auto";
+      inputTextareaRef.current.style.height =
+        inputTextareaRef.current.scrollHeight + "px";
     }
   }, [displayName, direction]);
 
@@ -102,12 +114,12 @@ export function NodeRow({
     <div className="relative flex items-center gap-2 py-1.5">
       {/* Connection Handle - Centered on outer edge */}
       <Handle
-        type={direction === 'input' ? 'target' : 'source'}
-        position={direction === 'input' ? Position.Left : Position.Right}
+        type={direction === "input" ? "target" : "source"}
+        position={direction === "input" ? Position.Left : Position.Right}
         id={node.node_id}
         className="!w-5 !h-5 !border-3 !border-gray-900 !cursor-pointer"
         style={{
-          [direction === 'input' ? 'left' : 'right']: -13,
+          [direction === "input" ? "left" : "right"]: -13,
           backgroundColor: handleColor,
         }}
         data-handleid={node.node_id}
@@ -115,11 +127,13 @@ export function NodeRow({
       />
 
       {/* Node Content - Mirrored layout based on direction */}
-      {direction === 'input' ? (
+      {direction === "input" ? (
         // Input layout: [handle] name - delete - type (type and delete only show in edit mode)
         <div className="flex items-center w-full gap-2">
           <div className="flex-1 min-w-0 nodrag flex items-center">
-            <div className={`text-sm text-gray-300 px-1.5 py-0.5 w-full min-h-[24px] flex items-center ${executionMode ? 'justify-center' : ''}`}>
+            <div
+              className={`text-sm text-gray-300 px-1.5 py-0.5 w-full min-h-[24px] flex items-center ${executionMode ? "justify-center" : ""}`}
+            >
               {displayName}
             </div>
           </div>
@@ -130,8 +144,18 @@ export function NodeRow({
                 className="p-0.5 rounded transition-colors text-gray-500 hover:text-red-400 hover:bg-red-900 cursor-pointer"
                 title="Remove node"
               >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <svg
+                  className="w-3 h-3"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
                 </svg>
               </button>
             </div>
@@ -144,7 +168,11 @@ export function NodeRow({
                 onFocus={() => onTypeVarFocus(node.type_var || null)}
                 onBlur={() => onTypeVarFocus(null)}
                 isHighlighted={!!isHighlighted}
-                effectiveAllowedTypes={getEffectiveAllowedTypes?.(moduleId, node.node_id, node.allowed_types || [])}
+                effectiveAllowedTypes={getEffectiveAllowedTypes?.(
+                  moduleId,
+                  node.node_id,
+                  node.allowed_types || []
+                )}
               />
             </div>
           )}
@@ -160,7 +188,11 @@ export function NodeRow({
                 onFocus={() => onTypeVarFocus(node.type_var || null)}
                 onBlur={() => onTypeVarFocus(null)}
                 isHighlighted={!!isHighlighted}
-                effectiveAllowedTypes={getEffectiveAllowedTypes?.(moduleId, node.node_id, node.allowed_types || [])}
+                effectiveAllowedTypes={getEffectiveAllowedTypes?.(
+                  moduleId,
+                  node.node_id,
+                  node.allowed_types || []
+                )}
               />
             </div>
           )}
@@ -171,8 +203,18 @@ export function NodeRow({
                 className="p-0.5 rounded transition-colors text-gray-500 hover:text-red-400 hover:bg-red-900 cursor-pointer"
                 title="Remove node"
               >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <svg
+                  className="w-3 h-3"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
                 </svg>
               </button>
             </div>
@@ -193,8 +235,8 @@ export function NodeRow({
                 rows={1}
                 onInput={(e) => {
                   const target = e.target as HTMLTextAreaElement;
-                  target.style.height = 'auto';
-                  target.style.height = target.scrollHeight + 'px';
+                  target.style.height = "auto";
+                  target.style.height = target.scrollHeight + "px";
                 }}
               />
             )}

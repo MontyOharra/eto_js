@@ -4,7 +4,15 @@
  * Refactored to use extracted hooks and utilities
  */
 
-import { useState, useCallback, useImperativeHandle, forwardRef, useEffect, useMemo, useRef } from 'react';
+import {
+  useState,
+  useCallback,
+  useImperativeHandle,
+  forwardRef,
+  useEffect,
+  useMemo,
+  useRef,
+} from "react";
 import {
   ReactFlow,
   Node,
@@ -18,12 +26,17 @@ import {
   useReactFlow,
   ReactFlowProvider,
   useViewport,
-} from '@xyflow/react';
-import '@xyflow/react/dist/style.css';
+} from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
 
-import { ModuleTemplate } from '../../../types/moduleTypes';
-import { PipelineState, VisualState, EntryPoint } from '../../../types/pipelineTypes';
-import { Module } from './module/Module';
+import { ModuleTemplate } from "../../../shared/types/moduleTypes";
+import {
+  PipelineState,
+  VisualState,
+  EntryPoint,
+} from "../../../types/pipelineTypes";
+import { Module } from "./module/Module";
+import { TYPE_COLORS } from "../utils/moduleUtils";
 
 // Hooks
 import {
@@ -31,12 +44,15 @@ import {
   useNodeUpdates,
   useModuleOperations,
   usePipelineInitialization,
-} from '../hooks';
+} from "../hooks";
 
 // Utilities
-import { serializeToPipelineState, serializeToVisualState } from '../utils/serialization';
-import { getEffectiveAllowedTypes } from '../utils/typeSystem';
-import { findPin } from '../utils/typeSystem';
+import {
+  serializeToPipelineState,
+  serializeToVisualState,
+} from "../utils/serialization";
+import { getEffectiveAllowedTypes } from "../utils/typeSystem";
+import { findPin } from "../utils/typeSystem";
 
 export interface PipelineGraphProps {
   viewOnly: boolean;
@@ -45,10 +61,10 @@ export interface PipelineGraphProps {
   initialVisualState?: VisualState;
   selectedModuleId?: string | null;
   onModulePlaced?: () => void;
-  onChange?: (state: PipelineState) => void;  // Called when pipeline state changes (modules, connections)
-  onVisualChange?: (state: VisualState) => void;  // Called when visual state changes (node positions)
+  onChange?: (state: PipelineState) => void; // Called when pipeline state changes (modules, connections)
+  onVisualChange?: (state: VisualState) => void; // Called when visual state changes (node positions)
   entryPoints?: EntryPoint[];
-  failedModuleIds?: string[];  // For execution visualization - highlight failed modules
+  failedModuleIds?: string[]; // For execution visualization - highlight failed modules
 }
 
 export interface PipelineGraphRef {
@@ -60,13 +76,15 @@ const nodeTypes = {
   module: Module,
 };
 
-export const PipelineGraph = forwardRef<PipelineGraphRef, PipelineGraphProps>((props, ref) => {
-  return (
-    <ReactFlowProvider>
-      <PipelineGraphInner {...props} ref={ref} />
-    </ReactFlowProvider>
-  );
-});
+export const PipelineGraph = forwardRef<PipelineGraphRef, PipelineGraphProps>(
+  (props, ref) => {
+    return (
+      <ReactFlowProvider>
+        <PipelineGraphInner {...props} ref={ref} />
+      </ReactFlowProvider>
+    );
+  }
+);
 
 const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
   (
@@ -86,9 +104,9 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
   ) => {
     const { screenToFlowPosition } = useReactFlow();
 
-    console.log('[PipelineGraph] Render with props:', {
+    console.log("[PipelineGraph] Render with props:", {
       entryPointsCount: entryPoints.length,
-      entryPointIds: entryPoints.map(ep => ep.node_id),
+      entryPointIds: entryPoints.map((ep) => ep.node_id),
     });
 
     // State
@@ -101,10 +119,13 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
     const [pendingConnection, setPendingConnection] = useState<{
       sourceHandleId: string;
       sourceNodeId: string;
-      handleType: 'source' | 'target';
+      handleType: "source" | "target";
       nodeType: string;
     } | null>(null);
-    const [mousePosition, setMousePosition] = useState<{ x: number; y: number } | null>(null);
+    const [mousePosition, setMousePosition] = useState<{
+      x: number;
+      y: number;
+    } | null>(null);
 
     // Initialize pipeline from state or entry points
     const { isInitialized } = usePipelineInitialization({
@@ -166,7 +187,7 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
       // GUARD: Don't fire onChange until initialization is complete
       // This prevents clearing parent state on mount before we've loaded initial data
       if (!isInitialized) {
-        console.log('[PipelineGraph onChange] Skipping - not initialized yet');
+        console.log("[PipelineGraph onChange] Skipping - not initialized yet");
         return;
       }
 
@@ -175,11 +196,14 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
 
       // Only call onChange if the pipeline structure actually changed
       if (prevPipelineStateRef.current !== currentStateJson) {
-        console.log('[PipelineGraph onChange]', {
+        console.log("[PipelineGraph onChange]", {
           nodeCount: nodes.length,
           edgeCount: edges.length,
           pipelineState,
-          reason: prevPipelineStateRef.current === null ? 'initial' : 'structure changed'
+          reason:
+            prevPipelineStateRef.current === null
+              ? "initial"
+              : "structure changed",
         });
 
         prevPipelineStateRef.current = currentStateJson;
@@ -199,10 +223,13 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
       // Capture initial visual state (entry point positions, any loaded module positions)
       const visualState = serializeToVisualState(nodes);
       if (Object.keys(visualState).length > 0) {
-        console.log('[PipelineGraph] Capturing initial visual state after initialization:', {
-          nodeCount: nodes.length,
-          visualState
-        });
+        console.log(
+          "[PipelineGraph] Capturing initial visual state after initialization:",
+          {
+            nodeCount: nodes.length,
+            visualState,
+          }
+        );
         hasCapturedInitialVisualState.current = true;
         onVisualChange(visualState);
       }
@@ -214,7 +241,10 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
         if (!viewOnly) {
           // Check if this is a drag end event (position change with dragging=false)
           const isDragEnd = changes.some(
-            (change) => change.type === 'position' && 'dragging' in change && change.dragging === false
+            (change) =>
+              change.type === "position" &&
+              "dragging" in change &&
+              change.dragging === false
           );
 
           setNodes((nds) => {
@@ -244,7 +274,7 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
 
     // Click-to-connect: Handle click on a pin
     const handleHandleClick = useCallback(
-      (nodeId: string, handleId: string, handleType: 'source' | 'target') => {
+      (nodeId: string, handleId: string, handleType: "source" | "target") => {
         if (viewOnly) return;
 
         if (!pendingConnection) {
@@ -257,10 +287,18 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
 
           if (existingEdge) {
             // Pick up existing connection from the other end
-            const isSource = existingEdge.source === nodeId && existingEdge.sourceHandle === handleId;
-            const otherNodeId = isSource ? existingEdge.target : existingEdge.source;
-            const otherHandleId = isSource ? existingEdge.targetHandle : existingEdge.sourceHandle;
-            const otherHandleType: 'source' | 'target' = isSource ? 'target' : 'source';
+            const isSource =
+              existingEdge.source === nodeId &&
+              existingEdge.sourceHandle === handleId;
+            const otherNodeId = isSource
+              ? existingEdge.target
+              : existingEdge.source;
+            const otherHandleId = isSource
+              ? existingEdge.targetHandle
+              : existingEdge.sourceHandle;
+            const otherHandleType: "source" | "target" = isSource
+              ? "target"
+              : "source";
 
             // Remove existing edge
             connectionManager.deleteConnection(existingEdge.id);
@@ -276,43 +314,51 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
               sourceHandleId: otherHandleId!,
               sourceNodeId: otherNodeId!,
               handleType: otherHandleType,
-              nodeType: otherPin?.type || 'str',
+              nodeType: otherPin?.type || "str",
             });
           } else {
             // Start new connection
             const node = nodes.find((n) => n.id === nodeId);
             const moduleInstance = node?.data?.moduleInstance;
-            const pin = moduleInstance ? findPin(moduleInstance, handleId) : null;
+            const pin = moduleInstance
+              ? findPin(moduleInstance, handleId)
+              : null;
 
             setPendingConnection({
               sourceHandleId: handleId,
               sourceNodeId: nodeId,
               handleType,
-              nodeType: pin?.type || 'str',
+              nodeType: pin?.type || "str",
             });
           }
         } else {
           // Complete connection
-          const { sourceHandleId, sourceNodeId, handleType: sourceHandleType } = pendingConnection;
+          const {
+            sourceHandleId,
+            sourceNodeId,
+            handleType: sourceHandleType,
+          } = pendingConnection;
 
           // Validate: source must be output, target must be input
           if (sourceHandleType === handleType) {
             // Both same type - cancel and start new from clicked handle
             const node = nodes.find((n) => n.id === nodeId);
             const moduleInstance = node?.data?.moduleInstance;
-            const pin = moduleInstance ? findPin(moduleInstance, handleId) : null;
+            const pin = moduleInstance
+              ? findPin(moduleInstance, handleId)
+              : null;
 
             setPendingConnection({
               sourceHandleId: handleId,
               sourceNodeId: nodeId,
               handleType,
-              nodeType: pin?.type || 'str',
+              nodeType: pin?.type || "str",
             });
             return;
           }
 
           // Determine source and target
-          const isSourceOutput = sourceHandleType === 'source';
+          const isSourceOutput = sourceHandleType === "source";
           const sourceModuleId = isSourceOutput ? sourceNodeId : nodeId;
           const sourcePinId = isSourceOutput ? sourceHandleId : handleId;
           const targetModuleId = isSourceOutput ? nodeId : sourceNodeId;
@@ -331,7 +377,7 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
             setMousePosition(null);
           } else {
             // Connection failed - keep pending
-            console.warn('Connection creation failed');
+            console.warn("Connection creation failed");
           }
         }
       },
@@ -358,7 +404,7 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
 
     // Add pin
     const handleAddNode = useCallback(
-      (moduleId: string, direction: 'input' | 'output', groupIndex: number) => {
+      (moduleId: string, direction: "input" | "output", groupIndex: number) => {
         const node = nodes.find((n) => n.id === moduleId);
         const template = node?.data?.template;
         if (template) {
@@ -388,7 +434,9 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
     // Get connected output name for input pin
     const getConnectedOutputName = useCallback(
       (moduleId: string, inputPinId: string): string | undefined => {
-        const edge = edges.find((e) => e.target === moduleId && e.targetHandle === inputPinId);
+        const edge = edges.find(
+          (e) => e.target === moduleId && e.targetHandle === inputPinId
+        );
         if (!edge) return undefined;
 
         const sourceModule = nodes.find((n) => n.id === edge.source);
@@ -405,7 +453,13 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
     // Get effective allowed types
     const getEffectiveAllowedTypesCallback = useCallback(
       (moduleId: string, pinId: string, baseAllowedTypes: string[]) => {
-        return getEffectiveAllowedTypes(nodes, edges, moduleId, pinId, baseAllowedTypes);
+        return getEffectiveAllowedTypes(
+          nodes,
+          edges,
+          moduleId,
+          pinId,
+          baseAllowedTypes
+        );
       },
       [nodes, edges]
     );
@@ -448,7 +502,7 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
     // Escape key - cancel pending connection
     const handleKeyDown = useCallback(
       (event: KeyboardEvent) => {
-        if (event.key === 'Escape' && pendingConnection) {
+        if (event.key === "Escape" && pendingConnection) {
           setPendingConnection(null);
           setMousePosition(null);
         }
@@ -458,8 +512,8 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
 
     // Attach escape key listener
     useEffect(() => {
-      window.addEventListener('keydown', handleKeyDown);
-      return () => window.removeEventListener('keydown', handleKeyDown);
+      window.addEventListener("keydown", handleKeyDown);
+      return () => window.removeEventListener("keydown", handleKeyDown);
     }, [handleKeyDown]);
 
     // Drag and drop
@@ -467,7 +521,7 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
       (event: React.DragEvent) => {
         if (viewOnly) return;
         event.preventDefault();
-        event.dataTransfer.dropEffect = 'move';
+        event.dataTransfer.dropEffect = "move";
       },
       [viewOnly]
     );
@@ -478,7 +532,7 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
 
         event.preventDefault();
 
-        const data = event.dataTransfer.getData('application/reactflow');
+        const data = event.dataTransfer.getData("application/reactflow");
         if (!data) return;
 
         const { moduleId } = JSON.parse(data);
@@ -499,17 +553,27 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
           if (onVisualChange) {
             setNodes((currentNodes) => {
               const visualState = serializeToVisualState(currentNodes);
-              console.log('[PipelineGraph onDrop] Capturing visual state after module added:', {
-                nodeCount: currentNodes.length,
-                visualState
-              });
+              console.log(
+                "[PipelineGraph onDrop] Capturing visual state after module added:",
+                {
+                  nodeCount: currentNodes.length,
+                  visualState,
+                }
+              );
               onVisualChange(visualState);
               return currentNodes;
             });
           }
         }, 0);
       },
-      [viewOnly, screenToFlowPosition, moduleTemplates, moduleOps, onModulePlaced, onVisualChange]
+      [
+        viewOnly,
+        screenToFlowPosition,
+        moduleTemplates,
+        moduleOps,
+        onModulePlaced,
+        onVisualChange,
+      ]
     );
 
     // Prepare nodes with callbacks
@@ -528,7 +592,7 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
         pendingConnection,
         getEffectiveAllowedTypes: getEffectiveAllowedTypesCallback,
         getConnectedOutputName,
-        failedModuleIds,  // Pass failed module IDs for error highlighting
+        failedModuleIds, // Pass failed module IDs for error highlighting
       },
       draggable: !isTextFocused,
     }));
@@ -536,12 +600,12 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
     // Prepare edges with selection styling
     const edgesWithSelection = edges.map((edge) => {
       if (edge.id === selectedEdge) {
-        const edgeColor = edge.style?.stroke || '#6B7280';
+        const edgeColor = edge.style?.stroke || "#6B7280";
         return {
           ...edge,
           style: {
             ...edge.style,
-            strokeDasharray: '5,5',
+            strokeDasharray: "5,5",
             strokeWidth: 4,
             filter: `drop-shadow(0 0 8px ${edgeColor}) drop-shadow(0 0 16px ${edgeColor})`,
           },
@@ -570,7 +634,7 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
           onPaneClick={handlePaneClick}
           panOnDrag={!isTextFocused}
           defaultEdgeOptions={{
-            type: 'default',
+            type: "default",
             style: { strokeWidth: 2 },
           }}
           minZoom={0.1}
@@ -618,7 +682,7 @@ interface ConnectionPreviewLineProps {
   pendingConnection: {
     sourceHandleId: string;
     sourceNodeId: string;
-    handleType: 'source' | 'target';
+    handleType: "source" | "target";
     nodeType: string;
   };
   mousePosition: { x: number; y: number };
@@ -642,24 +706,19 @@ function ConnectionPreviewLine({
   const startX = rect.left + rect.width / 2;
   const startY = rect.top + rect.height / 2;
 
-  // Get color from type
-  const TYPE_COLORS: Record<string, string> = {
-    str: '#3B82F6',
-    int: '#EF4444',
-    float: '#F59E0B',
-    bool: '#10B981',
-    datetime: '#8B5CF6',
-  };
-  const edgeColor = TYPE_COLORS[nodeType] || '#6B7280';
+  // Get color from type (import at top of file)
+  const edgeColor = TYPE_COLORS[nodeType] || "#6B7280";
 
   // Calculate bezier curve
   const dx = mousePosition.x - startX;
   const controlPointDistance = Math.abs(dx) * 0.5;
   const controlX1 =
-    startX + (handleType === 'source' ? controlPointDistance : -controlPointDistance);
+    startX +
+    (handleType === "source" ? controlPointDistance : -controlPointDistance);
   const controlY1 = startY;
   const controlX2 =
-    mousePosition.x + (handleType === 'source' ? -controlPointDistance : controlPointDistance);
+    mousePosition.x +
+    (handleType === "source" ? -controlPointDistance : controlPointDistance);
   const controlY2 = mousePosition.y;
 
   const path = `M ${startX} ${startY} C ${controlX1} ${controlY1}, ${controlX2} ${controlY2}, ${mousePosition.x} ${mousePosition.y}`;
@@ -669,7 +728,13 @@ function ConnectionPreviewLine({
       key={`${viewport.x}-${viewport.y}-${viewport.zoom}`}
       className="fixed top-0 left-0 w-screen h-screen pointer-events-none z-[999]"
     >
-      <path d={path} stroke={edgeColor} strokeWidth="2" strokeDasharray="5,5" fill="none" />
+      <path
+        d={path}
+        stroke={edgeColor}
+        strokeWidth="2"
+        strokeDasharray="5,5"
+        fill="none"
+      />
     </svg>
   );
 }

@@ -23,7 +23,6 @@ export interface PdfViewerContextValue {
   currentPage: number;
   numPages: number | null;
   pdfDimensions: PdfDimensions | null;
-  scrollPosition: PdfPoint;
 
   // Actions
   setScale: (scale: number) => void;

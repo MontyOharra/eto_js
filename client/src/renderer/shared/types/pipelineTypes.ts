@@ -9,8 +9,8 @@ import {
   IOShape as _IOShape,
   ModuleTemplate as _ModuleTemplate,
   ModuleInstance as _ModuleInstance,
-  NodePin as _NodePin
-} from './moduleTypes';
+  NodePin as _NodePin,
+} from "./moduleTypes";
 
 // Re-export module type definitions
 export type NodeTypeRule = _NodeTypeRule;
@@ -20,7 +20,6 @@ export type IOShape = _IOShape;
 export type ModuleTemplate = _ModuleTemplate;
 export type ModuleInstance = _ModuleInstance;
 export type NodePin = _NodePin;
-
 
 // Connection between nodes
 export interface NodeConnection {

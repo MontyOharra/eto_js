@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { ModuleTemplate } from "../../../types/moduleTypes";
+import { ModuleTemplate } from "../../../shared/types/moduleTypes";
 
 interface ModuleSelectorPaneProps {
   modules: ModuleTemplate[];
@@ -9,7 +9,13 @@ interface ModuleSelectorPaneProps {
 
 type ModuleKind = "all" | "transform" | "action" | "logic" | "comparator";
 
-const MODULE_KINDS: ModuleKind[] = ["all", "transform", "action", "logic", "comparator"];
+const MODULE_KINDS: ModuleKind[] = [
+  "all",
+  "transform",
+  "action",
+  "logic",
+  "comparator",
+];
 
 const KIND_LABELS: Record<ModuleKind, string> = {
   all: "All",
@@ -35,8 +41,7 @@ export function ModuleSelectorPane({
       const matchesSearch = m.title
         .toLowerCase()
         .includes(searchTerm.toLowerCase());
-      const matchesType =
-        selectedType === "all" || m.kind === selectedType;
+      const matchesType = selectedType === "all" || m.kind === selectedType;
       return matchesSearch && matchesType;
     });
 
@@ -67,9 +72,11 @@ export function ModuleSelectorPane({
     let newIndex: number;
 
     if (direction === "prev") {
-      newIndex = currentIndex === 0 ? MODULE_KINDS.length - 1 : currentIndex - 1;
+      newIndex =
+        currentIndex === 0 ? MODULE_KINDS.length - 1 : currentIndex - 1;
     } else {
-      newIndex = currentIndex === MODULE_KINDS.length - 1 ? 0 : currentIndex + 1;
+      newIndex =
+        currentIndex === MODULE_KINDS.length - 1 ? 0 : currentIndex + 1;
     }
 
     setSelectedType(MODULE_KINDS[newIndex]);
@@ -253,7 +260,10 @@ function ModuleCard({ module, isSelected, onSelect }: ModuleCardProps) {
   const moduleColor = module.color || "#6B7280";
 
   const handleDragStart = (e: React.DragEvent) => {
-    e.dataTransfer.setData("application/reactflow", JSON.stringify({ moduleId: module.id }));
+    e.dataTransfer.setData(
+      "application/reactflow",
+      JSON.stringify({ moduleId: module.id })
+    );
     e.dataTransfer.effectAllowed = "move";
 
     // Create custom drag preview that looks like module header

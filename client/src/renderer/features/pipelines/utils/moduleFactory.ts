@@ -3,11 +3,57 @@
  * Functions for creating and manipulating module instances
  */
 
-import { ModuleTemplate, ModuleInstance, NodePin, IOSideShape } from '../../../types/moduleTypes';
-import { initializeConfig } from '../../../utils/moduleFactoryNew';
-import { generateModuleId, generateNodeId } from './idGenerator';
+import {
+  ModuleTemplate,
+  ModuleInstance,
+  NodePin,
+  IOSideShape,
+} from "../../../shared/types/moduleTypes";
+import { generateModuleId, generateNodeId } from "./idGenerator";
 
-const ALL_TYPES = ['str', 'int', 'float', 'bool', 'datetime'];
+const ALL_TYPES = ["str", "int", "float", "bool", "datetime"];
+
+/**
+ * Get default value for a JSON schema type
+ */
+function getDefaultForType(type: string): string | number | boolean | unknown[] | Record<string, unknown> | null {
+  switch (type) {
+    case "string":
+      return "";
+    case "number":
+    case "integer":
+      return 0;
+    case "boolean":
+      return false;
+    case "array":
+      return [];
+    case "object":
+      return {};
+    default:
+      return null;
+  }
+}
+
+/**
+ * Initialize config from JSON schema with defaults
+ */
+function initializeConfig(configSchema: Record<string, unknown> | undefined): Record<string, unknown> {
+  const config: Record<string, unknown> = {};
+
+  if (configSchema && typeof configSchema === 'object' && 'properties' in configSchema) {
+    const properties = configSchema.properties as Record<string, unknown>;
+    for (const [key, prop] of Object.entries(properties)) {
+      const propDef = prop as Record<string, unknown>;
+      if (propDef.default !== undefined) {
+        config[key] = propDef.default;
+      } else {
+        config[key] = getDefaultForType(propDef.type as string);
+      }
+    }
+  }
+
+  return config;
+}
 
 /**
  * Create pins for a module based on IO shape
@@ -15,7 +61,7 @@ const ALL_TYPES = ['str', 'int', 'float', 'bool', 'datetime'];
 function createPins(
   instanceId: string,
   ioShape: IOSideShape | undefined,
-  direction: 'in' | 'out',
+  direction: "in" | "out",
   typeParams: Record<string, string[]>
 ): NodePin[] {
   const pins: NodePin[] = [];
@@ -32,21 +78,24 @@ function createPins(
       // Empty array means all types allowed
       allowedTypes = typeParamTypes.length === 0 ? ALL_TYPES : typeParamTypes;
     } else {
-      const directTypes = nodeGroup.typing?.allowed_types || ['str'];
+      const directTypes = nodeGroup.typing?.allowed_types || ["str"];
       // Empty array means all types allowed
       allowedTypes = directTypes.length === 0 ? ALL_TYPES : directTypes;
     }
 
-    const defaultType = allowedTypes[0] || 'str';
+    const defaultType = allowedTypes[0] || "str";
 
     // Create min_count pins for this group
     for (let i = 0; i < nodeGroup.min_count; i++) {
       // Generate default name
       // Output nodes start with empty strings (user fills in)
       // Input nodes use label (but display "Not Connected" until connected)
-      const defaultName = direction === 'out'
-        ? ''
-        : (nodeGroup.min_count > 1 ? `${nodeGroup.label}_${i}` : nodeGroup.label);
+      const defaultName =
+        direction === "out"
+          ? ""
+          : nodeGroup.min_count > 1
+            ? `${nodeGroup.label}_${i}`
+            : nodeGroup.label;
 
       pins.push({
         node_id: generateNodeId(),
@@ -70,13 +119,23 @@ function createPins(
  */
 export function createModuleInstance(
   template: ModuleTemplate,
-  instanceIdPrefix: string = 'module' // Kept for API compatibility but not used
+  instanceIdPrefix: string = "module" // Kept for API compatibility but not used
 ): ModuleInstance {
   const instanceId = generateModuleId();
 
   const typeParams = template.meta?.io_shape?.type_params || {};
-  const inputs = createPins(instanceId, template.meta?.io_shape?.inputs, 'in', typeParams);
-  const outputs = createPins(instanceId, template.meta?.io_shape?.outputs, 'out', typeParams);
+  const inputs = createPins(
+    instanceId,
+    template.meta?.io_shape?.inputs,
+    "in",
+    typeParams
+  );
+  const outputs = createPins(
+    instanceId,
+    template.meta?.io_shape?.outputs,
+    "out",
+    typeParams
+  );
 
   // Initialize config with defaults from schema
   const config = initializeConfig(template.config_schema);
@@ -97,12 +156,13 @@ export function createModuleInstance(
 export function addPinToModule(
   moduleInstance: ModuleInstance,
   template: ModuleTemplate,
-  direction: 'input' | 'output',
+  direction: "input" | "output",
   groupIndex: number
 ): ModuleInstance {
-  const pins = direction === 'input' ? moduleInstance.inputs : moduleInstance.outputs;
+  const pins =
+    direction === "input" ? moduleInstance.inputs : moduleInstance.outputs;
   const ioSide =
-    direction === 'input'
+    direction === "input"
       ? template.meta?.io_shape?.inputs
       : template.meta?.io_shape?.outputs;
 
@@ -121,7 +181,7 @@ export function addPinToModule(
     const typeParamTypes = typeParams[typeVar];
     allowedTypes = typeParamTypes.length === 0 ? ALL_TYPES : typeParamTypes;
   } else {
-    const directTypes = nodeGroup.typing?.allowed_types || ['str'];
+    const directTypes = nodeGroup.typing?.allowed_types || ["str"];
     allowedTypes = directTypes.length === 0 ? ALL_TYPES : directTypes;
   }
 
@@ -137,9 +197,9 @@ export function addPinToModule(
 
   const newPin: NodePin = {
     node_id: generateNodeId(),
-    direction: direction === 'input' ? 'in' : 'out',
+    direction: direction === "input" ? "in" : "out",
     type: defaultType,
-    name: '',
+    name: "",
     label: nodeGroup.label,
     position_index: positionIndex,
     group_index: groupIndex,
@@ -147,7 +207,7 @@ export function addPinToModule(
     allowed_types: allowedTypes,
   };
 
-  if (direction === 'input') {
+  if (direction === "input") {
     return {
       ...moduleInstance,
       inputs: [...moduleInstance.inputs, newPin],

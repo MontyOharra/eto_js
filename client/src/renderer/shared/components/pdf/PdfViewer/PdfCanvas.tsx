@@ -36,23 +36,12 @@ export function PdfCanvas({ pdfUrl, onError, children, onMouseDown, onMouseMove,
   // CSS scaling down (or 1:1) is always sharp; only scaling up causes blur
   const RENDER_SCALE = 3.0;
 
-  // Log when component mounts
-  useEffect(() => {
-    console.log('[PdfCanvas] Component mounted, pdfUrl:', pdfUrl);
-    return () => {
-      console.log('[PdfCanvas] Component unmounting');
-    };
-  }, []);
-
   // Reset document loaded state when PDF URL changes
   useEffect(() => {
-    console.log('[PdfCanvas] PDF URL changed to:', pdfUrl);
-    console.log('[PdfCanvas] Resetting isDocumentLoaded to false');
     setIsDocumentLoaded(false);
   }, [pdfUrl]);
 
   const handleDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
-    console.log('[PdfCanvas] Document loaded successfully, numPages:', numPages);
     setIsDocumentLoaded(true);
     onDocumentLoadSuccess(numPages);
   };
@@ -63,7 +52,7 @@ export function PdfCanvas({ pdfUrl, onError, children, onMouseDown, onMouseMove,
     onError?.(error);
   };
 
-  const handlePageLoadSuccess = (page: any) => {
+  const handlePageLoadSuccess = (page: { originalWidth?: number; originalHeight?: number; getViewport: (options: { scale: number }) => { width: number; height: number } }) => {
     // CRITICAL: Always get PDF dimensions at scale 1.0
     // The page object's width/height properties return SCALED dimensions at the current zoom.
     // We need CONSTANT base dimensions so overlays can calculate their size as: baseDimension * scale

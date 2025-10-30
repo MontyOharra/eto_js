@@ -3,17 +3,25 @@
  * Convert between React Flow state (nodes/edges) and pipeline state format
  */
 
-import { Node, Edge } from '@xyflow/react';
-import { PipelineState, VisualState, NodeConnection, EntryPoint } from '../../../types/pipelineTypes';
-import { ModuleInstance } from '../../../types/moduleTypes';
+import { Node, Edge } from "@xyflow/react";
+import {
+  PipelineState,
+  VisualState,
+  NodeConnection,
+  EntryPoint,
+} from "../../../types/pipelineTypes";
+import { ModuleInstance } from "../../../shared/types/moduleTypes";
 
 /**
  * Serialize React Flow state to PipelineState
  */
-export function serializeToPipelineState(nodes: Node[], edges: Edge[]): PipelineState {
+export function serializeToPipelineState(
+  nodes: Node[],
+  edges: Edge[]
+): PipelineState {
   // Extract module instances from nodes (excluding entry points)
   const modules: ModuleInstance[] = nodes
-    .filter((node) => node.type === 'module' && !node.data.isEntryPoint)
+    .filter((node) => node.type === "module" && !node.data.isEntryPoint)
     .map((node) => node.data.moduleInstance as ModuleInstance)
     .filter(Boolean);
 
@@ -44,7 +52,7 @@ export function serializeToVisualState(nodes: Node[]): VisualState {
   const positions: VisualState = {};
 
   nodes.forEach((node) => {
-    if (node.type === 'module') {
+    if (node.type === "module") {
       // All module nodes go into flat structure
       // Use node.id as the key for both regular modules and entry points
       positions[node.id] = {

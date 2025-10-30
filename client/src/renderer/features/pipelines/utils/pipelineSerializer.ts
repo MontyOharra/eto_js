@@ -2,15 +2,15 @@
  * Serialization utilities to convert between frontend and backend pipeline formats
  */
 
-import { NodePin, ModuleInstance } from '../types/moduleTypes';
+import { NodePin, ModuleInstance } from "../../../shared/types/moduleTypes";
 import {
   PipelineState,
   VisualState,
   NodeConnection,
   EntryPoint,
   InstanceNodePin,
-  BackendEntryPoint
-} from '../types/pipelineTypes';
+  BackendEntryPoint,
+} from "../../../types/pipelineTypes";
 
 // Backend-compatible types
 export interface BackendModuleInstance {
@@ -35,19 +35,21 @@ export function serializeNodePin(pin: NodePin): InstanceNodePin {
     type: pin.type,
     name: pin.name,
     position_index: pin.position_index,
-    group_index: pin.group_index
+    group_index: pin.group_index,
   };
 }
 
 // Convert ModuleInstance to BackendModuleInstance
-export function serializeModuleInstance(module: ModuleInstance): BackendModuleInstance {
+export function serializeModuleInstance(
+  module: ModuleInstance
+): BackendModuleInstance {
   return {
     module_instance_id: module.module_instance_id,
     module_ref: module.module_ref,
     module_kind: module.module_kind,
     config: module.config,
     inputs: module.inputs.map(serializeNodePin),
-    outputs: module.outputs.map(serializeNodePin)
+    outputs: module.outputs.map(serializeNodePin),
   };
 }
 
@@ -55,16 +57,18 @@ export function serializeModuleInstance(module: ModuleInstance): BackendModuleIn
 export function serializeEntryPoint(entryPoint: EntryPoint): BackendEntryPoint {
   return {
     node_id: entryPoint.node_id,
-    name: entryPoint.name
+    name: entryPoint.name,
   };
 }
 
 // Convert frontend PipelineState to backend format
-export function serializePipelineState(state: PipelineState): BackendPipelineState {
+export function serializePipelineState(
+  state: PipelineState
+): BackendPipelineState {
   return {
     entry_points: state.entry_points.map(serializeEntryPoint),
     modules: state.modules.map(serializeModuleInstance),
-    connections: state.connections
+    connections: state.connections,
   };
 }
 
@@ -91,6 +95,6 @@ export function serializePipelineData(
     name,
     description,
     pipeline_state: serializePipelineState(pipelineState),
-    visual_state: serializeVisualState(visualState)
+    visual_state: serializeVisualState(visualState),
   };
 }

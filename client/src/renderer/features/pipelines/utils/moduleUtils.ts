@@ -2,17 +2,17 @@
  * Module utility functions and constants
  */
 
-import { NodePin } from '../../types/moduleTypes';
+import { NodePin } from "../../shared/types/moduleTypes";
 
 /**
  * Type to color mapping for visual representation
  */
 export const TYPE_COLORS: Record<string, string> = {
-  str: '#3B82F6', // blue-500
-  int: '#EF4444', // red-500
-  float: '#F59E0B', // amber-500
-  bool: '#10B981', // green-500
-  datetime: '#8B5CF6', // purple-500
+  str: "#3B82F6", // blue-500
+  int: "#EF4444", // red-500
+  float: "#F59E0B", // amber-500
+  bool: "#10B981", // green-500
+  datetime: "#8B5CF6", // purple-500
 };
 
 /**
@@ -20,12 +20,12 @@ export const TYPE_COLORS: Record<string, string> = {
  * Uses perceived brightness formula
  */
 export function getTextColor(hexColor: string): string {
-  const hex = hexColor.replace('#', '');
+  const hex = hexColor.replace("#", "");
   const r = parseInt(hex.substr(0, 2), 16);
   const g = parseInt(hex.substr(2, 2), 16);
   const b = parseInt(hex.substr(4, 2), 16);
   const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-  return brightness > 128 ? '#000000' : '#FFFFFF';
+  return brightness > 128 ? "#000000" : "#FFFFFF";
 }
 
 /**

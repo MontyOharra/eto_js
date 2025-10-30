@@ -3,21 +3,21 @@
  * Handles connection creation, deletion, and type propagation
  */
 
-import { useCallback } from 'react';
-import { Node, Edge } from '@xyflow/react';
-import { ModuleInstance, NodePin } from '../../../types/moduleTypes';
+import { useCallback } from "react";
+import { Node, Edge } from "@xyflow/react";
+import { ModuleInstance, NodePin } from "../../../shared/types/moduleTypes";
 import {
   validateConnection,
   calculateTypePropagation,
   applyTypeUpdates,
   findPin,
-} from '../utils/typeSystem';
+} from "../utils/typeSystem";
 import {
   createStyledEdge,
   updateEdgeColors,
   findConnectedEdges,
   removePinEdges,
-} from '../utils/edgeUtils';
+} from "../utils/edgeUtils";
 
 export interface UseConnectionManagerProps {
   nodes: Node[];
@@ -62,8 +62,11 @@ export function useConnectionManager({
       const sourceNode = nodes.find((n) => n.id === sourceModuleId);
       const targetNode = nodes.find((n) => n.id === targetModuleId);
 
-      if (!sourceNode?.data?.moduleInstance || !targetNode?.data?.moduleInstance) {
-        console.error('Could not find source or target module');
+      if (
+        !sourceNode?.data?.moduleInstance ||
+        !targetNode?.data?.moduleInstance
+      ) {
+        console.error("Could not find source or target module");
         return false;
       }
 
@@ -74,7 +77,7 @@ export function useConnectionManager({
       const targetPin = findPin(targetModule, targetPinId);
 
       if (!sourcePin || !targetPin) {
-        console.error('Could not find source or target pin');
+        console.error("Could not find source or target pin");
         return false;
       }
 
@@ -88,7 +91,7 @@ export function useConnectionManager({
         targetPin
       );
       if (!validation.valid || !validation.suggestedType) {
-        console.warn('Cannot connect: No shared types between nodes');
+        console.warn("Cannot connect: No shared types between nodes");
         return false;
       }
 
@@ -161,7 +164,9 @@ export function useConnectionManager({
     (moduleId: string) => {
       if (viewOnly) return;
 
-      setEdges((eds) => eds.filter((e) => e.source !== moduleId && e.target !== moduleId));
+      setEdges((eds) =>
+        eds.filter((e) => e.source !== moduleId && e.target !== moduleId)
+      );
     },
     [setEdges, viewOnly]
   );

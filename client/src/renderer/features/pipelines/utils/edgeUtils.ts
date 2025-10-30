@@ -3,40 +3,27 @@
  * Functions for edge creation, coloring, and management
  */
 
-import { Node, Edge, Position } from '@xyflow/react';
-import { ModuleInstance } from '../../../types/moduleTypes';
-import { findPin } from './typeSystem';
-
-/**
- * Type to color mapping
- */
-export const TYPE_COLORS: Record<string, string> = {
-  str: '#3B82F6', // blue-500
-  int: '#EF4444', // red-500
-  float: '#F59E0B', // amber-500
-  bool: '#10B981', // green-500
-  datetime: '#8B5CF6', // purple-500
-};
+import { Node, Edge, Position } from "@xyflow/react";
+import { ModuleInstance } from "../../../shared/types/moduleTypes";
+import { findPin } from "./typeSystem";
+import { TYPE_COLORS } from "./moduleUtils";
 
 /**
  * Get color for a type
  */
 export function getTypeColor(type: string): string {
-  return TYPE_COLORS[type] || '#6B7280'; // gray-500 fallback
+  return TYPE_COLORS[type] || "#6B7280"; // gray-500 fallback
 }
 
 /**
  * Get edge color based on connected pins
  */
-export function getEdgeColor(
-  nodes: Node[],
-  edge: Edge
-): string {
+export function getEdgeColor(nodes: Node[], edge: Edge): string {
   const sourceNode = nodes.find((n) => n.id === edge.source);
   const targetNode = nodes.find((n) => n.id === edge.target);
 
   if (!sourceNode?.data?.moduleInstance || !targetNode?.data?.moduleInstance) {
-    return '#6B7280'; // gray fallback
+    return "#6B7280"; // gray fallback
   }
 
   const sourceModule = sourceNode.data.moduleInstance as ModuleInstance;
@@ -46,7 +33,7 @@ export function getEdgeColor(
   const targetPin = findPin(targetModule, edge.targetHandle!);
 
   // Use source pin type for color (they should match if connected)
-  const type = sourcePin?.type || targetPin?.type || 'str';
+  const type = sourcePin?.type || targetPin?.type || "str";
   return getTypeColor(type);
 }
 
@@ -130,13 +117,19 @@ export function findEdgeBetweenPins(
  * Remove all edges connected to a specific module
  */
 export function removeModuleEdges(edges: Edge[], moduleId: string): Edge[] {
-  return edges.filter((edge) => edge.source !== moduleId && edge.target !== moduleId);
+  return edges.filter(
+    (edge) => edge.source !== moduleId && edge.target !== moduleId
+  );
 }
 
 /**
  * Remove all edges connected to a specific pin
  */
-export function removePinEdges(edges: Edge[], moduleId: string, pinId: string): Edge[] {
+export function removePinEdges(
+  edges: Edge[],
+  moduleId: string,
+  pinId: string
+): Edge[] {
   return edges.filter(
     (edge) =>
       !(edge.source === moduleId && edge.sourceHandle === pinId) &&
@@ -158,11 +151,19 @@ export function createEdgesFromConnections(
   connections.forEach((conn) => {
     // Determine source and target module IDs
     // Entry points in React Flow have 'entry-' prefix
-    const sourceIsEntryPoint = entryPoints.some((ep: any) => ep.node_id === conn.from_node_id);
-    const sourceModuleId = sourceIsEntryPoint ? `entry-${conn.from_node_id}` : conn.from_node_id;
+    const sourceIsEntryPoint = entryPoints.some(
+      (ep: any) => ep.node_id === conn.from_node_id
+    );
+    const sourceModuleId = sourceIsEntryPoint
+      ? `entry-${conn.from_node_id}`
+      : conn.from_node_id;
 
-    const targetIsEntryPoint = entryPoints.some((ep: any) => ep.node_id === conn.to_node_id);
-    const targetModuleId = targetIsEntryPoint ? `entry-${conn.to_node_id}` : conn.to_node_id;
+    const targetIsEntryPoint = entryPoints.some(
+      (ep: any) => ep.node_id === conn.to_node_id
+    );
+    const targetModuleId = targetIsEntryPoint
+      ? `entry-${conn.to_node_id}`
+      : conn.to_node_id;
 
     // Find which module contains the source and target nodes
     let sourceNodeModuleId = sourceModuleId;
@@ -171,7 +172,9 @@ export function createEdgesFromConnections(
     // For non-entry-point nodes, find the module that contains this node
     if (!sourceIsEntryPoint) {
       const sourceModule = modules.find((m: any) =>
-        [...m.inputs, ...m.outputs].some((node: any) => node.node_id === conn.from_node_id)
+        [...m.inputs, ...m.outputs].some(
+          (node: any) => node.node_id === conn.from_node_id
+        )
       );
       if (sourceModule) {
         // Use module_instance_id (ModuleInstance property)
@@ -181,7 +184,9 @@ export function createEdgesFromConnections(
 
     if (!targetIsEntryPoint) {
       const targetModule = modules.find((m: any) =>
-        [...m.inputs, ...m.outputs].some((node: any) => node.node_id === conn.to_node_id)
+        [...m.inputs, ...m.outputs].some(
+          (node: any) => node.node_id === conn.to_node_id
+        )
       );
       if (targetModule) {
         // Use module_instance_id (ModuleInstance property)
@@ -195,10 +200,10 @@ export function createEdgesFromConnections(
       sourceHandle: conn.from_node_id,
       target: targetNodeModuleId,
       targetHandle: conn.to_node_id,
-      sourcePosition: Position.Right,  // Always right for LR layout
-      targetPosition: Position.Left,   // Always left for LR layout
+      sourcePosition: Position.Right, // Always right for LR layout
+      targetPosition: Position.Left, // Always left for LR layout
       style: {
-        stroke: '#6B7280',
+        stroke: "#6B7280",
         strokeWidth: 2,
       },
     });

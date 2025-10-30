@@ -89,14 +89,12 @@ export interface PdfViewerProps {
 }
 
 export function PdfViewer({
-  pdfUrl,
   initialScale = 1.0,
   initialPage = 1,
   minScale = 0.5,
   maxScale = 3.0,
   scaleStep = 0.25,
   children,
-  onError,
   onScaleChange,
   onPageChange,
 }: PdfViewerProps) {
@@ -105,7 +103,6 @@ export function PdfViewer({
   const [currentPage, setCurrentPageState] = useState(initialPage);
   const [numPages, setNumPages] = useState<number | null>(null);
   const [pdfDimensions, setPdfDimensions] = useState<PdfDimensions | null>(null);
-  const [scrollPosition] = useState<PdfPoint>({ x: 0, y: 0 });
 
   // Fixed high-quality render scale (matches PdfCanvas)
   const RENDER_SCALE = 3.0;
@@ -115,12 +112,14 @@ export function PdfViewer({
     if (initialScale !== scale) {
       setScaleState(initialScale);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialScale]);
 
   useEffect(() => {
     if (initialPage !== currentPage) {
       setCurrentPageState(initialPage);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialPage]);
 
   // Scale control with bounds
@@ -176,24 +175,19 @@ export function PdfViewer({
 
   // Fit PDF to width
   const fitToWidth = useCallback((containerWidth: number, sidebarWidth: number) => {
-    console.log('[fitToWidth] Called with:', { containerWidth, sidebarWidth, pdfDimensions });
     if (!pdfDimensions) {
-      console.log('[fitToWidth] No PDF dimensions, returning');
       return;
     }
 
     // Calculate available width for PDF (container width - sidebar width - padding)
     const padding = 32; // px-4 on PdfCanvas = 16px on each side
     const availableWidth = containerWidth - sidebarWidth - padding;
-    console.log('[fitToWidth] Available width:', availableWidth);
 
     // Calculate scale to fit PDF width
     const newScale = availableWidth / pdfDimensions.width;
-    console.log('[fitToWidth] Calculated scale:', newScale);
 
     // Clamp to min/max zoom
     const clampedScale = Math.max(minScale, Math.min(maxScale, newScale));
-    console.log('[fitToWidth] Clamped scale:', clampedScale);
     setScale(clampedScale);
   }, [pdfDimensions, minScale, maxScale, setScale]);
 
@@ -214,7 +208,6 @@ export function PdfViewer({
     currentPage,
     numPages,
     pdfDimensions,
-    scrollPosition,
     setScale,
     setCurrentPage,
     goToNextPage,

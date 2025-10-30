@@ -1,8 +1,11 @@
-import { useState, useCallback } from 'react';
-import { PipelineGraph } from '../../../../pipelines/components/PipelineGraph';
-import { ModuleSelectorPane } from '../../../../pipelines/components/ModuleSelectorPane';
-import type { ModuleTemplate } from '../../../../../types/moduleTypes';
-import type { PipelineState, VisualState } from '../../../../../types/pipelineTypes';
+import { useState, useCallback } from "react";
+import { PipelineGraph } from "../../../../pipelines/components/PipelineGraph";
+import { ModuleSelectorPane } from "../../../../pipelines/components/ModuleSelectorPane";
+import type { ModuleTemplate } from "../../../../../shared/types/moduleTypes";
+import type {
+  PipelineState,
+  VisualState,
+} from "../../../../../types/pipelineTypes";
 
 interface PipelineBuilderStepProps {
   pipelineState: PipelineState;
@@ -22,19 +25,25 @@ export function PipelineBuilderStep({
   const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null);
 
   // Handle pipeline state changes from graph (modules, connections)
-  const handlePipelineChange = useCallback((state: PipelineState) => {
-    // Entry points already in state from ExtractionFieldsStep, just pass through
-    onPipelineStateChange(state);
-  }, [onPipelineStateChange]);
+  const handlePipelineChange = useCallback(
+    (state: PipelineState) => {
+      // Entry points already in state from ExtractionFieldsStep, just pass through
+      onPipelineStateChange(state);
+    },
+    [onPipelineStateChange]
+  );
 
   // Handle visual state changes (node positions on drag end)
-  const handleVisualChange = useCallback((visualState: VisualState) => {
-    console.log('[PipelineBuilderStep] Visual state changed:', {
-      nodeCount: Object.keys(visualState).length,
-      positions: visualState,
-    });
-    onVisualStateChange(visualState);
-  }, [onVisualStateChange]);
+  const handleVisualChange = useCallback(
+    (visualState: VisualState) => {
+      console.log("[PipelineBuilderStep] Visual state changed:", {
+        nodeCount: Object.keys(visualState).length,
+        positions: visualState,
+      });
+      onVisualStateChange(visualState);
+    },
+    [onVisualStateChange]
+  );
 
   const handleModuleSelect = (moduleId: string | null) => {
     setSelectedModuleId(moduleId);

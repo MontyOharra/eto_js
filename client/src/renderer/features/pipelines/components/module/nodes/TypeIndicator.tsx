@@ -3,9 +3,9 @@
  * Displays and allows selection of node pin types
  */
 
-import { useState } from 'react';
-import { NodePin } from '../../../../../types/moduleTypes';
-import { getTypeColor } from '../../../utils/edgeUtils';
+import { useState } from "react";
+import { NodePin } from "../../../../../shared/types/moduleTypes";
+import { getTypeColor } from "../../../utils/edgeUtils";
 
 export interface TypeIndicatorProps {
   node: NodePin;
@@ -27,14 +27,20 @@ export function TypeIndicator({
   const [isHighlightActive, setIsHighlightActive] = useState(false);
 
   // Get available types from node's allowed_types, or all types if not specified
-  const availableTypes = node.allowed_types || ['str', 'int', 'float', 'bool', 'datetime'];
+  const availableTypes = node.allowed_types || [
+    "str",
+    "int",
+    "float",
+    "bool",
+    "datetime",
+  ];
 
   // Use effective types if provided (for showing disabled options), otherwise use available types
   const effectiveTypes = effectiveAllowedTypes || availableTypes;
 
   const highlightStyle = isHighlighted
     ? {
-        boxShadow: 'inset 0 0 0 2px #ffffff',
+        boxShadow: "inset 0 0 0 2px #ffffff",
       }
     : {};
 
@@ -60,7 +66,7 @@ export function TypeIndicator({
         className="w-full text-[9px] px-0.5 py-0.5 rounded border border-gray-600 min-h-[24px] flex items-center justify-center"
         style={{
           backgroundColor: getTypeColor(node.type),
-          color: '#FFFFFF',
+          color: "#FFFFFF",
           ...highlightStyle,
         }}
       >
@@ -92,8 +98,8 @@ export function TypeIndicator({
             key={type}
             value={type}
             disabled={isDisabled}
-            className={isDisabled ? 'text-gray-500' : 'text-white'}
-            style={{ backgroundColor: '#374151' }}
+            className={isDisabled ? "text-gray-500" : "text-white"}
+            style={{ backgroundColor: "#374151" }}
           >
             {type}
           </option>
