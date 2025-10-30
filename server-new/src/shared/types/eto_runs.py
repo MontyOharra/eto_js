@@ -4,7 +4,7 @@ Dataclasses representing eto_runs table and related operations
 """
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Literal, Optional, Any
 
 # =========================
 # Type Aliases for Enums
