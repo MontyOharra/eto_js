@@ -233,6 +233,28 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
 
             return [self._model_to_domain(model) for model in models]
 
+    def delete(self, run_id: int) -> bool:
+        """
+        Delete ETO run by ID.
+
+        Args:
+            run_id: ETO run ID
+
+        Returns:
+            True if deleted, False if not found
+        """
+        with self._get_session() as session:
+            model = session.get(self.model_class, run_id)
+
+            if model is None:
+                return False
+
+            session.delete(model)
+            session.flush()  # Persist deletion
+
+            logger.debug(f"Deleted ETO run {run_id}")
+            return True
+
     def get_all_with_relations(
         self,
         status: Optional[EtoRunStatus] = None,

@@ -14,6 +14,7 @@ from shared.database.repositories.eto_run import EtoRunRepository
 from shared.database.repositories.eto_run_pipeline_execution import EtoRunPipelineExecutionRepository
 from shared.database.repositories.eto_run_template_matching import EtoRunTemplateMatchingRepository
 from shared.database.repositories.eto_run_extraction import EtoRunExtractionRepository
+from shared.events.eto_events import eto_event_manager
 # TODO: Import remaining repositories when implemented
 # from shared.database.repositories.eto_run_pipeline_execution_step import EtoRunPipelineExecutionStepRepository
 
@@ -174,6 +175,18 @@ class EtoRunsService:
             # Create run with status = "not_started"
             run = self.eto_run_repo.create(EtoRunCreate(pdf_file_id=pdf_file_id))
 
+            # Broadcast creation event to all connected SSE clients
+            eto_event_manager.broadcast_sync(
+                "run_created",
+                {
+                    "id": run.id,
+                    "pdf_file_id": run.pdf_file_id,
+                    "status": run.status,
+                    "processing_step": run.processing_step,
+                    "created_at": run.created_at.isoformat() if run.created_at else None,
+                }
+            )
+
             logger.info(f"Created ETO run {run.id} for PDF {pdf_file_id}")
             return run
 
@@ -294,6 +307,327 @@ class EtoRunsService:
         logger.debug(f"Retrieved ETO run {run_id}: status={run.status}, processing_step={run.processing_step}")
         return run
 
+    def get_run_detail(self, run_id: int) -> "EtoRunDetailView":
+        """
+        Get ETO run with all related data for detailed view.
+
+        Fetches:
+        - Core run data
+        - PDF file info and email source (if applicable)
+        - Stage 1: Template matching data (if exists)
+        - Stage 2: Data extraction data (if exists)
+        - Stage 3: Pipeline execution data (if exists)
+        - Matched template info (denormalized for convenience)
+
+        Args:
+            run_id: ETO run ID
+
+        Returns:
+            EtoRunDetailView with all related data
+
+        Raises:
+            ObjectNotFoundError: If run not found
+        """
+        from shared.types.eto_runs import EtoRunDetailView
+
+        logger.debug(f"Getting detailed view for ETO run {run_id}")
+
+        # 1. Get core run data
+        run = self.eto_run_repo.get_by_id(run_id)
+        if not run:
+            raise ObjectNotFoundError(f"ETO run {run_id} not found")
+
+        # 2. Get PDF file info
+        pdf_file = self.pdf_files_service.get_pdf_file(run.pdf_file_id)
+
+        # 3. Get email source info (if applicable)
+        email_id = None
+        email_sender = None
+        email_received_date = None
+        email_subject = None
+        email_folder = None
+
+        if pdf_file.email_id:
+            # PDF was from email ingestion
+            from shared.services.service_container import ServiceContainer
+            email_service = ServiceContainer.get_email_service()
+            email = email_service.get_email(pdf_file.email_id)
+            if email:
+                email_id = email.id
+                email_sender = email.sender_email
+                email_received_date = email.received_date
+                email_subject = email.subject
+                email_folder = email.folder_name
+
+        # 4. Get stage data (if exists)
+        template_matching = self.template_matching_repo.get_by_eto_run_id(run_id)
+        extraction = self.extraction_repo.get_by_eto_run_id(run_id)
+        pipeline_execution = self.pipeline_execution_repo.get_by_eto_run_id(run_id)
+
+        # 5. Get matched template info (if template matching succeeded)
+        matched_template_id = None
+        matched_template_name = None
+        matched_template_version_id = None
+        matched_template_version_num = None
+
+        if template_matching and template_matching.matched_template_version_id:
+            # Get template version to find template ID
+            template_version = self.pdf_template_service.get_version(
+                template_matching.matched_template_version_id
+            )
+            if template_version:
+                matched_template_version_id = template_version.id
+                matched_template_version_num = template_version.version_number
+
+                # Get template to get name
+                template = self.pdf_template_service.get_template(template_version.template_id)
+                if template:
+                    matched_template_id = template.id
+                    matched_template_name = template.name
+
+        # 6. Compose the detailed view
+        detail_view = EtoRunDetailView(
+            run=run,
+            # PDF file info
+            pdf_file_id=pdf_file.id,
+            pdf_original_filename=pdf_file.original_filename,
+            pdf_file_size=pdf_file.file_size,
+            pdf_page_count=pdf_file.page_count,
+            # Email source info
+            email_id=email_id,
+            email_sender_email=email_sender,
+            email_received_date=email_received_date,
+            email_subject=email_subject,
+            email_folder_name=email_folder,
+            # Stage data
+            template_matching=template_matching,
+            extraction=extraction,
+            pipeline_execution=pipeline_execution,
+            # Matched template info
+            matched_template_id=matched_template_id,
+            matched_template_name=matched_template_name,
+            matched_template_version_id=matched_template_version_id,
+            matched_template_version_num=matched_template_version_num,
+        )
+
+        logger.debug(f"Retrieved detailed view for ETO run {run_id}")
+        return detail_view
+
+    # ==================== Bulk Operation Methods ====================
+
+    def reprocess_runs(self, run_ids: list[int]) -> None:
+        """
+        Reprocess failed or skipped ETO runs (bulk operation).
+
+        Workflow (for each run):
+        1. Verify run exists and status is "failure" or "skipped"
+        2. Delete all stage records (template_matching, extraction, pipeline_execution)
+        3. Reset run to "not_started" status
+        4. Clear error fields
+        5. Worker will automatically pick up and reprocess from beginning
+
+        Args:
+            run_ids: List of ETO run IDs to reprocess
+
+        Raises:
+            ObjectNotFoundError: If one or more runs not found
+            ValidationError: If one or more runs have invalid status
+        """
+        logger.info(f"Reprocessing {len(run_ids)} ETO runs: {run_ids}")
+
+        # Validate all runs exist and have valid status
+        for run_id in run_ids:
+            run = self.eto_run_repo.get_by_id(run_id)
+            if not run:
+                raise ObjectNotFoundError(f"ETO run {run_id} not found")
+
+            if run.status not in ("failure", "skipped"):
+                raise ValidationError(
+                    f"Cannot reprocess run {run_id} with status '{run.status}'. "
+                    f"Only 'failure' and 'skipped' runs can be reprocessed."
+                )
+
+        # Reprocess each run
+        for run_id in run_ids:
+            logger.debug(f"Reprocessing run {run_id}")
+
+            # Delete stage records (cascade delete should handle related records)
+            # Template matching
+            matching = self.template_matching_repo.get_by_eto_run_id(run_id)
+            if matching:
+                self.template_matching_repo.delete(matching.id)
+                logger.debug(f"Deleted template_matching record for run {run_id}")
+
+            # Extraction
+            extraction = self.extraction_repo.get_by_eto_run_id(run_id)
+            if extraction:
+                self.extraction_repo.delete(extraction.id)
+                logger.debug(f"Deleted extraction record for run {run_id}")
+
+            # Pipeline execution (and steps)
+            pipeline_execution = self.pipeline_execution_repo.get_by_eto_run_id(run_id)
+            if pipeline_execution:
+                self.pipeline_execution_repo.delete(pipeline_execution.id)
+                logger.debug(f"Deleted pipeline_execution record for run {run_id}")
+
+            # Reset run to not_started status
+            self.eto_run_repo.update(
+                run_id,
+                EtoRunUpdate(
+                    status="not_started",
+                    processing_step=None,
+                    error_type=None,
+                    error_message=None,
+                    error_details=None,
+                    started_at=None,
+                    completed_at=None,
+                )
+            )
+
+            # Broadcast status change
+            eto_event_manager.broadcast_sync(
+                "run_updated",
+                {
+                    "id": run_id,
+                    "status": "not_started",
+                }
+            )
+
+            logger.monitor(f"Run {run_id}: Reset to not_started for reprocessing")  # type: ignore
+
+        logger.info(f"Successfully reprocessed {len(run_ids)} ETO runs")
+
+    def skip_runs(self, run_ids: list[int]) -> None:
+        """
+        Mark ETO runs as skipped (bulk operation).
+
+        Workflow (for each run):
+        1. Verify run exists and status is "failure" or "needs_template"
+        2. Set status to "skipped"
+        3. Preserves all stage data for historical reference
+
+        Purpose:
+        - Exclude from bulk reprocessing operations
+        - Indicate intentional decision to not process this PDF
+        - Can be reprocessed or deleted later
+
+        Args:
+            run_ids: List of ETO run IDs to skip
+
+        Raises:
+            ObjectNotFoundError: If one or more runs not found
+            ValidationError: If one or more runs have invalid status
+        """
+        logger.info(f"Skipping {len(run_ids)} ETO runs: {run_ids}")
+
+        # Validate all runs exist and have valid status
+        for run_id in run_ids:
+            run = self.eto_run_repo.get_by_id(run_id)
+            if not run:
+                raise ObjectNotFoundError(f"ETO run {run_id} not found")
+
+            if run.status not in ("failure", "needs_template"):
+                raise ValidationError(
+                    f"Cannot skip run {run_id} with status '{run.status}'. "
+                    f"Only 'failure' and 'needs_template' runs can be skipped."
+                )
+
+        # Skip each run
+        for run_id in run_ids:
+            logger.debug(f"Skipping run {run_id}")
+
+            # Update status to skipped (preserving all other data)
+            self.eto_run_repo.update(
+                run_id,
+                EtoRunUpdate(status="skipped")
+            )
+
+            # Broadcast status change
+            eto_event_manager.broadcast_sync(
+                "run_updated",
+                {
+                    "id": run_id,
+                    "status": "skipped",
+                }
+            )
+
+            logger.monitor(f"Run {run_id}: Marked as skipped")  # type: ignore
+
+        logger.info(f"Successfully skipped {len(run_ids)} ETO runs")
+
+    def delete_runs(self, run_ids: list[int]) -> None:
+        """
+        Permanently delete ETO runs (bulk operation).
+
+        Workflow (for each run):
+        1. Verify run exists and status is "skipped"
+        2. Delete all stage records (cascade delete)
+        3. Delete run record
+        4. Note: PDF file is NOT deleted (may be referenced elsewhere)
+
+        Restrictions:
+        - Can only delete runs with status="skipped"
+        - Deletion is permanent (no recovery)
+
+        Args:
+            run_ids: List of ETO run IDs to delete
+
+        Raises:
+            ObjectNotFoundError: If one or more runs not found
+            ValidationError: If one or more runs have invalid status
+        """
+        logger.info(f"Deleting {len(run_ids)} ETO runs: {run_ids}")
+
+        # Validate all runs exist and have valid status
+        for run_id in run_ids:
+            run = self.eto_run_repo.get_by_id(run_id)
+            if not run:
+                raise ObjectNotFoundError(f"ETO run {run_id} not found")
+
+            if run.status != "skipped":
+                raise ValidationError(
+                    f"Cannot delete run {run_id} with status '{run.status}'. "
+                    f"Only 'skipped' runs can be deleted."
+                )
+
+        # Delete each run
+        for run_id in run_ids:
+            logger.debug(f"Deleting run {run_id}")
+
+            # Delete stage records first (explicit cascade)
+            # Template matching
+            matching = self.template_matching_repo.get_by_eto_run_id(run_id)
+            if matching:
+                self.template_matching_repo.delete(matching.id)
+                logger.debug(f"Deleted template_matching record for run {run_id}")
+
+            # Extraction
+            extraction = self.extraction_repo.get_by_eto_run_id(run_id)
+            if extraction:
+                self.extraction_repo.delete(extraction.id)
+                logger.debug(f"Deleted extraction record for run {run_id}")
+
+            # Pipeline execution (and steps)
+            pipeline_execution = self.pipeline_execution_repo.get_by_eto_run_id(run_id)
+            if pipeline_execution:
+                self.pipeline_execution_repo.delete(pipeline_execution.id)
+                logger.debug(f"Deleted pipeline_execution record for run {run_id}")
+
+            # Delete the run itself
+            self.eto_run_repo.delete(run_id)
+
+            # Broadcast deletion event
+            eto_event_manager.broadcast_sync(
+                "run_deleted",
+                {
+                    "id": run_id,
+                }
+            )
+
+            logger.monitor(f"Run {run_id}: Permanently deleted")  # type: ignore
+
+        logger.info(f"Successfully deleted {len(run_ids)} ETO runs")
+
     # ==================== Processing Methods (Worker) ====================
 
     def process_run(self, run_id: int) -> bool:
@@ -331,12 +665,23 @@ class EtoRunsService:
 
         try:
             # Update to processing status
+            started_at = datetime.now(timezone.utc)
             self.eto_run_repo.update(
                 run_id,
                 EtoRunUpdate(
                     status="processing",
-                    started_at=datetime.now(timezone.utc)
+                    started_at=started_at
                 )
+            )
+
+            # Broadcast status change to SSE clients
+            eto_event_manager.broadcast_sync(
+                "run_updated",
+                {
+                    "id": run_id,
+                    "status": "processing",
+                    "started_at": started_at.isoformat(),
+                }
             )
 
             # Stage 1: Template Matching
@@ -414,14 +759,28 @@ class EtoRunsService:
         )
         logger.debug(f"Run {run_id}: Updated processing_step to template_matching")
 
+        # Broadcast processing step change
+        eto_event_manager.broadcast_sync(
+            "run_updated",
+            {
+                "id": run_id,
+                "processing_step": "template_matching",
+            }
+        )
+
         # Step 2: Create template_matching record with status="processing"
+        started_at = datetime.now(timezone.utc)
         template_matching = self.template_matching_repo.create(
-            EtoRunTemplateMatchingCreate(
-                eto_run_id=run_id,
-                started_at=datetime.now(timezone.utc)
-            )
+            EtoRunTemplateMatchingCreate(eto_run_id=run_id)
         )
         logger.debug(f"Run {run_id}: Created template_matching record {template_matching.id}")
+
+        # Step 2b: Update with started_at timestamp
+        template_matching = self.template_matching_repo.update(
+            template_matching.id,
+            EtoRunTemplateMatchingUpdate(started_at=started_at)
+        )
+        logger.debug(f"Run {run_id}: Set template_matching started_at")
 
         try:
             # Step 3: Get PDF objects from PDF file
@@ -450,14 +809,27 @@ class EtoRunsService:
                 )
 
                 # Update run status to "needs_template"
+                completed_at = datetime.now(timezone.utc)
                 self.eto_run_repo.update(
                     run_id,
                     EtoRunUpdate(
                         status="needs_template",
-                        completed_at=datetime.now(timezone.utc),
+                        completed_at=completed_at,
                         error_type="NoTemplateMatch",
                         error_message="No matching template found for this PDF"
                     )
+                )
+
+                # Broadcast status change
+                eto_event_manager.broadcast_sync(
+                    "run_updated",
+                    {
+                        "id": run_id,
+                        "status": "needs_template",
+                        "completed_at": completed_at.isoformat(),
+                        "error_type": "NoTemplateMatch",
+                        "error_message": "No matching template found for this PDF"
+                    }
                 )
 
                 logger.warning(f"Run {run_id}: Set status to needs_template - no template match")
@@ -524,6 +896,15 @@ class EtoRunsService:
         )
         logger.debug(f"Run {run_id}: Updated processing_step to data_extraction")
 
+        # Broadcast processing step change
+        eto_event_manager.broadcast_sync(
+            "run_updated",
+            {
+                "id": run_id,
+                "processing_step": "data_extraction",
+            }
+        )
+
         # Step 2: Create extraction record
         extraction = self.extraction_repo.create(
             EtoRunExtractionCreate(eto_run_id=run_id)
@@ -584,6 +965,15 @@ class EtoRunsService:
         )
         logger.debug(f"Run {run_id}: Updated processing_step to data_transformation")
 
+        # Broadcast processing step change
+        eto_event_manager.broadcast_sync(
+            "run_updated",
+            {
+                "id": run_id,
+                "processing_step": "data_transformation",
+            }
+        )
+
         # Step 2: Create pipeline_execution record
         pipeline_execution = self.pipeline_execution_repo.create(
             EtoRunPipelineExecutionCreate(
@@ -627,13 +1017,25 @@ class EtoRunsService:
         Args:
             run_id: ETO run ID
         """
+        completed_at = datetime.now(timezone.utc)
         self.eto_run_repo.update(
             run_id,
             EtoRunUpdate(
                 status="success",
-                completed_at=datetime.now(timezone.utc)
+                completed_at=completed_at
             )
         )
+
+        # Broadcast success status
+        eto_event_manager.broadcast_sync(
+            "run_updated",
+            {
+                "id": run_id,
+                "status": "success",
+                "completed_at": completed_at.isoformat(),
+            }
+        )
+
         logger.monitor(f"Run {run_id}: Marked as success")  # type: ignore
 
     def _mark_run_failure(self, run_id: int, error: Exception, error_type: Optional[str] = None) -> None:
@@ -649,16 +1051,32 @@ class EtoRunsService:
         if error_type is None:
             error_type = type(error).__name__
 
+        completed_at = datetime.now(timezone.utc)
+        error_message = str(error)
+
         self.eto_run_repo.update(
             run_id,
             EtoRunUpdate(
                 status="failure",
-                completed_at=datetime.now(timezone.utc),
+                completed_at=completed_at,
                 error_type=error_type,
-                error_message=str(error),
+                error_message=error_message,
                 error_details=None  # TODO: Add stack trace or additional context if needed
             )
         )
+
+        # Broadcast failure status
+        eto_event_manager.broadcast_sync(
+            "run_updated",
+            {
+                "id": run_id,
+                "status": "failure",
+                "completed_at": completed_at.isoformat(),
+                "error_type": error_type,
+                "error_message": error_message,
+            }
+        )
+
         logger.warning(f"Run {run_id}: Marked as failure - {error_type}: {error}")
 
     # ==================== Background Worker Lifecycle ====================

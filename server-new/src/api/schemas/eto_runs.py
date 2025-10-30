@@ -134,14 +134,72 @@ class BulkRunIdsRequest(BaseModel):
 
 
 # =============================================================================
-# TODO: Additional schemas to be defined
+# GET /eto-runs/{id} - Detailed View with Stage Data
 # =============================================================================
-# - EtoRunDetail (GET /eto-runs/{id} response)
-# - PostEtoRunUploadResponse (POST /eto-runs response)
-#
-# Stage types:
-# - EtoStageTemplateMatching
-# - EtoStageDataExtraction
-# - EtoStagePipelineExecution
-# - EtoPipelineExecutionStep
-#
+
+class EtoStageTemplateMatching(BaseModel):
+    """
+    Template matching stage data for detailed run view.
+    """
+    status: Literal["processing", "success", "failure"]
+    matched_template_version_id: Optional[int] = None
+    matched_template_name: Optional[str] = None  # Denormalized for convenience
+    matched_version_number: Optional[int] = None  # Denormalized for convenience
+    started_at: Optional[str] = None  # ISO 8601
+    completed_at: Optional[str] = None  # ISO 8601
+
+
+class EtoStageDataExtraction(BaseModel):
+    """
+    Data extraction stage data for detailed run view.
+    """
+    status: Literal["processing", "success", "failure"]
+    extracted_data: Optional[Dict[str, Any]] = None  # Parsed JSON
+    started_at: Optional[str] = None  # ISO 8601
+    completed_at: Optional[str] = None  # ISO 8601
+
+
+class EtoStagePipelineExecution(BaseModel):
+    """
+    Pipeline execution stage data for detailed run view.
+    """
+    status: Literal["processing", "success", "failure"]
+    executed_actions: Optional[Dict[str, Any]] = None  # Parsed JSON
+    started_at: Optional[str] = None  # ISO 8601
+    completed_at: Optional[str] = None  # ISO 8601
+
+
+class EtoRunDetail(BaseModel):
+    """
+    Detailed ETO run view including all stage information.
+
+    Returned by GET /eto-runs/{id}
+
+    Different data shown based on run status:
+    - success: All stages with full data
+    - failure: Partial stages, error details, which stage failed
+    - needs_template: Template matching results only
+    - processing: Stages up to current processing_step
+    - not_started: No stage data yet
+    """
+    # Core run data
+    id: int
+    status: EtoRunStatus
+    processing_step: Optional[EtoProcessingStep] = None
+    started_at: Optional[str] = None  # ISO 8601
+    completed_at: Optional[str] = None  # ISO 8601
+    error_type: Optional[str] = None
+    error_message: Optional[str] = None
+    error_details: Optional[str] = None
+    created_at: str  # ISO 8601
+
+    # PDF file info
+    pdf: EtoPdfInfo
+
+    # Source (manual or email)
+    source: EtoSource = Field(..., discriminator="type")
+
+    # Stage data (optional - depends on run progress)
+    stage_template_matching: Optional[EtoStageTemplateMatching] = None
+    stage_data_extraction: Optional[EtoStageDataExtraction] = None
+    stage_pipeline_execution: Optional[EtoStagePipelineExecution] = None

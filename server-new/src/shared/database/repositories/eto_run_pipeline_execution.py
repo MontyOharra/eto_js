@@ -39,12 +39,14 @@ class EtoRunPipelineExecutionRepository(BaseRepository[EtoRunPipelineExecutionMo
         Convert ORM model to EtoRunPipelineExecution dataclass.
 
         Handles enum to string conversion:
-        - model.status (EtoStepStatus enum) -> dataclass (string literal)
+        - model.status (EtoStepStatus enum or str) -> dataclass (string literal)
+
+        Note: With native_enum=False, SQLAlchemy may return string values instead of Enum instances
         """
         return EtoRunPipelineExecution(
             id=model.id,
             eto_run_id=model.eto_run_id,
-            status=model.status.value,  # Enum to string
+            status=model.status.value if hasattr(model.status, 'value') else model.status,
             executed_actions=model.executed_actions,
             started_at=model.started_at,
             completed_at=model.completed_at,
@@ -166,3 +168,26 @@ class EtoRunPipelineExecutionRepository(BaseRepository[EtoRunPipelineExecutionMo
             models = query.all()
 
             return [self._model_to_domain(model) for model in models]
+
+    def delete(self, execution_id: int) -> bool:
+        """
+        Delete pipeline execution record by ID.
+        Note: Cascade delete should handle related step records.
+
+        Args:
+            execution_id: Pipeline execution record ID
+
+        Returns:
+            True if deleted, False if not found
+        """
+        with self._get_session() as session:
+            model = session.get(self.model_class, execution_id)
+
+            if model is None:
+                return False
+
+            session.delete(model)
+            session.flush()  # Persist deletion
+
+            logger.debug(f"Deleted pipeline execution record {execution_id}")
+            return True

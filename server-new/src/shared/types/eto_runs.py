@@ -106,3 +106,47 @@ class EtoRunListView:
     template_name: Optional[str]
     template_version_id: Optional[int]
     template_version_num: Optional[int]
+
+
+@dataclass
+class EtoRunDetailView:
+    """
+    Complete detailed view for a single ETO run with all stage data.
+
+    Used by GET /eto-runs/{id} endpoint to return full run details including:
+    - Core run data
+    - PDF file info
+    - Email source info (if applicable)
+    - Stage 1: Template matching data
+    - Stage 2: Data extraction data
+    - Stage 3: Pipeline execution data
+
+    Composed in service layer by fetching run + all related records.
+    """
+    # Core run data
+    run: EtoRun
+
+    # PDF file info (always present)
+    pdf_file_id: int
+    pdf_original_filename: str
+    pdf_file_size: Optional[int]
+    pdf_page_count: Optional[int]
+
+    # Source info (email fields - all None if manual upload)
+    email_id: Optional[int]
+    email_sender_email: Optional[str]
+    email_received_date: Optional[datetime]
+    email_subject: Optional[str]
+    email_folder_name: Optional[str]
+
+    # Stage data (optional - depends on run progress)
+    # Import at runtime to avoid circular imports
+    template_matching: Optional[Any] = None  # EtoRunTemplateMatching
+    extraction: Optional[Any] = None  # EtoRunExtraction
+    pipeline_execution: Optional[Any] = None  # EtoRunPipelineExecution
+
+    # Matched template info (denormalized from template_matching for convenience)
+    matched_template_id: Optional[int] = None
+    matched_template_name: Optional[str] = None
+    matched_template_version_id: Optional[int] = None
+    matched_template_version_num: Optional[int] = None

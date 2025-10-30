@@ -39,12 +39,14 @@ class EtoRunTemplateMatchingRepository(BaseRepository[EtoRunTemplateMatchingMode
         Convert ORM model to EtoRunTemplateMatching dataclass.
 
         Handles enum to string conversion:
-        - model.status (EtoStepStatus enum) -> dataclass (string literal)
+        - model.status (EtoStepStatus enum or str) -> dataclass (string literal)
+
+        Note: With native_enum=False, SQLAlchemy may return string values instead of Enum instances
         """
         return EtoRunTemplateMatching(
             id=model.id,
             eto_run_id=model.eto_run_id,
-            status=model.status.value,  # Enum to string
+            status=model.status.value if hasattr(model.status, 'value') else model.status,
             matched_template_version_id=model.matched_template_version_id,
             started_at=model.started_at,
             completed_at=model.completed_at,
@@ -204,3 +206,25 @@ class EtoRunTemplateMatchingRepository(BaseRepository[EtoRunTemplateMatchingMode
                     result[model.eto_run_id] = self._model_to_domain(model)
 
             return result
+
+    def delete(self, record_id: int) -> bool:
+        """
+        Delete template matching record by ID.
+
+        Args:
+            record_id: Template matching record ID
+
+        Returns:
+            True if deleted, False if not found
+        """
+        with self._get_session() as session:
+            model = session.get(self.model_class, record_id)
+
+            if model is None:
+                return False
+
+            session.delete(model)
+            session.flush()  # Persist deletion
+
+            logger.debug(f"Deleted template matching record {record_id}")
+            return True
