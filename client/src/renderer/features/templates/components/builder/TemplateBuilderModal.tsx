@@ -3,8 +3,8 @@
  * 3-step wizard for creating PDF templates
  */
 
-import { useState, useMemo, useEffect } from "react";
-import { SignatureObject, ExtractionField } from "../../types";
+import { useState, useMemo, useEffect, useCallback } from "react";
+import { SignatureObject, ExtractionField, PdfObjects } from "../../types";
 import {
   SignatureObjectsStep,
   ExtractionFieldsStep,
@@ -13,9 +13,9 @@ import {
   TemplateSimulationResult,
 } from "./steps";
 import { TemplateBuilderHeader, TemplateBuilderStepper } from "./components";
-import { usePdfData, useUploadPdf, useProcessPdfObjects } from "../../../pdf";
+import { usePdfData, useUploadPdf, useProcessPdfObjects, type PdfData } from "../../../pdf";
 import { useModulesApi } from "../../../modules/hooks";
-import { useSimulateTemplate } from "../../api";
+import { useSimulateTemplate, type PostTemplateSimulateRequest } from "../../api";
 import { usePipelineValidation } from "../../../pipelines/hooks";
 import type { ModuleTemplate } from "../../../modules/types";
 import type {
@@ -54,7 +54,6 @@ type BuilderStep =
 export function TemplateBuilderModal({
   isOpen,
   mode,
-  templateId,
   pdfFileId,
   pdfFile,
   onClose,
@@ -65,15 +64,7 @@ export function TemplateBuilderModal({
     useState<BuilderStep>("signature-objects");
   const [templateName, setTemplateName] = useState("");
   const [templateDescription, setTemplateDescription] = useState("");
-  const [signatureObjects, setSignatureObjects] = useState<{
-    text_words: any[];
-    text_lines: any[];
-    graphic_rects: any[];
-    graphic_lines: any[];
-    graphic_curves: any[];
-    images: any[];
-    tables: any[];
-  }>({
+  const [signatureObjects, setSignatureObjects] = useState<PdfObjects>({
     text_words: [],
     text_lines: [],
     graphic_rects: [],
@@ -93,18 +84,19 @@ export function TemplateBuilderModal({
   });
 
   // Wrapper to log pipeline state changes
-  const setPipelineState = (newState: PipelineState) => {
+  const setPipelineState = useCallback((newState: PipelineState) => {
     console.log("[TemplateBuilderModal] Pipeline state changing:", {
       oldEntryPoints: pipelineState.entry_points.map((ep) => ep.node_id),
       newEntryPoints: newState.entry_points.map((ep) => ep.node_id),
     });
     setPipelineStateInternal(newState);
-  };
+  }, [pipelineState]);
+
   // Flat visual state: all node positions in one object
   const [visualState, setVisualStateInternal] = useState<VisualState>({});
 
   // Wrapper to log visual state changes
-  const setVisualState = (newState: VisualState) => {
+  const setVisualState = useCallback((newState: VisualState) => {
     console.log("[TemplateBuilderModal] Visual state updated:", {
       nodeCount: Object.keys(newState).length,
       entryPointIds: Object.keys(newState).filter((id) =>
@@ -116,7 +108,7 @@ export function TemplateBuilderModal({
       ),
     });
     setVisualStateInternal(newState);
-  };
+  }, []);
   const [testResults, setTestResults] =
     useState<TemplateSimulationResult | null>(null);
   const [isTesting, setIsTesting] = useState(false);
@@ -137,8 +129,7 @@ export function TemplateBuilderModal({
   const [pdfCurrentPage, setPdfCurrentPage] = useState<number>(1);
 
   // State for uploaded PDF file
-  const [uploadedPdfUrl, setUploadedPdfUrl] = useState<string | null>(null);
-  const [uploadedPdfData, setUploadedPdfData] = useState<any>(null);
+  const [uploadedPdfData, setUploadedPdfData] = useState<PdfData | null>(null);
   const [isProcessingUpload, setIsProcessingUpload] = useState(false);
 
   // Use React Query to fetch and cache PDF data (only for stored PDFs)
@@ -240,23 +231,23 @@ export function TemplateBuilderModal({
       );
       setSelectedObjectTypes(selectedTypes);
     }
-  }, [mode, initialData, isOpen]);
+  }, [mode, initialData, isOpen, setPipelineState, setVisualState]);
 
   // Process uploaded PDF file
   useEffect(() => {
     if (!pdfFile) {
-      setUploadedPdfUrl(null);
       setUploadedPdfData(null);
       return;
     }
+
+    let blobUrl: string | null = null;
 
     async function processUploadedPdf() {
       setIsProcessingUpload(true);
 
       try {
         // Create blob URL for PDF viewer
-        const blobUrl = URL.createObjectURL(pdfFile);
-        setUploadedPdfUrl(blobUrl);
+        blobUrl = URL.createObjectURL(pdfFile);
 
         // Process PDF to extract objects via real API
         const objectsData = await processObjects(pdfFile);
@@ -284,8 +275,7 @@ export function TemplateBuilderModal({
           error
         );
         // Keep URL but show empty objects on error
-        const blobUrl = URL.createObjectURL(pdfFile);
-        setUploadedPdfUrl(blobUrl);
+        blobUrl = URL.createObjectURL(pdfFile);
         setUploadedPdfData(null);
       } finally {
         setIsProcessingUpload(false);
@@ -296,11 +286,11 @@ export function TemplateBuilderModal({
 
     // Cleanup blob URL on unmount
     return () => {
-      if (uploadedPdfUrl) {
-        URL.revokeObjectURL(uploadedPdfUrl);
+      if (blobUrl) {
+        URL.revokeObjectURL(blobUrl);
       }
     };
-  }, [pdfFile]);
+  }, [pdfFile, processObjects]);
 
   // Extract PDF data from either stored PDF or uploaded file
   const activePdfData = pdfFile ? uploadedPdfData : pdfData;
@@ -459,14 +449,14 @@ export function TemplateBuilderModal({
       }));
 
       // Build JSON request (NOT FormData!)
-      const request = {
+      const request: PostTemplateSimulateRequest = {
         pdf_objects: pdfObjects.objects, // Send just the objects part (text_words, text_lines, etc.)
         extraction_fields: backendExtractionFields,
         pipeline_state: pipelineState,
       };
 
       // Call real simulate API with JSON body
-      const response = await simulateTemplate.mutateAsync(request as any); // TODO: Fix type mismatch with backend
+      const response = await simulateTemplate.mutateAsync(request);
 
       // Map API response to TemplateSimulationResult format
       // Convert extraction_results array to extracted_data map
@@ -584,7 +574,6 @@ export function TemplateBuilderModal({
     setTestResults(null);
     setPdfScale(1.0);
     setPdfCurrentPage(1);
-    setUploadedPdfUrl(null);
     setUploadedPdfData(null);
     onClose();
   };

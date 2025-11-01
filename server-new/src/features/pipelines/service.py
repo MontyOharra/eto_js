@@ -26,7 +26,7 @@ from shared.types.pipelines import (
     PinInfo,
 )
 from shared.types.pipeline_definition import (
-    PipelineDefinitionFull,
+    PipelineDefinition,
     PipelineDefinitionSummary,
     PipelineDefinitionCreate,
 )
@@ -578,7 +578,7 @@ class PipelineService:
     def create_pipeline_definition(
         self,
         create_data: PipelineDefinitionCreate
-    ) -> PipelineDefinitionFull:
+    ) -> PipelineDefinition:
         """
         Create new pipeline definition with compilation.
 
@@ -682,7 +682,7 @@ class PipelineService:
             logger.error(f"Error creating pipeline: {e}", exc_info=True)
             raise ServiceError(f"Failed to create pipeline: {str(e)}")
 
-    def get_pipeline_definition(self, pipeline_id: int) -> PipelineDefinitionFull:
+    def get_pipeline_definition(self, pipeline_id: int) -> PipelineDefinition:
         """
         Get pipeline definition by ID.
 

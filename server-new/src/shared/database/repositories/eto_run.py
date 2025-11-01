@@ -3,16 +3,20 @@ ETO Run Repository
 Repository for eto_runs table with CRUD operations
 """
 import logging
+import json
 from typing import Type, Optional, List, Tuple
 from datetime import datetime
 from sqlalchemy.orm import joinedload, selectinload
 
 from shared.database.repositories.base import BaseRepository
+from shared.exceptions.service import ObjectNotFoundError
 from shared.database.models import (
     EtoRunModel,
     PdfFileModel,
     EmailModel,
     EtoRunTemplateMatchingModel,
+    EtoRunExtractionModel,
+    EtoRunPipelineExecutionModel,
     PdfTemplateVersionModel,
     PdfTemplateModel,
 )
@@ -23,10 +27,16 @@ from shared.types.eto_runs import (
     EtoRunStatus,
     EtoProcessingStep,
     EtoRunListView,
+    EtoRunDetailView,
+    EtoRunTemplateMatchingDetailView,
+    EtoRunExtractionDetailView,
+    EtoRunPipelineExecutionDetailView,
 )
 from shared.types.pdf_files import PdfFile
 from shared.types.email import Email
 from shared.types.eto_run_template_matchings import EtoRunTemplateMatching
+from shared.types.eto_run_extractions import EtoRunExtraction
+from shared.types.eto_run_pipeline_executions import EtoRunPipelineExecution
 from shared.types.pdf_templates import PdfTemplate, PdfTemplateVersion
 
 logger = logging.getLogger(__name__)
@@ -67,8 +77,8 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
         return EtoRun(
             id=model.id,
             pdf_file_id=model.pdf_file_id,
-            status=model.status.value if hasattr(model.status, 'value') else model.status,
-            processing_step=model.processing_step.value if (model.processing_step and hasattr(model.processing_step, 'value')) else model.processing_step,
+            status=model.status,
+            processing_step=model.processing_step if model.processing_step else None,
             error_type=model.error_type,
             error_message=model.error_message,
             error_details=model.error_details,
@@ -122,7 +132,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
 
             return self._model_to_domain(model)
 
-    def update(self, run_id: int, data: EtoRunUpdate) -> Optional[EtoRun]:
+    def update(self, run_id: int, data: EtoRunUpdate) -> EtoRun:
         """
         Update ETO run. Only updates provided fields.
 
@@ -131,13 +141,16 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
             data: EtoRunUpdate with fields to update (all optional)
 
         Returns:
-            Updated EtoRun dataclass or None if not found
+            Updated EtoRun dataclass
+
+        Raises:
+            ObjectNotFoundError: If run with given ID does not exist
         """
         with self._get_session() as session:
             model = session.get(self.model_class, run_id)
 
             if model is None:
-                return None
+                raise ObjectNotFoundError(f"ETO run {run_id} not found")
 
             # Update only provided fields
             if data.status is not None:
@@ -233,27 +246,26 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
 
             return [self._model_to_domain(model) for model in models]
 
-    def delete(self, run_id: int) -> bool:
+    def delete(self, run_id: int) -> None:
         """
         Delete ETO run by ID.
 
         Args:
             run_id: ETO run ID
 
-        Returns:
-            True if deleted, False if not found
+        Raises:
+            ObjectNotFoundError: If run with given ID does not exist
         """
         with self._get_session() as session:
             model = session.get(self.model_class, run_id)
 
             if model is None:
-                return False
+                raise ObjectNotFoundError(f"ETO run {run_id} not found")
 
             session.delete(model)
             session.flush()  # Persist deletion
 
             logger.debug(f"Deleted ETO run {run_id}")
-            return True
 
     def get_all_with_relations(
         self,
@@ -382,3 +394,181 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                 )
                 for row in rows
             ]
+
+    def get_detail_with_stages(self, run_id: int) -> Optional[EtoRunDetailView]:
+        """
+        Get complete ETO run detail with all stage data using SQLAlchemy joins.
+
+        Performs single query with LEFT JOINs to fetch:
+        - Core ETO run data
+        - PDF file (required)
+        - Email (optional)
+        - Template matching stage (optional)
+        - Extraction stage (optional)
+        - Pipeline execution stage (optional)
+        - Template name/version for denormalization (optional)
+
+        Parses JSON fields and constructs detailed view dataclasses.
+
+        Args:
+            run_id: ETO run ID
+
+        Returns:
+            EtoRunDetailView with all data or None if run not found
+        """
+        with self._get_session() as session:
+            row = (
+                session.query(
+                    # ETO run fields
+                    EtoRunModel.id,
+                    EtoRunModel.status,
+                    EtoRunModel.processing_step,
+                    EtoRunModel.started_at,
+                    EtoRunModel.completed_at,
+                    EtoRunModel.error_type,
+                    EtoRunModel.error_message,
+                    EtoRunModel.error_details,
+                    EtoRunModel.created_at,
+                    # PDF file fields
+                    PdfFileModel.id.label("pdf_file_id"),
+                    PdfFileModel.original_filename,
+                    PdfFileModel.file_size,
+                    PdfFileModel.page_count,
+                    # Email fields (optional)
+                    EmailModel.id.label("email_id"),
+                    EmailModel.sender_email,
+                    EmailModel.received_date,
+                    EmailModel.subject,
+                    EmailModel.folder_name,
+                    # Template matching fields (optional)
+                    EtoRunTemplateMatchingModel.status.label("tm_status"),
+                    EtoRunTemplateMatchingModel.matched_template_version_id,
+                    EtoRunTemplateMatchingModel.started_at.label("tm_started_at"),
+                    EtoRunTemplateMatchingModel.completed_at.label("tm_completed_at"),
+                    # Template denormalization fields (optional)
+                    PdfTemplateModel.name.label("template_name"),
+                    PdfTemplateVersionModel.version_num.label("template_version_num"),
+                    # Extraction fields (optional)
+                    EtoRunExtractionModel.status.label("ex_status"),
+                    EtoRunExtractionModel.extracted_data,
+                    EtoRunExtractionModel.started_at.label("ex_started_at"),
+                    EtoRunExtractionModel.completed_at.label("ex_completed_at"),
+                    # Pipeline execution fields (optional)
+                    EtoRunPipelineExecutionModel.status.label("pe_status"),
+                    EtoRunPipelineExecutionModel.executed_actions,
+                    EtoRunPipelineExecutionModel.started_at.label("pe_started_at"),
+                    EtoRunPipelineExecutionModel.completed_at.label("pe_completed_at"),
+                )
+                .join(PdfFileModel, EtoRunModel.pdf_file_id == PdfFileModel.id)
+                .outerjoin(EmailModel, PdfFileModel.email_id == EmailModel.id)
+                .outerjoin(
+                    EtoRunTemplateMatchingModel,
+                    EtoRunTemplateMatchingModel.eto_run_id == EtoRunModel.id
+                )
+                .outerjoin(
+                    PdfTemplateVersionModel,
+                    PdfTemplateVersionModel.id == EtoRunTemplateMatchingModel.matched_template_version_id
+                )
+                .outerjoin(
+                    PdfTemplateModel,
+                    PdfTemplateModel.id == PdfTemplateVersionModel.pdf_template_id
+                )
+                .outerjoin(
+                    EtoRunExtractionModel,
+                    EtoRunExtractionModel.eto_run_id == EtoRunModel.id
+                )
+                .outerjoin(
+                    EtoRunPipelineExecutionModel,
+                    EtoRunPipelineExecutionModel.eto_run_id == EtoRunModel.id
+                )
+                .filter(EtoRunModel.id == run_id)
+                .first()
+            )
+
+            if row is None:
+                return None
+
+            # Build template matching detail view if stage exists
+            template_matching_detail = None
+            if row.tm_status:
+                template_matching_detail = EtoRunTemplateMatchingDetailView(
+                    status=row.tm_status.value,
+                    matched_template_version_id=row.matched_template_version_id,
+                    started_at=row.tm_started_at,
+                    completed_at=row.tm_completed_at,
+                    matched_template_name=row.template_name,
+                    matched_version_number=row.template_version_num,
+                )
+
+            # Build extraction detail view if stage exists
+            extraction_detail = None
+            if row.ex_status:
+                # Parse extracted_data JSON string to dict
+                extracted_dict = None
+                if row.extracted_data:
+                    try:
+                        extracted_dict = json.loads(row.extracted_data)
+                    except (json.JSONDecodeError, TypeError) as e:
+                        logger.warning(
+                            f"Failed to parse extracted_data for run {run_id}: {e}"
+                        )
+
+                extraction_detail = EtoRunExtractionDetailView(
+                    status=row.ex_status.value,
+                    started_at=row.ex_started_at,
+                    completed_at=row.ex_completed_at,
+                    extracted_data=extracted_dict,
+                )
+
+            # Build pipeline execution detail view if stage exists
+            pipeline_execution_detail = None
+            if row.pe_status:
+                # Parse executed_actions JSON string to dict
+                actions_dict = None
+                if row.executed_actions:
+                    try:
+                        actions_dict = json.loads(row.executed_actions)
+                    except (json.JSONDecodeError, TypeError) as e:
+                        logger.warning(
+                            f"Failed to parse executed_actions for run {run_id}: {e}"
+                        )
+
+                pipeline_execution_detail = EtoRunPipelineExecutionDetailView(
+                    status=row.pe_status.value,
+                    started_at=row.pe_started_at,
+                    completed_at=row.pe_completed_at,
+                    executed_actions=actions_dict,
+                )
+
+            # Build final EtoRunDetailView
+            return EtoRunDetailView(
+                # Core run data
+                id=row.id,
+                status=row.status.value,
+                processing_step=row.processing_step.value if row.processing_step else None,
+                started_at=row.started_at,
+                completed_at=row.completed_at,
+                error_type=row.error_type,
+                error_message=row.error_message,
+                error_details=row.error_details,
+                # PDF file info
+                pdf_file_id=row.pdf_file_id,
+                pdf_original_filename=row.original_filename,
+                pdf_file_size=row.file_size,
+                pdf_page_count=row.page_count,
+                # Email info (optional)
+                email_id=row.email_id,
+                email_sender_email=row.sender_email,
+                email_received_date=row.received_date,
+                email_subject=row.subject,
+                email_folder_name=row.folder_name,
+                # Stage data (optional)
+                template_matching=template_matching_detail,
+                extraction=extraction_detail,
+                pipeline_execution=pipeline_execution_detail,
+                # Denormalized template info at root level (convenience)
+                matched_template_id=row.matched_template_version_id,
+                matched_template_name=row.template_name,
+                matched_template_version_id=row.matched_template_version_id,
+                matched_template_version_num=row.template_version_num,
+            )

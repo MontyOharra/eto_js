@@ -191,7 +191,6 @@ class EtoRunDetail(BaseModel):
     error_type: Optional[str] = None
     error_message: Optional[str] = None
     error_details: Optional[str] = None
-    created_at: str  # ISO 8601
 
     # PDF file info
     pdf: EtoPdfInfo

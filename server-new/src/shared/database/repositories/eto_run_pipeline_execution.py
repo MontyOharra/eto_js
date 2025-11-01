@@ -46,7 +46,7 @@ class EtoRunPipelineExecutionRepository(BaseRepository[EtoRunPipelineExecutionMo
         return EtoRunPipelineExecution(
             id=model.id,
             eto_run_id=model.eto_run_id,
-            status=model.status.value if hasattr(model.status, 'value') else model.status,
+            status=model.status,
             executed_actions=model.executed_actions,
             started_at=model.started_at,
             completed_at=model.completed_at,

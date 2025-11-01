@@ -154,8 +154,8 @@ export interface ExtractedFieldResult {
 export interface ExecutionStepResult {
   module_instance_id: string;
   step_number: number;
-  inputs: Record<string, { value: any; type: string }>;
-  outputs: Record<string, { value: any; type: string }>;
+  inputs: Record<string, { value: unknown; type: string }>;
+  outputs: Record<string, { value: unknown; type: string }>;
   error: string | null;
 }
 
@@ -167,6 +167,6 @@ export interface PostTemplateSimulateResponse {
   extraction_results: ExtractedFieldResult[];  // Fields with extracted values and bbox info
   pipeline_status: string;  // "success" | "failed"
   pipeline_steps: ExecutionStepResult[];
-  pipeline_actions: Record<string, Record<string, any>>;  // {module_instance_id: inputs}
+  pipeline_actions: Record<string, Record<string, unknown>>;  // {module_instance_id: inputs}
   pipeline_error: string | null;
 }

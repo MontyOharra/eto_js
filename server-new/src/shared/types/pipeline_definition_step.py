@@ -9,7 +9,7 @@ from .pipelines import NodeInstance
 
 
 @dataclass(frozen=True)
-class PipelineDefinitionStepFull:
+class PipelineDefinitionStep:
     """
     Complete pipeline step record from database.
 

@@ -4,7 +4,7 @@ Dataclasses representing eto_runs table and related operations
 """
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Literal, Optional, Any
+from typing import Literal, Optional, Dict, Any
 
 # =========================
 # Type Aliases for Enums
@@ -108,6 +108,63 @@ class EtoRunListView:
     template_version_num: Optional[int]
 
 
+# =========================
+# Detail View Stage Types
+# =========================
+
+@dataclass
+class EtoRunTemplateMatchingDetailView:
+    """
+    Template matching stage with denormalized template info.
+    Combines EtoRunTemplateMatching with template name/version data.
+
+    Used in EtoRunDetailView to provide full template matching context.
+    """
+    # From EtoRunTemplateMatching
+    status: Literal["processing", "success", "failure"]
+    matched_template_version_id: Optional[int]
+    started_at: Optional[datetime]
+    completed_at: Optional[datetime]
+
+    # Denormalized from joined template data
+    matched_template_name: Optional[str] = None
+    matched_version_number: Optional[int] = None
+
+
+@dataclass
+class EtoRunExtractionDetailView:
+    """
+    Data extraction stage with parsed extracted_data JSON.
+    Extends EtoRunExtraction by parsing JSON string to dict.
+
+    Used in EtoRunDetailView to provide extracted field values.
+    """
+    # From EtoRunExtraction
+    status: Literal["processing", "success", "failure"]
+    started_at: Optional[datetime]
+    completed_at: Optional[datetime]
+
+    # Parsed from extracted_data JSON string field
+    extracted_data: Optional[Dict[str, Any]] = None
+
+
+@dataclass
+class EtoRunPipelineExecutionDetailView:
+    """
+    Pipeline execution stage with parsed executed_actions JSON.
+
+    Used in EtoRunDetailView to provide pipeline execution results.
+    Note: Step-by-step trace can be fetched separately if needed.
+    """
+    # From EtoRunPipelineExecution
+    status: Literal["processing", "success", "failure"]
+    started_at: Optional[datetime]
+    completed_at: Optional[datetime]
+
+    # Parsed from executed_actions JSON string field
+    executed_actions: Optional[Dict[str, Any]] = None
+
+
 @dataclass
 class EtoRunDetailView:
     """
@@ -124,7 +181,14 @@ class EtoRunDetailView:
     Composed in service layer by fetching run + all related records.
     """
     # Core run data
-    run: EtoRun
+    id: int
+    status: EtoRunStatus
+    processing_step: Optional[EtoProcessingStep]
+    started_at: Optional[datetime]
+    completed_at: Optional[datetime]
+    error_type: Optional[str]
+    error_message: Optional[str]
+    error_details: Optional[str]
 
     # PDF file info (always present)
     pdf_file_id: int
@@ -140,10 +204,9 @@ class EtoRunDetailView:
     email_folder_name: Optional[str]
 
     # Stage data (optional - depends on run progress)
-    # Import at runtime to avoid circular imports
-    template_matching: Optional[Any] = None  # EtoRunTemplateMatching
-    extraction: Optional[Any] = None  # EtoRunExtraction
-    pipeline_execution: Optional[Any] = None  # EtoRunPipelineExecution
+    template_matching: Optional[EtoRunTemplateMatchingDetailView] = None
+    extraction: Optional[EtoRunExtractionDetailView] = None
+    pipeline_execution: Optional[EtoRunPipelineExecutionDetailView] = None
 
     # Matched template info (denormalized from template_matching for convenience)
     matched_template_id: Optional[int] = None

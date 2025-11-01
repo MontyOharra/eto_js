@@ -1,6 +1,13 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
-import { useTemplatesApi } from '../../../features/templates/hooks';
+import { useState, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import {
+  useTemplates,
+  useCreateTemplate,
+  useUpdateTemplate,
+  useActivateTemplate,
+  useDeactivateTemplate,
+} from '../../../features/templates';
 import { usePipelinesApi } from '../../../features/pipelines/hooks/usePipelinesApi';
 import { TemplateCard, TemplateBuilderModal, TemplateDetailModal, TemplateData } from '../../../features/templates/components';
 import { TemplateListItem, TemplateStatus } from '../../../features/templates/types';
@@ -13,21 +20,16 @@ type SortBy = 'name' | 'status' | 'usage_count';
 type SortOrder = 'asc' | 'desc';
 
 function TemplatesPage() {
-  const {
-    getTemplates,
-    getTemplateDetail,
-    createTemplate,
-    updateTemplate,
-    getTemplateVersionDetail,
-    activateTemplate,
-    deactivateTemplate,
-    isLoading,
-    error,
-  } = useTemplatesApi();
+  // TanStack Query hooks
+  const { data: allTemplates = [], isLoading, error } = useTemplates();
+  const createTemplate = useCreateTemplate();
+  const updateTemplate = useUpdateTemplate();
+  const activateTemplate = useActivateTemplate();
+  const deactivateTemplate = useDeactivateTemplate();
 
   const { getPipeline } = usePipelinesApi();
+  const queryClient = useQueryClient();
 
-  const [allTemplates, setAllTemplates] = useState<TemplateListItem[]>([]);
   const [statusFilter, setStatusFilter] = useState<TemplateStatus | 'all'>('all');
   const [sortBy, setSortBy] = useState<SortBy>('name');
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
@@ -44,22 +46,8 @@ function TemplatesPage() {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [detailTemplateId, setDetailTemplateId] = useState<number | null>(null);
 
-  // Fetch templates on mount
-  useEffect(() => {
-    loadTemplates();
-  }, []);
-
-  const loadTemplates = async () => {
-    try {
-      const templates = await getTemplates();
-      setAllTemplates(templates);
-    } catch (err) {
-      console.error('Failed to load templates:', err);
-    }
-  };
-
-  // Filter and sort templates
-  const getFilteredAndSortedTemplates = (): TemplateListItem[] => {
+  // Filter and sort templates using useMemo
+  const filteredTemplates = useMemo((): TemplateListItem[] => {
     // Filter by status
     let filtered =
       statusFilter === 'all'
@@ -97,9 +85,7 @@ function TemplatesPage() {
     });
 
     return sorted;
-  };
-
-  const filteredTemplates = getFilteredAndSortedTemplates();
+  }, [allTemplates, statusFilter, sortBy, sortOrder]);
 
   // ==========================================================================
   // Button Handlers
@@ -121,8 +107,11 @@ function TemplatesPage() {
       setIsDetailOpen(false);
       setDetailTemplateId(null);
 
-      // Load template detail, version detail, and pipeline in parallel
-      const templateDetail = await getTemplateDetail(templateId);
+      // Fetch template detail and version detail using queryClient
+      const templateDetail = await queryClient.fetchQuery({
+        queryKey: ['template', templateId],
+        staleTime: 0, // Force fresh fetch
+      });
 
       if (!templateDetail.current_version_id) {
         alert('Cannot edit template: No current version found');
@@ -130,10 +119,16 @@ function TemplatesPage() {
       }
 
       const [versionDetail, pipelineData] = await Promise.all([
-        getTemplateVersionDetail(templateDetail.current_version_id),
+        queryClient.fetchQuery({
+          queryKey: ['template-version', templateDetail.current_version_id],
+          staleTime: 0,
+        }),
         // We need to get the pipeline to access pipeline_state and visual_state
         (async () => {
-          const versionData = await getTemplateVersionDetail(templateDetail.current_version_id!);
+          const versionData = await queryClient.fetchQuery({
+            queryKey: ['template-version', templateDetail.current_version_id],
+            staleTime: 0,
+          });
           return getPipeline(versionData.pipeline_definition_id);
         })()
       ]);
@@ -164,9 +159,8 @@ function TemplatesPage() {
 
   const handleActivate = async (templateId: number) => {
     try {
-      await activateTemplate(templateId);
-      // Reload templates after successful activation
-      await loadTemplates();
+      await activateTemplate.mutateAsync(templateId);
+      // TanStack Query auto-invalidates and refetches on success
     } catch (err) {
       console.error('Failed to activate template:', err);
     }
@@ -174,9 +168,8 @@ function TemplatesPage() {
 
   const handleDeactivate = async (templateId: number) => {
     try {
-      await deactivateTemplate(templateId);
-      // Reload templates after successful deactivation
-      await loadTemplates();
+      await deactivateTemplate.mutateAsync(templateId);
+      // TanStack Query auto-invalidates and refetches on success
     } catch (err) {
       console.error('Failed to deactivate template:', err);
     }
@@ -222,13 +215,31 @@ function TemplatesPage() {
   const handleSaveTemplate = async (templateData: TemplateData) => {
     try {
       if (builderMode === 'create') {
-        await createTemplate(templateData);
+        await createTemplate.mutateAsync({
+          name: templateData.name,
+          description: templateData.description,
+          source_pdf_id: templateData.source_pdf_id!,
+          signature_objects: templateData.signature_objects,
+          extraction_fields: templateData.extraction_fields,
+          pipeline_state: templateData.pipeline_state,
+          visual_state: templateData.visual_state,
+        } as any); // TODO: Fix type mismatch with SignatureObject[] vs PdfObjects
         console.log('Template created successfully');
       } else if (builderMode === 'edit' && builderTemplateId) {
-        await updateTemplate(builderTemplateId, templateData);
+        await updateTemplate.mutateAsync({
+          templateId: builderTemplateId,
+          request: {
+            name: templateData.name,
+            description: templateData.description,
+            signature_objects: templateData.signature_objects,
+            extraction_fields: templateData.extraction_fields,
+            pipeline_state: templateData.pipeline_state,
+            visual_state: templateData.visual_state,
+          } as any, // TODO: Fix type mismatch
+        });
         console.log('Template updated successfully');
       }
-      await loadTemplates();
+      // TanStack Query auto-invalidates and refetches on success
     } catch (err) {
       console.error(`Failed to ${builderMode} template:`, err);
       throw err; // Re-throw to let modal handle error
@@ -244,9 +255,11 @@ function TemplatesPage() {
       <div className="p-6">
         <div className="bg-red-900 border border-red-700 rounded-lg p-4">
           <h2 className="text-xl font-bold text-red-300 mb-2">Error</h2>
-          <p className="text-red-200">{error}</p>
+          <p className="text-red-200">
+            {error instanceof Error ? error.message : 'Failed to load templates'}
+          </p>
           <button
-            onClick={loadTemplates}
+            onClick={() => window.location.reload()}
             className="mt-4 px-4 py-2 bg-red-700 hover:bg-red-600 text-white rounded transition-colors"
           >
             Retry
@@ -267,10 +280,11 @@ function TemplatesPage() {
           </p>
         </div>
         <button
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={handleCreateTemplate}
+          disabled={isLoading || createTemplate.isPending}
         >
-          + Create Template
+          {createTemplate.isPending ? 'Creating...' : '+ Create Template'}
         </button>
       </div>
 

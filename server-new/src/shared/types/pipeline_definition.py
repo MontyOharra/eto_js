@@ -9,7 +9,7 @@ from .pipelines import PipelineState, VisualState
 
 
 @dataclass(frozen=True)
-class PipelineDefinitionFull:
+class PipelineDefinition:
     """
     Complete pipeline definition from database.
 

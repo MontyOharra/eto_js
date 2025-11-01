@@ -27,8 +27,8 @@ from shared.database.repositories import (
     ModuleRepository,
 )
 from features.modules.utils.registry import ModuleRegistry
-from shared.types.pipeline_definition import PipelineDefinitionFull
-from shared.types.pipeline_definition_step import PipelineDefinitionStepFull
+from shared.types.pipeline_definition import PipelineDefinition
+from shared.types.pipeline_definition_step import PipelineDefinitionStep
 from shared.types.pipelines import NodeInstance
 from shared.types.pipeline_execution import (
     PipelineExecutionRun,
@@ -322,7 +322,7 @@ class PipelineExecutionService:
 
     def simulate_pipeline(
         self,
-        steps: List[PipelineDefinitionStepFull],
+        steps: List[PipelineDefinitionStep],
         entry_values_by_name: Dict[str, Any],
         pipeline_state,  # PipelineState from pipelines module
     ) -> PipelineExecutionResult:
@@ -365,7 +365,7 @@ class PipelineExecutionService:
 
     def execute_pipeline(
         self,
-        steps: List[PipelineDefinitionStepFull],
+        steps: List[PipelineDefinitionStep],
         entry_values_by_name: Dict[str, Any],
         pipeline_state,  # PipelineState from pipelines module
     ) -> PipelineExecutionResult:
@@ -406,7 +406,7 @@ class PipelineExecutionService:
 
     def _execute_pipeline_internal(
         self,
-        steps: List[PipelineDefinitionStepFull],
+        steps: List[PipelineDefinitionStep],
         entry_values_by_name: Dict[str, Any],
         pipeline_state,  # PipelineState from pipelines module
         execute_actions: bool,
@@ -468,7 +468,7 @@ class PipelineExecutionService:
         # Step 4: Build Dask graph
         task_of_step: Dict[str, Any] = {}
         non_action_tasks: List[Any] = []
-        action_steps: List[PipelineDefinitionStepFull] = []
+        action_steps: List[PipelineDefinitionStep] = []
 
         # Determine module kind for each step
         for step in steps:
@@ -529,7 +529,7 @@ class PipelineExecutionService:
 
     # ==================== Helper Methods (to be implemented) ====================
 
-    def _require_pipeline(self, pipeline_definition_id: int) -> PipelineDefinitionFull:
+    def _require_pipeline(self, pipeline_definition_id: int) -> PipelineDefinition:
         """
         Load pipeline and verify it's compiled.
 
@@ -560,7 +560,7 @@ class PipelineExecutionService:
 
         return pipeline
 
-    def _require_compiled_steps(self, compiled_plan_id: int) -> List[PipelineDefinitionStepFull]:
+    def _require_compiled_steps(self, compiled_plan_id: int) -> List[PipelineDefinitionStep]:
         """
         Load compiled steps ordered by step_number.
 
@@ -584,7 +584,7 @@ class PipelineExecutionService:
 
     def _map_entry_names_to_pin_ids(
         self,
-        pipeline: PipelineDefinitionFull
+        pipeline: PipelineDefinition
     ) -> Dict[str, List[str]]:
         """
         Build {entry_name -> [pin_id, ...]} from pipeline_state.entry_points.
@@ -669,7 +669,7 @@ class PipelineExecutionService:
 
     def _make_step_task(
         self,
-        step: PipelineDefinitionStepFull,
+        step: PipelineDefinitionStep,
         producer_of_pin: Dict[str, Any],
         collector: StepResultCollector,
         action_collector: ActionDataCollector,
@@ -885,7 +885,7 @@ class PipelineExecutionService:
 
     def _publish_outputs_for_downstream(
         self,
-        step: PipelineDefinitionStepFull,
+        step: PipelineDefinitionStep,
         task: Any,
         producer_of_pin: Dict[str, Any],
     ) -> None:

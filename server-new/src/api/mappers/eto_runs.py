@@ -2,8 +2,7 @@
 ETO Runs Mappers
 Convert between domain dataclasses and API Pydantic models
 """
-import json
-from typing import List, Optional, Any
+from typing import List, Optional
 
 from shared.types.eto_runs import EtoRunListView, EtoRun, EtoRunDetailView
 from api.schemas.eto_runs import (
@@ -125,9 +124,11 @@ def eto_run_detail_to_api(detail: EtoRunDetailView) -> EtoRunDetail:
 
     Handles:
     - Datetime to ISO 8601 string conversion
-    - JSON string parsing for extracted_data and executed_actions
     - Nested model construction (PDF, source, stages)
     - Discriminated union for source (manual vs email)
+
+    Note: JSON data (extracted_data, executed_actions) is already parsed
+    in the DetailView types - no parsing needed here.
 
     Args:
         detail: EtoRunDetailView domain dataclass with all related data
@@ -175,52 +176,35 @@ def eto_run_detail_to_api(detail: EtoRunDetailView) -> EtoRunDetail:
 
     # Stage 2: Data extraction
     if detail.extraction:
-        # Parse JSON string to dict
-        extracted_data_dict: Optional[dict[str, Any]] = None
-        if detail.extraction.extracted_data:
-            try:
-                extracted_data_dict = json.loads(detail.extraction.extracted_data)
-            except json.JSONDecodeError:
-                # If JSON parsing fails, leave as None
-                extracted_data_dict = None
-
+        # Data is already parsed in EtoRunExtractionDetailView (Dict[str, Any])
         stage_data_extraction = EtoStageDataExtraction(
             status=detail.extraction.status,
-            extracted_data=extracted_data_dict,
+            extracted_data=detail.extraction.extracted_data,  # Already parsed dict
             started_at=detail.extraction.started_at.isoformat() if detail.extraction.started_at else None,
             completed_at=detail.extraction.completed_at.isoformat() if detail.extraction.completed_at else None,
         )
 
     # Stage 3: Pipeline execution
     if detail.pipeline_execution:
-        # Parse JSON string to dict
-        executed_actions_dict: Optional[dict[str, Any]] = None
-        if detail.pipeline_execution.executed_actions:
-            try:
-                executed_actions_dict = json.loads(detail.pipeline_execution.executed_actions)
-            except json.JSONDecodeError:
-                # If JSON parsing fails, leave as None
-                executed_actions_dict = None
-
+        # Data is already parsed in EtoRunPipelineExecutionDetailView (Dict[str, Any])
         stage_pipeline_execution = EtoStagePipelineExecution(
             status=detail.pipeline_execution.status,
-            executed_actions=executed_actions_dict,
+            executed_actions=detail.pipeline_execution.executed_actions,  # Already parsed dict
             started_at=detail.pipeline_execution.started_at.isoformat() if detail.pipeline_execution.started_at else None,
             completed_at=detail.pipeline_execution.completed_at.isoformat() if detail.pipeline_execution.completed_at else None,
         )
 
     # Build the main EtoRunDetail
     return EtoRunDetail(
-        # Core run data
-        id=detail.run.id,
-        status=detail.run.status,
-        processing_step=detail.run.processing_step,
-        started_at=detail.run.started_at.isoformat() if detail.run.started_at else None,
-        completed_at=detail.run.completed_at.isoformat() if detail.run.completed_at else None,
-        error_type=detail.run.error_type,
-        error_message=detail.run.error_message,
-        error_details=detail.run.error_details,
-        created_at=detail.run.created_at.isoformat(),
+        # Core run data (all fields are at root level in EtoRunDetailView)
+        id=detail.id,
+        status=detail.status,
+        processing_step=detail.processing_step,
+        started_at=detail.started_at.isoformat() if detail.started_at else None,
+        completed_at=detail.completed_at.isoformat() if detail.completed_at else None,
+        error_type=detail.error_type,
+        error_message=detail.error_message,
+        error_details=detail.error_details,
         # PDF and source
         pdf=pdf,
         source=source,

@@ -10,7 +10,7 @@ from sqlalchemy import select
 from shared.database.repositories.base import BaseRepository
 from shared.database.models import PipelineDefinitionStepModel
 from shared.types.pipeline_definition_step import (
-    PipelineDefinitionStepFull,
+    PipelineDefinitionStep,
     PipelineDefinitionStepCreate,
 )
 from shared.types.pipelines import NodeInstance
@@ -72,9 +72,9 @@ class PipelineDefinitionStepRepository(BaseRepository[PipelineDefinitionStepMode
 
         return result
 
-    def _model_to_full(self, model: PipelineDefinitionStepModel) -> PipelineDefinitionStepFull:
-        """Convert ORM model to PipelineDefinitionStepFull dataclass"""
-        return PipelineDefinitionStepFull(
+    def _model_to_full(self, model: PipelineDefinitionStepModel) -> PipelineDefinitionStep:
+        """Convert ORM model to PipelineDefinitionStep dataclass"""
+        return PipelineDefinitionStep(
             id=model.id,
             pipeline_compiled_plan_id=model.pipeline_compiled_plan_id,
             module_instance_id=model.module_instance_id,
@@ -88,7 +88,7 @@ class PipelineDefinitionStepRepository(BaseRepository[PipelineDefinitionStepMode
     def create_steps(
         self,
         steps: List[PipelineDefinitionStepCreate]
-    ) -> List[PipelineDefinitionStepFull]:
+    ) -> List[PipelineDefinitionStep]:
         """
         Bulk create pipeline definition steps.
 
@@ -129,7 +129,7 @@ class PipelineDefinitionStepRepository(BaseRepository[PipelineDefinitionStepMode
     def get_steps_by_plan_id(
         self,
         compiled_plan_id: int
-    ) -> List[PipelineDefinitionStepFull]:
+    ) -> List[PipelineDefinitionStep]:
         """
         Get all steps for a compiled plan, ordered by step_number.
 
@@ -151,7 +151,7 @@ class PipelineDefinitionStepRepository(BaseRepository[PipelineDefinitionStepMode
 
             return [self._model_to_full(model) for model in models]
 
-    def get_by_id(self, step_id: int) -> Optional[PipelineDefinitionStepFull]:
+    def get_by_id(self, step_id: int) -> Optional[PipelineDefinitionStep]:
         """
         Get step by ID.
 

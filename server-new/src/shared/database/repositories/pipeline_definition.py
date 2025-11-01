@@ -10,7 +10,7 @@ from sqlalchemy import select, desc, asc
 from shared.database.repositories.base import BaseRepository
 from shared.database.models import PipelineDefinitionModel
 from shared.types.pipeline_definition import (
-    PipelineDefinitionFull,
+    PipelineDefinition,
     PipelineDefinitionSummary,
     PipelineDefinitionCreate,
 )
@@ -89,9 +89,9 @@ class PipelineDefinitionRepository(BaseRepository[PipelineDefinitionModel]):
             # New flat structure
             return {k: Position(**v) for k, v in data.items()}
 
-    def _model_to_full(self, model: PipelineDefinitionModel) -> PipelineDefinitionFull:
-        """Convert ORM model to PipelineDefinitionFull dataclass"""
-        return PipelineDefinitionFull(
+    def _model_to_full(self, model: PipelineDefinitionModel) -> PipelineDefinition:
+        """Convert ORM model to PipelineDefinition dataclass"""
+        return PipelineDefinition(
             id=model.id,
             pipeline_state=self._deserialize_pipeline_state(model.pipeline_state),
             visual_state=self._deserialize_visual_state(model.visual_state),
@@ -109,7 +109,7 @@ class PipelineDefinitionRepository(BaseRepository[PipelineDefinitionModel]):
             updated_at=model.updated_at
         )
 
-    def create(self, create_data: PipelineDefinitionCreate) -> PipelineDefinitionFull:
+    def create(self, create_data: PipelineDefinitionCreate) -> PipelineDefinition:
         """
         Create new pipeline definition.
 
@@ -137,7 +137,7 @@ class PipelineDefinitionRepository(BaseRepository[PipelineDefinitionModel]):
 
             return self._model_to_full(pipeline_def)
 
-    def get_by_id(self, pipeline_id: int) -> Optional[PipelineDefinitionFull]:
+    def get_by_id(self, pipeline_id: int) -> Optional[PipelineDefinition]:
         """
         Get pipeline definition by ID.
 

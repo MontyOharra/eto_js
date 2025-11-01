@@ -12,7 +12,7 @@ from shared.types.pipelines import (
     Position as PositionDomain,
 )
 from shared.types.pipeline_definition import (
-    PipelineDefinitionFull,
+    PipelineDefinition,
     PipelineDefinitionSummary,
     PipelineDefinitionCreate,
 )
@@ -102,8 +102,8 @@ def convert_pipeline_summary_list(summaries: list[PipelineDefinitionSummary]) ->
     return [convert_pipeline_summary(summary) for summary in summaries]
 
 
-def convert_pipeline_detail(pipeline: PipelineDefinitionFull) -> PipelineDetail:
-    """Convert domain PipelineDefinitionFull to API PipelineDetail"""
+def convert_pipeline_detail(pipeline: PipelineDefinition) -> PipelineDetail:
+    """Convert domain PipelineDefinition to API PipelineDetail"""
     return PipelineDetail(
         id=pipeline.id,
         compiled_plan_id=pipeline.compiled_plan_id,

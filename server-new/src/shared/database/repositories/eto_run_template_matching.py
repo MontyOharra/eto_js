@@ -46,7 +46,7 @@ class EtoRunTemplateMatchingRepository(BaseRepository[EtoRunTemplateMatchingMode
         return EtoRunTemplateMatching(
             id=model.id,
             eto_run_id=model.eto_run_id,
-            status=model.status.value if hasattr(model.status, 'value') else model.status,
+            status=model.status,
             matched_template_version_id=model.matched_template_version_id,
             started_at=model.started_at,
             completed_at=model.completed_at,
