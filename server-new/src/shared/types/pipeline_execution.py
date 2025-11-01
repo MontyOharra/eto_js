@@ -4,9 +4,7 @@ Domain types for pipeline execution runs and audit trail
 """
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, Any, Optional
-
-from shared.database.models import EtoStepStatus
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -20,10 +18,10 @@ class PipelineExecutionRun:
     """
     id: int
     eto_run_id: int
-    status: EtoStepStatus
-    executed_actions: Optional[str]
-    started_at: Optional[datetime]
-    completed_at: Optional[datetime]
+    status: str
+    executed_actions: str | None
+    started_at: datetime | None
+    completed_at: datetime | None
     created_at: datetime
     updated_at: datetime
 
@@ -37,9 +35,9 @@ class PipelineExecutionRunCreate:
     Updated to SUCCESS/FAILURE when execution completes.
     """
     eto_run_id: int
-    status: EtoStepStatus = EtoStepStatus.PROCESSING
-    executed_actions: Optional[str] = None
-    started_at: Optional[datetime] = None
+    status: str = 'processing'
+    executed_actions: str | None = None
+    started_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -54,9 +52,9 @@ class PipelineExecutionStep:
     run_id: int
     module_instance_id: str
     step_number: int
-    inputs: Dict[str, Dict[str, Any]]  # {node_name: {value, type}}
-    outputs: Dict[str, Dict[str, Any]]  # {node_name: {value, type}}
-    error: Optional[str]
+    inputs: dict[str, dict[str, Any]]  # {node_name: {value, type}}
+    outputs: dict[str, dict[str, Any]]  # {node_name: {value, type}}
+    error: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -81,9 +79,9 @@ class PipelineExecutionStepCreate:
     run_id: int
     module_instance_id: str
     step_number: int
-    inputs: Dict[str, Dict[str, Any]] = field(default_factory=dict)
-    outputs: Dict[str, Dict[str, Any]] = field(default_factory=dict)
-    error: Optional[str] = None
+    inputs: dict[str, dict[str, Any]] = field(default_factory=dict)
+    outputs: dict[str, dict[str, Any]] = field(default_factory=dict)
+    error: str | None = None
 
 
 # ==================== Simulation Types ====================
@@ -99,9 +97,9 @@ class PipelineExecutionStepResult:
     """
     module_instance_id: str
     step_number: int
-    inputs: Dict[str, Dict[str, Any]]  # {node_id: {name, value, type}}
-    outputs: Dict[str, Dict[str, Any]]  # {node_id: {name, value, type}}
-    error: Optional[str] = None
+    inputs: dict[str, dict[str, Any]]  # {node_id: {name, value, type}}
+    outputs: dict[str, dict[str, Any]]  # {node_id: {name, value, type}}
+    error: str | None = None
 
 
 @dataclass(frozen=True)
@@ -120,11 +118,11 @@ class ActionExecutionData:
     module_instance_id: str
     module_title: str  # e.g., "Print to Server Log" - for display
     action_module_id: str  # e.g., "print_action" - for handler lookup
-    inputs: Dict[str, Any]  # {upstream_pin_name: value} - using connected output pin names
-    config: Dict[str, Any]  # Module configuration
+    inputs: dict[str, Any]  # {upstream_pin_name: value} - using connected output pin names
+    config: dict[str, Any]  # Module configuration
     executed: bool  # True if actually executed, False if simulation only
-    outputs: Optional[Dict[str, Any]] = None  # Outputs if executed, None if simulation
-    error: Optional[str] = None  # Error message if execution failed
+    outputs: dict[str, Any] | None = None  # Outputs if executed, None if simulation
+    error: str | None = None  # Error message if execution failed
 
 
 @dataclass(frozen=True)
@@ -140,5 +138,5 @@ class PipelineExecutionResult:
     """
     status: str  # "success" or "failed"
     steps: list  # List[PipelineExecutionStepResult]
-    executed_actions: Dict[str, Dict[str, Any]]  # {module_id: {field: value}}
-    error: Optional[str] = None
+    executed_actions: dict[str, dict[str, Any]]  # {module_id: {field: value}}
+    error: str | None = None

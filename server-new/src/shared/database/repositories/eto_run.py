@@ -24,8 +24,6 @@ from shared.types.eto_runs import (
     EtoRun,
     EtoRunCreate,
     EtoRunUpdate,
-    EtoRunStatus,
-    EtoProcessingStep,
     EtoRunListView,
     EtoRunDetailView,
     EtoRunTemplateMatchingDetailView,
@@ -172,7 +170,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
 
     def get_all(
         self,
-        status: Optional[EtoRunStatus] = None,
+        status: Optional[str] = None,
         limit: Optional[int] = None,
         offset: Optional[int] = None,
         order_by: str = "created_at",
@@ -220,7 +218,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
             models = query.all()
             return [self._model_to_domain(model) for model in models]
 
-    def get_by_status(self, status: EtoRunStatus, limit: Optional[int] = None) -> List[EtoRun]:
+    def get_by_status(self, status: str, limit: Optional[int] = None) -> List[EtoRun]:
         """
         Get ETO runs by status.
         Used by worker to find runs that need processing.
@@ -265,7 +263,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
 
     def get_all_with_relations(
         self,
-        status: Optional[EtoRunStatus] = None,
+        status: Optional[str] = None,
         limit: Optional[int] = None,
         offset: Optional[int] = None,
         order_by: str = "created_at",

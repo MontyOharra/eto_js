@@ -11,7 +11,6 @@ from shared.types.eto_run_extractions import (
     EtoRunExtraction,
     EtoRunExtractionCreate,
     EtoRunExtractionUpdate,
-    EtoStepStatus,
 )
 
 logger = logging.getLogger(__name__)
@@ -149,7 +148,7 @@ class EtoRunExtractionRepository(BaseRepository[EtoRunExtractionModel]):
 
             return self._model_to_domain(model)
 
-    def get_by_status(self, status: EtoStepStatus, limit: Optional[int] = None) -> List[EtoRunExtraction]:
+    def get_by_status(self, status: str, limit: Optional[int] = None) -> List[EtoRunExtraction]:
         """
         Get extraction runs by status.
         Useful for monitoring/debugging extraction processing.

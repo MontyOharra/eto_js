@@ -34,8 +34,6 @@ from shared.types.eto_runs import (
     EtoRun,
     EtoRunCreate,
     EtoRunUpdate,
-    EtoRunStatus,
-    EtoProcessingStep,
     EtoRunListView,
     EtoRunDetailView,
 )
@@ -58,7 +56,6 @@ from shared.types.eto_run_extractions import (
     EtoRunExtraction,
     EtoRunExtractionCreate,
     EtoRunExtractionUpdate,
-    EtoStepStatus,
 )
 
 from shared.exceptions.service import ObjectNotFoundError, ServiceError
@@ -242,7 +239,7 @@ class EtoRunsService:
 
     def list_runs(
         self,
-        status: Optional[EtoRunStatus] = None,
+        status: Optional[str] = None,
         limit: Optional[int] = None,
         offset: Optional[int] = None,
         order_by: str = "created_at",
@@ -281,7 +278,7 @@ class EtoRunsService:
 
     def list_runs_with_relations(
         self,
-        status: Optional[EtoRunStatus] = None,
+        status: Optional[str] = None,
         limit: Optional[int] = None,
         offset: Optional[int] = None,
         order_by: str = "created_at",

@@ -11,7 +11,6 @@ from shared.types.eto_run_template_matchings import (
     EtoRunTemplateMatching,
     EtoRunTemplateMatchingCreate,
     EtoRunTemplateMatchingUpdate,
-    EtoStepStatus,
 )
 
 logger = logging.getLogger(__name__)
@@ -151,7 +150,7 @@ class EtoRunTemplateMatchingRepository(BaseRepository[EtoRunTemplateMatchingMode
 
             return self._model_to_domain(model)
 
-    def get_by_status(self, status: EtoStepStatus, limit: Optional[int] = None) -> List[EtoRunTemplateMatching]:
+    def get_by_status(self, status: str, limit: Optional[int] = None) -> List[EtoRunTemplateMatching]:
         """
         Get template matching records by status.
 

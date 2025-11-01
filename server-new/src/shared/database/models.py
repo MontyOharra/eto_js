@@ -139,11 +139,6 @@ class PdfFileModel(BaseModel):
 # =========================
 # pdf_templates
 # =========================
-
-class PdfTemplateStatus(StrEnum):
-    ACTIVE = "active"
-    INACTIVE = "inactive"
-
 class PdfTemplateModel(BaseModel):
     __tablename__ = "pdf_templates"
 
@@ -153,10 +148,10 @@ class PdfTemplateModel(BaseModel):
     description: Mapped[Optional[str]] = mapped_column(Text)
     source_pdf_id: Mapped[int] = mapped_column(ForeignKey("pdf_files.id"), nullable=False, index=True)
 
-    status: Mapped[PdfTemplateStatus] = mapped_column(
-        SAEnum(PdfTemplateStatus, native_enum=False, validate_strings=True, name="pdf_template_status"),
+    status: Mapped[str] = mapped_column(
+        SAEnum('active', 'inactive', native_enum=False, validate_strings=True, name="pdf_template_status"),
         nullable=False,
-        default=PdfTemplateStatus.ACTIVE,
+        default='active',
     )
     current_version_id: Mapped[Optional[int]] = mapped_column(ForeignKey("pdf_template_versions.id"))
 

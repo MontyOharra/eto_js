@@ -39,7 +39,6 @@ from shared.types.pipeline_execution import (
     ActionExecutionData,
     PipelineExecutionResult,
 )
-from shared.database.models import EtoStepStatus
 
 logger = logging.getLogger(__name__)
 

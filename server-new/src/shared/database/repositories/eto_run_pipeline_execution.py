@@ -11,7 +11,6 @@ from shared.types.eto_run_pipeline_executions import (
     EtoRunPipelineExecution,
     EtoRunPipelineExecutionCreate,
     EtoRunPipelineExecutionUpdate,
-    EtoStepStatus,
 )
 
 logger = logging.getLogger(__name__)
@@ -145,7 +144,7 @@ class EtoRunPipelineExecutionRepository(BaseRepository[EtoRunPipelineExecutionMo
 
             return self._model_to_domain(model)
 
-    def get_by_status(self, status: EtoStepStatus, limit: Optional[int] = None) -> List[EtoRunPipelineExecution]:
+    def get_by_status(self, status: str, limit: Optional[int] = None) -> List[EtoRunPipelineExecution]:
         """
         Get pipeline executions by status.
 

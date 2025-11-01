@@ -8,7 +8,7 @@ from sqlalchemy import func, case, desc, asc
 from sqlalchemy.orm import joinedload, selectinload
 
 from shared.database.repositories.base import BaseRepository
-from shared.database.models import PdfTemplateModel, PdfTemplateVersionModel, PdfTemplateStatus
+from shared.database.models import PdfTemplateModel, PdfTemplateVersionModel
 from shared.types.pdf_templates import (
     PdfTemplate,
     PdfTemplateListView
@@ -40,7 +40,7 @@ class PdfTemplateRepository(BaseRepository[PdfTemplateModel]):
             id=model.id,
             name=model.name,
             description=model.description,
-            status=model.status.value,  # Convert enum to string
+            status=model.status,  # Convert enum to string
             source_pdf_id=model.source_pdf_id,
             current_version_id=model.current_version_id,
             created_at=model.created_at,
@@ -103,7 +103,7 @@ class PdfTemplateRepository(BaseRepository[PdfTemplateModel]):
 
             # Apply status filter
             if status:
-                query = query.filter(PdfTemplateModel.status == PdfTemplateStatus(status))
+                query = query.filter(PdfTemplateModel.status == status)
 
             if not sort_by:
                 sort_by = "name"
@@ -189,7 +189,7 @@ class PdfTemplateRepository(BaseRepository[PdfTemplateModel]):
                 name=name,
                 description=description,
                 source_pdf_id=source_pdf_id,
-                status=PdfTemplateStatus(status),
+                status=status,
                 current_version_id=None  # Will be set after version is created
             )
 
@@ -222,10 +222,6 @@ class PdfTemplateRepository(BaseRepository[PdfTemplateModel]):
 
             # Apply updates
             for field, value in updates.items():
-                # Convert status string to enum if updating status
-                if field == "status" and isinstance(value, str):
-                    value = PdfTemplateStatus(value)
-
                 setattr(template, field, value)
 
             # Commit changes
