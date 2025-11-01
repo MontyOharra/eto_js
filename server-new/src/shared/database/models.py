@@ -1,4 +1,3 @@
-from enum import StrEnum
 from typing import Optional, List
 
 from datetime import datetime
@@ -20,26 +19,6 @@ from sqlalchemy import Enum as SAEnum
 
 class BaseModel(DeclarativeBase):
     pass
-
-class EtoStepStatus(StrEnum):
-    PROCESSING = "processing"
-    SUCCESS = "success"
-    FAILURE = "failure"
-
-
-class EtoRunStatus(StrEnum):
-    NOT_STARTED = "not_started"
-    PROCESSING = "processing"
-    SUCCESS = "success"
-    FAILURE = "failure"
-    NEEDS_TEMPLATE = "needs_template"
-    SKIPPED = "skipped"
-
-
-class EtoRunProcessingStep(StrEnum):
-    TEMPLATE_MATCHING = "template_matching"
-    DATA_EXTRACTION = "data_extraction"
-    DATA_TRANSFORMATION = "data_transformation"
 
 
 # =========================
@@ -362,13 +341,15 @@ class EtoRunModel(BaseModel):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     pdf_file_id: Mapped[int] = mapped_column(ForeignKey("pdf_files.id"), nullable=False, index=True)
 
-    status: Mapped[EtoRunStatus] = mapped_column(
-        SAEnum(EtoRunStatus, native_enum=False, validate_strings=True, name="eto_run_status"),
+    status: Mapped[str] = mapped_column(
+        SAEnum("not_started", "processing", "success", "failure", "needs_template", "skipped",
+               name="eto_run_status", native_enum=False),
         nullable=False,
-        default=EtoRunStatus.NOT_STARTED,
+        server_default="not_started",
     )
-    processing_step: Mapped[Optional[EtoRunProcessingStep]] = mapped_column(
-        SAEnum(EtoRunProcessingStep, native_enum=False, validate_strings=True, name="eto_run_processing_step"),
+    processing_step: Mapped[Optional[str]] = mapped_column(
+        SAEnum("template_matching", "data_extraction", "data_transformation",
+               name="eto_run_processing_step", native_enum=False),
         nullable=True,
     )
 
@@ -415,10 +396,11 @@ class EtoRunTemplateMatchingModel(BaseModel):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     eto_run_id: Mapped[int] = mapped_column(ForeignKey("eto_runs.id"), nullable=False, index=True)
 
-    status: Mapped[EtoStepStatus] = mapped_column(
-        SAEnum(EtoStepStatus, native_enum=False, validate_strings=True, name="eto_step_status_tm"),
+    status: Mapped[str] = mapped_column(
+        SAEnum("processing", "success", "failure",
+               name="eto_step_status_tm", native_enum=False),
         nullable=False,
-        default=EtoStepStatus.PROCESSING,
+        server_default="processing",
     )
 
     matched_template_version_id: Mapped[Optional[int]] = mapped_column(
@@ -456,10 +438,11 @@ class EtoRunExtractionModel(BaseModel):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     eto_run_id: Mapped[int] = mapped_column(ForeignKey("eto_runs.id"), nullable=False, index=True)
 
-    status: Mapped[EtoStepStatus] = mapped_column(
-        SAEnum(EtoStepStatus, native_enum=False, validate_strings=True, name="eto_step_status_ex"),
+    status: Mapped[str] = mapped_column(
+        SAEnum("processing", "success", "failure",
+               name="eto_step_status_ex", native_enum=False),
         nullable=False,
-        default=EtoStepStatus.PROCESSING,
+        server_default="processing",
     )
     extracted_data: Mapped[Optional[str]] = mapped_column(Text)
 
@@ -491,10 +474,11 @@ class EtoRunPipelineExecutionModel(BaseModel):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     eto_run_id: Mapped[int] = mapped_column(ForeignKey("eto_runs.id"), nullable=False, index=True)
 
-    status: Mapped[EtoStepStatus] = mapped_column(
-        SAEnum(EtoStepStatus, native_enum=False, validate_strings=True, name="eto_step_status_px"),
+    status: Mapped[str] = mapped_column(
+        SAEnum("processing", "success", "failure",
+               name="eto_step_status_px", native_enum=False),
         nullable=False,
-        default=EtoStepStatus.PROCESSING,
+        server_default="processing",
     )
 
     executed_actions: Mapped[Optional[str]] = mapped_column(Text)

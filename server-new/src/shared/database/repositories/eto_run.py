@@ -68,17 +68,13 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
         """
         Convert ORM model to EtoRun dataclass.
 
-        Handles enum to string conversion:
-        - model.status (EtoRunStatus enum or str) -> dataclass (string literal)
-        - model.processing_step (EtoRunProcessingStep enum or str) -> dataclass (string literal)
-
-        Note: With native_enum=False, SQLAlchemy may return string values instead of Enum instances
+        Status fields are plain strings (no enum conversion needed).
         """
         return EtoRun(
             id=model.id,
             pdf_file_id=model.pdf_file_id,
             status=model.status,
-            processing_step=model.processing_step if model.processing_step else None,
+            processing_step=model.processing_step,
             error_type=model.error_type,
             error_message=model.error_message,
             error_details=model.error_details,
@@ -154,9 +150,9 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
 
             # Update only provided fields
             if data.status is not None:
-                model.status = data.status  # SQLAlchemy will convert string to enum type: ignore    # type: ignore
+                model.status = data.status
             if data.processing_step is not None:
-                model.processing_step = data.processing_step  # SQLAlchemy will convert string to enum # type: ignore
+                model.processing_step = data.processing_step
             if data.error_type is not None:
                 model.error_type = data.error_type
             if data.error_message is not None:

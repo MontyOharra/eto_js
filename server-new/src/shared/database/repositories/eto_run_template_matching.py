@@ -38,10 +38,7 @@ class EtoRunTemplateMatchingRepository(BaseRepository[EtoRunTemplateMatchingMode
         """
         Convert ORM model to EtoRunTemplateMatching dataclass.
 
-        Handles enum to string conversion:
-        - model.status (EtoStepStatus enum or str) -> dataclass (string literal)
-
-        Note: With native_enum=False, SQLAlchemy may return string values instead of Enum instances
+        Status field is plain string (no enum conversion needed).
         """
         return EtoRunTemplateMatching(
             id=model.id,
@@ -116,7 +113,7 @@ class EtoRunTemplateMatchingRepository(BaseRepository[EtoRunTemplateMatchingMode
 
             # Update only provided fields
             if data.status is not None:
-                model.status = data.status  # SQLAlchemy will convert string to enum # type: ignore
+                model.status = data.status
             if data.matched_template_version_id is not None:
                 model.matched_template_version_id = data.matched_template_version_id
             if data.started_at is not None:

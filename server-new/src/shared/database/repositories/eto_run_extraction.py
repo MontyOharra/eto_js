@@ -40,10 +40,7 @@ class EtoRunExtractionRepository(BaseRepository[EtoRunExtractionModel]):
         """
         Convert ORM model to EtoRunExtraction dataclass.
 
-        Handles enum to string conversion:
-        - model.status (EtoStepStatus enum or str) -> dataclass (string literal)
-
-        Note: With native_enum=False, SQLAlchemy may return string values instead of Enum instances
+        Status field is plain string (no enum conversion needed).
         """
         return EtoRunExtraction(
             id=model.id,
@@ -119,7 +116,7 @@ class EtoRunExtractionRepository(BaseRepository[EtoRunExtractionModel]):
 
             # Update only provided fields
             if data.status is not None:
-                model.status = data.status  # SQLAlchemy will convert string to enum  # type: ignore
+                model.status = data.status
             if data.extracted_data is not None:
                 model.extracted_data = data.extracted_data
             if data.started_at is not None:

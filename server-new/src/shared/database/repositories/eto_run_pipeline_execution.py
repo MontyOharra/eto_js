@@ -38,10 +38,7 @@ class EtoRunPipelineExecutionRepository(BaseRepository[EtoRunPipelineExecutionMo
         """
         Convert ORM model to EtoRunPipelineExecution dataclass.
 
-        Handles enum to string conversion:
-        - model.status (EtoStepStatus enum or str) -> dataclass (string literal)
-
-        Note: With native_enum=False, SQLAlchemy may return string values instead of Enum instances
+        Status field is plain string (no enum conversion needed).
         """
         return EtoRunPipelineExecution(
             id=model.id,
@@ -117,7 +114,7 @@ class EtoRunPipelineExecutionRepository(BaseRepository[EtoRunPipelineExecutionMo
 
             # Update only provided fields
             if data.status is not None:
-                model.status = data.status  # SQLAlchemy will convert string to enum  # type: ignore
+                model.status = data.status
             if data.executed_actions is not None:
                 model.executed_actions = data.executed_actions
             if data.completed_at is not None:
