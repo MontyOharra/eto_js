@@ -327,18 +327,18 @@ export function RunDetailModal({ isOpen, runId, onClose }: RunDetailModalProps) 
                     <div
                       className={`font-mono text-xs ${viewMode === 'summary' ? '' : 'hidden'}`}
                     >
-                      {runDetail.status === 'success' && runDetail.pipeline_execution?.executed_actions ? (
+                      {runDetail.status === 'success' && runDetail.stage_pipeline_execution?.executed_actions ? (
                         <pre className="text-gray-300 whitespace-pre-wrap break-words">
-                          {JSON.stringify(runDetail.pipeline_execution.executed_actions, null, 2)}
+                          {JSON.stringify(runDetail.stage_pipeline_execution.executed_actions, null, 2)}
                         </pre>
                       ) : runDetail.status === 'failure' ? (
                         <div className="text-red-300">
                           <p className="font-bold mb-2">Error Type: {runDetail.error_type || 'Unknown'}</p>
                           <p className="mb-2">Message: {runDetail.error_message || 'No error message available'}</p>
-                          {runDetail.pipeline_execution?.error_message && (
+                          {runDetail.error_details && (
                             <>
-                              <p className="font-bold mb-2 mt-4">Pipeline Error:</p>
-                              <p>{runDetail.pipeline_execution.error_message}</p>
+                              <p className="font-bold mb-2 mt-4">Error Details:</p>
+                              <pre className="text-xs whitespace-pre-wrap">{runDetail.error_details}</pre>
                             </>
                           )}
                         </div>
@@ -351,19 +351,29 @@ export function RunDetailModal({ isOpen, runId, onClose }: RunDetailModalProps) 
                     <div
                       className={`absolute inset-0 ${viewMode === 'detail' ? '' : 'hidden'}`}
                     >
-                      {runDetail.pipeline_execution?.pipeline_definition_id ? (
+                      {runDetail.stage_pipeline_execution?.pipeline_definition_id &&
+                       runDetail.stage_pipeline_execution?.steps ? (
                         <ExecutedPipelineViewer
                           ref={pipelineViewerRef}
-                          pipelineDefinitionId={runDetail.pipeline_execution.pipeline_definition_id}
+                          pipelineDefinitionId={runDetail.stage_pipeline_execution.pipeline_definition_id}
                           executionData={{
-                            steps: runDetail.pipeline_execution.steps,
-                            executed_actions: runDetail.pipeline_execution.executed_actions || undefined,
+                            steps: runDetail.stage_pipeline_execution.steps,
+                            executed_actions: runDetail.stage_pipeline_execution.executed_actions || undefined,
                           }}
-                          extractedData={runDetail.data_extraction?.extracted_data || undefined}
+                          extractedData={runDetail.stage_data_extraction?.extracted_data || undefined}
                         />
                       ) : (
                         <div className="flex items-center justify-center h-full">
-                          <p className="text-gray-400">No pipeline data available</p>
+                          <p className="text-gray-400 text-sm">
+                            {runDetail.stage_pipeline_execution?.executed_actions ? (
+                              <>
+                                <span className="block mb-2">Detailed pipeline visualization not available</span>
+                                <span className="block text-xs text-gray-500">See Summary view for executed actions</span>
+                              </>
+                            ) : (
+                              'No pipeline data available'
+                            )}
+                          </p>
                         </div>
                       )}
                     </div>
@@ -389,9 +399,9 @@ export function RunDetailModal({ isOpen, runId, onClose }: RunDetailModalProps) 
                       <AutoFitOnResize isDragging={isDragging} />
                       <PdfViewer.Canvas pdfUrl={pdfUrl} onError={handlePdfError}>
                         {/* Show extraction field overlay in detail view */}
-                        {viewMode === 'detail' && runDetail.data_extraction?.extracted_fields_with_boxes && (
+                        {viewMode === 'detail' && runDetail.stage_data_extraction?.extracted_fields_with_boxes && (
                           <ExtractedFieldsOverlay
-                            fields={runDetail.data_extraction.extracted_fields_with_boxes}
+                            fields={runDetail.stage_data_extraction.extracted_fields_with_boxes}
                           />
                         )}
                       </PdfViewer.Canvas>

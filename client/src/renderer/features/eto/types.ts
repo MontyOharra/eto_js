@@ -54,19 +54,23 @@ export interface EtoRunListItem {
 
 // Full detail view of an ETO run (includes stage details)
 export interface EtoRunDetail extends EtoRunListItem {
+  error_details: string | null;
   pdf: EtoPdfInfo & { page_count: number | null };
-  template_matching: EtoStageTemplateMatching;
-  data_extraction: EtoStageDataExtraction;
-  pipeline_execution: EtoStagePipelineExecution;
+  // Stages are optional - only populated based on run progress
+  stage_template_matching: EtoStageTemplateMatching | null;
+  stage_data_extraction: EtoStageDataExtraction | null;
+  stage_pipeline_execution: EtoStagePipelineExecution | null;
 }
 
 // Stage 1: Template Matching
 export interface EtoStageTemplateMatching {
-  status: 'not_started' | 'success' | 'failure' | 'skipped';
+  status: 'processing' | 'success' | 'failure';
   started_at: string | null;
   completed_at: string | null;
-  error_message: string | null;
-  matched_template: EtoMatchedTemplate | null;
+  // Template info is denormalized at stage level (not nested object)
+  matched_template_version_id: number | null;
+  matched_template_name: string | null;
+  matched_version_number: number | null;
 }
 
 // Stage 2: Data Extraction
@@ -79,26 +83,24 @@ export interface ExtractedFieldWithBox {
 }
 
 export interface EtoStageDataExtraction {
-  status: 'not_started' | 'success' | 'failure' | 'skipped';
+  status: 'processing' | 'success' | 'failure';
   started_at: string | null;
   completed_at: string | null;
-  error_message: string | null;
   extracted_data: Record<string, any> | null;
-  extracted_fields_with_boxes?: ExtractedFieldWithBox[]; // For overlay display
+  // Optional feature - not yet implemented in backend
+  extracted_fields_with_boxes?: ExtractedFieldWithBox[];
 }
 
 // Stage 3: Pipeline Execution
 export interface EtoStagePipelineExecution {
-  status: 'not_started' | 'success' | 'failure' | 'skipped';
+  status: 'processing' | 'success' | 'failure';
   started_at: string | null;
   completed_at: string | null;
-  error_message: string | null;
-  pipeline_definition_id: number;  // Reference to pipeline definition for lazy loading
-  executed_actions: Array<{
-    action_module_name: string;
-    inputs: Record<string, any>;
-  }> | null;
-  steps: EtoPipelineExecutionStep[];
+  // Server returns Dict, not Array
+  executed_actions: Record<string, any> | null;
+  // Optional fields - may not be implemented yet in backend
+  pipeline_definition_id?: number;
+  steps?: EtoPipelineExecutionStep[];
 }
 
 export interface EtoPipelineExecutionStep {
