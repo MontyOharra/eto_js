@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useMemo, useState, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   useEtoRuns,
   useCreateEtoRun,
@@ -17,6 +18,9 @@ export const Route = createFileRoute('/dashboard/eto/')({
 });
 
 function EtoPage() {
+  // TanStack Query client for cache invalidation
+  const queryClient = useQueryClient();
+
   // TanStack Query hooks
   const { data: etoRunsData, isLoading, error } = useEtoRuns();
   const createEtoRun = useCreateEtoRun();
@@ -56,24 +60,30 @@ function EtoPage() {
   // ==========================================================================
   // Real-time Event Handlers (SSE)
   // ==========================================================================
-  // Note: SSE updates are optimistic - TanStack Query will invalidate and refetch
-  // automatically, so we don't need to manually update the cache here.
-  // The queries will refetch when mutations complete (onSuccess callbacks handle this).
+  // SSE events from background worker require manual query invalidation to trigger refetch.
+  // Unlike mutations (which auto-invalidate), SSE events come from external processing,
+  // so we must explicitly tell TanStack Query to refetch the updated data.
 
   const handleRunCreated = useCallback((data: any) => {
     console.log('[ETO] New run created via SSE:', data.id);
-    // TanStack Query will auto-invalidate on mutations, SSE just provides real-time feedback
-  }, []);
+    // Invalidate queries to trigger refetch with new run
+    queryClient.invalidateQueries({ queryKey: ['eto-runs'] });
+  }, [queryClient]);
 
   const handleRunUpdated = useCallback((data: any) => {
     console.log('[ETO] Run updated via SSE:', data);
-    // TanStack Query will auto-invalidate on mutations, SSE just provides real-time feedback
-  }, []);
+    // Invalidate queries to trigger refetch with updated status
+    queryClient.invalidateQueries({ queryKey: ['eto-runs'] });
+    if (data.id) {
+      queryClient.invalidateQueries({ queryKey: ['eto-run', data.id] });
+    }
+  }, [queryClient]);
 
   const handleRunDeleted = useCallback((runId: number) => {
     console.log('[ETO] Run deleted via SSE:', runId);
-    // TanStack Query will auto-invalidate on mutations, SSE just provides real-time feedback
-  }, []);
+    // Invalidate queries to trigger refetch without deleted run
+    queryClient.invalidateQueries({ queryKey: ['eto-runs'] });
+  }, [queryClient]);
 
   // Connect to SSE stream for real-time updates
   useEtoEvents({
