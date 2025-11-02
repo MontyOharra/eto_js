@@ -911,6 +911,9 @@ class PdfTemplateService:
         """
         Extract text from PDF objects based on extraction fields.
 
+        This is a thin wrapper around the shared extraction utility.
+        The actual extraction logic is in features.eto_runs.utils.extraction
+
         Args:
             pdf_objects: PdfObjects dataclass with text_words and other objects
             extraction_fields: List of extraction field domain objects
@@ -918,27 +921,9 @@ class PdfTemplateService:
         Returns:
             Dict mapping field names to extracted text
         """
-        from features.pdf_files.utils.extraction import extract_text_from_bbox
+        from features.eto_runs.utils.extraction import extract_data_from_pdf_objects
 
-        extracted = {}
-        for field in extraction_fields:
-            # Convert domain TextWord objects to dict format for extraction utility
-            text_words_dicts = [
-                {
-                    "page": word.page,
-                    "bbox": word.bbox,
-                    "text": word.text
-                }
-                for word in pdf_objects.text_words
-                if word.page == field.page
-            ]
-
-            # Extract text using existing utility
-            extracted_text = extract_text_from_bbox(
-                text_words=text_words_dicts,
-                bbox=field.bbox,
-                page=field.page
-            )
-            extracted[field.name] = extracted_text
-
-        return extracted
+        return extract_data_from_pdf_objects(
+            pdf_objects=pdf_objects,
+            extraction_fields=extraction_fields
+        )

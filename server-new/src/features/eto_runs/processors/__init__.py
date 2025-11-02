@@ -1,13 +1,8 @@
 """
 ETO Run Processors
-Stage-specific processing logic for ETO workflow
-"""
-from .template_matching import TemplateMatchingProcessor
-from .data_extraction import DataExtractionProcessor
-from .data_transformation import DataTransformationProcessor
 
-__all__ = [
-    'TemplateMatchingProcessor',
-    'DataExtractionProcessor',
-    'DataTransformationProcessor'
-]
+DEPRECATED: Processor classes have been removed and consolidated into EtoRunsService.
+This module is kept as a placeholder for backwards compatibility.
+"""
+
+__all__ = []

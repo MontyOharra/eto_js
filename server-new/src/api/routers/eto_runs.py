@@ -25,7 +25,7 @@ from api.mappers.eto_runs import (
 from shared.services.service_container import ServiceContainer
 from shared.exceptions.service import ValidationError
 from shared.events.eto_events import eto_event_manager
-# from features.eto_processing.service import EtoProcessingService
+from features.eto_runs.service import EtoRunsService
 
 logger = logging.getLogger(__name__)
 
@@ -229,7 +229,7 @@ async def create_eto_run(
 @router.post("/reprocess", status_code=status.HTTP_204_NO_CONTENT)
 async def reprocess_eto_runs(
     request: BulkRunIdsRequest,
-    service = Depends(lambda: ServiceContainer.get_eto_runs_service())
+    service: EtoRunsService = Depends(lambda: ServiceContainer.get_eto_runs_service())
 ) -> None:
     """
     Reprocess failed or skipped ETO runs (bulk operation).
@@ -259,7 +259,7 @@ async def reprocess_eto_runs(
 @router.post("/skip", status_code=status.HTTP_204_NO_CONTENT)
 async def skip_eto_runs(
     request: BulkRunIdsRequest,
-    service = Depends(lambda: ServiceContainer.get_eto_runs_service())
+    service: EtoRunsService = Depends(lambda: ServiceContainer.get_eto_runs_service())
 ) -> None:
     """
     Mark ETO runs as skipped (bulk operation).
@@ -292,7 +292,7 @@ async def skip_eto_runs(
 @router.delete("", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_eto_runs(
     request: BulkRunIdsRequest,
-    service = Depends(lambda: ServiceContainer.get_eto_runs_service())
+    service: EtoRunsService = Depends(lambda: ServiceContainer.get_eto_runs_service())
 ) -> None:
     """
     Permanently delete ETO runs (bulk operation).

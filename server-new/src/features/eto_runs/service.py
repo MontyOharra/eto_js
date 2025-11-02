@@ -18,12 +18,7 @@ from shared.database.repositories.eto_run_pipeline_execution_step import EtoRunP
 
 from shared.events.eto_events import eto_event_manager
 
-# Import processors and worker
-from .processors import (
-    TemplateMatchingProcessor,
-    DataExtractionProcessor,
-    DataTransformationProcessor
-)
+# Import worker
 from .utils import EtoWorker
 
 from shared.exceptions.service import ValidationError
@@ -143,23 +138,6 @@ class EtoRunsService:
 
         # TODO: Initialize remaining repositories when implemented
         # self.pipeline_execution_step_repo = EtoRunPipelineExecutionStepRepository(connection_manager=connection_manager)
-
-        # Initialize processors
-        logger.debug("Initializing stage processors...")
-        self.template_matching_processor = TemplateMatchingProcessor(
-            eto_run_repo=self.eto_run_repo,
-            template_matching_repo=self.template_matching_repo,
-            pdf_files_service=self.pdf_files_service,
-            pdf_template_service=self.pdf_template_service
-        )
-        self.data_extraction_processor = DataExtractionProcessor(
-            eto_run_repo=self.eto_run_repo,
-            extraction_repo=self.extraction_repo
-        )
-        self.data_transformation_processor = DataTransformationProcessor(
-            eto_run_repo=self.eto_run_repo,
-            pipeline_execution_repo=self.pipeline_execution_repo
-        )
 
         # Worker configuration from environment
         worker_enabled = os.getenv('ETO_WORKER_ENABLED', 'true').lower() == 'true'
@@ -598,14 +576,14 @@ class EtoRunsService:
 
     def process_run(self, run_id: int) -> bool:
         """
-        Execute full 3-stage ETO workflow for a run.
+        Execute ETO workflow for a run.
         Called by ETO worker for runs with status = "not_started".
 
         Workflow:
         1. Update status to "processing"
-        2. Execute Stage 1: Template Matching (with error handling)
-        3. Execute Stage 2: Data Extraction (with error handling)
-        4. Execute Stage 3: Data Transformation (with error handling)
+        2. Execute Stage 1: Template Matching
+        3. Execute Stage 2: Data Extraction
+        4. TODO: Execute Stage 3: Data Transformation (not yet implemented)
         5. Update status to "success" or "failure"
 
         Error Handling:
@@ -622,12 +600,11 @@ class EtoRunsService:
         """
         logger.monitor(f"Starting ETO processing for run {run_id}")  # type: ignore
 
-            # Get run and validate existence
+        # Get run and validate existence
         run = self.eto_run_repo.get_by_id(run_id)
         if not run:
             logger.error(f"ETO run {run_id} not found")
             raise ObjectNotFoundError(f"ETO run {run_id} not found")
-
 
         try:
             # Update to processing status
@@ -652,10 +629,13 @@ class EtoRunsService:
 
             # Stage 1: Template Matching
             try:
-                logger.monitor(f"Run {run_id}: Starting template matching stage")  # type: ignore
-                if not self.template_matching_processor.execute(run_id):
-                    # Stage processor returned False (handled its own error internally)
+                match_result = self._process_template_matching(run_id)
+                if match_result is None:
+                    # No match found - run status already updated to "needs_template"
                     return False
+
+                template_id, version_id = match_result
+
             except Exception as e:
                 logger.error(f"Run {run_id}: Template matching stage error: {e}", exc_info=True)
                 self._mark_run_failure(run_id, error=e, error_type="TemplateMatchingError")
@@ -663,27 +643,19 @@ class EtoRunsService:
 
             # Stage 2: Data Extraction
             try:
-                logger.monitor(f"Run {run_id}: Starting data extraction stage")  # type: ignore
-                if not self.data_extraction_processor.execute(run_id):
-                    # Stage processor returned False (handled its own error internally)
-                    return False
+                extracted_data = self._process_data_extraction(run_id, version_id)
+                logger.debug(f"Run {run_id}: Extracted data: {extracted_data}")
+
             except Exception as e:
                 logger.error(f"Run {run_id}: Data extraction stage error: {e}", exc_info=True)
                 self._mark_run_failure(run_id, error=e, error_type="DataExtractionError")
                 return False
 
-            # Stage 3: Data Transformation
-            try:
-                logger.monitor(f"Run {run_id}: Starting data transformation stage")  # type: ignore
-                if not self.data_transformation_processor.execute(run_id):
-                    # Stage processor returned False (handled its own error internally)
-                    return False
-            except Exception as e:
-                logger.error(f"Run {run_id}: Data transformation stage error: {e}", exc_info=True)
-                self._mark_run_failure(run_id, error=e, error_type="DataTransformationError")
-                return False
+            # TODO: Stage 3: Data Transformation
+            # For now, mark as success after extraction completes
+            logger.info(f"Run {run_id}: Data transformation stage not yet implemented - marking as success")
 
-            # All stages completed successfully
+            # All implemented stages completed successfully
             self._mark_run_success(run_id)
             logger.monitor(f"Run {run_id}: All stages completed successfully")  # type: ignore
             return True
@@ -694,6 +666,225 @@ class EtoRunsService:
             logger.error(f"Run {run_id}: Unexpected system error: {e}", exc_info=True)
             self._mark_run_failure(run_id, error=e, error_type="UnexpectedSystemError")
             return False
+
+    # ==================== Core Processing Methods (Mirroring Simulate Logic) ====================
+
+    def _extract_data_from_pdf(
+        self,
+        pdf_file_id: int,
+        extraction_fields: list
+    ) -> dict[str, str]:
+        """
+        Extract text from PDF using extraction fields.
+
+        This is a thin wrapper around the shared extraction utility.
+        The actual extraction logic is in features.eto_runs.utils.extraction
+
+        Args:
+            pdf_file_id: PDF file ID to extract from
+            extraction_fields: List of ExtractionField domain objects
+
+        Returns:
+            Dict mapping field names to extracted text
+        """
+        from features.eto_runs.utils.extraction import extract_data_from_pdf
+
+        return extract_data_from_pdf(
+            pdf_file_service=self.pdf_files_service,
+            pdf_file_id=pdf_file_id,
+            extraction_fields=extraction_fields
+        )
+
+    def _process_template_matching(self, run_id: int) -> tuple[int, int] | None:
+        """
+        Stage 1: Template Matching
+
+        Matches PDF to best template using signature objects.
+        Creates and updates template_matching record with results.
+
+        Args:
+            run_id: ETO run ID
+
+        Returns:
+            Tuple of (template_id, version_id) if match found, None otherwise
+
+        Raises:
+            Exception: Propagated to caller for error handling
+        """
+        logger.monitor(f"Run {run_id}: Executing template matching stage")  # type: ignore
+
+        # Step 1: Update run processing_step
+        self.eto_run_repo.update(
+            run_id,
+            EtoRunUpdate(processing_step="template_matching")
+        )
+        logger.debug(f"Run {run_id}: Updated processing_step to template_matching")
+
+        # Broadcast processing step change
+        eto_event_manager.broadcast_sync(
+            "run_updated",
+            {
+                "id": run_id,
+                "processing_step": "template_matching",
+            }
+        )
+
+        # Step 2: Create template_matching record with status="processing"
+        started_at = datetime.now(timezone.utc)
+        template_matching = self.template_matching_repo.create(
+            EtoRunTemplateMatchingCreate(eto_run_id=run_id)
+        )
+        logger.debug(f"Run {run_id}: Created template_matching record {template_matching.id}")
+
+        # Step 2b: Update with started_at timestamp
+        template_matching = self.template_matching_repo.update(
+            template_matching.id,
+            EtoRunTemplateMatchingUpdate(started_at=started_at)
+        )
+        logger.debug(f"Run {run_id}: Set template_matching started_at")
+
+        # Step 3: Get PDF objects from PDF file
+        run = self.eto_run_repo.get_by_id(run_id)
+        if not run:
+            raise ServiceError(f"Run {run_id} not found")
+
+        pdf_objects = self.pdf_files_service.get_pdf_objects(run.pdf_file_id)
+        logger.debug(f"Run {run_id}: Retrieved PDF objects from file {run.pdf_file_id}")
+
+        # Step 4: Call template matching service
+        match_result = self.pdf_template_service.match_template(pdf_objects)
+
+        # Step 5: Handle match result
+        if match_result is None:
+            # No template matched
+            logger.monitor(f"Run {run_id}: No template match found")  # type: ignore
+
+            # Update template_matching record to failure
+            self.template_matching_repo.update(
+                template_matching.id,
+                EtoRunTemplateMatchingUpdate(
+                    status="failure",
+                    completed_at=datetime.now(timezone.utc)
+                )
+            )
+
+            # Update run status to "needs_template"
+            completed_at = datetime.now(timezone.utc)
+            self.eto_run_repo.update(
+                run_id,
+                EtoRunUpdate(
+                    status="needs_template",
+                    completed_at=completed_at,
+                    error_type="NoTemplateMatch",
+                    error_message="No matching template found for this PDF"
+                )
+            )
+
+            # Broadcast status change
+            eto_event_manager.broadcast_sync(
+                "run_updated",
+                {
+                    "id": run_id,
+                    "status": "needs_template",
+                    "completed_at": completed_at.isoformat(),
+                    "error_type": "NoTemplateMatch",
+                    "error_message": "No matching template found for this PDF"
+                }
+            )
+
+            logger.warning(f"Run {run_id}: Set status to needs_template - no template match")
+            return None
+
+        # Match found!
+        template_id, version_id = match_result
+        logger.monitor(f"Run {run_id}: Template match found - template {template_id}, version {version_id}")  # type: ignore
+
+        # Update template_matching record to success
+        self.template_matching_repo.update(
+            template_matching.id,
+            EtoRunTemplateMatchingUpdate(
+                status="success",
+                matched_template_version_id=version_id,
+                completed_at=datetime.now(timezone.utc)
+            )
+        )
+
+        logger.monitor(f"Run {run_id}: Template matching completed successfully")  # type: ignore
+        return match_result
+
+    def _process_data_extraction(self, run_id: int, template_version_id: int) -> dict[str, str]:
+        """
+        Stage 2: Data Extraction
+
+        Extracts field values from PDF using matched template's extraction fields.
+        Uses the SAME extraction logic as simulate endpoint.
+        Creates and updates extraction record with results.
+
+        Args:
+            run_id: ETO run ID
+            template_version_id: Matched template version ID
+
+        Returns:
+            Dict of extracted data (field name -> text value)
+
+        Raises:
+            Exception: Propagated to caller for error handling
+        """
+        logger.monitor(f"Run {run_id}: Executing data extraction stage")  # type: ignore
+
+        # Step 1: Update run processing_step
+        self.eto_run_repo.update(
+            run_id,
+            EtoRunUpdate(processing_step="data_extraction")
+        )
+        logger.debug(f"Run {run_id}: Updated processing_step to data_extraction")
+
+        # Broadcast processing step change
+        eto_event_manager.broadcast_sync(
+            "run_updated",
+            {
+                "id": run_id,
+                "processing_step": "data_extraction",
+            }
+        )
+
+        # Step 2: Create extraction record
+        started_at = datetime.now(timezone.utc)
+        extraction = self.extraction_repo.create(
+            EtoRunExtractionCreate(eto_run_id=run_id)
+        )
+        logger.debug(f"Run {run_id}: Created extraction record {extraction.id}")
+
+        # Step 3: Get extraction fields from matched template version
+        template_version = self.pdf_template_service.get_version_by_id(template_version_id)
+        logger.debug(f"Run {run_id}: Retrieved template version {template_version_id} with {len(template_version.extraction_fields)} fields")
+
+        # Step 4: Get PDF file ID from run
+        run = self.eto_run_repo.get_by_id(run_id)
+        if not run:
+            raise ServiceError(f"Run {run_id} not found")
+
+        # Step 5: CORE LOGIC - Extract data using same logic as simulate endpoint
+        extracted_data = self._extract_data_from_pdf(
+            pdf_file_id=run.pdf_file_id,
+            extraction_fields=template_version.extraction_fields
+        )
+
+        logger.debug(f"Run {run_id}: Extracted {len(extracted_data)} fields from PDF")
+
+        # Step 6: Update extraction record with results
+        self.extraction_repo.update(
+            extraction.id,
+            EtoRunExtractionUpdate(
+                status="success",
+                extracted_data=json.dumps(extracted_data),
+                started_at=started_at,
+                completed_at=datetime.now(timezone.utc)
+            )
+        )
+
+        logger.monitor(f"Run {run_id}: Data extraction completed successfully")  # type: ignore
+        return extracted_data
 
     # ==================== Helper Methods ====================
 
