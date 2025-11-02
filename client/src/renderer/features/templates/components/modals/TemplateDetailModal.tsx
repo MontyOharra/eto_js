@@ -10,10 +10,9 @@ import { TemplateDetail, TemplateVersionDetail, PdfObjects } from "../../types";
 import { TemplateStatusBadge } from "../ui/TemplateStatusBadge";
 import { usePdfData, PdfViewer, usePdfViewer } from "../../../pdf";
 import { usePipelinesApi } from "../../../pipelines/hooks/usePipelinesApi";
-import { useModulesApi } from "../../../modules/hooks";
+import { useModules } from "../../../modules/hooks";
 import { PipelineGraph } from "../../../pipelines/components/PipelineGraph";
 import type { PipelineDetailResponse } from "../../../pipelines/types";
-import type { ModuleTemplate } from "../../../modules/types";
 
 interface TemplateDetailModalProps {
   isOpen: boolean;
@@ -771,10 +770,11 @@ interface PipelineViewProps {
 
 function PipelineView({ versionDetail }: PipelineViewProps) {
   const { getPipeline } = usePipelinesApi();
-  const { getModules } = useModulesApi();
+
+  // Fetch modules using TanStack Query
+  const { data: modules = [] } = useModules();
 
   const [pipeline, setPipeline] = useState<PipelineDetailResponse | null>(null);
-  const [modules, setModules] = useState<ModuleTemplate[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -785,14 +785,8 @@ function PipelineView({ versionDetail }: PipelineViewProps) {
       setError(null);
 
       try {
-        // Load pipeline and modules in parallel
-        const [pipelineData, modulesData] = await Promise.all([
-          getPipeline(versionDetail.pipeline_definition_id),
-          getModules(),
-        ]);
-
+        const pipelineData = await getPipeline(versionDetail.pipeline_definition_id);
         setPipeline(pipelineData);
-        setModules(modulesData.modules);
       } catch (err) {
         console.error("Failed to load pipeline:", err);
         setError(
@@ -804,7 +798,7 @@ function PipelineView({ versionDetail }: PipelineViewProps) {
     }
 
     loadPipelineData();
-  }, [versionDetail.pipeline_definition_id, getPipeline, getModules]);
+  }, [versionDetail.pipeline_definition_id, getPipeline]);
 
   // Loading state
   if (isLoading) {

@@ -7,6 +7,7 @@ from typing import Type, Optional, List
 
 from shared.database.repositories.base import BaseRepository
 from shared.database.models import EtoRunExtractionModel
+from shared.types._sentinel import UNSET
 from shared.types.eto_run_extractions import (
     EtoRunExtraction,
     EtoRunExtractionCreate,
@@ -100,6 +101,11 @@ class EtoRunExtractionRepository(BaseRepository[EtoRunExtractionModel]):
         """
         Update extraction run. Only updates provided fields.
 
+        Uses UNSET sentinel to distinguish between:
+        - Field not provided (UNSET) - field will not be updated
+        - Field explicitly set to None - field will be cleared in database
+        - Field set to value - field will be updated to that value
+
         Args:
             extraction_id: Extraction run ID
             data: EtoRunExtractionUpdate with fields to update (all optional)
@@ -113,14 +119,14 @@ class EtoRunExtractionRepository(BaseRepository[EtoRunExtractionModel]):
             if model is None:
                 return None
 
-            # Update only provided fields
-            if data.status is not None:
+            # Update only provided fields (check against UNSET, not None)
+            if data.status is not UNSET:
                 model.status = data.status
-            if data.extracted_data is not None:
+            if data.extracted_data is not UNSET:
                 model.extracted_data = data.extracted_data
-            if data.started_at is not None:
+            if data.started_at is not UNSET:
                 model.started_at = data.started_at
-            if data.completed_at is not None:
+            if data.completed_at is not UNSET:
                 model.completed_at = data.completed_at
 
             session.flush()  # Persist changes

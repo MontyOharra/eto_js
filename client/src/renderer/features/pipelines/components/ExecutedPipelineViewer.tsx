@@ -6,11 +6,10 @@
 
 import { useEffect, useState, forwardRef, useImperativeHandle, useRef } from 'react';
 import { usePipelinesApi } from '../hooks/usePipelinesApi';
-import { useModulesApi } from '../../modules/hooks/useModulesApi';
+import { useModules } from '../../modules/hooks';
 import { ExecutedPipelineGraph, ExecutedPipelineGraphRef } from './ExecutedPipelineGraph';
 import { applyLayeredLayout } from '../utils/layeredLayout';
 import type { PipelineState, VisualState } from '../types';
-import type { ModuleTemplate } from '../../modules/types';
 import type { EtoPipelineExecutionStep } from '../../eto/types';
 
 export interface ExecutedPipelineViewerProps {
@@ -68,10 +67,13 @@ const getModuleColor = (moduleId: string): string => {
 
 export const ExecutedPipelineViewer = forwardRef<ExecutedPipelineViewerRef, ExecutedPipelineViewerProps>(({ pipelineDefinitionId, executionData, extractedData }, ref) => {
   const { getPipeline, isLoading, error } = usePipelinesApi();
-  const { getModules } = useModulesApi();
+
+  // Fetch modules using TanStack Query
+  const { data: allModules = [] } = useModules();
+
   const [pipelineState, setPipelineState] = useState<PipelineState | null>(null);
   const [visualState, setVisualState] = useState<VisualState | null>(null);
-  const [moduleTemplates, setModuleTemplates] = useState<ModuleTemplate[]>([]);
+  const [moduleTemplates, setModuleTemplates] = useState<any[]>([]);
   const [failedModuleIds, setFailedModuleIds] = useState<string[]>([]);
   const [executionValues, setExecutionValues] = useState<Map<string, { value: any; type: string; name: string }>>(new Map());
   const graphRef = useRef<ExecutedPipelineGraphRef>(null);
@@ -88,14 +90,9 @@ export const ExecutedPipelineViewer = forwardRef<ExecutedPipelineViewerRef, Exec
     const loadPipeline = async () => {
       try {
         console.log('[ExecutedPipelineViewer] Fetching pipeline:', pipelineDefinitionId);
-        const [pipeline, modulesResponse] = await Promise.all([
-          getPipeline(pipelineDefinitionId),
-          getModules()
-        ]);
+        const pipeline = await getPipeline(pipelineDefinitionId);
         console.log('[ExecutedPipelineViewer] Pipeline loaded:', pipeline);
-        console.log('[ExecutedPipelineViewer] Modules loaded:', modulesResponse);
-
-        const allModules = modulesResponse.modules;
+        console.log('[ExecutedPipelineViewer] Modules loaded:', allModules);
 
         // Extract all node IDs that have execution data and build value map
         const executedNodeIds = new Set<string>();
@@ -324,9 +321,10 @@ export const ExecutedPipelineViewer = forwardRef<ExecutedPipelineViewerRef, Exec
       }
     };
 
-    loadPipeline();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pipelineDefinitionId]);
+    if (allModules.length > 0) {
+      loadPipeline();
+    }
+  }, [pipelineDefinitionId, allModules, getPipeline, executionData, extractedData]);
 
   if (isLoading) {
     return (

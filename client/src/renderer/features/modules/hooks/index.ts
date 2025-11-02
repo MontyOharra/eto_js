@@ -3,4 +3,4 @@
  * Exports all hooks related to modules functionality
  */
 
-export { useModulesApi } from './useModulesApi';
+export { useModules, useModule } from './useModules';

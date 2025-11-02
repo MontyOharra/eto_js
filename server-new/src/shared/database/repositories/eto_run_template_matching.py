@@ -7,6 +7,7 @@ from typing import Type, Optional, List
 
 from shared.database.repositories.base import BaseRepository
 from shared.database.models import EtoRunTemplateMatchingModel
+from shared.types._sentinel import UNSET
 from shared.types.eto_run_template_matchings import (
     EtoRunTemplateMatching,
     EtoRunTemplateMatchingCreate,
@@ -98,6 +99,11 @@ class EtoRunTemplateMatchingRepository(BaseRepository[EtoRunTemplateMatchingMode
         """
         Update template matching record. Only updates provided fields.
 
+        Uses UNSET sentinel to distinguish between:
+        - Field not provided (UNSET) - field will not be updated
+        - Field explicitly set to None - field will be cleared in database
+        - Field set to value - field will be updated to that value
+
         Args:
             record_id: Template matching record ID
             data: EtoRunTemplateMatchingUpdate with fields to update (all optional)
@@ -111,14 +117,14 @@ class EtoRunTemplateMatchingRepository(BaseRepository[EtoRunTemplateMatchingMode
             if model is None:
                 raise ObjectNotFoundError(f"run of {record_id} not found")
 
-            # Update only provided fields
-            if data.status is not None:
+            # Update only provided fields (check against UNSET, not None)
+            if data.status is not UNSET:
                 model.status = data.status
-            if data.matched_template_version_id is not None:
+            if data.matched_template_version_id is not UNSET:
                 model.matched_template_version_id = data.matched_template_version_id
-            if data.started_at is not None:
+            if data.started_at is not UNSET:
                 model.started_at = data.started_at
-            if data.completed_at is not None:
+            if data.completed_at is not UNSET:
                 model.completed_at = data.completed_at
 
             session.flush()  # Persist changes

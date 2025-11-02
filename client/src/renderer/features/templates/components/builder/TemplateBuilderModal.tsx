@@ -14,10 +14,9 @@ import {
 } from "./steps";
 import { TemplateBuilderHeader, TemplateBuilderStepper } from "./components";
 import { usePdfData, useUploadPdf, useProcessPdfObjects, type PdfData } from "../../../pdf";
-import { useModulesApi } from "../../../modules/hooks";
+import { useModules } from "../../../modules/hooks";
 import { useSimulateTemplate, type PostTemplateSimulateRequest } from "../../api";
 import { usePipelineValidation } from "../../../pipelines/hooks";
-import type { ModuleTemplate } from "../../../modules/types";
 import type {
   PipelineState,
   VisualState,
@@ -116,7 +115,6 @@ export function TemplateBuilderModal({
   const [testViewMode, setTestViewMode] = useState<"summary" | "detail">(
     "summary"
   );
-  const [moduleTemplates, setModuleTemplates] = useState<ModuleTemplate[]>([]);
 
   // Snapshot of pipeline/visual state when test is run (frozen for testing view)
   const [testedPipelineState, setTestedPipelineState] =
@@ -138,7 +136,10 @@ export function TemplateBuilderModal({
     isLoading: pdfLoading,
     error: pdfError,
   } = usePdfData(pdfFileId);
-  const { getModules } = useModulesApi();
+
+  // Fetch modules using TanStack Query (auto-refetches when stale)
+  const { data: moduleTemplates = [], isLoading: modulesLoading } = useModules();
+
   const { mutateAsync: uploadPdf } = useUploadPdf();
   const { mutateAsync: processObjects } = useProcessPdfObjects();
   const simulateTemplate = useSimulateTemplate();
@@ -149,21 +150,6 @@ export function TemplateBuilderModal({
     error: pipelineValidationError,
     isValidating: isPipelineValidating,
   } = usePipelineValidation(pipelineState);
-
-  // Load module templates for pipeline execution visualization
-  useEffect(() => {
-    async function loadModules() {
-      try {
-        const response = await getModules();
-        setModuleTemplates(response.modules);
-      } catch (error) {
-        console.error("Failed to load modules:", error);
-        setModuleTemplates([]);
-      }
-    }
-    loadModules();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only load once on mount
 
   // Initialize state from initialData when in edit mode
   useEffect(() => {

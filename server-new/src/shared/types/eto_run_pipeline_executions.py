@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal, Optional
 
+from ._sentinel import UNSET, UnsetType
+
 # =========================
 # ETO Run Pipeline Execution Types
 # =========================
@@ -25,10 +27,16 @@ class EtoRunPipelineExecutionUpdate:
     """
     Data for updating a pipeline execution record.
     All fields are optional - only provided fields will be updated.
+
+    Uses UNSET sentinel to distinguish between:
+    - Field not provided (UNSET) - field will not be updated
+    - Field set to None (None) - field will be cleared/nulled in database
+    - Field set to value - field will be updated to that value
     """
-    status: Optional[str] = None
-    executed_actions: Optional[str] = None
-    completed_at: Optional[datetime] = None
+    status: str | UnsetType = UNSET
+    executed_actions: str | None | UnsetType = UNSET
+    started_at: datetime | None | UnsetType = UNSET
+    completed_at: datetime | None | UnsetType = UNSET
 
 
 @dataclass

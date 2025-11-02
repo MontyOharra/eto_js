@@ -10,6 +10,7 @@ from sqlalchemy.orm import joinedload, selectinload
 
 from shared.database.repositories.base import BaseRepository
 from shared.exceptions.service import ObjectNotFoundError
+from shared.types._sentinel import UNSET
 from shared.database.models import (
     EtoRunModel,
     PdfFileModel,
@@ -126,6 +127,11 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
         """
         Update ETO run. Only updates provided fields.
 
+        Uses UNSET sentinel to distinguish between:
+        - Field not provided (UNSET) - field will not be updated
+        - Field explicitly set to None - field will be cleared in database
+        - Field set to value - field will be updated to that value
+
         Args:
             run_id: ETO run ID
             data: EtoRunUpdate with fields to update (all optional)
@@ -142,20 +148,20 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
             if model is None:
                 raise ObjectNotFoundError(f"ETO run {run_id} not found")
 
-            # Update only provided fields
-            if data.status is not None:
+            # Update only provided fields (check against UNSET, not None)
+            if data.status is not UNSET:
                 model.status = data.status
-            if data.processing_step is not None:
+            if data.processing_step is not UNSET:
                 model.processing_step = data.processing_step
-            if data.error_type is not None:
+            if data.error_type is not UNSET:
                 model.error_type = data.error_type
-            if data.error_message is not None:
+            if data.error_message is not UNSET:
                 model.error_message = data.error_message
-            if data.error_details is not None:
+            if data.error_details is not UNSET:
                 model.error_details = data.error_details
-            if data.started_at is not None:
+            if data.started_at is not UNSET:
                 model.started_at = data.started_at
-            if data.completed_at is not None:
+            if data.completed_at is not UNSET:
                 model.completed_at = data.completed_at
 
             session.flush()  # Persist changes

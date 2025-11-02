@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal, Optional, Dict, Any
 
+from ._sentinel import UNSET, UnsetType
+
 # =========================
 # Type Aliases for Enums
 # =========================
@@ -28,14 +30,24 @@ class EtoRunUpdate:
     """
     Data for updating an ETO run.
     All fields are optional - only provided fields will be updated.
+
+    Uses UNSET sentinel to distinguish between:
+    - Field not provided (UNSET) - field will not be updated
+    - Field set to None (None) - field will be cleared/nulled in database
+    - Field set to value - field will be updated to that value
+
+    Example:
+        EtoRunUpdate(status="success")  # Only update status
+        EtoRunUpdate(processing_step=None)  # Clear processing_step
+        EtoRunUpdate(status="failure", error_type="ValidationError")  # Update multiple
     """
-    status: Optional[str] = None
-    processing_step: Optional[str] = None
-    error_type: Optional[str] = None
-    error_message: Optional[str] = None
-    error_details: Optional[str] = None
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    status: str | UnsetType = UNSET
+    processing_step: str | None | UnsetType = UNSET
+    error_type: str | None | UnsetType = UNSET
+    error_message: str | None | UnsetType = UNSET
+    error_details: str | None | UnsetType = UNSET
+    started_at: datetime | None | UnsetType = UNSET
+    completed_at: datetime | None | UnsetType = UNSET
 
 
 @dataclass

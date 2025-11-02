@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal, Optional
 
+from ._sentinel import UNSET, UnsetType
+
 # =========================
 # Template Matching Types
 # =========================
@@ -24,11 +26,16 @@ class EtoRunTemplateMatchingUpdate:
     """
     Data for updating a template matching record.
     All fields are optional - only provided fields will be updated.
+
+    Uses UNSET sentinel to distinguish between:
+    - Field not provided (UNSET) - field will not be updated
+    - Field set to None (None) - field will be cleared/nulled in database
+    - Field set to value - field will be updated to that value
     """
-    status: Optional[str] = None
-    matched_template_version_id: Optional[int] = None
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    status: str | UnsetType = UNSET
+    matched_template_version_id: int | None | UnsetType = UNSET
+    started_at: datetime | None | UnsetType = UNSET
+    completed_at: datetime | None | UnsetType = UNSET
 
 
 @dataclass

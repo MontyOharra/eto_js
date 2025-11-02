@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal, Optional
 
+from ._sentinel import UNSET, UnsetType
+
 # =========================
 # ETO Run Extraction Types
 # =========================
@@ -25,11 +27,16 @@ class EtoRunExtractionUpdate:
     """
     Data for updating an extraction run.
     All fields are optional - only provided fields will be updated.
+
+    Uses UNSET sentinel to distinguish between:
+    - Field not provided (UNSET) - field will not be updated
+    - Field set to None (None) - field will be cleared/nulled in database
+    - Field set to value - field will be updated to that value
     """
-    status: Optional[str] = None
-    extracted_data: Optional[str] = None
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    status: str | UnsetType = UNSET
+    extracted_data: str | None | UnsetType = UNSET
+    started_at: datetime | None | UnsetType = UNSET
+    completed_at: datetime | None | UnsetType = UNSET
 
 
 @dataclass

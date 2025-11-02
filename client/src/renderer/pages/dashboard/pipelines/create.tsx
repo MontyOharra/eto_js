@@ -1,19 +1,18 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import { ModuleSelectorPane } from "../../../features/pipelines/components/ModuleSelectorPane";
 import {
   PipelineGraph,
   PipelineGraphRef,
 } from "../../../features/pipelines/components/PipelineGraph";
 import { EntryPointModal } from "../../../features/pipelines/components/EntryPointModal";
-import { useModulesApi } from "../../../features/modules/hooks";
+import { useModules } from "../../../features/modules/hooks";
 import {
   usePipelinesApi,
   usePipelineValidation,
 } from "../../../features/pipelines/hooks";
 import { serializePipelineData } from "../../../features/pipelines/utils/pipelineSerializer";
 import { generateEntryPointId } from "../../../features/pipelines/utils/idGenerator";
-import type { ModuleTemplate } from "../../../features/modules/types";
 import type { EntryPoint, PipelineState } from "../../../features/pipelines/types";
 
 export const Route = createFileRoute("/dashboard/pipelines/create")({
@@ -22,7 +21,10 @@ export const Route = createFileRoute("/dashboard/pipelines/create")({
 
 function PipelineCreatePage() {
   const navigate = useNavigate();
-  const { getModules, isLoading, error: apiError } = useModulesApi();
+
+  // Fetch modules using TanStack Query
+  const { data: moduleTemplates = [], isLoading, error: apiError } = useModules();
+
   const {
     createPipeline,
     validatePipeline,
@@ -30,7 +32,6 @@ function PipelineCreatePage() {
   } = usePipelinesApi();
 
   // Page state
-  const [moduleTemplates, setModuleTemplates] = useState<ModuleTemplate[]>([]);
   const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null);
 
   // Entry points state
@@ -50,19 +51,6 @@ function PipelineCreatePage() {
     error: validationError,
     isValidating,
   } = usePipelineValidation(currentPipelineState);
-
-  // Fetch module templates on mount from API
-  useEffect(() => {
-    async function loadModules() {
-      try {
-        const response = await getModules();
-        setModuleTemplates(response.modules);
-      } catch (err) {
-        console.error("Failed to load module templates:", err);
-      }
-    }
-    loadModules();
-  }, []);
 
   const handleModuleSelect = (moduleId: string | null) => {
     setSelectedModuleId(moduleId);

@@ -8,8 +8,7 @@ import { useState, useEffect } from "react";
 import { PipelineGraph } from "../PipelineGraph";
 import { ExecutePipelineModal } from "./ExecutePipelineModal";
 import { usePipelinesApi } from "../../hooks/usePipelinesApi";
-import { useModulesApi } from "../../../modules/hooks";
-import type { ModuleTemplate } from "../../../modules/types";
+import { useModules } from "../../../modules/hooks";
 import type { PipelineDetailResponse } from "../../types";
 
 interface PipelineViewerModalProps {
@@ -24,15 +23,16 @@ export function PipelineViewerModal({
   onClose,
 }: PipelineViewerModalProps) {
   const { getPipeline } = usePipelinesApi();
-  const { getModules } = useModulesApi();
+
+  // Fetch modules using TanStack Query
+  const { data: modules = [] } = useModules();
 
   const [pipeline, setPipeline] = useState<PipelineDetailResponse | null>(null);
-  const [modules, setModules] = useState<ModuleTemplate[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showExecuteModal, setShowExecuteModal] = useState(false);
 
-  // Load pipeline and modules when modal opens
+  // Load pipeline when modal opens
   useEffect(() => {
     if (!isOpen || !pipelineId) {
       setPipeline(null);
@@ -45,14 +45,8 @@ export function PipelineViewerModal({
       setError(null);
 
       try {
-        // Load pipeline and modules in parallel
-        const [pipelineData, modulesData] = await Promise.all([
-          getPipeline(pipelineId),
-          getModules(),
-        ]);
-
+        const pipelineData = await getPipeline(pipelineId);
         setPipeline(pipelineData);
-        setModules(modulesData.modules);
       } catch (err) {
         console.error("Failed to load pipeline:", err);
         setError(
@@ -64,7 +58,7 @@ export function PipelineViewerModal({
     }
 
     loadData();
-  }, [isOpen, pipelineId, getPipeline, getModules]);
+  }, [isOpen, pipelineId, getPipeline]);
 
   // Reset state when modal closes
   useEffect(() => {
