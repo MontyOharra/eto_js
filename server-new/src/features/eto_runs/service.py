@@ -345,7 +345,7 @@ class EtoRunsService:
         logger.debug(f"Retrieved ETO run {run_id}: status={run.status}, processing_step={run.processing_step}")
         return run
 
-    def get_run_with_detail(self, run_id: int) -> EtoRunDetailView:
+    def get_run_detail(self, run_id: int) -> EtoRunDetailView:
         """
         Get complete ETO run detail with all stage data.
 
@@ -377,6 +377,7 @@ class EtoRunsService:
             f"has_pipeline={detail.pipeline_execution is not None}"
         )
         return detail
+    
 
     # ==================== Bulk Operation Methods ====================
 

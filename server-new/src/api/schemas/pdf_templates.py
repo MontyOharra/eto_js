@@ -29,7 +29,7 @@ class TemplateListItem(BaseModel):
     id: int
     name: str
     description: Optional[str] = None
-    status: Literal["active", "inactive"]
+    status: str
     source_pdf_id: int
     current_version: TemplateVersionSummary
     total_versions: int
@@ -48,7 +48,7 @@ class PdfTemplate(BaseModel):
     id: int
     name: str
     description: Optional[str] = None
-    status: Literal["active", "inactive"]
+    status: str
     source_pdf_id: int
     current_version_id: Optional[int] = None
     versions: List[VersionListItem]  # All versions for navigation

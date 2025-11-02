@@ -6,13 +6,6 @@ from typing import Optional, List, Dict, Any, Literal, Union
 from pydantic import BaseModel, Field, ConfigDict
 
 # =============================================================================
-# Type Aliases
-# =============================================================================
-
-EtoRunStatus = Literal["not_started", "processing", "success", "failure", "needs_template", "skipped"]
-EtoProcessingStep = Literal["template_matching", "data_extraction", "data_transformation"]
-
-# =============================================================================
 # Nested Models for EtoRunListItem
 # =============================================================================
 
@@ -62,8 +55,8 @@ class EtoRunListItem(BaseModel):
     Includes core run data plus embedded related data (PDF, source, matched template).
     """
     id: int
-    status: EtoRunStatus
-    processing_step: Optional[EtoProcessingStep] = None
+    status: str
+    processing_step: Optional[str] = None
     started_at: Optional[str] = None  # ISO 8601
     completed_at: Optional[str] = None  # ISO 8601
     error_type: Optional[str] = None
@@ -111,7 +104,7 @@ class CreateEtoRunResponse(BaseModel):
     Returns the created run with initial status.
     """
     id: int
-    status: EtoRunStatus
+    status: str
     pdf_file_id: int
     started_at: Optional[str] = None  # Will be None for not_started runs
     created_at: str  # ISO 8601
@@ -184,8 +177,8 @@ class EtoRunDetail(BaseModel):
     """
     # Core run data
     id: int
-    status: EtoRunStatus
-    processing_step: Optional[EtoProcessingStep] = None
+    status: str
+    processing_step: Optional[str] = None
     started_at: Optional[str] = None  # ISO 8601
     completed_at: Optional[str] = None  # ISO 8601
     error_type: Optional[str] = None

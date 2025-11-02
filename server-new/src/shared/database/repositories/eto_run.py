@@ -30,12 +30,8 @@ from shared.types.eto_runs import (
     EtoRunExtractionDetailView,
     EtoRunPipelineExecutionDetailView,
 )
-from shared.types.pdf_files import PdfFile
-from shared.types.email import Email
-from shared.types.eto_run_template_matchings import EtoRunTemplateMatching
-from shared.types.eto_run_extractions import EtoRunExtraction
-from shared.types.eto_run_pipeline_executions import EtoRunPipelineExecution
-from shared.types.pdf_templates import PdfTemplate, PdfTemplateVersion
+
+from shared.types.pdf_templates import ExtractionField
 
 logger = logging.getLogger(__name__)
 
@@ -363,8 +359,8 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                 EtoRunListView(
                     # Core ETO run fields
                     id=row.id,
-                    status=row.status.value,  # Enum to string
-                    processing_step=row.processing_step.value if row.processing_step else None,  # Enum to string
+                    status=row.status,  # Enum to string
+                    processing_step=row.processing_step if row.processing_step else None,  # Enum to string
                     started_at=row.started_at,
                     completed_at=row.completed_at,
                     error_type=row.error_type,
@@ -486,7 +482,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
             template_matching_detail = None
             if row.tm_status:
                 template_matching_detail = EtoRunTemplateMatchingDetailView(
-                    status=row.tm_status.value,
+                    status=row.tm_status,
                     matched_template_version_id=row.matched_template_version_id,
                     started_at=row.tm_started_at,
                     completed_at=row.tm_completed_at,
@@ -508,7 +504,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                         )
 
                 extraction_detail = EtoRunExtractionDetailView(
-                    status=row.ex_status.value,
+                    status=row.ex_status,
                     started_at=row.ex_started_at,
                     completed_at=row.ex_completed_at,
                     extracted_data=extracted_dict,
@@ -528,7 +524,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                         )
 
                 pipeline_execution_detail = EtoRunPipelineExecutionDetailView(
-                    status=row.pe_status.value,
+                    status=row.pe_status,
                     started_at=row.pe_started_at,
                     completed_at=row.pe_completed_at,
                     executed_actions=actions_dict,
@@ -538,8 +534,8 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
             return EtoRunDetailView(
                 # Core run data
                 id=row.id,
-                status=row.status.value,
-                processing_step=row.processing_step.value if row.processing_step else None,
+                status=row.status,
+                processing_step=row.processing_step if row.processing_step else None,
                 started_at=row.started_at,
                 completed_at=row.completed_at,
                 error_type=row.error_type,
@@ -565,4 +561,11 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                 matched_template_name=row.template_name,
                 matched_template_version_id=row.matched_template_version_id,
                 matched_template_version_num=row.template_version_num,
+            )
+            
+            
+    def get_matched_template_extraction_fields(self, run_if: int) -> Optional[List[ExtractionField]]:
+        with self._get_session() as session:
+            row = (
+                
             )

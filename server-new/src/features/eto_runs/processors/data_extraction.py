@@ -96,23 +96,14 @@ class DataExtractionProcessor:
         # 2. Get template's extraction_fields configuration
         # 3. Call PDF extraction service with PDF objects + extraction_fields
         # 4. Store real extracted data
-        fake_extracted_data = {
-            "invoice_number": "FAKE-INV-12345",
-            "invoice_date": "2025-10-29",
-            "vendor_name": "Test Vendor Inc.",
-            "total_amount": "1234.56",
-            "line_items": [
-                {"description": "Test Item 1", "quantity": "2", "price": "500.00"},
-                {"description": "Test Item 2", "quantity": "1", "price": "234.56"}
-            ]
-        }
+       
 
         # Step 4: Update extraction record with fake data
         self.extraction_repo.update(
             extraction.id,
             EtoRunExtractionUpdate(
                 status="success",
-                extracted_data=json.dumps(fake_extracted_data),
+                extracted_data=json.dumps({}),
                 started_at=datetime.now(timezone.utc),
                 completed_at=datetime.now(timezone.utc)
             )

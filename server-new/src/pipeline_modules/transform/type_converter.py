@@ -43,7 +43,7 @@ class TypeConverter(TransformModule):
                             label="input_value",
                             min_count=1,
                             max_count=1,
-                            typing=NodeTypeRule(allowed_types=["str", "float", "datetime", "bool"])
+                            typing=NodeTypeRule(allowed_types=[])
                         )
                     ]
                 ),
@@ -53,7 +53,7 @@ class TypeConverter(TransformModule):
                             label="converted_value",
                             min_count=1,
                             max_count=1,
-                            typing=NodeTypeRule(allowed_types=["str", "float", "datetime", "bool"])
+                            typing=NodeTypeRule(allowed_types=[])
                         )
                     ]
                 )

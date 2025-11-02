@@ -7,14 +7,6 @@ from datetime import datetime
 from typing import Literal, Optional
 
 # =========================
-# Type Aliases for Enums
-# =========================
-
-# Corresponds to EtoStepStatus enum in models.py
-EtoStepStatus = Literal["processing", "success", "failure"]
-
-
-# =========================
 # ETO Run Pipeline Execution Types
 # =========================
 
@@ -34,7 +26,7 @@ class EtoRunPipelineExecutionUpdate:
     Data for updating a pipeline execution record.
     All fields are optional - only provided fields will be updated.
     """
-    status: Optional[EtoStepStatus] = None
+    status: Optional[str] = None
     executed_actions: Optional[str] = None
     completed_at: Optional[datetime] = None
 
@@ -47,7 +39,7 @@ class EtoRunPipelineExecution:
     """
     id: int
     eto_run_id: int
-    status: EtoStepStatus
+    status: str
     executed_actions: Optional[str]
     started_at: Optional[datetime]
     completed_at: Optional[datetime]

@@ -10,13 +10,6 @@ from typing import Literal, Optional, Dict, Any
 # Type Aliases for Enums
 # =========================
 
-# Corresponds to EtoRunStatus enum in models.py
-EtoRunStatus = Literal["not_started", "processing", "success", "failure", "needs_template", "skipped"]
-
-# Corresponds to EtoRunProcessingStep enum in models.py
-EtoProcessingStep = Literal["template_matching", "data_extraction", "data_transformation"]
-
-
 # =========================
 # ETO Run Types
 # =========================
@@ -36,8 +29,8 @@ class EtoRunUpdate:
     Data for updating an ETO run.
     All fields are optional - only provided fields will be updated.
     """
-    status: Optional[EtoRunStatus] = None
-    processing_step: Optional[EtoProcessingStep] = None
+    status: Optional[str] = None
+    processing_step: Optional[str] = None
     error_type: Optional[str] = None
     error_message: Optional[str] = None
     error_details: Optional[str] = None
@@ -53,8 +46,8 @@ class EtoRun:
     """
     id: int
     pdf_file_id: int
-    status: EtoRunStatus
-    processing_step: Optional[EtoProcessingStep]
+    status: str
+    processing_step: Optional[str]
     error_type: Optional[str]
     error_message: Optional[str]
     error_details: Optional[str]
@@ -81,8 +74,8 @@ class EtoRunListView:
     """
     # Core ETO run fields
     id: int
-    status: EtoRunStatus
-    processing_step: Optional[EtoProcessingStep]
+    status: str
+    processing_step: Optional[str]
     started_at: Optional[datetime]
     completed_at: Optional[datetime]
     error_type: Optional[str]
@@ -182,8 +175,8 @@ class EtoRunDetailView:
     """
     # Core run data
     id: int
-    status: EtoRunStatus
-    processing_step: Optional[EtoProcessingStep]
+    status: str
+    processing_step: Optional[str]
     started_at: Optional[datetime]
     completed_at: Optional[datetime]
     error_type: Optional[str]

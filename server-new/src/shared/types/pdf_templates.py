@@ -93,7 +93,7 @@ class PdfTemplate:
     id: int
     name: str
     description: str | None
-    status: Literal["active", "inactive"]
+    status: str
     source_pdf_id: int
     current_version_id: int | None
     created_at: datetime
@@ -105,7 +105,7 @@ class PdfTemplateListView:
     id: int
     name: str
     description: str | None
-    status: Literal["active", "inactive"]
+    status: str
     source_pdf_id: int
     current_version_id: int | None
     current_version_number: int | None

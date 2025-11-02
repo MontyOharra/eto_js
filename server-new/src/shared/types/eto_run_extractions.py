@@ -7,14 +7,6 @@ from datetime import datetime
 from typing import Literal, Optional
 
 # =========================
-# Type Aliases for Enums
-# =========================
-
-# Corresponds to EtoStepStatus enum in models.py
-EtoStepStatus = Literal["processing", "success", "failure"]
-
-
-# =========================
 # ETO Run Extraction Types
 # =========================
 
@@ -34,7 +26,7 @@ class EtoRunExtractionUpdate:
     Data for updating an extraction run.
     All fields are optional - only provided fields will be updated.
     """
-    status: Optional[EtoStepStatus] = None
+    status: Optional[str] = None
     extracted_data: Optional[str] = None
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
@@ -48,7 +40,7 @@ class EtoRunExtraction:
     """
     id: int
     eto_run_id: int
-    status: EtoStepStatus
+    status: str
     extracted_data: Optional[str]
     started_at: Optional[datetime]
     completed_at: Optional[datetime]

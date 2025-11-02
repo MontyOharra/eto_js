@@ -12,6 +12,7 @@ from shared.types.eto_run_template_matchings import (
     EtoRunTemplateMatchingCreate,
     EtoRunTemplateMatchingUpdate,
 )
+from shared.exceptions.service import ObjectNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +94,7 @@ class EtoRunTemplateMatchingRepository(BaseRepository[EtoRunTemplateMatchingMode
 
             return self._model_to_domain(model)
 
-    def update(self, record_id: int, data: EtoRunTemplateMatchingUpdate) -> Optional[EtoRunTemplateMatching]:
+    def update(self, record_id: int, data: EtoRunTemplateMatchingUpdate) -> EtoRunTemplateMatching:
         """
         Update template matching record. Only updates provided fields.
 
@@ -108,7 +109,7 @@ class EtoRunTemplateMatchingRepository(BaseRepository[EtoRunTemplateMatchingMode
             model = session.get(self.model_class, record_id)
 
             if model is None:
-                return None
+                raise ObjectNotFoundError(f"run of {record_id} not found")
 
             # Update only provided fields
             if data.status is not None:

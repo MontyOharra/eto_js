@@ -131,7 +131,7 @@ class PdfTemplateRepository(BaseRepository[PdfTemplateModel]):
                     id=template.id,
                     name=template.name,
                     description=template.description,
-                    status=template.status.value,  # Convert enum to string
+                    status=template.status,  # Convert enum to string
                     source_pdf_id=template.source_pdf_id,
                     current_version_id=template.current_version_id,
                     current_version_number=version_num,
