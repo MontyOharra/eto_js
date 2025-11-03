@@ -12,7 +12,7 @@ import {
 import { EtoRunsTable, RunDetailModal } from '../../../features/eto/components';
 import { EtoRunListItem, EtoRunStatus } from '../../../features/eto/types';
 import { TemplateBuilderModal } from '../../../features/templates/components';
-import { useCreateTemplate } from '../../../features/templates/hooks';
+import { useCreateTemplate } from '../../../features/templates';
 
 export const Route = createFileRoute('/dashboard/eto/')({
   component: EtoPage,
@@ -243,7 +243,7 @@ function EtoPage() {
             <div className="flex items-center gap-2 text-sm">
               {isLiveConnected ? (
                 <>
-                  <span className="flex h-2 w-2">
+                  <span className="relative flex h-2 w-2">
                     <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-green-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
                   </span>

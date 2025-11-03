@@ -55,7 +55,14 @@ export function EtoRunsTable({
     }
   };
 
-  const statusDisplayTest = 
+  let statusDisplayTest: string
+  if (status === 'needs_template') {
+    statusDisplayTest = 'needs template';
+  } else if (status === 'not_started') {
+    statusDisplayTest = 'not started';
+  } else {
+    statusDisplayTest = status;
+  }
 
   const renderRow = (run: EtoRunListItem) => {
     switch (status) {
@@ -153,7 +160,7 @@ export function EtoRunsTable({
             <div className="p-4 space-y-3">{runs.map(renderRow)}</div>
           ) : (
             <div className="p-8 text-center">
-              <p className="text-gray-400">No {status} runs found</p>
+              <p className="text-gray-400">No {statusDisplayTest} runs found</p>
             </div>
           )}
         </div>
