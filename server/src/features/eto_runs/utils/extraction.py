@@ -6,6 +6,7 @@ Core extraction logic shared between:
 - Template simulation (via PdfTemplateService.simulate)
 """
 import logging
+from typing import TypedDict
 
 from features.pdf_files.service import PdfFilesService
 from shared.types.pdf_templates import ExtractionField
@@ -14,11 +15,20 @@ from shared.types.pdf_files import PdfObjects
 logger = logging.getLogger(__name__)
 
 
+class ExtractedFieldData(TypedDict):
+    """Single extraction field result with bbox for visual display"""
+    name: str
+    description: str | None
+    bbox: tuple[float, float, float, float]
+    page: int
+    extracted_value: str
+
+
 def extract_data_from_pdf(
     pdf_file_service: 'PdfFilesService',
     pdf_file_id: int,
     extraction_fields: list['ExtractionField']
-) -> dict[str, str]:
+) -> list[ExtractedFieldData]:
     """
     Extract text from PDF using extraction fields.
 
@@ -32,7 +42,7 @@ def extract_data_from_pdf(
         extraction_fields: List of ExtractionField domain objects
 
     Returns:
-        Dict mapping field names to extracted text
+        List of ExtractedFieldData with name, bbox, page, and extracted value
     """
     from features.pdf_files.utils.extraction import extract_text_from_bbox
 
@@ -42,7 +52,7 @@ def extract_data_from_pdf(
     pdf_objects = pdf_file_service.get_pdf_objects(pdf_file_id)
 
     # Extract text using same logic as simulate endpoint
-    extracted = {}
+    extraction_results: list[ExtractedFieldData] = []
     for field in extraction_fields:
         # Convert domain TextWord objects to dict format for extraction utility
         text_words_dicts = [
@@ -61,16 +71,24 @@ def extract_data_from_pdf(
             bbox=field.bbox,
             page=field.page
         )
-        extracted[field.name] = extracted_text
+
+        # Build full extraction result with bbox data
+        extraction_results.append({
+            "name": field.name,
+            "description": field.description,
+            "bbox": field.bbox,
+            "page": field.page,
+            "extracted_value": extracted_text
+        })
         logger.debug(f"Field '{field.name}' extracted: '{extracted_text}'")
 
-    return extracted
+    return extraction_results
 
 
 def extract_data_from_pdf_objects(
     pdf_objects: PdfObjects,
     extraction_fields: list['ExtractionField']
-) -> dict[str, str]:
+) -> list[ExtractedFieldData]:
     """
     Extract text from PDF objects using extraction fields.
 
@@ -82,14 +100,14 @@ def extract_data_from_pdf_objects(
         extraction_fields: List of ExtractionField domain objects
 
     Returns:
-        Dict mapping field names to extracted text
+        List of ExtractedFieldData with name, bbox, page, and extracted value
     """
     from features.pdf_files.utils.extraction import extract_text_from_bbox
 
     logger.debug(f"Extracting data from PDF objects with {len(extraction_fields)} fields")
 
     # Extract text using same logic
-    extracted = {}
+    extraction_results: list[ExtractedFieldData] = []
     for field in extraction_fields:
         # Convert domain TextWord objects to dict format for extraction utility
         text_words_dicts = [
@@ -108,7 +126,15 @@ def extract_data_from_pdf_objects(
             bbox=field.bbox,
             page=field.page
         )
-        extracted[field.name] = extracted_text
+
+        # Build full extraction result with bbox data
+        extraction_results.append({
+            "name": field.name,
+            "description": field.description,
+            "bbox": field.bbox,
+            "page": field.page,
+            "extracted_value": extracted_text
+        })
         logger.debug(f"Field '{field.name}' extracted: '{extracted_text}'")
 
-    return extracted
+    return extraction_results

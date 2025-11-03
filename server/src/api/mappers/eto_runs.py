@@ -18,6 +18,7 @@ from api.schemas.eto_runs import (
     EtoStageDataExtraction,
     EtoStagePipelineExecution,
 )
+from api.schemas.pdf_templates import ExtractedFieldResult
 
 
 def eto_run_list_view_to_api(run: EtoRunListView) -> EtoRunListItem:
@@ -176,10 +177,23 @@ def eto_run_detail_to_api(detail: EtoRunDetailView) -> EtoRunDetail:
 
     # Stage 2: Data extraction
     if detail.extraction:
-        # Data is already parsed in EtoRunExtractionDetailView (Dict[str, Any])
+        # Convert extracted_data list to ExtractedFieldResult objects
+        extraction_results: Optional[List[ExtractedFieldResult]] = None
+        if detail.extraction.extracted_data:
+            extraction_results = [
+                ExtractedFieldResult(
+                    name=result["name"],
+                    description=result.get("description"),
+                    bbox=tuple(result["bbox"]),  # type: ignore
+                    page=result["page"],
+                    extracted_value=result["extracted_value"]
+                )
+                for result in detail.extraction.extracted_data
+            ]
+
         stage_data_extraction = EtoStageDataExtraction(
             status=detail.extraction.status,
-            extracted_data=detail.extraction.extracted_data,  # Already parsed dict
+            extraction_results=extraction_results,
             started_at=detail.extraction.started_at.isoformat() if detail.extraction.started_at else None,
             completed_at=detail.extraction.completed_at.isoformat() if detail.extraction.completed_at else None,
         )

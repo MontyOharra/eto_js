@@ -673,9 +673,9 @@ class EtoRunsService:
         self,
         pdf_file_id: int,
         extraction_fields: list
-    ) -> dict[str, str]:
+    ) -> list:
         """
-        Extract text from PDF using extraction fields.
+        Extract text from PDF using extraction fields with bbox metadata.
 
         This is a thin wrapper around the shared extraction utility.
         The actual extraction logic is in features.eto_runs.utils.extraction
@@ -685,7 +685,7 @@ class EtoRunsService:
             extraction_fields: List of ExtractionField domain objects
 
         Returns:
-            Dict mapping field names to extracted text
+            List of extraction results with name, bbox, page, and extracted value
         """
         from features.eto_runs.utils.extraction import extract_data_from_pdf
 
@@ -825,7 +825,7 @@ class EtoRunsService:
             template_version_id: Matched template version ID
 
         Returns:
-            Dict of extracted data (field name -> text value)
+            Dict of extracted data (field name -> text value) for pipeline execution
 
         Raises:
             Exception: Propagated to caller for error handling
@@ -865,26 +865,33 @@ class EtoRunsService:
             raise ServiceError(f"Run {run_id} not found")
 
         # Step 5: CORE LOGIC - Extract data using same logic as simulate endpoint
-        extracted_data = self._extract_data_from_pdf(
+        # Returns list of dicts with name, bbox, page, description, extracted_value
+        extraction_results = self._extract_data_from_pdf(
             pdf_file_id=run.pdf_file_id,
             extraction_fields=template_version.extraction_fields
         )
 
-        logger.debug(f"Run {run_id}: Extracted {len(extracted_data)} fields from PDF")
+        logger.debug(f"Run {run_id}: Extracted {len(extraction_results)} fields from PDF")
 
-        # Step 6: Update extraction record with results
+        # Step 6: Update extraction record with full results (including bbox data)
         self.extraction_repo.update(
             extraction.id,
             EtoRunExtractionUpdate(
                 status="success",
-                extracted_data=json.dumps(extracted_data),
+                extracted_data=json.dumps(extraction_results),  # Store full extraction results
                 started_at=started_at,
                 completed_at=datetime.now(timezone.utc)
             )
         )
 
+        # Step 7: Convert to dict format for pipeline execution (backwards compatibility)
+        extracted_data_dict = {
+            result["name"]: result["extracted_value"]
+            for result in extraction_results
+        }
+
         logger.monitor(f"Run {run_id}: Data extraction completed successfully")  # type: ignore
-        return extracted_data
+        return extracted_data_dict
 
     # ==================== Helper Methods ====================
 

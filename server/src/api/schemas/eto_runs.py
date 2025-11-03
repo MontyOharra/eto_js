@@ -5,6 +5,8 @@ Pydantic models for ETO run endpoints
 from typing import Optional, List, Dict, Any, Literal, Union
 from pydantic import BaseModel, Field, ConfigDict
 
+from .pdf_templates import ExtractedFieldResult
+
 # =============================================================================
 # Nested Models for EtoRunListItem
 # =============================================================================
@@ -145,9 +147,10 @@ class EtoStageTemplateMatching(BaseModel):
 class EtoStageDataExtraction(BaseModel):
     """
     Data extraction stage data for detailed run view.
+    Includes full extraction results with bbox data for visual display.
     """
     status: Literal["processing", "success", "failure"]
-    extracted_data: Optional[Dict[str, Any]] = None  # Parsed JSON
+    extraction_results: Optional[List[ExtractedFieldResult]] = None  # Fields with bbox/page/value
     started_at: Optional[str] = None  # ISO 8601
     completed_at: Optional[str] = None  # ISO 8601
 
