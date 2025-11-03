@@ -33,6 +33,7 @@ from features.email_ingestion.utils.email_listener_thread import EmailListenerTh
 # TYPE_CHECKING imports for forward references
 if TYPE_CHECKING:
     from features.pdf_files.service import PdfFilesService
+    from features.eto_runs.service import EtoRunsService
     from shared.database.connection import DatabaseConnectionManager
 
 
@@ -65,6 +66,7 @@ class EmailIngestionService:
         self,
         connection_manager: 'DatabaseConnectionManager',
         pdf_service: 'PdfFilesService',
+        eto_service: 'EtoRunsService',
     ):
         """
         Initialize email ingestion service
@@ -76,6 +78,7 @@ class EmailIngestionService:
         """
         self.connection_manager = connection_manager
         self.pdf_service = pdf_service
+        self.eto_service = eto_service
 
         self.config_repository = EmailConfigRepository(connection_manager=connection_manager)
         self.email_repository = EmailRepository(connection_manager=connection_manager)
@@ -904,8 +907,19 @@ class EmailIngestionService:
 
                         pdf_count += 1
 
-                        # TODO: Trigger ETO processing in future implementation
-                        # self.eto_service.process_pdf(pdf_record.id)
+                        # Create ETO run for this PDF
+                        try:
+                            eto_run = self.eto_service.create_run(pdf_record.id)
+                            logger.info(
+                                f"Created ETO run {eto_run.id} for PDF {pdf_record.id} "
+                                f"(status: {eto_run.status})"
+                            )
+                        except Exception as eto_error:
+                            # Log ETO creation error but don't fail the entire email processing
+                            logger.error(
+                                f"Failed to create ETO run for PDF {pdf_record.id}: {eto_error}",
+                                exc_info=True
+                            )
 
                     except Exception as pdf_error:
                         # Log PDF storage error but continue processing other attachments

@@ -117,9 +117,9 @@ class ServiceContainer:
             },
             'email_ingestion': {
                 'class': 'features.email_ingestion.service.EmailIngestionService',
-                'args': [cls._connection_manager, '_service:pdf_files'],
+                'args': [cls._connection_manager, '_service:pdf_files', '_service:eto_runs'],
                 'singleton': True,
-                'description': 'Email ingestion service with PDF processing integration'
+                'description': 'Email ingestion service with PDF processing and ETO integration'
             },
             'email_configs': {
                 'class': 'features.email_configs.service.EmailConfigService',
