@@ -14,7 +14,7 @@ export function SkippedRunRow({ run, onReprocess, onDelete, isSelected, onToggle
     <BaseEtoRunRow run={run} isSelected={isSelected} onToggleSelect={onToggleSelect}>
       <button
         onClick={() => onReprocess(run.id)}
-        className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+        className="px-3 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded transition-colors"
       >
         Reprocess
       </button>
