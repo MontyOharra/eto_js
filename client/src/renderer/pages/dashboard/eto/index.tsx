@@ -36,6 +36,7 @@ function EtoPage() {
 
   // State for template builder modal
   const [templateBuilderPdfId, setTemplateBuilderPdfId] = useState<number | null>(null);
+  const [templateBuilderRunId, setTemplateBuilderRunId] = useState<number | null>(null);
 
   // SSE connection status
   const [isLiveConnected, setIsLiveConnected] = useState(false);
@@ -127,6 +128,7 @@ function EtoPage() {
 
     if (run) {
       setTemplateBuilderPdfId(run.pdf.id);
+      setTemplateBuilderRunId(runId); // Track run ID for reprocessing after save
     } else {
       console.error('Run not found:', runId);
     }
@@ -171,8 +173,16 @@ function EtoPage() {
       await activateTemplate.mutateAsync(createdTemplate.id);
       console.log('Template activated successfully');
 
+      // Reprocess the ETO run if it was built from a run
+      if (templateBuilderRunId) {
+        console.log('Reprocessing ETO run:', templateBuilderRunId);
+        await reprocessMutation.mutateAsync({ run_ids: [templateBuilderRunId] });
+        console.log('ETO run reprocessed successfully');
+      }
+
       // Close modal
       setTemplateBuilderPdfId(null);
+      setTemplateBuilderRunId(null);
 
       // TanStack Query will auto-refetch when mutations complete
     } catch (err) {
@@ -347,7 +357,10 @@ function EtoPage() {
         mode="create"
         pdfFileId={templateBuilderPdfId}
         pdfFile={null}
-        onClose={() => setTemplateBuilderPdfId(null)}
+        onClose={() => {
+          setTemplateBuilderPdfId(null);
+          setTemplateBuilderRunId(null);
+        }}
         onSave={handleSaveTemplate}
       />
     </div>
