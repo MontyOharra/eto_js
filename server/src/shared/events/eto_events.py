@@ -39,6 +39,7 @@ class EtoEventManager:
 
         self._clients: Set[asyncio.Queue] = set()
         self._shutdown_flag = False
+        self._shutdown_event = asyncio.Event()
         self._initialized = True
         logger.info("EtoEventManager initialized")
 
@@ -130,6 +131,10 @@ class EtoEventManager:
         """Check if server is shutting down"""
         return self._shutdown_flag
 
+    def get_shutdown_event(self) -> asyncio.Event:
+        """Get the shutdown event for awaiting"""
+        return self._shutdown_event
+
     async def shutdown(self) -> None:
         """
         Gracefully shutdown all SSE connections.
@@ -139,6 +144,7 @@ class EtoEventManager:
         """
         logger.info(f"Initiating graceful SSE shutdown for {len(self._clients)} clients")
         self._shutdown_flag = True
+        self._shutdown_event.set()  # Wake up all waiting event generators
 
         # Send shutdown event to all clients
         shutdown_event = {
@@ -154,7 +160,7 @@ class EtoEventManager:
                 logger.debug(f"Failed to send shutdown event to client: {e}")
 
         # Give clients a moment to receive the shutdown event
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.1)
 
         # Clear all clients (the event generators will see the shutdown flag and exit)
         client_count = len(self._clients)
