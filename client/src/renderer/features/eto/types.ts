@@ -74,21 +74,28 @@ export interface EtoStageTemplateMatching {
 }
 
 // Stage 2: Data Extraction
-export interface ExtractedFieldWithBox {
-  field_id: string;
-  label: string;
-  value: string;
+export interface ExtractionResult {
+  name: string;
+  description: string | null;
+  bbox: [number, number, number, number]; // [x0, y0, x1, y1]
   page: number;
-  bbox: [number, number, number, number]; // [x1, y1, x2, y2]
+  extracted_value: string;
 }
 
 export interface EtoStageDataExtraction {
   status: 'processing' | 'success' | 'failure';
   started_at: string | null;
   completed_at: string | null;
-  extracted_data: Record<string, any> | null;
-  // Optional feature - not yet implemented in backend
-  extracted_fields_with_boxes?: ExtractedFieldWithBox[];
+  extraction_results: ExtractionResult[];
+}
+
+// Format used by ExtractedFieldsOverlay component
+export interface ExtractedFieldWithBox {
+  field_id: string;
+  label: string;
+  value: string;
+  page: number;
+  bbox: [number, number, number, number];
 }
 
 // Stage 3: Pipeline Execution

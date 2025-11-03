@@ -4,7 +4,7 @@
  * execution details, and allows viewing the PDF and specifics
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { PdfViewer, usePdfViewer } from '../../../pdf';
 import { useEtoRunDetail, getPdfDownloadUrl } from '../../hooks';
 import { StatusBadge } from '../ui/StatusBadge';
@@ -87,6 +87,29 @@ export function RunDetailModal({ isOpen, runId, onClose }: RunDetailModalProps) 
   const pipelineViewerRef = useRef<ExecutedPipelineViewerRef>(null);
 
   const error = queryError ? 'Failed to load run details' : null;
+
+  // Transform extraction results for overlay display
+  const extractedFieldsForOverlay = useMemo(() => {
+    if (!runDetail?.stage_data_extraction?.extraction_results) return [];
+
+    return runDetail.stage_data_extraction.extraction_results.map(result => ({
+      field_id: result.name,
+      label: result.description || result.name,
+      value: result.extracted_value,
+      page: result.page,
+      bbox: result.bbox,
+    }));
+  }, [runDetail?.stage_data_extraction?.extraction_results]);
+
+  // Convert extraction results to key-value dict for pipeline viewer
+  const extractedData = useMemo(() => {
+    if (!runDetail?.stage_data_extraction?.extraction_results) return undefined;
+
+    return runDetail.stage_data_extraction.extraction_results.reduce((acc, result) => {
+      acc[result.name] = result.extracted_value;
+      return acc;
+    }, {} as Record<string, string>);
+  }, [runDetail?.stage_data_extraction?.extraction_results]);
 
   // Reset to summary view when modal opens
   useEffect(() => {
@@ -360,7 +383,7 @@ export function RunDetailModal({ isOpen, runId, onClose }: RunDetailModalProps) 
                             steps: runDetail.stage_pipeline_execution.steps,
                             executed_actions: runDetail.stage_pipeline_execution.executed_actions || undefined,
                           }}
-                          extractedData={runDetail.stage_data_extraction?.extracted_data || undefined}
+                          extractedData={extractedData}
                         />
                       ) : (
                         <div className="flex items-center justify-center h-full">
@@ -399,10 +422,8 @@ export function RunDetailModal({ isOpen, runId, onClose }: RunDetailModalProps) 
                       <AutoFitOnResize isDragging={isDragging} />
                       <PdfViewer.Canvas pdfUrl={pdfUrl} onError={handlePdfError}>
                         {/* Show extraction field overlay in detail view */}
-                        {viewMode === 'detail' && runDetail.stage_data_extraction?.extracted_fields_with_boxes && (
-                          <ExtractedFieldsOverlay
-                            fields={runDetail.stage_data_extraction.extracted_fields_with_boxes}
-                          />
+                        {viewMode === 'detail' && extractedFieldsForOverlay.length > 0 && (
+                          <ExtractedFieldsOverlay fields={extractedFieldsForOverlay} />
                         )}
                       </PdfViewer.Canvas>
                       <PdfViewer.ControlsSidebar position="right" />
