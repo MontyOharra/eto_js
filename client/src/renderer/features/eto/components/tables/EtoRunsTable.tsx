@@ -35,6 +35,31 @@ export function EtoRunsTable({
   onDelete,
 }: EtoRunsTableProps) {
   const [isExpanded, setIsExpanded] = useState(runs.length > 0);
+  const [selectedRunIds, setSelectedRunIds] = useState<Set<number>>(new Set());
+
+  // Check if all runs are selected
+  const allSelected = runs.length > 0 && selectedRunIds.size === runs.length;
+  const someSelected = selectedRunIds.size > 0 && selectedRunIds.size < runs.length;
+
+  // Toggle all runs selection
+  const handleSelectAll = () => {
+    if (allSelected) {
+      setSelectedRunIds(new Set());
+    } else {
+      setSelectedRunIds(new Set(runs.map(run => run.id)));
+    }
+  };
+
+  // Toggle individual run selection
+  const handleToggleRun = (runId: number) => {
+    const newSelected = new Set(selectedRunIds);
+    if (newSelected.has(runId)) {
+      newSelected.delete(runId);
+    } else {
+      newSelected.add(runId);
+    }
+    setSelectedRunIds(newSelected);
+  };
 
   const getStatusColor = (status: EtoRunStatus) => {
     switch (status) {
@@ -65,16 +90,43 @@ export function EtoRunsTable({
   }
 
   const renderRow = (run: EtoRunListItem) => {
+    const isSelected = selectedRunIds.has(run.id);
+
     switch (status) {
       case 'not_started':
-        return <NotStartedRunRow key={run.id} run={run} />;
+        return (
+          <NotStartedRunRow
+            key={run.id}
+            run={run}
+            isSelected={isSelected}
+            onToggleSelect={handleToggleRun}
+          />
+        );
       case 'processing':
-        return <ProcessingRunRow key={run.id} run={run} />;
+        return (
+          <ProcessingRunRow
+            key={run.id}
+            run={run}
+            isSelected={isSelected}
+            onToggleSelect={handleToggleRun}
+          />
+        );
       case 'success':
         return onView ? (
-          <SuccessRunRow key={run.id} run={run} onView={onView} />
+          <SuccessRunRow
+            key={run.id}
+            run={run}
+            onView={onView}
+            isSelected={isSelected}
+            onToggleSelect={handleToggleRun}
+          />
         ) : (
-          <NotStartedRunRow key={run.id} run={run} />
+          <NotStartedRunRow
+            key={run.id}
+            run={run}
+            isSelected={isSelected}
+            onToggleSelect={handleToggleRun}
+          />
         );
       case 'failure':
         return onView && onReview && onSkip ? (
@@ -83,9 +135,16 @@ export function EtoRunsTable({
             run={run}
             onReview={onReview}
             onSkip={onSkip}
+            isSelected={isSelected}
+            onToggleSelect={handleToggleRun}
           />
         ) : (
-          <NotStartedRunRow key={run.id} run={run} />
+          <NotStartedRunRow
+            key={run.id}
+            run={run}
+            isSelected={isSelected}
+            onToggleSelect={handleToggleRun}
+          />
         );
       case 'needs_template':
         return onBuildTemplate && onSkip ? (
@@ -94,9 +153,16 @@ export function EtoRunsTable({
             run={run}
             onBuildTemplate={onBuildTemplate}
             onSkip={onSkip}
+            isSelected={isSelected}
+            onToggleSelect={handleToggleRun}
           />
         ) : (
-          <NotStartedRunRow key={run.id} run={run} />
+          <NotStartedRunRow
+            key={run.id}
+            run={run}
+            isSelected={isSelected}
+            onToggleSelect={handleToggleRun}
+          />
         );
       case 'skipped':
         return onReprocess && onDelete ? (
@@ -105,24 +171,59 @@ export function EtoRunsTable({
             run={run}
             onReprocess={onReprocess}
             onDelete={onDelete}
+            isSelected={isSelected}
+            onToggleSelect={handleToggleRun}
           />
         ) : (
-          <NotStartedRunRow key={run.id} run={run} />
+          <NotStartedRunRow
+            key={run.id}
+            run={run}
+            isSelected={isSelected}
+            onToggleSelect={handleToggleRun}
+          />
         );
       default:
-        return <NotStartedRunRow key={run.id} run={run} />;
+        return (
+          <NotStartedRunRow
+            key={run.id}
+            run={run}
+            isSelected={isSelected}
+            onToggleSelect={handleToggleRun}
+          />
+        );
     }
   };
 
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden">
       {/* Table Header */}
-      <div
-        className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-750 transition-colors"
-        onClick={() => setIsExpanded(!isExpanded)}
-      >
-        <div className="flex items-center space-x-3">
-          <StatusIcon status={status} />
+      <div className="flex items-center justify-between p-4">
+        {/* Left side - Icon with dropdown arrow underneath */}
+        <div className="flex items-start space-x-3">
+          <div className="flex flex-col items-center">
+            <StatusIcon status={status} />
+            <button
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="mt-1 hover:bg-gray-700 rounded p-0.5 transition-colors"
+            >
+              <svg
+                className={`w-4 h-4 text-gray-400 transition-transform ${
+                  isExpanded ? 'rotate-180' : ''
+                }`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 9l-7 7-7-7"
+                />
+              </svg>
+            </button>
+          </div>
+
           <div>
             <h3 className={`text-lg font-semibold ${getStatusColor(status)}`}>
               {title}
@@ -133,23 +234,24 @@ export function EtoRunsTable({
           </div>
         </div>
 
-        <div className="flex items-center space-x-3">
-          <span className="text-sm text-gray-400">{runs.length} items</span>
-          <svg
-            className={`w-5 h-5 text-gray-400 transition-transform ${
-              isExpanded ? 'rotate-180' : ''
-            }`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M19 9l-7 7-7-7"
+        {/* Right side - Select all checkbox */}
+        <div className="flex items-center space-x-2">
+          <label className="flex items-center cursor-pointer group">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              ref={(input) => {
+                if (input) {
+                  input.indeterminate = someSelected;
+                }
+              }}
+              onChange={handleSelectAll}
+              className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500 focus:ring-offset-gray-800 cursor-pointer"
             />
-          </svg>
+            <span className="ml-2 text-sm text-gray-400 group-hover:text-gray-300">
+              Select All
+            </span>
+          </label>
         </div>
       </div>
 

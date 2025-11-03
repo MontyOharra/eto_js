@@ -4,9 +4,11 @@ import { StatusIcon, StatusBadge, ProcessingStepBadge } from '../ui';
 interface BaseEtoRunRowProps {
   run: EtoRunListItem;
   children?: React.ReactNode;
+  isSelected?: boolean;
+  onToggleSelect?: (runId: number) => void;
 }
 
-export function BaseEtoRunRow({ run, children }: BaseEtoRunRowProps) {
+export function BaseEtoRunRow({ run, children, isSelected = false, onToggleSelect }: BaseEtoRunRowProps) {
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'N/A';
     const date = new Date(dateString);
@@ -30,11 +32,21 @@ export function BaseEtoRunRow({ run, children }: BaseEtoRunRowProps) {
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 hover:border-gray-600 transition-colors">
       <div className="flex items-center justify-between">
-        {/* Left side - Status icon + File info */}
+        {/* Left side - Checkbox + File info */}
         <div className="flex items-center space-x-4 flex-1">
-          {/* Status icon */}
+          {/* Selection checkbox (replaces status icon) */}
           <div className="flex-shrink-0">
-            <StatusIcon status={run.status} />
+            {onToggleSelect ? (
+              <input
+                type="checkbox"
+                checked={isSelected}
+                onChange={() => onToggleSelect(run.id)}
+                onClick={(e) => e.stopPropagation()}
+                className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500 focus:ring-offset-gray-800 cursor-pointer"
+              />
+            ) : (
+              <StatusIcon status={run.status} />
+            )}
           </div>
 
           {/* File information */}

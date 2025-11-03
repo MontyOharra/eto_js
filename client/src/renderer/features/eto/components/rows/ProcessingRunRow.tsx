@@ -3,8 +3,10 @@ import { BaseEtoRunRow } from '../base';
 
 interface ProcessingRunRowProps {
   run: EtoRunListItem;
+  isSelected?: boolean;
+  onToggleSelect?: (runId: number) => void;
 }
 
-export function ProcessingRunRow({ run }: ProcessingRunRowProps) {
-  return <BaseEtoRunRow run={run} />;
+export function ProcessingRunRow({ run, isSelected, onToggleSelect }: ProcessingRunRowProps) {
+  return <BaseEtoRunRow run={run} isSelected={isSelected} onToggleSelect={onToggleSelect} />;
 }

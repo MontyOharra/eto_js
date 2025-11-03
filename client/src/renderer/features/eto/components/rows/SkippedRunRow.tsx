@@ -5,11 +5,13 @@ interface SkippedRunRowProps {
   run: EtoRunListItem;
   onReprocess: (runId: number) => void;
   onDelete: (runId: number) => void;
+  isSelected?: boolean;
+  onToggleSelect?: (runId: number) => void;
 }
 
-export function SkippedRunRow({ run, onReprocess, onDelete }: SkippedRunRowProps) {
+export function SkippedRunRow({ run, onReprocess, onDelete, isSelected, onToggleSelect }: SkippedRunRowProps) {
   return (
-    <BaseEtoRunRow run={run}>
+    <BaseEtoRunRow run={run} isSelected={isSelected} onToggleSelect={onToggleSelect}>
       <button
         onClick={() => onReprocess(run.id)}
         className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
