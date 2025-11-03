@@ -12,8 +12,8 @@ import { StatusBadge } from '../ui/StatusBadge';
 import { ExtractedFieldsOverlay } from '../overlays/ExtractedFieldsOverlay';
 import { ExecutedPipelineGraph, ExecutedPipelineGraphRef } from '../../../pipelines/components/ExecutedPipelineGraph';
 import { useModules } from '../../../modules/hooks';
-import { apiClient } from '../../../shared/api/client';
-import { API_CONFIG } from '../../../shared/api/config';
+import { apiClient } from '../../../../shared/api/client';
+import { API_CONFIG } from '../../../../shared/api/config';
 import type { EtoRunDetail } from '../../types';
 import type { PipelineState, VisualState } from '../../../pipelines/types';
 
