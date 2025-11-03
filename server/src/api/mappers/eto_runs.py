@@ -200,12 +200,30 @@ def eto_run_detail_to_api(detail: EtoRunDetailView) -> EtoRunDetail:
 
     # Stage 3: Pipeline execution
     if detail.pipeline_execution:
+        # Convert execution steps to API format
+        from api.schemas.eto_runs import EtoPipelineExecutionStep
+        steps_list = None
+        if detail.pipeline_execution.steps:
+            steps_list = [
+                EtoPipelineExecutionStep(
+                    id=step.id,
+                    step_number=step.step_number,
+                    module_instance_id=step.module_instance_id,
+                    inputs=step.inputs,
+                    outputs=step.outputs,
+                    error=step.error,
+                )
+                for step in detail.pipeline_execution.steps
+            ]
+
         # Data is already parsed in EtoRunPipelineExecutionDetailView (Dict[str, Any])
         stage_pipeline_execution = EtoStagePipelineExecution(
             status=detail.pipeline_execution.status,
             executed_actions=detail.pipeline_execution.executed_actions,  # Already parsed dict
             started_at=detail.pipeline_execution.started_at.isoformat() if detail.pipeline_execution.started_at else None,
             completed_at=detail.pipeline_execution.completed_at.isoformat() if detail.pipeline_execution.completed_at else None,
+            pipeline_definition_id=detail.pipeline_execution.pipeline_definition_id,
+            steps=steps_list,
         )
 
     # Build the main EtoRunDetail
