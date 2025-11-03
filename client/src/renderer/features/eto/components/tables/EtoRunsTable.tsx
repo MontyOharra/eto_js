@@ -198,9 +198,9 @@ export function EtoRunsTable({
     <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden">
       {/* Table Header */}
       <div className="flex items-center justify-between p-4">
-        {/* Left side - Icon with dropdown arrow underneath */}
-        <div className="flex items-start space-x-3">
-          <div className="flex flex-col items-center">
+        {/* Left side - Icon with dropdown arrow underneath (vertically centered) */}
+        <div className="flex items-center space-x-3">
+          <div className="flex flex-col items-center justify-center">
             <StatusIcon status={status} />
             <button
               onClick={() => setIsExpanded(!isExpanded)}
@@ -237,6 +237,9 @@ export function EtoRunsTable({
         {/* Right side - Select all checkbox */}
         <div className="flex items-center space-x-2">
           <label className="flex items-center cursor-pointer group">
+            <span className="mr-2 text-sm text-gray-400 group-hover:text-gray-300">
+              Select All
+            </span>
             <input
               type="checkbox"
               checked={allSelected}
@@ -246,11 +249,8 @@ export function EtoRunsTable({
                 }
               }}
               onChange={handleSelectAll}
-              className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500 focus:ring-offset-gray-800 cursor-pointer"
+              className="w-4 h-4 rounded border-2 border-gray-600 bg-gray-800 checked:bg-blue-600 checked:border-blue-600 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800 cursor-pointer transition-colors"
             />
-            <span className="ml-2 text-sm text-gray-400 group-hover:text-gray-300">
-              Select All
-            </span>
           </label>
         </div>
       </div>

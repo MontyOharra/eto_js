@@ -42,7 +42,7 @@ export function BaseEtoRunRow({ run, children, isSelected = false, onToggleSelec
                 checked={isSelected}
                 onChange={() => onToggleSelect(run.id)}
                 onClick={(e) => e.stopPropagation()}
-                className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500 focus:ring-offset-gray-800 cursor-pointer"
+                className="w-4 h-4 rounded border-2 border-gray-600 bg-gray-800 checked:bg-blue-600 checked:border-blue-600 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 cursor-pointer transition-colors"
               />
             ) : (
               <StatusIcon status={run.status} />
