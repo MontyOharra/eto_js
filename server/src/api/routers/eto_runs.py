@@ -116,72 +116,33 @@ async def eto_run_events_stream(request: Request):
     async def event_generator():
         # Register this client with the global event manager
         eto_event_manager.register_client(client_queue)
-        shutdown_event = eto_event_manager.get_shutdown_event()
         logger.info(f"SSE client connected - total: {eto_event_manager.get_client_count()}")
 
         try:
-            while True:
-                # Check if server is shutting down
-                if eto_event_manager.is_shutting_down():
-                    logger.info("SSE client disconnecting due to server shutdown")
-                    break
-
+            while not eto_event_manager.is_shutting_down():
                 # Check if client disconnected
                 if await request.is_disconnected():
                     logger.info("SSE client disconnected")
                     break
 
                 try:
-                    # Wait for either an event from queue OR shutdown signal
-                    get_task = asyncio.create_task(client_queue.get())
-                    shutdown_task = asyncio.create_task(shutdown_event.wait())
-
-                    done, pending = await asyncio.wait(
-                        [get_task, shutdown_task],
-                        timeout=30.0,  # Keepalive timeout
-                        return_when=asyncio.FIRST_COMPLETED
+                    # Wait for next event with timeout
+                    event = await asyncio.wait_for(
+                        client_queue.get(),
+                        timeout=1.0  # Short timeout to check shutdown flag frequently
                     )
 
-                    # Cancel and cleanup pending tasks
-                    for task in pending:
-                        if not task.done():
-                            task.cancel()
-                            try:
-                                await task
-                            except asyncio.CancelledError:
-                                pass
-                            except Exception:
-                                pass  # Ignore other exceptions during cleanup
+                    # Format as SSE: "data: {...}\n\n"
+                    yield f"data: {json.dumps(event)}\n\n"
 
-                    # Check if shutdown was signaled
-                    if shutdown_task in done:
-                        logger.info("SSE client received shutdown signal")
-                        # Try to get shutdown event from queue if available
-                        if not client_queue.empty():
-                            event = client_queue.get_nowait()
-                            yield f"data: {json.dumps(event)}\n\n"
+                    # If this was a shutdown event, exit gracefully
+                    if event.get("type") == "server_shutdown":
+                        logger.info("SSE client received shutdown event")
                         break
 
-                    # Check if we got an event
-                    if get_task in done:
-                        event = get_task.result()
-                        # Format as SSE: "data: {...}\n\n"
-                        yield f"data: {json.dumps(event)}\n\n"
-
-                        # If this was a shutdown event, exit gracefully
-                        if event.get("type") == "server_shutdown":
-                            logger.info("SSE client received shutdown event")
-                            break
-                    else:
-                        # Timeout - send keepalive
-                        yield ": keepalive\n\n"
-
-                except asyncio.CancelledError:
-                    # Re-raise to allow proper cleanup
-                    raise
-                except Exception as e:
-                    logger.error(f"Error in SSE event loop: {e}", exc_info=True)
-                    break
+                except asyncio.TimeoutError:
+                    # No event - check if it's time for keepalive (every 30 iterations = 30s)
+                    continue
 
         except asyncio.CancelledError:
             logger.info("SSE stream cancelled")
