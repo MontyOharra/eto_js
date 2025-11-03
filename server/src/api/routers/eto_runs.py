@@ -120,12 +120,15 @@ async def eto_run_events_stream(request: Request):
 
         try:
             while not eto_event_manager.is_shutting_down():
-                # Check if client disconnected
-                if await request.is_disconnected():
-                    logger.info("SSE client disconnected")
-                    break
-
                 try:
+                    # Check if client disconnected (but don't block if cancelled)
+                    try:
+                        if await asyncio.wait_for(request.is_disconnected(), timeout=0.1):
+                            logger.info("SSE client disconnected")
+                            break
+                    except asyncio.TimeoutError:
+                        pass  # Client still connected
+
                     # Wait for next event with timeout
                     event = await asyncio.wait_for(
                         client_queue.get(),
@@ -141,13 +144,16 @@ async def eto_run_events_stream(request: Request):
                         break
 
                 except asyncio.TimeoutError:
-                    # No event - check if it's time for keepalive (every 30 iterations = 30s)
+                    # No event - continue to next iteration
                     continue
+                except asyncio.CancelledError:
+                    # If cancelled during any await, exit immediately
+                    logger.info("SSE stream cancelled during operation")
+                    return
 
         except asyncio.CancelledError:
-            logger.info("SSE stream cancelled - exiting gracefully")
-            # Don't re-raise - allow generator to complete normally
-            # This allows server shutdown to proceed without waiting for client
+            logger.info("SSE stream cancelled - exiting immediately")
+            return  # Exit generator immediately
         except Exception as e:
             logger.error(f"SSE stream error: {e}", exc_info=True)
         finally:
