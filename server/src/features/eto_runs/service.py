@@ -22,8 +22,6 @@ from shared.events.eto_events import eto_event_manager
 from .utils import EtoWorker
 
 from shared.exceptions.service import ValidationError
-# TODO: Import remaining repositories when implemented
-# from shared.database.repositories.eto_run_pipeline_execution_step import EtoRunPipelineExecutionStepRepository
 
 from shared.types.eto_runs import (
     EtoRun,
@@ -101,10 +99,9 @@ class EtoRunsService:
 
     eto_run_repo: EtoRunRepository
     pipeline_execution_repo: EtoRunPipelineExecutionRepository
+    pipeline_execution_step_repo: EtoRunPipelineExecutionStepRepository
     template_matching_repo: EtoRunTemplateMatchingRepository
     extraction_repo: EtoRunExtractionRepository
-    # TODO: Add remaining repositories when implemented
-    # pipeline_execution_step_repo: EtoRunPipelineExecutionStepRepository
 
     def __init__(
         self,
@@ -133,11 +130,9 @@ class EtoRunsService:
         # Initialize repositories
         self.eto_run_repo: EtoRunRepository = EtoRunRepository(connection_manager=connection_manager)
         self.pipeline_execution_repo: EtoRunPipelineExecutionRepository = EtoRunPipelineExecutionRepository(connection_manager=connection_manager)
+        self.pipeline_execution_step_repo: EtoRunPipelineExecutionStepRepository = EtoRunPipelineExecutionStepRepository(connection_manager=connection_manager)
         self.template_matching_repo: EtoRunTemplateMatchingRepository = EtoRunTemplateMatchingRepository(connection_manager=connection_manager)
         self.extraction_repo: EtoRunExtractionRepository = EtoRunExtractionRepository(connection_manager=connection_manager)
-
-        # TODO: Initialize remaining repositories when implemented
-        # self.pipeline_execution_step_repo = EtoRunPipelineExecutionStepRepository(connection_manager=connection_manager)
 
         # Worker configuration from environment
         worker_enabled = os.getenv('ETO_WORKER_ENABLED', 'true').lower() == 'true'
@@ -651,11 +646,20 @@ class EtoRunsService:
                 self._mark_run_failure(run_id, error=e, error_type="DataExtractionError")
                 return False
 
-            # TODO: Stage 3: Data Transformation
-            # For now, mark as success after extraction completes
-            logger.info(f"Run {run_id}: Data transformation stage not yet implemented - marking as success")
+            # Stage 3: Pipeline Execution
+            # Execute pipeline with extracted data and persist results
+            try:
+                self._process_pipeline_execution(
+                    run_id=run_id,
+                    template_version_id=version_id,
+                    extracted_data=extracted_data
+                )
+            except Exception as e:
+                logger.error(f"Run {run_id}: Pipeline execution stage error: {e}", exc_info=True)
+                self._mark_run_failure(run_id, error=e, error_type="PipelineExecutionError")
+                return False
 
-            # All implemented stages completed successfully
+            # All stages completed successfully
             self._mark_run_success(run_id)
             logger.monitor(f"Run {run_id}: All stages completed successfully")  # type: ignore
             return True
@@ -892,6 +896,158 @@ class EtoRunsService:
 
         logger.monitor(f"Run {run_id}: Data extraction completed successfully")  # type: ignore
         return extracted_data_dict
+
+    def _process_pipeline_execution(
+        self,
+        run_id: int,
+        template_version_id: int,
+        extracted_data: dict[str, str]
+    ) -> None:
+        """
+        Stage 3: Pipeline Execution
+
+        Executes the pipeline with extracted data, persisting step results and actions.
+        Uses PRODUCTION mode (execute_actions=True) - actions actually execute.
+
+        Args:
+            run_id: ETO run ID
+            template_version_id: Matched template version ID
+            extracted_data: Dict of extracted field values (field name -> text)
+
+        Raises:
+            Exception: Propagated to caller for error handling
+        """
+        logger.monitor(f"Run {run_id}: Executing pipeline execution stage")  # type: ignore
+
+        # Step 1: Update run processing_step
+        self.eto_run_repo.update(
+            run_id,
+            EtoRunUpdate(processing_step="data_transformation")
+        )
+        logger.debug(f"Run {run_id}: Updated processing_step to data_transformation")
+
+        # Broadcast processing step change
+        eto_event_manager.broadcast_sync(
+            "run_updated",
+            {
+                "id": run_id,
+                "processing_step": "data_transformation",
+            }
+        )
+
+        # Step 2: Create pipeline_execution record
+        started_at = datetime.now(timezone.utc)
+        pipeline_execution = self.pipeline_execution_repo.create(
+            EtoRunPipelineExecutionCreate(
+                eto_run_id=run_id,
+                started_at=started_at
+            )
+        )
+        logger.debug(f"Run {run_id}: Created pipeline_execution record {pipeline_execution.id}")
+
+        # Step 3: Get template version with pipeline_definition_id
+        template_version = self.pdf_template_service.get_version_by_id(template_version_id)
+        logger.debug(
+            f"Run {run_id}: Retrieved template version {template_version_id} "
+            f"with pipeline_definition_id {template_version.pipeline_definition_id}"
+        )
+
+        # Step 4: Get pipeline definition with pipeline_state
+        pipeline_definition = self.pipeline_execution_service.pipeline_repo.get_by_id(
+            template_version.pipeline_definition_id
+        )
+        if not pipeline_definition:
+            raise ServiceError(
+                f"Pipeline definition {template_version.pipeline_definition_id} not found "
+                f"for template version {template_version_id}"
+            )
+        logger.debug(
+            f"Run {run_id}: Retrieved pipeline definition {pipeline_definition.id} "
+            f"with compiled plan {pipeline_definition.compiled_plan_id}"
+        )
+
+        # Step 5: Get compiled steps
+        if not pipeline_definition.compiled_plan_id:
+            raise ServiceError(
+                f"Pipeline definition {pipeline_definition.id} is not compiled. "
+                f"Cannot execute uncompiled pipeline."
+            )
+
+        compiled_steps = self.pipeline_execution_service.step_repo.get_steps_by_plan_id(
+            pipeline_definition.compiled_plan_id
+        )
+        if not compiled_steps:
+            raise ServiceError(
+                f"No compiled steps found for pipeline {pipeline_definition.id} "
+                f"(plan {pipeline_definition.compiled_plan_id})"
+            )
+        logger.debug(
+            f"Run {run_id}: Retrieved {len(compiled_steps)} compiled steps "
+            f"from plan {pipeline_definition.compiled_plan_id}"
+        )
+
+        # Step 6: CORE LOGIC - Execute pipeline with PRODUCTION mode (execute_actions=True)
+        from shared.types.pipeline_execution import PipelineExecutionResult
+
+        execution_result: PipelineExecutionResult = self.pipeline_execution_service.execute_pipeline(
+            steps=compiled_steps,
+            entry_values_by_name=extracted_data,
+            pipeline_state=pipeline_definition.pipeline_state
+        )
+        logger.debug(
+            f"Run {run_id}: Pipeline execution completed with status={execution_result.status}, "
+            f"{len(execution_result.steps)} steps, {len(execution_result.executed_actions)} actions"
+        )
+
+        # Step 7: Persist ALL step results to database (batch after completion)
+        import json
+        from shared.types.eto_run_pipeline_execution_steps import EtoRunPipelineExecutionStepCreate
+
+        for step_result in execution_result.steps:
+            # Serialize step inputs/outputs to JSON strings
+            inputs_json = json.dumps(step_result.inputs) if step_result.inputs else None
+            outputs_json = json.dumps(step_result.outputs) if step_result.outputs else None
+
+            # Create step record
+            self.pipeline_execution_step_repo.create(
+                EtoRunPipelineExecutionStepCreate(
+                    run_id=pipeline_execution.id,  # FK to pipeline_execution record
+                    module_instance_id=step_result.module_instance_id,
+                    step_number=step_result.step_number,
+                    inputs=inputs_json,
+                    outputs=outputs_json,
+                    error=step_result.error
+                )
+            )
+
+        logger.debug(f"Run {run_id}: Persisted {len(execution_result.steps)} step results to database")
+
+        # Step 8: Store executed_actions as JSON
+        executed_actions_json = json.dumps(execution_result.executed_actions) if execution_result.executed_actions else None
+
+        # Step 9: Update pipeline_execution record with final status
+        completed_at = datetime.now(timezone.utc)
+        final_status = "success" if execution_result.status == "success" else "failure"
+
+        self.pipeline_execution_repo.update(
+            pipeline_execution.id,
+            EtoRunPipelineExecutionUpdate(
+                status=final_status,
+                executed_actions=executed_actions_json,
+                completed_at=completed_at
+            )
+        )
+        logger.debug(
+            f"Run {run_id}: Updated pipeline_execution record to status={final_status}"
+        )
+
+        # Step 10: If pipeline failed, raise error to mark run as failed
+        if execution_result.status != "success":
+            error_msg = execution_result.error or "Pipeline execution failed"
+            logger.error(f"Run {run_id}: Pipeline execution failed: {error_msg}")
+            raise ServiceError(f"Pipeline execution failed: {error_msg}")
+
+        logger.monitor(f"Run {run_id}: Pipeline execution completed successfully")  # type: ignore
 
     # ==================== Helper Methods ====================
 

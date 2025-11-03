@@ -344,7 +344,7 @@ class EtoRunModel(BaseModel):
     )
     processing_step: Mapped[Optional[str]] = mapped_column(
         SAEnum("template_matching", "data_extraction", "data_transformation",
-               name="eto_run_processing_step", native_enum=False),
+               name="eto_run_processing_step", native_enum=True),
         nullable=True,
     )
 

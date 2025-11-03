@@ -119,9 +119,12 @@ async def eto_run_events_stream(request: Request):
         logger.info(f"SSE client connected - total: {eto_event_manager.get_client_count()}")
 
         try:
+            # Send initial connection event to establish the stream
+            yield f": connected\n\n"  # SSE comment - keeps connection alive
+
             while not eto_event_manager.is_shutting_down():
                 try:
-                    # Check if client disconnected (but don't block if cancelled)
+                    # Check if client disconnected
                     try:
                         if await asyncio.wait_for(request.is_disconnected(), timeout=0.1):
                             logger.info("SSE client disconnected")
@@ -140,7 +143,7 @@ async def eto_run_events_stream(request: Request):
 
                     # If this was a shutdown event, exit gracefully
                     if event.get("type") == "server_shutdown":
-                        logger.info("SSE client received shutdown event")
+                        logger.info("SSE shutdown event received")
                         break
 
                 except asyncio.TimeoutError:
@@ -148,18 +151,16 @@ async def eto_run_events_stream(request: Request):
                     continue
                 except asyncio.CancelledError:
                     # If cancelled during any await, exit immediately
-                    logger.info("SSE stream cancelled during operation")
                     return
 
         except asyncio.CancelledError:
-            logger.info("SSE stream cancelled - exiting immediately")
             return  # Exit generator immediately
         except Exception as e:
-            logger.error(f"SSE stream error: {e}", exc_info=True)
+            logger.error(f"SSE error: {e}", exc_info=True)
         finally:
             # Always cleanup when connection closes
             eto_event_manager.unregister_client(client_queue)
-            logger.info(f"SSE client cleaned up - remaining: {eto_event_manager.get_client_count()}")
+            logger.info(f"SSE client disconnected - remaining: {eto_event_manager.get_client_count()}")
 
     return StreamingResponse(
         event_generator(),

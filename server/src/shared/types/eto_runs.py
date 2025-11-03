@@ -151,12 +151,22 @@ class EtoRunExtractionDetailView:
 
 
 @dataclass
+class EtoRunPipelineExecutionStepDetailView:
+    """Individual step in pipeline execution with inputs/outputs"""
+    id: int
+    step_number: int
+    module_instance_id: str
+    inputs: Optional[Dict[str, Dict[str, Any]]]
+    outputs: Optional[Dict[str, Dict[str, Any]]]
+    error: Optional[Dict[str, Any]]
+
+
+@dataclass
 class EtoRunPipelineExecutionDetailView:
     """
-    Pipeline execution stage with parsed executed_actions JSON.
+    Pipeline execution stage with parsed executed_actions JSON and execution steps.
 
-    Used in EtoRunDetailView to provide pipeline execution results.
-    Note: Step-by-step trace can be fetched separately if needed.
+    Used in EtoRunDetailView to provide pipeline execution results and visualization data.
     """
     # From EtoRunPipelineExecution
     status: Literal["processing", "success", "failure"]
@@ -165,6 +175,12 @@ class EtoRunPipelineExecutionDetailView:
 
     # Parsed from executed_actions JSON string field
     executed_actions: Optional[Dict[str, Any]] = None
+
+    # Pipeline definition ID from matched template version
+    pipeline_definition_id: Optional[int] = None
+
+    # Execution steps for pipeline visualization
+    steps: Optional[list[EtoRunPipelineExecutionStepDetailView]] = None
 
 
 @dataclass

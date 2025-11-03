@@ -155,6 +155,16 @@ class EtoStageDataExtraction(BaseModel):
     completed_at: Optional[str] = None  # ISO 8601
 
 
+class EtoPipelineExecutionStep(BaseModel):
+    """Individual step in pipeline execution"""
+    id: int
+    step_number: int
+    module_instance_id: str
+    inputs: Optional[Dict[str, Dict[str, Any]]] = None
+    outputs: Optional[Dict[str, Dict[str, Any]]] = None
+    error: Optional[Dict[str, Any]] = None
+
+
 class EtoStagePipelineExecution(BaseModel):
     """
     Pipeline execution stage data for detailed run view.
@@ -163,6 +173,8 @@ class EtoStagePipelineExecution(BaseModel):
     executed_actions: Optional[Dict[str, Any]] = None  # Parsed JSON
     started_at: Optional[str] = None  # ISO 8601
     completed_at: Optional[str] = None  # ISO 8601
+    pipeline_definition_id: Optional[int] = None
+    steps: Optional[List[EtoPipelineExecutionStep]] = None
 
 
 class EtoRunDetail(BaseModel):

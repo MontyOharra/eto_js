@@ -60,6 +60,7 @@ def main():
                 "*.log", "*.pyc", "__pycache__", ".git",
                 "storage/*", "logs/*", "data/*", "*.pdf", "*.csv", "*.json"
             ],  # Exclude files that trigger reload
+            "timeout_graceful_shutdown": 5,  # Force shutdown after 5 seconds
         }
 
         # Add specific directory watching in reload mode

@@ -444,10 +444,13 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                     EtoRunExtractionModel.started_at.label("ex_started_at"),
                     EtoRunExtractionModel.completed_at.label("ex_completed_at"),
                     # Pipeline execution fields (optional)
+                    EtoRunPipelineExecutionModel.id.label("pe_id"),
                     EtoRunPipelineExecutionModel.status.label("pe_status"),
                     EtoRunPipelineExecutionModel.executed_actions,
                     EtoRunPipelineExecutionModel.started_at.label("pe_started_at"),
                     EtoRunPipelineExecutionModel.completed_at.label("pe_completed_at"),
+                    # Pipeline definition ID from template version
+                    PdfTemplateVersionModel.pipeline_definition_id,
                 )
                 .join(PdfFileModel, EtoRunModel.pdf_file_id == PdfFileModel.id)
                 .outerjoin(EmailModel, PdfFileModel.email_id == EmailModel.id)
@@ -523,11 +526,60 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                             f"Failed to parse executed_actions for run {run_id}: {e}"
                         )
 
+                # Fetch pipeline execution steps if execution exists
+                steps_list = None
+                if row.pe_id:
+                    from shared.database.models import EtoRunPipelineExecutionStepModel
+
+                    steps_models = (
+                        session.query(EtoRunPipelineExecutionStepModel)
+                        .filter(EtoRunPipelineExecutionStepModel.run_id == row.pe_id)
+                        .order_by(EtoRunPipelineExecutionStepModel.step_number)
+                        .all()
+                    )
+
+                    # Convert steps to detail view format
+                    from shared.types.eto_runs import EtoRunPipelineExecutionStepDetailView
+                    steps_list = []
+                    for step in steps_models:
+                        # Parse JSON fields
+                        inputs_dict = None
+                        if step.inputs:
+                            try:
+                                inputs_dict = json.loads(step.inputs)
+                            except (json.JSONDecodeError, TypeError) as e:
+                                logger.warning(f"Failed to parse inputs for step {step.id}: {e}")
+
+                        outputs_dict = None
+                        if step.outputs:
+                            try:
+                                outputs_dict = json.loads(step.outputs)
+                            except (json.JSONDecodeError, TypeError) as e:
+                                logger.warning(f"Failed to parse outputs for step {step.id}: {e}")
+
+                        error_dict = None
+                        if step.error:
+                            try:
+                                error_dict = json.loads(step.error)
+                            except (json.JSONDecodeError, TypeError) as e:
+                                logger.warning(f"Failed to parse error for step {step.id}: {e}")
+
+                        steps_list.append(EtoRunPipelineExecutionStepDetailView(
+                            id=step.id,
+                            step_number=step.step_number,
+                            module_instance_id=step.module_instance_id,
+                            inputs=inputs_dict,
+                            outputs=outputs_dict,
+                            error=error_dict,
+                        ))
+
                 pipeline_execution_detail = EtoRunPipelineExecutionDetailView(
                     status=row.pe_status,
                     started_at=row.pe_started_at,
                     completed_at=row.pe_completed_at,
                     executed_actions=actions_dict,
+                    pipeline_definition_id=row.pipeline_definition_id,
+                    steps=steps_list,
                 )
 
             # Build final EtoRunDetailView

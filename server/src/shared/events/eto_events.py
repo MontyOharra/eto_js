@@ -146,6 +146,7 @@ class EtoEventManager:
         """
         logger.info(f"Initiating graceful SSE shutdown for {len(self._clients)} clients")
         self._shutdown_flag = True
+
         if self._shutdown_event:
             self._shutdown_event.set()  # Wake up all waiting event generators
 
