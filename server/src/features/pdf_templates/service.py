@@ -1,47 +1,462 @@
 """
 PDF Template Service
-Service for template matching and management operations
+Outward-facing service for managing PDF template CRUD and lifecycle
 """
-import json
 import logging
-import re
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Literal, Any, Optional
 
-from shared.database.repositories.pdf_template import PdfTemplateRepository
-from shared.database.repositories.pdf_template_version import PdfTemplateVersionRepository
-from shared.exceptions import ObjectNotFoundError
-
-from shared.types import (
-    PdfTemplate, PdfTemplateVersion, PdfTemplateCreate, PdfTemplateUpdate, PdfTemplateVersionCreate,
-    PdfObjects, PdfTemplateMatchResult, TextWordPdfObject
+from shared.database import DatabaseConnectionManager
+from shared.database.repositories import (
+    PdfTemplateRepository,
+    PdfTemplateVersionRepository,
+    PipelineDefinitionRepository,
+)
+from shared.types.pdf_templates import (
+    PdfTemplateListView,
+    PdfTemplate,
+    PdfTemplateCreate,
+    PdfTemplateUpdate,
+    PdfTemplateVersion,
+    PdfVersionSummary,
+    ExtractionField as ExtractionFieldDomain,
+    TemplateSimulateData,
+    TemplateSimulateResult,
+)
+from shared.types.pdf_files import PdfObjects
+from shared.types.pipelines import PipelineState as PipelineStateDomain
+from shared.types.pipeline_definition_step import PipelineDefinitionStepCreate
+from shared.exceptions.service import ObjectNotFoundError, ConflictError, ServiceError
+from features.pipelines.service import PipelineService
+from features.pipeline_execution.service import PipelineExecutionService
+from features.pdf_files.service import PdfFilesService
+from shared.types.pipeline_execution import PipelineExecutionResult
+from api.mappers.pipelines import (
+    convert_pipeline_state_to_domain,
+    convert_visual_state_to_domain,
 )
 
 logger = logging.getLogger(__name__)
 
-# Type alias for template matching tuple
-TemplateMatch = Tuple[PdfTemplate, PdfTemplateVersion, int]
-
 
 class PdfTemplateService:
-    """Service for PDF template matching and management"""
+    """
+    PDF template management service.
 
-    def __init__(self, connection_manager):
-        if not connection_manager:
-            raise RuntimeError("Database connection manager is required")
+    Handles CRUD operations and lifecycle management for PDF templates and versions.
+    Manages template activation/deactivation and version history.
+    """
 
-        self.connection_manager = connection_manager
+    connection_manager: DatabaseConnectionManager
+    template_repository: PdfTemplateRepository
+    version_repository: PdfTemplateVersionRepository
+    pipeline_repository: PipelineDefinitionRepository
+    pipeline_execution_service: PipelineExecutionService
 
-        # Repository layer - with explicit type annotations for IDE support
-        self.pdf_template_repo: PdfTemplateRepository = PdfTemplateRepository(self.connection_manager)
-        self.pdf_template_version_repo: PdfTemplateVersionRepository = PdfTemplateVersionRepository(self.connection_manager)
-
-        logger.info("PDF Template Service initialized")
-
-    # === Template Matching ===
-
-    def find_best_template_match(self, pdf_objects: PdfObjects) -> PdfTemplateMatchResult:
+    def __init__(
+        self,
+        connection_manager: DatabaseConnectionManager,
+        pipeline_service: 'PipelineService',
+        pdf_files_service: 'PdfFilesService',
+        pipeline_execution_service: PipelineExecutionService
+    ) -> None:
         """
-        Find the best matching template for a PDF document
+        Initialize PDF template service
+
+        Args:
+            connection_manager: Database connection manager
+            pipeline_service: Pipeline service for pipeline operations
+            pdf_files_service: PDF files service for text extraction
+            pipeline_execution_service: Pipeline execution service for running pipelines
+        """
+        self.connection_manager = connection_manager
+        self.template_repository = PdfTemplateRepository(connection_manager=connection_manager)
+        self.version_repository = PdfTemplateVersionRepository(connection_manager=connection_manager)
+        self.pipeline_repository = PipelineDefinitionRepository(connection_manager=connection_manager)
+        self.pipeline_service = pipeline_service
+        self.pdf_files_service = pdf_files_service
+        self.pipeline_execution_service = pipeline_execution_service
+
+    def list_templates(
+        self,
+        status: Literal["active", "inactive"] | None = None,
+        sort_by: Literal["name", "status", "usage_count"] = "name",
+        sort_order: Literal["asc", "desc"] = "asc"
+    ) -> list[PdfTemplateListView]:
+        """
+        List PDF templates with filtering and sorting.
+
+        Args:
+            status: Filter by status ("active" or "inactive"), None for all
+            sort_by: Field to sort by ("name", "status", "usage_count")
+            sort_order: Sort direction ("asc" or "desc")
+
+        Returns:
+            List of PdfTemplateListView
+        """
+        # Parameters are validated by Pydantic at API layer
+        # Just delegate to repository
+        return self.template_repository.list_templates(
+            status=status,
+            sort_by=sort_by,
+            sort_order=sort_order
+        )
+
+    def get_template(self, template_id: int) -> PdfTemplate:
+        """
+        Get PDF template metadata by ID.
+
+        Args:
+            template_id: Template ID
+
+        Returns:
+            PdfTemplate dataclass or None if not found
+        """
+        result = self.template_repository.get_by_id(template_id)
+
+        if not result:
+            raise ObjectNotFoundError(f"Template {template_id} not found")
+        
+        return result
+
+    def get_version_list(self, template_id: int) -> list[tuple[int, int]]:
+        """
+        Get list of all version IDs and version numbers for a template.
+
+        Used by GET /api/pdf-templates/{template_id}/versions endpoint.
+
+        Args:
+            template_id: Template ID
+
+        Returns:
+            List of tuples (version_id, version_number) ordered by version_number ASC
+
+        Raises:
+            ObjectNotFoundError: If template not found
+        """
+        # Verify template exists
+        template = self.template_repository.get_by_id(template_id)
+        if not template:
+            raise ObjectNotFoundError(f"Template {template_id} not found")
+
+        # Get version list from repository
+        return self.version_repository.get_version_list_for_template(template_id)
+
+    def get_version_by_id(self, version_id: int) -> PdfTemplateVersion:
+        """
+        Get specific version details by version ID.
+
+        Used by GET /api/pdf-templates/versions/{version_id} endpoint.
+        Called when viewing template details (current version) or switching versions.
+
+        Args:
+            version_id: Version record ID
+
+        Returns:
+            PdfTemplateVersion dataclass with full version details
+
+        Raises:
+            ObjectNotFoundError: If version not found
+        """
+        version = self.version_repository.get_by_id(version_id)
+        if not version:
+            raise ObjectNotFoundError(f"Version {version_id} not found")
+
+        return version
+
+    def update_template(
+        self,
+        template_id: int,
+        update_data: PdfTemplateUpdate
+    ) -> tuple[PdfTemplate, int, int]:
+        """
+        Update template with smart versioning logic.
+
+        Flow:
+        1. Simple Case: Only name/description changed
+           → Update template table directly, return
+
+        2. Version Case: signature_objects or extraction_fields changed (no pipeline)
+           → Create new version with current pipeline_definition_id, return
+
+        3. Complex Case: Pipeline fields changed
+           → Validate/compile pipeline → Create pipeline_definition + compiled_plan + steps
+           → Create new version with new pipeline_definition_id, return
+
+        Args:
+            template_id: Template ID to update
+            update_data: Unified PdfTemplateUpdate with all possible fields
+
+        Returns:
+            Tuple of (updated_template, current_version_num, pipeline_definition_id)
+
+        Raises:
+            ObjectNotFoundError: Template not found
+            ConflictError: Template is active and wizard data is being changed
+            ValidationError: Pipeline validation fails
+        """
+        from shared.types.pdf_templates import PdfVersionCreate
+        from shared.types.pipeline_definition import PipelineDefinitionCreate
+
+        # Get current template
+        template = self.template_repository.get_by_id(template_id)
+        if not template:
+            raise ObjectNotFoundError(f"Template {template_id} not found")
+
+        if template.current_version_id:
+            current_version = self.version_repository.get_by_id(template.current_version_id)
+
+        assert current_version is not None
+
+        # Detect what changed
+        metadata_changed = update_data.name is not None or update_data.description is not None
+        signature_changed = update_data.signature_objects is not None
+        extraction_changed = update_data.extraction_fields is not None
+        pipeline_changed = update_data.pipeline_state is not None or update_data.visual_state is not None
+
+        wizard_data_changed = signature_changed or extraction_changed or pipeline_changed
+
+        # Check: Cannot update wizard data while template is active
+        if wizard_data_changed and template.status == "active":
+            raise ConflictError(
+                f"Template {template_id} is active. Deactivate first before updating wizard data."
+            )
+
+        # ==================== Case 1: Only Metadata Changed ====================
+        if metadata_changed and not wizard_data_changed:
+            updates = {}
+            if update_data.name is not None:
+                updates["name"] = update_data.name
+            if update_data.description is not None:
+                updates["description"] = update_data.description
+
+            updated_template = self.template_repository.update(template_id, updates)
+            if not updated_template:
+                raise ServiceError(f"Failed to update template {template_id}")
+
+            # Return current version info
+            current_version_num = current_version.version_number
+            pipeline_id = current_version.pipeline_definition_id
+            return updated_template, current_version_num, pipeline_id
+
+        # ==================== Case 2 & 3: Wizard Data Changed ====================
+        with self.connection_manager.unit_of_work() as uow:
+            pipeline_definition_id: int
+
+            # Sub-case: Pipeline changed (Complex Case)
+            if pipeline_changed:
+                logger.info("Pipeline data changed - creating new pipeline definition")
+
+                # Both pipeline_state and visual_state must be provided together
+                if update_data.pipeline_state is None or update_data.visual_state is None:
+                    raise ServiceError(
+                        "Both pipeline_state and visual_state must be provided when updating pipeline"
+                    )
+
+                # Convert API types to domain types (handles both Pydantic models and dicts)
+                pipeline_state_obj = convert_pipeline_state_to_domain(update_data.pipeline_state)
+                visual_state_obj = convert_visual_state_to_domain(update_data.visual_state)
+
+                # Create pipeline definition (validation, compilation, creation all handled)
+                pipeline_create_data = PipelineDefinitionCreate(
+                    pipeline_state=pipeline_state_obj,
+                    visual_state=visual_state_obj
+                )
+
+                pipeline_definition = self.pipeline_service.create_pipeline_definition(pipeline_create_data)
+                pipeline_definition_id = pipeline_definition.id
+                logger.info(f"Created pipeline definition {pipeline_definition_id}")
+
+            else:
+                # Sub-case: No pipeline change - reuse current pipeline_definition_id
+                if not current_version:
+                    raise ServiceError(
+                        f"Template {template_id} has no current version - cannot determine pipeline_definition_id"
+                    )
+
+                pipeline_definition_id = current_version.pipeline_definition_id
+                logger.info(f"Reusing pipeline definition {pipeline_definition_id}")
+
+            # Calculate next version number
+            next_version_num = (current_version.version_number + 1) if current_version else 1
+
+            # Create new version
+            version_data = PdfVersionCreate(
+                template_id=template_id,
+                version_number=next_version_num,
+                source_pdf_id=template.source_pdf_id,
+                signature_objects=(
+                    update_data.signature_objects
+                    if update_data.signature_objects is not None
+                    else current_version.signature_objects
+                ),
+                extraction_fields=(
+                    update_data.extraction_fields
+                    if update_data.extraction_fields is not None
+                    else current_version.extraction_fields
+                ),
+                pipeline_definition_id=pipeline_definition_id
+            )
+
+            new_version = uow.pdf_template_versions.create(version_data)
+            logger.info(f"Created version {next_version_num} for template {template_id}")
+
+            # Update template metadata and point to new version
+            updates : dict[str, Any] = {"current_version_id": new_version.id}
+            if update_data.name is not None:
+                updates["name"] = update_data.name
+            if update_data.description is not None:
+                updates["description"] = update_data.description
+
+            updated_template = uow.pdf_templates.update(template_id, updates)
+            if not updated_template:
+                raise ServiceError(f"Failed to update template {template_id}")
+
+            # Transaction commits automatically
+            logger.info(
+                f"Template {template_id} updated successfully: "
+                f"version {next_version_num}, pipeline {pipeline_definition_id}"
+            )
+            return updated_template, next_version_num, pipeline_definition_id
+
+    def create_template(self, template_data: PdfTemplateCreate) -> tuple[PdfTemplate, int, int]:
+        """
+        Create new PDF template with initial version atomically.
+
+        Creates template + version 1 + pipeline definition in a single transaction.
+        Template starts with status="inactive".
+
+        Args:
+            template_data: PdfTemplateCreate dataclass with all wizard data
+
+        Returns:
+            Tuple of (created_template, version_number, pipeline_definition_id)
+
+        Raises:
+            ServiceError: If creation fails at any step
+        """
+        from shared.types.pdf_templates import PdfVersionCreate
+        from shared.types.pipeline_definition import PipelineDefinitionCreate
+
+        try:
+            with self.connection_manager.unit_of_work() as uow:
+                # Step 1: Create pipeline definition (validation, compilation, hash-based dedup)
+                logger.info("Creating pipeline definition for template")
+
+                # Convert API types to domain types (handles both Pydantic models and dicts)
+                pipeline_state_obj = convert_pipeline_state_to_domain(template_data.pipeline_state)
+                visual_state_obj = convert_visual_state_to_domain(template_data.visual_state)
+
+                # Create pipeline definition (handles validation, compilation, and creation)
+                pipeline_create_data = PipelineDefinitionCreate(
+                    pipeline_state=pipeline_state_obj,
+                    visual_state=visual_state_obj
+                )
+
+                pipeline_definition = self.pipeline_service.create_pipeline_definition(pipeline_create_data)
+                pipeline_definition_id = pipeline_definition.id
+                logger.info(f"Created/reused pipeline definition {pipeline_definition_id}")
+
+                # Step 2: Create template record (status=inactive, current_version_id=None initially)
+                template = uow.pdf_templates.create(
+                    name=template_data.name,
+                    description=template_data.description,
+                    source_pdf_id=template_data.source_pdf_id,
+                    status="inactive"
+                )
+
+                # Step 3: Create version 1 with signature objects, extraction fields, and pipeline ID
+                version_data = PdfVersionCreate(
+                    template_id=template.id,
+                    version_number=1,
+                    source_pdf_id=template_data.source_pdf_id,
+                    signature_objects=template_data.signature_objects,
+                    extraction_fields=template_data.extraction_fields,
+                    pipeline_definition_id=pipeline_definition_id
+                )
+
+                version = uow.pdf_template_versions.create(version_data)
+
+                # Step 4: Update template to point to version 1 as current version
+                updated_template = uow.pdf_templates.update(
+                    template.id,
+                    {"current_version_id": version.id}
+                )
+
+                if not updated_template:
+                    raise ServiceError(f"Failed to update template {template.id} with current_version_id")
+
+                # Transaction commits automatically when exiting context manager
+                return updated_template, 1, pipeline_definition_id
+
+        except Exception as e:
+            # UoW automatically rolls back on exception
+            logger.error(f"Error creating template: {e}", exc_info=True)
+            raise ServiceError(f"Failed to create template: {str(e)}")
+
+    def activate_template(self, template_id: int) -> PdfTemplate:
+        """
+        Activate a PDF template for ETO matching.
+
+        Args:
+            template_id: Template ID to activate
+
+        Returns:
+            Updated template metadata with active status
+
+        Raises:
+            ObjectNotFoundError: Template not found
+            ConflictError: Template has no current version (cannot activate)
+        """
+        # Verify template exists
+        template = self.template_repository.get_by_id(template_id)
+        if not template:
+            raise ObjectNotFoundError(f"Template {template_id} not found")
+
+        # Verify template has a current version
+        if template.current_version_id is None:
+            raise ConflictError(
+                f"Template {template_id} has no current version. Cannot activate template without a version."
+            )
+
+        # Update status to active
+        updated_template = self.template_repository.update(template_id, {"status": "active"})
+        if not updated_template:
+            # This shouldn't happen since we verified it exists above
+            raise ServiceError(f"Failed to activate template {template_id}")
+
+        return updated_template
+
+    def deactivate_template(self, template_id: int) -> PdfTemplate:
+        """
+        Deactivate a PDF template (stop using for ETO matching).
+
+        Args:
+            template_id: Template ID to deactivate
+
+        Returns:
+            Updated template metadata with inactive status
+
+        Raises:
+            ObjectNotFoundError: Template not found
+        """
+        # Verify template exists
+        template = self.template_repository.get_by_id(template_id)
+        if not template:
+            raise ObjectNotFoundError(f"Template {template_id} not found")
+
+        # Update status to inactive
+        updated_template = self.template_repository.update(template_id, {"status": "inactive"})
+        if not updated_template:
+            # This shouldn't happen since we verified it exists above
+            raise ServiceError(f"Failed to deactivate template {template_id}")
+
+        return updated_template
+
+    # ==================== Template Matching ====================
+
+    def match_template(self, pdf_objects: PdfObjects) -> Optional[tuple[int, int]]:
+        """
+        Find the best matching template for a PDF document.
 
         A template matches if ALL signature objects are found in the PDF.
         Among matching templates, ranking:
@@ -49,37 +464,50 @@ class PdfTemplateService:
         2. For ties, weighted ranking by object type priority
 
         Args:
-            pdf_objects: Nested PDF objects extracted from the document
+            pdf_objects: PDF objects extracted from the document
 
         Returns:
-            PdfTemplateMatchResult with match details
+            Tuple of (template_id, version_id) if match found, None otherwise
         """
+        logger.info("Starting template matching")
+
         try:
             # Get all active templates
-            active_templates = self.pdf_template_repo.get_active_templates()
+            active_templates = self.template_repository.list_templates(status="active")
 
             if not active_templates:
                 logger.info("No active templates found for matching")
-                return PdfTemplateMatchResult(template_found=False)
+                return None
 
-            matching_templates: List[TemplateMatch] = []
+            matching_templates: list[tuple[PdfTemplateListView, PdfTemplateVersion, int]] = []
 
             # Check each template's current version for complete match
             for template in active_templates:
                 try:
-                    # Get the current version for this template
-                    current_version = self.get_current_version(template.id)
-                    if not current_version:
+                    # Skip if no current version
+                    if template.current_version_id is None:
                         logger.debug(f"Template {template.id} has no current version, skipping")
+                        continue
+
+                    # Get the current version
+                    current_version = self.version_repository.get_by_id(template.current_version_id)
+                    if not current_version:
+                        logger.debug(f"Template {template.id} current version not found, skipping")
                         continue
 
                     # Check if all signature objects from current version are found in PDF
                     if self._is_complete_subset_match(pdf_objects, current_version.signature_objects):
                         total_count = self._count_total_objects(current_version.signature_objects)
                         matching_templates.append((template, current_version, total_count))
-                        logger.debug(f"Template {template.id} (version {current_version.version_num}): COMPLETE MATCH with {total_count} objects")
+                        logger.debug(
+                            f"Template {template.id} (version {current_version.version_number}): "
+                            f"COMPLETE MATCH with {total_count} objects"
+                        )
                     else:
-                        logger.debug(f"Template {template.id} (version {current_version.version_num}): incomplete match - skipped")
+                        logger.debug(
+                            f"Template {template.id} (version {current_version.version_number}): "
+                            f"incomplete match - skipped"
+                        )
 
                 except Exception as e:
                     logger.warning(f"Error checking template {template.id}: {e}")
@@ -87,38 +515,37 @@ class PdfTemplateService:
 
             if not matching_templates:
                 logger.info("No template match found - no templates had all signature objects present")
-                return PdfTemplateMatchResult(template_found=False)
+                return None
 
-            # Find the best match using corrected ranking
+            # Find the best match using ranking algorithm
             try:
                 best_match = self._find_best_match(matching_templates)
                 template, version, total_count = best_match
             except ValueError as e:
                 logger.error(f"Error finding best match: {e}")
-                return PdfTemplateMatchResult(template_found=False)
+                return None
 
             # Update version usage statistics
-            self.pdf_template_version_repo.increment_usage_count(version.id)
+            self.version_repository.increment_usage_count(version.id)
 
-            logger.info(f"Template match found: {template.id} (version {version.version_num}) with {total_count} total objects")
-
-            return PdfTemplateMatchResult(
-                template_found=True,
-                template_id=template.id,
-                template_version=version.version_num
+            logger.info(
+                f"Template match found: {template.id} (version {version.version_number}) "
+                f"with {total_count} total objects"
             )
 
+            return (template.id, version.id)
+
         except Exception as e:
-            logger.error(f"Error in template matching: {e}")
-            return PdfTemplateMatchResult(template_found=False)
+            logger.error(f"Error in template matching: {e}", exc_info=True)
+            return None
 
     def _is_complete_subset_match(self, pdf_objects: PdfObjects, template_objects: PdfObjects) -> bool:
         """
-        Check if template signature objects are a complete subset of PDF objects
+        Check if template signature objects are a complete subset of PDF objects.
 
         Args:
-            pdf_objects: Nested PDF objects from target document
-            template_objects: Nested template signature objects
+            pdf_objects: PDF objects from target document
+            template_objects: Template signature objects
 
         Returns:
             True if ALL template objects are found in PDF, False otherwise
@@ -134,17 +561,20 @@ class PdfTemplateService:
             self._match_tables(pdf_objects.tables, template_objects.tables)
         )
 
-    def _find_best_match(self, matching_templates: List[TemplateMatch]) -> TemplateMatch:
+    def _find_best_match(
+        self,
+        matching_templates: list[tuple[PdfTemplateListView, PdfTemplateVersion, int]]
+    ) -> tuple[PdfTemplateListView, PdfTemplateVersion, int]:
         """
-        Find best match using corrected ranking algorithm
+        Find best match using ranking algorithm:
         1. First by total object count (more objects = better)
         2. For ties, weighted ranking by object type priority
 
         Args:
-            matching_templates: List of TemplateMatch tuples, must be non-empty
+            matching_templates: List of tuples (template, version, total_count), must be non-empty
 
         Returns:
-            Best TemplateMatch tuple (template, version, total_count)
+            Best match tuple (template, version, total_count)
 
         Raises:
             ValueError: If matching_templates is empty
@@ -168,7 +598,7 @@ class PdfTemplateService:
         # Break ties using weighted ranking
         logger.debug(f"Breaking tie between {len(tied_templates)} templates with {max_count} objects each")
 
-        best_match: Optional[TemplateMatch] = None
+        best_match: Optional[tuple[PdfTemplateListView, PdfTemplateVersion, int]] = None
         best_weighted_score = -1.0
 
         for template, version, total_count in tied_templates:
@@ -199,8 +629,8 @@ class PdfTemplateService:
 
     def _calculate_weighted_score(self, objects: PdfObjects) -> float:
         """
-        Calculate weighted score for tie-breaking
-        Higher priority object types get more weight
+        Calculate weighted score for tie-breaking.
+        Higher priority object types get more weight.
         """
         weights = {
             'text_words': 1.0,
@@ -226,7 +656,7 @@ class PdfTemplateService:
 
     # === Type-specific matching methods ===
 
-    def _match_text_words(self, pdf_words: List[Any], template_words: List[Any]) -> bool:
+    def _match_text_words(self, pdf_words: list, template_words: list) -> bool:
         """Match text word objects - returns True if all template words found"""
         if not template_words:
             return True  # Empty requirement always passes
@@ -236,7 +666,7 @@ class PdfTemplateService:
                 return False
         return True
 
-    def _match_text_lines(self, pdf_lines: List[Any], template_lines: List[Any]) -> bool:
+    def _match_text_lines(self, pdf_lines: list, template_lines: list) -> bool:
         """Match text line objects - returns True if all template lines found"""
         if not template_lines:
             return True
@@ -246,7 +676,7 @@ class PdfTemplateService:
                 return False
         return True
 
-    def _match_graphic_rects(self, pdf_rects: List[Any], template_rects: List[Any]) -> bool:
+    def _match_graphic_rects(self, pdf_rects: list, template_rects: list) -> bool:
         """Match graphic rectangle objects"""
         if not template_rects:
             return True
@@ -256,7 +686,7 @@ class PdfTemplateService:
                 return False
         return True
 
-    def _match_graphic_lines(self, pdf_lines: List[Any], template_lines: List[Any]) -> bool:
+    def _match_graphic_lines(self, pdf_lines: list, template_lines: list) -> bool:
         """Match graphic line objects"""
         if not template_lines:
             return True
@@ -266,7 +696,7 @@ class PdfTemplateService:
                 return False
         return True
 
-    def _match_graphic_curves(self, pdf_curves: List[Any], template_curves: List[Any]) -> bool:
+    def _match_graphic_curves(self, pdf_curves: list, template_curves: list) -> bool:
         """Match graphic curve objects"""
         if not template_curves:
             return True
@@ -276,7 +706,7 @@ class PdfTemplateService:
                 return False
         return True
 
-    def _match_images(self, pdf_images: List[Any], template_images: List[Any]) -> bool:
+    def _match_images(self, pdf_images: list, template_images: list) -> bool:
         """Match image objects"""
         if not template_images:
             return True
@@ -286,7 +716,7 @@ class PdfTemplateService:
                 return False
         return True
 
-    def _match_tables(self, pdf_tables: List[Any], template_tables: List[Any]) -> bool:
+    def _match_tables(self, pdf_tables: list, template_tables: list) -> bool:
         """Match table objects"""
         if not template_tables:
             return True
@@ -298,7 +728,7 @@ class PdfTemplateService:
 
     # === Individual object matching methods ===
 
-    def _find_text_word_match(self, pdf_words: List[Any], template_word: Any) -> bool:
+    def _find_text_word_match(self, pdf_words: list, template_word) -> bool:
         """Find matching text word with content and position tolerance"""
         position_tolerance = 10.0
         content_similarity_threshold = 0.8
@@ -317,24 +747,19 @@ class PdfTemplateService:
                             return True
         return False
 
-    def _find_text_line_match(self, pdf_lines: List[Any], template_line: Any) -> bool:
-        """Find matching text line with content and position tolerance"""
+    def _find_text_line_match(self, pdf_lines: list, template_line) -> bool:
+        """Find matching text line by position (text lines only have bbox, no text content)"""
         position_tolerance = 15.0  # Slightly more tolerance for lines
-        content_similarity_threshold = 0.7  # Slightly lower for longer text
 
         for pdf_line in pdf_lines:
             if pdf_line.page != template_line.page:
                 continue
 
             if self._positions_match(pdf_line.bbox, template_line.bbox, position_tolerance):
-                if hasattr(template_line, 'text') and hasattr(pdf_line, 'text'):
-                    if template_line.text and pdf_line.text:
-                        similarity = self._calculate_text_similarity(template_line.text, pdf_line.text)
-                        if similarity >= content_similarity_threshold:
-                            return True
+                return True
         return False
 
-    def _find_graphic_rect_match(self, pdf_rects: List[Any], template_rect: Any) -> bool:
+    def _find_graphic_rect_match(self, pdf_rects: list, template_rect) -> bool:
         """Find matching graphic rectangle by position and size"""
         position_tolerance = 5.0  # Tighter tolerance for graphics
 
@@ -346,7 +771,7 @@ class PdfTemplateService:
                 return True
         return False
 
-    def _find_graphic_line_match(self, pdf_lines: List[Any], template_line: Any) -> bool:
+    def _find_graphic_line_match(self, pdf_lines: list, template_line) -> bool:
         """Find matching graphic line by position"""
         position_tolerance = 5.0
 
@@ -358,7 +783,7 @@ class PdfTemplateService:
                 return True
         return False
 
-    def _find_graphic_curve_match(self, pdf_curves: List[Any], template_curve: Any) -> bool:
+    def _find_graphic_curve_match(self, pdf_curves: list, template_curve) -> bool:
         """Find matching graphic curve by position"""
         position_tolerance = 8.0  # Curves might have slight variations
 
@@ -370,7 +795,7 @@ class PdfTemplateService:
                 return True
         return False
 
-    def _find_image_match(self, pdf_images: List[Any], template_image: Any) -> bool:
+    def _find_image_match(self, pdf_images: list, template_image) -> bool:
         """Find matching image by position and size"""
         position_tolerance = 3.0  # Very tight tolerance for images
 
@@ -382,7 +807,7 @@ class PdfTemplateService:
                 return True
         return False
 
-    def _find_table_match(self, pdf_tables: List[Any], template_table: Any) -> bool:
+    def _find_table_match(self, pdf_tables: list, template_table) -> bool:
         """Find matching table by position"""
         position_tolerance = 10.0  # Tables might have slight layout variations
 
@@ -394,7 +819,7 @@ class PdfTemplateService:
                 return True
         return False
 
-    def _positions_match(self, bbox1: List[float], bbox2: List[float], tolerance: float) -> bool:
+    def _positions_match(self, bbox1: tuple[float, float, float, float], bbox2: tuple[float, float, float, float], tolerance: float) -> bool:
         """Check if two bounding boxes match within tolerance"""
         center1_x = (bbox1[0] + bbox1[2]) / 2
         center1_y = (bbox1[1] + bbox1[3]) / 2
@@ -407,7 +832,7 @@ class PdfTemplateService:
         return x_diff <= tolerance and y_diff <= tolerance
 
     def _calculate_text_similarity(self, text1: str, text2: str) -> float:
-        """Calculate text similarity using character bigrams"""
+        """Calculate text similarity using character bigrams (Jaccard similarity)"""
         if not text1 or not text2:
             return 0.0
 
@@ -431,386 +856,69 @@ class PdfTemplateService:
 
         return intersection / union
 
+    # ==================== Template Simulation ====================
 
-    # === Template Management ===
-
-    def create_template(self, 
-        pdf_template_data: PdfTemplateCreate
-    ) -> PdfTemplate:
-        """
-        Create a new PDF template with its first version
-
-        Args:
-            name: Template name
-            description: Template description
-            pdf_id: Source PDF file ID
-            signature_objects: Objects for template matching
-            extraction_fields: Fields to extract from matching PDFs
-
-        Returns:
-            Created template (full domain object)
-        """
-
-        template = self.pdf_template_repo.create(pdf_template_data)
-        new_template_id = template.id
-  
-        # Create first version using create model
-        version_create = PdfTemplateVersionCreate(
-            pdf_template_id=new_template_id,
-            signature_objects=pdf_template_data.initial_signature_objects,
-            extraction_fields=pdf_template_data.initial_extraction_fields,
-        )
-        version = self.pdf_template_version_repo.create(version_create)
-
-        # Set as current version
-        template = self.pdf_template_repo.set_current_version_id(template.id, version.id)
-        
-        if not template:
-            raise ObjectNotFoundError("PdfTemplate", new_template_id)
-          
-        return template
-    
-    def create_template_version(self, version_create: PdfTemplateVersionCreate) -> PdfTemplateVersion:
-        """
-        Create a new version of a PDF template  
-        
-        Args:
-            version_create: Template version create model with all required data
-            
-        Returns:
-            Created template version (full domain object)
-            
-        Raises:
-            ObjectNotFoundError: If the template doesn't exist
-        """
-        # First verify the template exists
-        template = self.pdf_template_repo.get_by_id(version_create.pdf_template_id)
-        if not template:
-            raise ObjectNotFoundError("PdfTemplate", version_create.pdf_template_id)
-        
-        # Create the version (repository will auto-calculate version number)
-        version = self.pdf_template_version_repo.create(version_create)
-        
-        # Set as current version
-        updated_template = self.pdf_template_repo.set_current_version_id(version_create.pdf_template_id, version.id)
-        if not updated_template:
-            # This shouldn't happen since we just verified the template exists
-            raise ObjectNotFoundError("PdfTemplate", version_create.pdf_template_id)
-        
-        return version
-    
-    def get_current_version(self, template_id: int) -> Optional[PdfTemplateVersion]:
-        """Get the current active version for a template"""
-        # Get template to find current_version_id
-        template = self.pdf_template_repo.get_by_id(template_id)
-        if not template or not template.current_version_id:
-            return None
-        
-        # Get the specific version
-        return self.pdf_template_version_repo.get_by_id(template.current_version_id)
-    
-    def get_templates(self, 
-        status: Optional[str] = None,
-        order_by: str = "created_at",
-        desc: bool = False,
-        limit: Optional[int] = None,
-        offset: Optional[int] = None
-    ) -> List[PdfTemplate]:
-        """
-        Get PDF templates with filtering and pagination
-        
-        Args:
-            status: Filter by template status (active/inactive)
-            order_by: Field to order by
-            desc: Sort in descending order
-            limit: Maximum number of templates to return
-            offset: Number of templates to skip
-            
-        Returns:
-            List of PDF template domain objects
-        """
-        return self.pdf_template_repo.get_all(
-            status=status,
-            order_by=order_by,
-            desc=desc,
-            limit=limit,
-            offset=offset
-        )
-        
-    def is_healthy(self) -> bool:
-        """Check if the service is healthy"""
-        try:
-            self.pdf_template_repo.get_by_id(1) 
-            return True
-          
-        except Exception as e:
-            logger.error(f"PDF template service health check failed: {e}")
-            return False
-    
-    def get_template_by_id(self, template_id: int) -> Optional[PdfTemplate]:
-        """Get a single PDF template by ID"""
-        return self.pdf_template_repo.get_by_id(template_id)
-    
-    def get_template_version(self, template_id: int, version_id: int) -> Optional[PdfTemplateVersion]:
-        """Get a specific template version by template ID and version ID"""
-        # First verify the template exists
-        template = self.pdf_template_repo.get_by_id(template_id)
-        if not template:
-            return None
-        
-        # Get the specific version
-        version = self.pdf_template_version_repo.get_by_id(version_id)
-        if not version:
-            return None
-        
-        # Verify the version belongs to the requested template
-        if version.pdf_template_id != template_id:
-            return None
-        
-        return version
-    
-    def update_template(self, template_id: int, update_data: PdfTemplateUpdate) -> Optional[PdfTemplate]:
-        """Update a PDF template with the provided data"""
-        return self.pdf_template_repo.update(template_id, update_data)
-
-    # === Data Extraction ===
-
-    def extract_data_using_template(self, template_id: int, pdf_objects: PdfObjects) -> Dict[str, str]:
-        """
-        Extract data from PDF using template's extraction fields
-
-        Args:
-            template_id: ID of the template to use for extraction
-            pdf_objects: Nested PDF objects from the target document
-
-        Returns:
-            Dictionary mapping field labels to extracted text values
-
-        Raises:
-            ObjectNotFoundError: If template or current version not found
-            ValueError: If extraction fails or validation errors occur
-        """
-        logger.info(f"Starting data extraction using template {template_id}")
-
-        # Get the current version for this template
-        template = self.pdf_template_repo.get_by_id(template_id)
-        if not template:
-            raise ObjectNotFoundError("PdfTemplate", template_id)
-
-        if not template.current_version_id:
-            raise ValueError(f"Template {template_id} has no current version")
-
-        current_version = self.pdf_template_version_repo.get_by_id(template.current_version_id)
-        if not current_version:
-            raise ValueError(f"Current version {template.current_version_id} not found for template {template_id}")
-
-        # DEBUG: Log extraction fields from template
-        logger.info(f"DEBUG: Template {template_id} has {len(current_version.extraction_fields)} extraction fields:")
-        for i, field in enumerate(current_version.extraction_fields):
-            logger.info(f"DEBUG: Field {i+1}: label='{field.label}', page={field.page}, bbox={field.bounding_box}, required={field.required}")
-
-        # DEBUG: Log PDF objects summary
-        logger.info(f"DEBUG: PDF objects available - text_words: {len(pdf_objects.text_words)}, text_lines: {len(pdf_objects.text_lines)}")
-
-        # Extract data for each field
-        extracted_data: Dict[str, str] = {}
-
-        for field in current_version.extraction_fields:
-            try:
-                logger.info(f"DEBUG: Processing field '{field.label}' on page {field.page} with bbox {field.bounding_box}")
-
-                # Extract text from the bounding box
-                extracted_text = self._extract_text_from_bounding_box(
-                    pdf_objects.text_words,
-                    field.bounding_box,
-                    field.page
-                )
-
-                # Apply validation if specified
-                if field.validation_regex and extracted_text:
-                    if not self._validate_extracted_text(extracted_text, field.validation_regex):
-                        logger.warning(f"Field '{field.label}' failed validation: {extracted_text}")
-                        # Still include the text even if validation fails, let downstream handle it
-
-                # Check required fields
-                if field.required and not extracted_text:
-                    logger.warning(f"Required field '{field.label}' is empty")
-                    # Still continue extraction, let downstream handle missing required fields
-
-                extracted_data[field.label] = extracted_text
-                logger.info(f"DEBUG: Field '{field.label}' extracted: '{extracted_text}' (length: {len(extracted_text)})")
-
-            except Exception as e:
-                logger.error(f"Error extracting field '{field.label}': {e}")
-                extracted_data[field.label] = ""  # Set empty string for failed extractions
-
-        logger.info(f"Data extraction complete - extracted {len(extracted_data)} fields")
-        return extracted_data
-
-    def _extract_text_from_bounding_box(
+    def simulate(
         self,
-        text_words: List[TextWordPdfObject],
-        bounding_box: List[float],
-        page: int
-    ) -> str:
+        simulate_data: TemplateSimulateData
+    ) -> TemplateSimulateResult:
         """
-        Extract and concatenate text from words within a bounding box
+        Simulate template processing: extract data and execute pipeline.
+
+        This method performs data extraction and pipeline execution without
+        persistence. Used by the template builder to test templates before saving.
 
         Args:
-            text_words: List of text word objects from the PDF
-            bounding_box: [x0, y0, x1, y1] coordinates of extraction area
-            page: Page number (1-based)
+            simulate_data: Template simulation data with pdf_objects, extraction_fields, and pipeline_state
 
         Returns:
-            Concatenated text from all words within the bounding box
+            TemplateSimulateResult with extraction fields, extracted data, and execution result
         """
-        logger.info(f"DEBUG: Extracting text from bbox {bounding_box} on page {page}")
+        logger.info(
+            f"Simulating template: {len(simulate_data.extraction_fields)} fields, "
+            f"{len(simulate_data.pipeline_state.modules)} modules"
+        )
 
-        # Filter words by page
-        page_words = [word for word in text_words if word.page == page]
-        logger.info(f"DEBUG: Found {len(page_words)} text words on page {page}")
+        # Extract text from PDF objects (no file I/O needed)
+        extracted_data = self._extract_text_from_objects(
+            pdf_objects=simulate_data.pdf_objects,
+            extraction_fields=simulate_data.extraction_fields
+        )
 
-        # DEBUG: Log first few words on the page
-        for i, word in enumerate(page_words[:10]):  # Show first 10 words
-            word_center_x = (word.bbox[0] + word.bbox[2]) / 2
-            word_center_y = (word.bbox[1] + word.bbox[3]) / 2
-            logger.info(f"DEBUG: Word {i+1}: '{word.text}' at bbox={word.bbox}, center=({word_center_x:.1f}, {word_center_y:.1f})")
+        # Compile and execute pipeline
+        execution_result = self.pipeline_service.compile_and_execute(
+            pipeline_state=simulate_data.pipeline_state,
+            entry_values=extracted_data
+        )
 
-        if len(page_words) > 10:
-            logger.info(f"DEBUG: ... and {len(page_words) - 10} more words on this page")
+        # Return structured result
+        return TemplateSimulateResult(
+            extraction_fields=simulate_data.extraction_fields,
+            extracted_data=extracted_data,
+            execution_result=execution_result
+        )
 
-        # Find words within bounding box
-        words_in_box = []
-        for word in page_words:
-            word_center_x = (word.bbox[0] + word.bbox[2]) / 2
-            word_center_y = (word.bbox[1] + word.bbox[3]) / 2
-
-            # Check if word center is within extraction bounding box
-            is_center_in_box = (bounding_box[0] <= word_center_x <= bounding_box[2] and
-                               bounding_box[1] <= word_center_y <= bounding_box[3])
-
-            if is_center_in_box:
-                logger.info(f"DEBUG: Word center IN bbox: '{word.text}' at center=({word_center_x:.1f}, {word_center_y:.1f})")
-
-            if self._is_word_in_bounding_box(word, bounding_box):
-                words_in_box.append(word)
-                if not is_center_in_box:
-                    logger.info(f"DEBUG: Word overlap match (center outside): '{word.text}' at bbox={word.bbox}")
-
-        logger.info(f"DEBUG: Found {len(words_in_box)} words within bounding box")
-
-        if not words_in_box:
-            logger.info(f"DEBUG: No words found in bounding box {bounding_box} on page {page}")
-            return ""
-
-        # Sort words by position (top to bottom, left to right)
-        words_in_box.sort(key=lambda w: (-w.bbox[1], w.bbox[0]))  # -y for top-to-bottom, x for left-to-right
-
-        # Group words into lines based on y-coordinate proximity
-        lines = []
-        current_line = []
-        current_y = None
-        y_tolerance = 5.0  # Tolerance for considering words on the same line
-
-        for word in words_in_box:
-            word_y = (word.bbox[1] + word.bbox[3]) / 2  # Use center y-coordinate
-
-            if current_y is None or abs(word_y - current_y) <= y_tolerance:
-                current_line.append(word)
-                if current_y is None:
-                    current_y = word_y
-            else:
-                # New line detected
-                if current_line:
-                    lines.append(current_line)
-                current_line = [word]
-                current_y = word_y
-
-        # Add the last line
-        if current_line:
-            lines.append(current_line)
-
-        # Build the final text
-        result_lines = []
-        for line in lines:
-            # Sort words in line by x-coordinate
-            line.sort(key=lambda w: w.bbox[0])
-            # Join words with spaces
-            line_text = " ".join(word.text for word in line)
-            result_lines.append(line_text)
-
-        # Join lines with newlines and clean up
-        result = "\n".join(result_lines)
-        return result.strip()
-
-    def _is_word_in_bounding_box(
+    def _extract_text_from_objects(
         self,
-        word: TextWordPdfObject,
-        bounding_box: List[float],
-        tolerance: float = 2.0
-    ) -> bool:
+        pdf_objects: PdfObjects,
+        extraction_fields: list[ExtractionFieldDomain]
+    ) -> dict[str, str]:
         """
-        Check if a text word falls within an extraction field's bounding box
+        Extract text from PDF objects based on extraction fields.
 
-        Uses overlap-based checking: word is considered inside if it has
-        significant overlap with the extraction field.
+        This is a thin wrapper around the shared extraction utility.
+        The actual extraction logic is in features.eto_runs.utils.extraction
 
         Args:
-            word: Text word object with bbox
-            bounding_box: [x0, y0, x1, y1] extraction field coordinates
-            tolerance: Pixel tolerance for boundary checking
+            pdf_objects: PdfObjects dataclass with text_words and other objects
+            extraction_fields: List of extraction field domain objects
 
         Returns:
-            True if word is within the bounding box, False otherwise
+            Dict mapping field names to extracted text
         """
-        # Extract coordinates with tolerance
-        field_x0, field_y0, field_x1, field_y1 = bounding_box
-        field_x0 -= tolerance
-        field_y0 -= tolerance
-        field_x1 += tolerance
-        field_y1 += tolerance
+        from features.eto_runs.utils.extraction import extract_data_from_pdf_objects
 
-        word_x0, word_y0, word_x1, word_y1 = word.bbox
-
-        # Check if there's no overlap at all (early exit)
-        if (word_x1 < field_x0 or word_x0 > field_x1 or
-            word_y1 < field_y0 or word_y0 > field_y1):
-            return False
-
-        # Calculate overlap area
-        overlap_x0 = max(word_x0, field_x0)
-        overlap_y0 = max(word_y0, field_y0)
-        overlap_x1 = min(word_x1, field_x1)
-        overlap_y1 = min(word_y1, field_y1)
-
-        overlap_area = (overlap_x1 - overlap_x0) * (overlap_y1 - overlap_y0)
-        word_area = (word_x1 - word_x0) * (word_y1 - word_y0)
-
-        # Consider word inside if >50% overlap OR if center point is inside
-        overlap_ratio = overlap_area / word_area if word_area > 0 else 0
-
-        # Also check if word center is within field
-        word_center_x = (word_x0 + word_x1) / 2
-        word_center_y = (word_y0 + word_y1) / 2
-        center_inside = (field_x0 <= word_center_x <= field_x1 and
-                        field_y0 <= word_center_y <= field_y1)
-
-        return overlap_ratio > 0.5 or center_inside
-
-    def _validate_extracted_text(self, text: str, validation_regex: str) -> bool:
-        """
-        Validate extracted text against regex pattern
-
-        Args:
-            text: Extracted text to validate
-            validation_regex: Regular expression pattern for validation
-
-        Returns:
-            True if text matches pattern, False otherwise
-        """
-        try:
-            pattern = re.compile(validation_regex)
-            return bool(pattern.match(text))
-        except re.error as e:
-            logger.error(f"Invalid regex pattern '{validation_regex}': {e}")
-            return True  # Don't fail on invalid regex, just skip validation
+        return extract_data_from_pdf_objects(
+            pdf_objects=pdf_objects,
+            extraction_fields=extraction_fields
+        )
