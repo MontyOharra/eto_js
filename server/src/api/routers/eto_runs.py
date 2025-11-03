@@ -145,8 +145,9 @@ async def eto_run_events_stream(request: Request):
                     continue
 
         except asyncio.CancelledError:
-            logger.info("SSE stream cancelled")
-            raise  # Re-raise to ensure proper cleanup
+            logger.info("SSE stream cancelled - exiting gracefully")
+            # Don't re-raise - allow generator to complete normally
+            # This allows server shutdown to proceed without waiting for client
         except Exception as e:
             logger.error(f"SSE stream error: {e}", exc_info=True)
         finally:
