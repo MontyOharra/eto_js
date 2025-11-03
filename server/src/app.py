@@ -20,7 +20,8 @@ import uvicorn
 
 from shared.database import init_database_connection
 from shared.services.service_container import ServiceContainer
-from shared.utils.storage_config import get_storage_configuration
+from shared.config.storage import get_storage_configuration
+from shared.exceptions.service import ObjectNotFoundError, ConflictError, ValidationError, ServiceError
 
 logger = logging.getLogger(__name__)
 
@@ -238,31 +239,76 @@ async def initialize_services() -> None:
         ServiceContainer.initialize(_connection_manager, pdf_storage_path)
         logger.info("ServiceContainer initialized successfully")
 
-        logger.info("All services initialized successfully via ServiceContainer")
+        # Eagerly initialize all services to ensure proper startup
+        logger.info("Eagerly initializing all services...")
 
-        # Try email startup recovery
+        # 1. Initialize modules service FIRST (triggers auto-discovery)
+        try:
+            modules_service = ServiceContainer.get_modules_service()
+            logger.info("Modules service initialized (auto-discovery complete)")
+        except Exception as e:
+            logger.error(f"Failed to initialize modules service: {e}")
+            # Continue - other services may still work
+
+        # 2. Initialize core data services
+        try:
+            pdf_files_service = ServiceContainer.get_pdf_files_service()
+            logger.info("PDF files service initialized")
+        except Exception as e:
+            logger.warning(f"Failed to initialize PDF files service: {e}")
+
+        try:
+            pipeline_service = ServiceContainer.get_pipeline_service()
+            logger.info("Pipeline service initialized")
+        except Exception as e:
+            logger.warning(f"Failed to initialize pipeline service: {e}")
+
+        try:
+            pdf_template_service = ServiceContainer.get_pdf_template_service()
+            logger.info("PDF template service initialized")
+        except Exception as e:
+            logger.warning(f"Failed to initialize PDF template service: {e}")
+
+        # 3. Initialize ingestion services
         try:
             email_ingestion_service = ServiceContainer.get_email_ingestion_service()
-            email_ingestion_service.startup_recovery()
-            logger.info("Modules service initialized successfully")
-        except Exception as service_error:
-            logger.warning(f"Email ingestion startup recovery failed: {service_error}")
+            logger.info("Email ingestion service initialized")
+        except Exception as e:
+            logger.warning(f"Failed to initialize email ingestion service: {e}")
 
-        # Auto-start ETO processing if enabled
         try:
-            worker_enabled = os.getenv('ETO_WORKER_ENABLED', 'true').lower() == 'true'
-            if worker_enabled:
-                eto_service = ServiceContainer.get_eto_processing_service()
-                # Start the worker automatically
-                worker_started = await eto_service.start_worker()
-                if worker_started:
-                    logger.info("ETO processing worker started automatically")
-                else:
-                    logger.warning("ETO processing worker failed to start automatically")
+            email_config_service = ServiceContainer.get_email_config_service()
+            logger.info("Email config service initialized")
+        except Exception as e:
+            logger.warning(f"Failed to initialize email config service: {e}")
+
+        # 4. Initialize ETO processing services
+        try:
+            eto_runs_service = ServiceContainer.get_eto_runs_service()
+            logger.info("ETO runs service initialized")
+        except Exception as e:
+            logger.warning(f"Failed to initialize ETO runs service: {e}")
+
+        logger.info("All services initialized successfully")
+
+        # Start email ingestion service (background workers)
+        try:
+            email_ingestion_service = ServiceContainer.get_email_ingestion_service()
+            email_ingestion_service.startup()
+            logger.info("Email ingestion service started successfully")
+        except Exception as service_error:
+            logger.warning(f"Email ingestion service startup failed: {service_error}")
+
+        # Start ETO processing worker (background polling)
+        try:
+            eto_runs_service = ServiceContainer.get_eto_runs_service()
+            worker_started = await eto_runs_service.startup()
+            if worker_started:
+                logger.info("ETO processing worker started successfully")
             else:
-                logger.info("ETO processing service initialized but worker disabled (ETO_WORKER_ENABLED=false)")
-        except Exception as eto_error:
-            logger.exception(f"ETO processing service initialization failed: {eto_error}")
+                logger.warning("ETO processing worker failed to start or is disabled")
+        except Exception as service_error:
+            logger.warning(f"ETO processing worker startup failed: {service_error}")
 
 
     except Exception as e:
@@ -277,19 +323,6 @@ async def cleanup_services() -> None:
 
     try:
         if ServiceContainer.is_initialized():
-            try:
-                eto_service = ServiceContainer.get_eto_processing_service()
-                if hasattr(eto_service, 'stop_worker'):
-                    worker_stopped = await eto_service.stop_worker(graceful=True)
-                    if worker_stopped:
-                        logger.info("ETO processing worker stopped gracefully")
-                    else:
-                        logger.info("ETO processing worker was not running")
-                else:
-                    logger.info("ETO processing service stopped")
-            except Exception as e:
-                logger.warning(f"Failed to stop ETO service: {e}")
-            
             # Stop email ingestion service if running
             try:
                 email_ingestion_service = ServiceContainer.get_email_ingestion_service()
@@ -298,6 +331,15 @@ async def cleanup_services() -> None:
                     logger.info("Email ingestion service stopped")
             except Exception as e:
                 logger.warning(f"Failed to stop email ingestion service: {e}")
+
+            # Stop ETO processing worker if running
+            try:
+                eto_runs_service = ServiceContainer.get_eto_runs_service()
+                if hasattr(eto_runs_service, 'shutdown'):
+                    await eto_runs_service.shutdown(graceful=True)
+                    logger.info("ETO processing worker stopped gracefully")
+            except Exception as e:
+                logger.warning(f"Failed to stop ETO processing worker: {e}")
 
 
         if _connection_manager:
@@ -347,17 +389,59 @@ def setup_exception_handlers(app: FastAPI) -> None:
     """Setup exception handlers for FastAPI"""
     
     @app.exception_handler(RequestValidationError)
-    async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    async def schema_validation_exception_handler(request: Request, exc: RequestValidationError):
         """Handle Pydantic validation errors"""
-        logger.warning(f"Validation error on {request.method} {request.url}: {exc}")
+        # Sanitize error details to avoid logging/serializing large binary data
+        errors = exc.errors()
+        sanitized_errors = []
+        for error in errors:
+            sanitized_error = error.copy()
+            # If input is bytes, truncate for both logging and response
+            if 'input' in sanitized_error and isinstance(sanitized_error['input'], bytes):
+                input_bytes = sanitized_error['input']
+                if len(input_bytes) > 100:
+                    sanitized_error['input'] = f"<binary data, {len(input_bytes)} bytes>"
+                else:
+                    # Even small bytes can't be JSON serialized
+                    sanitized_error['input'] = f"<binary data, {len(input_bytes)} bytes>"
+            sanitized_errors.append(sanitized_error)
+
+        # Log detailed validation errors
+        logger.error(f"=" * 80)
+        logger.error(f"REQUEST VALIDATION FAILED: {request.method} {request.url}")
+        logger.error(f"Total validation errors: {len(sanitized_errors)}")
+        logger.error(f"-" * 80)
+
+        for idx, error in enumerate(sanitized_errors, 1):
+            logger.error(f"Error {idx}:")
+            logger.error(f"  Location: {' -> '.join(str(loc) for loc in error.get('loc', []))}")
+            logger.error(f"  Type: {error.get('type', 'unknown')}")
+            logger.error(f"  Message: {error.get('msg', 'unknown')}")
+
+            # Smart input logging - don't log large structures
+            if 'input' in error:
+                input_val = error['input']
+                # If it's a dict or list, just show type and size
+                if isinstance(input_val, dict):
+                    logger.error(f"  Input type: dict with {len(input_val)} keys")
+                elif isinstance(input_val, list):
+                    logger.error(f"  Input type: list with {len(input_val)} items")
+                elif isinstance(input_val, str) and len(input_val) > 100:
+                    logger.error(f"  Input (truncated): {input_val[:100]}...")
+                else:
+                    logger.error(f"  Input: {input_val}")
+
+            if 'ctx' in error:
+                logger.error(f"  Context: {error.get('ctx')}")
+
+        logger.error(f"=" * 80)
+
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content={
-                "success": False,
                 "error": "Validation error",
                 "message": "The request data failed validation",
-                "details": exc.errors(),
-                "status_code": 422
+                "details": sanitized_errors,  # Return sanitized details (bytes can't be JSON serialized)
             }
         )
 
@@ -367,113 +451,113 @@ def setup_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=exc.status_code,
             content={
-                "success": False,
                 "error": exc.detail,
                 "message": exc.detail,
-                "status_code": exc.status_code
+            }
+        )
+        
+    @app.exception_handler(ValidationError)
+    async def validation_exception_handler(request: Request, exc : ValidationError):
+        """Handle 400 errors with consistent JSON response"""
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "error": "Validation error",
+                "message": exc.args[0] if len(exc.args) > 0 else "The request data failed validation",
             }
         )
 
-    @app.exception_handler(404)
-    async def not_found_handler(request: Request, exc):
+    @app.exception_handler(ObjectNotFoundError)
+    async def not_found_handler(request: Request, exc : ObjectNotFoundError):
         """Handle 404 errors with consistent JSON response"""
+        logger.info(f"Resource not found on {request.method} {request.url.path}: {exc}")
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
             content={
-                "success": False,
                 "error": "Resource not found",
-                "message": "The requested resource does not exist",
-                "status_code": 404
+                "message": exc.args[0] if len(exc.args) > 0 else "The requested resource does not exist",
             }
         )
 
-    @app.exception_handler(500)
-    async def internal_server_error_handler(request: Request, exc):
+    @app.exception_handler(ConflictError)
+    async def conflict_handler(request: Request, exc : ConflictError):
+        """Handle 409 errors with consistent JSON response"""
+        logger.warning(f"Conflict on {request.method} {request.url.path}: {exc}")
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                "error": "Conflict",
+                "message": exc.args[0] if len(exc.args) > 0 else "The request conflicts with current state",
+            }
+        )
+
+    @app.exception_handler(ServiceError)
+    async def service_error_handler(request: Request, exc : ServiceError):
+        """Handle service-level errors with 500 response"""
+        logger.error(f"Service error on {request.method} {request.url.path}: {exc}", exc_info=True)
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "error": "Service error",
+                "message": exc.args[0] if len(exc.args) > 0 else "An error occurred while processing the request",
+            }
+        )
+
+    @app.exception_handler(Exception)
+    async def internal_server_error_handler(request: Request, exc : Exception):
         """Handle 500 errors with consistent JSON response"""
         logger.error(f"Internal server error: {exc}", exc_info=True)
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={
-                "success": False,
                 "error": "Internal server error",
                 "message": "An unexpected error occurred on the server",
-                "status_code": 500
-            }
-        )
-
-    @app.exception_handler(405)
-    async def method_not_allowed_handler(request: Request, exc):
-        """Handle 405 errors with consistent JSON response"""
-        return JSONResponse(
-            status_code=status.HTTP_405_METHOD_NOT_ALLOWED,
-            content={
-                "success": False,
-                "error": "Method not allowed",
-                "message": "The HTTP method is not allowed for this endpoint",
-                "status_code": 405
             }
         )
 
 
 def register_routers(app: FastAPI) -> None:
     """Register FastAPI routers"""
-    # Register health router first
     try:
-        from .api.routers import health_router
-        app.include_router(health_router, prefix="/api")
-        logger.info("Registered health router")
-    except ImportError as e:
-        logger.warning(f"Could not import health router: {e}")
-    except Exception as e:
-        logger.error(f"Error registering health router: {e}", exc_info=True)
+        from .api.routers import (
+            email_configs_router,
+            pdf_files_router,
+            pdf_templates_router,
+            pipelines_router,
+            modules_router,
+            admin_router,
+            eto_runs_router,
+        )
 
-    # Register modules router
-    try:
-        from .api.routers import modules_router
-        app.include_router(modules_router, prefix="/api")
-        logger.info("Registered modules router")
-    except ImportError as e:
-        logger.warning(f"Could not import modules router: {e}")
-    except Exception as e:
-        logger.error(f"Error registering modules router: {e}", exc_info=True)
-
-    # Register pipelines router
-    try:
-        from .api.routers import pipelines_router
-        app.include_router(pipelines_router, prefix="/api")
-        logger.info("Registered pipelines router")
-    except ImportError as e:
-        logger.warning(f"Could not import pipelines router: {e}")
-    except Exception as e:
-        logger.error(f"Error registering pipelines router: {e}", exc_info=True)
-        
-    try:
-        from .api.routers import eto_router
-        app.include_router(eto_router, prefix="/api")
-        logger.info("Registered ETO processing router")
-    except ImportError as e:
-        logger.warning(f"Could not import ETO processing router: {e}")
-    except Exception as e:
-        logger.error(f"Error registering ETO processing router: {e}", exc_info=True)
-        
-    try:
-        from .api.routers import pdf_templates_router
-        app.include_router(pdf_templates_router, prefix="/api")
-        logger.info("Registered pdf templates router")
-    except ImportError as e:
-        logger.warning(f"Could not import pdf templates router: {e}")
-    except Exception as e:
-        logger.error(f"Error registering pdf templates router: {e}", exc_info=True)
-        
-    try:
-        from .api.routers import email_configs_router
+        # Register all routers
         app.include_router(email_configs_router, prefix="/api")
-        logger.info("Registered email configs router")
-    except ImportError as e:
-        logger.warning(f"Could not import email configs router: {e}")
-    except Exception as e:
-        logger.error(f"Error registering email configs router: {e}", exc_info=True)
+        logger.info("Registered email configs router at /api/email-configs")
 
+        app.include_router(pdf_files_router, prefix="/api")
+        logger.info("Registered pdf files router at /api/pdf-files")
+
+        app.include_router(pdf_templates_router, prefix="/api")
+        logger.info("Registered pdf templates router at /api/pdf-templates")
+
+        app.include_router(pipelines_router, prefix="/api")
+        logger.info("Registered pipelines router at /api/pipelines")
+
+        app.include_router(modules_router, prefix="/api")
+        logger.info("Registered modules router at /api/modules")
+
+        app.include_router(admin_router, prefix="/api")
+        logger.info("Registered admin router at /api/admin")
+
+        app.include_router(eto_runs_router, prefix="/api")
+        logger.info("Registered eto runs router at /api/eto-runs")
+
+    except ImportError as e:
+        logger.error(f"Could not import routers: {e}", exc_info=True)
+        raise
+    except Exception as e:
+        logger.error(f"Error registering routers: {e}", exc_info=True)
+        raise
+        
 
 def register_info_endpoint(app: FastAPI) -> None:
     """Register application info endpoint"""
@@ -489,18 +573,28 @@ def register_info_endpoint(app: FastAPI) -> None:
             "framework": "FastAPI",
             "api_prefix": "/api",
             "endpoints": {
-                "health": "/api/health",
-                "email_configuration": "/api/email-configs",
-                "eto_processing": "/api/eto-runs",
-                "eto_worker": "/api/eto-runs/worker",
-                "pdf_templates": "/api/pdf_templates"
+                "email_configs": "/api/email-configs",
+                "pdf_files": "/api/pdf-files",
+                "pdf_templates": "/api/pdf-templates",
+                "pipelines": "/api/pipelines",
+                "modules": "/api/modules",
+                "admin": "/api/admin",
+                "eto_runs": "/api/eto-runs"
             },
             "documentation": {
-                "health": "Service health and status monitoring",
-                "email_configuration": "Email ingestion configuration management",
-                "eto_processing": "ETO processing run management and background processing",
-                "eto_worker": "Background worker management (start/stop/pause/resume)",
-                "pdf_templates": "PDF template creation and versioning"
+                "email_configs": "Email ingestion configuration management (CRUD, activation, discovery)",
+                "pdf_files": "PDF file storage, extraction, and object retrieval",
+                "pdf_templates": "PDF template creation, versioning, and activation",
+                "pipelines": "Pipeline definition management (dev/testing - CRUD, compilation)",
+                "modules": "Module catalog access (GET modules for pipeline building)",
+                "admin": "Administrative endpoints (module sync, system management)",
+                "eto_runs": "ETO run lifecycle management (list, view, reprocess, skip, delete)"
+            },
+            "features": {
+                "email_ingestion": "Automated email monitoring with Outlook COM integration",
+                "pdf_processing": "PDF extraction with pdfminer.six",
+                "template_matching": "Signature-based template matching with versioning",
+                "pipeline_execution": "Visual node-based transformation pipelines"
             },
             "interactive_docs": "/docs",
             "openapi_schema": "/openapi.json"
@@ -536,7 +630,7 @@ def create_app() -> FastAPI:
 def run_server():
     """Run the FastAPI server with uvicorn"""
     # Get configuration from environment
-    port = int(os.getenv('PORT', 8090))
+    port = int(os.getenv('PORT', 8000))
     host = os.getenv('HOST', '0.0.0.0')
     debug = os.getenv('DEBUG', 'false').lower() == 'true'
 

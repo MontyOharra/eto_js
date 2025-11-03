@@ -1,23 +1,45 @@
-from typing import List, Dict, Any, Optional
+"""
+Modules API Schemas
+Pydantic models for module catalog endpoints
+"""
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 
-class ModuleCatalogResponse(BaseModel):
-    """Response model for module catalog"""
-    modules: List[Dict[str, Any]]
 
-class ModuleExecuteRequest(BaseModel):
-    """Request model for module execution"""
-    module_id: str = Field(..., description="Module ID from catalog")
-    inputs: Dict[str, Any] = Field(..., description="Input values keyed by input node ID")
-    config: Dict[str, Any] = Field(..., description="Module configuration parameters")
-    use_cache: bool = Field(True, description="Whether to use cached module (faster)")
+# ============================================================================
+# Module Catalog Types
+# ============================================================================
+
+class Module(BaseModel):
+    """Module catalog entry for API responses"""
+    id: str
+    version: str
+    name: str
+    description: Optional[str] = None
+    module_kind: str  # "transform", "action", "logic", "comparator"
+    meta: Dict[str, Any]  # Module I/O metadata
+    config_schema: Dict[str, Any]  # JSON schema for module configuration
+    color: str
+    category: str
 
 
-class ModuleExecuteResponse(BaseModel):
-    """Response model for module execution"""
+# ============================================================================
+# Admin Sync Types
+# ============================================================================
+
+class ModuleSyncResult(BaseModel):
+    """Result of syncing a single module"""
+    id: str
+    name: str
+    status: str  # "success", "error", "skipped"
+    message: Optional[str] = None
+
+
+class SyncModulesResponse(BaseModel):
+    """Response for POST /admin/sync-modules"""
     success: bool
-    module_id: str
-    outputs: Dict[str, Any] = Field(..., description="Output values keyed by output node ID")
-    error: Optional[str] = None
-    performance_ms: float = Field(..., description="Execution time in milliseconds")
-    cache_used: bool = Field(..., description="Whether module was loaded from cache")
+    modules_discovered: int
+    modules_synced: int
+    modules_failed: int
+    results: List[ModuleSyncResult]
+    message: str

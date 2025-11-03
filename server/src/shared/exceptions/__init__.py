@@ -1,38 +1,29 @@
 """Shared exceptions for transformation pipeline system"""
 
-from .repository import RepositoryError, ObjectNotFoundError, ValidationError, DatabaseConnectionError, DuplicateKeyError
-from .pipeline_validation import PipelineValidationFailedException
-from .module_definitions import NotImplementedError
-from .service import ServiceError
-from .eto_processing import (
-    EtoProcessingError,
-    EtoStatusValidationError,
-    EtoTemplateMatchingError,
-    EtoDataExtractionError,
-    EtoTransformationError
+from .service import (
+    ServiceError,
+    ValidationError,
+    ObjectNotFoundError,
+)
+
+from .pipeline_validation import (
+    PipelineValidationError,
+    SchemaValidationError,
+    ModuleValidationError,
+    EdgeValidationError,
+    GraphValidationError,
 )
 
 __all__ = [
-    # Repository errors
-    'RepositoryError',
-    'ObjectNotFoundError',
-    'ValidationError',
-    'DatabaseConnectionError',
-    'DuplicateKeyError',
-
-    # Pipeline validation errors
-    'PipelineValidationFailedException',
-
-    # Module definitions errors
-    'NotImplementedError',
-    
-    # Service errors
+    # Service exceptions
     'ServiceError',
-    
-    # ETO processing errors
-    'EtoProcessingError',
-    'EtoStatusValidationError',
-    'EtoTemplateMatchingError',
-    'EtoDataExtractionError',
-    'EtoTransformationError'
+    'ValidationError',
+    'ObjectNotFoundError',
+
+    # Pipeline validation exceptions
+    'PipelineValidationError',
+    'SchemaValidationError',
+    'ModuleValidationError',
+    'EdgeValidationError',
+    'GraphValidationError',
 ]

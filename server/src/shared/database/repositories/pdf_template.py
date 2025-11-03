@@ -1,168 +1,231 @@
 """
 PDF Template Repository
-Repository for PDF template CRUD operations with Pydantic model conversion
+Repository for pdf_templates table with CRUD operations
 """
 import logging
-from typing import Optional, List, Dict, Any
-from sqlalchemy.exc import SQLAlchemyError
-from datetime import datetime, timezone
+from typing import Type, Any
+from sqlalchemy import func, case, desc, asc
+from sqlalchemy.orm import joinedload, selectinload
 
-from shared.database.repositories import BaseRepository
-from shared.exceptions import RepositoryError, ObjectNotFoundError, ValidationError
-from shared.database.models import PdfTemplateModel
-from shared.database.connection import DatabaseConnectionManager
-from shared.types import PdfTemplate, PdfTemplateCreate, PdfTemplateUpdate
-from shared.utils import DateTimeUtils
-
+from shared.database.repositories.base import BaseRepository
+from shared.database.models import PdfTemplateModel, PdfTemplateVersionModel
+from shared.types.pdf_templates import (
+    PdfTemplate,
+    PdfTemplateListView
+)
+from shared.exceptions.service import ObjectNotFoundError
 
 logger = logging.getLogger(__name__)
 
 
 class PdfTemplateRepository(BaseRepository[PdfTemplateModel]):
-    """Repository for PDF template operations"""
+    """
+    Repository for PDF template CRUD operations.
 
-    def __init__(self, connection_manager: DatabaseConnectionManager):
-        super().__init__(connection_manager)
+    Supports dual-mode operation:
+    - Standalone: Pass connection_manager, auto-commits
+    - UoW: Pass session, caller controls transaction
+    """
 
     @property
-    def model_class(self):
+    def model_class(self) -> Type[PdfTemplateModel]:
+        """Return the SQLAlchemy model class this repository manages"""
         return PdfTemplateModel
 
-    def _convert_to_domain_object(self, model: PdfTemplateModel) -> PdfTemplate:
-        """Convert SQLAlchemy model to Pydantic domain object"""
-        # Use Pydantic's automatic conversion from SQLAlchemy model
-        return PdfTemplate.model_validate(model)
+    # ========== Helper Methods ==========
 
-    # === Core CRUD Operations (returning domain objects) ===
+    def _model_to_template(self, model: PdfTemplateModel) -> PdfTemplate:
+        """Convert ORM model to PdfTemplateMetadata dataclass"""
+        return PdfTemplate(
+            id=model.id,
+            name=model.name,
+            description=model.description,
+            status=model.status,  # Convert enum to string
+            source_pdf_id=model.source_pdf_id,
+            current_version_id=model.current_version_id,
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )
 
-    def create(self, template_create: PdfTemplateCreate) -> PdfTemplate:
-        """Create a new PDF template from create model"""
-        try:
-            with self.connection_manager.session_scope() as session:
-                # Convert create model to SQLAlchemy model (exclude fields not in DB)
-                model_data = template_create.model_dump_for_db()
-                model = self.model_class(**model_data)
+    # ========== Query Operations ==========
 
-                # Add to session and flush to get ID
-                session.add(model)
-                session.flush()
+    def list_templates(
+        self,
+        status: str | None = None,
+        sort_by: str | None = None,
+        sort_order: str | None = None
+    ) -> list[PdfTemplateListView]:
+        """
+        List templates with filtering and sorting.
 
-                # Refresh to get updated fields
-                session.refresh(model)
+        Complex query that:
+        - Joins with current_version to get version_num and usage_count
+        - Counts total versions per template via subquery
+        - Filters by status if provided
+        - Sorts dynamically based on parameters
 
-                logger.debug(f"Created PDF template with ID: {model.id}")
-                return self._convert_to_domain_object(model)
+        Args:
+            status: Filter by status ("active" or "inactive"), None for all
+            sort_by: Field to sort by ("name", "status", "usage_count")
+            sort_order: Sort direction ("asc" or "desc")
 
-        except SQLAlchemyError as e:
-            logger.error(f"Error creating PDF template: {e}")
-            raise RepositoryError(f"Failed to create PDF template: {e}") from e
+        Returns:
+            List of PdfTemplateSummary
+        """
+        with self._get_session() as session:
+            # Subquery to count versions per template
+            version_count_subquery = (
+                session.query(
+                    PdfTemplateVersionModel.pdf_template_id,
+                    func.count(PdfTemplateVersionModel.id).label('version_count')
+                )
+                .group_by(PdfTemplateVersionModel.pdf_template_id)
+                .subquery()
+            )
 
-    def get_by_id(self, template_id: int) -> Optional[PdfTemplate]:
-        """Get PDF template by ID"""
-        try:
-            with self.connection_manager.session_scope() as session:
-                model = session.get(self.model_class, template_id)
-                if not model:
-                    return None        
-                return self._convert_to_domain_object(model)
-              
-        except SQLAlchemyError as e:
-            logger.error(f"Error getting PDF template {template_id}: {e}")
-            raise RepositoryError(f"Failed to get PDF template: {e}") from e
-        
-    def set_current_version_id(self, id: int, version_id: int) -> Optional[PdfTemplate]:
-        """Set the current version ID for a template"""
-        try:
-            with self.connection_manager.session_scope() as session:
-                # Get existing template
-                model = session.get(self.model_class, id)
+            # Main query
+            query = (
+                session.query(
+                    PdfTemplateModel,
+                    PdfTemplateVersionModel.version_num,
+                    PdfTemplateVersionModel.usage_count,
+                    version_count_subquery.c.version_count
+                )
+                .outerjoin(
+                    PdfTemplateVersionModel,
+                    PdfTemplateModel.current_version_id == PdfTemplateVersionModel.id
+                )
+                .outerjoin(
+                    version_count_subquery,
+                    PdfTemplateModel.id == version_count_subquery.c.pdf_template_id
+                )
+            )
 
-                if not model:
-                    return None
+            # Apply status filter
+            if status:
+                query = query.filter(PdfTemplateModel.status == status)
 
-                # Update current version ID
-                model.current_version_id = version_id
-                session.flush()
-                session.refresh(model)
+            if not sort_by:
+                sort_by = "name"
+            if not sort_order:
+                sort_order = "desc"
 
-                logger.debug(f"Updated PDF template with ID: {id}")
-                return self._convert_to_domain_object(model)
-        except SQLAlchemyError as e:
-            logger.error(f"Error updating PDF template {id}: {e}")
-            raise RepositoryError(f"Failed to update PDF template: {e}") from e
+            # Apply sorting
+            sort_column = {
+                "name": PdfTemplateModel.name,
+                "status": PdfTemplateModel.status,
+                "usage_count": PdfTemplateVersionModel.usage_count
+            }.get(sort_by, PdfTemplateModel.name)
 
-    def get_all(self, status: Optional[str] = None, order_by: Optional[str] = None, desc: bool = False,
-               limit: Optional[int] = None, offset: Optional[int] = None) -> List[PdfTemplate]:
-        """Get all PDF templates with optional filtering, sorting and pagination"""
-        try:
-            with self.connection_manager.session_scope() as session:
-                query = session.query(self.model_class)
+            if sort_order == "desc":
+                query = query.order_by(desc(sort_column))
+            else:
+                query = query.order_by(asc(sort_column))
 
-                # Apply status filtering if specified
-                if status:
-                    query = query.filter(self.model_class.status == status)
+            # Execute query
+            results = query.all()
 
-                # Apply sorting if specified
-                if order_by:
-                    if hasattr(self.model_class, order_by):
-                        column = getattr(self.model_class, order_by)
-                        query = query.order_by(column.desc() if desc else column)
-                    else:
-                        logger.warning(f"Field '{order_by}' does not exist on {self.model_class.__name__}, skipping sort")
+            # Convert to PdfTemplateSummary objects
+            summaries = [
+                PdfTemplateListView(
+                    id=template.id,
+                    name=template.name,
+                    description=template.description,
+                    status=template.status,  # Convert enum to string
+                    source_pdf_id=template.source_pdf_id,
+                    current_version_id=template.current_version_id,
+                    current_version_number=version_num,
+                    version_usage_count=usage_count or 0,  # Default to 0 if None
+                    version_count=version_count or 0,  # Default to 0 if None
+                    updated_at=template.updated_at
+                )
+                for template, version_num, usage_count, version_count in results
+            ]
 
-                if offset is not None:
-                    query = query.offset(offset)
+            return summaries
 
-                if limit is not None:
-                    query = query.limit(limit)
+    def get_by_id(self, template_id: int) -> PdfTemplate | None:
+        """
+        Get template metadata by ID.
 
-                models = query.all()
-                return [self._convert_to_domain_object(model) for model in models]
+        Args:
+            template_id: Template record ID
 
-        except SQLAlchemyError as e:
-            logger.error(f"Error getting all PDF templates: {e}")
-            raise RepositoryError(f"Failed to get PDF templates: {e}") from e
+        Returns:
+            PdfTemplateMetadata dataclass or None if not found
+        """
+        with self._get_session() as session:
+            model = session.get(self.model_class, template_id)
 
-    # === Specialized Query Methods ===
+            if model is None:
+                return None
 
-    def update(self, template_id: int, update_data: PdfTemplateUpdate) -> Optional[PdfTemplate]:
-        """Update a PDF template with the provided data"""
-        try:
-            with self.connection_manager.session_scope() as session:
-                # Get existing template
-                model = session.get(self.model_class, template_id)
-                if not model:
-                    return None
+            return self._model_to_template(model)
 
-                # Update only fields that are provided (not None)
-                update_dict = update_data.model_dump_for_db()
-                for field, value in update_dict.items():
-                    if hasattr(model, field):
-                        setattr(model, field, value)
+    # ========== Update Operations ==========
 
-                # Update the updated_at timestamp
-                model.updated_at = DateTimeUtils.utc_now()
-                
-                session.flush()
-                session.refresh(model)
+    def create(
+        self,
+        name: str,
+        description: str | None,
+        source_pdf_id: int,
+        status: str = "inactive"
+    ) -> PdfTemplate:
+        """
+        Create new template record.
 
-                logger.debug(f"Updated PDF template with ID: {template_id}")
-                return self._convert_to_domain_object(model)
+        Args:
+            name: Template name
+            description: Template description (optional)
+            source_pdf_id: Source PDF file ID
+            status: Template status (default: "inactive")
 
-        except SQLAlchemyError as e:
-            logger.error(f"Error updating PDF template {template_id}: {e}")
-            raise RepositoryError(f"Failed to update PDF template: {e}") from e
+        Returns:
+            Created PdfTemplateMetadata
+        """
+        with self._get_session() as session:
+            # Create ORM model
+            template = self.model_class(
+                name=name,
+                description=description,
+                source_pdf_id=source_pdf_id,
+                status=status,
+                current_version_id=None  # Will be set after version is created
+            )
 
-    def get_active_templates(self) -> List[PdfTemplate]:
-        """Get all active PDF templates for matching"""
-        try:
-            with self.connection_manager.session_scope() as session:
-                models = session.query(self.model_class).filter(
-                    self.model_class.status == 'active'
-                ).all()
+            session.add(template)
+            session.commit()
+            session.refresh(template)
 
-                return [self._convert_to_domain_object(model) for model in models]
+            return self._model_to_template(template)
 
-        except SQLAlchemyError as e:
-            logger.error(f"Error getting active PDF templates: {e}")
-            raise RepositoryError(f"Failed to get active PDF templates: {e}") from e
+    def update(self, template_id: int, updates: dict[str, Any]) -> PdfTemplate:
+        """
+        Update template with provided field values.
+
+        Generic update method that applies any field updates to the template.
+        Handles enum conversion for status field.
+
+        Args:
+            template_id: Template ID to update
+            updates: Dictionary of field names to new values
+
+        Returns:
+            Updated PdfTemplateMetadata or None if template not found
+        """
+        with self._get_session() as session:
+            # Fetch template
+            template = session.get(self.model_class, template_id)
+
+            if template is None:
+                raise ObjectNotFoundError(f"Template {template_id} not found")
+
+            # Apply updates
+            for field, value in updates.items():
+                setattr(template, field, value)
+
+            # Commit changes
+            session.commit()
+            session.refresh(template)
+
+            return self._model_to_template(template)

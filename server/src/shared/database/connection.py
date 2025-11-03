@@ -1,6 +1,7 @@
 """
 Database Connection Management
 Handles SQL Server connections, session management, and database creation
+Uses synchronous SQLAlchemy (SQL Server does not support async operations well)
 """
 import logging
 import threading
@@ -28,19 +29,21 @@ class DatabaseConnectionManager:
     """
     Manages database connections and session creation
     Does NOT create databases - only connects to existing ones
+
+    Uses synchronous SQLAlchemy (SQL Server does not support async operations well)
     """
-    
+
     def __init__(self, database_url: str):
         """Initialize connection manager with database URL - doesn't connect yet"""
         if not database_url:
             raise ValueError("Database URL is required")
-        
+
         self.database_url = database_url
         self.engine: Optional[Engine] = None
         self.session_factory: Optional[sessionmaker] = None
         self._initialized = False
         self._lock = threading.Lock()
-        
+
         logger.info(f"DatabaseConnectionManager initialized for: {self._safe_url()}")
     
     def initialize_connection(self):
@@ -49,10 +52,10 @@ class DatabaseConnectionManager:
             if self._initialized:
                 logger.debug("Connection already initialized")
                 return
-            
+
             try:
                 logger.debug(f"Initializing database connection to: {self._safe_url()}")
-                
+
                 # Create engine with SQL Server optimized settings
                 self.engine = create_engine(
                     self.database_url,
@@ -65,20 +68,21 @@ class DatabaseConnectionManager:
                         "timeout": 30,  # 30 second connection timeout
                     }
                 )
-                
+
                 # Test connection and verify database exists
                 self._verify_database_exists()
-                
+
                 # Create session factory
                 self.session_factory = sessionmaker(
                     bind=self.engine,
                     autocommit=False,
-                    autoflush=False
+                    autoflush=False,
+                    expire_on_commit=False,  # Don't expire objects after commit
                 )
-                
+
                 self._initialized = True
                 logger.info("Database connection initialized successfully")
-                
+
             except DatabaseNotFoundError:
                 raise
             except OperationalError as e:
@@ -101,7 +105,7 @@ class DatabaseConnectionManager:
         except OperationalError as e:
             error_str = str(e).lower()
             database_name = self._parse_database_name()
-            
+
             if "cannot open database" in error_str or "database" in error_str:
                 raise DatabaseNotFoundError(
                     f"Database '{database_name}' does not exist. "
@@ -111,25 +115,77 @@ class DatabaseConnectionManager:
                 # Re-raise as connection error
                 raise
     
-    def get_session(self) -> Session:
-        """Get a new database session"""
+    @contextmanager
+    def session(self):
+        """
+        Create a session with automatic commit/rollback.
+
+        Usage:
+            with connection_manager.session() as session:
+                result = session.execute(query)
+                # Auto-commits on success, auto-rolls back on exception
+        """
         if not self._initialized:
-            raise DatabaseConnectionError("Connection not initialized. Call initialize_connection() first.")
-        
+            raise DatabaseConnectionError(
+                "Connection not initialized. Call initialize_connection() first."
+            )
+
         if not self.session_factory:
             raise DatabaseConnectionError("Session factory not available")
-        
-        return self.session_factory()
-    
-    @contextmanager
-    def session_scope(self):
-        """Provide a transactional scope around database operations"""
-        session = self.get_session()
+
+        session = self.session_factory()
         try:
             yield session
             session.commit()
         except Exception:
             session.rollback()
+            raise
+        finally:
+            session.close()
+
+    @contextmanager
+    def unit_of_work(self):
+        """
+        Create a Unit of Work for managing multi-table transactions.
+
+        The Unit of Work provides access to all repositories within a single
+        transaction context. All operations commit together atomically.
+
+        Usage:
+            with connection_manager.unit_of_work() as uow:
+                # Access repositories through UoW
+                config = uow.email_configs.create(config_data)
+                email = uow.emails.create(email_data)
+                # Both operations commit together automatically
+
+        Returns:
+            UnitOfWork instance with shared session
+
+        Raises:
+            DatabaseConnectionError: If connection not initialized
+        """
+        from shared.database.unit_of_work import UnitOfWork
+
+        if not self._initialized:
+            raise DatabaseConnectionError(
+                "Connection not initialized. Call initialize_connection() first."
+            )
+
+        if not self.session_factory:
+            raise DatabaseConnectionError("Session factory not available")
+
+        # Create session and UoW
+        session = self.session_factory()
+        uow = UnitOfWork(session)
+        try:
+            yield uow
+            # Commit transaction on success
+            session.commit()
+            logger.debug("UoW transaction committed")
+        except Exception:
+            # Rollback on any exception
+            session.rollback()
+            logger.debug("UoW transaction rolled back due to exception")
             raise
         finally:
             session.close()
@@ -139,17 +195,17 @@ class DatabaseConnectionManager:
         try:
             if not self._initialized:
                 return False
-            
-            with self.session_scope() as session:
+
+            with self.session() as session:
                 session.execute(text("SELECT 1"))
-            
+
             logger.debug("Database connection test successful")
             return True
-            
+
         except Exception as e:
             logger.warning(f"Database connection test failed: {e}")
             return False
-    
+
     def close(self):
         """Close database connections and cleanup"""
         with self._lock:
@@ -158,7 +214,7 @@ class DatabaseConnectionManager:
                 self.engine = None
                 self.session_factory = None
                 self._initialized = False
-    
+
         logger.info("Closed database connections")
         
     def _safe_url(self) -> str:
@@ -191,19 +247,19 @@ _connection_lock = threading.Lock()
 def init_database_connection(database_url: str) -> DatabaseConnectionManager:
     """Initialize global database connection"""
     global _connection_manager
-    
+
     with _connection_lock:
         if _connection_manager is not None:
             logger.debug("Database connection already initialized")
             return _connection_manager
-        
+
         try:
             _connection_manager = DatabaseConnectionManager(database_url)
             _connection_manager.initialize_connection()
-            
+
             logger.info("Global database connection initialized")
             return _connection_manager
-            
+
         except Exception as e:
             logger.error(f"Failed to initialize global database connection: {e}")
             _connection_manager = None
@@ -214,5 +270,5 @@ def get_connection_manager() -> Optional[DatabaseConnectionManager]:
     """Get the global connection manager instance"""
     if _connection_manager is None:
         logger.warning("Database connection not initialized. Call init_database_connection() first.")
-    
+
     return _connection_manager

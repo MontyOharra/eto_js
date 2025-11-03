@@ -20,10 +20,10 @@ class ModuleSecurityValidator:
     """Security validation for module loading"""
 
     ALLOWED_PACKAGES = [
-        "src.features.modules.transform",
-        "src.features.modules.action",
-        "src.features.modules.logic",
-        "src.features.modules.comparator",
+        "features.modules.transform",
+        "features.modules.action",
+        "features.modules.logic",
+        "features.modules.comparator",
     ]
 
     BLOCKED_PATTERNS = [
@@ -280,7 +280,7 @@ class ModuleRegistry:
 
         Args:
             package_paths: List of package paths to scan for modules
-                          e.g., ["src.features.modules.transform", "src.features.modules.action"]
+                          e.g., ["features.modules.transform", "features.modules.action"]
         """
         for package_path in package_paths:
             try:
@@ -326,14 +326,14 @@ class ModuleRegistry:
                 meta = module_class.meta()
                 config_schema = module_class.config_schema()
 
-                # Build catalog entry
+                # Build catalog entry (keep meta as ModuleMeta object, conversion happens in repository)
                 entry = {
                     "id": module_class.id,
                     "version": getattr(module_class, 'version', '1.0.0'),  # Default version
                     "name": module_class.title,
                     "description": module_class.description,
                     "module_kind": module_class.kind,
-                    "meta": meta.model_dump(exclude_none=False),  # Convert to dict
+                    "meta": meta,  # Keep as ModuleMeta object
                     "config_schema": config_schema,
                     "handler_name": f"{module_class.__module__}:{module_class.__name__}",
                     "color": getattr(module_class, 'color', '#3B82F6'),  # Default color

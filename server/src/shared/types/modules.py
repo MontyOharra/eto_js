@@ -1,19 +1,17 @@
 """
 Shared module type definitions and base classes
 """
-from typing import Optional, List, Dict, Type, Any
+from typing import Optional, List, Dict, Type, Any, Literal
 from abc import ABC, abstractmethod
-from pydantic import BaseModel, Field
+from dataclasses import dataclass, field
+from pydantic import BaseModel
 from enum import Enum
+from datetime import datetime
 
-class AllowedModuleNodeTypes(str, Enum):
-    """Allowed module types"""
-    STR = "str"
-    FLOAT = "float"
-    DATETIME = "datetime"
-    BOOL = "bool"
-    INT = "int"
-    
+# Type alias for allowed node types - equivalent to TypeScript union: "str" | "float" | "datetime" | "bool" | "int"
+AllowedNodeType = Literal["str", "float", "datetime", "bool", "int"]
+
+
 class ModuleKind(str, Enum):
     """Module kind"""
     TRANSFORM = "transform"
@@ -22,36 +20,40 @@ class ModuleKind(str, Enum):
     COMPARATOR = "comparator"
 
 
-class NodeTypeRule(BaseModel):
+@dataclass(frozen=True)
+class NodeTypeRule:
     """Type rule for a node group - either allowed_types list or type_var"""
-    # exactly one of these is AllowedModuleNodeTypes
-    allowed_types: Optional[List[AllowedModuleNodeTypes]] = None  # per-pin whitelist; user picks independently
+    allowed_types: Optional[List[AllowedNodeType]] = None  # per-pin whitelist; user picks independently
     type_var: Optional[str] = None             # e.g., "T" (unifies across pins)
 
 
-class NodeGroup(BaseModel):
+@dataclass(frozen=True)
+class NodeGroup:
     """Definition of a group of nodes (pins) with cardinality constraints"""
-    min_count: int = 1
-    max_count: Optional[int] = 1
     typing: NodeTypeRule
     label: str
+    min_count: int = 1
+    max_count: Optional[int] = 1
 
 
-class IOSideShape(BaseModel):
+@dataclass(frozen=True)
+class IOSideShape:
     """Shape definition for one side of I/O (inputs or outputs)"""
-    nodes: List[NodeGroup] = []  # exact count, fixed order
+    nodes: List[NodeGroup] = field(default_factory=list)  # exact count, fixed order
 
 
-class IOShape(BaseModel):
+@dataclass(frozen=True)
+class IOShape:
     """Complete I/O shape definition for a module"""
-    inputs: IOSideShape = IOSideShape()
-    outputs: IOSideShape = IOSideShape()
-    type_params: Dict[str, List[AllowedModuleNodeTypes]] = Field(default_factory=dict)
+    inputs: IOSideShape = field(default_factory=IOSideShape)
+    outputs: IOSideShape = field(default_factory=IOSideShape)
+    type_params: Dict[str, List[AllowedNodeType]] = field(default_factory=dict)
 
 
-class ModuleMeta(BaseModel):
+@dataclass(frozen=True)
+class ModuleMeta:
     """Metadata defining I/O constraints for a module"""
-    io_shape: IOShape = IOShape()
+    io_shape: IOShape = field(default_factory=IOShape)
 
 
 class BaseModule(ABC):
@@ -84,7 +86,7 @@ class BaseModule(ABC):
         Generated from the ConfigModel Pydantic model
         """
         return cls.ConfigModel.model_json_schema()
-    
+
     @classmethod
     def config_class(cls) -> Type[BaseModel]:
         """
@@ -95,7 +97,7 @@ class BaseModule(ABC):
     @classmethod
     def validate_wiring(cls,
                        module_instance_id: str,
-                       config: Dict[str, Any],
+                       cfg: Dict[str, Any],
                        instance_inputs: List[Dict[str, Any]],
                        instance_outputs: List[Dict[str, Any]],
                        upstream_of_input: Dict[str, str]) -> List[Dict[str, Any]]:
@@ -113,7 +115,13 @@ class BaseModule(ABC):
             List of validation errors (empty if valid)
         """
         return []
-
+    
+    @abstractmethod
+    def run(self, inputs: Dict[str, Any], cfg: Any, context: Optional[Any]) -> Dict[str, Any]:
+        """
+        Execute the module logic
+        """
+        return {}
 
 class TransformModule(BaseModule):
     """
@@ -142,4 +150,52 @@ class ComparatorModule(BaseModule):
     Comparator modules produce boolean outputs based on comparing inputs to config values
     """
     kind = ModuleKind.COMPARATOR
-    
+
+
+
+@dataclass(frozen=True)
+class ModuleCreate:
+    """Domain type for creating new module catalog entries"""
+    id: str
+    version: str
+    name: str
+    description: Optional[str]
+    module_kind: ModuleKind
+    meta: ModuleMeta
+    config_schema: Dict[str, Any]
+    handler_name: str
+    color: str = "#3B82F6"
+    category: str = "Processing"
+    is_active: bool = True
+
+
+@dataclass(frozen=True)
+class ModuleUpdate:
+    """Domain type for updating module catalog entries"""
+    name: Optional[str] = None
+    description: Optional[str] = None
+    module_kind: Optional[ModuleKind] = None
+    meta: Optional[ModuleMeta] = None
+    config_schema: Optional[Dict[str, Any]] = None
+    handler_name: Optional[str] = None
+    color: Optional[str] = None
+    category: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+@dataclass(frozen=True)
+class Module:
+    """Full module catalog domain object retrieved from database"""
+    id: str
+    version: str
+    name: str
+    description: Optional[str]
+    module_kind: ModuleKind
+    meta: ModuleMeta
+    config_schema: Dict[str, Any]
+    handler_name: str
+    color: str
+    category: str
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime

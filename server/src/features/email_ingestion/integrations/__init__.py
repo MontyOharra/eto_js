@@ -1,13 +1,15 @@
 """
-Email Integrations
-Provider-specific email integration implementations
+Email Integrations Package
+Provides registry-based email provider integrations with dataclass types
 """
+from .registry import IntegrationRegistry
 from .base_integration import BaseEmailIntegration
+
+# Import all integration implementations to trigger auto-registration
 from .outlook_com import OutlookComIntegration
-from .factory import EmailIntegrationFactory
 
 __all__ = [
+    'IntegrationRegistry',
     'BaseEmailIntegration',
     'OutlookComIntegration',
-    'EmailIntegrationFactory',
 ]

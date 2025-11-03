@@ -1,233 +1,205 @@
 """
-Pipeline Repository
-Repository for pipeline operations following ETO server patterns
+Pipeline Definition Repository
+Repository for pipeline_definitions table with CRUD operations
 """
+import json
 import logging
-import uuid
-from typing import Optional, List
-from datetime import datetime
-from sqlalchemy.exc import SQLAlchemyError
+from typing import Type, List, Optional
+from sqlalchemy import select, desc, asc
 
-from .base import BaseRepository
-from src.shared.database.models import PipelineDefinitionModel
-from shared.types import PipelineDefinition, PipelineDefinitionCreate, PipelineDefinitionSummary
-from src.shared.exceptions import RepositoryError, ObjectNotFoundError
+from shared.database.repositories.base import BaseRepository
+from shared.database.models import PipelineDefinitionModel
+from shared.types.pipeline_definition import (
+    PipelineDefinition,
+    PipelineDefinitionSummary,
+    PipelineDefinitionCreate,
+)
+from shared.types.pipelines import PipelineState, VisualState
 
 logger = logging.getLogger(__name__)
 
 
 class PipelineDefinitionRepository(BaseRepository[PipelineDefinitionModel]):
     """
-    Repository for pipeline operations
-    Manages pipelines with immutable design - only get, list, and create operations
+    Repository for Pipeline Definition CRUD operations.
+
+    Supports dual-mode operation:
+    - Standalone: Pass connection_manager, auto-commits
+    - UoW: Pass session, caller controls transaction
     """
 
     @property
-    def model_class(self):
+    def model_class(self) -> Type[PipelineDefinitionModel]:
+        """Return the SQLAlchemy model class this repository manages"""
         return PipelineDefinitionModel
 
-    def _generate_pipeline_id(self) -> str:
-        """Generate unique pipeline ID"""
-        return f"pipeline_{uuid.uuid4().hex[:12]}"
+    def _serialize_pipeline_state(self, pipeline_state: PipelineState) -> str:
+        """Convert PipelineState dataclass to JSON string"""
+        from dataclasses import asdict
+        return json.dumps(asdict(pipeline_state))
 
-    def _convert_to_domain_object(self, db_model: PipelineDefinitionModel) -> PipelineDefinition:
-        """Convert SQLAlchemy model to domain object"""
-        return PipelineDefinition.from_db_model(db_model)
+    def _serialize_visual_state(self, visual_state: VisualState) -> str:
+        """Convert VisualState (flat dict) to JSON string"""
+        from dataclasses import asdict
+        # visual_state is a dict of {node_id: Position}
+        # Convert Position dataclasses to dicts
+        return json.dumps({k: asdict(v) for k, v in visual_state.items()})
 
-    def _convert_to_summary(self, db_model: PipelineDefinitionModel) -> PipelineDefinitionSummary:
-        """Convert SQLAlchemy model to summary object"""
-        pipeline = self._convert_to_domain_object(db_model)
-        return PipelineDefinitionSummary.from_full_pipeline_definition(pipeline)
+    def _deserialize_pipeline_state(self, json_str: str) -> PipelineState:
+        """Convert JSON string to PipelineState dataclass"""
+        from shared.types.pipelines import EntryPoint, ModuleInstance, NodeInstance, NodeConnection
+        data = json.loads(json_str)
 
-    # ========== Required Operations (Get, List, Upload) ==========
+        # Reconstruct nested dataclasses
+        entry_points = [EntryPoint(**ep) for ep in data.get("entry_points", [])]
 
-    def create(self, pipeline_create: PipelineDefinitionCreate) -> PipelineDefinition:
+        modules = []
+        for mod in data.get("modules", []):
+            inputs = [NodeInstance(**ni) for ni in mod.get("inputs", [])]
+            outputs = [NodeInstance(**ni) for ni in mod.get("outputs", [])]
+            modules.append(ModuleInstance(
+                module_instance_id=mod["module_instance_id"],
+                module_ref=mod["module_ref"],
+                config=mod["config"],
+                inputs=inputs,
+                outputs=outputs
+            ))
+
+        connections = [NodeConnection(**conn) for conn in data.get("connections", [])]
+
+        return PipelineState(
+            entry_points=entry_points,
+            modules=modules,
+            connections=connections
+        )
+
+    def _deserialize_visual_state(self, json_str: str) -> VisualState:
+        """Convert JSON string to VisualState (flat dict structure)"""
+        from shared.types.pipelines import Position
+        data = json.loads(json_str)
+
+        # Handle both old nested structure and new flat structure
+        if "modules" in data or "entry_points" in data:
+            # Old nested structure - flatten it
+            result = {}
+            result.update({k: Position(**v) for k, v in data.get("modules", {}).items()})
+            result.update({k: Position(**v) for k, v in data.get("entry_points", {}).items()})
+            return result
+        else:
+            # New flat structure
+            return {k: Position(**v) for k, v in data.items()}
+
+    def _model_to_full(self, model: PipelineDefinitionModel) -> PipelineDefinition:
+        """Convert ORM model to PipelineDefinition dataclass"""
+        return PipelineDefinition(
+            id=model.id,
+            pipeline_state=self._deserialize_pipeline_state(model.pipeline_state),
+            visual_state=self._deserialize_visual_state(model.visual_state),
+            compiled_plan_id=model.compiled_plan_id,
+            created_at=model.created_at,
+            updated_at=model.updated_at
+        )
+
+    def _model_to_summary(self, model: PipelineDefinitionModel) -> PipelineDefinitionSummary:
+        """Convert ORM model to PipelineDefinitionSummary dataclass"""
+        return PipelineDefinitionSummary(
+            id=model.id,
+            compiled_plan_id=model.compiled_plan_id,
+            created_at=model.created_at,
+            updated_at=model.updated_at
+        )
+
+    def create(self, create_data: PipelineDefinitionCreate) -> PipelineDefinition:
         """
-        Upload/create new pipeline from Pydantic model
-        Pipelines are immutable once created
+        Create new pipeline definition.
 
         Args:
-            pipeline_create: PipelineDefinitionCreate model with pipeline data
+            create_data: Pipeline definition creation data
 
         Returns:
-            Created Pipeline domain model
+            Created pipeline definition with full details
         """
-        try:
-            with self.connection_manager.session_scope() as session:
-                # Generate ID
-                pipeline_id = self._generate_pipeline_id()
+        with self._get_session() as session:
+            # Serialize states to JSON
+            pipeline_state_json = self._serialize_pipeline_state(create_data.pipeline_state)
+            visual_state_json = self._serialize_visual_state(create_data.visual_state)
 
-                # Convert to database format with JSON serialization
-                data = pipeline_create.model_dump_for_db()
-                data['id'] = pipeline_id
+            # Create ORM model
+            pipeline_def = self.model_class(
+                pipeline_state=pipeline_state_json,
+                visual_state=visual_state_json,
+                compiled_plan_id=None  # Compilation happens separately in service layer
+            )
 
-                # Create model instance
-                model = self.model_class(**data)
-                session.add(model)
-                session.flush()  # Get ID before commit
-                session.refresh(model)
+            session.add(pipeline_def)
+            session.commit()
+            session.refresh(pipeline_def)
 
-                logger.info(f"Created pipeline: {pipeline_id} - {pipeline_create.name}")
-
-                # Return domain model
-                return self._convert_to_domain_object(model)
-
-        except SQLAlchemyError as e:
-            logger.error(f"Error creating pipeline: {e}")
-            raise RepositoryError(f"Failed to create pipeline: {e}") from e
+            return self._model_to_full(pipeline_def)
 
     def get_by_id(self, pipeline_id: int) -> Optional[PipelineDefinition]:
         """
-        Get pipeline by ID
+        Get pipeline definition by ID.
 
         Args:
-            pipeline_id: Pipeline ID to search for
+            pipeline_id: Pipeline definition ID
 
         Returns:
-            Pipeline domain object or None if not found
+            Pipeline definition with full details or None if not found
         """
-        try:
-            with self.connection_manager.session_scope() as session:
-                model = session.get(self.model_class, pipeline_id)
+        with self._get_session() as session:
+            pipeline_def = session.get(self.model_class, pipeline_id)
 
-                if not model:
-                    logger.debug(f"Pipeline not found: {pipeline_id}")
-                    return None
+            if pipeline_def is None:
+                return None
 
-                return self._convert_to_domain_object(model)
+            return self._model_to_full(pipeline_def)
 
-        except SQLAlchemyError as e:
-            logger.error(f"Error getting pipeline {pipeline_id}: {e}")
-            raise RepositoryError(f"Failed to get pipeline: {e}") from e
-
-    def get_all(self, include_inactive: bool = False) -> List[PipelineDefinition]:
+    def list_pipelines(
+        self,
+        sort_by: str = "created_at",
+        sort_order: str = "desc"
+    ) -> List[PipelineDefinitionSummary]:
         """
-        Get all pipelines (list operation)
+        List all pipeline definitions with lightweight summaries.
 
         Args:
-            include_inactive: If True, include inactive pipelines
+            sort_by: Field to sort by (created_at, updated_at, id)
+            sort_order: Sort order (asc or desc)
 
         Returns:
-            List of Pipeline domain objects
+            List of pipeline definition summaries
         """
-        try:
-            with self.connection_manager.session_scope() as session:
-                query = session.query(self.model_class)
+        with self._get_session() as session:
+            # Build query
+            stmt = select(self.model_class)
 
-                # Filter by active status if requested
-                if not include_inactive:
-                    query = query.filter(self.model_class.is_active == True)
+            # Apply sorting
+            sort_column = getattr(self.model_class, sort_by, self.model_class.created_at)
+            if sort_order == "desc":
+                stmt = stmt.order_by(desc(sort_column))
+            else:
+                stmt = stmt.order_by(asc(sort_column))
 
-                # Order by creation date (newest first)
-                query = query.order_by(self.model_class.created_at.desc())
+            result = session.execute(stmt)
+            models = result.scalars().all()
 
-                models = query.all()
-                logger.debug(f"Retrieved {len(models)} pipelines")
+            return [self._model_to_summary(model) for model in models]
 
-                return [self._convert_to_domain_object(model) for model in models]
-
-        except SQLAlchemyError as e:
-            logger.error(f"Error getting all pipelines: {e}")
-            raise RepositoryError(f"Failed to get pipelines: {e}") from e
-
-    def get_summaries(self, include_inactive: bool = False) -> List[PipelineDefinitionSummary]:
+    def update_compiled_plan_id(self, pipeline_id: int, compiled_plan_id: int) -> None:
         """
-        Get pipeline summaries for list views (lightweight)
+        Update the compiled_plan_id for a pipeline definition.
+
+        This is the only mutable field - used by the service layer after compilation.
 
         Args:
-            include_inactive: If True, include inactive pipelines
-
-        Returns:
-            List of PipelineDefinitionSummary objects
+            pipeline_id: Pipeline definition ID
+            compiled_plan_id: Compiled plan ID to link to
         """
-        try:
-            with self.connection_manager.session_scope() as session:
-                query = session.query(self.model_class)
+        with self._get_session() as session:
+            pipeline_def = session.get(self.model_class, pipeline_id)
+            if pipeline_def is None:
+                raise ValueError(f"Pipeline definition {pipeline_id} not found")
 
-                # Filter by active status if requested
-                if not include_inactive:
-                    query = query.filter(self.model_class.is_active == True)
-
-                # Order by creation date (newest first)
-                query = query.order_by(self.model_class.created_at.desc())
-
-                models = query.all()
-                logger.debug(f"Retrieved {len(models)} pipeline summaries")
-
-                return [self._convert_to_summary(model) for model in models]
-
-        except SQLAlchemyError as e:
-            logger.error(f"Error getting pipeline summaries: {e}")
-            raise RepositoryError(f"Failed to get pipeline summaries: {e}") from e
-
-    def create_with_checksum(self, data: dict) -> PipelineDefinition:
-        """
-        Create pipeline with pre-calculated checksum
-
-        Used when checksum is calculated before creation (compilation flow)
-
-        Args:
-            data: Pipeline data dict (from model_dump_for_db) with 'plan_checksum' and 'compiled_at' already set
-
-        Returns:
-            Created Pipeline domain object
-        """
-        try:
-            with self.connection_manager.session_scope() as session:
-                # Generate ID if not present
-
-                # Create model instance
-                model = self.model_class(**data)
-                session.add(model)
-                session.flush()
-                session.refresh(model)
-
-                checksum_preview = data.get('plan_checksum', 'none')
-                checksum_str = checksum_preview[:8] + "..." if checksum_preview and checksum_preview != 'none' else 'none'
-                logger.info(f"Created pipeline: {model.id} - {model.name} with checksum {checksum_str}")
-
-                return self._convert_to_domain_object(model)
-
-        except SQLAlchemyError as e:
-            logger.error(f"Error creating pipeline: {e}")
-            raise RepositoryError(f"Failed to create pipeline: {e}") from e
-
-    # ========== Compilation-Related Operations ==========
-
-    def update_pipeline_checksum(self, pipeline_id: int, checksum: str, compiled_at: datetime) -> PipelineDefinition:
-        """
-        Update pipeline's plan_checksum and compiled_at timestamp
-
-        Args:
-            pipeline_id: Pipeline ID to update
-            checksum: Plan checksum to set
-            compiled_at: Compilation timestamp
-
-        Returns:
-            Updated Pipeline domain object
-
-        Raises:
-            ObjectNotFoundError: If pipeline doesn't exist
-            RepositoryError: If update fails
-        """
-        try:
-            with self.connection_manager.session_scope() as session:
-                model = session.get(self.model_class, pipeline_id)
-
-                if not model:
-                    raise ObjectNotFoundError('Pipeline', pipeline_id)
-
-                model.plan_checksum = checksum
-                model.compiled_at = compiled_at
-                session.flush()
-                session.refresh(model)
-
-                logger.info(f"Updated pipeline {pipeline_id} with checksum {checksum[:8]}...")
-
-                return self._convert_to_domain_object(model)
-
-        except ObjectNotFoundError:
-            raise
-        except SQLAlchemyError as e:
-            logger.error(f"Error updating pipeline checksum: {e}")
-            raise RepositoryError(f"Failed to update checksum: {e}") from e
+            pipeline_def.compiled_plan_id = compiled_plan_id
+            session.commit()

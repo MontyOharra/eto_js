@@ -6,14 +6,6 @@ class RepositoryError(Exception):
     pass
 
 
-class ObjectNotFoundError(RepositoryError):
-    """Object with given ID not found"""
-    def __init__(self, object_type: str, object_id: int | str):
-        self.object_type = object_type
-        self.object_id = object_id
-        super().__init__(f"{object_type} with id {object_id} not found")
-
-
 class ValidationError(RepositoryError):
     """Data validation failed"""
     pass

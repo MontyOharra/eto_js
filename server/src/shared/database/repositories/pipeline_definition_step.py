@@ -1,168 +1,170 @@
 """
-Pipeline Step Repository
-Repository for compiled pipeline step operations
+Pipeline Definition Step Repository
+Repository for pipeline_definition_steps table with CRUD operations
 """
+import json
 import logging
-from sqlalchemy.exc import SQLAlchemyError
+from typing import Type, List, Dict, Optional, Any
+from sqlalchemy import select
 
-from typing import List, Optional
-from shared.types import PipelineDefinitionStep, PipelineDefinitionStepCreate
-
-from .base import BaseRepository
-
+from shared.database.repositories.base import BaseRepository
 from shared.database.models import PipelineDefinitionStepModel
-from shared.exceptions import RepositoryError
+from shared.types.pipeline_definition_step import (
+    PipelineDefinitionStep,
+    PipelineDefinitionStepCreate,
+)
+from shared.types.pipelines import NodeInstance
 
 logger = logging.getLogger(__name__)
 
 
 class PipelineDefinitionStepRepository(BaseRepository[PipelineDefinitionStepModel]):
     """
-    Repository for pipeline step operations
-    Manages compiled execution steps grouped by plan_checksum
+    Repository for Pipeline Definition Step CRUD operations.
+
+    Supports dual-mode operation:
+    - Standalone: Pass connection_manager, auto-commits
+    - UoW: Pass session, caller controls transaction
+
+    This table is append-only (no updates or deletes) - steps are immutable
+    once created as part of a compiled plan.
     """
 
     @property
-    def model_class(self):
+    def model_class(self) -> Type[PipelineDefinitionStepModel]:
+        """Return the SQLAlchemy model class this repository manages"""
         return PipelineDefinitionStepModel
 
-    def _convert_to_domain_object(self, db_model: PipelineDefinitionStepModel) -> PipelineDefinitionStep:
-        """Convert SQLAlchemy model to domain object"""
-        return PipelineDefinitionStep.from_db_model(db_model)
-
-    # ========== Core Step Operations ==========
-
-    def get_steps_by_checksum(self, checksum: str) -> List[PipelineDefinitionStep]:
+    def _serialize_node_metadata(self, node_metadata: Dict[str, List[NodeInstance]]) -> str:
         """
-        Get all compiled steps for a given plan checksum
+        Convert node metadata (inputs/outputs) to JSON string.
 
         Args:
-            checksum: Plan checksum (SHA-256 hex string)
+            node_metadata: Dict with "inputs" and "outputs" keys mapping to List[NodeInstance]
 
         Returns:
-            List of PipelineDefinitionStep domain objects, ordered by step_number
-            Empty list if no steps found for this checksum
+            JSON string representation
         """
-        try:
-            with self.connection_manager.session_scope() as session:
-                db_models = session.query(self.model_class).filter(
-                    self.model_class.plan_checksum == checksum
-                ).order_by(self.model_class.step_number).all()
+        from dataclasses import asdict
 
-                logger.debug(f"Retrieved {len(db_models)} steps for checksum {checksum[:8]}...")
+        # Convert NodeInstance dataclasses to dicts
+        serializable = {}
+        for key, node_list in node_metadata.items():
+            serializable[key] = [asdict(node) for node in node_list]
 
-                return [self._convert_to_domain_object(model) for model in db_models]
+        return json.dumps(serializable)
 
-        except SQLAlchemyError as e:
-            logger.error(f"Error getting steps for checksum {checksum}: {e}")
-            raise RepositoryError(f"Failed to get steps: {e}") from e
-
-    def save_steps(self, steps: List[PipelineDefinitionStepCreate]) -> List[PipelineDefinitionStep]:
+    def _deserialize_node_metadata(self, json_str: str) -> Dict[str, List[NodeInstance]]:
         """
-        Bulk save compiled pipeline steps
+        Convert JSON string to node metadata dict.
 
         Args:
-            steps: List of PipelineDefinitionStepCreate domain objects to save
+            json_str: JSON string from database
 
         Returns:
-            List of saved PipelineDefinitionStep domain objects with IDs
-
-        Raises:
-            RepositoryError: If save fails
+            Dict with "inputs" and "outputs" keys mapping to List[NodeInstance]
         """
-        try:
-            with self.connection_manager.session_scope() as session:
-                # Convert domain objects to database models
-                db_models = []
-                for step in steps:
-                    data = step.model_dump_for_db()
-                    db_model = self.model_class(**data)
-                    db_models.append(db_model)
+        data = json.loads(json_str)
 
-                # Bulk save
-                session.add_all(db_models)
-                session.flush()
+        result = {}
+        for key, node_list in data.items():
+            result[key] = [NodeInstance(**node_dict) for node_dict in node_list]
 
-                # Refresh to get IDs
-                for model in db_models:
-                    session.refresh(model)
+        return result
 
-                logger.info(f"Saved {len(db_models)} pipeline steps")
+    def _model_to_full(self, model: PipelineDefinitionStepModel) -> PipelineDefinitionStep:
+        """Convert ORM model to PipelineDefinitionStep dataclass"""
+        return PipelineDefinitionStep(
+            id=model.id,
+            pipeline_compiled_plan_id=model.pipeline_compiled_plan_id,
+            module_instance_id=model.module_instance_id,
+            module_ref=model.module_ref,
+            module_config=json.loads(model.module_config),
+            input_field_mappings=json.loads(model.input_field_mappings),
+            node_metadata=self._deserialize_node_metadata(model.node_metadata),
+            step_number=model.step_number
+        )
 
-                # Convert back to domain objects
-                return [self._convert_to_domain_object(model) for model in db_models]
-
-        except SQLAlchemyError as e:
-            logger.error(f"Error saving pipeline steps: {e}")
-            raise RepositoryError(f"Failed to save steps: {e}") from e
-
-    def checksum_exists(self, checksum: str) -> bool:
+    def create_steps(
+        self,
+        steps: List[PipelineDefinitionStepCreate]
+    ) -> List[PipelineDefinitionStep]:
         """
-        Check if compiled steps exist for a given checksum (cache check)
+        Bulk create pipeline definition steps.
+
+        This is the primary method for creating steps - they're always created
+        in bulk as part of a compiled plan.
 
         Args:
-            checksum: Plan checksum to check
+            steps: List of step creation data (all for same compiled plan)
 
         Returns:
-            True if steps exist, False otherwise
+            List of created steps with full details
         """
-        try:
-            with self.connection_manager.session_scope() as session:
-                exists = session.query(self.model_class).filter(
-                    self.model_class.plan_checksum == checksum
-                ).first() is not None
+        with self._get_session() as session:
+            # Create ORM models
+            step_models = []
+            for step_data in steps:
+                step_model = self.model_class(
+                    pipeline_compiled_plan_id=step_data.pipeline_compiled_plan_id,
+                    module_instance_id=step_data.module_instance_id,
+                    module_ref=step_data.module_ref,
+                    module_config=json.dumps(step_data.module_config),
+                    input_field_mappings=json.dumps(step_data.input_field_mappings),
+                    node_metadata=self._serialize_node_metadata(step_data.node_metadata),
+                    step_number=step_data.step_number
+                )
+                step_models.append(step_model)
 
-                logger.debug(f"Checksum {checksum[:8]}... exists: {exists}")
-                return exists
+            # Bulk insert
+            session.add_all(step_models)
+            session.commit()
 
-        except SQLAlchemyError as e:
-            logger.error(f"Error checking checksum existence: {e}")
-            raise RepositoryError(f"Failed to check checksum: {e}") from e
+            # Refresh to get IDs
+            for model in step_models:
+                session.refresh(model)
 
-    def get_step_count_by_checksum(self, checksum: str) -> int:
+            return [self._model_to_full(model) for model in step_models]
+
+    def get_steps_by_plan_id(
+        self,
+        compiled_plan_id: int
+    ) -> List[PipelineDefinitionStep]:
         """
-        Get count of steps for a given checksum
+        Get all steps for a compiled plan, ordered by step_number.
+
+        This retrieves the execution plan in the correct topological order.
 
         Args:
-            checksum: Plan checksum
+            compiled_plan_id: Compiled plan ID
 
         Returns:
-            Number of steps
+            List of steps ordered by step_number (execution order)
         """
-        try:
-            with self.connection_manager.session_scope() as session:
-                count = session.query(self.model_class).filter(
-                    self.model_class.plan_checksum == checksum
-                ).count()
+        with self._get_session() as session:
+            stmt = select(self.model_class).where(
+                self.model_class.pipeline_compiled_plan_id == compiled_plan_id
+            ).order_by(self.model_class.step_number)
 
-                return count
+            result = session.execute(stmt)
+            models = result.scalars().all()
 
-        except SQLAlchemyError as e:
-            logger.error(f"Error counting steps for checksum: {e}")
-            raise RepositoryError(f"Failed to count steps: {e}") from e
+            return [self._model_to_full(model) for model in models]
 
-    def delete_steps_by_checksum(self, checksum: str) -> int:
+    def get_by_id(self, step_id: int) -> Optional[PipelineDefinitionStep]:
         """
-        Delete all steps for a given checksum
-
-        Note: This should rarely be used - steps are meant to be immutable cache.
-        Only use for cleanup/maintenance.
+        Get step by ID.
 
         Args:
-            checksum: Plan checksum
+            step_id: Step ID
 
         Returns:
-            Number of steps deleted
+            Step with full details or None if not found
         """
-        try:
-            with self.connection_manager.session_scope() as session:
-                count = session.query(self.model_class).filter(
-                    self.model_class.plan_checksum == checksum
-                ).delete()
+        with self._get_session() as session:
+            step = session.get(self.model_class, step_id)
 
-                logger.warning(f"Deleted {count} steps for checksum {checksum[:8]}...")
-                return count
+            if step is None:
+                return None
 
-        except SQLAlchemyError as e:
-            logger.error(f"Error deleting steps: {e}")
-            raise RepositoryError(f"Failed to delete steps: {e}") from e
+            return self._model_to_full(step)

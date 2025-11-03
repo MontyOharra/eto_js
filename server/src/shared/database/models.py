@@ -1,6 +1,3 @@
-from __future__ import annotations
-
-from enum import StrEnum
 from typing import Optional, List
 
 from datetime import datetime
@@ -15,7 +12,6 @@ from sqlalchemy import (
     Index,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.mssql import DATETIME2
 from sqlalchemy.orm import DeclarativeBase, relationship, Mapped, mapped_column
 from sqlalchemy.sql import func
 from sqlalchemy import Enum as SAEnum
@@ -23,26 +19,6 @@ from sqlalchemy import Enum as SAEnum
 
 class BaseModel(DeclarativeBase):
     pass
-
-class EtoStepStatus(StrEnum):
-    PROCESSING = "processing"
-    SUCCESS = "success"
-    FAILURE = "failure"
-
-
-class EtoRunStatus(StrEnum):
-    NOT_STARTED = "not_started"
-    PROCESSING = "processing"
-    SUCCESS = "success"
-    FAILURE = "failure"
-    NEEDS_TEMPLATE = "needs_template"
-    SKIPPED = "skipped"
-
-
-class EtoRunProcessingStep(StrEnum):
-    TEMPLATE_MATCHING = "template_matching"
-    DATA_EXTRACTION = "data_extraction"
-    DATA_TRANSFORMATION = "data_transformation"
 
 
 # =========================
@@ -62,21 +38,18 @@ class EmailConfigModel(BaseModel):
     filter_rules: Mapped[Optional[str]] = mapped_column(Text)
 
     poll_interval_seconds: Mapped[int] = mapped_column(Integer, default=5)
-    max_backlog_hours: Mapped[int] = mapped_column(Integer, default=24)
-    error_retry_attempts: Mapped[int] = mapped_column(Integer, default=3)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    activated_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
-    is_running: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    last_check_time: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
+    activated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    last_check_time: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     last_error_message: Mapped[Optional[str]] = mapped_column(Text)
-    last_error_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
+    last_error_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     created_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
     )
 
     # Relationships
@@ -84,7 +57,6 @@ class EmailConfigModel(BaseModel):
 
     __table_args__ = (
         Index("idx_email_config_active", "is_active"),
-        Index("idx_email_config_running", "is_running"),
     )
 
 
@@ -102,20 +74,20 @@ class EmailModel(BaseModel):
     subject: Mapped[Optional[str]] = mapped_column(String(500))
     sender_email: Mapped[Optional[str]] = mapped_column(String(255))
     sender_name: Mapped[Optional[str]] = mapped_column(String(255))
-    received_date: Mapped[Optional[datetime]] = mapped_column(DATETIME2, index=True)
+    received_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), index=True)
     folder_name: Mapped[Optional[str]] = mapped_column(String(100))
 
     has_pdf_attachments: Mapped[bool] = mapped_column(Boolean, default=False)
     attachment_count: Mapped[int] = mapped_column(Integer, default=0)
     pdf_count: Mapped[int] = mapped_column(Integer, default=0)
 
-    processed_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
+    processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     created_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
     )
 
     # Relationships
@@ -150,10 +122,10 @@ class PdfFileModel(BaseModel):
     objects_json: Mapped[str] = mapped_column(Text, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
     )
 
     # Relationships
@@ -167,11 +139,6 @@ class PdfFileModel(BaseModel):
 # =========================
 # pdf_templates
 # =========================
-
-class PdfTemplateStatus(StrEnum):
-    ACTIVE = "active"
-    INACTIVE = "inactive"
-
 class PdfTemplateModel(BaseModel):
     __tablename__ = "pdf_templates"
 
@@ -181,18 +148,18 @@ class PdfTemplateModel(BaseModel):
     description: Mapped[Optional[str]] = mapped_column(Text)
     source_pdf_id: Mapped[int] = mapped_column(ForeignKey("pdf_files.id"), nullable=False, index=True)
 
-    status: Mapped[PdfTemplateStatus] = mapped_column(
-        SAEnum(PdfTemplateStatus, native_enum=False, validate_strings=True, name="pdf_template_status"),
+    status: Mapped[str] = mapped_column(
+        SAEnum('active', 'inactive', native_enum=False, validate_strings=True, name="pdf_template_status"),
         nullable=False,
-        default=PdfTemplateStatus.ACTIVE,
+        default='active',
     )
     current_version_id: Mapped[Optional[int]] = mapped_column(ForeignKey("pdf_template_versions.id"))
 
     created_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
     )
 
     # Relationships
@@ -216,13 +183,13 @@ class PdfTemplateVersionModel(BaseModel):
     extraction_fields: Mapped[str] = mapped_column(Text, nullable=False)
     pipeline_definition_id: Mapped[int] = mapped_column(ForeignKey("pipeline_definitions.id"), nullable=False, index=True)
     usage_count: Mapped[int] = mapped_column(Integer, default=0)
-    last_used_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     created_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
     )
 
     # Relationships
@@ -235,8 +202,8 @@ class PdfTemplateVersionModel(BaseModel):
 # module_catalog
 # =========================
 
-class ModuleCatalogModel(BaseModel):
-    __tablename__ = "module_catalog"
+class ModuleModel(BaseModel):
+    __tablename__ = "modules"
 
     id: Mapped[str] = mapped_column(String(100), primary_key=True)
     version: Mapped[str] = mapped_column(String(50), nullable=False)
@@ -246,15 +213,15 @@ class ModuleCatalogModel(BaseModel):
     category: Mapped[str] = mapped_column(String(100), default="Processing")
     module_kind: Mapped[str] = mapped_column(String(20), nullable=False)
     meta: Mapped[str] = mapped_column(Text, nullable=False)
-    config_schema: Mapped[Optional[str]] = mapped_column(Text)
+    config_schema: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
     handler_name: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     created_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
     )
 
     # Relationships
@@ -280,13 +247,13 @@ class PipelineCompiledPlanModel(BaseModel):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     plan_checksum: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
-    compiled_at: Mapped[datetime] = mapped_column(DATETIME2, nullable=False)
+    compiled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
     )
 
     # Relationships
@@ -311,10 +278,10 @@ class PipelineDefinitionModel(BaseModel):
     compiled_plan_id: Mapped[Optional[int]] = mapped_column(ForeignKey("pipeline_compiled_plans.id"), index=True)
 
     created_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
     )
 
     # Relationships
@@ -335,7 +302,7 @@ class PipelineDefinitionStepModel(BaseModel):
     )
 
     module_instance_id: Mapped[str] = mapped_column(String(100), nullable=False)
-    module_ref: Mapped[str] = mapped_column(ForeignKey("module_catalog.id", ondelete="CASCADE"), nullable=False, index=True)
+    module_ref: Mapped[str] = mapped_column(ForeignKey("modules.id", ondelete="CASCADE"), nullable=False, index=True)
 
     module_config: Mapped[str] = mapped_column(Text, nullable=False)
     input_field_mappings: Mapped[str] = mapped_column(Text, nullable=False)
@@ -343,15 +310,15 @@ class PipelineDefinitionStepModel(BaseModel):
     step_number: Mapped[int] = mapped_column(Integer, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
     )
 
     # Relationships
     compiled_plan: Mapped["PipelineCompiledPlanModel"] = relationship(back_populates="steps")
-    module: Mapped["ModuleCatalogModel"] = relationship(back_populates="steps")
+    module: Mapped["ModuleModel"] = relationship(back_populates="steps")
 
     __table_args__ = (
         Index("idx_pipeline_compiled_plan_id", "pipeline_compiled_plan_id"),
@@ -369,13 +336,15 @@ class EtoRunModel(BaseModel):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     pdf_file_id: Mapped[int] = mapped_column(ForeignKey("pdf_files.id"), nullable=False, index=True)
 
-    status: Mapped[EtoRunStatus] = mapped_column(
-        SAEnum(EtoRunStatus, native_enum=False, validate_strings=True, name="eto_run_status"),
+    status: Mapped[str] = mapped_column(
+        SAEnum("not_started", "processing", "success", "failure", "needs_template", "skipped",
+               name="eto_run_status", native_enum=False),
         nullable=False,
-        default=EtoRunStatus.NOT_STARTED,
+        server_default="not_started",
     )
-    processing_step: Mapped[Optional[EtoRunProcessingStep]] = mapped_column(
-        SAEnum(EtoRunProcessingStep, native_enum=False, validate_strings=True, name="eto_run_processing_step"),
+    processing_step: Mapped[Optional[str]] = mapped_column(
+        SAEnum("template_matching", "data_extraction", "data_transformation",
+               name="eto_run_processing_step", native_enum=False),
         nullable=True,
     )
 
@@ -383,14 +352,14 @@ class EtoRunModel(BaseModel):
     error_message: Mapped[Optional[str]] = mapped_column(Text)
     error_details: Mapped[Optional[str]] = mapped_column(Text)
 
-    started_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     created_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
     )
 
     # Relationships
@@ -422,24 +391,25 @@ class EtoRunTemplateMatchingModel(BaseModel):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     eto_run_id: Mapped[int] = mapped_column(ForeignKey("eto_runs.id"), nullable=False, index=True)
 
-    status: Mapped[EtoStepStatus] = mapped_column(
-        SAEnum(EtoStepStatus, native_enum=False, validate_strings=True, name="eto_step_status_tm"),
+    status: Mapped[str] = mapped_column(
+        SAEnum("processing", "success", "failure",
+               name="eto_step_status_tm", native_enum=False),
         nullable=False,
-        default=EtoStepStatus.PROCESSING,
+        server_default="processing",
     )
 
     matched_template_version_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("pdf_template_versions.id"), index=True
     )
 
-    started_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     created_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
     )
 
     # Relationships
@@ -463,21 +433,22 @@ class EtoRunExtractionModel(BaseModel):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     eto_run_id: Mapped[int] = mapped_column(ForeignKey("eto_runs.id"), nullable=False, index=True)
 
-    status: Mapped[EtoStepStatus] = mapped_column(
-        SAEnum(EtoStepStatus, native_enum=False, validate_strings=True, name="eto_step_status_ex"),
+    status: Mapped[str] = mapped_column(
+        SAEnum("processing", "success", "failure",
+               name="eto_step_status_ex", native_enum=False),
         nullable=False,
-        default=EtoStepStatus.PROCESSING,
+        server_default="processing",
     )
     extracted_data: Mapped[Optional[str]] = mapped_column(Text)
 
-    started_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     created_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
     )
 
     # Relationships
@@ -498,22 +469,23 @@ class EtoRunPipelineExecutionModel(BaseModel):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     eto_run_id: Mapped[int] = mapped_column(ForeignKey("eto_runs.id"), nullable=False, index=True)
 
-    status: Mapped[EtoStepStatus] = mapped_column(
-        SAEnum(EtoStepStatus, native_enum=False, validate_strings=True, name="eto_step_status_px"),
+    status: Mapped[str] = mapped_column(
+        SAEnum("processing", "success", "failure",
+               name="eto_step_status_px", native_enum=False),
         nullable=False,
-        default=EtoStepStatus.PROCESSING,
+        server_default="processing",
     )
 
     executed_actions: Mapped[Optional[str]] = mapped_column(Text)
 
-    started_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DATETIME2)
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     created_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
     )
 
     # Relationships
@@ -542,10 +514,10 @@ class EtoRunPipelineExecutionStepModel(BaseModel):
     error: Mapped[Optional[str]] = mapped_column(Text)
 
     created_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DATETIME2, server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
     )
 
     # Relationships

@@ -1,16 +1,35 @@
 """
 Email Configuration API Router
-No deletion - configs are permanent, only deactivated
 """
 import logging
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
+
+from api.schemas.email_configs import (
+    CreateEmailConfigRequest,
+    UpdateEmailConfigRequest,
+    ValidateEmailConfigRequest,
+
+    EmailConfig,
+    EmailConfigSummary,
+    DiscoverEmailAccountsResponse,
+    DiscoverEmailFoldersResponse,
+    ValidateEmailConfigResponse,
+    EmailAccount,
+    EmailFolder
+)
+
+from api.mappers.email_configs import (
+    email_config_summary_list_to_api,
+    email_config_to_api,
+    create_request_to_domain,
+    update_request_to_domain,
+)
 
 from shared.services.service_container import ServiceContainer
-from shared.types import EmailConfig, EmailConfigCreate, EmailConfigUpdate, ServiceStatusResponse, ServiceHealth
-from shared.exceptions import ObjectNotFoundError, ServiceError
-
+from features.email_configs.service import EmailConfigService
 from features.email_ingestion.service import EmailIngestionService
+from shared.exceptions.service import ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -20,242 +39,162 @@ router = APIRouter(
 )
 
 
-@router.post("/", response_model=EmailConfig, status_code=status.HTTP_201_CREATED)
-def create_config(
-    config: EmailConfigCreate,
+@router.get("", response_model=list[EmailConfigSummary])
+async def list_email_configs(
+    order_by: str = "name",
+    desc: bool = False,
+    config_service: EmailConfigService = Depends(
+        lambda: ServiceContainer.get_email_config_service()
+    )
+) -> list[EmailConfigSummary]:
+    """List all email configurations (summary)"""
+
+    configs = config_service.list_configs_summary(order_by=order_by, desc=desc)
+    return email_config_summary_list_to_api(configs)
+
+
+@router.get("/{id}", response_model=EmailConfig)
+async def get_email_config(
+    id: int,
+    config_service: EmailConfigService = Depends(
+        lambda: ServiceContainer.get_email_config_service()
+    )
+) -> EmailConfig:
+    """Get email configuration details"""
+
+    config = config_service.get_config(id)
+
+    return email_config_to_api(config)
+
+
+@router.post("", response_model=EmailConfig, status_code=status.HTTP_201_CREATED)
+async def create_email_config(
+    request: CreateEmailConfigRequest,
+    config_service: EmailConfigService = Depends(
+        lambda: ServiceContainer.get_email_config_service()
+    )
+) -> EmailConfig:
+    """Create new email configuration"""
+    config_create = create_request_to_domain(request)
+    config = config_service.create_config(config_create)
+    return email_config_to_api(config)
+
+@router.put("/{id}", response_model=EmailConfig)
+async def update_email_config(
+    id: int,
+    request: UpdateEmailConfigRequest,
+    config_service: EmailConfigService = Depends(
+        lambda: ServiceContainer.get_email_config_service()
+    )
+) -> EmailConfig:
+    """Update email configuration"""
+    config_update = update_request_to_domain(request)
+    config = config_service.update_config(id, config_update)
+    return email_config_to_api(config)
+
+
+@router.delete("/{id}", response_model=EmailConfig)
+async def delete_email_config(
+    id: int,
+    config_service: EmailConfigService = Depends(
+        lambda: ServiceContainer.get_email_config_service()
+    )
+) -> EmailConfig:
+    """Delete email configuration (must be deactivated first)"""
+
+    return email_config_to_api(config_service.delete_config(id))
+
+
+
+@router.post("/{id}/activate", response_model=EmailConfig)
+async def activate_email_config(
+    id: int,
+    config_service: EmailConfigService = Depends(
+        lambda: ServiceContainer.get_email_config_service()
+    )
+) -> EmailConfig:
+    """Activate email configuration (starts email monitoring)"""
+    config = config_service.activate_config(id)
+    return email_config_to_api(config)
+
+
+@router.post("/{id}/deactivate", response_model=EmailConfig)
+async def deactivate_email_config(
+    id: int,
+    config_service: EmailConfigService = Depends(
+        lambda: ServiceContainer.get_email_config_service()
+    )
+) -> EmailConfig:
+    """Deactivate email configuration (stops email monitoring)"""
+
+    config = config_service.deactivate_config(id)
+
+    return email_config_to_api(config)
+
+
+@router.get("/discovery/accounts", response_model=list[EmailAccount])
+async def discover_email_accounts(
     ingestion_service: EmailIngestionService = Depends(
         lambda: ServiceContainer.get_email_ingestion_service()
     ),
-):
-    """Create a new email configuration (permanent - cannot be deleted)"""
-    try:
-        
-        # Create config (service will test connection internally)
-        created = ingestion_service.create_config(config)
-        
-        logger.info(f"Created email config {created.id}")
-        return created
-        
-    except ServiceError as e:
-        logger.error(f"Failed to create config: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-    except Exception as e:
-        logger.error(f"Unexpected error creating config: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error"
-        )
+) -> list[EmailAccount]:
+    """List available email accounts for configuration wizard Step 1"""
+    accounts = ingestion_service.discover_email_accounts()
 
-
-@router.get("/", response_model=List[EmailConfig])
-def list_configs(
-    ingestion_service: EmailIngestionService = Depends(
-        lambda: ServiceContainer.get_email_ingestion_service()
-    ),
-):
-    """List all email configurations"""
-    try:
-        configs = ingestion_service.list_configs()
-        
-        return configs
-        
-    except Exception as e:
-        logger.error(f"Failed to list configs: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error"
-        )
-
-
-@router.get("/{config_id}", response_model=EmailConfig)
-def get_config(
-    config_id: int,
-    ingestion_service: EmailIngestionService = Depends(
-        lambda: ServiceContainer.get_email_ingestion_service()
-    ),
-):
-    """Get a specific email configuration"""
-    try:
-        config = ingestion_service.get_config(config_id)
-        
-        if not config:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Configuration {config_id} not found"
+    return [
+            EmailAccount(
+                email_address=account.email_address,
+                display_name=account.display_name
             )
-        
-        return config
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to get config {config_id}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error"
-        )
+            for account in accounts
+        ]
 
-
-@router.put("/{config_id}", response_model=EmailConfig)
-def update_config(
-    config_id: int,
-    update: EmailConfigUpdate,
-    ingestion_service: EmailIngestionService = Depends(
-        lambda: ServiceContainer.get_email_ingestion_service()
-    ), 
-):
-    """Update an email configuration"""
-    try:
-        
-        logger.info(f"Update body: {update}")
-        logger.info(f"Update filter_rules: {update.filter_rules}")
-
-        # Update configuration and refresh listener if needed
-        updated = ingestion_service.update_config(config_id, update)
-        
-        logger.info(f"Updated email config {config_id}")
-        return updated
-        
-    except ObjectNotFoundError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Configuration {config_id} not found"
-        )
-    except ServiceError as e:
-        logger.error(f"Failed to update config {config_id}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-    except Exception as e:
-        logger.error(f"Unexpected error updating config {config_id}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error"
-        )
-
-
-@router.patch("/{config_id}/activate")
-def toggle_activation(
-    config_id: int,
-    activate: bool,
-    ingestion_service: EmailIngestionService = Depends(
-        lambda: ServiceContainer.get_email_ingestion_service()
-    ),
-):
-    """
-    Activate or deactivate an email configuration.
-    Deactivation deletes the cursor for a fresh start on reactivation.
-    """
-    try:
-        
-        # Toggle activation
-        if activate:
-            updated = ingestion_service.activate_config(config_id)
-            message = f"Configuration {config_id} activated"
-        else:
-            updated = ingestion_service.deactivate_config(config_id)
-            message = f"Configuration {config_id} deactivated (progress reset for fresh start)"
-        
-        logger.info(message)
-        return {
-            "message": message,
-            "config": updated
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to toggle activation for config {config_id}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error"
-        )
-
-
-
-
-@router.get("/discovery/accounts")
-def discover_email_accounts(
-    ingestion_service: EmailIngestionService = Depends(
-        lambda: ServiceContainer.get_email_ingestion_service()
-    ),
-):
-    """Discover all email accounts available in Outlook"""
-    try:
-        accounts = ingestion_service.discover_email_accounts()
-        
-        return accounts
-        
-    except Exception as e:
-        logger.error(f"Failed to discover email accounts: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error"
-        )
-
-
-@router.get("/discovery/folders")
-def discover_folders(
+@router.get("/discovery/folders", response_model=list[EmailFolder])
+async def discover_email_folders(
     email_address: str,
     ingestion_service: EmailIngestionService = Depends(
         lambda: ServiceContainer.get_email_ingestion_service()
-    ),
-):
-    """Discover all folders for a specific email account"""
-    try:
-        folders = ingestion_service.discover_folders(email_address)
-        
-        return folders
-        
-    except ValueError as e:
-        logger.error(f"Invalid request: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+    )
+) -> list[EmailFolder]:
+    """List available folders for selected email account (wizard Step 2)"""
+
+    folders = ingestion_service.discover_folders(
+        email_address=email_address,
+        provider_type='outlook_com'
+    )
+
+    return [
+        EmailFolder(
+            folder_name=folder.name,
+            folder_path=folder.full_path
         )
-    except Exception as e:
-        logger.error(f"Failed to discover folders for {email_address}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error"
-        )
+        for folder in folders
+    ]
 
 
-@router.get("/status", response_model=ServiceStatusResponse)
-def get_email_configs_status(
+
+@router.post("/validate", response_model=ValidateEmailConfigResponse)
+async def validate_email_config(
+    request: ValidateEmailConfigRequest,
     ingestion_service: EmailIngestionService = Depends(
         lambda: ServiceContainer.get_email_ingestion_service()
-    ),
-) -> ServiceStatusResponse:
-    """
-    Get email configurations service status
+    )
+) -> ValidateEmailConfigResponse:
+    """Validate email configuration before creation (wizard Step 4)"""
 
-    Returns health status of the email ingestion service including database connectivity
-    """
-    try:
-        if not ingestion_service:
-            return ServiceStatusResponse(
-                service="email_configs",
-                status=ServiceHealth.DOWN,
-                message="Email ingestion service is not available"
-            )
+    # Test connection to email account and folder
+    result = ingestion_service.test_connection(
+        email_address=request.email_address,
+        folder_name=request.folder_name,
+        provider_type="outlook_com"
+    )
 
-        is_healthy = ingestion_service.is_healthy()
-
-        return ServiceStatusResponse(
-            service="email_configs",
-            status=ServiceHealth.UP if is_healthy else ServiceHealth.DOWN,
-            message="Service is operational" if is_healthy else "Service is not operational"
+    if result.success:
+        return ValidateEmailConfigResponse(
+            email_address=request.email_address,
+            folder_name=request.folder_name,
+            message="Configuration is valid"
         )
-
-    except Exception as e:
-        logger.error(f"Error checking email configs service status: {e}")
-        return ServiceStatusResponse(
-            service="email_configs",
-            status=ServiceHealth.DOWN,
-            message=f"Service health check failed: {str(e)}"
-        )
+    else:
+        # Connection test failed - return 400
+        raise ValidationError("Cannot connect to email account")

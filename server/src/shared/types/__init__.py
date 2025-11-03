@@ -1,85 +1,38 @@
-"""Shared Pydantic models for domain objects"""
+"""Shared domain types (dataclasses) for internal service/repository layer"""
 
-from .db.email_config import (
-    EmailFilterRule,
+# Email configuration types
+from shared.types.email_configs import (
+    FilterRule,
+    EmailConfig,
+    EmailConfigSummary,
     EmailConfigCreate,
     EmailConfigUpdate,
-    EmailConfig,
-    EmailConfigSummary
 )
 
-from .db.email import (
+# Email types
+from shared.types.email import (
     Email,
     EmailCreate,
-    EmailSummary,
 )
 
-from .db.eto_run import (
-    EtoRunCreate,
-    EtoRun,
-    EtoEmailInfo,
-    EtoRunSummary,
-    EtoRunWithPdfData,
-    EtoRunStatusUpdate,
-    EtoRunTemplateMatchUpdate,
-    EtoRunDataExtractionUpdate,
-    EtoRunTransformationUpdate,
-    EtoRunOrderUpdate,
-    EtoRunResetResult,
+# Email integration types (transient dataclasses from integrations)
+from shared.types.email_integrations import (
+    EmailAccount,
+    EmailFolder,
+    EmailMessage,
+    ConnectionTestResult,
 )
 
-from .db.module_catalog import (
-    ModuleCatalog,
-    ModuleCatalogCreate,
-    ModuleCatalogUpdate,
-)
-
-from .db.pdf_file import (
+# PDF files types
+from shared.types.pdf_files import (
     PdfFile,
     PdfFileCreate,
-    PdfDetailData,
 )
 
-from .db.pdf_template_version import (
-    PdfTemplateVersion,
-    PdfTemplateVersionCreate,
-)
-
-from .db.pdf_template import (
-    PdfTemplate,
-    PdfTemplateCreate,
-    PdfTemplateUpdate,
-)
-
-from .db.pipeline_definition_step import (
-    PipelineDefinitionStep,
-    PipelineDefinitionStepCreate,
-)
-
-from .db.pipeline_definition import (
-    PipelineDefinition,
-    PipelineDefinitionCreate,
-    PipelineDefinitionSummary,
-)
-
-
-
-from .email_integration import (
-    EmailProvider,
-    EmailMessage,
-    EmailAttachment,
-    EmailFolder,
-    EmailAccount,
-    EmailSearchCriteria,
-    EmailIntegrationConfig,
-    OutlookComConfig,
-    GmailApiConfig,
-    ImapConfig,
-    ConnectionTestResult,
-    ProviderInfo,
-)
-
-from .modules import (
+# Module types
+from shared.types.modules import (
+    AllowedNodeType,
+    ModuleKind,
     NodeTypeRule,
     NodeGroup,
     IOSideShape,
@@ -90,185 +43,64 @@ from .modules import (
     ActionModule,
     LogicModule,
     ComparatorModule,
+    Module,
+    ModuleCreate,
+    ModuleUpdate
 )
 
-from .pdfs import (
-    BasePdfObject,
-    TextWordPdfObject,
-    TextLinePdfObject,
-    GraphicRectPdfObject,
-    GraphicLinePdfObject,
-    GraphicCurvePdfObject,
-    ImagePdfObject,
-    TablePdfObject,
-    PdfObjects,
-    ExtractionField,
-    PdfTemplateMatchResult
-)
-
-from .pipeline_execution import (
-    PipelineExecutionError,
-    PipelineExecutionRunResult,
-)
-
-from .pipelines import (
-    InstanceNodePin,
-    ModuleInstance,
-    NodeConnection,
-    EntryPoint,
-    PipelineState,
-    ModulePosition,
-    VisualState,
-)
-
-from .pipeline_validation import (
-    PipelineValidationErrorCode,
-    PipelineValidationError,
-    PipelineValidationResult,
-    PinInfo,
-    PipelineIndices,
-)
-
-from .services import (
-    ServiceHealth,
-    ServiceStatusResponse
+# Pipeline execution types
+from shared.types.pipeline_execution import (
+    PipelineExecutionRun,
+    PipelineExecutionRunCreate,
+    PipelineExecutionStep,
+    PipelineExecutionStepCreate,
+    # Simulation types
+    PipelineExecutionStepResult,
+    ActionExecutionData,
+    PipelineExecutionResult,
 )
 
 __all__ = [
-    # === DB TYPES ===
-    
-    # Email Config
-    'EmailFilterRule',
-    'EmailConfigCreate',
-    'EmailConfigUpdate',
-    'EmailConfig',
-    'EmailConfigSummary',
-    
+    # Email configuration
+    "FilterRule",
+    "EmailConfig",
+    "EmailConfigSummary",
+    "EmailConfigCreate",
+    "EmailConfigUpdate",
     # Email
-    'Email',
-    'EmailCreate',
-    'EmailSummary',
-    
-    # Eto Run
-    'EtoRunCreate',
-    'EtoDataExtractionResult',
-    'EtoTransformationResult',
-    'EtoRun',
-    'EtoEmailInfo',
-    'EtoRunSummary',
-    'EtoRunWithPdfData',
-    'EtoRunStatusUpdate',
-    'EtoRunTemplateMatchUpdate',
-    'EtoRunDataExtractionUpdate',
-    'EtoRunTransformationUpdate',
-    'EtoRunOrderUpdate',
-    'EtoRunResetResult',
-    
-    # PDF File
-    'PdfFile',
-    'PdfFileCreate',
-    'PdfDetailData',
-    
-    # PDF Template Version
-    'PdfTemplateVersionCreate',
-    'PdfTemplateVersion',
-    
-    # PDF Template
-    'PdfTemplate',
-    'PdfTemplateCreate',
-    'PdfTemplateUpdate',
-    
-    # Module Catalog
-    'ModuleCatalogCreate',
-    'ModuleCatalogUpdate',
-    'ModuleCatalog',
-
-    # Pipeline Definition Steps
-    'PipelineDefinitionStepCreate',
-    'PipelineDefinitionStep',
-
-    # Pipeline Definitions
-    'PipelineDefinitionCreate',
-    'PipelineDefinition',
-    'PipelineDefinitionSummary',
-
-    # Pipeline Execution Runs
-    'PipelineExecutionRunCreate',
-    'PipelineExecutionRun',
-
-    # Pipeline Execution Steps
-    'PipelineExecutionStepCreate',
-    'PipelineExecutionStep',
-
-    # === GENERAL DOMAIN TYPES ===
-    
-    # Email Integration
-    'EmailProvider',
-    'EmailMessage',
-    'EmailAttachment',
-    'EmailFolder',
-    'EmailAccount',
-    'EmailSearchCriteria',
-    'EmailIntegrationConfig',
-    'OutlookComConfig',
-    'GmailApiConfig',
-    'ImapConfig',
-    'ConnectionTestResult',
-    'ProviderInfo',
-    
-    # Enums
-    'AllowedModuleNodeTypes',
-    'ModuleKind',
-    'EtoRunStatus',
-    'EtoProcessingStep',
-    'EtoErrorType',
-    
-    # Modules
-    'NodeTypeRule',
-    'NodeGroup',
-    'IOSideShape',
-    'IOShape',
-    'ModuleExecutionContext',
-    'ModuleMeta',
-    'BaseModule',
-    'TransformModule',
-    'ActionModule',
-    'LogicModule',
-    'ComparatorModule',
-
-    # PDF Processing
-    'BasePdfObject',
-    'TextWordPdfObject',
-    'TextLinePdfObject',
-    'GraphicRectPdfObject',
-    'GraphicLinePdfObject',
-    'GraphicCurvePdfObject',
-    'ImagePdfObject',
-    'TablePdfObject',
-    'PdfObjects',
-    'ExtractionField',
-    'PdfTemplateMatchResult',
-
-    # Pipeline Execution
-    'PipelineExecutionError',
-    'PipelineExecutionRunResult',
-
-    # Pipeline State
-    'InstanceNodePin',
-    'ModuleInstance',
-    'NodeConnection',
-    'EntryPoint',
-    'PipelineState',
-    'ModulePosition',
-    'VisualState',
-
-    # Pipeline Validation
-    'PipelineValidationErrorCode',
-    'PipelineValidationError',
-    'PipelineValidationResult',
-    'PinInfo',
-    'PipelineIndices',
-    
-    'ServiceHealth',
-    'ServiceStatusResponse'
+    "Email",
+    "EmailCreate",
+    # Email integrations
+    "EmailAccount",
+    "EmailFolder",
+    "EmailMessage",
+    "ConnectionTestResult",
+    # PDF files
+    "PdfFile",
+    "PdfFileCreate",
+    # Module types
+    "AllowedNodeType",
+    "ModuleKind",
+    "NodeTypeRule",
+    "NodeGroup",
+    "IOSideShape",
+    "IOShape",
+    "ModuleMeta",
+    "BaseModule",
+    "TransformModule",
+    "ActionModule",
+    "LogicModule",
+    "ComparatorModule",
+    "Module",
+    "ModuleCreate",
+    "ModuleUpdate",
+    # Pipeline execution
+    "PipelineExecutionRun",
+    "PipelineExecutionRunCreate",
+    "PipelineExecutionStep",
+    "PipelineExecutionStepCreate",
+    # Simulation
+    "PipelineExecutionStepResult",
+    "ActionExecutionData",
+    "PipelineExecutionResult",
 ]
