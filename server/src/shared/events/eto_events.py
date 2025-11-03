@@ -5,7 +5,7 @@ Manages Server-Sent Events (SSE) for real-time ETO run updates
 import asyncio
 import json
 import logging
-from typing import Dict, Any, Set
+from typing import Dict, Any, Set, Optional
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -39,7 +39,7 @@ class EtoEventManager:
 
         self._clients: Set[asyncio.Queue] = set()
         self._shutdown_flag = False
-        self._shutdown_event = asyncio.Event()
+        self._shutdown_event: Optional[asyncio.Event] = None
         self._initialized = True
         logger.info("EtoEventManager initialized")
 
@@ -132,7 +132,9 @@ class EtoEventManager:
         return self._shutdown_flag
 
     def get_shutdown_event(self) -> asyncio.Event:
-        """Get the shutdown event for awaiting"""
+        """Get the shutdown event for awaiting (lazy initialized)"""
+        if self._shutdown_event is None:
+            self._shutdown_event = asyncio.Event()
         return self._shutdown_event
 
     async def shutdown(self) -> None:
@@ -144,7 +146,8 @@ class EtoEventManager:
         """
         logger.info(f"Initiating graceful SSE shutdown for {len(self._clients)} clients")
         self._shutdown_flag = True
-        self._shutdown_event.set()  # Wake up all waiting event generators
+        if self._shutdown_event:
+            self._shutdown_event.set()  # Wake up all waiting event generators
 
         # Send shutdown event to all clients
         shutdown_event = {

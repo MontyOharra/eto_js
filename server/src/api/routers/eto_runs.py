@@ -142,13 +142,16 @@ async def eto_run_events_stream(request: Request):
                         return_when=asyncio.FIRST_COMPLETED
                     )
 
-                    # Cancel pending tasks
+                    # Cancel and cleanup pending tasks
                     for task in pending:
-                        task.cancel()
-                        try:
-                            await task
-                        except asyncio.CancelledError:
-                            pass
+                        if not task.done():
+                            task.cancel()
+                            try:
+                                await task
+                            except asyncio.CancelledError:
+                                pass
+                            except Exception:
+                                pass  # Ignore other exceptions during cleanup
 
                     # Check if shutdown was signaled
                     if shutdown_task in done:
