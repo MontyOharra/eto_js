@@ -914,11 +914,18 @@ class PdfTemplateService:
             extraction_fields: List of extraction field domain objects
 
         Returns:
-            Dict mapping field names to extracted text
+            Dict mapping field names to extracted text (for pipeline execution)
         """
         from features.eto_runs.utils.extraction import extract_data_from_pdf_objects
 
-        return extract_data_from_pdf_objects(
+        # Get full extraction results with bbox data
+        extraction_results = extract_data_from_pdf_objects(
             pdf_objects=pdf_objects,
             extraction_fields=extraction_fields
         )
+
+        # Convert to dict format for pipeline execution
+        return {
+            result["name"]: result["extracted_value"]
+            for result in extraction_results
+        }
