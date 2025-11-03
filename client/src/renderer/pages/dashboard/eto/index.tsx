@@ -12,7 +12,7 @@ import {
 import { EtoRunsTable, RunDetailModal } from '../../../features/eto/components';
 import { EtoRunListItem, EtoRunStatus } from '../../../features/eto/types';
 import { TemplateBuilderModal } from '../../../features/templates/components';
-import { useCreateTemplate } from '../../../features/templates';
+import { useCreateTemplate, useActivateTemplate } from '../../../features/templates';
 
 export const Route = createFileRoute('/dashboard/eto/')({
   component: EtoPage,
@@ -29,6 +29,7 @@ function EtoPage() {
   const skipMutation = useSkipRuns();
   const deleteMutation = useDeleteRuns();
   const createTemplate = useCreateTemplate();
+  const activateTemplate = useActivateTemplate();
 
   // State for run detail modal
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
@@ -154,7 +155,7 @@ function EtoPage() {
 
     try {
       // Call API to save template
-      await createTemplate.mutateAsync({
+      const createdTemplate = await createTemplate.mutateAsync({
         name: templateData.name,
         description: templateData.description,
         source_pdf_id: templateData.source_pdf_id!,
@@ -164,14 +165,18 @@ function EtoPage() {
         visual_state: templateData.visual_state,
       } as any);
 
-      console.log('Template created successfully');
+      console.log('Template created successfully:', createdTemplate.id);
+
+      // Automatically activate the template
+      await activateTemplate.mutateAsync(createdTemplate.id);
+      console.log('Template activated successfully');
 
       // Close modal
       setTemplateBuilderPdfId(null);
 
       // TanStack Query will auto-refetch when mutations complete
     } catch (err) {
-      console.error('Failed to create template:', err);
+      console.error('Failed to create/activate template:', err);
       // Re-throw to let modal handle error display
       throw err;
     }
