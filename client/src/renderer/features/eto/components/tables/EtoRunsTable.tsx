@@ -14,13 +14,17 @@ interface EtoRunsTableProps {
   title: string;
   status: EtoRunStatus;
   runs: EtoRunListItem[];
-  // Status-specific callbacks
+  // Status-specific callbacks (single run)
   onView?: (runId: number) => void;
   onReview?: (runId: number) => void;
   onSkip?: (runId: number) => void;
   onBuildTemplate?: (runId: number) => void;
   onReprocess?: (runId: number) => void;
   onDelete?: (runId: number) => void;
+  // Bulk action callbacks
+  onBulkSkip?: (runIds: number[]) => void;
+  onBulkReprocess?: (runIds: number[]) => void;
+  onBulkDelete?: (runIds: number[]) => void;
 }
 
 export function EtoRunsTable({
@@ -33,6 +37,9 @@ export function EtoRunsTable({
   onBuildTemplate,
   onReprocess,
   onDelete,
+  onBulkSkip,
+  onBulkReprocess,
+  onBulkDelete,
 }: EtoRunsTableProps) {
   const [isExpanded, setIsExpanded] = useState(runs.length > 0);
   const [selectedRunIds, setSelectedRunIds] = useState<Set<number>>(new Set());
@@ -59,6 +66,28 @@ export function EtoRunsTable({
       newSelected.add(runId);
     }
     setSelectedRunIds(newSelected);
+  };
+
+  // Bulk action handlers
+  const handleBulkSkip = () => {
+    if (onBulkSkip && selectedRunIds.size > 0) {
+      onBulkSkip(Array.from(selectedRunIds));
+      setSelectedRunIds(new Set()); // Clear selection after action
+    }
+  };
+
+  const handleBulkReprocess = () => {
+    if (onBulkReprocess && selectedRunIds.size > 0) {
+      onBulkReprocess(Array.from(selectedRunIds));
+      setSelectedRunIds(new Set()); // Clear selection after action
+    }
+  };
+
+  const handleBulkDelete = () => {
+    if (onBulkDelete && selectedRunIds.size > 0) {
+      onBulkDelete(Array.from(selectedRunIds));
+      setSelectedRunIds(new Set()); // Clear selection after action
+    }
   };
 
   const getStatusColor = (status: EtoRunStatus) => {
@@ -232,8 +261,44 @@ export function EtoRunsTable({
           </div>
         </div>
 
-        {/* Right side - Select all checkbox */}
-        <div className="flex items-center space-x-2" onClick={(e) => e.stopPropagation()}>
+        {/* Right side - Bulk action buttons and Select all checkbox */}
+        <div className="flex items-center space-x-3" onClick={(e) => e.stopPropagation()}>
+          {/* Bulk action buttons - only show when items are selected */}
+          {selectedRunIds.size > 0 && (
+            <div className="flex items-center space-x-2">
+              {/* Skip button - for needs_template and failure statuses */}
+              {onBulkSkip && (status === 'needs_template' || status === 'failure') && (
+                <button
+                  onClick={handleBulkSkip}
+                  className="px-3 py-1 text-xs bg-yellow-600 hover:bg-yellow-700 text-white rounded transition-colors"
+                >
+                  Skip ({selectedRunIds.size})
+                </button>
+              )}
+
+              {/* Reprocess button - for needs_template, failure, and skipped statuses */}
+              {onBulkReprocess && (status === 'needs_template' || status === 'failure' || status === 'skipped') && (
+                <button
+                  onClick={handleBulkReprocess}
+                  className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+                >
+                  Reprocess ({selectedRunIds.size})
+                </button>
+              )}
+
+              {/* Delete button - for skipped status */}
+              {onBulkDelete && status === 'skipped' && (
+                <button
+                  onClick={handleBulkDelete}
+                  className="px-3 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
+                >
+                  Delete ({selectedRunIds.size})
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Select all checkbox */}
           <label className="flex items-center cursor-pointer group">
             <span className="mr-2 text-sm text-gray-400 group-hover:text-gray-300">
               Select All

@@ -312,6 +312,12 @@ function EtoPage() {
           onView={handleView}
           onReview={handleReview}
           onSkip={handleSkip}
+          onBulkSkip={async (runIds) => {
+            await skipMutation.mutateAsync({ run_ids: runIds });
+          }}
+          onBulkReprocess={async (runIds) => {
+            await reprocessMutation.mutateAsync({ run_ids: runIds });
+          }}
         />
 
         {/* Needs Template Runs */}
@@ -321,6 +327,12 @@ function EtoPage() {
           runs={runsByStatus.needs_template}
           onBuildTemplate={handleBuildTemplate}
           onSkip={handleSkip}
+          onBulkSkip={async (runIds) => {
+            await skipMutation.mutateAsync({ run_ids: runIds });
+          }}
+          onBulkReprocess={async (runIds) => {
+            await reprocessMutation.mutateAsync({ run_ids: runIds });
+          }}
         />
         {/* Processing Runs */}
         <EtoRunsTable
@@ -335,6 +347,12 @@ function EtoPage() {
           runs={runsByStatus.skipped}
           onReprocess={handleReprocess}
           onDelete={handleDelete}
+          onBulkReprocess={async (runIds) => {
+            await reprocessMutation.mutateAsync({ run_ids: runIds });
+          }}
+          onBulkDelete={async (runIds) => {
+            await deleteMutation.mutateAsync({ run_ids: runIds });
+          }}
         />
         {/* Not Started Runs */}
         <EtoRunsTable
