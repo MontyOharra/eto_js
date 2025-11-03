@@ -235,6 +235,9 @@ export function EtoRunsTable({
         {/* Right side - Select all checkbox */}
         <div className="flex items-center space-x-2" onClick={(e) => e.stopPropagation()}>
           <label className="flex items-center cursor-pointer group">
+            <span className="mr-2 text-sm text-gray-400 group-hover:text-gray-300">
+              Select All
+            </span>
             <input
               type="checkbox"
               checked={allSelected}
@@ -246,9 +249,6 @@ export function EtoRunsTable({
               onChange={handleSelectAll}
               className="w-4 h-4 rounded border-2 border-gray-600 bg-gray-900 appearance-none checked:bg-blue-600 checked:border-blue-600 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800 cursor-pointer transition-colors relative checked:after:content-['✓'] checked:after:absolute checked:after:text-white checked:after:text-xs checked:after:left-[2px] checked:after:top-[-2px]"
             />
-            <span className="ml-2 text-sm text-gray-400 group-hover:text-gray-300">
-              Select All
-            </span>
           </label>
         </div>
       </div>
