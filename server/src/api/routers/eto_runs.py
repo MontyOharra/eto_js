@@ -120,23 +120,33 @@ async def eto_run_events_stream(request: Request):
 
         try:
             while True:
+                # Check if server is shutting down
+                if eto_event_manager.is_shutting_down():
+                    logger.info("SSE client disconnecting due to server shutdown")
+                    break
+
                 # Check if client disconnected
                 if await request.is_disconnected():
                     logger.info("SSE client disconnected")
                     break
 
                 try:
-                    # Wait for next event (with timeout to check disconnection)
+                    # Wait for next event (with timeout to check disconnection and shutdown)
                     event = await asyncio.wait_for(
                         client_queue.get(),
-                        timeout=30.0  # Check for disconnect every 30s
+                        timeout=5.0  # Check more frequently for shutdown (5s instead of 30s)
                     )
 
                     # Format as SSE: "data: {...}\n\n"
                     yield f"data: {json.dumps(event)}\n\n"
 
+                    # If this was a shutdown event, exit gracefully
+                    if event.get("type") == "server_shutdown":
+                        logger.info("SSE client received shutdown event")
+                        break
+
                 except asyncio.TimeoutError:
-                    # No event in 30s - send keepalive comment (prevents connection timeout)
+                    # No event in 5s - send keepalive comment (prevents connection timeout)
                     yield ": keepalive\n\n"
                     continue
 

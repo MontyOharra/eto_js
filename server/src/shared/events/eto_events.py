@@ -38,6 +38,7 @@ class EtoEventManager:
             return
 
         self._clients: Set[asyncio.Queue] = set()
+        self._shutdown_flag = False
         self._initialized = True
         logger.info("EtoEventManager initialized")
 
@@ -124,6 +125,41 @@ class EtoEventManager:
     def get_client_count(self) -> int:
         """Get number of connected SSE clients"""
         return len(self._clients)
+
+    def is_shutting_down(self) -> bool:
+        """Check if server is shutting down"""
+        return self._shutdown_flag
+
+    async def shutdown(self) -> None:
+        """
+        Gracefully shutdown all SSE connections.
+
+        Sends a shutdown event to all clients and closes their connections.
+        Called during server shutdown to allow SSE streams to complete.
+        """
+        logger.info(f"Initiating graceful SSE shutdown for {len(self._clients)} clients")
+        self._shutdown_flag = True
+
+        # Send shutdown event to all clients
+        shutdown_event = {
+            "type": "server_shutdown",
+            "data": {"message": "Server is shutting down"},
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+        for client_queue in list(self._clients):
+            try:
+                client_queue.put_nowait(shutdown_event)
+            except Exception as e:
+                logger.debug(f"Failed to send shutdown event to client: {e}")
+
+        # Give clients a moment to receive the shutdown event
+        await asyncio.sleep(0.5)
+
+        # Clear all clients (the event generators will see the shutdown flag and exit)
+        client_count = len(self._clients)
+        self._clients.clear()
+        logger.info(f"SSE shutdown complete - disconnected {client_count} clients")
 
 
 # Global singleton instance

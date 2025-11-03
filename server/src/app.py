@@ -322,6 +322,14 @@ async def cleanup_services() -> None:
     global _connection_manager
 
     try:
+        # Gracefully close all SSE connections first
+        try:
+            from shared.events.eto_events import eto_event_manager
+            await eto_event_manager.shutdown()
+            logger.info("SSE connections closed gracefully")
+        except Exception as e:
+            logger.warning(f"Failed to close SSE connections: {e}")
+
         if ServiceContainer.is_initialized():
             # Stop email ingestion service if running
             try:
