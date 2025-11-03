@@ -4,9 +4,7 @@ Dataclasses representing eto_run_extractions table and related operations
 """
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Literal, Optional
-
-from ._sentinel import UNSET, UnsetType
+from typing import Literal, Optional, TypedDict
 
 # =========================
 # ETO Run Extraction Types
@@ -22,21 +20,20 @@ class EtoRunExtractionCreate:
     eto_run_id: int
 
 
-@dataclass
-class EtoRunExtractionUpdate:
+class EtoRunExtractionUpdate(TypedDict, total=False):
     """
-    Data for updating an extraction run.
+    Dict for updating an extraction run.
     All fields are optional - only provided fields will be updated.
 
-    Uses UNSET sentinel to distinguish between:
-    - Field not provided (UNSET) - field will not be updated
-    - Field set to None (None) - field will be cleared/nulled in database
-    - Field set to value - field will be updated to that value
+    Uses dict keys to distinguish between:
+    - Field not provided (key absent) - field will not be updated
+    - Field set to None (key present, value None) - field will be cleared/nulled in database
+    - Field set to value (key present, value set) - field will be updated to that value
     """
-    status: str | UnsetType = UNSET
-    extracted_data: str | None | UnsetType = UNSET
-    started_at: datetime | None | UnsetType = UNSET
-    completed_at: datetime | None | UnsetType = UNSET
+    status: str
+    extracted_data: str | None
+    started_at: datetime | None
+    completed_at: datetime | None
 
 
 @dataclass

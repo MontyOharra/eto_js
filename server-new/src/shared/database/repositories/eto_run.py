@@ -10,7 +10,6 @@ from sqlalchemy.orm import joinedload, selectinload
 
 from shared.database.repositories.base import BaseRepository
 from shared.exceptions.service import ObjectNotFoundError
-from shared.types._sentinel import UNSET
 from shared.database.models import (
     EtoRunModel,
     PdfFileModel,
@@ -123,24 +122,29 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
 
             return self._model_to_domain(model)
 
-    def update(self, run_id: int, data: EtoRunUpdate) -> EtoRun:
+    def update(self, run_id: int, updates: EtoRunUpdate) -> EtoRun:
         """
         Update ETO run. Only updates provided fields.
 
-        Uses UNSET sentinel to distinguish between:
-        - Field not provided (UNSET) - field will not be updated
-        - Field explicitly set to None - field will be cleared in database
-        - Field set to value - field will be updated to that value
+        Uses dict keys to distinguish between:
+        - Field not provided (key absent) - field will not be updated
+        - Field explicitly set to None (key present, value None) - field will be cleared in database
+        - Field set to value (key present) - field will be updated to that value
 
         Args:
             run_id: ETO run ID
-            data: EtoRunUpdate with fields to update (all optional)
+            updates: Dict of fields to update (TypedDict with all fields optional)
 
         Returns:
             Updated EtoRun dataclass
 
         Raises:
             ObjectNotFoundError: If run with given ID does not exist
+            ValueError: If invalid field name provided
+
+        Example:
+            update(1, {"status": "success"})
+            update(1, {"processing_step": None, "error_type": None})
         """
         with self._get_session() as session:
             model = session.get(self.model_class, run_id)
@@ -148,21 +152,11 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
             if model is None:
                 raise ObjectNotFoundError(f"ETO run {run_id} not found")
 
-            # Update only provided fields (check against UNSET, not None)
-            if data.status is not UNSET:
-                model.status = data.status
-            if data.processing_step is not UNSET:
-                model.processing_step = data.processing_step
-            if data.error_type is not UNSET:
-                model.error_type = data.error_type
-            if data.error_message is not UNSET:
-                model.error_message = data.error_message
-            if data.error_details is not UNSET:
-                model.error_details = data.error_details
-            if data.started_at is not UNSET:
-                model.started_at = data.started_at
-            if data.completed_at is not UNSET:
-                model.completed_at = data.completed_at
+            # Update only provided fields (iterate over dict keys)
+            for field, value in updates.items():
+                if not hasattr(model, field):
+                    raise ValueError(f"Invalid field for ETO run update: {field}")
+                setattr(model, field, value)
 
             session.flush()  # Persist changes
 

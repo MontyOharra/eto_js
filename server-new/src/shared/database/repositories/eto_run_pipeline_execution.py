@@ -7,7 +7,6 @@ from typing import Type, Optional, List
 
 from shared.database.repositories.base import BaseRepository
 from shared.database.models import EtoRunPipelineExecutionModel
-from shared.types._sentinel import UNSET
 from shared.types.eto_run_pipeline_executions import (
     EtoRunPipelineExecution,
     EtoRunPipelineExecutionCreate,
@@ -95,21 +94,24 @@ class EtoRunPipelineExecutionRepository(BaseRepository[EtoRunPipelineExecutionMo
 
             return self._model_to_domain(model)
 
-    def update(self, execution_id: int, data: EtoRunPipelineExecutionUpdate) -> Optional[EtoRunPipelineExecution]:
+    def update(self, execution_id: int, updates: EtoRunPipelineExecutionUpdate) -> Optional[EtoRunPipelineExecution]:
         """
         Update pipeline execution. Only updates provided fields.
 
-        Uses UNSET sentinel to distinguish between:
-        - Field not provided (UNSET) - field will not be updated
-        - Field explicitly set to None - field will be cleared in database
-        - Field set to value - field will be updated to that value
+        Uses dict keys to distinguish between:
+        - Field not provided (key absent) - field will not be updated
+        - Field explicitly set to None (key present, value None) - field will be cleared in database
+        - Field set to value (key present) - field will be updated to that value
 
         Args:
             execution_id: Pipeline execution ID
-            data: EtoRunPipelineExecutionUpdate with fields to update (all optional)
+            updates: Dict of fields to update (TypedDict with all fields optional)
 
         Returns:
             Updated EtoRunPipelineExecution dataclass or None if not found
+
+        Raises:
+            ValueError: If invalid field name provided
         """
         with self._get_session() as session:
             model = session.get(self.model_class, execution_id)
@@ -117,15 +119,11 @@ class EtoRunPipelineExecutionRepository(BaseRepository[EtoRunPipelineExecutionMo
             if model is None:
                 return None
 
-            # Update only provided fields (check against UNSET, not None)
-            if data.status is not UNSET:
-                model.status = data.status
-            if data.executed_actions is not UNSET:
-                model.executed_actions = data.executed_actions
-            if data.started_at is not UNSET:
-                model.started_at = data.started_at
-            if data.completed_at is not UNSET:
-                model.completed_at = data.completed_at
+            # Update only provided fields (iterate over dict keys)
+            for field, value in updates.items():
+                if not hasattr(model, field):
+                    raise ValueError(f"Invalid field for pipeline execution update: {field}")
+                setattr(model, field, value)
 
             session.flush()  # Persist changes
 

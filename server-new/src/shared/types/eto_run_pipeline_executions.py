@@ -4,9 +4,7 @@ Dataclasses representing eto_run_pipeline_executions table and related operation
 """
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Literal, Optional
-
-from ._sentinel import UNSET, UnsetType
+from typing import Literal, Optional, TypedDict
 
 # =========================
 # ETO Run Pipeline Execution Types
@@ -22,21 +20,20 @@ class EtoRunPipelineExecutionCreate:
     started_at: Optional[datetime] = None
 
 
-@dataclass
-class EtoRunPipelineExecutionUpdate:
+class EtoRunPipelineExecutionUpdate(TypedDict, total=False):
     """
-    Data for updating a pipeline execution record.
+    Dict for updating a pipeline execution record.
     All fields are optional - only provided fields will be updated.
 
-    Uses UNSET sentinel to distinguish between:
-    - Field not provided (UNSET) - field will not be updated
-    - Field set to None (None) - field will be cleared/nulled in database
-    - Field set to value - field will be updated to that value
+    Uses dict keys to distinguish between:
+    - Field not provided (key absent) - field will not be updated
+    - Field set to None (key present, value None) - field will be cleared/nulled in database
+    - Field set to value (key present, value set) - field will be updated to that value
     """
-    status: str | UnsetType = UNSET
-    executed_actions: str | None | UnsetType = UNSET
-    started_at: datetime | None | UnsetType = UNSET
-    completed_at: datetime | None | UnsetType = UNSET
+    status: str
+    executed_actions: str | None
+    started_at: datetime | None
+    completed_at: datetime | None
 
 
 @dataclass

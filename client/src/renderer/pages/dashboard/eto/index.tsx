@@ -12,6 +12,7 @@ import {
 import { EtoRunsTable, RunDetailModal } from '../../../features/eto/components';
 import { EtoRunListItem, EtoRunStatus } from '../../../features/eto/types';
 import { TemplateBuilderModal } from '../../../features/templates/components';
+import { useCreateTemplate } from '../../../features/templates/hooks';
 
 export const Route = createFileRoute('/dashboard/eto/')({
   component: EtoPage,
@@ -27,6 +28,7 @@ function EtoPage() {
   const reprocessMutation = useReprocessRuns();
   const skipMutation = useSkipRuns();
   const deleteMutation = useDeleteRuns();
+  const createTemplate = useCreateTemplate();
 
   // State for run detail modal
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
@@ -149,13 +151,30 @@ function EtoPage() {
 
   const handleSaveTemplate = async (templateData: any) => {
     console.log('Saving template:', templateData);
-    // TODO: Call API to save template
-    // await createTemplate(templateData);
 
-    // Close modal
-    setTemplateBuilderPdfId(null);
+    try {
+      // Call API to save template
+      await createTemplate.mutateAsync({
+        name: templateData.name,
+        description: templateData.description,
+        source_pdf_id: templateData.source_pdf_id!,
+        signature_objects: templateData.signature_objects,
+        extraction_fields: templateData.extraction_fields,
+        pipeline_state: templateData.pipeline_state,
+        visual_state: templateData.visual_state,
+      } as any);
 
-    // TanStack Query will auto-refetch when mutations complete
+      console.log('Template created successfully');
+
+      // Close modal
+      setTemplateBuilderPdfId(null);
+
+      // TanStack Query will auto-refetch when mutations complete
+    } catch (err) {
+      console.error('Failed to create template:', err);
+      // Re-throw to let modal handle error display
+      throw err;
+    }
   };
 
   const handleManualUpload = () => {
@@ -320,6 +339,7 @@ function EtoPage() {
       {/* Template Builder Modal */}
       <TemplateBuilderModal
         isOpen={templateBuilderPdfId !== null}
+        mode="create"
         pdfFileId={templateBuilderPdfId}
         pdfFile={null}
         onClose={() => setTemplateBuilderPdfId(null)}

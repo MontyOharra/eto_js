@@ -4,9 +4,7 @@ Dataclasses representing eto_run_template_matchings table and related operations
 """
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Literal, Optional
-
-from ._sentinel import UNSET, UnsetType
+from typing import Literal, Optional, TypedDict
 
 # =========================
 # Template Matching Types
@@ -21,21 +19,20 @@ class EtoRunTemplateMatchingCreate:
     eto_run_id: int
 
 
-@dataclass
-class EtoRunTemplateMatchingUpdate:
+class EtoRunTemplateMatchingUpdate(TypedDict, total=False):
     """
-    Data for updating a template matching record.
+    Dict for updating a template matching record.
     All fields are optional - only provided fields will be updated.
 
-    Uses UNSET sentinel to distinguish between:
-    - Field not provided (UNSET) - field will not be updated
-    - Field set to None (None) - field will be cleared/nulled in database
-    - Field set to value - field will be updated to that value
+    Uses dict keys to distinguish between:
+    - Field not provided (key absent) - field will not be updated
+    - Field set to None (key present, value None) - field will be cleared/nulled in database
+    - Field set to value (key present, value set) - field will be updated to that value
     """
-    status: str | UnsetType = UNSET
-    matched_template_version_id: int | None | UnsetType = UNSET
-    started_at: datetime | None | UnsetType = UNSET
-    completed_at: datetime | None | UnsetType = UNSET
+    status: str
+    matched_template_version_id: int | None
+    started_at: datetime | None
+    completed_at: datetime | None
 
 
 @dataclass

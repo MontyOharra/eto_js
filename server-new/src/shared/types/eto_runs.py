@@ -4,9 +4,7 @@ Dataclasses representing eto_runs table and related operations
 """
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Literal, Optional, Dict, Any
-
-from ._sentinel import UNSET, UnsetType
+from typing import Literal, Optional, Dict, Any, TypedDict
 
 # =========================
 # Type Aliases for Enums
@@ -25,29 +23,28 @@ class EtoRunCreate:
     pdf_file_id: int
 
 
-@dataclass
-class EtoRunUpdate:
+class EtoRunUpdate(TypedDict, total=False):
     """
-    Data for updating an ETO run.
+    Dict for updating an ETO run.
     All fields are optional - only provided fields will be updated.
 
-    Uses UNSET sentinel to distinguish between:
-    - Field not provided (UNSET) - field will not be updated
-    - Field set to None (None) - field will be cleared/nulled in database
-    - Field set to value - field will be updated to that value
+    Uses dict keys to distinguish between:
+    - Field not provided (key absent) - field will not be updated
+    - Field set to None (key present, value None) - field will be cleared/nulled in database
+    - Field set to value (key present, value set) - field will be updated to that value
 
     Example:
-        EtoRunUpdate(status="success")  # Only update status
-        EtoRunUpdate(processing_step=None)  # Clear processing_step
-        EtoRunUpdate(status="failure", error_type="ValidationError")  # Update multiple
+        {"status": "success"}  # Only update status
+        {"processing_step": None}  # Clear processing_step
+        {"status": "failure", "error_type": "ValidationError"}  # Update multiple
     """
-    status: str | UnsetType = UNSET
-    processing_step: str | None | UnsetType = UNSET
-    error_type: str | None | UnsetType = UNSET
-    error_message: str | None | UnsetType = UNSET
-    error_details: str | None | UnsetType = UNSET
-    started_at: datetime | None | UnsetType = UNSET
-    completed_at: datetime | None | UnsetType = UNSET
+    status: str
+    processing_step: str | None
+    error_type: str | None
+    error_message: str | None
+    error_details: str | None
+    started_at: datetime | None
+    completed_at: datetime | None
 
 
 @dataclass

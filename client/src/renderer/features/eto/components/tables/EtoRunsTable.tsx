@@ -55,6 +55,8 @@ export function EtoRunsTable({
     }
   };
 
+  const statusDisplayTest = 
+
   const renderRow = (run: EtoRunListItem) => {
     switch (status) {
       case 'not_started':

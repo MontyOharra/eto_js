@@ -6,11 +6,10 @@ Core extraction logic shared between:
 - Template simulation (via PdfTemplateService.simulate)
 """
 import logging
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from features.pdf_files.service import PdfFilesService
-    from shared.types.pdf_templates import ExtractionField
+from features.pdf_files.service import PdfFilesService
+from shared.types.pdf_templates import ExtractionField
+from shared.types.pdf_files import PdfObjects
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +68,7 @@ def extract_data_from_pdf(
 
 
 def extract_data_from_pdf_objects(
-    pdf_objects,
+    pdf_objects: PdfObjects,
     extraction_fields: list['ExtractionField']
 ) -> dict[str, str]:
     """
