@@ -5,12 +5,17 @@
  */
 
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { PdfViewer, usePdfViewer } from '../../../pdf';
 import { useEtoRunDetail, getPdfDownloadUrl } from '../../hooks';
 import { StatusBadge } from '../ui/StatusBadge';
 import { ExtractedFieldsOverlay } from '../overlays/ExtractedFieldsOverlay';
-import { ExecutedPipelineViewer, ExecutedPipelineViewerRef } from '../../../pipelines/components/ExecutedPipelineViewer';
+import { ExecutedPipelineGraph, ExecutedPipelineGraphRef } from '../../../pipelines/components/ExecutedPipelineGraph';
+import { useModules } from '../../../modules/hooks';
+import { apiClient } from '../../../shared/api/client';
+import { API_CONFIG } from '../../../shared/api/config';
 import type { EtoRunDetail } from '../../types';
+import type { PipelineState, VisualState } from '../../../pipelines/types';
 
 interface RunDetailModalProps {
   isOpen: boolean;
@@ -84,9 +89,36 @@ export function RunDetailModal({ isOpen, runId, onClose }: RunDetailModalProps) 
   const [specificsWidth, setSpecificsWidth] = useState(60); // Percentage
   const [isDragging, setIsDragging] = useState(false);
   const pdfContainerRef = useRef<HTMLDivElement>(null);
-  const pipelineViewerRef = useRef<ExecutedPipelineViewerRef>(null);
+  const pipelineViewerRef = useRef<ExecutedPipelineGraphRef>(null);
 
   const error = queryError ? 'Failed to load run details' : null;
+
+  // Fetch module templates using TanStack Query
+  const { data: moduleTemplates = [] } = useModules();
+
+  // Fetch pipeline definition when pipeline_definition_id is available
+  const pipelineDefinitionId = runDetail?.stage_pipeline_execution?.pipeline_definition_id;
+  const { data: pipelineDefinition } = useQuery({
+    queryKey: ['pipeline', pipelineDefinitionId],
+    queryFn: async () => {
+      if (!pipelineDefinitionId) return null;
+
+      const response = await apiClient.get<any>(
+        `${API_CONFIG.ENDPOINTS.PIPELINES}/${pipelineDefinitionId}`
+      );
+      const data = response.data;
+
+      // Transform backend snake_case to frontend camelCase
+      if (data.visual_state?.entry_points) {
+        data.visual_state.entryPoints = data.visual_state.entry_points;
+        delete data.visual_state.entry_points;
+      }
+
+      return data;
+    },
+    enabled: !!pipelineDefinitionId && isOpen,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
 
   // Transform extraction results for overlay display
   const extractedFieldsForOverlay = useMemo(() => {
@@ -101,7 +133,7 @@ export function RunDetailModal({ isOpen, runId, onClose }: RunDetailModalProps) 
     }));
   }, [runDetail?.stage_data_extraction?.extraction_results]);
 
-  // Convert extraction results to key-value dict for pipeline viewer
+  // Convert extraction results to key-value dict (for backward compatibility)
   const extractedData = useMemo(() => {
     if (!runDetail?.stage_data_extraction?.extraction_results) return undefined;
 
@@ -110,6 +142,72 @@ export function RunDetailModal({ isOpen, runId, onClose }: RunDetailModalProps) 
       return acc;
     }, {} as Record<string, string>);
   }, [runDetail?.stage_data_extraction?.extraction_results]);
+
+  // Process execution steps into executionValues Map and failedModuleIds array
+  const [executionValues, failedModuleIds] = useMemo(() => {
+    const executionValuesMap = new Map<string, { value: any; type: string; name: string }>();
+    const failedModules: string[] = [];
+
+    if (runDetail?.stage_pipeline_execution?.steps) {
+      runDetail.stage_pipeline_execution.steps.forEach(step => {
+        // Collect all input node IDs and values
+        if (step.inputs) {
+          Object.entries(step.inputs).forEach(([nodeId, data]) => {
+            executionValuesMap.set(nodeId, {
+              value: data.value,
+              type: data.type,
+              name: data.name,
+            });
+          });
+        }
+
+        // Collect all output node IDs and values
+        if (step.outputs) {
+          Object.entries(step.outputs).forEach(([nodeId, data]) => {
+            executionValuesMap.set(nodeId, {
+              value: data.value,
+              type: data.type,
+              name: data.name,
+            });
+          });
+        }
+
+        // Track failed modules
+        if (step.error) {
+          failedModules.push(step.module_instance_id);
+        }
+      });
+    }
+
+    // Add entry point values from extracted data
+    // Entry points use node_id format: entry_${field_name}
+    if (runDetail?.stage_data_extraction?.extraction_results) {
+      runDetail.stage_data_extraction.extraction_results.forEach(result => {
+        const entryNodeId = `entry_${result.name}`;
+        const fieldValue = result.extracted_value;
+
+        if (fieldValue !== undefined) {
+          // Determine type from the value
+          let valueType = typeof fieldValue;
+          if (valueType === 'object' && fieldValue instanceof Date) {
+            valueType = 'datetime';
+          } else if (valueType === 'number') {
+            valueType = Number.isInteger(fieldValue) ? 'int' : 'float';
+          } else if (valueType === 'string') {
+            valueType = 'str';
+          }
+
+          executionValuesMap.set(entryNodeId, {
+            value: fieldValue,
+            type: valueType,
+            name: result.name,
+          });
+        }
+      });
+    }
+
+    return [executionValuesMap, failedModules] as const;
+  }, [runDetail?.stage_pipeline_execution?.steps, runDetail?.stage_data_extraction?.extraction_results]);
 
   // Reset to summary view when modal opens
   useEffect(() => {
@@ -374,21 +472,19 @@ export function RunDetailModal({ isOpen, runId, onClose }: RunDetailModalProps) 
                     <div
                       className={`absolute inset-0 ${viewMode === 'detail' ? '' : 'hidden'}`}
                     >
-                      {runDetail.stage_pipeline_execution?.pipeline_definition_id &&
-                       runDetail.stage_pipeline_execution?.steps ? (
-                        <ExecutedPipelineViewer
+                      {pipelineDefinition && moduleTemplates.length > 0 ? (
+                        <ExecutedPipelineGraph
                           ref={pipelineViewerRef}
-                          pipelineDefinitionId={runDetail.stage_pipeline_execution.pipeline_definition_id}
-                          executionData={{
-                            steps: runDetail.stage_pipeline_execution.steps,
-                            executed_actions: runDetail.stage_pipeline_execution.executed_actions || undefined,
-                          }}
-                          extractedData={extractedData}
+                          moduleTemplates={moduleTemplates}
+                          pipelineState={pipelineDefinition.pipeline_state}
+                          visualState={pipelineDefinition.visual_state}
+                          failedModuleIds={failedModuleIds}
+                          executionValues={executionValues}
                         />
                       ) : (
                         <div className="flex items-center justify-center h-full">
                           <p className="text-gray-400 text-sm">
-                            {runDetail.stage_pipeline_execution?.executed_actions ? (
+                            {runDetail?.stage_pipeline_execution?.executed_actions ? (
                               <>
                                 <span className="block mb-2">Detailed pipeline visualization not available</span>
                                 <span className="block text-xs text-gray-500">See Summary view for executed actions</span>
