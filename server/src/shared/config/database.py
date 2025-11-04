@@ -19,6 +19,7 @@ class DatabaseConnectionConfig:
     """Configuration for a single database connection"""
     name: str
     connection_string: str
+    connection_type: str = "sqlalchemy"  # "sqlalchemy" or "access"
     description: Optional[str] = None
 
     @classmethod
@@ -31,6 +32,10 @@ class DatabaseConnectionConfig:
     ) -> Optional['DatabaseConnectionConfig']:
         """
         Create database connection config from environment variable.
+
+        Automatically detects connection type based on connection string format:
+        - Starts with "Driver=" → Access database (pyodbc)
+        - Otherwise → SQLAlchemy-compatible (SQL Server, PostgreSQL, etc.)
 
         Args:
             name: Logical name for this connection (e.g., "orders_db", "main")
@@ -56,11 +61,15 @@ class DatabaseConnectionConfig:
                 logger.info(f"Optional database connection '{name}' not configured (no {env_var_name})")
                 return None
 
-        logger.info(f"Configured database connection: {name}")
+        # Auto-detect connection type based on connection string format
+        connection_type = "access" if connection_string.strip().startswith("Driver=") else "sqlalchemy"
+
+        logger.info(f"Configured database connection: {name} (type: {connection_type})")
 
         return cls(
             name=name,
             connection_string=connection_string,
+            connection_type=connection_type,
             description=description
         )
 
@@ -75,7 +84,7 @@ class DatabaseConfig:
     - orders_db: Legacy HTC orders database for CreateOrder action (optional)
     """
     main: DatabaseConnectionConfig
-    orders_db: Optional[DatabaseConnectionConfig] = None
+    orders_db: DatabaseConnectionConfig
 
     def get_connection(self, name: str) -> DatabaseConnectionConfig:
         """
@@ -128,14 +137,19 @@ class DatabaseConfig:
             description="Primary application database",
             required=True
         )
+        if not main:
+            raise ValueError("DATABASE_URL environment variable not set")
 
         # Orders database (optional)
         orders_db = DatabaseConnectionConfig.from_environment(
-            name="orders_db",
-            env_var_name="ORDERS_DB_CONNECTION_STRING",
+            name="htc_db",
+            env_var_name="HTC_DB_CONNECTION_STRING",
             description="Legacy HTC orders database",
             required=False
         )
+        
+        if not orders_db:
+            raise ValueError("HTC_DB_CONNECTION_STRING environment variable not set")
 
         return cls(
             main=main,

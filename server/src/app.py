@@ -20,6 +20,7 @@ import uvicorn
 
 from shared.database import init_database_connection
 from shared.database.connection import DatabaseConnectionManager
+from shared.database.access_connection import AccessConnectionManager
 from shared.services.service_container import ServiceContainer
 from shared.config.storage import get_storage_configuration
 from shared.config.database import DatabaseConfig
@@ -221,10 +222,20 @@ async def initialize_database_connection() -> None:
         _connection_managers = {}
 
         for conn_name, conn_config in db_config.get_all_connections().items():
-            logger.debug(f"Initializing '{conn_name}' database connection...")
-            manager = init_database_connection(conn_config.connection_string)
+            logger.debug(f"Initializing '{conn_name}' database connection (type: {conn_config.connection_type})...")
+
+            # Create appropriate connection manager based on type
+            if conn_config.connection_type == "access":
+                # Use Access-specific connection manager
+                manager = AccessConnectionManager(conn_config.connection_string)
+                manager.initialize_connection()
+                logger.info(f"Access database connection '{conn_name}' established and verified")
+            else:
+                # Use SQLAlchemy-based connection manager (default)
+                manager = init_database_connection(conn_config.connection_string)
+                logger.info(f"Database connection '{conn_name}' established and verified")
+
             _connection_managers[conn_name] = manager
-            logger.info(f"Database connection '{conn_name}' established and verified")
 
         # Set primary connection manager for backward compatibility
         _connection_manager = _connection_managers.get('main')

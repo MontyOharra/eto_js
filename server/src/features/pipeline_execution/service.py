@@ -624,6 +624,48 @@ class PipelineExecutionService:
 
         return entry_name_to_ids
 
+    def _generate_mock_outputs(self, output_nodes: List[NodeInstance]) -> Dict[str, Any]:
+        """
+        Generate mock/placeholder output values for action modules during simulation.
+
+        This allows downstream modules to execute even though actions don't run in simulation.
+        Mock values are clearly identifiable as simulated data.
+
+        Args:
+            output_nodes: List of output NodeInstance objects from the action module
+
+        Returns:
+            Dictionary mapping node_id to mock value based on node type
+        """
+        from datetime import datetime
+
+        mock_outputs = {}
+
+        for node in output_nodes:
+            node_type = node.type.lower()
+
+            if node_type == "int":
+                # Use 999999 as a clearly mock integer value
+                mock_outputs[node.node_id] = 999999
+            elif node_type == "str":
+                # Use descriptive mock string
+                mock_outputs[node.node_id] = f"MOCK_{node.label.upper()}"
+            elif node_type == "bool":
+                # Default to True for mock boolean
+                mock_outputs[node.node_id] = True
+            elif node_type == "float":
+                # Use 999.99 as mock float
+                mock_outputs[node.node_id] = 999.99
+            elif node_type == "datetime":
+                # Use current datetime as mock
+                mock_outputs[node.node_id] = datetime.now()
+            else:
+                # For unknown types, use a mock string
+                mock_outputs[node.node_id] = f"MOCK_OUTPUT"
+
+        logger.debug(f"Generated mock outputs: {mock_outputs}")
+        return mock_outputs
+
     def _seed_entry_values(
         self,
         entry_values_by_name: Dict[str, Any],
@@ -835,11 +877,11 @@ class PipelineExecutionService:
                         error=None
                     ))
 
-                    # Actions don't produce outputs in simulation
-                    outputs_dict = {}
+                    # Generate mock outputs so downstream modules can execute
+                    outputs_dict = self._generate_mock_outputs(ctx.outputs)
                     error = None
 
-                    logger.debug(f"Collected action data for {step.module_instance_id} (simulation)")
+                    logger.debug(f"Collected action data for {step.module_instance_id} (simulation) with mock outputs")
             else:
                 # Transform/Logic module: Execute normally
                 try:

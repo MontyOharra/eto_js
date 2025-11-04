@@ -25,6 +25,7 @@ from .models import (
 )
 
 from .connection import DatabaseConnectionManager, init_database_connection, get_connection_manager
+from .access_connection import AccessConnectionManager
 from .unit_of_work import UnitOfWork
 
 __all__ = [
@@ -51,6 +52,7 @@ __all__ = [
     'EtoRunPipelineExecutionStepModel',
     # Connection management
     'DatabaseConnectionManager',
+    'AccessConnectionManager',
     'init_database_connection',
     'get_connection_manager',
     # Unit of Work
