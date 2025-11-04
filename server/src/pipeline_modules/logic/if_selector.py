@@ -46,13 +46,13 @@ class IfSelector(LogicModule):
                             typing=NodeTypeRule(allowed_types=["bool"])
                         ),
                         NodeGroup(
-                            label="False",
+                            label="True",
                             min_count=1,
                             max_count=1,
                             typing=NodeTypeRule(type_var="T")
                         ),
                         NodeGroup(
-                            label="True",
+                            label="False",
                             min_count=1,
                             max_count=1,
                             typing=NodeTypeRule(type_var="T")
@@ -69,7 +69,7 @@ class IfSelector(LogicModule):
                         )
                     ]
                 ),
-                type_params={"T": ["str", "float", "datetime", "bool"]}  # Domain for TypeVar T
+                type_params={"T": []}  # Domain for TypeVar T
             )
         )
 

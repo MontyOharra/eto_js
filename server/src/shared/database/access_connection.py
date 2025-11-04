@@ -5,7 +5,7 @@ Separate from SQLAlchemy-based connection manager due to Access limitations
 """
 import logging
 import threading
-from typing import Optional
+from typing import Any
 from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
@@ -45,7 +45,7 @@ class AccessConnectionManager:
             raise ValueError("Access connection string is required")
 
         self.connection_string = connection_string
-        self.connection: Optional[any] = None  # pyodbc.Connection
+        self.connection: Any = None  # pyodbc.Connection
         self._initialized = False
         self._lock = threading.Lock()
 
@@ -77,6 +77,7 @@ class AccessConnectionManager:
                 )
 
                 # Test connection with a simple query
+                assert self.connection is not None
                 cursor = self.connection.cursor()
                 cursor.execute("SELECT 1")
                 cursor.close()
