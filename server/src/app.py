@@ -19,14 +19,17 @@ from fastapi.exceptions import RequestValidationError, HTTPException as FastAPIH
 import uvicorn
 
 from shared.database import init_database_connection
+from shared.database.connection import DatabaseConnectionManager
 from shared.services.service_container import ServiceContainer
 from shared.config.storage import get_storage_configuration
+from shared.config.database import DatabaseConfig
 from shared.exceptions.service import ObjectNotFoundError, ConflictError, ValidationError, ServiceError
 
 logger = logging.getLogger(__name__)
 
-# Global variables to store initialized database connection
-_connection_manager = None
+# Global variables to store initialized database connections
+_connection_manager = None  # Primary 'main' connection
+_connection_managers = {}  # All named connections
 
 
 class DatabaseConnectionError(Exception):
@@ -206,26 +209,38 @@ def configure_logging():
 
 
 async def initialize_database_connection() -> None:
-    """Initialize database connection and verify connectivity"""
-    global _connection_manager
+    """Initialize all database connections from configuration"""
+    global _connection_manager, _connection_managers
 
     try:
-        logger.debug("Initializing database connection...")
-        database_url = os.getenv('DATABASE_URL')
-        if not database_url:
-            raise DatabaseConnectionError("DATABASE_URL environment variable is required")
+        logger.debug("Loading database configuration...")
+        db_config = DatabaseConfig.from_environment()
+        logger.info("Database configuration loaded successfully")
 
-        _connection_manager = init_database_connection(database_url)
-        logger.info("Database connection established and verified")
+        # Initialize all configured connections
+        _connection_managers = {}
+
+        for conn_name, conn_config in db_config.get_all_connections().items():
+            logger.debug(f"Initializing '{conn_name}' database connection...")
+            manager = init_database_connection(conn_config.connection_string)
+            _connection_managers[conn_name] = manager
+            logger.info(f"Database connection '{conn_name}' established and verified")
+
+        # Set primary connection manager for backward compatibility
+        _connection_manager = _connection_managers.get('main')
+        if not _connection_manager:
+            raise DatabaseConnectionError("Primary 'main' database connection not configured")
+
+        logger.info(f"Initialized {len(_connection_managers)} database connection(s)")
 
     except Exception as e:
-        logger.error(f"Failed to initialize database: {e}", exc_info=True)
+        logger.error(f"Failed to initialize database connections: {e}", exc_info=True)
         raise DatabaseConnectionError(f"Database initialization failed: {e}")
 
 
 async def initialize_services() -> None:
     """Initialize all services using the ServiceContainer singleton"""
-    global _connection_manager
+    global _connection_manager, _connection_managers
 
     try:
         logger.debug("Initializing services via ServiceContainer...")
@@ -236,7 +251,11 @@ async def initialize_services() -> None:
         pdf_storage_path = get_storage_configuration()
 
         logger.debug("Initializing ServiceContainer...")
-        ServiceContainer.initialize(_connection_manager, pdf_storage_path)
+        ServiceContainer.initialize(
+            connection_manager=_connection_manager,
+            pdf_storage_path=pdf_storage_path,
+            connection_managers=_connection_managers
+        )
         logger.info("ServiceContainer initialized successfully")
 
         # Eagerly initialize all services to ensure proper startup

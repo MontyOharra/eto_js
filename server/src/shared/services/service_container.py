@@ -57,18 +57,22 @@ class ServiceContainer:
     _initialized: bool = False
     _services: Dict[str, Any] = {}
     _service_definitions: Dict[str, Dict[str, Any]] = {}
-    _connection_manager: Optional['DatabaseConnectionManager'] = None
+    _connection_manager: Optional['DatabaseConnectionManager'] = None  # Primary 'main' connection
+    _connection_managers: Dict[str, 'DatabaseConnectionManager'] = {}  # All named connections
     _pdf_storage_path: Optional[str] = None
     _resolving: List[str] = []
 
     @classmethod
-    def initialize(cls, connection_manager: 'DatabaseConnectionManager', pdf_storage_path: str, **kwargs) -> None:
+    def initialize(cls, connection_manager: 'DatabaseConnectionManager', pdf_storage_path: str, connection_managers: Optional[Dict[str, 'DatabaseConnectionManager']] = None, **kwargs) -> None:
         """
         Initialize the service container.
         Can be called multiple times safely (will only initialize once).
 
         Args:
-            connection_manager: Database connection manager
+            connection_manager: Primary database connection manager (backward compatibility)
+            pdf_storage_path: Path for PDF file storage
+            connection_managers: Optional dict of named database connection managers
+                                 e.g., {'main': manager1, 'orders_db': manager2}
             **kwargs: Additional configuration parameters
         """
         if cls._initialized:
@@ -80,6 +84,15 @@ class ServiceContainer:
         # Store core dependencies
         cls._connection_manager = connection_manager
         cls._pdf_storage_path = pdf_storage_path
+
+        # Store all connection managers
+        if connection_managers:
+            cls._connection_managers = connection_managers
+            logger.info(f"Registered {len(connection_managers)} database connections: {', '.join(connection_managers.keys())}")
+        else:
+            # If not provided, just register the main connection manager
+            cls._connection_managers = {'main': connection_manager}
+            logger.info("Registered single 'main' database connection")
 
         # Store any additional configuration
         for key, value in kwargs.items():
@@ -363,12 +376,46 @@ class ServiceContainer:
 
     @classmethod
     def get_connection_manager(cls) -> 'DatabaseConnectionManager':
-        """Get the database connection manager"""
+        """Get the primary database connection manager (backward compatibility)"""
         if not cls._initialized:
             raise RuntimeError("ServiceContainer not initialized")
         if not cls._connection_manager:
             raise RuntimeError("Connection manager not available")
         return cls._connection_manager
+
+    @classmethod
+    def get_connection(cls, name: str) -> 'DatabaseConnectionManager':
+        """
+        Get a named database connection manager.
+
+        Args:
+            name: Connection name (e.g., 'main', 'orders_db')
+
+        Returns:
+            DatabaseConnectionManager for the requested connection
+
+        Raises:
+            RuntimeError: If ServiceContainer not initialized
+            ValueError: If connection name not found
+
+        Example:
+            # In a module's run() method:
+            orders_db = context.services.get_connection('orders_db')
+            with orders_db.session() as session:
+                # Use session for HTC database operations
+                ...
+        """
+        if not cls._initialized:
+            raise RuntimeError("ServiceContainer not initialized")
+
+        if name not in cls._connection_managers:
+            available = ', '.join(cls._connection_managers.keys())
+            raise ValueError(
+                f"Database connection '{name}' not found. "
+                f"Available connections: {available}"
+            )
+
+        return cls._connection_managers[name]
 
     @classmethod
     def is_initialized(cls) -> bool:

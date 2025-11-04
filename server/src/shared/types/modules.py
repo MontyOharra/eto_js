@@ -18,6 +18,7 @@ class ModuleKind(str, Enum):
     ACTION = "action"
     LOGIC = "logic"
     COMPARATOR = "comparator"
+    MISC = "misc"
 
 
 @dataclass(frozen=True)
@@ -151,6 +152,11 @@ class ComparatorModule(BaseModule):
     """
     kind = ModuleKind.COMPARATOR
 
+class MiscModule(BaseModule):
+    """
+    Base class for Misc modules - modules that don't fit into any other category
+    """
+    kind = ModuleKind.MISC
 
 
 @dataclass(frozen=True)

@@ -7,7 +7,7 @@ interface ModuleSelectorPaneProps {
   onModuleSelect: (moduleId: string | null) => void;
 }
 
-type ModuleKind = "all" | "transform" | "action" | "logic" | "comparator";
+type ModuleKind = "all" | "transform" | "action" | "logic" | "comparator" | "misc";
 
 const MODULE_KINDS: ModuleKind[] = [
   "all",
@@ -15,6 +15,7 @@ const MODULE_KINDS: ModuleKind[] = [
   "action",
   "logic",
   "comparator",
+  "misc",
 ];
 
 const KIND_LABELS: Record<ModuleKind, string> = {
@@ -23,6 +24,7 @@ const KIND_LABELS: Record<ModuleKind, string> = {
   action: "Action",
   logic: "Logic",
   comparator: "Comparator",
+  misc: "Misc",
 };
 
 export function ModuleSelectorPane({
