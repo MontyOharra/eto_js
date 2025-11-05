@@ -3,8 +3,8 @@
  * Allows editing configuration settings (must be deactivated first)
  */
 
-import { useState, useEffect } from 'react';
-import type { EmailConfigDetail, FilterRule } from '../types';
+import { useState, useEffect } from "react";
+import type { EmailConfigDetail, FilterRule } from "../../types";
 
 interface EditConfigModalProps {
   isOpen: boolean;
@@ -26,7 +26,7 @@ export function EditConfigModal({
   onClose,
   onSave,
 }: EditConfigModalProps) {
-  const [description, setDescription] = useState('');
+  const [description, setDescription] = useState("");
   const [pollInterval, setPollInterval] = useState(60);
   const [filterRules, setFilterRules] = useState<FilterRule[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -34,7 +34,7 @@ export function EditConfigModal({
   // Reset form when modal opens with new config
   useEffect(() => {
     if (config && isOpen) {
-      setDescription(config.description || '');
+      setDescription(config.description || "");
       setPollInterval(config.poll_interval_seconds);
       setFilterRules(config.filter_rules || []);
     }
@@ -44,17 +44,23 @@ export function EditConfigModal({
     setFilterRules([
       ...filterRules,
       {
-        field: 'sender_email',
-        operation: 'contains',
-        value: '',
+        field: "sender_email",
+        operation: "contains",
+        value: "",
         case_sensitive: false,
       },
     ]);
   };
 
-  const handleUpdateFilterRule = (index: number, field: keyof FilterRule, value: any) => {
+  const handleUpdateFilterRule = (
+    index: number,
+    field: keyof FilterRule,
+    value: any
+  ) => {
     setFilterRules(
-      filterRules.map((rule, i) => (i === index ? { ...rule, [field]: value } : rule))
+      filterRules.map((rule, i) =>
+        i === index ? { ...rule, [field]: value } : rule
+      )
     );
   };
 
@@ -74,7 +80,7 @@ export function EditConfigModal({
       });
       onClose();
     } catch (err) {
-      console.error('Failed to save configuration:', err);
+      console.error("Failed to save configuration:", err);
     } finally {
       setIsSaving(false);
     }
@@ -87,12 +93,19 @@ export function EditConfigModal({
       <div className="bg-gray-900 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden border border-gray-700">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-700">
-          <h2 className="text-xl font-semibold text-white">Edit Configuration: {config.name}</h2>
+          <h2 className="text-xl font-semibold text-white">
+            Edit Configuration: {config.name}
+          </h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-200 transition-colors"
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg
+              className="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -177,7 +190,9 @@ export function EditConfigModal({
 
           {/* Monitoring Settings */}
           <div>
-            <h3 className="text-lg font-medium text-white mb-4">Monitoring Settings</h3>
+            <h3 className="text-lg font-medium text-white mb-4">
+              Monitoring Settings
+            </h3>
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Poll Interval (seconds)
@@ -187,7 +202,9 @@ export function EditConfigModal({
                 min="5"
                 max="3600"
                 value={pollInterval}
-                onChange={(e) => setPollInterval(parseInt(e.target.value) || 60)}
+                onChange={(e) =>
+                  setPollInterval(parseInt(e.target.value) || 60)
+                }
                 disabled={config.is_active}
                 className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
               />
@@ -228,7 +245,10 @@ export function EditConfigModal({
             ) : (
               <div className="space-y-3">
                 {filterRules.map((rule, index) => (
-                  <div key={index} className="bg-gray-800 rounded p-3 border border-gray-700">
+                  <div
+                    key={index}
+                    className="bg-gray-800 rounded p-3 border border-gray-700"
+                  >
                     <div className="grid grid-cols-12 gap-2 items-end">
                       <div className="col-span-3">
                         <label className="block text-xs font-medium text-gray-400 mb-1">
@@ -236,14 +256,24 @@ export function EditConfigModal({
                         </label>
                         <select
                           value={rule.field}
-                          onChange={(e) => handleUpdateFilterRule(index, 'field', e.target.value)}
+                          onChange={(e) =>
+                            handleUpdateFilterRule(
+                              index,
+                              "field",
+                              e.target.value
+                            )
+                          }
                           disabled={config.is_active}
                           className="w-full px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <option value="sender_email">Sender Email</option>
                           <option value="subject">Subject</option>
-                          <option value="has_attachments">Has Attachments</option>
-                          <option value="attachment_types">Attachment Types</option>
+                          <option value="has_attachments">
+                            Has Attachments
+                          </option>
+                          <option value="attachment_types">
+                            Attachment Types
+                          </option>
                         </select>
                       </div>
                       <div className="col-span-3">
@@ -253,7 +283,11 @@ export function EditConfigModal({
                         <select
                           value={rule.operation}
                           onChange={(e) =>
-                            handleUpdateFilterRule(index, 'operation', e.target.value)
+                            handleUpdateFilterRule(
+                              index,
+                              "operation",
+                              e.target.value
+                            )
                           }
                           disabled={config.is_active}
                           className="w-full px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -271,7 +305,13 @@ export function EditConfigModal({
                         <input
                           type="text"
                           value={rule.value}
-                          onChange={(e) => handleUpdateFilterRule(index, 'value', e.target.value)}
+                          onChange={(e) =>
+                            handleUpdateFilterRule(
+                              index,
+                              "value",
+                              e.target.value
+                            )
+                          }
                           disabled={config.is_active}
                           placeholder="Filter value..."
                           className="w-full px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -283,7 +323,11 @@ export function EditConfigModal({
                             type="checkbox"
                             checked={rule.case_sensitive}
                             onChange={(e) =>
-                              handleUpdateFilterRule(index, 'case_sensitive', e.target.checked)
+                              handleUpdateFilterRule(
+                                index,
+                                "case_sensitive",
+                                e.target.checked
+                              )
                             }
                             disabled={config.is_active}
                             className="mr-1 rounded bg-gray-700 border-gray-600 text-blue-600 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -334,7 +378,7 @@ export function EditConfigModal({
             disabled={isSaving || config.is_active}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded transition-colors"
           >
-            {isSaving ? 'Saving...' : 'Save Changes'}
+            {isSaving ? "Saving..." : "Save Changes"}
           </button>
         </div>
       </div>
