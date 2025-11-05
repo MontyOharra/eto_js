@@ -41,7 +41,7 @@ class BaseEmailIntegration(ABC):
     # ========== Connection Management ==========
 
     @abstractmethod
-    def connect(self, account_identifier: Optional[str] = None) -> bool:
+    def connect(self) -> bool:
         """
         Establish connection to email provider
 
@@ -74,25 +74,10 @@ class BaseEmailIntegration(ABC):
         """
         pass
 
-    # ========== Account Discovery ==========
-
-    def discover_accounts(self) -> list[EmailAccount]:
-        """
-        Discover available email accounts (for providers that support multiple accounts)
-
-        Returns:
-            List of EmailAccount dataclasses
-
-        Note:
-            Optional - only implemented by providers that support multiple accounts
-            (e.g., Outlook COM where user might have multiple accounts configured)
-        """
-        return []
-
     # ========== Folder Operations ==========
 
     @abstractmethod
-    def discover_folders(self, account_identifier: Optional[str] = None) -> list[EmailFolder]:
+    def discover_folders(self) -> list[EmailFolder]:
         """
         Get list of all available folders in the email account
 
