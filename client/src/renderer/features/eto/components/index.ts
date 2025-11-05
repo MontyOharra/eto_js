@@ -1,14 +1,9 @@
 // UI components
-export * from './ui';
+export * from "./EtoRunRow";
 
 // Base components
-export * from './base';
+export * from "./EtoRunDetail";
 
 // Row components
-export * from './rows';
+export * from "./EtoRunTable";
 
-// Table components
-export * from './tables';
-
-// Modals
-export * from './modals';

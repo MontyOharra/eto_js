@@ -9,7 +9,7 @@ import {
   useDeleteRuns,
   useEtoEvents,
 } from '../../../features/eto/hooks';
-import { EtoRunsTable, RunDetailModal } from '../../../features/eto/components';
+import { EtoRunTable, RunDetailModal } from '../../../features/eto/components';
 import { EtoRunListItem, EtoRunStatus } from '../../../features/eto/types';
 import { TemplateBuilderModal } from '../../../features/templates/components';
 import { useCreateTemplate, useActivateTemplate } from '../../../features/templates';
@@ -103,11 +103,6 @@ function EtoPage() {
   // ==========================================================================
 
   const handleView = (runId: number) => {
-    setSelectedRunId(runId);
-  };
-
-  const handleReview = (runId: number) => {
-    // Open detail modal - user can switch to Detail tab to review pipeline execution
     setSelectedRunId(runId);
   };
 
@@ -297,7 +292,7 @@ function EtoPage() {
       <div className="space-y-4">
   
         {/* Success Runs */}
-        <EtoRunsTable
+        <EtoRunTable
           title="Successful"
           status="success"
           runs={runsByStatus.success}
@@ -305,12 +300,12 @@ function EtoPage() {
         />
 
         {/* Failed Runs */}
-        <EtoRunsTable
+        <EtoRunTable
           title="Failed"
           status="failure"
           runs={runsByStatus.failure}
           onView={handleView}
-          onReview={handleReview}
+          onReprocess={handleReprocess}
           onSkip={handleSkip}
           onBulkSkip={async (runIds) => {
             await skipMutation.mutateAsync({ run_ids: runIds });
@@ -321,11 +316,12 @@ function EtoPage() {
         />
 
         {/* Needs Template Runs */}
-        <EtoRunsTable
+        <EtoRunTable
           title="Needs Template"
           status="needs_template"
           runs={runsByStatus.needs_template}
           onBuildTemplate={handleBuildTemplate}
+          onReprocess={handleReprocess}
           onSkip={handleSkip}
           onBulkSkip={async (runIds) => {
             await skipMutation.mutateAsync({ run_ids: runIds });
@@ -335,13 +331,13 @@ function EtoPage() {
           }}
         />
         {/* Processing Runs */}
-        <EtoRunsTable
+        <EtoRunTable
           title="Processing"
           status="processing"
           runs={runsByStatus.processing}
         />
         {/* Skipped Runs */}
-        <EtoRunsTable
+        <EtoRunTable
           title="Skipped"
           status="skipped"
           runs={runsByStatus.skipped}
@@ -355,7 +351,7 @@ function EtoPage() {
           }}
         />
         {/* Not Started Runs */}
-        <EtoRunsTable
+        <EtoRunTable
           title="Not Started"
           status="not_started"
           runs={runsByStatus.not_started}
