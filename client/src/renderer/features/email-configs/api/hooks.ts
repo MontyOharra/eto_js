@@ -1,22 +1,20 @@
 /**
- * Email Configs API Hook
- * Real API implementation for email-configs endpoints
+ * Email Configs API Hooks
+ * API implementation for email-configs endpoints
  */
 
 import { useState, useCallback } from 'react';
 import { apiClient } from '../../../shared/api/client';
 import { API_CONFIG } from '../../../shared/api/config';
+import type { EmailConfigListItem, EmailConfigDetail, EmailFolder } from '../types';
 import type {
-  EmailConfigListItem,
-  EmailConfigDetail,
   CreateEmailConfigRequest,
   UpdateEmailConfigRequest,
-  EmailFolder,
   ValidateEmailConfigRequest,
   ValidateEmailConfigResponse,
   EmailConfigsListQueryParams,
   DiscoverFoldersRequest,
-} from '../api/types';
+} from './types';
 
 interface UseEmailConfigsApiResult {
   // State

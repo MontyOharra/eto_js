@@ -1,12 +1,13 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useState, useEffect } from 'react';
-import { useEmailConfigsApi } from '../../../features/email-configs/hooks';
 import {
+  useEmailConfigsApi,
   EmailConfigCard,
   EmailConfigWizard,
   EditConfigModal,
-} from '../../../features/email-configs/components';
-import type { EmailConfigDetail, CreateEmailConfigRequest } from '../../../features/email-configs/types';
+  type EmailConfigDetail,
+  type CreateEmailConfigRequest,
+} from '../../../features/email-configs';
 
 export const Route = createFileRoute('/dashboard/configs/')({
   component: ConfigurationsPage,

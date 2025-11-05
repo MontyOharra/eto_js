@@ -1,20 +1,52 @@
 /**
  * Email Configurations Feature
- * Public exports for email ingestion configurations
+ * Public API for email config management
  */
 
-// Types
+// ============================================================================
+// Domain Types
+// ============================================================================
+
 export type {
+  // Filter System
   FilterRuleField,
   FilterRuleOperation,
   FilterRule,
+
+  // Entities
   EmailConfigListItem,
   EmailConfigDetail,
   EmailFolder,
-  CreateEmailConfigRequest,
+
+  // Provider Settings
+  ImapProviderSettings,
+  GraphApiProviderSettings,
+  ProviderSettings,
 } from './types';
 
+// ============================================================================
+// API Types
+// ============================================================================
+
+export type {
+  CreateEmailConfigRequest,
+  UpdateEmailConfigRequest,
+  ValidateEmailConfigRequest,
+  ValidateEmailConfigResponse,
+  DiscoverFoldersRequest,
+  EmailConfigsListQueryParams,
+} from './api/types';
+
+// ============================================================================
+// API Hooks
+// ============================================================================
+
+export { useEmailConfigsApi } from './api/hooks';
+
+// ============================================================================
 // Components
+// ============================================================================
+
 export {
   EmailConfigCard,
   EmailConfigWizard,

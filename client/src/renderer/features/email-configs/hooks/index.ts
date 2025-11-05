@@ -1,1 +1,0 @@
-export { useEmailConfigsApi } from './useEmailConfigsApi';
