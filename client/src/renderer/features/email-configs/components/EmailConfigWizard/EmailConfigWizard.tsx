@@ -3,8 +3,9 @@
  * 4-step wizard for creating email ingestion configurations with multi-provider support
  */
 
-import { useState } from 'react';
-import type { EmailFolder, FilterRule, CreateEmailConfigRequest } from '../../types';
+import { useState, useEffect } from 'react';
+import type { EmailFolder, FilterRule } from '../../types';
+import type { CreateEmailConfigRequest } from '../../api/types';
 import { ProviderSelectionStep, CredentialsStep, FolderSelectionStep, ConfigurationStep } from './steps';
 import { EmailConfigWizardHeader } from './EmailConfigWizardHeader';
 import { EmailConfigWizardFooter } from './EmailConfigWizardFooter';
@@ -97,6 +98,13 @@ export function EmailConfigWizard({
       setIsLoadingFolders(false);
     }
   };
+
+  // Auto-load folders when entering the folder selection step
+  useEffect(() => {
+    if (currentStep === 'folder' && folders.length === 0 && !isLoadingFolders && credentials && selectedProvider) {
+      loadFolders();
+    }
+  }, [currentStep]);
 
   const handleSelectFolder = (folder: EmailFolder) => {
     setSelectedFolder(folder.folder_name);
