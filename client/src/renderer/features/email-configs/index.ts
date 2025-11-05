@@ -10,15 +10,13 @@ export type {
   FilterRule,
   EmailConfigListItem,
   EmailConfigDetail,
-  EmailAccount,
   EmailFolder,
+  CreateEmailConfigRequest,
 } from './types';
 
 // Components
 export {
   EmailConfigCard,
-  StatusBadge,
   EmailConfigWizard,
   EditConfigModal,
 } from './components';
-export type { WizardData } from './components';

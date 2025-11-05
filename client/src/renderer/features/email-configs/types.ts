@@ -10,6 +10,6 @@ export type {
   FilterRule,
   EmailConfigListItem,
   EmailConfigDetail,
-  EmailAccount,
   EmailFolder,
+  CreateEmailConfigRequest,
 } from './api/types';

@@ -1,12 +1,8 @@
 // Cards
-export { EmailConfigCard } from './cards/EmailConfigCard';
-
-// UI Components
-export { StatusBadge } from './ui/StatusBadge';
+export { EmailConfigCard } from "./EmailConfigCard";
 
 // Wizard
-export { EmailConfigWizard } from './wizard/EmailConfigWizard';
-export type { WizardData } from './wizard/EmailConfigWizard';
+export { EmailConfigWizard } from "./EmailConfigWizard/EmailConfigWizard";
 
 // Modals
-export { EditConfigModal } from './EditConfigModal';
+export { EditConfigModal } from "./EditEmailConfigModal/EditConfigModal";

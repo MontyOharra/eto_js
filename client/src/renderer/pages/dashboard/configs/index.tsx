@@ -5,9 +5,8 @@ import {
   EmailConfigCard,
   EmailConfigWizard,
   EditConfigModal,
-  type WizardData,
 } from '../../../features/email-configs/components';
-import type { EmailConfigDetail } from '../../../features/email-configs/types';
+import type { EmailConfigDetail, CreateEmailConfigRequest } from '../../../features/email-configs/types';
 
 export const Route = createFileRoute('/dashboard/configs/')({
   component: ConfigurationsPage,
@@ -22,8 +21,8 @@ function ConfigurationsPage() {
     deleteEmailConfig,
     activateEmailConfig,
     deactivateEmailConfig,
-    getEmailAccounts,
-    getEmailFolders,
+    discoverFolders,
+    testConnection,
     isLoading,
     error,
   } = useEmailConfigsApi();
@@ -50,7 +49,7 @@ function ConfigurationsPage() {
     }
   };
 
-  const handleCreateConfig = async (data: WizardData) => {
+  const handleCreateConfig = async (data: CreateEmailConfigRequest) => {
     try {
       await createEmailConfig(data);
       await loadConfigs();
@@ -119,9 +118,20 @@ function ConfigurationsPage() {
     }
   };
 
-  // Wrapper to convert string email to params object
-  const handleLoadFolders = async (emailAddress: string) => {
-    return getEmailFolders({ email_address: emailAddress });
+  const handleLoadFolders = async (providerType: string, providerSettings: Record<string, any>) => {
+    return discoverFolders({ provider_type: providerType, provider_settings: providerSettings });
+  };
+
+  const handleTestConnection = async (
+    providerType: string,
+    providerSettings: Record<string, any>,
+    folderName: string
+  ) => {
+    return testConnection({
+      provider_type: providerType,
+      provider_settings: providerSettings,
+      folder_name: folderName,
+    });
   };
 
   return (
@@ -206,13 +216,14 @@ function ConfigurationsPage() {
       </div>
 
       {/* Create Configuration Wizard */}
-      <EmailConfigWizard
-        isOpen={showCreateWizard}
-        onClose={() => setShowCreateWizard(false)}
-        onSave={handleCreateConfig}
-        onLoadAccounts={getEmailAccounts}
-        onLoadFolders={handleLoadFolders}
-      />
+      {showCreateWizard && (
+        <EmailConfigWizard
+          onClose={() => setShowCreateWizard(false)}
+          onSave={handleCreateConfig}
+          onLoadFolders={handleLoadFolders}
+          onTestConnection={handleTestConnection}
+        />
+      )}
 
       {/* Edit Configuration Modal */}
       <EditConfigModal
