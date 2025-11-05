@@ -307,34 +307,34 @@ class EmailIngestionService:
 
         logger.info("Background worker thread stopped")
 
-    # ========== Public Methods: Account/Folder Discovery ==========
+    # ========== Public Methods: Folder Discovery ==========
 
-    def discover_email_accounts(self, provider_type: str = "outlook_com") -> list[EmailAccount]:
+    def discover_folders(
+        self,
+        provider_type: str,
+        provider_settings: dict
+    ) -> list[EmailFolder]:
         """
-        Discover available email accounts for the specified provider.
+        Discover available folders using provider credentials.
 
-        Creates a temporary integration instance to query the email provider
-        for available accounts. Does not establish a persistent connection.
-
-        Implementation:
-        1. Validate provider is supported via IntegrationRegistry
-        2. Create temporary integration (no connection needed)
-        3. Call integration.discover_accounts()
-        4. Return list of EmailAccount dataclasses
+        NEW FLOW:
+        1. Create integration with credentials from provider_settings
+        2. Connect to provider
+        3. Discover folders
+        4. Disconnect
 
         Args:
-            provider_type: Email provider to query (default: "outlook_com")
+            provider_type: Email provider ("imap", "graph_api", etc.)
+            provider_settings: Provider-specific credentials dict
 
         Returns:
-            List of EmailAccount dataclasses with account information
+            List of EmailFolder dataclasses
 
         Raises:
-            ValidationError: If provider_type is not supported
-            ServiceError: If account discovery fails
+            ValidationError: If provider not supported
+            ServiceError: If connection or discovery fails
         """
         try:
-            logger.info(f"Discovering email accounts for provider: {provider_type}")
-
             # Validate provider is supported
             if not IntegrationRegistry.is_supported(provider_type):
                 available = IntegrationRegistry.get_available_providers()
@@ -343,115 +343,34 @@ class EmailIngestionService:
                     f"Available providers: {', '.join(available)}"
                 )
 
-            # Create temporary integration for discovery
-            # No specific email_address needed for account discovery
-            integration = IntegrationRegistry.create(
-                provider_type=provider_type,
-                email_address=None,
-                folder_name=None
-            )
-
-            logger.debug(f"Created temporary integration for {provider_type}")
-
-            # Discover accounts (no connection needed for Outlook COM)
-            accounts = integration.discover_accounts()
-
-            logger.info(
-                f"Successfully discovered {len(accounts)} account(s) "
-                f"for provider '{provider_type}'"
-            )
-
-            # Log discovered accounts (without sensitive data)
-            for i, account in enumerate(accounts, 1):
-                logger.debug(
-                    f"  Account {i}: {account.email_address} "
-                    f"({account.display_name}) - Default: {account.is_default}"
-                )
-
-            return accounts
-
-        except ValidationError:
-            # Re-raise validation errors as-is
-            raise
-
-        except Exception as e:
-            logger.error(
-                f"Error discovering email accounts for provider '{provider_type}': {e}",
-                exc_info=True
-            )
-            raise ServiceError(
-                f"Failed to discover email accounts: {str(e)}"
-            ) from e
-
-    def discover_folders(
-        self,
-        email_address: str,
-        provider_type: str = "outlook_com"
-    ) -> list[EmailFolder]:
-        """
-        Discover available folders for a specific email account.
-
-        Creates a temporary integration instance, connects to the email account,
-        retrieves folder information, and then disconnects. This is a one-time
-        operation and does not maintain a persistent connection.
-
-        Implementation:
-        1. Validate inputs (email_address required, provider supported)
-        2. Create temporary integration for this account
-        3. Connect to email provider (required for folder discovery)
-        4. Call integration.discover_folders()
-        5. Disconnect from provider (in finally block)
-        6. Return list of EmailFolder dataclasses
-
-        Args:
-            email_address: Email address to discover folders for
-            provider_type: Email provider to use (default: "outlook_com")
-
-        Returns:
-            List of EmailFolder dataclasses with folder information
-
-        Raises:
-            ValidationError: If provider not supported or email_address invalid
-            ServiceError: If connection or discovery fails
-        """
-        try:
-            # Validate inputs
-            if not email_address:
-                raise ValidationError("email_address is required")
-
-            if not IntegrationRegistry.is_supported(provider_type):
-                available = IntegrationRegistry.get_available_providers()
-                raise ValidationError(
-                    f"Provider '{provider_type}' is not supported. "
-                    f"Available providers: {', '.join(available)}"
-                )
+            # Extract email for logging
+            email_address = provider_settings.get('email_address', 'unknown')
 
             logger.info(
                 f"Discovering folders for '{email_address}' "
                 f"using provider '{provider_type}'"
             )
 
-            # Create temporary integration for this specific account
+            # Create integration with full credentials
             integration = IntegrationRegistry.create(
                 provider_type=provider_type,
-                email_address=email_address,
-                folder_name="Inbox"
+                **provider_settings  # Pass all settings as kwargs
             )
 
-            logger.debug(f"Created temporary integration for {email_address}")
+            logger.debug(f"Created integration for {email_address}")
 
-            # Connect to email provider (required for folder discovery)
-            if not integration.connect(email_address):
+            # Connect (uses credentials from init)
+            if not integration.connect():
                 raise ServiceError(
                     f"Failed to connect to email account '{email_address}'. "
-                    f"Please verify the account exists and is accessible."
+                    f"Please verify credentials and server settings."
                 )
 
             logger.debug(f"Successfully connected to {email_address}")
 
             try:
                 # Discover folders while connected
-                folders = integration.discover_folders(email_address)
+                folders = integration.discover_folders()
 
                 logger.info(
                     f"Successfully discovered {len(folders)} folder(s) "
@@ -488,7 +407,7 @@ class EmailIngestionService:
 
         except Exception as e:
             logger.error(
-                f"Error discovering folders for '{email_address}': {e}",
+                f"Error discovering folders: {e}",
                 exc_info=True
             )
             raise ServiceError(
@@ -499,77 +418,67 @@ class EmailIngestionService:
 
     def test_connection(
         self,
-        email_address: str,
-        folder_name: str,
-        provider_type: str = "outlook_com"
+        provider_type: str,
+        provider_settings: dict,
+        folder_name: str
     ) -> ConnectionTestResult:
         """
-        Test connection to email account and folder (wizard step 4 validation).
-
-        Creates temporary integration, tests connection, tests folder access.
-        Returns result with success/error information.
-
-        Implementation:
-        1. Validate inputs (email_address and folder_name required)
-        2. Create temporary integration
-        3. Test connection via integration.connect()
-        4. Test folder access via integration.test_folder_access()
-        5. Disconnect (in finally block)
-        6. Return ConnectionTestResult dataclass
+        Test connection with provider credentials.
 
         Args:
-            email_address: Email address to test
-            folder_name: Folder name to test access
-            provider_type: Email provider (default: "outlook_com")
+            provider_type: Email provider ("imap", "graph_api", etc.)
+            provider_settings: Provider-specific credentials dict
+            folder_name: Folder to verify access
 
         Returns:
-            ConnectionTestResult dataclass with success, message, error, details
-
-        Raises:
-            ValidationError: If inputs invalid
+            ConnectionTestResult with success/failure info
         """
         try:
-            # Validate inputs
-            if not email_address:
-                raise ValidationError("email_address is required")
-            if not folder_name:
-                raise ValidationError("folder_name is required")
+            # Validate provider is supported
+            if not IntegrationRegistry.is_supported(provider_type):
+                available = IntegrationRegistry.get_available_providers()
+                return ConnectionTestResult(
+                    success=False,
+                    message=f"Provider '{provider_type}' is not supported",
+                    error=f"Available providers: {', '.join(available)}"
+                )
 
-            # Create temporary integration
+            # Extract email for logging
+            email_address = provider_settings.get('email_address', 'unknown')
+
+            logger.info(f"Testing connection for '{email_address}' using provider '{provider_type}'")
+
+            # Create integration with credentials
             integration = IntegrationRegistry.create(
                 provider_type=provider_type,
-                email_address=email_address,
-                folder_name=folder_name
+                folder_name=folder_name,
+                **provider_settings
             )
 
             # Test connection
-            if not integration.connect(email_address):
+            if not integration.connect():
                 return ConnectionTestResult(
                     success=False,
-                    message=f"Cannot connect to email account '{email_address}'",
-                    error=f"Connection to '{email_address}' failed",
-                    details=None
+                    message="Connection failed",
+                    error="Unable to connect with provided credentials"
                 )
 
             try:
-                # Test folder access (check if folder exists)
-                folders = integration.discover_folders(email_address)
+                # Test folder access
+                folders = integration.discover_folders()
                 folder_names = [f.name for f in folders]
 
                 if folder_name not in folder_names:
                     return ConnectionTestResult(
                         success=False,
-                        message=f"Folder '{folder_name}' does not exist or is not accessible",
-                        error=f"Folder '{folder_name}' not found. Available folders: {', '.join(folder_names[:5])}",
-                        details={"available_folders": folder_names[:10]}
+                        message=f"Folder '{folder_name}' not accessible",
+                        error=f"Available folders: {', '.join(folder_names[:5])}"
                     )
 
-                # Success
                 return ConnectionTestResult(
                     success=True,
-                    message=f"Successfully connected to '{email_address}' and accessed folder '{folder_name}'",
-                    error=None,
-                    details=None
+                    message=f"Connection successful to '{email_address}'",
+                    details={"folder_count": len(folders)}
                 )
 
             finally:
@@ -579,16 +488,12 @@ class EmailIngestionService:
                 except Exception as disconnect_error:
                     logger.warning(f"Error disconnecting during test: {disconnect_error}")
 
-        except ValidationError:
-            raise
-
         except Exception as e:
             logger.error(f"Error testing connection: {e}", exc_info=True)
             return ConnectionTestResult(
                 success=False,
                 message="Connection test failed",
-                error=f"Connection test failed: {str(e)}",
-                details=None
+                error=str(e)
             )
 
     # ========== Public Methods: Listener Lifecycle ==========
@@ -647,7 +552,9 @@ class EmailIngestionService:
                         config.id,
                         EmailConfigUpdate(
                             activated_at=activation_time,
-                            last_check_time=resume_from_time
+                            last_check_time=resume_from_time,
+                            last_error_message=None,
+                            last_error_at=None
                         )
                     )
                 else:
@@ -662,20 +569,30 @@ class EmailIngestionService:
                     from shared.types.email_configs import EmailConfigUpdate
                     self.config_repository.update(
                         config.id,
-                        EmailConfigUpdate(activated_at=activation_time)
+                        EmailConfigUpdate(
+                            activated_at=activation_time,
+                            last_error_message=None,
+                            last_error_at=None
+                        )
                     )
 
-                # Create persistent integration
+                # Extract email_address from provider_settings
+                # provider_settings is a dataclass object, not a dict
+                email_address = getattr(config.provider_settings, 'email_address', 'unknown')
+
+                # Create persistent integration with full credentials
+                # Convert provider_settings dataclass to dict for unpacking
+                provider_settings_dict = config.provider_settings.__dict__ if config.provider_settings else {}
                 integration = IntegrationRegistry.create(
-                    provider_type='outlook_com',
-                    email_address=config.email_address,
-                    folder_name=config.folder_name
+                    provider_type=config.provider_type,
+                    folder_name=config.folder_name,
+                    **provider_settings_dict  # Pass all credentials
                 )
 
                 # Connect to provider
-                if not integration.connect(config.email_address):
+                if not integration.connect():
                     raise ServiceError(
-                        f"Failed to connect to email account '{config.email_address}'"
+                        f"Failed to connect to email account '{email_address}'"
                     )
 
                 # Create listener thread with resume point
@@ -687,6 +604,7 @@ class EmailIngestionService:
                     process_callback=self._process_email,
                     error_callback=self._handle_listener_error,
                     check_complete_callback=self._update_last_check_time,
+                    critical_failure_callback=self._handle_critical_failure,
                     last_check_time=resume_from_time  # Pass resume point
                 )
 
@@ -702,7 +620,7 @@ class EmailIngestionService:
                 # Return status
                 return ListenerStatus(
                     config_id=config.id,
-                    email_address=config.email_address,
+                    email_address=email_address,
                     folder_name=config.folder_name,
                     is_active=True,
                     is_running=True,
@@ -989,6 +907,65 @@ class EmailIngestionService:
                 f"Error updating error tracking for config {config_id}: {update_error}",
                 exc_info=True
             )
+
+    def _handle_critical_failure(self, config_id: int, error: Exception, error_count: int) -> None:
+        """
+        Handle critical failure when listener reaches max errors.
+        Auto-deactivates the config and stops the listener.
+
+        Called by EmailListenerThread when error_count >= max_errors.
+        This is a last-resort mechanism to prevent a failing config from
+        continuously consuming resources.
+
+        Args:
+            config_id: Configuration ID that encountered critical failure
+            error: Last exception that occurred
+            error_count: Number of consecutive errors (typically 5)
+
+        Note:
+            - Called from background thread - must be thread-safe
+            - Should not raise exceptions (listener thread is already stopping)
+            - Keeps error information in DB for user visibility
+        """
+        logger.critical(
+            f"Critical failure for config {config_id}: {error_count} consecutive errors. "
+            f"Auto-deactivating config. Last error: {error}"
+        )
+
+        try:
+            # Clean up listener and integration resources
+            with self.lock:
+                if config_id in self.active_integrations:
+                    try:
+                        integration = self.active_integrations[config_id]
+                        integration.disconnect()
+                        logger.debug(f"Disconnected integration for config {config_id}")
+                    except Exception as disconnect_error:
+                        logger.warning(
+                            f"Error disconnecting integration for config {config_id}: {disconnect_error}"
+                        )
+                    del self.active_integrations[config_id]
+
+                if config_id in self.active_listeners:
+                    del self.active_listeners[config_id]
+
+            # Update config to inactive in database (keep error info for user)
+            from shared.types.email_configs import EmailConfigUpdate
+            self.config_repository.update(
+                config_id,
+                EmailConfigUpdate(is_active=False)
+            )
+
+            logger.info(f"Config {config_id} auto-deactivated due to critical failure")
+
+        except Exception as update_error:
+            # Don't raise - just log the error
+            # Listener thread is already stopping, don't make it worse
+            logger.error(
+                f"Error handling critical failure for config {config_id}: {update_error}",
+                exc_info=True
+            )
+
 
     def _update_last_check_time(self, config_id: int, check_time: datetime) -> None:
         """

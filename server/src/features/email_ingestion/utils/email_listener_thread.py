@@ -28,6 +28,7 @@ class EmailListenerThread(threading.Thread):
     process_callback: Callable[[int, EmailMessage, list[EmailAttachment]], None]
     error_callback: Callable[[int, Exception], None]
     check_complete_callback: Callable[[int, datetime], None]
+    critical_failure_callback: Callable[[int, Exception, int], None]
     stop_event: threading.Event
     error_count: int
     max_errors: int
@@ -43,6 +44,7 @@ class EmailListenerThread(threading.Thread):
         process_callback: Callable[[int, EmailMessage, list[EmailAttachment]], None],
         error_callback: Callable[[int, Exception], None],
         check_complete_callback: Callable[[int, datetime], None],
+        critical_failure_callback: Callable[[int, Exception, int], None],
         last_check_time: datetime | None = None
     ) -> None:
         """
@@ -56,6 +58,7 @@ class EmailListenerThread(threading.Thread):
             process_callback: Function to call for each new email (config_id, email_msg, attachments)
             error_callback: Function to call when errors occur (config_id, error)
             check_complete_callback: Function to call after each check completes (config_id, check_time)
+            critical_failure_callback: Function to call when max errors reached (config_id, error, error_count)
             last_check_time: Timestamp to resume from (None = start from now, for fresh activation)
         """
         super().__init__(name=f"EmailListener-{config_id}")
@@ -66,6 +69,8 @@ class EmailListenerThread(threading.Thread):
         self.process_callback = process_callback
         self.error_callback = error_callback
         self.check_complete_callback = check_complete_callback
+
+        # Thread control        self.critical_failure_callback = critical_failure_callback
 
         # Thread control
         self.stop_event = threading.Event()
@@ -124,6 +129,13 @@ class EmailListenerThread(threading.Thread):
                     logger.critical(
                         f"Max errors reached for config {self.config_id}, stopping listener"
                     )
+
+                    # Call critical failure callback to auto-deactivate config
+                    try:
+                        self.critical_failure_callback(self.config_id, e, self.error_count)
+                    except Exception as callback_error:
+                        logger.error(f"Error in critical failure callback: {callback_error}")
+
                     break
 
                 # Exponential backoff on errors

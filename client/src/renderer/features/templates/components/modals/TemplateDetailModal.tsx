@@ -18,7 +18,7 @@ interface TemplateDetailModalProps {
   isOpen: boolean;
   templateId: number | null;
   onClose: () => void;
-  onEdit?: (templateId: number) => void;
+  onEdit?: (templateId: number, versionId: number) => void;
 }
 
 type ViewStep = "signature-objects" | "extraction-fields" | "pipeline";
@@ -223,9 +223,9 @@ export function TemplateDetailModal({
 
           {/* Action Buttons */}
           <div className="flex items-center space-x-2">
-            {onEdit && template && (
+            {onEdit && template && versionDetail && (
               <button
-                onClick={() => onEdit(template.id)}
+                onClick={() => onEdit(template.id, versionDetail.version_id)}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
               >
                 Edit Template
@@ -772,7 +772,19 @@ function PipelineView({ versionDetail }: PipelineViewProps) {
   const { getPipeline } = usePipelinesApi();
 
   // Fetch modules using TanStack Query
-  const { data: modules = [] } = useModules();
+  const {
+    data: modules = [],
+    isLoading: modulesLoading,
+    error: modulesError
+  } = useModules();
+
+  console.log('[PipelineView] RENDER - modules status:', {
+    modulesCount: modules.length,
+    modulesLoading,
+    hasModulesError: !!modulesError,
+    modulesError: modulesError?.message || modulesError,
+    sampleModules: modules.slice(0, 3).map(m => m.id)
+  });
 
   const [pipeline, setPipeline] = useState<PipelineDetailResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -786,6 +798,7 @@ function PipelineView({ versionDetail }: PipelineViewProps) {
 
       try {
         const pipelineData = await getPipeline(versionDetail.pipeline_definition_id);
+        console.log('[PipelineView] Loaded pipeline data:', pipelineData);
         setPipeline(pipelineData);
       } catch (err) {
         console.error("Failed to load pipeline:", err);
@@ -800,13 +813,41 @@ function PipelineView({ versionDetail }: PipelineViewProps) {
     loadPipelineData();
   }, [versionDetail.pipeline_definition_id, getPipeline]);
 
-  // Loading state
-  if (isLoading) {
+  // Log modules state for debugging
+  useEffect(() => {
+    console.log('[PipelineView] Modules state:', {
+      modulesCount: modules.length,
+      modulesLoading,
+      modulesError,
+      modules: modules.map(m => ({ id: m.id, title: m.title }))
+    });
+  }, [modules, modulesLoading, modulesError]);
+
+  // Loading state - wait for both pipeline and modules
+  if (isLoading || modulesLoading) {
     return (
       <div className="h-full w-full bg-gray-900 flex items-center justify-center">
         <div className="text-center">
-          <div className="text-white text-lg mb-2">Loading pipeline...</div>
+          <div className="text-white text-lg mb-2">
+            {modulesLoading ? 'Loading modules...' : 'Loading pipeline...'}
+          </div>
           <div className="text-gray-400 text-sm">Please wait</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Modules error state
+  if (modulesError) {
+    return (
+      <div className="h-full w-full bg-gray-900 flex items-center justify-center p-6">
+        <div className="bg-red-900 border border-red-700 rounded-lg p-6 max-w-md">
+          <h3 className="text-xl font-bold text-red-300 mb-2">
+            Error Loading Modules
+          </h3>
+          <p className="text-red-200">
+            {modulesError instanceof Error ? modulesError.message : 'Failed to load module catalog'}
+          </p>
         </div>
       </div>
     );
@@ -840,6 +881,7 @@ function PipelineView({ versionDetail }: PipelineViewProps) {
           viewOnly={true}
           initialPipelineState={pipeline.pipeline_state}
           initialVisualState={pipeline.visual_state}
+          entryPoints={pipeline.pipeline_state.entry_points}
         />
       </div>
     );

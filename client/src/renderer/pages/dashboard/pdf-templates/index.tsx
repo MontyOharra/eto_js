@@ -11,6 +11,8 @@ import {
 import { usePipelinesApi } from '../../../features/pipelines/hooks/usePipelinesApi';
 import { TemplateCard, TemplateBuilderModal, TemplateDetailModal, TemplateData } from '../../../features/templates/components';
 import { TemplateListItem, TemplateStatus } from '../../../features/templates/types';
+import { apiClient } from '../../../shared/api/client';
+import { API_CONFIG } from '../../../shared/api/config';
 
 export const Route = createFileRoute('/dashboard/pdf-templates/')({
   component: TemplatesPage,
@@ -101,7 +103,7 @@ function TemplatesPage() {
     setDetailTemplateId(null);
   };
 
-  const handleEditFromDetail = async (templateId: number) => {
+  const handleEditFromDetail = async (templateId: number, versionId: number) => {
     try {
       // Close detail modal
       setIsDetailOpen(false);
@@ -113,20 +115,29 @@ function TemplatesPage() {
         staleTime: 0, // Force fresh fetch
       });
 
-      if (!templateDetail.current_version_id) {
-        alert('Cannot edit template: No current version found');
-        return;
-      }
-
+      // Use the provided versionId instead of current_version_id
+      // Manually fetch version detail with queryFn
       const [versionDetail, pipelineData] = await Promise.all([
         queryClient.fetchQuery({
-          queryKey: ['template-version', templateDetail.current_version_id],
+          queryKey: ['template-version', versionId],
+          queryFn: async () => {
+            const response = await apiClient.get(
+              `${API_CONFIG.ENDPOINTS.TEMPLATES}/versions/${versionId}`
+            );
+            return response.data;
+          },
           staleTime: 0,
         }),
         // We need to get the pipeline to access pipeline_state and visual_state
         (async () => {
           const versionData = await queryClient.fetchQuery({
-            queryKey: ['template-version', templateDetail.current_version_id],
+            queryKey: ['template-version', versionId],
+            queryFn: async () => {
+              const response = await apiClient.get(
+                `${API_CONFIG.ENDPOINTS.TEMPLATES}/versions/${versionId}`
+              );
+              return response.data;
+            },
             staleTime: 0,
           });
           return getPipeline(versionData.pipeline_definition_id);
