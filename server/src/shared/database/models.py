@@ -33,7 +33,8 @@ class EmailConfigModel(BaseModel):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text)
 
-    email_address: Mapped[str] = mapped_column(String(255), nullable=False)
+    provider_type: Mapped[str] = mapped_column(String(255), nullable=False)
+    provider_settings: Mapped[str] = mapped_column(Text, nullable=False)
     folder_name: Mapped[str] = mapped_column(String(255), nullable=False)
     filter_rules: Mapped[Optional[str]] = mapped_column(Text)
 
@@ -69,7 +70,7 @@ class EmailModel(BaseModel):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
-    config_id: Mapped[int] = mapped_column(ForeignKey("email_configs.id"), nullable=False)
+    config_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("email_configs.id"), nullable=True)
     message_id: Mapped[str] = mapped_column(String(500), nullable=False)
     subject: Mapped[Optional[str]] = mapped_column(String(500))
     sender_email: Mapped[Optional[str]] = mapped_column(String(255))

@@ -3,7 +3,7 @@ Database configuration supporting multiple named database connections
 
 Allows the application to connect to different databases for different purposes:
 - main: Primary application database (ETO runs, PDFs, pipelines, templates)
-- orders_db: Legacy HTC orders database (for CreateOrder action module)
+- htc_db: Legacy HTC orders database (for CreateOrder action module)
 - (future databases can be added as needed)
 """
 import os
@@ -38,8 +38,8 @@ class DatabaseConnectionConfig:
         - Otherwise → SQLAlchemy-compatible (SQL Server, PostgreSQL, etc.)
 
         Args:
-            name: Logical name for this connection (e.g., "orders_db", "main")
-            env_var_name: Environment variable name (e.g., "ORDERS_DB_CONNECTION_STRING")
+            name: Logical name for this connection (e.g., "htc_db", "main")
+            env_var_name: Environment variable name (e.g., "htc_db_CONNECTION_STRING")
             description: Human-readable description
             required: If True, raises ValueError when env var not found
 
@@ -81,17 +81,17 @@ class DatabaseConfig:
 
     Supports multiple named database connections for different purposes:
     - main: Primary application database (ETO runs, PDFs, pipelines, etc.)
-    - orders_db: Legacy HTC orders database for CreateOrder action (optional)
+    - htc_db: Legacy HTC orders database for CreateOrder action (optional)
     """
     main: DatabaseConnectionConfig
-    orders_db: DatabaseConnectionConfig
+    htc_db: DatabaseConnectionConfig
 
     def get_connection(self, name: str) -> DatabaseConnectionConfig:
         """
         Get a database connection config by name.
 
         Args:
-            name: Connection name ("main" or "orders_db")
+            name: Connection name ("main" or "htc_db")
 
         Returns:
             DatabaseConnectionConfig for the requested connection
@@ -101,13 +101,13 @@ class DatabaseConfig:
         """
         if name == "main":
             return self.main
-        elif name == "orders_db":
-            if not self.orders_db:
+        elif name == "htc_db":
+            if not self.htc_db:
                 raise ValueError(
                     "Orders database not configured. "
-                    "Set ORDERS_DB_CONNECTION_STRING environment variable in .env file."
+                    "Set htc_db_CONNECTION_STRING environment variable in .env file."
                 )
-            return self.orders_db
+            return self.htc_db
         else:
             raise ValueError(f"Unknown database connection: {name}")
 
@@ -122,7 +122,7 @@ class DatabaseConfig:
         - Environment: DATABASE_URL
 
         Orders Database (optional):
-        - Environment: ORDERS_DB_CONNECTION_STRING
+        - Environment: htc_db_CONNECTION_STRING
 
         Returns:
             DatabaseConfig instance
@@ -141,19 +141,19 @@ class DatabaseConfig:
             raise ValueError("DATABASE_URL environment variable not set")
 
         # Orders database (optional)
-        orders_db = DatabaseConnectionConfig.from_environment(
+        htc_db = DatabaseConnectionConfig.from_environment(
             name="htc_db",
             env_var_name="HTC_DB_CONNECTION_STRING",
             description="Legacy HTC orders database",
             required=False
         )
         
-        if not orders_db:
+        if not htc_db:
             raise ValueError("HTC_DB_CONNECTION_STRING environment variable not set")
 
         return cls(
             main=main,
-            orders_db=orders_db
+            htc_db=htc_db
         )
 
     def get_all_connections(self) -> Dict[str, DatabaseConnectionConfig]:
@@ -164,6 +164,6 @@ class DatabaseConfig:
             Dictionary mapping connection names to their configs
         """
         connections = {"main": self.main}
-        if self.orders_db:
-            connections["orders_db"] = self.orders_db
+        if self.htc_db:
+            connections["htc_db"] = self.htc_db
         return connections

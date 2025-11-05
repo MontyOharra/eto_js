@@ -21,7 +21,7 @@ class CreateOrder(ActionModule):
     """
     Action module that creates a test record in the HTC database.
 
-    For testing purposes - inserts a hawb value into the test table.
+    For testing purposes - inserts hawb and search_text values into the test table.
     """
 
     id = "create_order"
@@ -29,7 +29,7 @@ class CreateOrder(ActionModule):
     title = "Create Order"
     description = "Creates a test record in the HTC database test table"
     category = "Database"
-    color = "#10B981"  # Green
+    color = "#DC2626"  # Dark red (Tailwind red-600)
 
     ConfigModel = CreateOrderConfig
 
@@ -44,6 +44,12 @@ class CreateOrder(ActionModule):
                         max_count=1,
                         typing=NodeTypeRule(allowed_types=["str"])
                     ),
+                    NodeGroup(
+                        label="search_text",
+                        min_count=1,
+                        max_count=1,
+                        typing=NodeTypeRule(allowed_types=["str"])
+                    ),
                 ]),
                 outputs=IOSideShape(nodes=[])  # Actions typically have no outputs
             )
@@ -53,10 +59,10 @@ class CreateOrder(ActionModule):
         """
         Execute the create order action.
 
-        Inserts a hawb value into the test table in htc_db.
+        Inserts hawb and search_text values into the test table in htc_db.
 
         Args:
-            inputs: Dictionary with input values (hawb)
+            inputs: Dictionary with input values (hawb, search_text)
             cfg: Configuration (empty for now)
             context: Execution context with services
 
@@ -66,11 +72,14 @@ class CreateOrder(ActionModule):
         if not context or not context.services:
             raise RuntimeError("CreateOrder requires service container access")
 
-        # Get input value by matching context input nodes to inputs dict
-        hawb_input = next(node for node in context.inputs if node.label == "hawb")
+        # Get input values by matching context input nodes to inputs dict
+        hawb_input = next(node for node in context.inputs if node.group_index == 0)
+        search_text_input = next(node for node in context.inputs if node.group_index == 1)
+        
         hawb = inputs[hawb_input.node_id]
+        search_text = inputs[search_text_input.node_id]
 
-        logger.info(f"[CREATE ORDER] Creating test record with HAWB: {hawb}")
+        logger.info(f"[CREATE ORDER] Creating test record with HAWB: {hawb}, search_text: {search_text}")
 
         # Get the HTC database connection
         try:
@@ -91,13 +100,13 @@ class CreateOrder(ActionModule):
                 # Insert test record
                 cursor.execute(
                     """
-                    INSERT INTO test (hawb)
-                    VALUES (?)
+                    INSERT INTO test (hawb, search_text)
+                    VALUES (?, ?)
                     """,
-                    (hawb,)
+                    (hawb, search_text)
                 )
 
-                logger.info(f"[CREATE ORDER] Test record created successfully with HAWB: {hawb}")
+                logger.info(f"[CREATE ORDER] Test record created successfully with HAWB: {hawb}, search_text: {search_text}")
 
         except Exception as e:
             logger.error(f"[CREATE ORDER] Database operation failed: {e}", exc_info=True)

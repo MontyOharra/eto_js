@@ -29,7 +29,7 @@ class PrintAction(ActionModule):
     title = "Print to Server Log"
     description = "Prints a message to the server backend logs"
     category = "Print"
-    color = "#EF4444"  # Red
+    color = "#DC2626"  # Red
     ConfigModel = PrintActionConfig
 
     @classmethod
