@@ -2,24 +2,70 @@
  * Type definitions for the Transformation Pipeline system
  */
 
-import {
-  NodeTypeRule as _NodeTypeRule,
-  NodeGroup as _NodeGroup,
-  IOSideShape as _IOSideShape,
-  IOShape as _IOShape,
-  ModuleTemplate as _ModuleTemplate,
-  ModuleInstance as _ModuleInstance,
-  NodePin as _NodePin,
+import type {
+  NodeTypeRule,
+  NodeGroup,
+  IOSideShape,
+  IOShape,
+  ModuleTemplate,
 } from "../modules/types";
 
-// Re-export module type definitions
-export type NodeTypeRule = _NodeTypeRule;
-export type NodeGroup = _NodeGroup;
-export type IOSideShape = _IOSideShape;
-export type IOShape = _IOShape;
-export type ModuleTemplate = _ModuleTemplate;
-export type ModuleInstance = _ModuleInstance;
-export type NodePin = _NodePin;
+// Re-export module catalog types for convenience
+export type { NodeTypeRule, NodeGroup, IOSideShape, IOShape, ModuleTemplate };
+
+// ============================================================================
+// Runtime Types (Module Instances & Pins)
+// ============================================================================
+
+/**
+ * Runtime instance of a pin in a module instance
+ * Created when a module is added to the pipeline
+ */
+export interface NodePin {
+  node_id: string;
+  direction: 'in' | 'out';
+  type: string;
+  name: string;              // user-editable name
+  label: string;             // from NodeGroup.label
+  position_index: number;    // position within the group
+  group_index: number;       // index in meta.io_shape.inputs.nodes or outputs.nodes
+  type_var?: string;         // type variable name if applicable
+  allowed_types?: string[];  // allowed types for this node (from template)
+}
+
+/**
+ * Module instance structure
+ * Represents a module placed in the pipeline
+ */
+export interface ModuleInstance {
+  module_instance_id: string;
+  module_ref: string;
+  module_kind: string;
+  config: Record<string, any>;
+  inputs: NodePin[];         // Flat array, grouped by group_index
+  outputs: NodePin[];
+}
+
+/**
+ * Type variable management for generic modules
+ * Tracks type unification across module pins
+ */
+export interface TypeVariableState {
+  assignments: Record<string, string>; // typeVar -> currentType
+  affectedNodes: Record<string, string[]>; // typeVar -> nodeIds[]
+}
+
+/**
+ * Group info for UI rendering
+ * Helper type for managing dynamic node groups
+ */
+export interface GroupInfo {
+  groupIndex: number;
+  group: NodeGroup;
+  currentCount: number;
+  canAdd: boolean;
+  canRemove: boolean;
+}
 
 // Connection between nodes
 export interface NodeConnection {

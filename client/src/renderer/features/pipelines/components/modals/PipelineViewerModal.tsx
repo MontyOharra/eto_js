@@ -8,7 +8,7 @@ import { useState, useEffect } from "react";
 import { PipelineGraph } from "../PipelineGraph";
 import { ExecutePipelineModal } from "./ExecutePipelineModal";
 import { usePipelinesApi } from "../../hooks/usePipelinesApi";
-import { useModules } from "../../../modules/hooks";
+import { useModules } from '../../../modules';
 import type { PipelineDetailResponse } from "../../types";
 
 interface PipelineViewerModalProps {

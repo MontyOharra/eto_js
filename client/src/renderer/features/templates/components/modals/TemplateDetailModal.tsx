@@ -10,7 +10,7 @@ import { TemplateDetail, TemplateVersionDetail, PdfObjects } from "../../types";
 import { TemplateStatusBadge } from "../ui/TemplateStatusBadge";
 import { usePdfData, PdfViewer, usePdfViewer } from "../../../pdf";
 import { usePipelinesApi } from "../../../pipelines/hooks/usePipelinesApi";
-import { useModules } from "../../../modules/hooks";
+import { useModules } from '../../../modules';
 import { PipelineGraph } from "../../../pipelines/components/PipelineGraph";
 import type { PipelineDetailResponse } from "../../../pipelines/types";
 

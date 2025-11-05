@@ -14,7 +14,7 @@ import {
   ExecutedPipelineGraph,
   ExecutedPipelineGraphRef,
 } from "../../../pipelines/components/ExecutedPipelineGraph";
-import { useModules } from "../../../modules/hooks";
+import { useModules } from '../../../modules';
 import { apiClient } from "../../../../shared/api/client";
 import { API_CONFIG } from "../../../../shared/api/config";
 import type { EtoRunDetail } from "../../types";

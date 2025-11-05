@@ -1,24 +1,35 @@
 /**
  * Modules Feature
- * Module template definitions and module management
+ * Public API for module catalog access
  */
 
-// Types
+// ============================================================================
+// Domain Types
+// ============================================================================
+
 export type {
+  // I/O Shape System
   NodeTypeRule,
   NodeGroup,
   IOSideShape,
   IOShape,
+  ModuleMeta,
+
+  // Module Template
   ModuleTemplate,
-  ModuleInstance,
-  NodePin,
 } from './types';
 
-// API Hooks
-export { useModules } from './hooks/useModules';
-
+// ============================================================================
 // API Types
+// ============================================================================
+
 export type {
-  GetModulesResponse,
-  GetModuleDetailResponse,
+  Module,
+  ModulesQueryParams,
 } from './api/types';
+
+// ============================================================================
+// API Hooks
+// ============================================================================
+
+export { useModules, useModule } from './api/hooks';

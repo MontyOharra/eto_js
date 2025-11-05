@@ -6,7 +6,7 @@
 
 import { useEffect, useState, forwardRef, useImperativeHandle, useRef } from 'react';
 import { usePipelinesApi } from '../hooks/usePipelinesApi';
-import { useModules } from '../../modules/hooks';
+import { useModules } from '../../modules';
 import { ExecutedPipelineGraph, ExecutedPipelineGraphRef } from './ExecutedPipelineGraph';
 import { applyLayeredLayout } from '../utils/layeredLayout';
 import type { PipelineState, VisualState } from '../types';

@@ -14,7 +14,7 @@ import {
 } from "./steps";
 import { TemplateBuilderHeader, TemplateBuilderStepper } from "./components";
 import { usePdfData, useUploadPdf, useProcessPdfObjects, type PdfData } from "../../../pdf";
-import { useModules } from "../../../modules/hooks";
+import { useModules } from '../../../modules';
 import { useSimulateTemplate, type PostTemplateSimulateRequest } from "../../api";
 import { usePipelineValidation } from "../../../pipelines/hooks";
 import type {

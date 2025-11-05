@@ -1,44 +1,30 @@
 /**
  * Modules API Types
- * Type definitions for the modules catalog API
+ * Backend response types for the modules catalog API
  */
-
-import type { ModuleTemplate } from "../types";
 
 /**
- * Response from GET /modules endpoint
+ * Module catalog entry from backend API
+ * Matches server/src/api/schemas/modules.py::Module
  */
-export interface ModuleCatalogResponse {
-  modules: ModuleTemplate[];
+export interface Module {
+  id: string;
+  version: string;
+  name: string;
+  description: string | null;
+  module_kind: string;  // "transform", "action", "logic", "comparator"
+  meta: any;  // Module I/O metadata
+  config_schema: any;  // JSON schema for module configuration
+  color: string;
+  category: string;
 }
 
 /**
  * Query parameters for filtering modules
+ * Used with GET /modules endpoint
  */
 export interface ModulesQueryParams {
   module_kind?: "transform" | "action" | "logic" | "entry_point";
   category?: string;
   search?: string;
-}
-
-/**
- * Module execution request (for testing modules)
- */
-export interface ModuleExecuteRequest {
-  module_id: string;
-  inputs: Record<string, any>;
-  config: Record<string, any>;
-  use_cache?: boolean;
-}
-
-/**
- * Module execution response
- */
-export interface ModuleExecuteResponse {
-  success: boolean;
-  module_id: string;
-  outputs: Record<string, any>;
-  error: string | null;
-  performance_ms: number;
-  cache_used: boolean;
 }

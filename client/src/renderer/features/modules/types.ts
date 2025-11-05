@@ -1,63 +1,70 @@
 /**
- * Module type system with unified NodeGroup structure
- * Matches backend contracts.py structure
+ * Module Catalog Types
+ * Domain types for module templates and their metadata
  */
 
-// Node type system
+// ============================================================================
+// I/O Shape System
+// ============================================================================
+
+/**
+ * Type rule for a node group
+ * Defines allowed types and type variables for type unification
+ */
 export interface NodeTypeRule {
   allowed_types?: string[];  // per-pin whitelist; user picks independently
   type_var?: string;         // e.g., "T" (unifies across pins)
 }
 
-// Unified NodeGroup - replaces StaticNodes/DynamicNodes split
-// Static nodes: min_count === max_count === 1
-// Dynamic nodes: max_count > 1 or null
+/**
+ * Node group definition
+ * Describes a collection of related input/output nodes
+ *
+ * Static nodes: min_count === max_count === 1
+ * Dynamic nodes: max_count > 1 or undefined (unlimited)
+ */
 export interface NodeGroup {
   label: string;
   min_count: number;
-  max_count?: number;        // null/undefined = unlimited
+  max_count?: number;        // undefined = unlimited
   typing: NodeTypeRule;
 }
 
-// I/O shape definitions
+/**
+ * I/O side shape (inputs or outputs)
+ * Ordered array of node groups
+ */
 export interface IOSideShape {
-  nodes: NodeGroup[];        // All nodes in a single array, ordered
+  nodes: NodeGroup[];
 }
 
+/**
+ * Complete I/O shape for a module
+ * Defines the module's input and output signature
+ */
 export interface IOShape {
   inputs: IOSideShape;
   outputs: IOSideShape;
   type_params: Record<string, string[]>; // declare domains for type variables
 }
 
+/**
+ * Module metadata
+ * Contains I/O shape and other module-level metadata
+ */
 export interface ModuleMeta {
   io_shape: IOShape;
 }
 
-// Runtime instance of a pin in a module instance
-export interface NodePin {
-  node_id: string;
-  direction: 'in' | 'out';
-  type: string;
-  name: string;              // user-editable name
-  label: string;             // from NodeGroup.label
-  position_index: number;    // position within the group
-  group_index: number;       // index in meta.io_shape.inputs.nodes or outputs.nodes
-  type_var?: string;         // type variable name if applicable
-  allowed_types?: string[];  // allowed types for this node (from template)
-}
+// ============================================================================
+// Module Template
+// ============================================================================
 
-// Module instance structure
-export interface ModuleInstance {
-  module_instance_id: string;
-  module_ref: string;
-  module_kind: string;
-  config: Record<string, any>;
-  inputs: NodePin[];         // Flat array, grouped by group_index
-  outputs: NodePin[];
-}
-
-// Module template structure
+/**
+ * Module template definition
+ * Represents a module type available in the catalog
+ * This is the frontend representation of backend Module type
+ */
 export interface ModuleTemplate {
   id: string;
   version: string;
@@ -68,19 +75,4 @@ export interface ModuleTemplate {
   category: string;
   meta: ModuleMeta;
   config_schema: any;
-}
-
-// Type variable management
-export interface TypeVariableState {
-  assignments: Record<string, string>; // typeVar -> currentType
-  affectedNodes: Record<string, string[]>; // typeVar -> nodeIds[]
-}
-
-// Group info for UI
-export interface GroupInfo {
-  groupIndex: number;
-  group: NodeGroup;
-  currentCount: number;
-  canAdd: boolean;
-  canRemove: boolean;
 }

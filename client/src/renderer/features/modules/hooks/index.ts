@@ -1,6 +1,0 @@
-/**
- * Modules Feature Hooks
- * Exports all hooks related to modules functionality
- */
-
-export { useModules, useModule } from './useModules';

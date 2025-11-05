@@ -1,33 +1,18 @@
 /**
- * Modules TanStack Query Hooks
- * Declarative API for fetching modules catalog using TanStack Query
+ * Modules API Hooks
+ * TanStack Query hooks for fetching module catalog data
  */
 
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../../../shared/api/client';
 import { API_CONFIG } from '../../../shared/api/config';
 import type { ModuleTemplate } from '../types';
-import type { ModulesQueryParams } from '../api/types';
+import type { Module, ModulesQueryParams } from './types';
 
 /**
- * Backend API response type (matches server-new/src/api/schemas/modules.py)
+ * Convert backend Module to frontend ModuleTemplate
  */
-interface ModuleCatalogDTO {
-  id: string;
-  version: string;
-  name: string;
-  description: string | null;
-  module_kind: string;
-  meta: any;
-  config_schema: any;
-  color: string;
-  category: string;
-}
-
-/**
- * Convert backend ModuleCatalogDTO to frontend ModuleTemplate
- */
-function convertModuleCatalogToTemplate(dto: ModuleCatalogDTO): ModuleTemplate {
+function convertModuleToTemplate(dto: Module): ModuleTemplate {
   return {
     id: dto.id,
     version: dto.version,
@@ -65,13 +50,13 @@ export function useModules(filters?: ModulesQueryParams) {
       }
 
       // Fetch from backend
-      const response = await apiClient.get<ModuleCatalogDTO[]>(
+      const response = await apiClient.get<Module[]>(
         API_CONFIG.ENDPOINTS.MODULES,
         { params }
       );
 
       // Convert to frontend format
-      let modules = response.data.map(convertModuleCatalogToTemplate);
+      let modules = response.data.map(convertModuleToTemplate);
 
       // Apply client-side filters
       if (filters?.category) {
@@ -116,11 +101,11 @@ export function useModule(moduleId: string | null) {
       if (!moduleId) return null;
 
       // Backend doesn't have single module endpoint, fetch all and filter
-      const response = await apiClient.get<ModuleCatalogDTO[]>(
+      const response = await apiClient.get<Module[]>(
         API_CONFIG.ENDPOINTS.MODULES
       );
 
-      const modules = response.data.map(convertModuleCatalogToTemplate);
+      const modules = response.data.map(convertModuleToTemplate);
       const module = modules.find((m) => m.id === moduleId);
 
       if (!module) {
