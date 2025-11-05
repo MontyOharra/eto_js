@@ -57,13 +57,35 @@ export interface EmailConfigDetail {
 }
 
 // ============================================================================
+// Provider Settings Types
+// ============================================================================
+
+export interface ImapProviderSettings {
+  host: string;
+  port: number;
+  email_address: string;
+  password: string;
+  use_ssl: boolean;
+}
+
+export interface GraphApiProviderSettings {
+  tenant_id: string;
+  client_id: string;
+  client_secret: string;
+  email_address: string;
+}
+
+export type ProviderSettings = ImapProviderSettings | GraphApiProviderSettings;
+
+// ============================================================================
 // Create Request (POST /email-configs)
 // ============================================================================
 
 export interface CreateEmailConfigRequest {
+  provider_type: string; // "imap", "graph_api", etc.
+  provider_settings: Record<string, any>; // Provider-specific settings
   name: string; // required, 1-255 chars
   description?: string; // optional, max 1000 chars
-  email_address: string; // required, valid email
   folder_name: string; // required, min 1 char
   filter_rules?: FilterRule[]; // optional, default: []
   poll_interval_seconds?: number; // optional, min: 5, default: 5
@@ -80,17 +102,13 @@ export interface UpdateEmailConfigRequest {
 }
 
 // ============================================================================
-// Discovery: Email Accounts (GET /email-configs/discovery/accounts)
+// Discovery: Folders (POST /email-configs/discovery/folders)
 // ============================================================================
 
-export interface EmailAccount {
-  email_address: string;
-  display_name: string | null;
+export interface DiscoverFoldersRequest {
+  provider_type: string;
+  provider_settings: Record<string, any>;
 }
-
-// ============================================================================
-// Discovery: Folders (GET /email-configs/discovery/folders)
-// ============================================================================
 
 export interface EmailFolder {
   folder_name: string;
@@ -102,7 +120,8 @@ export interface EmailFolder {
 // ============================================================================
 
 export interface ValidateEmailConfigRequest {
-  email_address: string;
+  provider_type: string;
+  provider_settings: Record<string, any>;
   folder_name: string;
 }
 
@@ -119,8 +138,4 @@ export interface ValidateEmailConfigResponse {
 export interface EmailConfigsListQueryParams {
   order_by?: 'name' | 'is_active' | 'last_check_time';
   desc?: boolean;
-}
-
-export interface EmailFoldersQueryParams {
-  email_address: string; // required
 }

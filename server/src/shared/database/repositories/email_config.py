@@ -15,6 +15,8 @@ from shared.types.email_configs import (
     EmailConfigCreate,
     EmailConfigUpdate,
     FilterRule,
+    ProviderSettings,
+    ImapProviderSettings
 )
 
 from shared.exceptions.service import ObjectNotFoundError
@@ -69,6 +71,31 @@ class EmailConfigRepository(BaseRepository[EmailConfigModel]):
             )
             for rule in rules_dicts
         ]
+            
+    def _provider_settings_to_json(self, settings: ProviderSettings | None) -> str | None:
+        """Convert provider settings dataclass to JSON string"""
+        if not settings:
+            return None
+
+        # Convert dataclass to dict
+        settings_dict = {
+            'type': type(settings).__name__,
+            'data': {k: v for k, v in settings.__dict__.items()}
+        }
+        return json.dumps(settings_dict)
+
+    def _provider_settings_from_json(self, settings_json: str | None, provider_type: str) -> ProviderSettings | None:
+        """Convert JSON string to provider settings dataclass"""
+        if not settings_json:
+            return None
+
+        settings_dict = json.loads(settings_json)
+        data = settings_dict['data']
+
+        if provider_type == 'imap':
+            return ImapProviderSettings(**data)
+
+        return None        
 
     def _model_to_dataclass(self, model: EmailConfigModel) -> EmailConfig:
         """Convert ORM model to EmailConfig dataclass"""
@@ -76,7 +103,8 @@ class EmailConfigRepository(BaseRepository[EmailConfigModel]):
             id=model.id,
             name=model.name,
             description=model.description,
-            email_address=model.email_address,
+            provider_type=model.provider_type,
+            provider_settings=self._provider_settings_from_json(model.provider_settings, model.provider_type),
             folder_name=model.folder_name,
             filter_rules=self._filter_rules_from_json(model.filter_rules),
             poll_interval_seconds=model.poll_interval_seconds,
@@ -167,7 +195,8 @@ class EmailConfigRepository(BaseRepository[EmailConfigModel]):
             model = self.model_class(
                 name=config_data.name,
                 description=config_data.description,
-                email_address=config_data.email_address,
+                provider_type=config_data.provider_type,
+                provider_settings=self._provider_settings_to_json(config_data.provider_settings),
                 folder_name=config_data.folder_name,
                 filter_rules=self._filter_rules_to_json(config_data.filter_rules),
                 poll_interval_seconds=config_data.poll_interval_seconds,

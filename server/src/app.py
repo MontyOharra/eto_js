@@ -665,44 +665,5 @@ def create_app() -> FastAPI:
     return app
 
 
-def run_server():
-    """Run the FastAPI server with uvicorn"""
-    # Get configuration from environment
-    port = int(os.getenv('PORT', 8000))
-    host = os.getenv('HOST', '0.0.0.0')
-    debug = os.getenv('DEBUG', 'false').lower() == 'true'
-
-    logger.info(f"Starting FastAPI server on {host}:{port}")
-
-    if debug:
-        logger.warning("Running in DEBUG mode - not suitable for production!")
-
-    # Run with uvicorn
-    if debug:
-        # In debug mode, configure reload to only watch src/ directory
-        uvicorn.run(
-            "app-fastapi:create_app",
-            factory=True,
-            host=host,
-            port=port,
-            reload=True,
-            reload_dirs=["./src"],  # Only watch src directory
-            reload_excludes=["./storage", "./logs", "./data"],  # Exclude storage/logs/data directories
-            log_level="debug",
-            access_log=True
-        )
-    else:
-        # Production mode - no reload
-        uvicorn.run(
-            "app-fastapi:create_app",
-            factory=True,
-            host=host,
-            port=port,
-            reload=False,
-            log_level="info",
-            access_log=True
-        )
-
-
-if __name__ == "__main__":
-    run_server()
+# Entry point has been moved to main.py
+# This file only contains the FastAPI app factory and configuration

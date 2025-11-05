@@ -11,12 +11,11 @@ import type {
   EmailConfigDetail,
   CreateEmailConfigRequest,
   UpdateEmailConfigRequest,
-  EmailAccount,
   EmailFolder,
   ValidateEmailConfigRequest,
   ValidateEmailConfigResponse,
   EmailConfigsListQueryParams,
-  EmailFoldersQueryParams,
+  DiscoverFoldersRequest,
 } from '../api/types';
 
 interface UseEmailConfigsApiResult {
@@ -38,11 +37,10 @@ interface UseEmailConfigsApiResult {
   deactivateEmailConfig: (id: number) => Promise<EmailConfigDetail>;
 
   // Discovery operations
-  getEmailAccounts: () => Promise<EmailAccount[]>;
-  getEmailFolders: (params: EmailFoldersQueryParams) => Promise<EmailFolder[]>;
+  discoverFolders: (data: DiscoverFoldersRequest) => Promise<EmailFolder[]>;
 
   // Validation operations
-  validateEmailConfig: (data: ValidateEmailConfigRequest) => Promise<ValidateEmailConfigResponse>;
+  testConnection: (data: ValidateEmailConfigRequest) => Promise<{ success: boolean; message: string }>;
 }
 
 export function useEmailConfigsApi(): UseEmailConfigsApiResult {
@@ -170,29 +168,13 @@ export function useEmailConfigsApi(): UseEmailConfigsApiResult {
   );
 
   /**
-   * GET /api/email-configs/discovery/accounts
-   * Get list of available email accounts from Outlook
+   * POST /api/email-configs/discovery/folders
+   * Get list of available folders using provider credentials
    */
-  const getEmailAccounts = useCallback(
-    async (): Promise<EmailAccount[]> => {
+  const discoverFolders = useCallback(
+    async (data: DiscoverFoldersRequest): Promise<EmailFolder[]> => {
       return withLoadingAndError(async () => {
-        const response = await apiClient.get<EmailAccount[]>(`${baseUrl}/discovery/accounts`);
-        return response.data;
-      });
-    },
-    [baseUrl, withLoadingAndError]
-  );
-
-  /**
-   * GET /api/email-configs/discovery/folders
-   * Get list of available folders for a specific email account
-   */
-  const getEmailFolders = useCallback(
-    async (params: EmailFoldersQueryParams): Promise<EmailFolder[]> => {
-      return withLoadingAndError(async () => {
-        const response = await apiClient.get<EmailFolder[]>(`${baseUrl}/discovery/folders`, {
-          params,
-        });
+        const response = await apiClient.post<EmailFolder[]>(`${baseUrl}/discovery/folders`, data);
         return response.data;
       });
     },
@@ -201,16 +183,26 @@ export function useEmailConfigsApi(): UseEmailConfigsApiResult {
 
   /**
    * POST /api/email-configs/validate
-   * Validate email configuration settings (checks connectivity and folder access)
+   * Test connection to email server with provider credentials
    */
-  const validateEmailConfig = useCallback(
-    async (data: ValidateEmailConfigRequest): Promise<ValidateEmailConfigResponse> => {
+  const testConnection = useCallback(
+    async (data: ValidateEmailConfigRequest): Promise<{ success: boolean; message: string }> => {
       return withLoadingAndError(async () => {
-        const response = await apiClient.post<ValidateEmailConfigResponse>(
-          `${baseUrl}/validate`,
-          data
-        );
-        return response.data;
+        try {
+          const response = await apiClient.post<ValidateEmailConfigResponse>(
+            `${baseUrl}/validate`,
+            data
+          );
+          return {
+            success: true,
+            message: response.data.message,
+          };
+        } catch (err) {
+          return {
+            success: false,
+            message: err instanceof Error ? err.message : 'Connection test failed',
+          };
+        }
       });
     },
     [baseUrl, withLoadingAndError]
@@ -226,8 +218,7 @@ export function useEmailConfigsApi(): UseEmailConfigsApiResult {
     deleteEmailConfig,
     activateEmailConfig,
     deactivateEmailConfig,
-    getEmailAccounts,
-    getEmailFolders,
-    validateEmailConfig,
+    discoverFolders,
+    testConnection,
   };
 }

@@ -12,8 +12,8 @@ from api.schemas.email_configs import (
 
     EmailConfig,
     EmailConfigSummary,
-    DiscoverEmailAccountsResponse,
-    DiscoverEmailFoldersResponse,
+    DiscoverFoldersResponse,
+    DiscoverFoldersRequest,
     ValidateEmailConfigResponse,
     EmailAccount,
     EmailFolder
@@ -132,35 +132,19 @@ async def deactivate_email_config(
     return email_config_to_api(config)
 
 
-@router.get("/discovery/accounts", response_model=list[EmailAccount])
-async def discover_email_accounts(
-    ingestion_service: EmailIngestionService = Depends(
-        lambda: ServiceContainer.get_email_ingestion_service()
-    ),
-) -> list[EmailAccount]:
-    """List available email accounts for configuration wizard Step 1"""
-    accounts = ingestion_service.discover_email_accounts()
-
-    return [
-            EmailAccount(
-                email_address=account.email_address,
-                display_name=account.display_name
-            )
-            for account in accounts
-        ]
-
-@router.get("/discovery/folders", response_model=list[EmailFolder])
+@router.post("/discovery/folders", response_model=list[EmailFolder])
 async def discover_email_folders(
-    email_address: str,
+    request: DiscoverFoldersRequest,
     ingestion_service: EmailIngestionService = Depends(
         lambda: ServiceContainer.get_email_ingestion_service()
     )
 ) -> list[EmailFolder]:
     """List available folders for selected email account (wizard Step 2)"""
 
+
     folders = ingestion_service.discover_folders(
-        email_address=email_address,
-        provider_type='outlook_com'
+        provider_type=request.provider_type,
+        provider_settings=request.provider_settings
     )
 
     return [
@@ -180,21 +164,24 @@ async def validate_email_config(
         lambda: ServiceContainer.get_email_ingestion_service()
     )
 ) -> ValidateEmailConfigResponse:
-    """Validate email configuration before creation (wizard Step 4)"""
+    """Validate email configuration before creation (wizard Step 3)"""
 
     # Test connection to email account and folder
     result = ingestion_service.test_connection(
-        email_address=request.email_address,
-        folder_name=request.folder_name,
-        provider_type="outlook_com"
+        provider_type=request.provider_type,
+        provider_settings=request.provider_settings,
+        folder_name=request.folder_name
     )
 
     if result.success:
+        # Extract email from provider_settings for response
+        email_address = request.provider_settings.get('email_address', 'unknown')
+
         return ValidateEmailConfigResponse(
-            email_address=request.email_address,
+            email_address=email_address,
             folder_name=request.folder_name,
             message="Configuration is valid"
         )
     else:
-        # Connection test failed - return 400
-        raise ValidationError("Cannot connect to email account")
+        # Connection test failed - return error details
+        raise ValidationError(result.error or "Cannot connect to email account")

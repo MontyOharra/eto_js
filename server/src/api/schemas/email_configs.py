@@ -13,6 +13,17 @@ class FilterRule(BaseModel):
     value: str
     case_sensitive: bool
 
+
+class ImapProviderSettings(BaseModel):
+    host: str
+    port: int = 993
+    email_address: str
+    password: str
+    use_ssl: bool = True
+
+# Union for API
+ProviderSettings = ImapProviderSettings
+
 class EmailConfigSummary(BaseModel):
     id: int
     name: str
@@ -23,7 +34,8 @@ class EmailConfig(BaseModel):
     id: int
     name: str
     description: Optional[str] = None
-    email_address: str
+    provider_type: str
+    provider_settings: ProviderSettings | None
     folder_name: str
     filter_rules: List[FilterRule]
     poll_interval_seconds: int
@@ -54,7 +66,8 @@ class ListEmailConfigsResponse(BaseModel):
 class CreateEmailConfigRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = Field(None, max_length=1000)
-    email_address: str
+    provider_type: str
+    provider_settings: ProviderSettings | None
     folder_name: str = Field(..., min_length=1)
     filter_rules: List[FilterRule] = []
     poll_interval_seconds: int = Field(5, ge=5)
@@ -67,16 +80,20 @@ class UpdateEmailConfigRequest(BaseModel):
     poll_interval_seconds: Optional[int] = Field(None, ge=5)
 
 
-class DiscoverEmailAccountsResponse(BaseModel):
-    accounts: List[EmailAccount]
+class DiscoverFoldersRequest(BaseModel):
+    """Request to discover folders with provider credentials"""
+    provider_type: Literal["imap", "graph_api"]
+    provider_settings: dict  # Could be ImapProviderSettingsSchema or GraphApiProviderSettingsSchema
+    
 
 
-class DiscoverEmailFoldersResponse(BaseModel):
+class DiscoverFoldersResponse(BaseModel):
     folders: List[EmailFolder]
 
 
 class ValidateEmailConfigRequest(BaseModel):
-    email_address: str
+    provider_type: str
+    provider_settings: dict
     folder_name: str
 
 class ValidateEmailConfigResponse(BaseModel):

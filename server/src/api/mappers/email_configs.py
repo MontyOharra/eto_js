@@ -3,7 +3,9 @@ from shared.types.email_configs import (
     EmailConfigSummary,
     EmailConfigCreate,
     EmailConfigUpdate,
-    FilterRule as FilterRuleDomain,
+    FilterRule,
+    ProviderSettings,
+    ImapProviderSettings
 )
 from api.schemas.email_configs import (
     EmailConfigSummary as EmailConfigSummaryPydantic,
@@ -11,7 +13,38 @@ from api.schemas.email_configs import (
     FilterRule as FilterRulePydantic,
     CreateEmailConfigRequest,
     UpdateEmailConfigRequest,
+    ProviderSettings as ProviderSettingsSchema,
+    ImapProviderSettings as ImapProviderSettingsSchema,
 )
+
+
+def _provider_settings_to_api(settings: ProviderSettings | None) -> ProviderSettingsSchema | None:
+    if not settings:
+        return None
+
+    if isinstance(settings, ImapProviderSettings):
+        return ImapProviderSettingsSchema(
+            host=settings.host,
+            port=settings.port,
+            email_address=settings.email_address,
+            password=settings.password,
+            use_ssl=settings.use_ssl
+        )
+    # ... similar for GraphApiProviderSettings
+
+def _provider_settings_to_domain(schema: ProviderSettingsSchema | None) -> ProviderSettings | None:
+    if not schema:
+        return None
+
+    if isinstance(schema, ImapProviderSettingsSchema):
+        return ImapProviderSettings(
+            host=schema.host,
+            port=schema.port,
+            email_address=schema.email_address,
+            password=schema.password,
+            use_ssl=schema.use_ssl
+        )
+    # ... similar for GraphApiProviderSettings
 
 # ========== Domain → API (Response) Conversions ==========
 
@@ -26,6 +59,8 @@ def email_config_summary_list_to_api(summaries: list[EmailConfigSummary]) -> lis
         )
         for summary in summaries
     ]
+    
+    
 
 def email_config_to_api(config: EmailConfig) -> EmailConfigPydantic:
     """Convert domain EmailConfig to API schema"""
@@ -33,7 +68,8 @@ def email_config_to_api(config: EmailConfig) -> EmailConfigPydantic:
         id=config.id,
         name=config.name,
         description=config.description,
-        email_address=config.email_address,
+        provider_type=config.provider_type,
+        provider_settings=_provider_settings_to_api(config.provider_settings),
         folder_name=config.folder_name,
         filter_rules=[
             FilterRulePydantic(
@@ -59,10 +95,11 @@ def create_request_to_domain(request: CreateEmailConfigRequest) -> EmailConfigCr
     return EmailConfigCreate(
         name=request.name,
         description=request.description,
-        email_address=request.email_address,
+        provider_type=request.provider_type,
+        provider_settings=_provider_settings_to_domain(request.provider_settings),
         folder_name=request.folder_name,
         filter_rules=[
-            FilterRuleDomain(
+            FilterRule(
                 field=rule.field,
                 operation=rule.operation,
                 value=rule.value,
@@ -78,7 +115,7 @@ def update_request_to_domain(request: UpdateEmailConfigRequest) -> EmailConfigUp
     filter_rules = None
     if request.filter_rules is not None:
         filter_rules = [
-            FilterRuleDomain(
+            FilterRule(
                 field=rule.field,
                 operation=rule.operation,
                 value=rule.value,

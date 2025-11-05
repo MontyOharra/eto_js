@@ -15,7 +15,7 @@ export type {
 } from './types';
 
 // API Hooks
-export { useModulesApi } from './hooks/useModulesApi';
+export { useModules } from './hooks/useModules';
 
 // API Types
 export type {

@@ -12,6 +12,16 @@ class FilterRule:
 
 
 @dataclass(frozen=True)
+class ImapProviderSettings:
+    host: str
+    port: int
+    email_address: str
+    password: str
+    use_ssl: bool = True
+
+ProviderSettings = ImapProviderSettings    
+
+@dataclass(frozen=True)
 class EmailConfig:
     """
     Full email configuration (database record).
@@ -20,7 +30,8 @@ class EmailConfig:
     id: int
     name: str
     description: str | None
-    email_address: str
+    provider_type: str
+    provider_settings: ProviderSettings | None
     folder_name: str
     filter_rules: list[FilterRule]
     poll_interval_seconds: int
@@ -52,7 +63,8 @@ class EmailConfigCreate:
     Used by create_config service method.
     """
     name: str
-    email_address: str
+    provider_type: str
+    provider_settings: ProviderSettings | None
     folder_name: str
     description: str | None = None
     filter_rules: list[FilterRule] = field(default_factory=list)

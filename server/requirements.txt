@@ -21,9 +21,6 @@ pyodbc==5.0.1  # SQL Server driver for database connectivity
 # Logging and utilities
 python-json-logger==2.0.7
 
-# Windows integration (for email processing)
-pywin32>=306
-
 # PDF Processing
 PyPDF2>=3.0.1
 pdfplumber>=0.7.6

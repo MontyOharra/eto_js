@@ -252,7 +252,7 @@ async def reprocess_eto_runs(
     For single run, send array with one ID: { run_ids: [1] }
 
     Flow (for each run):
-    1. Verify run status is "failure" or "skipped"
+    1. Verify run status is "failure", "skipped", or "needs_template"
     2. Delete all stage records (template_matching, extraction, pipeline_execution + steps)
     3. Reset status to "not_started"
     4. Clear error fields
@@ -262,7 +262,7 @@ async def reprocess_eto_runs(
 
     Errors:
     - 404: One or more runs not found
-    - 400: One or more runs have invalid status (can only reprocess failure/skipped runs)
+    - 400: One or more runs have invalid status (can only reprocess failure/skipped/needs_template runs)
     """
     logger.info(f"Reprocessing {len(request.run_ids)} ETO runs: {request.run_ids}")
     service.reprocess_runs(request.run_ids)

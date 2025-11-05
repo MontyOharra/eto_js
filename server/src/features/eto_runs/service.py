@@ -359,7 +359,7 @@ class EtoRunsService:
         Reprocess failed or skipped ETO runs (bulk operation).
 
         Workflow (for each run):
-        1. Verify run exists and status is "failure" or "skipped"
+        1. Verify run exists and status is "failure", "skipped", or "needs_template"
         2. Delete all stage records (template_matching, extraction, pipeline_execution)
         3. Reset run to "not_started" status
         4. Clear error fields
@@ -380,10 +380,10 @@ class EtoRunsService:
             if not run:
                 raise ObjectNotFoundError(f"ETO run {run_id} not found")
 
-            if run.status not in ("failure", "skipped"):
+            if run.status not in ("failure", "skipped", "needs_template"):
                 raise ValidationError(
                     f"Cannot reprocess run {run_id} with status '{run.status}'. "
-                    f"Only 'failure' and 'skipped' runs can be reprocessed."
+                    f"Only 'failure', 'skipped', and 'needs_template' runs can be reprocessed."
                 )
 
         # Reprocess each run
