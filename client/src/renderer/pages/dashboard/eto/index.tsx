@@ -8,9 +8,11 @@ import {
   useSkipRuns,
   useDeleteRuns,
   useEtoEvents,
-} from '../../../features/eto/hooks';
-import { EtoRunTable, RunDetailModal } from '../../../features/eto/components';
-import { EtoRunListItem, EtoRunStatus } from '../../../features/eto/types';
+  EtoRunTable,
+  RunDetailModal,
+  type EtoRunListItem,
+  type EtoRunStatus,
+} from '../../../features/eto';
 import { TemplateBuilderModal } from '../../../features/templates/components';
 import { useCreateTemplate, useActivateTemplate } from '../../../features/templates';
 
