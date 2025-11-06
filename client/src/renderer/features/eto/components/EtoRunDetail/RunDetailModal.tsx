@@ -7,9 +7,11 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { PdfViewer, usePdfViewer } from "../../../pdf";
-import { useEtoRunDetail, getPdfDownloadUrl } from "../../hooks";
+import { useEtoRunDetail } from "../../api/hooks";
+import { getPdfDownloadUrl } from "../../../pdf/api/hooks";
 import { StatusBadge } from "../EtoRunTable/StatusBadge";
 import { ExtractedFieldsOverlay } from "../EtoRunDetail/ExtractedFieldsOverlay";
+import { RunDetailModalFooter } from "./RunDetailModalFooter";
 import {
   ExecutedPipelineGraph,
   ExecutedPipelineGraphRef,
@@ -17,7 +19,7 @@ import {
 import { useModules } from '../../../modules';
 import { apiClient } from "../../../../shared/api/client";
 import { API_CONFIG } from "../../../../shared/api/config";
-import { formatDuration, formatTimestamp } from "../../../../shared/utils/formatUtils";
+import { formatDuration } from "../../../../shared/utils/formatUtils";
 import type { EtoRunDetail } from "../../types";
 import type { PipelineState, VisualState } from "../../../pipelines/types";
 
@@ -578,33 +580,7 @@ export function RunDetailModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between p-3 border-t border-gray-700 flex-shrink-0">
-          {runDetail && (
-            <div className="flex items-center space-x-4 text-xs text-gray-400">
-              <div>
-                <span className="text-gray-500">Started:</span>{" "}
-                <span className="font-mono">
-                  {formatTimestamp(runDetail.started_at)}
-                </span>
-              </div>
-              {runDetail.completed_at && (
-                <div>
-                  <span className="text-gray-500">Completed:</span>{" "}
-                  <span className="font-mono">
-                    {formatTimestamp(runDetail.completed_at)}
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 border border-gray-600 text-gray-300 rounded hover:bg-gray-800 transition-colors text-sm"
-          >
-            Close
-          </button>
-        </div>
+        <RunDetailModalFooter runDetail={runDetail || null} onClose={onClose} />
       </div>
     </div>
   );
