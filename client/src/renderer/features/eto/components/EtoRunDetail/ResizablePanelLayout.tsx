@@ -63,13 +63,13 @@ export function ResizablePanelLayout({
   return (
     <div className="flex h-full resizable-panel-container">
       {/* Left Panel */}
-      <div style={{ width: `${leftWidth}%` }}>{leftPanel}</div>
+      <div style={{ width: `${leftWidth}%`, height: '100%' }}>{leftPanel}</div>
 
       {/* Resizable Divider */}
       <ResizableDivider onMouseDown={handleMouseDown} isDragging={isDragging} />
 
       {/* Right Panel */}
-      <div style={{ width: `${100 - leftWidth}%` }}>{rightPanel}</div>
+      <div style={{ width: `${100 - leftWidth}%`, height: '100%' }}>{rightPanel}</div>
     </div>
   );
 }

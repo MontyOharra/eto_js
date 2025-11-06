@@ -97,7 +97,7 @@ export function PdfViewerPanel({
   }));
 
   return (
-    <div className="bg-gray-800 border border-gray-700 rounded-lg flex-1 overflow-hidden relative pr-4 pl-1 py-4">
+    <div className="bg-gray-800 border border-gray-700 rounded-lg h-full overflow-hidden relative pr-4 pl-1 py-4">
       {pdfUrl ? (
         <PdfViewer pdfUrl={pdfUrl} onError={handlePdfError}>
           <AutoFitOnResize isDragging={isDragging} />
