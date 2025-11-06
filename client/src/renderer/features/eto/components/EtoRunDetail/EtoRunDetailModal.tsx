@@ -1,5 +1,5 @@
 /**
- * Run Detail Modal
+ * EtoRunDetail
  * Displays detailed information about an ETO run including PDF info,
  * execution details, and allows viewing the PDF and specifics
  */
@@ -11,7 +11,7 @@ import { useEtoRunDetail } from "../../api/hooks";
 import { getPdfDownloadUrl } from "../../../pdf/api/hooks";
 import { StatusBadge } from "../EtoRunTable/StatusBadge";
 import { ExtractedFieldsOverlay } from "../EtoRunDetail/ExtractedFieldsOverlay";
-import { RunDetailModalFooter } from "./RunDetailModalFooter";
+import { EtoRunDetailFooter } from "./EtoRunDetailFooter";
 import {
   ExecutedPipelineGraph,
   ExecutedPipelineGraphRef,
@@ -23,7 +23,7 @@ import { formatDuration } from "../../../../shared/utils/formatUtils";
 import type { EtoRunDetail } from "../../types";
 import type { PipelineState, VisualState } from "../../../pipelines/types";
 
-interface RunDetailModalProps {
+interface EtoRunDetailProps {
   isOpen: boolean;
   runId: number | null;
   onClose: () => void;
@@ -91,11 +91,11 @@ function AutoFitOnResize({ isDragging }: { isDragging: boolean }) {
   return <div ref={pdfViewerRef} style={{ display: "none" }} />;
 }
 
-export function RunDetailModal({
+export function EtoRunDetail({
   isOpen,
   runId,
   onClose,
-}: RunDetailModalProps) {
+}: EtoRunDetailProps) {
   // Use TanStack Query hook to fetch run details
   const {
     data: runDetail,
@@ -580,7 +580,7 @@ export function RunDetailModal({
         </div>
 
         {/* Footer */}
-        <RunDetailModalFooter runDetail={runDetail || null} onClose={onClose} />
+        <EtoRunDetailFooter runDetail={runDetail || null} onClose={onClose} />
       </div>
     </div>
   );

@@ -9,7 +9,7 @@ import {
   useDeleteRuns,
   useEtoEvents,
   EtoRunTable,
-  RunDetailModal,
+  EtoRunDetail,
   type EtoRunListItem,
   type EtoRunStatus,
 } from '../../../features/eto';
@@ -361,7 +361,7 @@ function EtoPage() {
       </div>
 
       {/* Run Detail Modal */}
-      <RunDetailModal
+      <EtoRunDetail
         isOpen={selectedRunId !== null}
         runId={selectedRunId}
         onClose={() => setSelectedRunId(null)}

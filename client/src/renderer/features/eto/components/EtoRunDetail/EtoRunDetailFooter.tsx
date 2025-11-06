@@ -1,20 +1,20 @@
 /**
- * RunDetailModalFooter
- * Footer section for ETO run detail modal with timestamps and close button
+ * EtoRunDetailFooter
+ * Footer section for ETO run detail with timestamps and close button
  */
 
 import { formatTimestamp } from '../../../../shared/utils/formatUtils';
 import type { EtoRunDetail } from '../../types';
 
-interface RunDetailModalFooterProps {
+interface EtoRunDetailFooterProps {
   runDetail: EtoRunDetail | null;
   onClose: () => void;
 }
 
-export function RunDetailModalFooter({
+export function EtoRunDetailFooter({
   runDetail,
   onClose,
-}: RunDetailModalFooterProps) {
+}: EtoRunDetailFooterProps) {
   return (
     <div className="flex items-center justify-between p-3 border-t border-gray-700 flex-shrink-0">
       {runDetail && (
