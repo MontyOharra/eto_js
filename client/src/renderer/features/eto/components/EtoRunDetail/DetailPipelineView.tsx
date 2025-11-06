@@ -108,19 +108,10 @@ export function DetailPipelineView({
         const fieldValue = result.extracted_value;
 
         if (fieldValue !== undefined) {
-          // Determine type from the value
-          let valueType: string = typeof fieldValue;
-          if (typeof fieldValue === "object" && fieldValue instanceof Date) {
-            valueType = "datetime";
-          } else if (typeof fieldValue === "number") {
-            valueType = Number.isInteger(fieldValue) ? "int" : "float";
-          } else if (typeof fieldValue === "string") {
-            valueType = "str";
-          }
-
+          // Extracted values from backend are always strings
           valuesMap.set(entryNodeId, {
             value: fieldValue,
-            type: valueType,
+            type: "str",
             name: result.name,
           });
         }
