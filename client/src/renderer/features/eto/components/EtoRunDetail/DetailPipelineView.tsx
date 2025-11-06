@@ -109,12 +109,12 @@ export function DetailPipelineView({
 
         if (fieldValue !== undefined) {
           // Determine type from the value
-          let valueType = typeof fieldValue;
-          if (valueType === "object" && fieldValue instanceof Date) {
+          let valueType: string = typeof fieldValue;
+          if (typeof fieldValue === "object" && fieldValue instanceof Date) {
             valueType = "datetime";
-          } else if (valueType === "number") {
+          } else if (typeof fieldValue === "number") {
             valueType = Number.isInteger(fieldValue) ? "int" : "float";
-          } else if (valueType === "string") {
+          } else if (typeof fieldValue === "string") {
             valueType = "str";
           }
 

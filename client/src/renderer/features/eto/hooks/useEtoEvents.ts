@@ -50,8 +50,6 @@ export function useEtoEvents({
       return;
     }
 
-    console.log('[SSE] Connecting to ETO events stream...');
-
     // Create EventSource connection
     const eventSource = new EventSource(
       `${API_CONFIG.BASE_URL}/api/eto-runs/events`,
@@ -61,7 +59,6 @@ export function useEtoEvents({
     );
 
     eventSource.onopen = () => {
-      console.log('[SSE] Connected to ETO events stream');
       isConnectedRef.current = true;
       onConnected?.();
     };
@@ -70,7 +67,6 @@ export function useEtoEvents({
       try {
         // Parse the event data
         const payload: EtoEvent = JSON.parse(event.data);
-        console.log('[SSE] Received event:', payload.type, payload.data);
 
         // Route to appropriate callback
         switch (payload.type) {
@@ -95,7 +91,6 @@ export function useEtoEvents({
     };
 
     eventSource.onerror = (error) => {
-      console.error('[SSE] Connection error:', error);
 
       // Update connection state
       if (isConnectedRef.current) {
@@ -109,7 +104,6 @@ export function useEtoEvents({
       // Attempt reconnect after delay
       if (!reconnectTimeoutRef.current) {
         reconnectTimeoutRef.current = setTimeout(() => {
-          console.log('[SSE] Attempting to reconnect...');
           reconnectTimeoutRef.current = null;
           connect();
         }, 3000); // Retry after 3 seconds
@@ -125,8 +119,6 @@ export function useEtoEvents({
 
     // Cleanup on unmount
     return () => {
-      console.log('[SSE] Disconnecting from events stream');
-
       // Clear reconnect timeout
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);

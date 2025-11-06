@@ -20,8 +20,6 @@ export function ExtractedFieldsOverlay({ fields }: ExtractedFieldsOverlayProps) 
     return null;
   }
 
-  const pageHeight = pdfDimensions.height;
-
   // Render extracted field boxes
   const renderField = (field: ExtractedFieldWithBox) => {
     // Only show fields on current page (both 1-indexed)
