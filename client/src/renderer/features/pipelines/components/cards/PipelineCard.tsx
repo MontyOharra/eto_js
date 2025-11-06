@@ -1,4 +1,5 @@
 import { PipelineListItem } from '../../types';
+import { formatTimestamp } from '../../../../shared/utils/formatUtils';
 
 interface PipelineCardProps {
   pipeline: PipelineListItem;
@@ -9,18 +10,6 @@ export function PipelineCard({
   pipeline,
   onView,
 }: PipelineCardProps) {
-  // Format dates for display
-  const formatDate = (isoString: string) => {
-    const date = new Date(isoString);
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-lg p-5 hover:border-gray-600 transition-colors">
       {/* Header */}
@@ -46,13 +35,13 @@ export function PipelineCard({
         <div className="flex items-center justify-between text-sm">
           <span className="text-gray-400">Created:</span>
           <span className="text-gray-200 text-xs">
-            {formatDate(pipeline.created_at)}
+            {formatTimestamp(pipeline.created_at)}
           </span>
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-gray-400">Updated:</span>
           <span className="text-gray-200 text-xs">
-            {formatDate(pipeline.updated_at)}
+            {formatTimestamp(pipeline.updated_at)}
           </span>
         </div>
       </div>

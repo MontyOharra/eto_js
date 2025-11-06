@@ -17,6 +17,7 @@ import {
 import { useModules } from '../../../modules';
 import { apiClient } from "../../../../shared/api/client";
 import { API_CONFIG } from "../../../../shared/api/config";
+import { formatDuration, formatTimestamp } from "../../../../shared/utils/formatUtils";
 import type { EtoRunDetail } from "../../types";
 import type { PipelineState, VisualState } from "../../../pipelines/types";
 
@@ -322,46 +323,6 @@ export function RunDetailModal({
       resizeObserver.disconnect();
     };
   }, [viewMode]);
-
-  // Format file size
-  const formatFileSize = (bytes: number | null): string => {
-    if (!bytes) return "Unknown";
-    const mb = bytes / (1024 * 1024);
-    return `${mb.toFixed(2)} MB`;
-  };
-
-  // Format duration
-  const formatDuration = (
-    startedAt: string | null,
-    completedAt: string | null
-  ): string => {
-    if (!startedAt || !completedAt) return "N/A";
-    const start = new Date(startedAt).getTime();
-    const end = new Date(completedAt).getTime();
-    const durationMs = end - start;
-    const seconds = Math.floor(durationMs / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-
-    if (minutes > 0) {
-      return `${minutes}m ${remainingSeconds}s`;
-    }
-    return `${seconds}s`;
-  };
-
-  // Format timestamp
-  const formatTimestamp = (timestamp: string | null): string => {
-    if (!timestamp) return "N/A";
-    const date = new Date(timestamp);
-    return date.toLocaleString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
-  };
 
   if (!isOpen || !runId) return null;
 

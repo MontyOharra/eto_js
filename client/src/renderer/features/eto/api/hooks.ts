@@ -6,7 +6,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../../shared/api/client';
 import { API_CONFIG } from '../../../shared/api/config';
-import { useUploadPdf, getPdfDownloadUrl } from '../../pdf';
+import { useUploadPdf } from '../../pdf';
 import {
   GetEtoRunsQueryParams,
   GetEtoRunsResponse,
@@ -157,13 +157,3 @@ export function useDeleteRuns() {
     },
   });
 }
-
-// ============================================================================
-// Utility Functions
-// ============================================================================
-
-/**
- * Get PDF download URL for a given PDF file ID
- * Re-exported from PDF feature for convenience
- */
-export { getPdfDownloadUrl };

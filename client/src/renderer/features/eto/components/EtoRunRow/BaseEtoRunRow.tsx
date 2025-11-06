@@ -1,5 +1,6 @@
 import { EtoRunListItem } from '../../types';
 import { ProcessingStepBadge } from './ProcessingStepBadge';
+import { formatFileSize, formatTimestampShort } from '../../../../shared/utils/formatUtils';
 
 interface BaseEtoRunRowProps {
   run: EtoRunListItem;
@@ -9,27 +10,6 @@ interface BaseEtoRunRowProps {
 }
 
 export function BaseEtoRunRow({ run, children, isSelected = false, onToggleSelect }: BaseEtoRunRowProps) {
-  
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
-  const formatBytes = (bytes: number | null) => {
-    if (bytes === null) return 'Unknown';
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
-  };
-
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 hover:border-gray-600 transition-colors">
       <div className="flex items-center justify-between">
@@ -62,7 +42,7 @@ export function BaseEtoRunRow({ run, children, isSelected = false, onToggleSelec
             {/* Metadata row */}
             <div className="mt-1 flex items-center space-x-4 text-xs text-gray-400">
               {run.started_at && (
-                <span>Started: {formatDate(run.started_at)}</span>
+                <span>Started: {formatTimestampShort(run.started_at)}</span>
               )}
               <span>
                 From:{' '}
@@ -70,9 +50,9 @@ export function BaseEtoRunRow({ run, children, isSelected = false, onToggleSelec
                   ? run.source.sender_email
                   : 'Manual Upload'}
               </span>
-              <span>Size: {formatBytes(run.pdf.file_size)}</span>
+              <span>Size: {formatFileSize(run.pdf.file_size)}</span>
               {run.completed_at && (
-                <span>Completed: {formatDate(run.completed_at)}</span>
+                <span>Completed: {formatTimestampShort(run.completed_at)}</span>
               )}
               {run.matched_template && (
                 <span>Template: {run.matched_template.template_name}</span>

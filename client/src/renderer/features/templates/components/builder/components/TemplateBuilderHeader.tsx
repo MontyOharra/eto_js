@@ -5,6 +5,7 @@
 
 import { PdfFileMetadataDTO } from '../../../../pdf';
 import { EmailData } from '../../../../emails/mocks/useMockEmailApi';
+import { formatFileSize } from '../../../../../shared/utils/formatUtils';
 
 interface TemplateBuilderHeaderProps {
   pdfMetadata: PdfFileMetadataDTO | null;
@@ -17,13 +18,6 @@ export function TemplateBuilderHeader({
   emailData,
   onClose,
 }: TemplateBuilderHeaderProps) {
-  // Format file size
-  const formatFileSize = (bytes: number | null): string => {
-    if (!bytes) return 'Unknown';
-    const mb = bytes / (1024 * 1024);
-    return `${mb.toFixed(2)} MB`;
-  };
-
   return (
     <div className="flex items-center justify-between p-4 border-b border-gray-700 flex-shrink-0">
       <div className="flex items-center space-x-4">
