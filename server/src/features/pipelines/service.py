@@ -102,15 +102,16 @@ class PipelineService:
         module_by_id: Dict[str, ModuleInstance] = {}
         input_to_upstream: Dict[str, str] = {}
 
-        # Index entry points
+        # Index entry points (index their output pins)
         for entry_point in pipeline_state.entry_points:
-            pin_by_id[entry_point.node_id] = PinInfo(
-                node_id=entry_point.node_id,
-                type="any",  # Entry points can connect to any type
-                direction="entry",
-                name=entry_point.name,
-                module_instance_id=None
-            )
+            for output_pin in entry_point.outputs:
+                pin_by_id[output_pin.node_id] = PinInfo(
+                    node_id=output_pin.node_id,
+                    type=output_pin.type,
+                    direction="entry",
+                    name=output_pin.name,
+                    module_instance_id=None  # Entry points don't have module IDs
+                )
 
         # Index modules and their pins
         for module in pipeline_state.modules:
@@ -318,9 +319,10 @@ class PipelineService:
                 for pin in module.outputs:
                     reachable_pins.add(pin.node_id)
 
-        # Also add entry point node_ids (they can connect to reachable modules)
+        # Also add entry point output pins (they can connect to reachable modules)
         for entry_point in pipeline_state.entry_points:
-            reachable_pins.add(entry_point.node_id)
+            for output_pin in entry_point.outputs:
+                reachable_pins.add(output_pin.node_id)
 
         # Step 4: Filter modules to reachable only
         pruned_modules = [
@@ -367,11 +369,12 @@ class PipelineService:
         # Step 1: Create canonical entry points (count only, names don't matter for logic)
         # Sort entry points by their first downstream connection for deterministic ordering
         def ep_sort_key(ep):
-            # Find what this entry point connects to
+            # Find what this entry point connects to (check all output pins)
             downstream_nodes = []
-            for conn in pruned_pipeline.connections:
-                if conn.from_node_id == ep.node_id:
-                    downstream_nodes.append(conn.to_node_id)
+            for output_pin in ep.outputs:
+                for conn in pruned_pipeline.connections:
+                    if conn.from_node_id == output_pin.node_id:
+                        downstream_nodes.append(conn.to_node_id)
             # Sort by downstream connections (deterministic even if names change)
             return tuple(sorted(downstream_nodes))
 
@@ -380,10 +383,11 @@ class PipelineService:
         # Just include the count of entry points, not their names
         canonical_entry_points = [{"index": idx} for idx in range(len(sorted_eps))]
 
-        # Map entry point node_ids to canonical IDs
+        # Map entry point output node_ids to canonical IDs
         entry_point_id_map = {}
         for idx, ep in enumerate(sorted_eps):
-            entry_point_id_map[ep.node_id] = f"EP_{idx}"
+            for output_pin in ep.outputs:
+                entry_point_id_map[output_pin.node_id] = f"EP_{idx}"
 
         # Step 2: Topology-based module ordering (BFS from entry points)
         visited_modules = set()
@@ -392,16 +396,17 @@ class PipelineService:
         # BFS queue: Find modules that consume entry points
         queue = deque()
         for ep in sorted_eps:
-            # Find connections where this entry point is the source
-            for conn in pruned_pipeline.connections:
-                if conn.from_node_id == ep.node_id:
-                    # Find which module this connection goes to
-                    for module in pruned_pipeline.modules:
-                        if any(inp.node_id == conn.to_node_id for inp in module.inputs):
-                            if module.module_instance_id not in visited_modules:
-                                visited_modules.add(module.module_instance_id)
-                                queue.append(module.module_instance_id)
-                            break
+            # Find connections where this entry point's outputs are the source
+            for output_pin in ep.outputs:
+                for conn in pruned_pipeline.connections:
+                    if conn.from_node_id == output_pin.node_id:
+                        # Find which module this connection goes to
+                        for module in pruned_pipeline.modules:
+                            if any(inp.node_id == conn.to_node_id for inp in module.inputs):
+                                if module.module_instance_id not in visited_modules:
+                                    visited_modules.add(module.module_instance_id)
+                                    queue.append(module.module_instance_id)
+                                break
 
         # BFS traversal
         while queue:
