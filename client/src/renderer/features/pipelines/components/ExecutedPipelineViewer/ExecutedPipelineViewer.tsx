@@ -12,11 +12,13 @@ import {
   Background,
   ReactFlowProvider,
   BackgroundVariant,
+  useViewport,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import dagre from "dagre";
 import { ExecutedModule } from "./ExecutedModule";
 import { ExecutedEntryPoint } from "./ExecutedEntryPoint";
+import { ExecutionEdge } from "./ExecutionEdge";
 import { useModules } from "../../../modules";
 import type { PipelineState } from "../../types";
 import type { ExecutionStepResult } from "../../api/types";
@@ -30,6 +32,10 @@ interface ExecutedPipelineViewerProps {
 const nodeTypes = {
   executedModule: ExecutedModule,
   executedEntryPoint: ExecutedEntryPoint,
+};
+
+const edgeTypes = {
+  executionEdge: ExecutionEdge,
 };
 
 // Use dagre to calculate node positions (left-to-right layout)
@@ -76,6 +82,18 @@ function ExecutedPipelineViewerInner({
   pipelineState,
   executionSteps,
 }: ExecutedPipelineViewerProps) {
+  // Get current zoom level to adjust background density
+  const { zoom } = useViewport();
+
+  // Calculate gap based on zoom - larger gap when zoomed out
+  // This prevents visual clutter at low zoom levels
+  const backgroundGap = useMemo(() => {
+    if (zoom < 0.5) return 40;
+    if (zoom < 0.75) return 30;
+    if (zoom < 1.5) return 20;
+    return 15;
+  }, [zoom]);
+
   // Fetch modules using TanStack Query
   const { data: modules = [], isLoading: modulesLoading } = useModules();
 
@@ -138,26 +156,36 @@ function ExecutedPipelineViewerInner({
 
       // Build inputs/outputs from pipeline state structure with execution values
       // This ensures all handles are rendered even if execution data is missing
-      const inputs: Record<string, { name: string; value: string; type: string }> = {};
-      const outputs: Record<string, { name: string; value: string; type: string }> = {};
+      const inputs: Record<string, { name: string; value: string; type: string; group_index: number; label: string }> = {};
+      const outputs: Record<string, { name: string; value: string; type: string; group_index: number; label: string }> = {};
 
       // Populate inputs from pipeline state, overlay with execution data if available
       moduleInstance.inputs.forEach((input) => {
         const executionData = executionStep?.inputs?.[input.node_id];
+        // Get group label from template's io_shape
+        const groupLabel = template?.meta?.io_shape?.inputs?.nodes?.[input.group_index]?.label || input.label || "Group";
+
         inputs[input.node_id] = {
           name: executionData?.name || input.name,
           value: executionData?.value || "",
           type: executionData?.type || input.type,
+          group_index: input.group_index,
+          label: groupLabel,
         };
       });
 
       // Populate outputs from pipeline state, overlay with execution data if available
       moduleInstance.outputs.forEach((output) => {
         const executionData = executionStep?.outputs?.[output.node_id];
+        // Get group label from template's io_shape
+        const groupLabel = template?.meta?.io_shape?.outputs?.nodes?.[output.group_index]?.label || output.label || "Group";
+
         outputs[output.node_id] = {
           name: executionData?.name || output.name,
           value: executionData?.value || "",
           type: executionData?.type || output.type,
+          group_index: output.group_index,
+          label: groupLabel,
         };
       });
 
@@ -219,8 +247,7 @@ function ExecutedPipelineViewerInner({
         target: targetModuleId || '',
         sourceHandle: connection.from_node_id,
         targetHandle: connection.to_node_id,
-        type: 'straight',
-        style: { stroke: '#6B7280', strokeWidth: 2 },
+        type: 'executionEdge',
       };
     });
 
@@ -228,9 +255,66 @@ function ExecutedPipelineViewerInner({
     return edges.filter(edge => edge.source && edge.target);
   }, [pipelineState]);
 
-  // Apply dagre layout to position nodes
+  // Apply dagre layout to position nodes and calculate edge offsets
   const { nodes, edges } = useMemo(() => {
-    return getLayoutedElements(rawNodes, rawEdges);
+    const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(rawNodes, rawEdges);
+
+    // Build node position map
+    const nodePositions = new Map<string, { x: number; y: number }>();
+    layoutedNodes.forEach((node) => {
+      nodePositions.set(node.id, node.position);
+    });
+
+    // Group edges by their source-target column positions
+    const edgesByColumn = new Map<string, typeof layoutedEdges>();
+    layoutedEdges.forEach((edge) => {
+      const sourcePos = nodePositions.get(edge.source);
+      const targetPos = nodePositions.get(edge.target);
+
+      if (sourcePos && targetPos) {
+        // Round X positions to nearest 100px to group edges in same vertical column
+        const sourceCol = Math.round(sourcePos.x / 100) * 100;
+        const targetCol = Math.round(targetPos.x / 100) * 100;
+        const columnKey = `${sourceCol}-${targetCol}`;
+
+        if (!edgesByColumn.has(columnKey)) {
+          edgesByColumn.set(columnKey, []);
+        }
+        edgesByColumn.get(columnKey)!.push(edge);
+      }
+    });
+
+    // Apply offsets to edges that share the same vertical column
+    const edgesWithOffsets = layoutedEdges.map((edge) => {
+      const sourcePos = nodePositions.get(edge.source);
+      const targetPos = nodePositions.get(edge.target);
+
+      let offset = 0;
+      if (sourcePos && targetPos) {
+        const sourceCol = Math.round(sourcePos.x / 100) * 100;
+        const targetCol = Math.round(targetPos.x / 100) * 100;
+        const columnKey = `${sourceCol}-${targetCol}`;
+        const parallelEdges = edgesByColumn.get(columnKey) || [];
+        const edgeIndex = parallelEdges.indexOf(edge);
+        const totalEdges = parallelEdges.length;
+
+        // Spread parallel edges horizontally (12px spacing between each)
+        if (totalEdges > 1) {
+          const spacing = 12;
+          const totalWidth = (totalEdges - 1) * spacing;
+          offset = edgeIndex * spacing - totalWidth / 2;
+        }
+      }
+
+      return {
+        ...edge,
+        data: {
+          offset,
+        },
+      };
+    });
+
+    return { nodes: layoutedNodes, edges: edgesWithOffsets };
   }, [rawNodes, rawEdges]);
 
   // Show loading state while modules are loading
@@ -257,6 +341,7 @@ function ExecutedPipelineViewerInner({
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable={false}
@@ -271,7 +356,12 @@ function ExecutedPipelineViewerInner({
         }}
       >
         <Controls />
-        <Background variant={BackgroundVariant.Dots} />
+        <Background
+          variant={BackgroundVariant.Dots}
+          gap={backgroundGap}
+          size={2}
+          color="#6B7280"
+        />
       </ReactFlow>
     </div>
   );

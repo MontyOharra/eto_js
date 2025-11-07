@@ -1,14 +1,38 @@
 /**
  * ExecutedModuleBody
  * Body section for executed module showing inputs/outputs in two-column layout
+ * Groups pins by group_index and displays group labels
  */
 
-import { ExecutedModuleRow } from "./ExecutedModuleRow";
+import { ExecutedNodeGroup } from "./ExecutedNodeGroup";
+
+interface PinData {
+  name: string;
+  value: string;
+  type: string;
+  group_index: number;
+  label: string;
+}
 
 interface ExecutedModuleBodyProps {
-  inputs: Record<string, { name: string; value: string; type: string }>;
-  outputs: Record<string, { name: string; value: string; type: string }>;
+  inputs: Record<string, PinData>;
+  outputs: Record<string, PinData>;
   error?: string | null;
+}
+
+// Helper to group pins by group_index
+function groupPinsByIndex(pins: Record<string, PinData>): Map<number, Array<{ nodeId: string; data: PinData }>> {
+  const groups = new Map<number, Array<{ nodeId: string; data: PinData }>>();
+
+  Object.entries(pins).forEach(([nodeId, data]) => {
+    const groupIndex = data.group_index;
+    if (!groups.has(groupIndex)) {
+      groups.set(groupIndex, []);
+    }
+    groups.get(groupIndex)!.push({ nodeId, data });
+  });
+
+  return groups;
 }
 
 export function ExecutedModuleBody({
@@ -16,10 +40,12 @@ export function ExecutedModuleBody({
   outputs,
   error,
 }: ExecutedModuleBodyProps) {
-  const inputEntries = Object.entries(inputs);
-  const outputEntries = Object.entries(outputs);
-  const hasInputs = inputEntries.length > 0;
-  const hasOutputs = outputEntries.length > 0;
+  // Group inputs and outputs by group_index
+  const inputGroups = groupPinsByIndex(inputs);
+  const outputGroups = groupPinsByIndex(outputs);
+
+  const hasInputs = Object.keys(inputs).length > 0;
+  const hasOutputs = Object.keys(outputs).length > 0;
 
   return (
     <>
@@ -32,13 +58,16 @@ export function ExecutedModuleBody({
               hasOutputs ? "w-1/2 border-r border-gray-600" : "w-full"
             } px-3 py-2`}
           >
-            {inputEntries.map(([nodeId, data]) => (
-              <ExecutedModuleRow
-                key={nodeId}
-                nodeId={nodeId}
-                name={data.name}
-                type={data.type}
-                value={data.value}
+            {Array.from(inputGroups.entries()).map(([groupIndex, pins]) => (
+              <ExecutedNodeGroup
+                key={groupIndex}
+                groupLabel={pins[0]?.data.label || "Group"}
+                nodes={pins.map(({ nodeId, data }) => ({
+                  nodeId,
+                  name: data.name,
+                  type: data.type,
+                  value: data.value,
+                }))}
                 direction="input"
               />
             ))}
@@ -48,13 +77,16 @@ export function ExecutedModuleBody({
         {/* Outputs Section - Right Column */}
         {hasOutputs && (
           <div className={`${hasInputs ? "w-1/2" : "w-full"} px-3 py-2`}>
-            {outputEntries.map(([nodeId, data]) => (
-              <ExecutedModuleRow
-                key={nodeId}
-                nodeId={nodeId}
-                name={data.name}
-                type={data.type}
-                value={data.value}
+            {Array.from(outputGroups.entries()).map(([groupIndex, pins]) => (
+              <ExecutedNodeGroup
+                key={groupIndex}
+                groupLabel={pins[0]?.data.label || "Group"}
+                nodes={pins.map(({ nodeId, data }) => ({
+                  nodeId,
+                  name: data.name,
+                  type: data.type,
+                  value: data.value,
+                }))}
                 direction="output"
               />
             ))}

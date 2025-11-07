@@ -73,7 +73,7 @@ export function useModules(filters?: ModulesQueryParams) {
 
       return modules;
     },
-    staleTime: 1000 * 60 * 5, // 5 minutes - modules catalog rarely changes
+    staleTime: 0, // Always fetch fresh data (modules may be synced externally via curl)
     gcTime: 1000 * 60 * 10, // 10 minutes - keep in cache
   });
 }
@@ -115,7 +115,7 @@ export function useModule(moduleId: string | null) {
       return module;
     },
     enabled: !!moduleId, // Only run query if moduleId is provided
-    staleTime: 1000 * 60 * 5,
+    staleTime: 0, // Always fetch fresh data (modules may be synced externally via curl)
     gcTime: 1000 * 60 * 10,
   });
 }

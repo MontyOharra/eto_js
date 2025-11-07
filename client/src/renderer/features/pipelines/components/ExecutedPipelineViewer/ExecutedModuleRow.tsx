@@ -37,48 +37,14 @@ export function ExecutedModuleRow({
         }}
       />
 
-      {/* Node Content - Mirrored layout based on direction */}
-      {direction === "input" ? (
-        // Input layout: [handle] name - type
-        <div className="flex items-center w-full gap-2">
-          <div className="flex-1 min-w-0 nodrag flex items-center">
-            <div className="text-sm text-gray-300 px-1.5 py-0.5 w-full min-h-[24px] flex items-center">
-              {name}
-            </div>
-          </div>
-          <div className="flex-shrink-0 w-12 flex items-center">
-            <div
-              className="w-full text-[9px] px-0.5 py-0.5 rounded border border-gray-600 min-h-[24px] flex items-center justify-center"
-              style={{
-                backgroundColor: handleColor,
-                color: "#FFFFFF",
-              }}
-            >
-              {type}
-            </div>
+      {/* Node Content - Centered layout */}
+      <div className="flex items-center w-full">
+        <div className="flex-1 min-w-0 nodrag flex items-center">
+          <div className="text-sm text-gray-300 px-1.5 py-0.5 w-full min-h-[24px] flex items-center justify-center">
+            {name}
           </div>
         </div>
-      ) : (
-        // Output layout: type - name [handle]
-        <div className="flex items-center w-full gap-2">
-          <div className="flex-shrink-0 w-12 flex items-center">
-            <div
-              className="w-full text-[9px] px-0.5 py-0.5 rounded border border-gray-600 min-h-[24px] flex items-center justify-center"
-              style={{
-                backgroundColor: handleColor,
-                color: "#FFFFFF",
-              }}
-            >
-              {type}
-            </div>
-          </div>
-          <div className="flex-1 min-w-0 nodrag flex items-center">
-            <div className="text-sm text-gray-300 px-1.5 py-0.5 w-full min-h-[24px] flex items-center justify-end">
-              {name}
-            </div>
-          </div>
-        </div>
-      )}
+      </div>
     </div>
   );
 }
