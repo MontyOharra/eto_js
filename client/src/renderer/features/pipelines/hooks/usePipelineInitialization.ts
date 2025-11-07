@@ -34,40 +34,31 @@ function createEntryPointNodes(
   visualState?: VisualState
 ): Node[] {
   return entryPoints.map((ep, index) => {
-    // Flat visual state: look up by React Flow node ID (entry-{node_id})
-    const reactFlowNodeId = `entry-${ep.node_id}`;
+    // Flat visual state: look up by entry_point_id (E{xx})
+    const reactFlowNodeId = ep.entry_point_id;
     const position = visualState?.[reactFlowNodeId] || {
       x: 50 + index * 200,
       y: 50,
     };
 
     // Create fake module instance for visual rendering
-    // Backend entry points don't have 'type', default to 'str'
-    const entryPointType = (ep as any).type || "str";
-
+    // Use the actual outputs from the entry point
     const fakeModuleInstance: ModuleInstance = {
-      module_instance_id: `entry-${ep.node_id}`,
+      module_instance_id: ep.entry_point_id,
       module_ref: "entry_point:1.0.0",
       config: {},
       inputs: [],
-      outputs: [
-        {
-          node_id: ep.node_id,
-          direction: "out",
-          type: entryPointType,
-          name: ep.name,
-          label: ep.name,
-          position_index: 0,
-          group_index: 0,
-          allowed_types: ["str"],
-        },
-      ],
+      outputs: ep.outputs.map(output => ({
+        ...output,
+        allowed_types: ["str"],
+      })),
     };
 
     // Create fake template for entry point
     const fakeTemplate: ModuleTemplate = {
       id: "entry_point",
       version: "1.0.0",
+      category: "entry_point",
       kind: "transform",
       title: "Entry Point",
       description: "Pipeline entry point",
@@ -94,7 +85,7 @@ function createEntryPointNodes(
     };
 
     return {
-      id: `entry-${ep.node_id}`,
+      id: ep.entry_point_id,
       type: "module",
       position: { x: position.x, y: position.y },
       data: {
@@ -370,7 +361,7 @@ export function usePipelineInitialization({
   // Sync entry points dynamically after initial load
   // This allows adding/removing entry points without full re-initialization
   const entryPointsKey = JSON.stringify(
-    entryPoints.map((ep) => ep.node_id).sort()
+    entryPoints.map((ep) => ep.entry_point_id).sort()
   );
 
   useEffect(() => {
@@ -386,7 +377,7 @@ export function usePipelineInitialization({
       "[usePipelineInitialization] Syncing entry points after initialization",
       {
         entryPointsInProp: entryPoints.length,
-        entryPointIds: entryPoints.map((ep) => ep.node_id),
+        entryPointIds: entryPoints.map((ep) => ep.entry_point_id),
       }
     );
 

@@ -278,11 +278,12 @@ export function ExecutePipelineModal({
                               const entryValuesMap: Record<string, { name: string; value: any; type: string }> = {};
                               entryPoints.forEach((ep) => {
                                 const value = entryValues[ep.name];
-                                if (value !== undefined && value !== "") {
-                                  entryValuesMap[ep.node_id] = {
+                                if (value !== undefined && value !== "" && ep.outputs[0]) {
+                                  // Use the node_id from the first output
+                                  entryValuesMap[ep.outputs[0].node_id] = {
                                     name: ep.name,
                                     value: value,
-                                    type: ep.type,
+                                    type: ep.outputs[0].type,
                                   };
                                 }
                               });
@@ -326,10 +327,10 @@ export function ExecutePipelineModal({
 
                 <div className="flex-1 overflow-y-auto space-y-4">
                   {entryPoints.map((ep) => (
-                    <div key={ep.node_id}>
+                    <div key={ep.entry_point_id}>
                       <label className="block text-sm font-medium text-gray-300 mb-2">
                         {ep.name}
-                        <span className="text-gray-500 ml-2">({ep.type})</span>
+                        <span className="text-gray-500 ml-2">({ep.outputs[0]?.type || 'str'})</span>
                       </label>
                       <input
                         type="text"

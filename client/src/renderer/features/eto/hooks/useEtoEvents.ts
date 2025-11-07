@@ -91,6 +91,7 @@ export function useEtoEvents({
     };
 
     eventSource.onerror = (error) => {
+      console.log('SSE error:', error);
 
       // Update connection state
       if (isConnectedRef.current) {

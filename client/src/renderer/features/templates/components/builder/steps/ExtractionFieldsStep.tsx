@@ -10,6 +10,7 @@ import { PdfViewer } from '../../../../pdf';
 import { PdfObjectOverlay } from './SignatureObjectsStep/PdfObjectOverlay';
 import { ExtractionFieldsSidebar, SidebarMode } from './ExtractionFieldsStep/ExtractionFieldsSidebar';
 import { ExtractionFieldOverlay } from './ExtractionFieldsStep/ExtractionFieldOverlay';
+import { generateEntryPointId, generateNodeId } from '../../../../pipelines/utils/idGenerator';
 
 interface ExtractionFieldsStepProps {
   pdfFileId: number | null;
@@ -42,10 +43,23 @@ interface ExtractionFieldsStepProps {
 
 // Helper: Convert extraction field to entry point
 function extractionFieldToEntryPoint(field: ExtractionField): EntryPoint {
+  const entryPointId = generateEntryPointId(); // E{xx} format
+  const nodeId = generateNodeId(); // N{xxx} format for the output pin
+
   return {
-    node_id: `entry_${field.name}`,
+    entry_point_id: entryPointId,
     name: field.name,
-    type: 'str', // Extraction fields always output strings
+    outputs: [
+      {
+        node_id: nodeId,
+        direction: 'out',
+        type: 'str', // Extraction fields always output strings
+        name: field.name,
+        label: field.name,
+        position_index: 0,
+        group_index: 0,
+      }
+    ],
   };
 }
 
@@ -127,14 +141,13 @@ export function ExtractionFieldsStep({
     const updatedFields = extractionFields.filter(f => f.name !== fieldName);
     onExtractionFieldsChange(updatedFields);
 
-    // Also remove from pipeline state entry points
-    const entryPointNodeId = `entry_${fieldName}`;
-    const updatedEntryPoints = pipelineState.entry_points.filter(ep => ep.node_id !== entryPointNodeId);
+    // Also remove from pipeline state entry points (match by name)
+    const updatedEntryPoints = pipelineState.entry_points.filter(ep => ep.name !== fieldName);
 
     console.log('[ExtractionFieldsStep] Updating pipeline state:', {
-      oldEntryPoints: pipelineState.entry_points.map(ep => ep.node_id),
-      newEntryPoints: updatedEntryPoints.map(ep => ep.node_id),
-      removedId: entryPointNodeId,
+      oldEntryPoints: pipelineState.entry_points.map(ep => ep.name),
+      newEntryPoints: updatedEntryPoints.map(ep => ep.name),
+      removedName: fieldName,
     });
 
     onPipelineStateChange({

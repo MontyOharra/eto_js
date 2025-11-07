@@ -1,8 +1,7 @@
-import { PipelineListItem } from '../../types';
-import { formatTimestamp } from '../../../../shared/utils/formatUtils';
+import { PipelineSummary } from '../../api/types';
 
 interface PipelineCardProps {
-  pipeline: PipelineListItem;
+  pipeline: PipelineSummary;
   onView?: (pipelineId: number) => void;
   onTestExecutedView?: (pipelineId: number) => void;
 }
@@ -32,18 +31,6 @@ export function PipelineCard({
           <span className="text-gray-400">Compiled Plan:</span>
           <span className="text-gray-200 font-mono">
             {pipeline.compiled_plan_id !== null ? `#${pipeline.compiled_plan_id}` : 'Not compiled'}
-          </span>
-        </div>
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-gray-400">Created:</span>
-          <span className="text-gray-200 text-xs">
-            {formatTimestamp(pipeline.created_at)}
-          </span>
-        </div>
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-gray-400">Updated:</span>
-          <span className="text-gray-200 text-xs">
-            {formatTimestamp(pipeline.updated_at)}
           </span>
         </div>
       </div>

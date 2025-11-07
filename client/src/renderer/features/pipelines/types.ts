@@ -65,11 +65,11 @@ export interface NodeConnection {
   to_node_id: string;
 }
 
-// Entry point for pipeline (frontend - includes type for UI)
+// Entry point for pipeline - structured like a module with outputs
 export interface EntryPoint {
-  node_id: string;
+  entry_point_id: string;  // Like module_instance_id (format: E01, E02, etc.)
   name: string;
-  type: string;
+  outputs: NodePin[];      // Array with single output pin containing the type
 }
 
 // Pipeline state (execution data)

@@ -20,8 +20,9 @@ interface BackendNodePin {
 }
 
 interface BackendEntryPoint {
-  node_id: string;
+  entry_point_id: string;
   name: string;
+  outputs: BackendNodePin[];
 }
 
 interface BackendModuleInstance {
@@ -72,10 +73,11 @@ export function serializePipelineData(
     outputs: module.outputs.map(serializeNodePin),
   });
 
-  // Convert EntryPoint to BackendEntryPoint (strip type field)
+  // Convert EntryPoint to BackendEntryPoint
   const serializeEntryPoint = (entryPoint: EntryPoint): BackendEntryPoint => ({
-    node_id: entryPoint.node_id,
+    entry_point_id: entryPoint.entry_point_id,
     name: entryPoint.name,
+    outputs: entryPoint.outputs.map(serializeNodePin),
   });
 
   return {

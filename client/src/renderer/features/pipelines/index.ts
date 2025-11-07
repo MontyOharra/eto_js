@@ -8,12 +8,6 @@
 // ============================================================================
 
 export type {
-  // Module types (re-exported for convenience)
-  NodeTypeRule,
-  NodeGroup,
-  IOSideShape,
-  IOShape,
-  ModuleTemplate,
   ModuleInstance,
   NodePin,
   // Pipeline domain types

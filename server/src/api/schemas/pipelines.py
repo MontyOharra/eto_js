@@ -19,9 +19,10 @@ class Node(BaseModel):
 
 
 class EntryPoint(BaseModel):
-    """Entry point for pipeline input"""
-    node_id: str
+    """Entry point for pipeline - structured like a module with outputs"""
+    entry_point_id: str  # Format: E01, E02, etc.
     name: str
+    outputs: List[Node] = []  # Array with single output pin containing the type
 
 
 class ModuleInstance(BaseModel):

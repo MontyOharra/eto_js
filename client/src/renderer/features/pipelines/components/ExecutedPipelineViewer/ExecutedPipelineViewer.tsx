@@ -110,12 +110,12 @@ function ExecutedPipelineViewerInner({
     // Create entry point nodes
     pipelineState.entry_points.forEach((entryPoint) => {
       nodes.push({
-        id: `entry-${entryPoint.node_id}`, // Prefix with 'entry-' to match old implementation
+        id: entryPoint.entry_point_id, // Use entry_point_id (E{xx} format)
         type: "executedEntryPoint",
         position: { x: 0, y: 0 }, // Will be positioned by dagre
         data: {
           name: entryPoint.name,
-          nodeId: entryPoint.node_id,
+          nodeId: entryPoint.outputs[0]?.node_id || '', // Get node_id from first output
         },
       });
     });
@@ -224,9 +224,12 @@ function ExecutedPipelineViewerInner({
       });
     });
 
-    // Map entry points - use 'entry-' prefixed ID as the node ID
+    // Map entry points - use entry_point_id as the node ID
     pipelineState.entry_points.forEach((ep) => {
-      nodeIdToModuleId.set(ep.node_id, `entry-${ep.node_id}`);
+      // Map the output node_id to the entry_point_id
+      if (ep.outputs[0]) {
+        nodeIdToModuleId.set(ep.outputs[0].node_id, ep.entry_point_id);
+      }
     });
 
     // Convert connections to edges
@@ -244,7 +247,12 @@ function ExecutedPipelineViewerInner({
 
       // Get output data from source module or entry point
       let outputData = null;
-      if (sourceModuleId && sourceModuleId.startsWith('entry-')) {
+      // Check if source is an entry point (E{xx} format)
+      const isEntryPoint = pipelineState.entry_points.some(
+        ep => ep.entry_point_id === sourceModuleId
+      );
+
+      if (isEntryPoint) {
         // Source is an entry point - use entryValues
         outputData = entryValues?.[connection.from_node_id] || null;
         console.log('Entry point edge:', connection.from_node_id, outputData);
