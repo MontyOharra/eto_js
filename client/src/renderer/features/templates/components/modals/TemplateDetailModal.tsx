@@ -9,10 +9,9 @@ import { useTemplateDetail, useTemplateVersionDetail } from "../../api";
 import { TemplateDetail, TemplateVersionDetail, PdfObjects } from "../../types";
 import { TemplateStatusBadge } from "../ui/TemplateStatusBadge";
 import { usePdfData, PdfViewer, usePdfViewer } from "../../../pdf";
-import { usePipelinesApi } from "../../../pipelines/hooks/usePipelinesApi";
+import { usePipelinesApi, PipelineDetail } from "../../../pipelines";
 import { useModules } from '../../../modules';
-import { PipelineGraph } from "../../../pipelines/components/PipelineGraph";
-import type { PipelineDetailResponse } from "../../../pipelines/types";
+import { PipelineGraph } from "../../../pipelines";
 
 interface TemplateDetailModalProps {
   isOpen: boolean;

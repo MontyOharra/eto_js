@@ -3,15 +3,8 @@
  */
 
 import type {
-  NodeTypeRule,
   NodeGroup,
-  IOSideShape,
-  IOShape,
-  ModuleTemplate,
 } from "../modules/types";
-
-// Re-export module catalog types for convenience
-export type { NodeTypeRule, NodeGroup, IOSideShape, IOShape, ModuleTemplate };
 
 // ============================================================================
 // Runtime Types (Module Instances & Pins)
@@ -40,7 +33,6 @@ export interface NodePin {
 export interface ModuleInstance {
   module_instance_id: string;
   module_ref: string;
-  module_kind: string;
   config: Record<string, any>;
   inputs: NodePin[];         // Flat array, grouped by group_index
   outputs: NodePin[];
@@ -80,20 +72,6 @@ export interface EntryPoint {
   type: string;
 }
 
-// Backend-compatible types for serialization
-export interface InstanceNodePin {
-  node_id: string;
-  type: string;
-  name: string;
-  position_index: number;
-  group_index: number;
-}
-
-export interface BackendEntryPoint {
-  node_id: string;
-  name: string;
-}
-
 // Pipeline state (execution data)
 export interface PipelineState {
   entry_points: EntryPoint[];
@@ -111,19 +89,6 @@ export interface PipelineData {
   description?: string;
   pipeline_json: PipelineState;
   visual_json: VisualState;
-}
-
-// API response for modules endpoint
-export interface ModulesResponse {
-  modules: ModuleTemplate[];
-  total_count: number;
-  stats: {
-    total_modules: number;
-    transform_modules: number;
-    action_modules: number;
-    logic_modules: number;
-    module_refs: string[];
-  };
 }
 
 // Type alias for compatibility

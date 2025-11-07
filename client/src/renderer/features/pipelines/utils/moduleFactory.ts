@@ -5,10 +5,12 @@
 
 import {
   ModuleTemplate,
-  ModuleInstance,
-  NodePin,
   IOSideShape,
 } from "../../modules/types";
+import {
+  ModuleInstance,
+  NodePin,
+} from "../types";
 import { generateModuleId, generateNodeId } from "./idGenerator";
 
 const ALL_TYPES = ["str", "int", "float", "bool", "datetime"];
@@ -59,7 +61,6 @@ function initializeConfig(configSchema: Record<string, unknown> | undefined): Re
  * Create pins for a module based on IO shape
  */
 function createPins(
-  instanceId: string,
   ioShape: IOSideShape | undefined,
   direction: "in" | "out",
   typeParams: Record<string, string[]>
@@ -119,19 +120,16 @@ function createPins(
  */
 export function createModuleInstance(
   template: ModuleTemplate,
-  instanceIdPrefix: string = "module" // Kept for API compatibility but not used
 ): ModuleInstance {
   const instanceId = generateModuleId();
 
   const typeParams = template.meta?.io_shape?.type_params || {};
   const inputs = createPins(
-    instanceId,
     template.meta?.io_shape?.inputs,
     "in",
     typeParams
   );
   const outputs = createPins(
-    instanceId,
     template.meta?.io_shape?.outputs,
     "out",
     typeParams
@@ -143,7 +141,6 @@ export function createModuleInstance(
   return {
     module_instance_id: instanceId,
     module_ref: `${template.id}:${template.version}`,
-    module_kind: template.kind,
     config,
     inputs,
     outputs,

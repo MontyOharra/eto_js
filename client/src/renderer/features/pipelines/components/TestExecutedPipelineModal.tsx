@@ -4,15 +4,17 @@
  * Used in the pipelines page "Test Executed Pipeline View" button
  */
 
-import { ExecutedPipelineViewer } from './ExecutedPipelineViewer';
-import { mockPipeline1SuccessExecution } from '../mocks/pipelineExecutionMock';
+import { ExecutedPipelineViewer } from "./executedViewer-old/ExecutedPipelineViewer";
 
 interface TestExecutedPipelineModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-export function TestExecutedPipelineModal({ isOpen, onClose }: TestExecutedPipelineModalProps) {
+export function TestExecutedPipelineModal({
+  isOpen,
+  onClose,
+}: TestExecutedPipelineModalProps) {
   if (!isOpen) return null;
 
   return (
@@ -21,7 +23,9 @@ export function TestExecutedPipelineModal({ isOpen, onClose }: TestExecutedPipel
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-700 flex-shrink-0">
           <div>
-            <h2 className="text-xl font-semibold text-white">Executed Pipeline Viewer Test</h2>
+            <h2 className="text-xl font-semibold text-white">
+              Executed Pipeline Viewer Test
+            </h2>
             <p className="text-sm text-gray-400 mt-1">
               Testing pipeline visualization with execution data overlay
             </p>
@@ -31,7 +35,12 @@ export function TestExecutedPipelineModal({ isOpen, onClose }: TestExecutedPipel
             onClick={onClose}
             className="text-gray-400 hover:text-gray-200 transition-colors"
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg
+              className="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -56,8 +65,9 @@ export function TestExecutedPipelineModal({ isOpen, onClose }: TestExecutedPipel
         {/* Footer */}
         <div className="flex items-center justify-between p-4 border-t border-gray-700 flex-shrink-0">
           <div className="text-sm text-gray-400">
-            <span className="font-semibold">Pipeline ID:</span> 1 |{' '}
-            <span className="font-semibold">Execution Steps:</span> {mockPipeline1SuccessExecution.length} |{' '}
+            <span className="font-semibold">Pipeline ID:</span> 1 |{" "}
+            <span className="font-semibold">Execution Steps:</span>{" "}
+            {mockPipeline1SuccessExecution.length} |{" "}
             <span className="font-semibold">Actions:</span> 0
           </div>
 

@@ -1,83 +1,43 @@
 /**
  * Serialization utilities to convert between frontend and backend pipeline formats
  */
-
-import { NodePin, ModuleInstance } from "../../modules/types";
 import {
+  NodePin, 
+  ModuleInstance,
   PipelineState,
   VisualState,
   NodeConnection,
   EntryPoint,
-  InstanceNodePin,
-  BackendEntryPoint,
 } from "../types";
 
-// Backend-compatible types
-export interface BackendModuleInstance {
-  module_instance_id: string;
-  module_ref: string;
-  module_kind: string;
-  config: Record<string, any>;
-  inputs: InstanceNodePin[];
-  outputs: InstanceNodePin[];
+// Backend-compatible types (stripped of frontend-only fields)
+interface BackendNodePin {
+  node_id: string;
+  type: string;
+  name: string;
+  position_index: number;
+  group_index: number;
 }
 
-export interface BackendPipelineState {
+interface BackendEntryPoint {
+  node_id: string;
+  name: string;
+}
+
+interface BackendModuleInstance {
+  module_instance_id: string;
+  module_ref: string;
+  config: Record<string, any>;
+  inputs: BackendNodePin[];
+  outputs: BackendNodePin[];
+}
+
+interface BackendPipelineState {
   entry_points: BackendEntryPoint[];
   modules: BackendModuleInstance[];
   connections: NodeConnection[];
 }
 
-// Convert NodePin to InstanceNodePin (strip frontend-only fields)
-export function serializeNodePin(pin: NodePin): InstanceNodePin {
-  return {
-    node_id: pin.node_id,
-    type: pin.type,
-    name: pin.name,
-    position_index: pin.position_index,
-    group_index: pin.group_index,
-  };
-}
-
-// Convert ModuleInstance to BackendModuleInstance
-export function serializeModuleInstance(
-  module: ModuleInstance
-): BackendModuleInstance {
-  return {
-    module_instance_id: module.module_instance_id,
-    module_ref: module.module_ref,
-    module_kind: module.module_kind,
-    config: module.config,
-    inputs: module.inputs.map(serializeNodePin),
-    outputs: module.outputs.map(serializeNodePin),
-  };
-}
-
-// Convert EntryPoint to BackendEntryPoint (strip type field)
-export function serializeEntryPoint(entryPoint: EntryPoint): BackendEntryPoint {
-  return {
-    node_id: entryPoint.node_id,
-    name: entryPoint.name,
-  };
-}
-
-// Convert frontend PipelineState to backend format
-export function serializePipelineState(
-  state: PipelineState
-): BackendPipelineState {
-  return {
-    entry_points: state.entry_points.map(serializeEntryPoint),
-    modules: state.modules.map(serializeModuleInstance),
-    connections: state.connections,
-  };
-}
-
-// Visual state doesn't need conversion - it matches backend format
-export function serializeVisualState(visualState: VisualState): VisualState {
-  return visualState;
-}
-
-// Complete pipeline data serialization
 export interface BackendPipelineData {
   name?: string;
   description?: string;
@@ -85,16 +45,47 @@ export interface BackendPipelineData {
   visual_state: VisualState;
 }
 
+/**
+ * Complete pipeline data serialization for backend API
+ */
 export function serializePipelineData(
   pipelineState: PipelineState,
   visualState: VisualState,
   name?: string,
   description?: string
 ): BackendPipelineData {
+  // Convert NodePin to BackendNodePin (strip frontend-only fields)
+  const serializeNodePin = (pin: NodePin): BackendNodePin => ({
+    node_id: pin.node_id,
+    type: pin.type,
+    name: pin.name,
+    position_index: pin.position_index,
+    group_index: pin.group_index,
+  });
+
+  // Convert ModuleInstance to BackendModuleInstance
+  const serializeModuleInstance = (module: ModuleInstance): BackendModuleInstance => ({
+    module_instance_id: module.module_instance_id,
+    module_ref: module.module_ref,
+    config: module.config,
+    inputs: module.inputs.map(serializeNodePin),
+    outputs: module.outputs.map(serializeNodePin),
+  });
+
+  // Convert EntryPoint to BackendEntryPoint (strip type field)
+  const serializeEntryPoint = (entryPoint: EntryPoint): BackendEntryPoint => ({
+    node_id: entryPoint.node_id,
+    name: entryPoint.name,
+  });
+
   return {
     name,
     description,
-    pipeline_state: serializePipelineState(pipelineState),
-    visual_state: serializeVisualState(visualState),
+    pipeline_state: {
+      entry_points: pipelineState.entry_points.map(serializeEntryPoint),
+      modules: pipelineState.modules.map(serializeModuleInstance),
+      connections: pipelineState.connections,
+    },
+    visual_state: visualState,
   };
 }

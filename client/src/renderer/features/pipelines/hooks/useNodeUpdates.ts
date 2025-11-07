@@ -5,7 +5,7 @@
 
 import { useCallback } from "react";
 import { Node, Edge } from "@xyflow/react";
-import { ModuleInstance, NodePin } from "../../modules/types";
+import { ModuleInstance, NodePin } from "../types";
 import {
   calculateTypePropagation,
   applyTypeUpdates,

@@ -157,6 +157,8 @@ def _serialize_io_for_audit(
     This converts raw module I/O into a format suitable for ExecutedPipelineViewer,
     which needs node_id as keys and name as a field for proper visualization.
 
+    NOTE: This is used for OUTPUTS. For INPUTS, use _serialize_inputs_for_audit instead.
+
     Args:
         io_dict: Raw I/O from module execution {node_id: value}
         pins: Pin metadata with node_id, name, and type
@@ -174,6 +176,74 @@ def _serialize_io_for_audit(
             raw_value = io_dict[pin.node_id]
             result[pin.node_id] = {
                 "name": pin.name,
+                "value": _serialize_value(raw_value, pin.type),
+                "type": pin.type
+            }
+    return result
+
+
+def _serialize_inputs_for_audit(
+    io_dict: Dict[str, Any],
+    pins: List[NodeInstance],
+    input_field_mappings: Dict[str, str],
+    all_nodes_metadata: Dict[str, List[NodeInstance]],
+    entry_points_lookup: Dict[str, str]
+) -> Dict[str, Dict[str, Any]]:
+    """
+    Transform inputs to {node_id: {name, value, type}} using UPSTREAM pin names.
+
+    For inputs, we want to show the upstream output pin name (what's connected),
+    not the current module's input pin name (which is just the group name).
+
+    Args:
+        io_dict: Raw inputs from module execution {input_node_id: value}
+        pins: Input pin metadata with node_id, name, and type
+        input_field_mappings: Maps input_pin_id -> upstream_output_pin_id
+        all_nodes_metadata: All node metadata from pipeline state to look up upstream pin names
+        entry_points_lookup: Entry point node_id -> name mapping
+
+    Returns:
+        Dict in format: {input_node_id: {name: upstream_pin_name, value, type}}
+
+    Example:
+        Input:
+            io_dict = {"module2_in_0": "ABC123"}
+            pins = [NodeInstance(node_id="module2_in_0", name="text", type="str")]
+            input_field_mappings = {"module2_in_0": "transform_out_0"}
+            all_nodes_metadata has NodeInstance(node_id="transform_out_0", name="hawb", type="str")
+        Output:
+            {"module2_in_0": {"name": "hawb", "value": "ABC123", "type": "str"}}
+    """
+    # Build a lookup map of node_id -> name from all metadata
+    node_id_to_name = {}
+    for node_list in all_nodes_metadata.values():
+        for node in node_list:
+            node_id_to_name[node.node_id] = node.name
+
+    # Add entry points to the lookup
+    node_id_to_name.update(entry_points_lookup)
+
+    result = {}
+    for pin in pins:
+        if pin.node_id in io_dict:
+            raw_value = io_dict[pin.node_id]
+
+            # Look up the upstream pin that's connected to this input
+            upstream_pin_id = input_field_mappings.get(pin.node_id)
+
+            # Use upstream pin name if found, otherwise fall back to current pin name
+            if upstream_pin_id and upstream_pin_id in node_id_to_name:
+                display_name = node_id_to_name[upstream_pin_id]
+            else:
+                # Fallback: use the input pin name
+                display_name = pin.name
+                logger.warning(
+                    f"Could not find upstream pin name for input {pin.node_id}, "
+                    f"upstream_pin_id={upstream_pin_id}, using fallback name: {display_name}"
+                )
+
+            result[pin.node_id] = {
+                "name": display_name,
                 "value": _serialize_value(raw_value, pin.type),
                 "type": pin.type
             }
@@ -649,7 +719,7 @@ class PipelineExecutionService:
                 mock_outputs[node.node_id] = 999999
             elif node_type == "str":
                 # Use descriptive mock string
-                mock_outputs[node.node_id] = f"MOCK_{node.label.upper()}"
+                mock_outputs[node.node_id] = f"MOCK_{node.name.upper()}"
             elif node_type == "bool":
                 # Default to True for mock boolean
                 mock_outputs[node.node_id] = True
@@ -900,7 +970,15 @@ class PipelineExecutionService:
                     logger.exception(f"Module {step.module_instance_id} failed: {e}")
 
             # Serialize for audit trail
-            audit_inputs = _serialize_io_for_audit(inputs_dict, ctx.inputs)
+            # For inputs: look up upstream pin names for better UX
+            audit_inputs = _serialize_inputs_for_audit(
+                inputs_dict,
+                ctx.inputs,
+                step.input_field_mappings,
+                all_nodes_metadata,
+                entry_points_lookup
+            )
+            # For outputs: use the output pin names from this module
             audit_outputs = _serialize_io_for_audit(outputs_dict, ctx.outputs) if outputs_dict else {}
 
             # Collect step result

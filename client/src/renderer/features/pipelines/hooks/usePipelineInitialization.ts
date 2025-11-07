@@ -6,15 +6,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Node, Edge } from "@xyflow/react";
 import {
-  ModuleTemplate,
   ModuleInstance,
   NodePin,
-} from "../../modules/types";
-import {
   PipelineState,
   VisualState,
   EntryPoint,
 } from "../types";
+import { ModuleTemplate } from "../../modules/types";
 import { getTypeColor } from "../utils/edgeUtils";
 
 const ALL_TYPES = ["str", "int", "float", "bool", "datetime"];
@@ -50,7 +48,6 @@ function createEntryPointNodes(
     const fakeModuleInstance: ModuleInstance = {
       module_instance_id: `entry-${ep.node_id}`,
       module_ref: "entry_point:1.0.0",
-      module_kind: "transform",
       config: {},
       inputs: [],
       outputs: [
@@ -111,7 +108,7 @@ function createEntryPointNodes(
 }
 
 /**
- * Reconstruct full NodePin objects from stored InstanceNodePins
+ * Reconstruct full NodePin objects from backend Node format
  * Adds back UI-only fields (direction, label, type_var, allowed_types)
  */
 function reconstructPins(

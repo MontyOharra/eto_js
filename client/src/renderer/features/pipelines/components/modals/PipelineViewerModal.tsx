@@ -7,9 +7,8 @@
 import { useState, useEffect } from "react";
 import { PipelineGraph } from "../PipelineGraph";
 import { ExecutePipelineModal } from "./ExecutePipelineModal";
-import { usePipelinesApi } from "../../hooks/usePipelinesApi";
+import { usePipelinesApi, PipelineDetail } from "../../";
 import { useModules } from '../../../modules';
-import type { PipelineDetailResponse } from "../../types";
 
 interface PipelineViewerModalProps {
   isOpen: boolean;
@@ -27,7 +26,7 @@ export function PipelineViewerModal({
   // Fetch modules using TanStack Query
   const { data: modules = [] } = useModules();
 
-  const [pipeline, setPipeline] = useState<PipelineDetailResponse | null>(null);
+  const [pipeline, setPipeline] = useState<PipelineDetail | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showExecuteModal, setShowExecuteModal] = useState(false);

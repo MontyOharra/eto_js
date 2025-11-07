@@ -5,10 +5,8 @@
 
 import { useCallback } from "react";
 import { Node } from "@xyflow/react";
-import {
-  ModuleTemplate,
-  ModuleInstance,
-} from "../../modules/types";
+import { ModuleTemplate } from "../../modules/types";
+import { ModuleInstance } from "../types";
 import {
   createModuleInstance,
   addPinToModule,
@@ -39,7 +37,6 @@ export interface ModuleOperationsActions {
 }
 
 export function useModuleOperations({
-  nodes,
   setNodes,
   viewOnly = false,
 }: UseModuleOperationsProps): ModuleOperationsActions {

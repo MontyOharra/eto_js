@@ -8,7 +8,7 @@ import {
   useActivateTemplate,
   useDeactivateTemplate,
 } from '../../../features/templates';
-import { usePipelinesApi } from '../../../features/pipelines/hooks/usePipelinesApi';
+import { usePipelinesApi } from '../../../features/pipelines/api';
 import { TemplateCard, TemplateBuilderModal, TemplateDetailModal, TemplateData } from '../../../features/templates/components';
 import { TemplateListItem, TemplateStatus } from '../../../features/templates/types';
 import { apiClient } from '../../../shared/api/client';

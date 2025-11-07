@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { usePipelinesApi } from './usePipelinesApi';
+import { usePipelinesApi } from '../api';
 import type { PipelineState } from '../types';
 
 interface ValidationError {

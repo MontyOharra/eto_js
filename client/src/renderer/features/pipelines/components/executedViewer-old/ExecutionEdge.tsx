@@ -12,7 +12,7 @@
 
 import { useState } from 'react';
 import { BaseEdge, EdgeLabelRenderer, EdgeProps, getSmoothStepPath } from '@xyflow/react';
-import { TYPE_COLORS } from '../utils/moduleUtils';
+import { TYPE_COLORS } from '../../utils/moduleUtils';
 
 export interface ExecutionEdgeData {
   value?: any;

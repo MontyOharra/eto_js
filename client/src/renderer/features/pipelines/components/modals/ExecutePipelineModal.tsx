@@ -4,10 +4,10 @@
  * Uses split-panel layout similar to RunDetailModal
  */
 
-import { useState, useEffect, useRef } from 'react';
-import { usePipelinesApi } from '../../hooks/usePipelinesApi';
-import { ExecutedPipelineViewer, ExecutedPipelineViewerRef } from '../ExecutedPipelineViewer';
-import type { EntryPoint } from '../../types';
+import { useState, useEffect } from "react";
+import { usePipelinesApi } from "../../api";
+import { ExecutedPipelineViewer } from "../ExecutedPipelineViewer";
+import type { EntryPoint, PipelineState } from "../../types";
 
 interface ExecutePipelineModalProps {
   isOpen: boolean;
@@ -29,7 +29,7 @@ interface ExecutionResult {
   error: string | null;
 }
 
-type ViewMode = 'summary' | 'detail';
+type ViewMode = "summary" | "detail";
 
 export function ExecutePipelineModal({
   isOpen,
@@ -37,62 +37,45 @@ export function ExecutePipelineModal({
   entryPoints,
   onClose,
 }: ExecutePipelineModalProps) {
-  const { executePipeline } = usePipelinesApi();
+  const { executePipeline, getPipeline } = usePipelinesApi();
 
   const [entryValues, setEntryValues] = useState<Record<string, string>>({});
   const [isExecuting, setIsExecuting] = useState(false);
   const [result, setResult] = useState<ExecutionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>('summary');
+  const [viewMode, setViewMode] = useState<ViewMode>("summary");
   const [executionWidth, setExecutionWidth] = useState(60); // Percentage for left panel
   const [isDragging, setIsDragging] = useState(false);
-  const pipelineViewerRef = useRef<ExecutedPipelineViewerRef>(null);
+  const [pipelineState, setPipelineState] = useState<PipelineState | null>(null);
 
-  // Initialize entry values when modal opens
+  // Initialize entry values and load pipeline when modal opens
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && pipelineId) {
       const initialValues: Record<string, string> = {};
-      entryPoints.forEach(ep => {
-        initialValues[ep.name] = '';
+      entryPoints.forEach((ep) => {
+        initialValues[ep.name] = "";
       });
       setEntryValues(initialValues);
       setResult(null);
       setError(null);
-      setViewMode('summary');
-    }
-  }, [isOpen, entryPoints]);
+      setViewMode("summary");
 
-  // Fit pipeline view when switching to detail mode
-  useEffect(() => {
-    if (viewMode === 'detail' && pipelineViewerRef.current && result) {
-      setTimeout(() => {
-        pipelineViewerRef.current?.fitView();
-      }, 100);
-    }
-  }, [viewMode, result]);
-
-  // Auto-fit pipeline viewer when its container is resized
-  useEffect(() => {
-    if (viewMode !== 'detail' || !result) return;
-
-    const executionPanel = document.querySelector('.execution-panel');
-    if (!executionPanel) return;
-
-    const resizeObserver = new ResizeObserver(() => {
-      if (pipelineViewerRef.current) {
-        pipelineViewerRef.current.fitView();
+      // Load pipeline state
+      async function loadPipeline() {
+        try {
+          const pipeline = await getPipeline(pipelineId);
+          setPipelineState(pipeline.pipeline_state);
+        } catch (err) {
+          console.error("Failed to load pipeline:", err);
+        }
       }
-    });
+      loadPipeline();
+    }
+  }, [isOpen, pipelineId, entryPoints, getPipeline]);
 
-    resizeObserver.observe(executionPanel);
-
-    return () => {
-      resizeObserver.disconnect();
-    };
-  }, [viewMode, result]);
 
   const handleValueChange = (name: string, value: string) => {
-    setEntryValues(prev => ({
+    setEntryValues((prev) => ({
       ...prev,
       [name]: value,
     }));
@@ -102,9 +85,13 @@ export function ExecutePipelineModal({
     if (!pipelineId) return;
 
     // Validate all entry points have values
-    const missingEntries = entryPoints.filter(ep => !entryValues[ep.name]?.trim());
+    const missingEntries = entryPoints.filter(
+      (ep) => !entryValues[ep.name]?.trim()
+    );
     if (missingEntries.length > 0) {
-      setError(`Please provide values for: ${missingEntries.map(ep => ep.name).join(', ')}`);
+      setError(
+        `Please provide values for: ${missingEntries.map((ep) => ep.name).join(", ")}`
+      );
       return;
     }
 
@@ -113,11 +100,13 @@ export function ExecutePipelineModal({
     setResult(null);
 
     try {
-      const executionResult = await executePipeline(pipelineId, entryValues);
+      const executionResult = await executePipeline(pipelineId, {"entry_values":entryValues});
       setResult(executionResult);
     } catch (err) {
-      console.error('Pipeline execution failed:', err);
-      setError(err instanceof Error ? err.message : 'Pipeline execution failed');
+      console.error("Pipeline execution failed:", err);
+      setError(
+        err instanceof Error ? err.message : "Pipeline execution failed"
+      );
     } finally {
       setIsExecuting(false);
     }
@@ -138,7 +127,7 @@ export function ExecutePipelineModal({
   const handleMouseMove = (e: MouseEvent) => {
     if (!isDragging) return;
 
-    const modal = document.querySelector('.resize-container');
+    const modal = document.querySelector(".resize-container");
     if (!modal) return;
 
     const rect = modal.getBoundingClientRect();
@@ -157,11 +146,11 @@ export function ExecutePipelineModal({
   // Attach/detach mouse event listeners for resizing
   useEffect(() => {
     if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
       return () => {
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
+        document.removeEventListener("mousemove", handleMouseMove);
+        document.removeEventListener("mouseup", handleMouseUp);
       };
     }
   }, [isDragging]);
@@ -174,27 +163,29 @@ export function ExecutePipelineModal({
         {/* Header */}
         <div className="flex items-center justify-between p-3 border-b border-gray-700 flex-shrink-0">
           <div className="flex items-center space-x-4">
-            <h2 className="text-xl font-semibold text-white">Pipeline Execution Tester</h2>
+            <h2 className="text-xl font-semibold text-white">
+              Pipeline Execution Tester
+            </h2>
 
             {/* View Mode Toggle - Only show after execution */}
             {result && (
               <div className="flex items-center bg-gray-800 rounded-lg p-1 border-l border-gray-600 ml-4">
                 <button
-                  onClick={() => setViewMode('summary')}
+                  onClick={() => setViewMode("summary")}
                   className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                    viewMode === 'summary'
-                      ? 'bg-blue-600 text-white'
-                      : 'text-gray-400 hover:text-gray-200'
+                    viewMode === "summary"
+                      ? "bg-blue-600 text-white"
+                      : "text-gray-400 hover:text-gray-200"
                   }`}
                 >
                   Summary
                 </button>
                 <button
-                  onClick={() => setViewMode('detail')}
+                  onClick={() => setViewMode("detail")}
                   className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                    viewMode === 'detail'
-                      ? 'bg-blue-600 text-white'
-                      : 'text-gray-400 hover:text-gray-200'
+                    viewMode === "detail"
+                      ? "bg-blue-600 text-white"
+                      : "text-gray-400 hover:text-gray-200"
                   }`}
                 >
                   Detail
@@ -207,8 +198,18 @@ export function ExecutePipelineModal({
             onClick={handleClose}
             className="text-gray-400 hover:text-gray-200 transition-colors"
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            <svg
+              className="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
           </button>
         </div>
@@ -217,10 +218,17 @@ export function ExecutePipelineModal({
         <div className="flex-1 overflow-hidden">
           <div className="pr-4 pl-2 py-4 flex h-full resize-container">
             {/* Left Panel - Execution Auditor */}
-            <div className="flex flex-col execution-panel" style={{ width: `${executionWidth}%` }}>
+            <div
+              className="flex flex-col execution-panel"
+              style={{ width: `${executionWidth}%` }}
+            >
               <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 flex flex-col flex-1 overflow-hidden">
                 <h3 className="text-lg font-semibold text-white mb-3">
-                  {!result ? 'Execution Auditor' : (result.status === 'success' ? 'Execution Results' : 'Execution Failed')}
+                  {!result
+                    ? "Execution Auditor"
+                    : result.status === "success"
+                      ? "Execution Results"
+                      : "Execution Failed"}
                 </h3>
 
                 {/* Scrollable content area */}
@@ -228,20 +236,27 @@ export function ExecutePipelineModal({
                   {!result ? (
                     // Before execution
                     <div className="flex items-center justify-center h-full">
-                      <p className="text-gray-400 text-sm">Execute pipeline to see results here</p>
+                      <p className="text-gray-400 text-sm">
+                        Execute pipeline to see results here
+                      </p>
                     </div>
                   ) : (
                     <>
                       {/* Summary View - Actions/Errors */}
-                      <div className={`font-mono text-xs ${viewMode === 'summary' ? '' : 'hidden'}`}>
-                        {result.status === 'success' && Object.keys(result.executed_actions).length > 0 ? (
+                      <div
+                        className={`font-mono text-xs ${viewMode === "summary" ? "" : "hidden"}`}
+                      >
+                        {result.status === "success" &&
+                        Object.keys(result.executed_actions).length > 0 ? (
                           <pre className="text-gray-300 whitespace-pre-wrap break-words">
                             {JSON.stringify(result.executed_actions, null, 2)}
                           </pre>
-                        ) : result.status === 'failed' ? (
+                        ) : result.status === "failed" ? (
                           <div className="text-red-300">
                             <p className="font-bold mb-2">Execution Failed</p>
-                            <p className="mb-2">{result.error || 'No error message available'}</p>
+                            <p className="mb-2">
+                              {result.error || "No error message available"}
+                            </p>
                           </div>
                         ) : (
                           <p className="text-gray-400">No actions executed</p>
@@ -249,25 +264,20 @@ export function ExecutePipelineModal({
                       </div>
 
                       {/* Detail View - Pipeline Visualization */}
-                      <div className={`absolute inset-0 ${viewMode === 'detail' ? '' : 'hidden'}`}>
-                        {pipelineId ? (
+                      <div
+                        className={`absolute inset-0 ${viewMode === "detail" ? "" : "hidden"}`}
+                      >
+                        {pipelineState ? (
                           <ExecutedPipelineViewer
-                            ref={pipelineViewerRef}
-                            pipelineDefinitionId={pipelineId}
-                            executionData={{
-                              steps: result.steps,
-                              executed_actions: result.executed_actions
-                                ? Object.entries(result.executed_actions).map(([moduleId, inputs]) => ({
-                                    action_module_name: moduleId,
-                                    inputs,
-                                  }))
-                                : undefined,
-                            }}
-                            extractedData={entryValues}
+                            pipelineId={pipelineId}
+                            pipelineState={pipelineState}
+                            executionSteps={result.steps}
                           />
                         ) : (
                           <div className="flex items-center justify-center h-full">
-                            <p className="text-gray-400">No pipeline data available</p>
+                            <p className="text-gray-400">
+                              Loading pipeline data...
+                            </p>
                           </div>
                         )}
                       </div>
@@ -282,18 +292,23 @@ export function ExecutePipelineModal({
               className="w-1 bg-gray-700 hover:bg-blue-500 cursor-col-resize transition-colors flex-shrink-0 mx-1"
               onMouseDown={handleMouseDown}
               style={{
-                userSelect: 'none',
-                backgroundColor: isDragging ? '#3B82F6' : undefined,
+                userSelect: "none",
+                backgroundColor: isDragging ? "#3B82F6" : undefined,
               }}
             />
 
             {/* Right Panel - Entry Points */}
-            <div className="flex flex-col" style={{ width: `${100 - executionWidth}%` }}>
+            <div
+              className="flex flex-col"
+              style={{ width: `${100 - executionWidth}%` }}
+            >
               <div className="bg-gray-800 border border-gray-700 rounded-lg flex-1 overflow-hidden p-4 flex flex-col">
-                <h3 className="text-lg font-semibold text-white mb-4">Entry Points</h3>
+                <h3 className="text-lg font-semibold text-white mb-4">
+                  Entry Points
+                </h3>
 
                 <div className="flex-1 overflow-y-auto space-y-4">
-                  {entryPoints.map(ep => (
+                  {entryPoints.map((ep) => (
                     <div key={ep.node_id}>
                       <label className="block text-sm font-medium text-gray-300 mb-2">
                         {ep.name}
@@ -301,8 +316,10 @@ export function ExecutePipelineModal({
                       </label>
                       <input
                         type="text"
-                        value={entryValues[ep.name] || ''}
-                        onChange={(e) => handleValueChange(ep.name, e.target.value)}
+                        value={entryValues[ep.name] || ""}
+                        onChange={(e) =>
+                          handleValueChange(ep.name, e.target.value)
+                        }
                         placeholder={`Enter value for ${ep.name}`}
                         className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:border-blue-500"
                         disabled={isExecuting}
@@ -325,7 +342,7 @@ export function ExecutePipelineModal({
                     disabled={isExecuting}
                     className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isExecuting ? 'Executing...' : 'Execute'}
+                    {isExecuting ? "Executing..." : "Execute"}
                   </button>
                 </div>
               </div>

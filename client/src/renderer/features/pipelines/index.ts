@@ -3,7 +3,10 @@
  * Pipeline creation, execution, and management
  */
 
-// Types (re-exports module types + adds pipeline-specific types)
+// ============================================================================
+// Domain Types
+// ============================================================================
+
 export type {
   // Module types (re-exported for convenience)
   NodeTypeRule,
@@ -13,18 +16,50 @@ export type {
   ModuleTemplate,
   ModuleInstance,
   NodePin,
-  // Pipeline-specific types
+  // Pipeline domain types
   NodeConnection,
   EntryPoint,
-  BackendEntryPoint,
   PipelineState,
   VisualState,
+  PipelineData,
 } from './types';
 
+// ============================================================================
+// API Types & Hooks
+// ============================================================================
+
+export type {
+  // List endpoint
+  PipelineSummary,
+  PipelinesListResponse,
+  // Detail endpoint
+  PipelineDetail,
+  // Create endpoint
+  CreatePipelineRequest,
+  CreatePipelineResponse,
+  // Validation endpoint
+  ValidationError,
+  ValidatePipelineRequest,
+  ValidatePipelineResponse,
+  // Execution endpoint
+  ExecutePipelineRequest,
+  ExecutePipelineResponse,
+  ExecutionStepResult,
+  // Query params
+  PipelinesQueryParams,
+} from './api/types';
+
+export { usePipelinesApi } from './api/hooks';
+
+// ============================================================================
 // Components
+// ============================================================================
+
 export { PipelineGraph } from './components/PipelineGraph';
 export type { PipelineGraphRef } from './components/PipelineGraph';
 
+// ============================================================================
 // Hooks
-export { usePipelinesApi } from './hooks/usePipelinesApi';
+// ============================================================================
+
 export { usePipelineValidation } from './hooks/usePipelineValidation';

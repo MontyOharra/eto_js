@@ -2,7 +2,7 @@
  * Module utility functions and constants
  */
 
-import { NodePin } from "../../modules/types";
+import { NodePin } from "../types";
 
 /**
  * Type to color mapping for visual representation

@@ -39,6 +39,11 @@ class PipelineExecutionRunCreate:
     executed_actions: str | None = None
     started_at: datetime | None = None
 
+@dataclass(frozen=True)
+class PipelinExecutionStepIOData:
+    name: str
+    value: str
+    type: str
 
 @dataclass(frozen=True)
 class PipelineExecutionStep:
@@ -52,8 +57,8 @@ class PipelineExecutionStep:
     run_id: int
     module_instance_id: str
     step_number: int
-    inputs: dict[str, dict[str, Any]]  # {node_name: {value, type}}
-    outputs: dict[str, dict[str, Any]]  # {node_name: {value, type}}
+    inputs: dict[str, PipelinExecutionStepIOData]  # {node_name: {value, type}}
+    outputs: dict[str, PipelinExecutionStepIOData]  # {node_name: {value, type}}
     error: str | None
     created_at: datetime
     updated_at: datetime

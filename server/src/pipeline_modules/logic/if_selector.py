@@ -91,8 +91,8 @@ class IfSelector(LogicModule):
         # Map input node_ids to their values using context metadata
         # The inputs are ordered: [Condition, False, True] based on meta() definition
         condition_input = context.inputs[0]  # First input group is "Condition"
-        false_input = context.inputs[1]      # Second input group is "False"
-        true_input = context.inputs[2]       # Third input group is "True"
+        false_input = context.inputs[2]      # Second input group is "False"
+        true_input = context.inputs[1]       # Third input group is "True"
 
         # Extract values from inputs dict
         condition = inputs[condition_input.node_id]

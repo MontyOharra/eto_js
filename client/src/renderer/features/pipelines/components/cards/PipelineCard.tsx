@@ -4,11 +4,13 @@ import { formatTimestamp } from '../../../../shared/utils/formatUtils';
 interface PipelineCardProps {
   pipeline: PipelineListItem;
   onView?: (pipelineId: number) => void;
+  onTestExecutedView?: (pipelineId: number) => void;
 }
 
 export function PipelineCard({
   pipeline,
   onView,
+  onTestExecutedView,
 }: PipelineCardProps) {
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-lg p-5 hover:border-gray-600 transition-colors">
@@ -54,6 +56,14 @@ export function PipelineCard({
             className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
           >
             View Graph
+          </button>
+        )}
+        {onTestExecutedView && (
+          <button
+            onClick={() => onTestExecutedView(pipeline.id)}
+            className="px-3 py-1.5 text-sm bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors"
+          >
+            Test Executed View
           </button>
         )}
       </div>

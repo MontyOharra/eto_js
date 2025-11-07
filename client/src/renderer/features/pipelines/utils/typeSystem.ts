@@ -4,7 +4,7 @@
  */
 
 import { Node, Edge } from "@xyflow/react";
-import { ModuleInstance, NodePin } from "../../modules/types";
+import { ModuleInstance, NodePin } from "../types";
 
 /**
  * Calculate intersection of two type arrays
@@ -17,9 +17,9 @@ export function getTypeIntersection(
 }
 
 /**
- * Get all pins from a module instance
+ * Get all pins from a module instance (internal helper)
  */
-export function getAllPins(moduleInstance: ModuleInstance): NodePin[] {
+function getAllPins(moduleInstance: ModuleInstance): NodePin[] {
   return [...moduleInstance.inputs, ...moduleInstance.outputs];
 }
 

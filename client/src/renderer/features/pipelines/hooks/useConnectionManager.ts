@@ -5,7 +5,7 @@
 
 import { useCallback } from "react";
 import { Node, Edge } from "@xyflow/react";
-import { ModuleInstance, NodePin } from "../../modules/types";
+import { ModuleInstance } from "../types";
 import {
   validateConnection,
   calculateTypePropagation,
@@ -15,7 +15,6 @@ import {
 import {
   createStyledEdge,
   updateEdgeColors,
-  findConnectedEdges,
   removePinEdges,
 } from "../utils/edgeUtils";
 
@@ -46,9 +45,7 @@ export function useConnectionManager({
   setEdges,
   viewOnly = false,
 }: UseConnectionManagerProps): ConnectionManagerActions {
-  /**
-   * Create a connection between two pins with type propagation
-   */
+
   const createConnection = useCallback(
     (
       sourceModuleId: string,

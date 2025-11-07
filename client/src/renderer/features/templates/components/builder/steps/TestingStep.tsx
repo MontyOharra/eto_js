@@ -10,7 +10,7 @@ import { ExtractedFieldsOverlay } from "../../../../eto/components/EtoRunDetail/
 import {
   ExecutedPipelineGraph,
   ExecutedPipelineGraphRef,
-} from "../../../../pipelines/components/ExecutedPipelineGraph";
+} from "../../../../pipelines/components/executedViewer-old/ExecutedPipelineGraph";
 import type {
   PipelineState,
   VisualState,

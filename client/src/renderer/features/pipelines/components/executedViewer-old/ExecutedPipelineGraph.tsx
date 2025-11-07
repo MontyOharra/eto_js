@@ -24,16 +24,12 @@ import {
 import "@xyflow/react/dist/style.css";
 import dagre from "dagre";
 
-import { ModuleTemplate } from "../../modules/types";
-import {
-  PipelineState,
-  VisualState,
-  EntryPoint,
-} from "../types";
-import { Module } from "./module/Module";
+import { ModuleTemplate } from "../../../modules/types";
+import { PipelineState, VisualState, EntryPoint } from "../../types";
+import { Module } from "../module/Module";
 import { ExecutionEdge } from "./ExecutionEdge";
-import { createEdgesFromConnections } from "../utils/edgeUtils";
-import { createModuleInstance } from "../utils/moduleFactory";
+import { createEdgesFromConnections } from "../../utils/edgeUtils";
+import { createModuleInstance } from "../../utils/moduleFactory";
 
 export interface ExecutedPipelineGraphProps {
   moduleTemplates: ModuleTemplate[];

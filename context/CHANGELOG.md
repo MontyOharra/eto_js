@@ -5,6 +5,144 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-11-06 15:30] — ExecutedPipelineViewer Component Implementation
+
+### Spec / Intent
+- Build new ExecutedPipelineViewer from scratch to visualize pipeline execution results
+- Fix backend input pin name resolution to show upstream output pin names
+- Create read-only pipeline visualization with execution data overlay
+- Integrate with React Flow and dagre for automatic layout
+
+### Changes Made
+
+**Backend - Input Pin Name Resolution** (`server/src/features/pipeline_execution/service.py`):
+- Created `_serialize_inputs_for_audit()` function (lines 185-250)
+- Looks up upstream output pin names instead of using generic input group names
+- Uses `input_field_mappings` to find upstream pin ID
+- Uses `all_nodes_metadata` to find upstream pin name
+- Updated `execute_pipeline()` to use new function for inputs (lines 974-980)
+- Result: Input pins now show meaningful names like "hawb", "pu" instead of "text", "value"
+
+**Frontend - ExecutedPipelineViewer Components** (`client/src/renderer/features/pipelines/components/ExecutedPipelineViewer/`):
+- **ExecutedPipelineViewer.tsx** (287 lines):
+  - Main orchestrator component with React Flow integration
+  - Fetches modules using `useModules()` TanStack Query hook
+  - Converts pipeline state + execution steps to React Flow nodes
+  - Applies dagre layout (left-to-right, ranksep: 450, nodesep: 200)
+  - **Critical Fix**: Always iterates pipeline state for structure, overlays execution data
+  - This ensures all handles render even when execution data is incomplete
+  - Maps connections to edges with proper handle IDs
+
+- **ExecutedEntryPoint.tsx** (41 lines):
+  - Wrapper component that reuses ExecutedModule with hardcoded values
+  - Black header (#000000), "Entry Point" title
+  - No inputs, single string output with entry point name
+  - Uses `entry-${nodeId}` prefix for node IDs (critical for edge connections)
+
+- **ExecutedModule.tsx** (74 lines):
+  - Module node component composed of header + body
+  - Border color based on execution status (red for failed, gray for executed)
+  - Dynamic width based on content
+
+- **ExecutedModuleHeader.tsx**:
+  - Colored header bar with module name
+  - Uses `getTextColor()` utility for proper text contrast
+
+- **ExecutedModuleBody.tsx**:
+  - Two-column layout (inputs left, outputs right)
+  - Renders ExecutedModuleRow for each pin
+  - Shows error message if execution failed
+
+- **ExecutedModuleRow.tsx** (85 lines):
+  - Individual pin row with React Flow Handle
+  - Type-colored indicator badge (from TYPE_COLORS)
+  - Mirrored layout: inputs show "name - type", outputs show "type - name"
+  - Handle positioned on outer edge (-13px offset)
+
+### Technical Details
+
+**Critical Handle Rendering Fix**:
+```typescript
+// Always iterate through pipeline state for structure
+moduleInstance.inputs.forEach((input) => {
+  const executionData = executionStep?.inputs?.[input.node_id];
+  inputs[input.node_id] = {
+    name: executionData?.name || input.name,
+    value: executionData?.value || "",
+    type: executionData?.type || input.type,
+  };
+});
+```
+
+**Why This Matters**: Without this approach, React Flow throws "Couldn't create edge for source handle id" errors when execution data is incomplete. We iterate pipeline state (source of truth for structure) and overlay execution data (which may be incomplete).
+
+**Entry Point ID Prefixing**:
+```typescript
+// Create entry point nodes with 'entry-' prefix
+id: `entry-${entryPoint.node_id}`,
+
+// Map in edge lookup
+nodeIdToModuleId.set(ep.node_id, `entry-${ep.node_id}`);
+```
+
+**Dagre Layout Configuration**:
+- Node dimensions: 220px × 180px
+- Direction: Left-to-right (LR)
+- Horizontal spacing (ranksep): 450px
+- Vertical spacing (nodesep): 200px
+
+### Errors Fixed
+
+**Error 1: Input Pins Showing Generic Names**
+- Before: Inputs showed "text", "value", "data" (group names)
+- After: Inputs show "hawb", "pu", "due date text" (upstream output names)
+- Fix: Created `_serialize_inputs_for_audit()` with upstream pin lookup
+
+**Error 2: React Flow Handle Error**
+- Error: `[React Flow]: Couldn't create edge for source handle id: "Na4y"`
+- Root cause: Module "Ml2" had output "Na4y" in pipeline state but empty outputs in execution step
+- Fix: Always iterate pipeline state for structure, overlay execution data for values
+- Result: All handles render even when execution data is missing
+
+**Error 3: Entry Point Edge Connections**
+- Problem: Edges from entry points to modules weren't connecting
+- Root cause: Entry point node IDs didn't match expected `entry-` prefix pattern
+- Fix: Consistently use `entry-${nodeId}` prefix for all entry point nodes
+
+### Architecture Decisions
+
+**Why Reuse ExecutedModule for Entry Points?**
+- Consistency: Same styling and structure as regular modules
+- Simplicity: No duplicate component code
+- Maintainability: Changes to module styling apply to entry points
+
+**Why Iterate Pipeline State Instead of Execution Steps?**
+- Completeness: Pipeline state is source of truth for structure
+- Resilience: Handles missing execution data gracefully
+- Edge Connections: Ensures all handles exist for React Flow
+
+**Why Dagre Layout?**
+- Hierarchical: Natural left-to-right flow from entry points to outputs
+- Automatic: No manual positioning needed
+- Consistent: Same layout algorithm as pipeline builder
+
+### Next Actions
+- Implement ExecutionEdge component with smooth step paths
+- Add type-colored edges with value labels
+- Add hover effects and value truncation
+- Calculate offsets for parallel edges
+- Test with various pipeline structures
+
+### Notes
+- All components are read-only (no editing functionality)
+- Uses TanStack Query for module data fetching
+- Replaces old executedViewer-old implementation
+- Current state: Basic visualization working with straight-line edges
+- Ready for ExecutionEdge implementation with enhanced styling
+- Detailed continuity document created at `context/CONTINUITY.md`
+
+---
+
 ## [2025-10-30 17:15] — ETO API Conversion to TanStack Query
 
 ### Spec / Intent

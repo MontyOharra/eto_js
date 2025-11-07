@@ -1,9 +1,8 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
-import { usePipelinesApi } from '../../../features/pipelines/hooks/usePipelinesApi';
+import { usePipelinesApi, PipelineSummary } from '../../../features/pipelines';
 import { PipelineCard, PipelineViewerModal } from '../../../features/pipelines/components';
-import { TestExecutedPipelineModal } from '../../../features/pipelines/components/TestExecutedPipelineModal';
-import { PipelineListItem } from '../../../features/pipelines/types';
+import { ExecutedPipelineModal } from '../../../features/pipelines/components/modals/ExecutedPipelineModal';
 
 export const Route = createFileRoute('/dashboard/pipelines/')({
   component: PipelinesPage,
@@ -19,11 +18,12 @@ function PipelinesPage() {
     error,
   } = usePipelinesApi();
 
-  const [allPipelines, setAllPipelines] = useState<PipelineListItem[]>([]);
+  const [allPipelines, setAllPipelines] = useState<PipelineSummary[]>([]);
   const [sortBy, setSortBy] = useState<SortBy>('created_at');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
   const [viewerPipelineId, setViewerPipelineId] = useState<number | null>(null);
+  const [executedViewPipelineId, setExecutedViewPipelineId] = useState<number | null>(null);
 
   // Fetch pipelines on mount
   useEffect(() => {
@@ -81,6 +81,10 @@ function PipelinesPage() {
 
   const handleView = (pipelineId: number) => {
     setViewerPipelineId(pipelineId);
+  };
+
+  const handleTestExecutedView = (pipelineId: number) => {
+    setExecutedViewPipelineId(pipelineId);
   };
 
 
@@ -199,6 +203,7 @@ function PipelinesPage() {
               key={pipeline.id}
               pipeline={pipeline}
               onView={handleView}
+              onTestExecutedView={handleTestExecutedView}
             />
           ))}
         </div>
@@ -238,9 +243,10 @@ function PipelinesPage() {
     </div>
 
       {/* Test Modal */}
-      <TestExecutedPipelineModal
+      <ExecutedPipelineModal
         isOpen={isTestModalOpen}
         onClose={() => setIsTestModalOpen(false)}
+        pipelineId={null}
       />
 
       {/* Pipeline Viewer Modal */}
@@ -248,6 +254,13 @@ function PipelinesPage() {
         isOpen={viewerPipelineId !== null}
         pipelineId={viewerPipelineId}
         onClose={() => setViewerPipelineId(null)}
+      />
+
+      {/* Executed Pipeline Viewer Modal */}
+      <ExecutedPipelineModal
+        isOpen={executedViewPipelineId !== null}
+        onClose={() => setExecutedViewPipelineId(null)}
+        pipelineId={executedViewPipelineId}
       />
     </div>
   );

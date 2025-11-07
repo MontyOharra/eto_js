@@ -7,9 +7,9 @@ import { useEffect, useRef, useState, useMemo } from "react";
 import {
   ExecutedPipelineGraph,
   ExecutedPipelineGraphRef,
-} from "../../../pipelines/components/ExecutedPipelineGraph";
+} from "../../../pipelines/components/executedViewer-old/ExecutedPipelineGraph";
 import { useModules } from "../../../modules";
-import { usePipelinesApi } from "../../../pipelines";
+import { usePipelinesApi } from "../../../pipelines/api";
 import type { EtoRunDetail } from "../../types";
 
 interface DetailPipelineViewProps {
@@ -72,7 +72,10 @@ export function DetailPipelineView({
 
   // Build execution values map from API data (no transforms, just Map creation)
   const executionValues = useMemo(() => {
-    const valuesMap = new Map<string, { value: any; type: string; name: string }>();
+    const valuesMap = new Map<
+      string,
+      { value: any; type: string; name: string }
+    >();
 
     // Add execution step values
     if (runDetail?.stage_pipeline_execution?.steps) {

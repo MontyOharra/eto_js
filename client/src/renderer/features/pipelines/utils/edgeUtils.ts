@@ -4,7 +4,7 @@
  */
 
 import { Node, Edge, Position } from "@xyflow/react";
-import { ModuleInstance } from "../../modules/types";
+import { ModuleInstance } from "../types";
 import { findPin } from "./typeSystem";
 import { TYPE_COLORS } from "./moduleUtils";
 
@@ -91,34 +91,6 @@ export function findConnectedEdges(
     (edge) =>
       (edge.source === moduleId && edge.sourceHandle === pinId) ||
       (edge.target === moduleId && edge.targetHandle === pinId)
-  );
-}
-
-/**
- * Find edge connecting two specific pins
- */
-export function findEdgeBetweenPins(
-  edges: Edge[],
-  sourceModuleId: string,
-  sourcePinId: string,
-  targetModuleId: string,
-  targetPinId: string
-): Edge | undefined {
-  return edges.find(
-    (edge) =>
-      edge.source === sourceModuleId &&
-      edge.sourceHandle === sourcePinId &&
-      edge.target === targetModuleId &&
-      edge.targetHandle === targetPinId
-  );
-}
-
-/**
- * Remove all edges connected to a specific module
- */
-export function removeModuleEdges(edges: Edge[], moduleId: string): Edge[] {
-  return edges.filter(
-    (edge) => edge.source !== moduleId && edge.target !== moduleId
   );
 }
 

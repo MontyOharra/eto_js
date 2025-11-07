@@ -8,21 +8,15 @@ import { apiClient } from '../../../shared/api/client';
 import { API_CONFIG } from '../../../shared/api/config';
 import type {
   PipelinesListResponse,
-  PipelineDetailResponse,
+  PipelineDetail,
   CreatePipelineRequest,
   CreatePipelineResponse,
-  UpdatePipelineRequest,
-  UpdatePipelineResponse,
   ValidatePipelineRequest,
   ValidatePipelineResponse,
-} from '../types';
-
-interface PipelinesQueryParams {
-  sort_by?: 'id' | 'created_at';
-  sort_order?: 'asc' | 'desc';
-  limit?: number;
-  offset?: number;
-}
+  ExecutePipelineRequest,
+  ExecutePipelineResponse,
+  PipelinesQueryParams,
+} from './types';
 
 interface UsePipelinesApiResult {
   // State
@@ -31,12 +25,10 @@ interface UsePipelinesApiResult {
 
   // API operations
   getPipelines: (params?: PipelinesQueryParams) => Promise<PipelinesListResponse>;
-  getPipeline: (id: number) => Promise<PipelineDetailResponse>;
+  getPipeline: (id: number) => Promise<PipelineDetail>;
   createPipeline: (data: CreatePipelineRequest) => Promise<CreatePipelineResponse>;
-  updatePipeline: (id: number, data: UpdatePipelineRequest) => Promise<UpdatePipelineResponse>;
-  deletePipeline: (id: number) => Promise<void>;
   validatePipeline: (data: ValidatePipelineRequest) => Promise<ValidatePipelineResponse>;
-  executePipeline: (id: number, entryValues: Record<string, any>) => Promise<any>;
+  executePipeline: (id: number, request: ExecutePipelineRequest) => Promise<ExecutePipelineResponse>;
 }
 
 export function usePipelinesApi(): UsePipelinesApiResult {
@@ -85,18 +77,10 @@ export function usePipelinesApi(): UsePipelinesApiResult {
    * Get complete pipeline definition including pipeline_state and visual_state
    */
   const getPipeline = useCallback(
-    async (id: number): Promise<PipelineDetailResponse> => {
+    async (id: number): Promise<PipelineDetail> => {
       return withLoadingAndError(async () => {
-        const response = await apiClient.get<any>(`${baseUrl}/${id}`);
-        const data = response.data;
-
-        // Transform backend snake_case to frontend camelCase
-        if (data.visual_state?.entry_points) {
-          data.visual_state.entryPoints = data.visual_state.entry_points;
-          delete data.visual_state.entry_points;
-        }
-
-        return data as PipelineDetailResponse;
+        const response = await apiClient.get<PipelineDetail>(`${baseUrl}/${id}`);
+        return response.data;
       });
     },
     [baseUrl, withLoadingAndError]
@@ -109,49 +93,8 @@ export function usePipelinesApi(): UsePipelinesApiResult {
   const createPipeline = useCallback(
     async (data: CreatePipelineRequest): Promise<CreatePipelineResponse> => {
       return withLoadingAndError(async () => {
-        // Transform frontend camelCase to backend snake_case
-        const transformedData = { ...data };
-        if (transformedData.visual_state?.entryPoints) {
-          (transformedData.visual_state as any).entry_points = transformedData.visual_state.entryPoints;
-          delete transformedData.visual_state.entryPoints;
-        }
-
-        const response = await apiClient.post<CreatePipelineResponse>(baseUrl, transformedData);
+        const response = await apiClient.post<CreatePipelineResponse>(baseUrl, data);
         return response.data;
-      });
-    },
-    [baseUrl, withLoadingAndError]
-  );
-
-  /**
-   * PUT /api/pipelines/{id}
-   * Update existing pipeline definition
-   */
-  const updatePipeline = useCallback(
-    async (id: number, data: UpdatePipelineRequest): Promise<UpdatePipelineResponse> => {
-      return withLoadingAndError(async () => {
-        // Transform frontend camelCase to backend snake_case
-        const transformedData = { ...data };
-        if (transformedData.visual_state?.entryPoints) {
-          (transformedData.visual_state as any).entry_points = transformedData.visual_state.entryPoints;
-          delete transformedData.visual_state.entryPoints;
-        }
-
-        const response = await apiClient.put<UpdatePipelineResponse>(`${baseUrl}/${id}`, transformedData);
-        return response.data;
-      });
-    },
-    [baseUrl, withLoadingAndError]
-  );
-
-  /**
-   * DELETE /api/pipelines/{id}
-   * Delete pipeline definition (only for standalone pipelines)
-   */
-  const deletePipeline = useCallback(
-    async (id: number): Promise<void> => {
-      return withLoadingAndError(async () => {
-        await apiClient.delete(`${baseUrl}/${id}`);
       });
     },
     [baseUrl, withLoadingAndError]
@@ -164,16 +107,9 @@ export function usePipelinesApi(): UsePipelinesApiResult {
   const validatePipeline = useCallback(
     async (data: ValidatePipelineRequest): Promise<ValidatePipelineResponse> => {
       return withLoadingAndError(async () => {
-        // Transform frontend camelCase to backend snake_case
-        const transformedData = { ...data };
-        if (transformedData.visual_state?.entryPoints) {
-          (transformedData.visual_state as any).entry_points = transformedData.visual_state.entryPoints;
-          delete transformedData.visual_state.entryPoints;
-        }
-
         const response = await apiClient.post<ValidatePipelineResponse>(
           `${baseUrl}/validate`,
-          transformedData
+          data
         );
         return response.data;
       });
@@ -186,11 +122,11 @@ export function usePipelinesApi(): UsePipelinesApiResult {
    * Execute pipeline with entry values (simulation mode)
    */
   const executePipeline = useCallback(
-    async (id: number, entryValues: Record<string, any>): Promise<any> => {
+    async (id: number, request: ExecutePipelineRequest): Promise<ExecutePipelineResponse> => {
       return withLoadingAndError(async () => {
-        const response = await apiClient.post<any>(
+        const response = await apiClient.post<ExecutePipelineResponse>(
           `${baseUrl}/${id}/execute`,
-          { entry_values: entryValues }
+          request
         );
         return response.data;
       });
@@ -204,8 +140,6 @@ export function usePipelinesApi(): UsePipelinesApiResult {
     getPipelines,
     getPipeline,
     createPipeline,
-    updatePipeline,
-    deletePipeline,
     validatePipeline,
     executePipeline,
   };

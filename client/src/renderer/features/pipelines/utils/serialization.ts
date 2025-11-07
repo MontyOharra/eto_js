@@ -9,8 +9,8 @@ import {
   VisualState,
   NodeConnection,
   EntryPoint,
+  ModuleInstance
 } from "../types";
-import { ModuleInstance } from "../../modules/types";
 
 /**
  * Serialize React Flow state to PipelineState
