@@ -107,9 +107,10 @@ class PipelineValidator:
         # Collect all node IDs with their sources for error reporting
         node_ids: List[tuple[str, str]] = []
 
-        # Entry points
+        # Entry points (check output pins)
         for ep in pipeline_state.entry_points:
-            node_ids.append((ep.node_id, f"entry point '{ep.name}'"))
+            for output_pin in ep.outputs:
+                node_ids.append((output_pin.node_id, f"entry point '{ep.name}' output '{output_pin.name}'"))
 
         # Module pins
         for module in pipeline_state.modules:
@@ -201,15 +202,16 @@ class PipelineValidator:
         module_by_id: Dict[str, ModuleInstance] = {}
         input_to_upstream: Dict[str, str] = {}
 
-        # Index entry points
+        # Index entry points (index their output pins)
         for entry in pipeline_state.entry_points:
-            pin_by_id[entry.node_id] = PinInfo(
-                node_id=entry.node_id,
-                type="str",  # Entry points always output str
-                direction="entry",
-                name=entry.name,
-                module_instance_id=None
-            )
+            for output_pin in entry.outputs:
+                pin_by_id[output_pin.node_id] = PinInfo(
+                    node_id=output_pin.node_id,
+                    type=output_pin.type,
+                    direction="entry",
+                    name=output_pin.name,
+                    module_instance_id=None  # Entry points don't have module IDs
+                )
 
         # Index modules and their pins
         for module in pipeline_state.modules:
