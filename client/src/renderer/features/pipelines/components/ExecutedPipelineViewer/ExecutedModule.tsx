@@ -10,6 +10,7 @@ import { ExecutedModuleBody } from "./ExecutedModuleBody";
 interface ExecutedModuleProps {
   data: {
     // Header info
+    moduleId: string;
     moduleName: string;
     moduleColor: string;
 
@@ -31,6 +32,7 @@ interface ExecutedModuleProps {
 
 export function ExecutedModule({ data }: ExecutedModuleProps) {
   const {
+    moduleId,
     moduleName,
     moduleColor,
     inputs,
@@ -43,8 +45,8 @@ export function ExecutedModule({ data }: ExecutedModuleProps) {
 
   // Determine border color based on execution status
   const getBorderColor = () => {
-    if (status === "failed") return "border-red-500";
-    return "border-gray-600";
+    if (status === "not_executed") return "border-gray-700";
+    return "border-gray-600"; // executed or failed (error shown in body)
   };
 
   const inputEntries = Object.entries(inputs || {});
@@ -56,12 +58,13 @@ export function ExecutedModule({ data }: ExecutedModuleProps) {
     <div
       className={`bg-gray-800 rounded-lg border-2 ${getBorderColor()} ${
         hasInputs && hasOutputs ? "min-w-[400px]" : "min-w-[200px]"
-      } w-min`}
+      } w-min ${status === "not_executed" ? "opacity-50" : ""}`}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       style={{ pointerEvents: "auto" }}
     >
       <ExecutedModuleHeader
+        moduleId={moduleId}
         moduleName={moduleName}
         moduleColor={moduleColor}
         status={status}

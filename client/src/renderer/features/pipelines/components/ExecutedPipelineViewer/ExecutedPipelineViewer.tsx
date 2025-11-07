@@ -97,25 +97,6 @@ function ExecutedPipelineViewerInner({
   // Fetch modules using TanStack Query
   const { data: modules = [], isLoading: modulesLoading } = useModules();
 
-  // Log execution steps on render
-  console.log('Execution Steps:', executionSteps?.map((step, index) => ({
-    index,
-    module_instance_id: step.module_instance_id,
-    step_number: step.step_number,
-    inputs: step.inputs,
-    outputs: step.outputs,
-    error: step.error,
-  })));
-
-  // Log pipeline state structure
-  console.log('Pipeline State Modules:', pipelineState?.modules.map(m => ({
-    module_instance_id: m.module_instance_id,
-    outputs: m.outputs.map(o => ({ node_id: o.node_id, name: o.name })),
-    inputs: m.inputs.map(i => ({ node_id: i.node_id, name: i.name }))
-  })));
-
-  console.log('Pipeline Connections:', pipelineState?.connections);
-
   // Convert pipeline state modules and entry points to React Flow nodes
   const rawNodes: Node[] = useMemo(() => {
     if (!pipelineState || !modules.length) {
@@ -153,6 +134,22 @@ function ExecutedPipelineViewerInner({
 
       // Get execution data for this module
       const executionStep = executionSteps?.find((step) => step.module_instance_id === moduleInstance.module_instance_id);
+
+      // Determine execution status based on execution step
+      let status: "executed" | "failed" | "not_executed";
+      let error: string | null = null;
+
+      if (!executionStep) {
+        // No execution step means this module never ran (stopped before reaching it)
+        status = "not_executed";
+      } else if (executionStep.error) {
+        // Has execution step with error - module failed
+        status = "failed";
+        error = executionStep.error;
+      } else {
+        // Has execution step without error - module executed successfully
+        status = "executed";
+      }
 
       // Build inputs/outputs from pipeline state structure with execution values
       // This ensures all handles are rendered even if execution data is missing
@@ -194,11 +191,13 @@ function ExecutedPipelineViewerInner({
         type: "executedModule",
         position: { x: 0, y: 0 }, // Will be positioned by dagre
         data: {
+          moduleId: moduleInstance.module_instance_id,
           moduleName,
           moduleColor,
           inputs,
           outputs,
-          status: "executed" as const, // Default to executed for now
+          status,
+          error,
         },
       });
     });
@@ -241,6 +240,16 @@ function ExecutedPipelineViewerInner({
         console.warn(`Missing target node for handle: ${connection.to_node_id}`);
       }
 
+      // Get output data from source module
+      let outputData = null;
+      if (sourceModuleId && !sourceModuleId.startsWith('entry-')) {
+        const sourceExecution = executionSteps?.find(
+          (step) => step.module_instance_id === sourceModuleId
+        );
+        // Get the specific output for this connection
+        outputData = sourceExecution?.outputs?.[connection.from_node_id] || null;
+      }
+
       return {
         id: `edge-${index}`,
         source: sourceModuleId || '',
@@ -248,12 +257,15 @@ function ExecutedPipelineViewerInner({
         sourceHandle: connection.from_node_id,
         targetHandle: connection.to_node_id,
         type: 'executionEdge',
+        data: {
+          output: outputData,
+        },
       };
     });
 
     // Filter out edges with missing source or target
     return edges.filter(edge => edge.source && edge.target);
-  }, [pipelineState]);
+  }, [pipelineState, executionSteps]);
 
   // Apply dagre layout to position nodes and calculate edge offsets
   const { nodes, edges } = useMemo(() => {
@@ -309,6 +321,7 @@ function ExecutedPipelineViewerInner({
       return {
         ...edge,
         data: {
+          ...edge.data, // Preserve existing data (output)
           offset,
         },
       };

@@ -6,12 +6,14 @@
 import { getTextColor } from "../../utils/moduleUtils";
 
 interface ExecutedModuleHeaderProps {
+  moduleId: string;
   moduleName: string;
   moduleColor: string;
   status: "executed" | "failed" | "not_executed";
 }
 
 export function ExecutedModuleHeader({
+  moduleId,
   moduleName,
   moduleColor,
 }: ExecutedModuleHeaderProps) {
@@ -26,6 +28,9 @@ export function ExecutedModuleHeader({
         <h3 className="text-sm font-semibold" style={{ color: textColor }}>
           {moduleName}
         </h3>
+        <span className="text-xs font-mono opacity-75" style={{ color: textColor }}>
+          {moduleId}
+        </span>
       </div>
     </div>
   );
