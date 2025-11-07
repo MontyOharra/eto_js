@@ -47,8 +47,9 @@ def convert_node(node: NodeInstanceDomain) -> Node:
 def convert_entry_point(entry_point: EntryPointDomain) -> EntryPoint:
     """Convert domain EntryPoint to API EntryPoint"""
     return EntryPoint(
-        node_id=entry_point.node_id,
-        name=entry_point.name
+        entry_point_id=entry_point.entry_point_id,
+        name=entry_point.name,
+        outputs=[convert_node(node) for node in entry_point.outputs]
     )
 
 
@@ -144,13 +145,15 @@ def convert_entry_point_to_domain(entry_point: EntryPoint | dict) -> EntryPointD
     """
     if isinstance(entry_point, dict):
         return EntryPointDomain(
-            node_id=entry_point['node_id'],
-            name=entry_point['name']
+            entry_point_id=entry_point['entry_point_id'],
+            name=entry_point['name'],
+            outputs=[convert_node_to_domain(node) for node in entry_point.get('outputs', [])]
         )
 
     return EntryPointDomain(
-        node_id=entry_point.node_id,
-        name=entry_point.name
+        entry_point_id=entry_point.entry_point_id,
+        name=entry_point.name,
+        outputs=[convert_node_to_domain(node) for node in entry_point.outputs]
     )
 
 

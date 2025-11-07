@@ -18,9 +18,10 @@ class NodeInstance:
 
 @dataclass(frozen=True)
 class EntryPoint:
-    """Entry point for pipeline input"""
-    node_id: str
+    """Entry point for pipeline - structured like a module with outputs"""
+    entry_point_id: str
     name: str
+    outputs: List[NodeInstance] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

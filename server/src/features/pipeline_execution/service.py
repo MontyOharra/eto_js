@@ -548,7 +548,9 @@ class PipelineExecutionService:
         # Step 3.6: Build entry points lookup {node_id -> name}
         # Actions connected to entry points need to look up entry point names
         entry_points_lookup: Dict[str, str] = {
-            ep.node_id: ep.name for ep in pipeline_state.entry_points
+            ep.outputs[0].node_id: ep.name
+            for ep in pipeline_state.entry_points
+            if ep.outputs
         }
 
         # Step 4: Build Dask graph
@@ -722,7 +724,9 @@ class PipelineExecutionService:
         for entry_point in pipeline_state.entry_points:
             if entry_point.name not in entry_name_to_ids:
                 entry_name_to_ids[entry_point.name] = []
-            entry_name_to_ids[entry_point.name].append(entry_point.node_id)
+            # Get node_id from first output pin
+            if entry_point.outputs:
+                entry_name_to_ids[entry_point.name].append(entry_point.outputs[0].node_id)
 
         logger.debug(f"Mapped {len(entry_name_to_ids)} entry point names to pin IDs")
 
