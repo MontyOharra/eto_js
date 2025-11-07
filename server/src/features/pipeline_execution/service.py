@@ -46,6 +46,21 @@ logger = logging.getLogger(__name__)
 # ==================== Utility Classes ====================
 
 
+class ExecutionCancelled:
+    """
+    Sentinel class to indicate a module did not execute due to upstream failure.
+
+    When a module fails, it returns ExecutionCancelled instances for all outputs.
+    Downstream modules detect this and skip execution, propagating the sentinel.
+    This prevents downstream modules from executing with empty/invalid data.
+    """
+    def __init__(self, reason: str = "Upstream module failed"):
+        self.reason = reason
+
+    def __repr__(self):
+        return f"ExecutionCancelled({self.reason})"
+
+
 class StepResultCollector:
     """
     Thread-safe collector for execution step results.
@@ -344,7 +359,7 @@ class PipelineExecutionService:
     - Lazy task graph construction
     - Transform/Logic → Action ordering (action barrier)
     - Audit trail persistence
-    - Fail-fast error handling
+    - Branch-isolated error handling (independent DAG branches continue on error)
     """
 
     connection_manager: DatabaseConnectionManager
@@ -411,7 +426,8 @@ class PipelineExecutionService:
           - Extra entry names are ignored (logged)
           - All Action modules run only after all Transform/Logic modules succeed
           - Actions collect data but DON'T execute
-          - On any module error, the whole run is marked failed
+          - Independent DAG branches continue execution even if one branch fails
+          - Status is "success" (no errors), "partial" (some errors), or "failed" (all errors)
 
         Args:
             steps: Compiled pipeline steps to execute
@@ -423,7 +439,7 @@ class PipelineExecutionService:
 
         Raises:
             ValueError: Missing required entry values
-            RuntimeError: Module not found or execution failed
+            RuntimeError: Module not found
         """
         return self._execute_pipeline_internal(
             steps=steps,
@@ -452,7 +468,8 @@ class PipelineExecutionService:
           - Extra entry names are ignored (logged)
           - All Action modules run only after all Transform/Logic modules succeed
           - Actions execute and produce side effects
-          - On any module error, the whole run is marked failed
+          - Independent DAG branches continue execution even if one branch fails
+          - Status is "success" (no errors), "partial" (some errors), or "failed" (all errors)
 
         Args:
             steps: Compiled pipeline steps to execute
@@ -464,7 +481,7 @@ class PipelineExecutionService:
 
         Raises:
             ValueError: Missing required entry values
-            RuntimeError: Module not found or execution failed
+            RuntimeError: Module not found
         """
         return self._execute_pipeline_internal(
             steps=steps,
@@ -573,21 +590,38 @@ class PipelineExecutionService:
             leaves = [t for t in task_of_step.values()] or list(producer_of_pin.values())
             if leaves:
                 logger.info(f"Executing Dask graph with {len(leaves)} leaf tasks")
-                compute(*leaves)  # Raises on first failure
+                compute(*leaves)  # No longer raises on first failure (modules return empty dicts)
 
+            logger.info("Pipeline execution graph completed")
+        except Exception as e:
+            # Catch any unexpected errors during graph execution
+            logger.exception(f"Unexpected error during pipeline execution: {e}")
+
+        # Step 8: Collect all errors from execution steps
+        collected_steps = collector.get_all()
+        errors = [step.error for step in collected_steps if step.error]
+
+        # Determine overall status based on error count
+        if not errors:
             status = "success"
             error = None
-            logger.info("Pipeline execution succeeded")
-        except Exception as e:
+            logger.info("Pipeline execution succeeded - all modules completed successfully")
+        elif len(errors) == len(collected_steps):
             status = "failed"
-            error = f"{type(e).__name__}: {e}"
-            logger.exception(f"Pipeline execution failed: {e}")
+            error = f"All {len(errors)} module(s) failed"
+            logger.error(f"Pipeline execution failed completely: {error}")
+        else:
+            status = "partial"
+            error = f"{len(errors)} of {len(collected_steps)} module(s) failed"
+            logger.warning(f"Pipeline execution partially succeeded: {error}")
 
-        # Step 8: Return results
-        collected_steps = collector.get_all()
-        logger.info(f"Returning pipeline result: status={status}, steps_count={len(collected_steps)}, error={error}")
+        # Log detailed error information
+        logger.info(f"Returning pipeline result: status={status}, steps_count={len(collected_steps)}, errors_count={len(errors)}")
         for step in collected_steps:
-            logger.info(f"  Step {step.step_number} ({step.module_instance_id}): error={step.error}")
+            if step.error:
+                logger.error(f"  Step {step.step_number} ({step.module_instance_id}): FAILED - {step.error}")
+            else:
+                logger.debug(f"  Step {step.step_number} ({step.module_instance_id}): SUCCESS")
 
         return PipelineExecutionResult(
             status=status,
@@ -878,6 +912,22 @@ class PipelineExecutionService:
             values = resolved[:len(input_ids)]
             inputs_dict = {inp_id: val for inp_id, val in zip(input_ids, values)}
 
+            # Check if any upstream input is ExecutionCancelled sentinel
+            # If so, skip execution and propagate cancellation downstream
+            cancelled_inputs = [val for val in values if isinstance(val, ExecutionCancelled)]
+            if cancelled_inputs:
+                reason = cancelled_inputs[0].reason  # Use first cancellation reason
+                logger.info(f"Skipping module {step.module_instance_id} due to upstream cancellation: {reason}")
+
+                # Create ExecutionCancelled sentinel for all outputs
+                sentinel = ExecutionCancelled(reason)
+                outputs_dict = {pin.node_id: sentinel for pin in ctx.outputs}
+
+                # DO NOT record step result - module didn't execute, shouldn't appear in steps array
+                # This ensures not_executed modules are truly absent from execution results
+
+                return outputs_dict  # Return sentinel values for downstream propagation
+
             if is_action:
                 # Convert inputs to upstream pin names for better UX
                 upstream_named_inputs = _convert_to_upstream_named_inputs(
@@ -952,6 +1002,11 @@ class PipelineExecutionService:
                     error = None
 
                     logger.debug(f"Collected action data for {step.module_instance_id} (simulation) with mock outputs")
+
+                    # Actions in simulation mode don't create step results (they didn't execute)
+                    # Return mock outputs for downstream dependencies but don't audit
+                    return outputs_dict
+
             else:
                 # Transform/Logic module: Execute normally
                 try:
@@ -969,7 +1024,7 @@ class PipelineExecutionService:
                     error = f"{type(e).__name__}: {e}"
                     logger.exception(f"Module {step.module_instance_id} failed: {e}")
 
-            # Serialize for audit trail
+            # Serialize for audit trail (only for transform/logic and executed actions)
             # For inputs: look up upstream pin names for better UX
             audit_inputs = _serialize_inputs_for_audit(
                 inputs_dict,
@@ -981,7 +1036,7 @@ class PipelineExecutionService:
             # For outputs: use the output pin names from this module
             audit_outputs = _serialize_io_for_audit(outputs_dict, ctx.outputs) if outputs_dict else {}
 
-            # Collect step result
+            # Collect step result (only for modules that actually executed)
             step_result = PipelineExecutionStepResult(
                 module_instance_id=step.module_instance_id,
                 step_number=step.step_number,
@@ -992,10 +1047,13 @@ class PipelineExecutionService:
             collector.add(step_result)
             logger.info(f"Collected step result for {step.module_instance_id}: error={error}")
 
-            # Fail fast on error
+            # Branch-isolated error handling: Don't raise, let other branches continue
+            # Return ExecutionCancelled sentinels if module failed to prevent downstream execution
             if error:
-                logger.info(f"Raising RuntimeError due to module error: {error}")
-                raise RuntimeError(error)
+                logger.error(f"Module {step.module_instance_id} failed: {error}, cancelling downstream execution")
+                # Create ExecutionCancelled sentinel for all outputs
+                sentinel = ExecutionCancelled(f"Module {step.module_instance_id} failed: {error}")
+                return {pin.node_id: sentinel for pin in ctx.outputs}
 
             return outputs_dict
 

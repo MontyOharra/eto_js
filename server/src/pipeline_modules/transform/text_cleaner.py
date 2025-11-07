@@ -103,11 +103,8 @@ class BasicTextCleaner(TransformModule):
         if cfg.to_lowercase:
             cleaned_text = cleaned_text.lower()
 
-        # Return output using context info if available
-        if context and hasattr(context, 'instance_ordered_outputs'):
-            output_node_id = context.instance_ordered_outputs[0]["node_id"]
-        else:
-            # Fallback: use the first output key
-            output_node_id = next(iter(inputs.keys())).replace('input', 'output')
+        # Return output using context.outputs[0].node_id
+        # Context always provides the output node metadata
+        output_node_id = context.outputs[0].node_id
 
         return {output_node_id: cleaned_text}
