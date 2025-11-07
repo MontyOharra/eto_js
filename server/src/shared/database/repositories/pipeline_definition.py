@@ -51,7 +51,14 @@ class PipelineDefinitionRepository(BaseRepository[PipelineDefinitionModel]):
         data = json.loads(json_str)
 
         # Reconstruct nested dataclasses
-        entry_points = [EntryPoint(**ep) for ep in data.get("entry_points", [])]
+        entry_points = []
+        for ep in data.get("entry_points", []):
+            outputs = [NodeInstance(**ni) for ni in ep.get("outputs", [])]
+            entry_points.append(EntryPoint(
+                entry_point_id=ep["entry_point_id"],
+                name=ep["name"],
+                outputs=outputs
+            ))
 
         modules = []
         for mod in data.get("modules", []):
