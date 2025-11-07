@@ -67,7 +67,6 @@ export function ExecutedModule({ data }: ExecutedModuleProps) {
         moduleId={moduleId}
         moduleName={moduleName}
         moduleColor={moduleColor}
-        status={status}
       />
 
       <ExecutedModuleBody inputs={inputs} outputs={outputs} error={error} />

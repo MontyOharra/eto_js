@@ -27,6 +27,7 @@ interface ExecutedPipelineViewerProps {
   pipelineId: number | null;
   pipelineState?: PipelineState;
   executionSteps?: ExecutionStepResult[];
+  entryValues?: Record<string, { name: string; value: any; type: string }>;
 }
 
 const nodeTypes = {
@@ -81,6 +82,7 @@ const getLayoutedElements = (
 function ExecutedPipelineViewerInner({
   pipelineState,
   executionSteps,
+  entryValues,
 }: ExecutedPipelineViewerProps) {
   // Get current zoom level to adjust background density
   const { zoom } = useViewport();
@@ -240,9 +242,14 @@ function ExecutedPipelineViewerInner({
         console.warn(`Missing target node for handle: ${connection.to_node_id}`);
       }
 
-      // Get output data from source module
+      // Get output data from source module or entry point
       let outputData = null;
-      if (sourceModuleId && !sourceModuleId.startsWith('entry-')) {
+      if (sourceModuleId && sourceModuleId.startsWith('entry-')) {
+        // Source is an entry point - use entryValues
+        outputData = entryValues?.[connection.from_node_id] || null;
+        console.log('Entry point edge:', connection.from_node_id, outputData);
+      } else if (sourceModuleId) {
+        // Source is a module - use execution steps
         const sourceExecution = executionSteps?.find(
           (step) => step.module_instance_id === sourceModuleId
         );
@@ -265,7 +272,7 @@ function ExecutedPipelineViewerInner({
 
     // Filter out edges with missing source or target
     return edges.filter(edge => edge.source && edge.target);
-  }, [pipelineState, executionSteps]);
+  }, [pipelineState, executionSteps, entryValues]);
 
   // Apply dagre layout to position nodes and calculate edge offsets
   const { nodes, edges } = useMemo(() => {

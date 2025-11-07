@@ -9,7 +9,6 @@ interface ExecutedModuleHeaderProps {
   moduleId: string;
   moduleName: string;
   moduleColor: string;
-  status: "executed" | "failed" | "not_executed";
 }
 
 export function ExecutedModuleHeader({

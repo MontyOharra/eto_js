@@ -51,6 +51,7 @@ export function ExecutePipelineModal({
   // Initialize entry values and load pipeline when modal opens
   useEffect(() => {
     if (isOpen && pipelineId) {
+      console.log('Entry points received:', entryPoints);
       const initialValues: Record<string, string> = {};
       entryPoints.forEach((ep) => {
         initialValues[ep.name] = "";
@@ -272,6 +273,22 @@ export function ExecutePipelineModal({
                             pipelineId={pipelineId}
                             pipelineState={pipelineState}
                             executionSteps={result.steps}
+                            entryValues={(() => {
+                              // Build entry values map: { node_id: { name, value, type } }
+                              const entryValuesMap: Record<string, { name: string; value: any; type: string }> = {};
+                              entryPoints.forEach((ep) => {
+                                const value = entryValues[ep.name];
+                                if (value !== undefined && value !== "") {
+                                  entryValuesMap[ep.node_id] = {
+                                    name: ep.name,
+                                    value: value,
+                                    type: ep.type,
+                                  };
+                                }
+                              });
+                              console.log('Built entryValuesMap:', entryValuesMap);
+                              return entryValuesMap;
+                            })()}
                           />
                         ) : (
                           <div className="flex items-center justify-center h-full">
