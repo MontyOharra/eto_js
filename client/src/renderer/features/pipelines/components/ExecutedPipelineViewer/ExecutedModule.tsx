@@ -14,11 +14,11 @@ interface ExecutedModuleProps {
     moduleName: string;
     moduleColor: string;
 
-    // Inputs: { [node_id]: { name: "node_name", value: "actual_value", type: "str" } }
-    inputs: Record<string, { name: string; value: string; type: string }>;
+    // Inputs: { [node_id]: { name: "node_name", value: "actual_value", type: "str", group_index: 0, label: "Group" } }
+    inputs: Record<string, { name: string; value: string; type: string; group_index: number; label: string }>;
 
-    // Outputs: { [node_id]: { name: "node_name", value: "actual_value", type: "str" } }
-    outputs: Record<string, { name: string; value: string; type: string }>;
+    // Outputs: { [node_id]: { name: "node_name", value: "actual_value", type: "str", group_index: 0, label: "Group" } }
+    outputs: Record<string, { name: string; value: string; type: string; group_index: number; label: string }>;
 
     // Optional execution state
     status?: "executed" | "failed" | "not_executed";
@@ -69,7 +69,11 @@ export function ExecutedModule({ data }: ExecutedModuleProps) {
         moduleColor={moduleColor}
       />
 
-      <ExecutedModuleBody inputs={inputs} outputs={outputs} error={error} />
+      <ExecutedModuleBody
+        inputs={inputs}
+        outputs={outputs}
+        error={error}
+      />
     </div>
   );
 }

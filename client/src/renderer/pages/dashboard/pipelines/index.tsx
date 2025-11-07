@@ -2,7 +2,6 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { usePipelinesApi, PipelineSummary } from '../../../features/pipelines';
 import { PipelineCard, PipelineViewerModal } from '../../../features/pipelines/components';
-import { ExecutedPipelineModal } from '../../../features/pipelines/components/modals/ExecutedPipelineModal';
 
 export const Route = createFileRoute('/dashboard/pipelines/')({
   component: PipelinesPage,
@@ -21,9 +20,7 @@ function PipelinesPage() {
   const [allPipelines, setAllPipelines] = useState<PipelineSummary[]>([]);
   const [sortBy, setSortBy] = useState<SortBy>('created_at');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
-  const [isTestModalOpen, setIsTestModalOpen] = useState(false);
   const [viewerPipelineId, setViewerPipelineId] = useState<number | null>(null);
-  const [executedViewPipelineId, setExecutedViewPipelineId] = useState<number | null>(null);
 
   // Fetch pipelines on mount
   useEffect(() => {
@@ -83,10 +80,6 @@ function PipelinesPage() {
     setViewerPipelineId(pipelineId);
   };
 
-  const handleTestExecutedView = (pipelineId: number) => {
-    setExecutedViewPipelineId(pipelineId);
-  };
-
 
   // ==========================================================================
   // Render
@@ -120,12 +113,6 @@ function PipelinesPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => setIsTestModalOpen(true)}
-            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors font-medium"
-          >
-            Test Executed Pipeline View
-          </button>
           <Link
             to="/dashboard/pipelines/create"
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
@@ -203,7 +190,6 @@ function PipelinesPage() {
               key={pipeline.id}
               pipeline={pipeline}
               onView={handleView}
-              onTestExecutedView={handleTestExecutedView}
             />
           ))}
         </div>
@@ -242,25 +228,11 @@ function PipelinesPage() {
       )}
     </div>
 
-      {/* Test Modal */}
-      <ExecutedPipelineModal
-        isOpen={isTestModalOpen}
-        onClose={() => setIsTestModalOpen(false)}
-        pipelineId={null}
-      />
-
       {/* Pipeline Viewer Modal */}
       <PipelineViewerModal
         isOpen={viewerPipelineId !== null}
         pipelineId={viewerPipelineId}
         onClose={() => setViewerPipelineId(null)}
-      />
-
-      {/* Executed Pipeline Viewer Modal */}
-      <ExecutedPipelineModal
-        isOpen={executedViewPipelineId !== null}
-        onClose={() => setExecutedViewPipelineId(null)}
-        pipelineId={executedViewPipelineId}
       />
     </div>
   );

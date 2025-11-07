@@ -15,22 +15,26 @@ interface ExecutedEntryPointProps {
   data: {
     name: string;
     nodeId: string; // The node_id for the output handle
+    entryPointId: string;
   };
 }
 
 export function ExecutedEntryPoint({ data }: ExecutedEntryPointProps) {
-  const { name, nodeId } = data;
+  const { name, nodeId, entryPointId } = data;
 
   // Hardcoded values for entry points
   const moduleData = {
     moduleName: "Entry Point",
     moduleColor: "#000000", // Black header
+    moduleId: entryPointId,
     inputs: {}, // No inputs for entry points
     outputs: {
       [nodeId]: {
         name: name,
         value: "", // No value to display
         type: "str", // Always string type
+        group_index: 0,
+        label: "Output",
       },
     },
     status: "executed" as const,

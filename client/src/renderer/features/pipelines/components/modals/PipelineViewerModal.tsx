@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect } from "react";
-import { PipelineGraph } from "../PipelineGraph";
+import { PipelineGraph } from "../PipelineGraph/PipelineGraph";
 import { ExecutePipelineModal } from "./ExecutePipelineModal";
 import { usePipelinesApi, PipelineDetail } from "../../";
 import { useModules } from '../../../modules';

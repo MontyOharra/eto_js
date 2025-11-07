@@ -35,7 +35,7 @@ import {
   VisualState,
   EntryPoint,
 } from "../types";
-import { Module } from "./module/Module";
+import { Module } from "./Module";
 import { TYPE_COLORS } from "../utils/moduleUtils";
 
 // Hooks
@@ -114,6 +114,7 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
     const [edges, setEdges] = useState<Edge[]>([]);
     const [isTextFocused, setIsTextFocused] = useState(false);
     const [selectedEdge, setSelectedEdge] = useState<string | null>(null);
+    const [hoveredModuleId, setHoveredModuleId] = useState<string | null>(null);
 
     // Click-to-connect state
     const [pendingConnection, setPendingConnection] = useState<{
@@ -489,6 +490,15 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
       setSelectedEdge(null);
     }, []);
 
+    // Module hover handlers for edge highlighting
+    const handleModuleMouseEnter = useCallback((moduleId: string) => {
+      setHoveredModuleId(moduleId);
+    }, []);
+
+    const handleModuleMouseLeave = useCallback(() => {
+      setHoveredModuleId(null);
+    }, []);
+
     // Track mouse for preview line
     const handleMouseMove = useCallback(
       (event: React.MouseEvent) => {
@@ -593,14 +603,18 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
         getEffectiveAllowedTypes: getEffectiveAllowedTypesCallback,
         getConnectedOutputName,
         failedModuleIds, // Pass failed module IDs for error highlighting
+        onModuleMouseEnter: handleModuleMouseEnter, // For edge highlighting on hover
+        onModuleMouseLeave: handleModuleMouseLeave,
       },
       draggable: !isTextFocused,
     }));
 
-    // Prepare edges with selection styling
+    // Prepare edges with selection and hover styling
     const edgesWithSelection = edges.map((edge) => {
+      const edgeColor = edge.style?.stroke || "#6B7280";
+
+      // Check if edge is selected
       if (edge.id === selectedEdge) {
-        const edgeColor = edge.style?.stroke || "#6B7280";
         return {
           ...edge,
           style: {
@@ -611,6 +625,23 @@ const PipelineGraphInner = forwardRef<PipelineGraphRef, PipelineGraphProps>(
           },
         };
       }
+
+      // Check if edge is connected to hovered module
+      const isConnectedToHoveredModule =
+        hoveredModuleId &&
+        (edge.source === hoveredModuleId || edge.target === hoveredModuleId);
+
+      if (isConnectedToHoveredModule) {
+        return {
+          ...edge,
+          style: {
+            ...edge.style,
+            strokeWidth: 4,
+            filter: `drop-shadow(0 0 8px ${edgeColor}) drop-shadow(0 0 16px ${edgeColor})`,
+          },
+        };
+      }
+
       return edge;
     });
 

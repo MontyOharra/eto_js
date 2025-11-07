@@ -6,7 +6,7 @@
  * Displays value labels next to edges with hover expansion
  */
 
-import { useState } from 'react';
+import { useState, CSSProperties } from 'react';
 import { BaseEdge, EdgeLabelRenderer, EdgeProps } from '@xyflow/react';
 import { TYPE_COLORS } from '../../utils/moduleUtils';
 
@@ -17,6 +17,12 @@ export interface ExecutionEdgeData {
     type: string;
   } | null;
   offset?: number;
+}
+
+// Extended EdgeProps to ensure style and data are properly typed
+interface ExecutionEdgeProps extends Omit<EdgeProps, 'style' | 'data'> {
+  style?: CSSProperties;
+  data?: ExecutionEdgeData;
 }
 
 const formatValue = (value: any, truncate: boolean = true): string => {
@@ -42,7 +48,7 @@ export function ExecutionEdge({
   style = {},
   markerEnd,
   data,
-}: EdgeProps<ExecutionEdgeData>) {
+}: ExecutionEdgeProps) {
   const [isLabelHovered, setIsLabelHovered] = useState(false);
   const [isEdgeHovered, setIsEdgeHovered] = useState(false);
 

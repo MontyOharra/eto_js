@@ -11,7 +11,7 @@ import type { EntryPoint, PipelineState } from "../../types";
 
 interface ExecutePipelineModalProps {
   isOpen: boolean;
-  pipelineId: number | null;
+  pipelineId: number;
   entryPoints: EntryPoint[];
   onClose: () => void;
 }

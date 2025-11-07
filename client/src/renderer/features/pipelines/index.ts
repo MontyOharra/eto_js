@@ -49,8 +49,8 @@ export { usePipelinesApi } from './api/hooks';
 // Components
 // ============================================================================
 
-export { PipelineGraph } from './components/PipelineGraph';
-export type { PipelineGraphRef } from './components/PipelineGraph';
+export { PipelineGraph } from './components/PipelineGraph/PipelineGraph';
+export type { PipelineGraphRef } from './components/PipelineGraph/PipelineGraph';
 
 // ============================================================================
 // Hooks

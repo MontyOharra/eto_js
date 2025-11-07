@@ -3,7 +3,7 @@
  * Read-only pipeline visualization with execution data overlay
  */
 
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 import {
   ReactFlow,
   Node,
@@ -11,8 +11,8 @@ import {
   Controls,
   Background,
   ReactFlowProvider,
+  useReactFlow,
   BackgroundVariant,
-  useViewport,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import dagre from "dagre";
@@ -84,17 +84,7 @@ function ExecutedPipelineViewerInner({
   executionSteps,
   entryValues,
 }: ExecutedPipelineViewerProps) {
-  // Get current zoom level to adjust background density
-  const { zoom } = useViewport();
-
-  // Calculate gap based on zoom - larger gap when zoomed out
-  // This prevents visual clutter at low zoom levels
-  const backgroundGap = useMemo(() => {
-    if (zoom < 0.5) return 40;
-    if (zoom < 0.75) return 30;
-    if (zoom < 1.5) return 20;
-    return 15;
-  }, [zoom]);
+  const { fitView } = useReactFlow();
 
   // Fetch modules using TanStack Query
   const { data: modules = [], isLoading: modulesLoading } = useModules();
@@ -116,6 +106,7 @@ function ExecutedPipelineViewerInner({
         data: {
           name: entryPoint.name,
           nodeId: entryPoint.outputs[0]?.node_id || '', // Get node_id from first output
+          entryPointId: entryPoint.entry_point_id,
         },
       });
     });
@@ -345,6 +336,15 @@ function ExecutedPipelineViewerInner({
     return { nodes: layoutedNodes, edges: edgesWithOffsets };
   }, [rawNodes, rawEdges]);
 
+  // Fit view once when nodes are ready
+  useEffect(() => {
+    if (nodes.length > 0) {
+      setTimeout(() => {
+        fitView({ padding: 0.2, maxZoom: 1 });
+      }, 0);
+    }
+  }, [nodes.length, fitView]);
+
   // Show loading state while modules are loading
   if (modulesLoading) {
     return (
@@ -384,12 +384,7 @@ function ExecutedPipelineViewerInner({
         }}
       >
         <Controls />
-        <Background
-          variant={BackgroundVariant.Dots}
-          gap={backgroundGap}
-          size={2}
-          color="#6B7280"
-        />
+        <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
       </ReactFlow>
     </div>
   );

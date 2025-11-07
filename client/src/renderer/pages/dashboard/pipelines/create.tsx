@@ -5,7 +5,7 @@ import {
   PipelineGraph,
   PipelineGraphRef,
 } from "../../../features/pipelines/components/PipelineGraph";
-import { EntryPointModal } from "../../../features/pipelines/components/EntryPointModal";
+import { EntryPointModal } from "../../../features/pipelines/components/modals/EntryPointModal";
 import { useModules } from '../../../features/modules';
 import {
   usePipelinesApi,

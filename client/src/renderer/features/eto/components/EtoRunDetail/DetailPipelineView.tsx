@@ -3,14 +3,11 @@
  * Displays executed pipeline visualization with execution values and failed modules
  */
 
-import { useEffect, useRef, useState, useMemo } from "react";
-import {
-  ExecutedPipelineGraph,
-  ExecutedPipelineGraphRef,
-} from "../../../pipelines/components/executedViewer-old/ExecutedPipelineGraph";
-import { useModules } from "../../../modules";
+import { useEffect, useState, useMemo } from "react";
+import { ExecutedPipelineViewer } from "../../../pipelines/components/ExecutedPipelineViewer/ExecutedPipelineViewer";
 import { usePipelinesApi } from "../../../pipelines/api";
 import type { EtoRunDetail } from "../../types";
+import type { ExecutionStepResult } from "../../../pipelines/api/types";
 
 interface DetailPipelineViewProps {
   pipelineDefinitionId: number | null;
@@ -21,8 +18,6 @@ export function DetailPipelineView({
   pipelineDefinitionId,
   runDetail,
 }: DetailPipelineViewProps) {
-  const pipelineViewerRef = useRef<ExecutedPipelineGraphRef>(null);
-  const { data: moduleTemplates = [] } = useModules();
   const { getPipeline } = usePipelinesApi();
 
   // Fetch pipeline definition
@@ -45,99 +40,54 @@ export function DetailPipelineView({
       .finally(() => setIsLoading(false));
   }, [pipelineDefinitionId, getPipeline]);
 
-  // Auto-fit when pipeline loads or container resizes
-  useEffect(() => {
-    if (!pipelineViewerRef.current || !pipelineDefinition) return;
+  // Convert execution steps to new API format
+  const executionSteps: ExecutionStepResult[] = useMemo(() => {
+    if (!runDetail?.stage_pipeline_execution?.steps) {
+      return [];
+    }
 
-    // Initial fit
-    const timer = setTimeout(() => {
-      pipelineViewerRef.current?.fitView();
-    }, 100);
+    return runDetail.stage_pipeline_execution.steps.map((step) => ({
+      module_instance_id: step.module_instance_id,
+      step_number: step.step_number,
+      inputs: step.inputs || {},
+      outputs: step.outputs || {},
+      error: step.error || null,
+    }));
+  }, [runDetail]);
 
-    // Set up resize observer
-    const container = document.querySelector(".detail-pipeline-container");
-    if (!container) return () => clearTimeout(timer);
+  // Convert entry values to new API format
+  // Map extraction results by node_id (from entry point outputs) instead of by name
+  const entryValues = useMemo(() => {
+    const values: Record<string, { name: string; value: any; type: string }> = {};
 
-    const resizeObserver = new ResizeObserver(() => {
-      pipelineViewerRef.current?.fitView();
+    if (!pipelineDefinition?.pipeline_state || !runDetail?.stage_data_extraction?.extraction_results) {
+      return values;
+    }
+
+    // Create a map of entry point name -> output node_id
+    const entryNameToNodeId = new Map<string, string>();
+    pipelineDefinition.pipeline_state.entry_points.forEach((ep: any) => {
+      if (ep.outputs && ep.outputs[0]) {
+        entryNameToNodeId.set(ep.name, ep.outputs[0].node_id);
+      }
     });
 
-    resizeObserver.observe(container);
-
-    return () => {
-      clearTimeout(timer);
-      resizeObserver.disconnect();
-    };
-  }, [pipelineDefinition]);
-
-  // Build execution values map from API data (no transforms, just Map creation)
-  const executionValues = useMemo(() => {
-    const valuesMap = new Map<
-      string,
-      { value: any; type: string; name: string }
-    >();
-
-    // Add execution step values
-    if (runDetail?.stage_pipeline_execution?.steps) {
-      runDetail.stage_pipeline_execution.steps.forEach((step) => {
-        // Add input values
-        if (step.inputs) {
-          Object.entries(step.inputs).forEach(([nodeId, data]) => {
-            valuesMap.set(nodeId, {
-              value: data.value,
-              type: data.type,
-              name: data.name,
-            });
-          });
-        }
-
-        // Add output values
-        if (step.outputs) {
-          Object.entries(step.outputs).forEach(([nodeId, data]) => {
-            valuesMap.set(nodeId, {
-              value: data.value,
-              type: data.type,
-              name: data.name,
-            });
-          });
-        }
-      });
-    }
-
-    // Add entry point values from extraction results
-    if (runDetail?.stage_data_extraction?.extraction_results) {
-      runDetail.stage_data_extraction.extraction_results.forEach((result) => {
-        const entryNodeId = `entry_${result.name}`;
-        const fieldValue = result.extracted_value;
-
-        if (fieldValue !== undefined) {
-          // Extracted values from backend are always strings
-          valuesMap.set(entryNodeId, {
-            value: fieldValue,
-            type: "str",
+    // Map extraction results to node_ids
+    runDetail.stage_data_extraction.extraction_results.forEach((result) => {
+      if (result.extracted_value !== undefined) {
+        const nodeId = entryNameToNodeId.get(result.name);
+        if (nodeId) {
+          values[nodeId] = {
             name: result.name,
-          });
+            value: result.extracted_value,
+            type: "str",
+          };
         }
-      });
-    }
+      }
+    });
 
-    return valuesMap;
-  }, [runDetail]);
-
-  // Build failed modules list from API data
-  const failedModuleIds = useMemo(() => {
-    const failed: string[] = [];
-
-    if (runDetail?.stage_pipeline_execution?.steps) {
-      runDetail.stage_pipeline_execution.steps.forEach((step) => {
-        if (step.error) {
-          failed.push(step.module_instance_id);
-        }
-      });
-    }
-
-    return failed;
-  }, [runDetail]);
+    return values;
+  }, [runDetail, pipelineDefinition]);
 
   if (isLoading) {
     return (
@@ -147,7 +97,7 @@ export function DetailPipelineView({
     );
   }
 
-  if (!pipelineDefinition || moduleTemplates.length === 0) {
+  if (!pipelineDefinition) {
     return (
       <div className="flex items-center justify-center h-full">
         <p className="text-gray-400 text-sm">
@@ -170,13 +120,11 @@ export function DetailPipelineView({
 
   return (
     <div className="detail-pipeline-container absolute inset-0">
-      <ExecutedPipelineGraph
-        ref={pipelineViewerRef}
-        moduleTemplates={moduleTemplates}
+      <ExecutedPipelineViewer
+        pipelineId={pipelineDefinitionId}
         pipelineState={pipelineDefinition.pipeline_state}
-        visualState={pipelineDefinition.visual_state}
-        failedModuleIds={failedModuleIds}
-        executionValues={executionValues}
+        executionSteps={executionSteps}
+        entryValues={entryValues}
       />
     </div>
   );

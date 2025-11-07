@@ -9,7 +9,7 @@ import {
   NodePin,
 } from "../../../modules/types";
 import { groupNodesByIndex } from "../../utils/moduleUtils";
-import { NodeGroupSection } from "./nodes/NodeGroupSection";
+import { NodeGroupSection } from "./NodeGroupSection";
 
 export interface ModuleNodesProps {
   moduleInstance: ModuleInstance;
