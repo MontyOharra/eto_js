@@ -4,7 +4,7 @@
  */
 
 import { useEffect, useState, useMemo } from "react";
-import { ExecutedPipelineViewer } from "../../../pipelines/components/ExecutedPipelineViewer/ExecutedPipelineViewer";
+import { ExecutedPipelineGraph } from "../../../pipelines/components/ExecutedPipelineGraph/ExecutedPipelineGraph";
 import { usePipelinesApi } from "../../../pipelines/api";
 import type { EtoRunDetail } from "../../types";
 import type { ExecutionStepResult } from "../../../pipelines/api/types";
@@ -58,9 +58,13 @@ export function DetailPipelineView({
   // Convert entry values to new API format
   // Map extraction results by node_id (from entry point outputs) instead of by name
   const entryValues = useMemo(() => {
-    const values: Record<string, { name: string; value: any; type: string }> = {};
+    const values: Record<string, { name: string; value: any; type: string }> =
+      {};
 
-    if (!pipelineDefinition?.pipeline_state || !runDetail?.stage_data_extraction?.extraction_results) {
+    if (
+      !pipelineDefinition?.pipeline_state ||
+      !runDetail?.stage_data_extraction?.extraction_results
+    ) {
       return values;
     }
 
@@ -120,7 +124,7 @@ export function DetailPipelineView({
 
   return (
     <div className="detail-pipeline-container absolute inset-0">
-      <ExecutedPipelineViewer
+      <ExecutedPipelineGraph
         pipelineId={pipelineDefinitionId}
         pipelineState={pipelineDefinition.pipeline_state}
         executionSteps={executionSteps}

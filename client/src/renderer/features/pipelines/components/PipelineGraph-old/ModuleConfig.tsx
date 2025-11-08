@@ -7,7 +7,7 @@ import { useState } from "react";
 import {
   ModuleTemplate,
   ModuleInstance,
-} from "../../../modules/types";
+} from "../../../../modules/types";
 import { ConfigSection } from "./ConfigSection";
 
 export interface ModuleConfigProps {

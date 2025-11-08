@@ -1,11 +1,8 @@
 import { useState, useCallback } from "react";
-import { PipelineGraph } from "../../../../pipelines/components/PipelineGraph";
+import { PipelineGraph } from "../../../../pipelines/components/PipelineGraph-old/PipelineGraph";
 import { ModuleSelectorPane } from "../../../../pipelines/components/ModuleSelectorPane";
 import type { ModuleTemplate } from "../../../../modules/types";
-import type {
-  PipelineState,
-  VisualState,
-} from "../../../../pipelines/types";
+import type { PipelineState, VisualState } from "../../../../pipelines/types";
 
 interface PipelineBuilderStepProps {
   pipelineState: PipelineState;

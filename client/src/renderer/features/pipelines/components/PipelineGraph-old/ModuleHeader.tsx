@@ -6,7 +6,7 @@
 import {
   ModuleTemplate,
   ModuleInstance,
-} from "../../../modules/types";
+} from "../../../../modules/types";
 import { getTextColor } from "../../utils/moduleUtils";
 
 export interface ModuleHeaderProps {

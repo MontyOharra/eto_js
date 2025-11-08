@@ -10,12 +10,9 @@ import { ExtractedFieldsOverlay } from "../../../../eto/components/EtoRunDetail/
 import {
   ExecutedPipelineGraph,
   ExecutedPipelineGraphRef,
-} from "../../../../pipelines/components/executedViewer-old/ExecutedPipelineGraph";
-import type {
-  PipelineState,
-  VisualState,
-} from "../../../../../pipelines/types";
-import type { ModuleTemplate } from "../../../../../modules/types";
+} from "../../../../pipelines/components/ExecutedPipelineGraph/ExecutedPipelineGraph";
+import type { PipelineState, VisualState } from "../../../../pipelines/types";
+import type { ModuleTemplate } from "../../../../modules/types";
 
 // Simulation result type (matches ETO run detail but without template/pipeline IDs)
 export interface TemplateSimulationResult {

@@ -6,7 +6,7 @@
 
 import { useState, useEffect } from "react";
 import { usePipelinesApi } from "../../api";
-import { ExecutedPipelineViewer } from "../ExecutedPipelineViewer";
+import { ExecutedPipelineGraph } from "../ExecutedPipelineGraph";
 import type { EntryPoint, PipelineState } from "../../types";
 
 interface ExecutePipelineModalProps {
@@ -46,12 +46,14 @@ export function ExecutePipelineModal({
   const [viewMode, setViewMode] = useState<ViewMode>("summary");
   const [executionWidth, setExecutionWidth] = useState(60); // Percentage for left panel
   const [isDragging, setIsDragging] = useState(false);
-  const [pipelineState, setPipelineState] = useState<PipelineState | null>(null);
+  const [pipelineState, setPipelineState] = useState<PipelineState | null>(
+    null
+  );
 
   // Initialize entry values and load pipeline when modal opens
   useEffect(() => {
     if (isOpen && pipelineId) {
-      console.log('Entry points received:', entryPoints);
+      console.log("Entry points received:", entryPoints);
       const initialValues: Record<string, string> = {};
       entryPoints.forEach((ep) => {
         initialValues[ep.name] = "";
@@ -73,7 +75,6 @@ export function ExecutePipelineModal({
       loadPipeline();
     }
   }, [isOpen, pipelineId, entryPoints, getPipeline]);
-
 
   const handleValueChange = (name: string, value: string) => {
     setEntryValues((prev) => ({
@@ -101,7 +102,9 @@ export function ExecutePipelineModal({
     setResult(null);
 
     try {
-      const executionResult = await executePipeline(pipelineId, {"entry_values":entryValues});
+      const executionResult = await executePipeline(pipelineId, {
+        entry_values: entryValues,
+      });
       setResult(executionResult);
     } catch (err) {
       console.error("Pipeline execution failed:", err);
@@ -269,16 +272,23 @@ export function ExecutePipelineModal({
                         className={`absolute inset-0 ${viewMode === "detail" ? "" : "hidden"}`}
                       >
                         {pipelineState ? (
-                          <ExecutedPipelineViewer
+                          <ExecutedPipelineGraph
                             pipelineId={pipelineId}
                             pipelineState={pipelineState}
                             executionSteps={result.steps}
                             entryValues={(() => {
                               // Build entry values map: { node_id: { name, value, type } }
-                              const entryValuesMap: Record<string, { name: string; value: any; type: string }> = {};
+                              const entryValuesMap: Record<
+                                string,
+                                { name: string; value: any; type: string }
+                              > = {};
                               entryPoints.forEach((ep) => {
                                 const value = entryValues[ep.name];
-                                if (value !== undefined && value !== "" && ep.outputs[0]) {
+                                if (
+                                  value !== undefined &&
+                                  value !== "" &&
+                                  ep.outputs[0]
+                                ) {
                                   // Use the node_id from the first output
                                   entryValuesMap[ep.outputs[0].node_id] = {
                                     name: ep.name,
@@ -287,7 +297,10 @@ export function ExecutePipelineModal({
                                   };
                                 }
                               });
-                              console.log('Built entryValuesMap:', entryValuesMap);
+                              console.log(
+                                "Built entryValuesMap:",
+                                entryValuesMap
+                              );
                               return entryValuesMap;
                             })()}
                           />
@@ -330,7 +343,9 @@ export function ExecutePipelineModal({
                     <div key={ep.entry_point_id}>
                       <label className="block text-sm font-medium text-gray-300 mb-2">
                         {ep.name}
-                        <span className="text-gray-500 ml-2">({ep.outputs[0]?.type || 'str'})</span>
+                        <span className="text-gray-500 ml-2">
+                          ({ep.outputs[0]?.type || "str"})
+                        </span>
                       </label>
                       <input
                         type="text"

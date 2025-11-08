@@ -5,14 +5,14 @@
  */
 
 import { useState, useEffect } from "react";
-import { PipelineGraph } from "../PipelineGraph/PipelineGraph";
-import { ExecutePipelineModal } from "./ExecutePipelineModal";
+import { PipelineGraph } from "../PipelineGraph-old/PipelineGraph";
+import { ExecutePipelineModal } from "../ExecutePipelineModal";
 import { usePipelinesApi, PipelineDetail } from "../../";
-import { useModules } from '../../../modules';
+import { useModules } from "../../../modules";
 
 interface PipelineViewerModalProps {
   isOpen: boolean;
-  pipelineId: number | null;
+  pipelineId: number;
   onClose: () => void;
 }
 

@@ -1,5 +1,5 @@
 /**
- * ExecutedPipelineViewer
+ * ExecutedPipelineGraph
  * Read-only pipeline visualization with execution data overlay
  */
 
@@ -23,7 +23,7 @@ import { useModules } from "../../../modules";
 import type { PipelineState } from "../../types";
 import type { ExecutionStepResult } from "../../api/types";
 
-interface ExecutedPipelineViewerProps {
+interface ExecutedPipelineGraphProps {
   pipelineId: number | null;
   pipelineState?: PipelineState;
   executionSteps?: ExecutionStepResult[];
@@ -79,11 +79,11 @@ const getLayoutedElements = (
 };
 
 
-function ExecutedPipelineViewerInner({
+function ExecutedPipelineGraphInner({
   pipelineState,
   executionSteps,
   entryValues,
-}: ExecutedPipelineViewerProps) {
+}: ExecutedPipelineGraphProps) {
   const { fitView } = useReactFlow();
 
   // Fetch modules using TanStack Query
@@ -390,10 +390,10 @@ function ExecutedPipelineViewerInner({
   );
 }
 
-export function ExecutedPipelineViewer(props: ExecutedPipelineViewerProps) {
+export function ExecutedPipelineGraph(props: ExecutedPipelineGraphProps) {
   return (
     <ReactFlowProvider>
-      <ExecutedPipelineViewerInner {...props} />
+      <ExecutedPipelineGraphInner {...props} />
     </ReactFlowProvider>
   );
 }

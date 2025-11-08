@@ -1,7 +1,8 @@
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { usePipelinesApi, PipelineSummary } from '../../../features/pipelines';
-import { PipelineCard, PipelineViewerModal } from '../../../features/pipelines/components';
+import { PipelineCard, PipelineViewerModal, PipelineBuilderModal } from '../../../features/pipelines/components';
+import type { PipelineData } from '../../../features/pipelines/components/modals/PipelineBuilderModal';
 
 export const Route = createFileRoute('/dashboard/pipelines/')({
   component: PipelinesPage,
@@ -13,6 +14,7 @@ type SortOrder = 'asc' | 'desc';
 function PipelinesPage() {
   const {
     getPipelines,
+    createPipeline,
     isLoading,
     error,
   } = usePipelinesApi();
@@ -21,6 +23,7 @@ function PipelinesPage() {
   const [sortBy, setSortBy] = useState<SortBy>('created_at');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [viewerPipelineId, setViewerPipelineId] = useState<number | null>(null);
+  const [isBuilderModalOpen, setIsBuilderModalOpen] = useState(false);
 
   // Fetch pipelines on mount
   useEffect(() => {
@@ -80,6 +83,30 @@ function PipelinesPage() {
     setViewerPipelineId(pipelineId);
   };
 
+  const handleSavePipeline = async (data: PipelineData) => {
+    try {
+      // TODO: Serialize data to backend format when ready
+      const backendData = {
+        pipeline_json: data.pipeline_state,
+        visual_json: data.visual_state,
+      };
+
+      const result = await createPipeline(backendData);
+      console.log('✅ Pipeline created successfully:', result);
+
+      // Refresh pipelines list
+      await loadPipelines();
+
+      // Close modal
+      setIsBuilderModalOpen(false);
+
+      alert(`✅ Pipeline created successfully!\n\nID: ${result.id}`);
+    } catch (err) {
+      console.error('Failed to create pipeline:', err);
+      alert(`Failed to create pipeline: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  };
+
 
   // ==========================================================================
   // Render
@@ -113,12 +140,12 @@ function PipelinesPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Link
-            to="/dashboard/pipelines/create"
+          <button
+            onClick={() => setIsBuilderModalOpen(true)}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
           >
             + Create Pipeline
-          </Link>
+          </button>
         </div>
       </div>
 
@@ -218,12 +245,12 @@ function PipelinesPage() {
           <p className="text-gray-400 mb-4">
             Get started by creating your first transformation pipeline for testing
           </p>
-          <Link
-            to="/dashboard/pipelines/create"
+          <button
+            onClick={() => setIsBuilderModalOpen(true)}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
           >
             Create Pipeline
-          </Link>
+          </button>
         </div>
       )}
     </div>
@@ -233,6 +260,13 @@ function PipelinesPage() {
         isOpen={viewerPipelineId !== null}
         pipelineId={viewerPipelineId}
         onClose={() => setViewerPipelineId(null)}
+      />
+
+      {/* Pipeline Builder Modal */}
+      <PipelineBuilderModal
+        isOpen={isBuilderModalOpen}
+        onClose={() => setIsBuilderModalOpen(false)}
+        onSave={handleSavePipeline}
       />
     </div>
   );

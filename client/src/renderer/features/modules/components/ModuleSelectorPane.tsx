@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { ModuleTemplate } from "../../modules/types";
+import { ModuleTemplate } from "../types";
 
 interface ModuleSelectorPaneProps {
   modules: ModuleTemplate[];
