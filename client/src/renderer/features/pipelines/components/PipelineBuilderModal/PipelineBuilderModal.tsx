@@ -7,6 +7,7 @@
 
 import { useState, useCallback } from "react";
 import { generateEntryPointId } from "../../utils/idGenerator";
+import { createEntryPoint } from "../../utils/moduleFactory";
 import { PipelineEditor } from "../PipelineEditor";
 import type {
   EntryPoint,
@@ -34,9 +35,12 @@ export function PipelineBuilderModal({
 }: PipelineBuilderModalProps) {
   const [currentStep, setCurrentStep] = useState<BuilderStep>("entry-points");
 
-  // Pipeline state
+  // Entry points - managed separately and passed as external prop
+  const [entryPoints, setEntryPoints] = useState<EntryPoint[]>([]);
+
+  // Pipeline state (modules and connections only - entry points managed externally)
   const [pipelineState, setPipelineState] = useState<PipelineState>({
-    entry_points: [],
+    entry_points: [], // Will be populated on save
     modules: [],
     connections: [],
   });
@@ -45,31 +49,17 @@ export function PipelineBuilderModal({
   const [visualState, setVisualState] = useState<VisualState>({});
 
   // Handle entry points from step 1
-  const handleEntryPointsConfirm = useCallback((points: Array<{ name: string }>) => {
+  const handleEntryPointsConfirm = useCallback((points: Array<{ id: string; name: string }>) => {
     const newEntryPoints: EntryPoint[] = points.map((p) => {
-      const entryPointId = generateEntryPointId();
-      return {
-        entry_point_id: entryPointId,
-        name: p.name,
-        outputs: [
-          {
-            node_id: `${entryPointId}_out`,
-            direction: 'out' as const,
-            type: 'str',
-            name: p.name,
-            label: 'Output',
-            position_index: 0,
-            group_index: 0,
-            allowed_types: ['str', 'int', 'float', 'bool', 'date', 'datetime'],
-          },
-        ],
-      };
+      // Use existing ID if it's an entry point ID (ep_*), otherwise generate new one
+      const entryPointId = p.id.startsWith('ep_') ? p.id : generateEntryPointId();
+
+      // Use factory to create entry point from template
+      return createEntryPoint(entryPointId, p.name);
     });
 
-    setPipelineState((prev) => ({
-      ...prev,
-      entry_points: newEntryPoints,
-    }));
+    // Store entry points in separate state (not in pipelineState until save)
+    setEntryPoints(newEntryPoints);
 
     // Move to pipeline builder step
     setCurrentStep("pipeline");
@@ -81,17 +71,41 @@ export function PipelineBuilderModal({
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = () => {
+    // Merge entry points into pipeline state for saving
+    const completePipelineState: PipelineState = {
+      ...pipelineState,
+      entry_points: entryPoints,
+    };
+
     const data: PipelineData = {
-      pipeline_state: pipelineState,
+      pipeline_state: completePipelineState,
       visual_state: visualState,
     };
 
-    await onSave(data);
+    // Debug logging - print state in readable format
+    console.log('='.repeat(80));
+    console.log('PIPELINE DATA (NOT SAVING - DEBUG ONLY)');
+    console.log('='.repeat(80));
+
+    console.log('\n📊 PIPELINE STATE:');
+    console.log(JSON.stringify(completePipelineState, null, 2));
+
+    console.log('\n📐 VISUAL STATE:');
+    console.log(JSON.stringify(visualState, null, 2));
+
+    console.log('\n📦 COMPLETE DATA OBJECT:');
+    console.log(JSON.stringify(data, null, 2));
+
+    console.log('\n' + '='.repeat(80));
+
+    // TODO: Re-enable saving when ready
+    // await onSave(data);
   };
 
   const handleCancel = () => {
     // Reset state
+    setEntryPoints([]);
     setPipelineState({
       entry_points: [],
       modules: [],
@@ -152,6 +166,7 @@ export function PipelineBuilderModal({
         <div className="flex-1 overflow-hidden">
           {currentStep === "entry-points" && (
             <EntryPointsStep
+              initialEntryPoints={entryPoints}
               onConfirm={handleEntryPointsConfirm}
               onCancel={handleCancel}
             />
@@ -161,6 +176,7 @@ export function PipelineBuilderModal({
             <PipelineEditor
               pipelineState={pipelineState}
               visualState={visualState}
+              entryPoints={entryPoints}
               onPipelineStateChange={setPipelineState}
               onVisualStateChange={setVisualState}
             />
@@ -212,15 +228,24 @@ export function PipelineBuilderModal({
 
 // Step components
 function EntryPointsStep({
+  initialEntryPoints = [],
   onConfirm,
   onCancel,
 }: {
-  onConfirm: (points: Array<{ name: string }>) => void;
+  initialEntryPoints?: EntryPoint[];
+  onConfirm: (points: Array<{ id: string; name: string }>) => void;
   onCancel: () => void;
 }) {
-  const [entryPoints, setEntryPoints] = useState<Array<{ id: string; name: string }>>([
-    { id: crypto.randomUUID(), name: '' }
-  ]);
+  // Convert EntryPoint[] to local format, or start with one empty entry point
+  const [entryPoints, setEntryPoints] = useState<Array<{ id: string; name: string }>>(() => {
+    if (initialEntryPoints.length > 0) {
+      return initialEntryPoints.map(ep => ({
+        id: ep.entry_point_id,
+        name: ep.name,
+      }));
+    }
+    return [{ id: crypto.randomUUID(), name: '' }];
+  });
 
   const handleAddEntryPoint = () => {
     setEntryPoints([...entryPoints, { id: crypto.randomUUID(), name: '' }]);
@@ -238,7 +263,7 @@ function EntryPointsStep({
   };
 
   const handleNext = () => {
-    // Filter out empty names and confirm
+    // Filter out empty names and confirm (keep full objects with IDs)
     const validEntryPoints = entryPoints.filter(ep => ep.name.trim() !== '');
     if (validEntryPoints.length === 0) {
       alert('Please provide at least one entry point name');

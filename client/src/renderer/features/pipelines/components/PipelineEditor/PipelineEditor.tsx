@@ -8,11 +8,12 @@
 import { useState } from "react";
 import { useModules, ModuleSelectorPane } from "../../../modules";
 import { PipelineGraph } from "../PipelineGraph";
-import type { PipelineState, VisualState } from "../../types";
+import type { PipelineState, VisualState, EntryPoint } from "../../types";
 
 interface PipelineEditorProps {
   pipelineState: PipelineState;
   visualState: VisualState;
+  entryPoints?: EntryPoint[]; // Optional: external entry points that override pipelineState.entry_points
   onPipelineStateChange: (state: PipelineState) => void;
   onVisualStateChange: (state: VisualState) => void;
 }
@@ -20,6 +21,7 @@ interface PipelineEditorProps {
 export function PipelineEditor({
   pipelineState,
   visualState,
+  entryPoints,
   onPipelineStateChange,
   onVisualStateChange,
 }: PipelineEditorProps) {
@@ -32,6 +34,13 @@ export function PipelineEditor({
   const handleModuleSelect = (moduleId: string | null) => {
     setSelectedModuleId(moduleId);
   };
+
+  const handleModulePlaced = () => {
+    setSelectedModuleId(null);
+  };
+
+  // Use external entry points if provided, otherwise use pipelineState.entry_points
+  const effectiveEntryPoints = entryPoints ?? pipelineState.entry_points;
 
   // Show loading state while modules are loading
   if (modulesLoading) {
@@ -61,7 +70,11 @@ export function PipelineEditor({
         <PipelineGraph
           pipelineState={pipelineState}
           visualState={visualState}
+          entryPoints={effectiveEntryPoints}
           mode="edit"
+          modules={modules}
+          selectedModuleId={selectedModuleId}
+          onModulePlaced={handleModulePlaced}
           onPipelineStateChange={onPipelineStateChange}
           onVisualStateChange={onVisualStateChange}
         />

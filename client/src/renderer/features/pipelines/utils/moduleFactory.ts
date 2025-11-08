@@ -10,6 +10,7 @@ import {
 import {
   ModuleInstance,
   NodePin,
+  EntryPoint,
 } from "../types";
 import { generateModuleId, generateNodeId } from "./idGenerator";
 
@@ -264,5 +265,72 @@ export function updateModuleConfig(
       ...moduleInstance.config,
       [configKey]: value,
     },
+  };
+}
+
+/**
+ * Entry point template definition (single source of truth)
+ * Used by both the factory and EntryPoint component
+ */
+export const ENTRY_POINT_TEMPLATE: ModuleTemplate = {
+  id: "entry_point",
+  version: "1.0.0",
+  title: "Entry Point",
+  description: "Pipeline entry point - provides initial data to the pipeline",
+  kind: "entry_point",
+  color: "#000000",
+  category: "system",
+  meta: {
+    io_shape: {
+      inputs: { nodes: [] },
+      outputs: {
+        nodes: [
+          {
+            label: "Output",
+            min_count: 1,
+            max_count: 1,
+            typing: {
+              allowed_types: ["str"],
+            },
+          },
+        ],
+      },
+      type_params: {},
+    },
+  },
+  config_schema: {},
+};
+
+/**
+ * Create a new entry point from the template
+ * Uses ENTRY_POINT_TEMPLATE as the single source of truth for structure
+ */
+export function createEntryPoint(
+  entryPointId: string,
+  name: string
+): EntryPoint {
+  const typeParams = ENTRY_POINT_TEMPLATE.meta?.io_shape?.type_params || {};
+
+  // Create outputs using the template
+  const outputs = createPins(
+    ENTRY_POINT_TEMPLATE.meta?.io_shape?.outputs,
+    "out",
+    typeParams
+  );
+
+  // Override the generated output with the user-provided name and readonly flag
+  if (outputs.length > 0) {
+    outputs[0] = {
+      ...outputs[0],
+      node_id: `${entryPointId}_out`,
+      name: name,
+      readonly: true, // Entry point names are read-only
+    };
+  }
+
+  return {
+    entry_point_id: entryPointId,
+    name: name,
+    outputs: outputs,
   };
 }

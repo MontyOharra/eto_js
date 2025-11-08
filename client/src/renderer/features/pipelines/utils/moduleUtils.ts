@@ -2,7 +2,8 @@
  * Module utility functions and constants
  */
 
-import { NodePin } from "../types";
+import { NodePin, EntryPoint, ModuleInstance } from "../types";
+import { updatePinInModule } from "./moduleFactory";
 
 /**
  * Type to color mapping for visual representation
@@ -44,4 +45,77 @@ export function groupNodesByIndex(nodes: NodePin[]): Map<number, NodePin[]> {
   });
 
   return groups;
+}
+
+/**
+ * Find a pin by its node_id across entry points and modules
+ * Useful for searching through the entire pipeline state
+ */
+export function findPinInPipeline(
+  nodeId: string,
+  entryPoints: EntryPoint[],
+  modules: ModuleInstance[]
+): NodePin | undefined {
+  // Check entry points
+  for (const ep of entryPoints) {
+    const pin = ep.outputs.find((p) => p.node_id === nodeId);
+    if (pin) return pin;
+  }
+
+  // Check modules
+  for (const module of modules) {
+    const pin = [...module.inputs, ...module.outputs].find((p) => p.node_id === nodeId);
+    if (pin) return pin;
+  }
+
+  return undefined;
+}
+
+/**
+ * Synchronize type changes across all pins with the same type_var
+ * Returns updated module with all linked pins changed to the new type
+ */
+export function synchronizeTypeVarUpdate(
+  module: ModuleInstance,
+  nodeId: string,
+  newType: string
+): { updatedModule: ModuleInstance; wasTypeVarUpdate: boolean } {
+  const allPins = [...module.inputs, ...module.outputs];
+  const targetPin = allPins.find((p) => p.node_id === nodeId);
+
+  // If pin has type_var, update all pins with same type_var
+  if (targetPin?.type_var) {
+    let updatedModule = module;
+    allPins.forEach((pin) => {
+      if (pin.type_var === targetPin.type_var) {
+        updatedModule = updatePinInModule(updatedModule, pin.node_id, { type: newType });
+      }
+    });
+
+    return { updatedModule, wasTypeVarUpdate: true };
+  }
+
+  // No type_var, just update the single pin
+  return { updatedModule: updatePinInModule(module, nodeId, { type: newType }), wasTypeVarUpdate: false };
+}
+
+/**
+ * Check if two pins can connect based on shared allowed types
+ * Returns true if the pins share at least one common type
+ */
+export function pinsCanConnect(sourcePin: NodePin, targetPin: NodePin): boolean {
+  // Ensure source is output and target is input
+  if (sourcePin.direction !== 'out' || targetPin.direction !== 'in') {
+    return false;
+  }
+
+  const sourceAllowedTypes = sourcePin.allowed_types || [];
+  const targetAllowedTypes = targetPin.allowed_types || [];
+
+  // Check if there's at least one shared type
+  const sharedTypes = sourceAllowedTypes.filter(type =>
+    targetAllowedTypes.includes(type)
+  );
+
+  return sharedTypes.length > 0;
 }

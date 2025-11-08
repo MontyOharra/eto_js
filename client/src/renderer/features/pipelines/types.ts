@@ -24,6 +24,7 @@ export interface NodePin {
   group_index: number;       // index in meta.io_shape.inputs.nodes or outputs.nodes
   type_var?: string;         // type variable name if applicable
   allowed_types?: string[];  // allowed types for this node (from template)
+  readonly?: boolean;        // if true, name cannot be edited (used for entry points)
 }
 
 /**

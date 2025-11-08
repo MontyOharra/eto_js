@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { PipelineGraph } from "../../../../pipelines/components/PipelineGraph-old/PipelineGraph";
-import { ModuleSelectorPane } from "../../../../pipelines/components/ModuleSelectorPane";
+import { ModuleSelectorPane } from "../../../../modules/components/ModuleSelectorPane";
 import type { ModuleTemplate } from "../../../../modules/types";
 import type { PipelineState, VisualState } from "../../../../pipelines/types";
 
