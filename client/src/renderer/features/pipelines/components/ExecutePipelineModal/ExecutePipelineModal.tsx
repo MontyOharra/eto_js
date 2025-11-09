@@ -49,6 +49,7 @@ export function ExecutePipelineModal({
   const [pipelineState, setPipelineState] = useState<PipelineState | null>(
     null
   );
+  const [centerTrigger, setCenterTrigger] = useState<number>(0);
 
   // Initialize entry values and load pipeline when modal opens
   useEffect(() => {
@@ -62,6 +63,7 @@ export function ExecutePipelineModal({
       setResult(null);
       setError(null);
       setViewMode("summary");
+      setCenterTrigger(Date.now()); // Trigger graph centering when modal opens
 
       // Load pipeline state
       async function loadPipeline() {
@@ -276,6 +278,7 @@ export function ExecutePipelineModal({
                             pipelineId={pipelineId}
                             pipelineState={pipelineState}
                             executionSteps={result.steps}
+                            centerTrigger={centerTrigger}
                             entryValues={(() => {
                               // Build entry values map: { node_id: { name, value, type } }
                               const entryValuesMap: Record<

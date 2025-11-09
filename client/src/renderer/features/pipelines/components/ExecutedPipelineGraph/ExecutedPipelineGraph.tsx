@@ -28,6 +28,7 @@ interface ExecutedPipelineGraphProps {
   pipelineState?: PipelineState;
   executionSteps?: ExecutionStepResult[];
   entryValues?: Record<string, { name: string; value: any; type: string }>;
+  centerTrigger?: number | string; // Optional trigger to recenter view (e.g., timestamp when modal opens)
 }
 
 const nodeTypes = {
@@ -83,6 +84,7 @@ function ExecutedPipelineGraphInner({
   pipelineState,
   executionSteps,
   entryValues,
+  centerTrigger,
 }: ExecutedPipelineGraphProps) {
   const { fitView } = useReactFlow();
 
@@ -336,14 +338,14 @@ function ExecutedPipelineGraphInner({
     return { nodes: layoutedNodes, edges: edgesWithOffsets };
   }, [rawNodes, rawEdges]);
 
-  // Fit view once when nodes are ready
+  // Fit view when nodes are ready or when centerTrigger changes
   useEffect(() => {
     if (nodes.length > 0) {
       setTimeout(() => {
         fitView({ padding: 0.2, maxZoom: 1 });
       }, 0);
     }
-  }, [nodes.length, fitView]);
+  }, [nodes.length, fitView, centerTrigger]);
 
   // Show loading state while modules are loading
   if (modulesLoading) {

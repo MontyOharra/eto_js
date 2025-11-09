@@ -62,15 +62,15 @@ export function PipelineBuilderStep({
       {/* Pipeline Graph */}
       <div className="flex-1">
         <PipelineGraph
-          moduleTemplates={moduleTemplates}
+          pipelineState={pipelineState}
+          visualState={visualState}
+          entryPoints={pipelineState.entry_points}
+          mode="edit"
+          modules={moduleTemplates}
           selectedModuleId={selectedModuleId}
           onModulePlaced={handleModulePlaced}
-          onChange={handlePipelineChange}
-          onVisualChange={handleVisualChange}
-          initialPipelineState={pipelineState}
-          initialVisualState={visualState}
-          viewOnly={false}
-          entryPoints={pipelineState.entry_points}
+          onPipelineStateChange={handlePipelineChange}
+          onVisualStateChange={handleVisualChange}
         />
       </div>
     </div>

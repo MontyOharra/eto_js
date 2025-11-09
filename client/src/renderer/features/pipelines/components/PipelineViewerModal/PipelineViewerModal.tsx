@@ -134,12 +134,10 @@ export function PipelineViewerModal({
 
           {!isLoading && !error && pipeline && (
             <PipelineGraph
-              moduleTemplates={modules}
-              selectedModuleId={null}
-              onModulePlaced={() => {}}
-              viewOnly={true}
-              initialPipelineState={pipeline.pipeline_state}
-              initialVisualState={pipeline.visual_state}
+              pipelineState={pipeline.pipeline_state}
+              visualState={pipeline.visual_state}
+              mode="view"
+              modules={modules}
             />
           )}
         </div>

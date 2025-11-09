@@ -23,6 +23,7 @@ export function DetailPipelineView({
   // Fetch pipeline definition
   const [pipelineDefinition, setPipelineDefinition] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [centerTrigger, setCenterTrigger] = useState<number>(0);
 
   useEffect(() => {
     if (!pipelineDefinitionId) {
@@ -32,7 +33,10 @@ export function DetailPipelineView({
 
     setIsLoading(true);
     getPipeline(pipelineDefinitionId)
-      .then((data) => setPipelineDefinition(data))
+      .then((data) => {
+        setPipelineDefinition(data);
+        setCenterTrigger(Date.now()); // Trigger centering when pipeline loads
+      })
       .catch((err) => {
         console.error("Failed to fetch pipeline:", err);
         setPipelineDefinition(null);
@@ -129,6 +133,7 @@ export function DetailPipelineView({
         pipelineState={pipelineDefinition.pipeline_state}
         executionSteps={executionSteps}
         entryValues={entryValues}
+        centerTrigger={centerTrigger}
       />
     </div>
   );
