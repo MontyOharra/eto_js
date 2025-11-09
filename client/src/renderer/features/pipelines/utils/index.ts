@@ -5,9 +5,7 @@
 
 export * from './edgeUtils';
 export * from './idGenerator';
-export * from './layeredLayout';
+export * from './layoutUtils';
 export * from './moduleUtils';
 export * from './moduleFactory';
-export * from './pipelineSerializer';
-export * from './serialization';
 export * from './typeSystem';
