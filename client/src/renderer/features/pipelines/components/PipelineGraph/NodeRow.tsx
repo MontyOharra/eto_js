@@ -3,7 +3,7 @@
  * Displays an individual input or output pin row
  */
 
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useState } from "react";
 import { Handle, Position } from "@xyflow/react";
 import { NodePin } from "../../types";
 import { getTypeColor } from "../../utils/edgeUtils";
@@ -60,6 +60,14 @@ export function NodeRow({
 
   // Ref for output textarea to auto-resize
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Local state for text input - updates immediately for responsive typing
+  const [localName, setLocalName] = useState(node.name);
+
+  // Sync local state when node.name changes externally
+  useEffect(() => {
+    setLocalName(node.name);
+  }, [node.name]);
 
   // Handle click
   const handleClick = (e: React.MouseEvent) => {
@@ -201,18 +209,23 @@ export function NodeRow({
               // Editable textarea (used for regular modules)
               <textarea
                 ref={textareaRef}
-                value={node.name}
-                onChange={(e) => onNameChange(node.node_id, e.target.value)}
-                onFocus={onTextFocus}
-                onBlur={onTextBlur}
-                placeholder="Node name"
-                className="w-full text-sm bg-gray-700 text-gray-200 px-1.5 py-0.5 rounded border border-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none overflow-hidden min-h-[24px] break-words nodrag"
-                rows={1}
-                onInput={(e) => {
+                value={localName}
+                onChange={(e) => {
+                  setLocalName(e.target.value);
+                  // Auto-resize immediately
                   const target = e.target as HTMLTextAreaElement;
                   target.style.height = "auto";
                   target.style.height = target.scrollHeight + "px";
                 }}
+                onFocus={onTextFocus}
+                onBlur={(e) => {
+                  // Update pipeline state when done editing
+                  onNameChange(node.node_id, localName);
+                  onTextBlur?.();
+                }}
+                placeholder="Node name"
+                className="w-full text-sm bg-gray-700 text-gray-200 px-1.5 py-0.5 rounded border border-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none overflow-hidden min-h-[24px] break-words nodrag"
+                rows={1}
               />
             )}
           </div>

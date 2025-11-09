@@ -3,7 +3,7 @@
  * Renders individual config fields based on JSON Schema
  */
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 
 interface JSONSchemaProperty {
   type: string;
@@ -25,6 +25,78 @@ interface ConfigSectionProps {
   config: Record<string, any>;
   onConfigChange: (key: string, value: any) => void;
 }
+
+// String field component with local state for responsive typing
+const StringField: React.FC<{
+  configKey: string;
+  value: string;
+  label: string;
+  description?: string;
+  onConfigChange: (key: string, value: any) => void;
+}> = ({ configKey, value, label, description, onConfigChange }) => {
+  const [localValue, setLocalValue] = useState(value ?? "");
+
+  // Sync when external value changes
+  useEffect(() => {
+    setLocalValue(value ?? "");
+  }, [value]);
+
+  return (
+    <div className="mb-2.5">
+      <label className="block text-xs text-gray-200 mb-1">{label}</label>
+      <input
+        type="text"
+        value={localValue}
+        onChange={(e) => setLocalValue(e.target.value)}
+        onBlur={() => onConfigChange(configKey, localValue)}
+        className="nodrag w-full px-2 py-1 text-xs bg-gray-700 border border-gray-600 rounded text-gray-200 focus:outline-none focus:border-blue-500"
+      />
+      {description && (
+        <p className="text-[10px] text-gray-400 mt-0.5">{description}</p>
+      )}
+    </div>
+  );
+};
+
+// Number field component with local state
+const NumberField: React.FC<{
+  configKey: string;
+  value: number;
+  label: string;
+  description?: string;
+  propertyType: "number" | "integer";
+  defaultValue: any;
+  onConfigChange: (key: string, value: any) => void;
+}> = ({ configKey, value, label, description, propertyType, defaultValue, onConfigChange }) => {
+  const [localValue, setLocalValue] = useState(value ?? "");
+
+  // Sync when external value changes
+  useEffect(() => {
+    setLocalValue(value ?? "");
+  }, [value]);
+
+  return (
+    <div className="mb-2.5">
+      <label className="block text-xs text-gray-200 mb-1">{label}</label>
+      <input
+        type="number"
+        value={localValue}
+        onChange={(e) => setLocalValue(e.target.value)}
+        onBlur={() => {
+          const parsed = propertyType === "integer"
+            ? parseInt(String(localValue), 10)
+            : parseFloat(String(localValue));
+          onConfigChange(configKey, isNaN(parsed) ? defaultValue : parsed);
+        }}
+        step={propertyType === "integer" ? "1" : "any"}
+        className="nodrag w-full px-2 py-1 text-xs bg-gray-700 border border-gray-600 rounded text-gray-200 focus:outline-none focus:border-blue-500"
+      />
+      {description && (
+        <p className="text-[10px] text-gray-400 mt-0.5">{description}</p>
+      )}
+    </div>
+  );
+};
 
 export const ConfigSection: React.FC<ConfigSectionProps> = ({
   schema,
@@ -86,25 +158,16 @@ export const ConfigSection: React.FC<ConfigSectionProps> = ({
     // Number input
     if (property.type === "number" || property.type === "integer") {
       return (
-        <div key={key} className="mb-2.5">
-          <label className="block text-xs text-gray-200 mb-1">{label}</label>
-          <input
-            type="number"
-            value={value ?? ""}
-            onChange={(e) => {
-              const parsed =
-                property.type === "integer"
-                  ? parseInt(e.target.value, 10)
-                  : parseFloat(e.target.value);
-              handleChange(isNaN(parsed) ? property.default : parsed);
-            }}
-            step={property.type === "integer" ? "1" : "any"}
-            className="nodrag w-full px-2 py-1 text-xs bg-gray-700 border border-gray-600 rounded text-gray-200 focus:outline-none focus:border-blue-500"
-          />
-          {description && (
-            <p className="text-[10px] text-gray-400 mt-0.5">{description}</p>
-          )}
-        </div>
+        <NumberField
+          key={key}
+          configKey={key}
+          value={value}
+          label={label}
+          description={description}
+          propertyType={property.type}
+          defaultValue={property.default}
+          onConfigChange={onConfigChange}
+        />
       );
     }
 
@@ -132,20 +195,7 @@ export const ConfigSection: React.FC<ConfigSectionProps> = ({
     }
 
     // String input (default)
-    return (
-      <div key={key} className="mb-2.5">
-        <label className="block text-xs text-gray-200 mb-1">{label}</label>
-        <input
-          type="text"
-          value={value ?? ""}
-          onChange={(e) => handleChange(e.target.value)}
-          className="nodrag w-full px-2 py-1 text-xs bg-gray-700 border border-gray-600 rounded text-gray-200 focus:outline-none focus:border-blue-500"
-        />
-        {description && (
-          <p className="text-[10px] text-gray-400 mt-0.5">{description}</p>
-        )}
-      </div>
-    );
+    return <StringField key={key} configKey={key} value={value} label={label} description={description} onConfigChange={onConfigChange} />;
   };
 
   return (
