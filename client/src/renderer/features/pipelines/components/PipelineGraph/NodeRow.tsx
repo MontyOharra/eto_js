@@ -218,7 +218,8 @@ export function NodeRow({
                   target.style.height = target.scrollHeight + "px";
                 }}
                 onFocus={onTextFocus}
-                onBlur={(e) => {
+                // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                onBlur={(_event) => {
                   // Update pipeline state when done editing
                   onNameChange(node.node_id, localName);
                   onTextBlur?.();

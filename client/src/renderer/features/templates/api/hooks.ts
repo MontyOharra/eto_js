@@ -8,18 +8,12 @@ import { apiClient } from '../../../shared/api/client';
 import { API_CONFIG } from '../../../shared/api/config';
 import {
   GetTemplatesQueryParams,
-  GetTemplateDetailResponse,
-  PostTemplateCreateRequest,
-  PostTemplateCreateResponse,
-  PutTemplateUpdateRequest,
-  PutTemplateUpdateResponse,
-  PostTemplateActivateResponse,
-  PostTemplateDeactivateResponse,
-  GetTemplateVersionDetailResponse,
-  PostTemplateSimulateRequest,
-  PostTemplateSimulateResponse,
+  CreateTemplateRequest,
+  UpdateTemplateRequest,
+  SimulateTemplateRequest,
+  SimulateTemplateResponse,
 } from './types';
-import { TemplateListItem } from '../types';
+import { TemplateListItem, TemplateDetail, TemplateVersionDetail } from '../types';
 
 const baseUrl = API_CONFIG.ENDPOINTS.TEMPLATES;
 
@@ -56,12 +50,12 @@ export function useTemplates(params?: GetTemplatesQueryParams) {
 export function useTemplateDetail(templateId: number | null) {
   return useQuery({
     queryKey: ['template', templateId],
-    queryFn: async (): Promise<GetTemplateDetailResponse> => {
+    queryFn: async (): Promise<TemplateDetail> => {
       if (!templateId) {
         throw new Error('No template ID provided');
       }
 
-      const response = await apiClient.get<GetTemplateDetailResponse>(
+      const response = await apiClient.get<TemplateDetail>(
         `${baseUrl}/${templateId}`
       );
       return response.data;
@@ -79,12 +73,12 @@ export function useTemplateDetail(templateId: number | null) {
 export function useTemplateVersionDetail(versionId: number | null) {
   return useQuery({
     queryKey: ['template-version', versionId],
-    queryFn: async (): Promise<GetTemplateVersionDetailResponse> => {
+    queryFn: async (): Promise<TemplateVersionDetail> => {
       if (!versionId) {
         throw new Error('No version ID provided');
       }
 
-      const response = await apiClient.get<GetTemplateVersionDetailResponse>(
+      const response = await apiClient.get<TemplateVersionDetail>(
         `${baseUrl}/versions/${versionId}`
       );
       return response.data;
@@ -108,9 +102,9 @@ export function useCreateTemplate() {
 
   return useMutation({
     mutationFn: async (
-      request: PostTemplateCreateRequest
-    ): Promise<PostTemplateCreateResponse> => {
-      const response = await apiClient.post<PostTemplateCreateResponse>(
+      request: CreateTemplateRequest
+    ): Promise<TemplateDetail> => {
+      const response = await apiClient.post<TemplateDetail>(
         baseUrl,
         request
       );
@@ -136,9 +130,9 @@ export function useUpdateTemplate() {
       request,
     }: {
       templateId: number;
-      request: PutTemplateUpdateRequest;
-    }): Promise<PutTemplateUpdateResponse> => {
-      const response = await apiClient.put<PutTemplateUpdateResponse>(
+      request: UpdateTemplateRequest;
+    }): Promise<TemplateDetail> => {
+      const response = await apiClient.put<TemplateDetail>(
         `${baseUrl}/${templateId}`,
         request
       );
@@ -178,8 +172,8 @@ export function useActivateTemplate() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (templateId: number): Promise<PostTemplateActivateResponse> => {
-      const response = await apiClient.post<PostTemplateActivateResponse>(
+    mutationFn: async (templateId: number): Promise<TemplateDetail> => {
+      const response = await apiClient.post<TemplateDetail>(
         `${baseUrl}/${templateId}/activate`
       );
       return response.data;
@@ -200,8 +194,8 @@ export function useDeactivateTemplate() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (templateId: number): Promise<PostTemplateDeactivateResponse> => {
-      const response = await apiClient.post<PostTemplateDeactivateResponse>(
+    mutationFn: async (templateId: number): Promise<TemplateDetail> => {
+      const response = await apiClient.post<TemplateDetail>(
         `${baseUrl}/${templateId}/deactivate`
       );
       return response.data;
@@ -224,9 +218,9 @@ export function useDeactivateTemplate() {
 export function useSimulateTemplate() {
   return useMutation({
     mutationFn: async (
-      request: PostTemplateSimulateRequest
-    ): Promise<PostTemplateSimulateResponse> => {
-      const response = await apiClient.post<PostTemplateSimulateResponse>(
+      request: SimulateTemplateRequest
+    ): Promise<SimulateTemplateResponse> => {
+      const response = await apiClient.post<SimulateTemplateResponse>(
         `${baseUrl}/simulate`,
         request,
         {

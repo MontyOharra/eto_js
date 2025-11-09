@@ -3,6 +3,19 @@
  * Unified exports for PDF viewing and API operations
  */
 
+// Domain types (core PDF object types)
+export type {
+  BBox,
+  PdfObjects,
+  TextWordObject,
+  TextLineObject,
+  GraphicRectObject,
+  GraphicLineObject,
+  GraphicCurveObject,
+  ImageObject,
+  TableObject,
+} from './types';
+
 // API hooks and utilities
 export {
   usePdfData,
@@ -16,17 +29,9 @@ export {
 // API types
 export type { PdfData } from './api';
 export type {
-  BBox,
   PdfFileMetadata,
   PdfObjectsResponse,
   PdfProcessResponse,
-  TextWordObject,
-  TextLineObject,
-  GraphicRectObject,
-  GraphicLineObject,
-  GraphicCurveObject,
-  ImageObject,
-  TableObject,
 } from './api/types';
 
 // Components

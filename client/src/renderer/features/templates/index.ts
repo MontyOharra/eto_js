@@ -3,45 +3,17 @@
  * Unified exports for template operations
  */
 
-// API hooks
-export {
-  useTemplates,
-  useTemplateDetail,
-  useTemplateVersionDetail,
-  useCreateTemplate,
-  useUpdateTemplate,
-  useDeleteTemplate,
-  useActivateTemplate,
-  useDeactivateTemplate,
-  useSimulateTemplate,
-} from './api';
+// Export all API hooks and types
+export * from './api';
 
-// API types (Request/Response DTOs)
-export type {
-  GetTemplatesQueryParams,
-  GetTemplatesResponse,
-  GetTemplateDetailResponse,
-  PostTemplateCreateRequest,
-  PostTemplateCreateResponse,
-  PutTemplateUpdateRequest,
-  PutTemplateUpdateResponse,
-  PostTemplateActivateResponse,
-  PostTemplateDeactivateResponse,
-  GetTemplateVersionDetailResponse,
-  PostTemplateSimulateRequest,
-  PostTemplateSimulateResponse,
-  ExtractedFieldResult,
-  ExecutionStepResult,
-} from './api';
-
-// Domain types
+// Export domain types
 export type {
   TemplateStatus,
   PdfObjectType,
   BBox,
+  PdfObjects,
   TemplateVersionSummary,
   VersionListItem,
-  PdfObjects,
   SignatureObject,
   ExtractionField,
   TemplateVersion,

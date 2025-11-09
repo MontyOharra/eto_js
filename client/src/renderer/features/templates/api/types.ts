@@ -1,51 +1,32 @@
 /**
  * API Types (Request/Response DTOs)
  * These types represent the exact shape of data sent to/from the API endpoints.
- * They import and use domain types from '../types.ts'
+ * They import and use domain types from '../types.ts' and other features
  */
 
 import {
   TemplateStatus,
-  TemplateListItem,
-  TemplateDetail,
-  TemplateVersionDetail,
-  PdfObjects,
   ExtractionField,
 } from '../types';
+import type { PdfObjects } from '../../pdf';
 import type { PipelineState, VisualState } from '../../pipelines/types';
-import type { PdfObjectsResponseDTO } from '../../pdf';
+import type { PdfObjectsResponse as PdfObjectsResponseDTO } from '../../pdf/api/types';
 
 // =============================================================================
-// GET /pdf-templates - List templates with pagination
+// GET /pdf-templates - List templates
 // =============================================================================
 
 export interface GetTemplatesQueryParams {
   status?: TemplateStatus;
   sort_by?: 'name' | 'status' | 'usage_count';
   sort_order?: 'asc' | 'desc';
-  limit?: number; // default: 50, max: 200
-  offset?: number; // default: 0
 }
-
-export interface GetTemplatesResponse {
-  items: TemplateListItem[];
-  total: number;
-  limit: number;
-  offset: number;
-}
-
-// =============================================================================
-// GET /pdf-templates/{id} - Get full template details
-// =============================================================================
-
-// Response type is TemplateDetail from domain types
-export type GetTemplateDetailResponse = TemplateDetail;
 
 // =============================================================================
 // POST /pdf-templates - Create new template
 // =============================================================================
 
-export interface PostTemplateCreateRequest {
+export interface CreateTemplateRequest {
   name: string; // required, 1-255 chars
   description?: string; // optional, max 1000 chars
   source_pdf_id: number; // required - PDF must be uploaded first via POST /pdf-files
@@ -61,14 +42,11 @@ export interface PostTemplateCreateRequest {
   visual_state: VisualState;
 }
 
-// Response is TemplateDetail (PdfTemplate from backend)
-export type PostTemplateCreateResponse = TemplateDetail;
-
 // =============================================================================
 // PUT /pdf-templates/{id} - Update template (creates new version)
 // =============================================================================
 
-export interface PutTemplateUpdateRequest {
+export interface UpdateTemplateRequest {
   // Optional: Update template metadata
   name?: string; // optional, 1-255 chars
   description?: string; // optional, max 1000 chars
@@ -79,43 +57,6 @@ export interface PutTemplateUpdateRequest {
   pipeline_state?: PipelineState;
   visual_state?: VisualState;
 }
-
-// Response is TemplateDetail (PdfTemplate from backend)
-export type PutTemplateUpdateResponse = TemplateDetail;
-
-// =============================================================================
-// DELETE /pdf-templates/{id} - Delete template
-// =============================================================================
-
-// No request body
-// Response: 204 No Content
-
-// =============================================================================
-// POST /pdf-templates/{id}/activate - Activate template
-// =============================================================================
-
-// No request body
-// Response is TemplateDetail (PdfTemplate from backend)
-export type PostTemplateActivateResponse = TemplateDetail;
-
-// =============================================================================
-// POST /pdf-templates/{id}/deactivate - Deactivate template
-// =============================================================================
-
-// No request body
-// Response is TemplateDetail (PdfTemplate from backend)
-export type PostTemplateDeactivateResponse = TemplateDetail;
-
-// =============================================================================
-// GET /pdf-templates/versions/{version_id} - Get version details
-// =============================================================================
-
-// Response matches backend GetTemplateVersionResponse
-export type GetTemplateVersionDetailResponse = TemplateVersionDetail;
-
-// =============================================================================
-// POST /pdf-templates/simulate - Simulate full ETO process
-// =============================================================================
 
 /**
  * Request for template simulation (testing/preview only)
@@ -129,7 +70,7 @@ export type GetTemplateVersionDetailResponse = TemplateVersionDetail;
  * - extraction_fields: Field definitions with bbox coordinates
  * - pipeline_state: Pipeline graph structure
  */
-export interface PostTemplateSimulateRequest {
+export interface SimulateTemplateRequest {
   pdf_objects: PdfObjectsResponseDTO['objects'];  // Pre-extracted PDF objects
   extraction_fields: ExtractionField[];
   pipeline_state: PipelineState;
@@ -163,7 +104,7 @@ export interface ExecutionStepResult {
  * Response for POST /pdf-templates/simulate
  * Matches backend: server-new/src/api/schemas/pdf_templates.py::SimulateTemplateResponse
  */
-export interface PostTemplateSimulateResponse {
+export interface SimulateTemplateResponse {
   extraction_results: ExtractedFieldResult[];  // Fields with extracted values and bbox info
   pipeline_status: string;  // "success" | "failed"
   pipeline_steps: ExecutionStepResult[];

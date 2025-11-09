@@ -1,650 +1,717 @@
-# ExecutedPipelineViewer Development - Session Continuity Document
+# Templates Feature Refactoring - Session Continuity Document
 
 ## Session Overview
-**Date**: 2025-11-06
-**Status**: Viewer functional with basic visualization, ready for edge component implementation
-**Primary Goal**: Build ExecutedPipelineViewer from scratch to visualize pipeline execution results
+**Date**: 2025-11-09
+**Status**: Templates API layer refactored, PdfObjects type consolidated
+**Primary Goal**: Refactor templates feature to match architecture patterns established in modules/pipelines features
 
 ---
 
 ## What We Accomplished
 
-### 1. Backend Fix - Input Pin Name Resolution
-**Problem**: After pipeline execution, input pins showed generic group names ("text", "value") instead of meaningful upstream output pin names ("hawb", "pu").
+### 1. Templates API Type Refactoring
 
-**Root Cause**: The `_serialize_io_for_audit()` function used the current module's input pin names (group names), not the connected upstream output pin names.
+**Goal**: Align templates API types with naming conventions used in modules and pipelines features.
 
-**Solution**: Created new `_serialize_inputs_for_audit()` function in `server/src/features/pipeline_execution/service.py`:
-- Looks up `input_field_mappings` to find upstream pin ID
-- Uses `all_nodes_metadata` to find upstream pin name
-- Falls back to input pin name if lookup fails
+**Analysis Phase**:
+- Compared `templates/api/types.ts` with `modules/api/types.ts` and `pipelines/api/types.ts`
+- Identified verbose HTTP method prefixes (PostTemplateCreateRequest, PutTemplateUpdateRequest)
+- Found unnecessary type aliases pointing to domain types
+- Discovered unused `GetTemplatesResponse` interface
 
-**File**: `server/src/features/pipeline_execution/service.py` (lines 185-250, 974-980)
+**Changes Implemented**:
 
-**Code Reference**:
-```python
-def _serialize_inputs_for_audit(
-    io_dict: Dict[str, Any],
-    pins: List[NodeInstance],
-    input_field_mappings: Dict[str, str],  # node_id -> upstream_node_id
-    all_nodes_metadata: Dict[str, List[NodeInstance]],
-    entry_points_lookup: Dict[str, str]
-) -> Dict[str, Dict[str, Any]]:
-    """Transform inputs to {node_id: {name, value, type}} using UPSTREAM pin names."""
-
-    # Build lookup map of node_id -> name from all metadata
-    node_id_to_name = {}
-    for node_list in all_nodes_metadata.values():
-        for node in node_list:
-            node_id_to_name[node.node_id] = node.name
-
-    node_id_to_name.update(entry_points_lookup)
-
-    result = {}
-    for pin in pins:
-        if pin.node_id in io_dict:
-            # Look up upstream pin ID from mapping
-            upstream_pin_id = input_field_mappings.get(pin.node_id)
-            if upstream_pin_id and upstream_pin_id in node_id_to_name:
-                display_name = node_id_to_name[upstream_pin_id]
-            else:
-                display_name = pin.name
-
-            result[pin.node_id] = {
-                "name": display_name,
-                "value": _serialize_value(raw_value, pin.type),
-                "type": pin.type
-            }
-    return result
-```
-
-**Status**: ✅ Complete and verified working
-
----
-
-### 2. ExecutedPipelineViewer Component Creation
-
-#### Core Components Built
-
-**A. ExecutedPipelineViewer.tsx** (Main orchestrator)
-- File: `client/src/renderer/features/pipelines/components/ExecutedPipelineViewer/ExecutedPipelineViewer.tsx`
-- Fetches modules using `useModules()` hook
-- Converts pipeline state + execution steps to React Flow nodes
-- Applies dagre layout (left-to-right, ranksep: 450, nodesep: 200)
-- Creates edges from pipeline connections
-- Renders read-only React Flow canvas
-
-**Key Innovation - Handle Rendering Fix**:
-The most critical fix ensures all handles render even when execution data is missing:
+#### A. Renamed Request Types (Remove HTTP Prefixes)
+**File**: `client/src/renderer/features/templates/api/types.ts`
 
 ```typescript
-// Build inputs/outputs from pipeline state structure with execution values
-// This ensures all handles are rendered even if execution data is missing
-const inputs: Record<string, { name: string; value: string; type: string }> = {};
-const outputs: Record<string, { name: string; value: string; type: string }> = {};
+// BEFORE:
+export interface PostTemplateCreateRequest { ... }
+export interface PutTemplateUpdateRequest { ... }
+export interface PostTemplateSimulateRequest { ... }
+export interface PostTemplateSimulateResponse { ... }
 
-// Populate inputs from pipeline state, overlay with execution data if available
-moduleInstance.inputs.forEach((input) => {
-  const executionData = executionStep?.inputs?.[input.node_id];
-  inputs[input.node_id] = {
-    name: executionData?.name || input.name,
-    value: executionData?.value || "",
-    type: executionData?.type || input.type,
-  };
-});
-
-// Populate outputs from pipeline state, overlay with execution data if available
-moduleInstance.outputs.forEach((output) => {
-  const executionData = executionStep?.outputs?.[output.node_id];
-  outputs[output.node_id] = {
-    name: executionData?.name || output.name,
-    value: executionData?.value || "",
-    type: executionData?.type || output.type,
-  };
-});
+// AFTER:
+export interface CreateTemplateRequest { ... }
+export interface UpdateTemplateRequest { ... }
+export interface SimulateTemplateRequest { ... }
+export interface SimulateTemplateResponse { ... }
 ```
 
-**Why This Matters**: Without this approach, edges fail to connect because React Flow can't find the handle IDs. We iterate through pipeline state (source of truth for structure) and overlay execution data (which may be incomplete).
+**Rationale**: Matches pattern in modules/pipelines features (CreatePipelineRequest, not PostPipelineCreateRequest)
 
-**B. ExecutedEntryPoint.tsx** (Entry point wrapper)
-- File: `client/src/renderer/features/pipelines/components/ExecutedPipelineViewer/ExecutedEntryPoint.tsx`
-- Simple wrapper that reuses ExecutedModule with hardcoded values
-- Black header (`#000000`)
-- "Entry Point" as module name
-- No inputs, single string output with entry point name
-- Uses `entry-${nodeId}` prefix for node IDs (critical for edge connections)
+#### B. Removed Type Aliases
+**File**: `client/src/renderer/features/templates/api/types.ts`
 
 ```typescript
-export function ExecutedEntryPoint({ data }: ExecutedEntryPointProps) {
-  const { name, nodeId } = data;
+// REMOVED (unnecessary):
+export type PostTemplateCreateResponse = TemplateDetail;
+export type GetTemplateDetailResponse = TemplateDetail;
+export type GetTemplateVersionResponse = TemplateVersionDetail;
+export type PutTemplateUpdateResponse = TemplateDetail;
 
-  const moduleData = {
-    moduleName: "Entry Point",
-    moduleColor: "#000000", // Black header
-    inputs: {}, // No inputs for entry points
-    outputs: {
-      [nodeId]: {
-        name: name,
-        value: "", // No value to display
-        type: "str", // Always string type
-      },
-    },
-    status: "executed" as const,
-  };
-
-  return <ExecutedModule data={moduleData} />;
+// NOW: Use domain types directly in hooks
+mutationFn: async (request: CreateTemplateRequest): Promise<TemplateDetail> => {
+  const response = await apiClient.post<TemplateDetail>(baseUrl, request);
+  return response.data;
 }
 ```
 
-**C. ExecutedModule.tsx** (Module node component)
-- File: `client/src/renderer/features/pipelines/components/ExecutedPipelineViewer/ExecutedModule.tsx`
-- Composed of ExecutedModuleHeader + ExecutedModuleBody
-- Border color based on execution status (red for failed, gray for executed)
-- Supports hover handlers for future interactivity
-- Dynamic width based on content
+**Rationale**: TanStack Query hooks can use domain types directly, no need for API-specific response wrappers
 
-**D. ExecutedModuleHeader.tsx**
-- File: `client/src/renderer/features/pipelines/components/ExecutedPipelineViewer/ExecutedModuleHeader.tsx`
-- Colored header bar with module name
-- Uses `getTextColor()` utility for proper text contrast
-- Displays execution status icon (future enhancement)
+#### C. Removed Unused Type
+**File**: `client/src/renderer/features/templates/api/types.ts`
 
-**E. ExecutedModuleBody.tsx**
-- File: `client/src/renderer/features/pipelines/components/ExecutedPipelineViewer/ExecutedModuleBody.tsx`
-- Two-column layout (inputs left, outputs right)
-- Renders ExecutedModuleRow for each pin
-- Shows error message if execution failed
-- Scrollable content if many pins
+```typescript
+// REMOVED (unused):
+export interface GetTemplatesResponse {
+  templates: TemplateListItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+```
 
-**F. ExecutedModuleRow.tsx**
-- File: `client/src/renderer/features/pipelines/components/ExecutedPipelineViewer/ExecutedModuleRow.tsx`
-- Individual pin row with React Flow Handle
-- Type-colored indicator badge (from TYPE_COLORS)
-- Mirrored layout: inputs show "name - type", outputs show "type - name"
-- Handle positioned on outer edge (-13px offset)
+**Rationale**: Backend returns `TemplateListItem[]` directly without pagination wrapper
+
+#### D. Simplified Exports
+**File**: `client/src/renderer/features/templates/api/index.ts`
+
+```typescript
+// BEFORE (36 lines of explicit exports):
+export {
+  useTemplates,
+  useTemplateDetail,
+  // ... 7 more hooks
+} from './hooks';
+
+export type {
+  GetTemplatesQueryParams,
+  CreateTemplateRequest,
+  // ... 10 more types
+} from './types';
+
+// AFTER (7 lines):
+/**
+ * Templates API
+ * Unified exports for template operations
+ */
+
+export * from './types';
+export * from './hooks';
+```
+
+**Rationale**: Simpler, less maintenance, matches pattern in other features
+
+#### E. Updated Hook Implementations
+**File**: `client/src/renderer/features/templates/api/hooks.ts`
+
+```typescript
+// Updated all imports and type signatures
+import {
+  CreateTemplateRequest,
+  UpdateTemplateRequest,
+  SimulateTemplateRequest,
+  SimulateTemplateResponse,
+} from './types';
+import { TemplateListItem, TemplateDetail, TemplateVersionDetail } from '../types';
+
+// Updated all mutation/query functions to use new type names
+```
+
+**Status**: ✅ Complete and verified (TypeScript: 0 errors)
 
 ---
 
-### 3. Critical Bug Fixes
+### 2. PdfObjects Type Consolidation (CRITICAL FIX)
 
-#### Bug 1: React Flow Handle Error
-**Error Message**: `[React Flow]: Couldn't create edge for source handle id: "Na4y", edge id: edge-12`
+**Problem Discovered**: Two different `PdfObjects` type definitions existed with conflicting structures:
+1. `pdf/api/types.ts`: Correct structure matching backend
+2. `templates/types.ts`: Incorrect structure with extra fields and wrong optionality
 
-**Root Cause**:
-- Module "Ml2" had output "Na4y" in `pipelineState.modules`
-- BUT execution step for "Ml2" had empty outputs object
-- We were only rendering handles from execution step data
-- So no Handle with id="Na4y" was rendered
-- Edge connection referenced "Na4y" but couldn't find it
+**Root Cause Analysis**:
 
-**User's Debugging**:
+**Backend Schema** (server/src/api/schemas/pdf_files.py) - Source of Truth:
+```python
+class TextWord(BaseModel):
+    page: int
+    bbox: Tuple[float, float, float, float]
+    text: str
+    fontname: str      # REQUIRED (not Optional)
+    fontsize: float    # REQUIRED (not Optional)
+
+class GraphicRect(BaseModel):
+    page: int
+    bbox: Tuple[float, float, float, float]
+    linewidth: float   # REQUIRED (not Optional)
+
+class PdfObjects(BaseModel):
+    text_words: List[TextWord]
+    text_lines: List[TextLine]
+    graphic_rects: List[GraphicRect]
+    # ... more object types
 ```
-Pipeline State Modules:
-  module_instance_id: "Ml2"
-  outputs: Array(1)
-    0: name: "due date text"
-       node_id: "Na4y"
 
-Execution Steps:
-  module_instance_id: "Ml2"
-  outputs: [[Prototype]]: Object  // EMPTY!
-```
-
-**Fix**: Always iterate through pipeline state for structure, overlay execution data for values (see Handle Rendering Fix above)
-
-**Status**: ✅ Fixed and verified
-
-#### Bug 2: Entry Point Edge Connections
-**Problem**: Edges from entry points to modules weren't connecting
-
-**Root Cause**: Entry point node IDs didn't match the expected `entry-` prefix pattern
-
-**Fix** (in ExecutedPipelineViewer.tsx):
+**Frontend Incorrect Version** (templates/types.ts - REMOVED):
 ```typescript
-// Create entry point nodes with 'entry-' prefix
-pipelineState.entry_points.forEach((entryPoint) => {
-  nodes.push({
-    id: `entry-${entryPoint.node_id}`, // Critical prefix
-    type: "executedEntryPoint",
-    position: { x: 0, y: 0 },
-    data: {
-      name: entryPoint.name,
-      nodeId: entryPoint.node_id,
-    },
-  });
-});
-
-// Map entry points in edge lookup - use 'entry-' prefixed ID
-pipelineState.entry_points.forEach((ep) => {
-  nodeIdToModuleId.set(ep.node_id, `entry-${ep.node_id}`);
-});
+export interface PdfObjects {
+  text_words: Array<{
+    type: 'text_word';     // ❌ Backend doesn't have this field
+    page: number;
+    bbox: BBox;
+    text: string;
+    fontname?: string;     // ❌ Should be required, not optional
+    fontsize?: number;     // ❌ Should be required, not optional
+  }>;
+  graphic_rects: Array<{
+    type: 'graphic_rect';  // ❌ Backend doesn't have this field
+    page: number;
+    bbox: BBox;
+    linewidth?: number;    // ❌ Should be required, not optional
+  }>;
+  // ... 70+ more lines of incorrect definitions
+}
 ```
 
-**Status**: ✅ Fixed and verified
+**Frontend Correct Version** (pdf/api/types.ts):
+```typescript
+export interface TextWordObject {
+  page: number;
+  bbox: BBox;
+  text: string;
+  fontname: string;   // ✅ Required (matches backend)
+  fontsize: number;   // ✅ Required (matches backend)
+}
+
+export interface GraphicRectObject {
+  page: number;
+  bbox: BBox;
+  linewidth: number;  // ✅ Required (matches backend)
+}
+
+export interface PdfObjects {
+  text_words: TextWordObject[];
+  text_lines: TextLineObject[];
+  graphic_rects: GraphicRectObject[];
+  // ... all object types
+}
+```
+
+**Architectural Improvement**: User requested to move PdfObjects from `pdf/api/types.ts` to `pdf/types.ts`:
+
+> "I feel like the PdfObjects type should exist in pdf/types.ts instead of pdf/api/types.ts since it is not specific to the api, but is instead used in multiple places"
+
+**Solution Implemented**:
+
+#### A. Created pdf/types.ts (NEW FILE)
+**File**: `client/src/renderer/features/pdf/types.ts`
+
+```typescript
+/**
+ * PDF Domain Types
+ * Represents the structure of PDF objects extracted from PDF files
+ * These types match the backend domain types and are used across features
+ */
+
+export type BBox = [number, number, number, number]; // [x0, y0, x1, y1]
+
+export interface TextWordObject {
+  page: number;
+  bbox: BBox;
+  text: string;
+  fontname: string;  // REQUIRED (not optional)
+  fontsize: number;  // REQUIRED (not optional)
+}
+
+export interface TextLineObject {
+  page: number;
+  bbox: BBox;
+  text: string;
+  fontname: string;  // REQUIRED
+  fontsize: number;  // REQUIRED
+}
+
+export interface GraphicRectObject {
+  page: number;
+  bbox: BBox;
+  linewidth: number;  // REQUIRED (not optional)
+}
+
+export interface GraphicLineObject {
+  page: number;
+  bbox: BBox;
+  linewidth: number;  // REQUIRED
+}
+
+export interface GraphicCurveObject {
+  page: number;
+  bbox: BBox;
+  linewidth: number;  // REQUIRED
+  points: [number, number][];  // REQUIRED
+}
+
+export interface ImageObject {
+  page: number;
+  bbox: BBox;
+  format: string;      // REQUIRED
+  colorspace: string;  // REQUIRED
+  bits: number;        // REQUIRED
+}
+
+export interface TableObject {
+  page: number;
+  bbox: BBox;
+  rows: number;  // REQUIRED
+  cols: number;  // REQUIRED
+}
+
+export interface PdfObjects {
+  text_words: TextWordObject[];
+  text_lines: TextLineObject[];
+  graphic_rects: GraphicRectObject[];
+  graphic_lines: GraphicLineObject[];
+  graphic_curves: GraphicCurveObject[];
+  images: ImageObject[];
+  tables: TableObject[];
+}
+```
+
+**Key Points**:
+- NO `type` discriminator field (backend doesn't have it)
+- All required fields are truly required (not optional)
+- Matches backend Pydantic schemas exactly
+
+#### B. Updated pdf/api/types.ts
+**File**: `client/src/renderer/features/pdf/api/types.ts`
+
+```typescript
+// BEFORE: Defined all PDF object types inline
+
+// AFTER: Import from domain types
+import type {
+  BBox,
+  PdfObjects,
+  TextWordObject,
+  TextLineObject,
+  GraphicRectObject,
+  GraphicLineObject,
+  GraphicCurveObject,
+  ImageObject,
+  TableObject,
+} from '../types';
+
+// Re-export domain types for convenience
+export type {
+  BBox,
+  PdfObjects,
+  TextWordObject,
+  TextLineObject,
+  GraphicRectObject,
+  GraphicLineObject,
+  GraphicCurveObject,
+  ImageObject,
+  TableObject,
+};
+
+// API-specific types remain here
+export interface PdfFileMetadata { ... }
+export interface PdfObjectsResponse { ... }
+export interface PdfProcessResponse { ... }
+```
+
+**Rationale**: Separates domain types (types.ts) from API types (api/types.ts)
+
+#### C. Updated pdf/index.ts
+**File**: `client/src/renderer/features/pdf/index.ts`
+
+```typescript
+/**
+ * PDF Feature
+ * Unified exports for PDF viewing and API operations
+ */
+
+// Domain types (core PDF object types) - EXPORTED FIRST
+export type {
+  BBox,
+  PdfObjects,
+  TextWordObject,
+  TextLineObject,
+  GraphicRectObject,
+  GraphicLineObject,
+  GraphicCurveObject,
+  ImageObject,
+  TableObject,
+} from './types';
+
+// API hooks and utilities
+export {
+  usePdfData,
+  usePdfMetadata,
+  usePdfObjects,
+  useUploadPdf,
+  useProcessPdfObjects,
+  getPdfDownloadUrl,
+} from './api';
+
+// API types
+export type { PdfData } from './api';
+export type {
+  PdfFileMetadata,
+  PdfObjectsResponse,
+  PdfProcessResponse,
+} from './api/types';
+
+// Components
+export { PdfViewer } from './components';
+export { usePdfViewer } from './components/PdfViewer/PdfViewerContext';
+
+// Hooks
+export { usePdfCoordinates } from './hooks';
+```
+
+**Rationale**: Domain types prioritized in exports, clearly separated from API types
+
+#### D. Removed Incorrect PdfObjects from templates/types.ts
+**File**: `client/src/renderer/features/templates/types.ts`
+
+```typescript
+// REMOVED 81 lines of incorrect PdfObjects definition
+
+// ADDED: Import from pdf feature
+import type { BBox, PdfObjects } from '../pdf';
+
+// Re-export for convenience
+export type { BBox, PdfObjects };
+```
+
+**Impact**: Deleted 81 lines of incorrect type definitions, now imports canonical version
+
+#### E. Updated templates/api/types.ts
+**File**: `client/src/renderer/features/templates/api/types.ts`
+
+```typescript
+// BEFORE:
+import { PdfObjects } from '../types';
+
+// AFTER:
+import type { PdfObjects } from '../../pdf';
+```
+
+**Rationale**: Import PdfObjects from source feature, not local duplicate
+
+#### F. Updated templates/index.ts
+**File**: `client/src/renderer/features/templates/index.ts`
+
+```typescript
+// Simplified to use export * pattern
+export * from './api';
+
+export type {
+  TemplateStatus,
+  PdfObjectType,
+  BBox,
+  PdfObjects,  // Re-exported from pdf feature
+  TemplateVersionSummary,
+  VersionListItem,
+  SignatureObject,
+  ExtractionField,
+  TemplateVersion,
+  TemplateVersionDetail,
+  TemplateListItem,
+  TemplateDetail,
+} from './types';
+```
+
+**Status**: ✅ Complete and verified (TypeScript: 0 errors)
 
 ---
 
-### 4. Dagre Layout Configuration
+## Architecture Decisions
 
-**Configuration** (ExecutedPipelineViewer.tsx lines 36-72):
+### Domain Types vs API Types
+
+**Established Pattern**:
+- **types.ts**: Domain types representing business entities, used across features
+- **api/types.ts**: API-specific request/response DTOs, wire format types
+
+**Example**: PdfObjects is a domain type (represents PDF structure) → belongs in `pdf/types.ts`
+
+### Type Import Strategy
+
+**Pattern**: Features can import domain types from other features
 ```typescript
-const nodeWidth = 220;
-const nodeHeight = 180;
-
-// Configure layout: LR (left-to-right), ranksep for horizontal spacing, nodesep for vertical
-dagreGraph.setGraph({ rankdir: direction, ranksep: 450, nodesep: 200 });
-
-nodes.forEach((node) => {
-  dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });
-});
-
-edges.forEach((edge) => {
-  dagreGraph.setEdge(edge.source, edge.target);
-});
-
-dagre.layout(dagreGraph);
-
-const layoutedNodes = nodes.map((node) => {
-  const nodeWithPosition = dagreGraph.node(node.id);
-  return {
-    ...node,
-    position: {
-      x: nodeWithPosition.x - nodeWidth / 2,
-      y: nodeWithPosition.y - nodeHeight / 2,
-    },
-  };
-});
+// templates/types.ts imports from pdf feature
+import type { BBox, PdfObjects } from '../pdf';
 ```
 
-**Result**: Clean left-to-right hierarchical layout with proper spacing
+**Rationale**: Avoids duplication, ensures single source of truth
+
+### Naming Conventions
+
+**Request Types**: `{Verb}{Entity}Request`
+- ✅ `CreateTemplateRequest`
+- ✅ `UpdateTemplateRequest`
+- ❌ `PostTemplateCreateRequest`
+- ❌ `PutTemplateUpdateRequest`
+
+**Response Types**: Use domain types directly
+- ✅ `Promise<TemplateDetail>`
+- ❌ `Promise<GetTemplateDetailResponse>` (unnecessary alias)
+
+### Export Patterns
+
+**Prefer `export *` for simplicity**:
+```typescript
+// api/index.ts
+export * from './types';
+export * from './hooks';
+```
+
+**Exception**: Feature index.ts uses explicit exports for clarity of public API
 
 ---
 
-### 5. Edge Creation and Debugging
+## Files Modified
 
-**Edge Mapping Logic** (ExecutedPipelineViewer.tsx lines 182-229):
-```typescript
-// Build a lookup map: node_id -> module_instance_id (or entry point node_id)
-const nodeIdToModuleId = new Map<string, string>();
-pipelineState.modules.forEach((module) => {
-  module.inputs.forEach((input) => {
-    nodeIdToModuleId.set(input.node_id, module.module_instance_id);
-  });
-  module.outputs.forEach((output) => {
-    nodeIdToModuleId.set(output.node_id, module.module_instance_id);
-  });
-});
+### Created
+- `client/src/renderer/features/pdf/types.ts` (NEW)
 
-// Map entry points - use 'entry-' prefixed ID as the node ID
-pipelineState.entry_points.forEach((ep) => {
-  nodeIdToModuleId.set(ep.node_id, `entry-${ep.node_id}`);
-});
+### Modified
+- `client/src/renderer/features/pdf/api/types.ts`
+- `client/src/renderer/features/pdf/index.ts`
+- `client/src/renderer/features/templates/types.ts`
+- `client/src/renderer/features/templates/api/types.ts`
+- `client/src/renderer/features/templates/api/hooks.ts`
+- `client/src/renderer/features/templates/api/index.ts`
+- `client/src/renderer/features/templates/index.ts`
 
-// Convert connections to edges
-const edges = pipelineState.connections.map((connection, index) => {
-  const sourceModuleId = nodeIdToModuleId.get(connection.from_node_id);
-  const targetModuleId = nodeIdToModuleId.get(connection.to_node_id);
-
-  // Debug: Log missing handles
-  if (!sourceModuleId) {
-    console.warn(`Missing source node for handle: ${connection.from_node_id}`);
-  }
-  if (!targetModuleId) {
-    console.warn(`Missing target node for handle: ${connection.to_node_id}`);
-  }
-
-  return {
-    id: `edge-${index}`,
-    source: sourceModuleId || '',
-    target: targetModuleId || '',
-    sourceHandle: connection.from_node_id,
-    targetHandle: connection.to_node_id,
-    type: 'straight',
-    style: { stroke: '#6B7280', strokeWidth: 2 },
-  };
-});
-
-// Filter out edges with missing source or target
-return edges.filter(edge => edge.source && edge.target);
-```
-
-**Current State**: Using basic straight-line edges (type: 'straight')
+### Verification
+- TypeScript compilation: **0 errors** ✅
+- All type imports verified working across feature boundaries
 
 ---
 
-## What's Next: ExecutionEdge Implementation
+## Pending Tasks
 
-### Analysis Complete
-I analyzed the old `ExecutionEdge.tsx` component and documented how it works:
+### 1. Commit and Push Changes ⏳
+**Status**: Ready to commit
 
-**File**: `client/src/renderer/features/pipelines/components/executedViewer-old/ExecutionEdge.tsx`
+**Changes to Commit**:
+1. Templates API type refactoring (naming conventions)
+2. PdfObjects type consolidation (domain vs API separation)
 
-**Key Features**:
-1. **Smooth Step Paths**: Uses `getSmoothStepPath` for orthogonal edges with 90-degree corners
-2. **Custom Path Construction**: Adds horizontal offset for parallel edges to prevent overlapping
-3. **Value Labels**: Positioned 80px right of source pin, shows execution values
-4. **Hover Effects**: Glow effect (`drop-shadow`) when hovering over edge
-5. **Type Coloring**: Edge stroke color from TYPE_COLORS based on data type
-6. **EdgeLabelRenderer**: Proper label positioning that doesn't interfere with graph
-7. **Invisible Wider Path**: 20px wide invisible path for easier hovering
-8. **Value Truncation**: Truncates to 30 chars unless hovered
+**Commit Message Format**:
+```
+refactor: Consolidate PdfObjects types and align templates API naming
 
-**Code Pattern**:
-```typescript
-const [edgePath, labelX, labelY] = getSmoothStepPath({
-  sourceX,
-  sourceY,
-  targetX,
-  targetY,
-  sourcePosition,
-  targetPosition,
-});
+- Create pdf/types.ts for PDF domain types (BBox, PdfObjects, all object interfaces)
+- Move PdfObjects from pdf/api/types.ts to pdf/types.ts (domain vs API separation)
+- Remove duplicate PdfObjects definition from templates/types.ts (81 lines deleted)
+- Update templates to import PdfObjects from pdf feature (single source of truth)
+- Rename templates API types to remove HTTP prefixes (CreateTemplateRequest vs PostTemplateCreateRequest)
+- Remove unnecessary type aliases (use domain types directly in hooks)
+- Remove unused GetTemplatesResponse interface
+- Simplify api/index.ts exports to use export * pattern
 
-// Custom offset for parallel edges
-const customPath = `M ${sourceX} ${sourceY} L ${sourceX + offset} ${sourceY} ${edgePath.substring(edgePath.indexOf('L'))}`;
+TypeScript compilation: 0 errors
 
-// Label positioned near source
-<EdgeLabelRenderer>
-  <div style={{
-    position: 'absolute',
-    transform: `translate(-50%, -50%) translate(${sourceX + 80}px, ${sourceY}px)`,
-  }}>
-    {truncatedValue}
-  </div>
-</EdgeLabelRenderer>
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>
 ```
 
----
+### 2. Continue Templates Component Refactoring
+**Next Steps** (from user directive):
+> "We have so far found the most success with starting via the api, and the types, and then working our way through the component tree."
 
-## Pending Tasks (In Order)
-
-### 1. Implement ExecutionEdge Component ⏳
-**File to Create**: `client/src/renderer/features/pipelines/components/ExecutedPipelineViewer/ExecutionEdge.tsx`
-
-**Requirements**:
-- Use `getSmoothStepPath` for orthogonal paths
-- Type-colored edges (from TYPE_COLORS)
-- Value labels 80px right of source pin
-- Hover effects with glow (drop-shadow)
-- Support for parallel edges with horizontal offsets
-- Invisible wider path (20px) for easier hovering
-- Truncate values to 30 chars (show full on hover)
-
-**Reference**: Old implementation at `executedViewer-old/ExecutionEdge.tsx`
-
-### 2. Register Edge Type in ExecutedPipelineViewer
-**File**: `ExecutedPipelineViewer.tsx`
-
-**Changes Needed**:
-- Import ExecutionEdge component
-- Create `edgeTypes` constant: `{ executionEdge: ExecutionEdge }`
-- Pass to ReactFlow component: `edgeTypes={edgeTypes}`
-- Change edge creation: `type: 'executionEdge'` instead of `'straight'`
-
-### 3. Extract Execution Values for Edge Labels
-**File**: `ExecutedPipelineViewer.tsx`
-
-**Logic Needed**:
-- For each connection, find source module's execution step
-- Look up output value from execution step using `connection.from_node_id`
-- Attach value to edge data: `data: { value: executionValue }`
-- ExecutionEdge will read from edge.data.value
-
-**Code Pattern**:
-```typescript
-const edges = pipelineState.connections.map((connection, index) => {
-  const sourceModuleId = nodeIdToModuleId.get(connection.from_node_id);
-  const targetModuleId = nodeIdToModuleId.get(connection.to_node_id);
-
-  // Find execution value for this connection
-  const sourceExecution = executionSteps?.find(step =>
-    step.module_instance_id === sourceModuleId
-  );
-  const outputValue = sourceExecution?.outputs?.[connection.from_node_id]?.value || "";
-
-  return {
-    id: `edge-${index}`,
-    source: sourceModuleId || '',
-    target: targetModuleId || '',
-    sourceHandle: connection.from_node_id,
-    targetHandle: connection.to_node_id,
-    type: 'executionEdge',
-    data: { value: outputValue },
-    style: { stroke: '#6B7280', strokeWidth: 2 },
-  };
-});
-```
-
-### 4. Calculate Edge Offsets for Parallel Edges
-**File**: `ExecutedPipelineViewer.tsx`
-
-**Logic Needed**:
-- Group edges by source-target pair
-- For each group with multiple edges, assign incremental offsets
-- Pass offset in edge data: `data: { value, offset }`
-- ExecutionEdge uses offset to adjust horizontal position
-
-### 5. Testing and Refinement
-- Test with various pipeline structures
-- Verify edge labels show correct values
-- Test hover states and value truncation
-- Verify parallel edges don't overlap
-- Check type coloring matches data types
+**To Do**:
+- Analyze templates component structure
+- Compare with modules/pipelines component patterns
+- Refactor components to match established architecture
+- Ensure consistent patterns across features
 
 ---
 
 ## Important Code Locations
 
-### Frontend Files
+### PDF Feature
 ```
-client/src/renderer/features/pipelines/components/ExecutedPipelineViewer/
-├── ExecutedPipelineViewer.tsx       [Main component, 287 lines]
-├── ExecutedEntryPoint.tsx           [Entry point wrapper, 41 lines]
-├── ExecutedModule.tsx               [Module node, 74 lines]
-├── ExecutedModuleHeader.tsx         [Module header]
-├── ExecutedModuleBody.tsx           [Module body with pins]
-└── ExecutedModuleRow.tsx            [Individual pin row, 85 lines]
-
-client/src/renderer/features/pipelines/components/executedViewer-old/
-└── ExecutionEdge.tsx                [Reference implementation]
+client/src/renderer/features/pdf/
+├── types.ts                        [NEW: Domain types - BBox, PdfObjects, all object interfaces]
+├── api/
+│   ├── types.ts                    [API types - PdfFileMetadata, PdfObjectsResponse, etc.]
+│   ├── hooks.ts                    [TanStack Query hooks]
+│   └── index.ts                    [API exports]
+└── index.ts                        [Feature exports - domain types first]
 ```
 
-### Backend File
+### Templates Feature
 ```
-server/src/features/pipeline_execution/service.py
-├── _serialize_inputs_for_audit()    [Lines 185-250]
-└── execute_pipeline()               [Lines 974-980, calls serializer]
+client/src/renderer/features/templates/
+├── types.ts                        [Domain types - imports PdfObjects from pdf]
+├── api/
+│   ├── types.ts                    [API types - CreateTemplateRequest, etc.]
+│   ├── hooks.ts                    [TanStack Query hooks]
+│   └── index.ts                    [API exports - simplified to export *]
+└── index.ts                        [Feature exports]
 ```
 
-### Utility Files
+### Backend (Read-Only Reference)
 ```
-client/src/renderer/features/pipelines/utils/moduleUtils.ts
-├── TYPE_COLORS                      [Color mapping for data types]
-└── getTextColor()                   [Text contrast calculation]
+server/src/api/schemas/
+├── pdf_files.py                    [PdfObjects schema - source of truth]
+└── pdf_templates.py                [Template schemas]
 ```
 
 ---
 
-## Data Flow Summary
+## Data Type Reference
 
-### Pipeline Execution Data Structure
+### BBox (Bounding Box)
 ```typescript
-// From backend
-interface ExecutionStepResult {
-  module_instance_id: string;
-  step_number: number;
-  inputs: Record<string, { name: string; value: string; type: string }>;
-  outputs: Record<string, { name: string; value: string; type: string }>;
-  error: string | null;
-}
-
-// Pipeline state (structure)
-interface PipelineState {
-  entry_points: EntryPoint[];
-  modules: ModuleInstance[];
-  connections: NodeConnection[];
-}
-
-// Visual state (positions)
-interface VisualState {
-  modules: Record<string, { x: number; y: number }>;
-  entryPoints: Record<string, { x: number; y: number }>;
-}
+export type BBox = [number, number, number, number]; // [x0, y0, x1, y1]
 ```
 
-### Component Props Flow
-```
-Parent Component (e.g., ETO Run Detail Modal)
-  ↓ passes props
-ExecutedPipelineViewer
-  ↓ creates
-[ExecutedEntryPoint nodes, ExecutedModule nodes]
-  ↓ renders on
-React Flow Canvas
-  ↓ connected by
-[ExecutionEdge components] ← TO BE IMPLEMENTED
-```
-
----
-
-## Known Issues and Considerations
-
-### 1. Empty Execution Data
-**Issue**: Some modules may have empty outputs in execution steps (e.g., module "Ml2" had no outputs).
-
-**Solution**: We always iterate through pipeline state for structure, overlay execution data for values. Missing execution data results in empty value strings, but handles still render.
-
-**Status**: ✅ Resolved
-
-### 2. Entry Point ID Prefixing
-**Issue**: Entry points need `entry-` prefix to avoid conflicts with module instance IDs.
-
-**Solution**: All entry point node IDs use `entry-${nodeId}` pattern consistently.
-
-**Status**: ✅ Resolved
-
-### 3. Module Template Loading
-**Issue**: Module templates must be loaded to get colors and titles.
-
-**Solution**: Using `useModules()` hook with TanStack Query. Shows loading state while fetching.
-
-**Status**: ✅ Working
-
-### 4. Edge Type Coloring
-**Issue**: Need to determine edge color based on connection's data type.
-
-**Solution**: Look up type from source pin in pipeline state, use TYPE_COLORS mapping.
-
-**Status**: ⏳ To be implemented in ExecutionEdge
-
----
-
-## Testing Checklist
-
-When implementing ExecutionEdge:
-
-- [ ] Edges render with smooth step paths (orthogonal corners)
-- [ ] Edge colors match data types (TYPE_COLORS)
-- [ ] Value labels appear 80px right of source pins
-- [ ] Values truncate to 30 chars, show full on hover
-- [ ] Hover adds glow effect to edge
-- [ ] Parallel edges have horizontal offsets (no overlapping)
-- [ ] Invisible wider path makes hovering easier
-- [ ] Entry point connections work correctly
-- [ ] Multi-module pipelines layout cleanly
-- [ ] Edge labels don't interfere with graph navigation
-
----
-
-## Console Logs (For Debugging)
-
-The viewer includes console logs that help debug data flow:
-
+### PdfObjects Structure
 ```typescript
-console.log('Execution Steps:', executionSteps?.map((step, index) => ({
-  index,
-  module_instance_id: step.module_instance_id,
-  step_number: step.step_number,
-  inputs: step.inputs,
-  outputs: step.outputs,
-  error: step.error,
-})));
-
-console.log('Pipeline State Modules:', pipelineState?.modules.map(m => ({
-  module_instance_id: m.module_instance_id,
-  outputs: m.outputs.map(o => ({ node_id: o.node_id, name: o.name })),
-  inputs: m.inputs.map(i => ({ node_id: i.node_id, name: i.name }))
-})));
-
-console.log('Pipeline Connections:', pipelineState?.connections);
+export interface PdfObjects {
+  text_words: TextWordObject[];      // Text at word granularity
+  text_lines: TextLineObject[];      // Text at line granularity
+  graphic_rects: GraphicRectObject[]; // Rectangle graphics
+  graphic_lines: GraphicLineObject[]; // Line graphics
+  graphic_curves: GraphicCurveObject[]; // Curve graphics (bezier, etc.)
+  images: ImageObject[];              // Embedded images
+  tables: TableObject[];              // Table structures
+}
 ```
 
-These logs were crucial for identifying the missing handle bug.
+### Required Fields (NOT Optional)
+All object types have required fields that match backend:
+- TextWordObject: `fontname`, `fontsize` (REQUIRED)
+- GraphicRectObject: `linewidth` (REQUIRED)
+- GraphicLineObject: `linewidth` (REQUIRED)
+- GraphicCurveObject: `linewidth`, `points` (REQUIRED)
+- ImageObject: `format`, `colorspace`, `bits` (REQUIRED)
+- TableObject: `rows`, `cols` (REQUIRED)
+
+**Critical**: Templates feature previously had these as optional (`fontname?`) - INCORRECT
+
+---
+
+## Debugging Reference
+
+### TypeScript Compilation Check
+```bash
+cd client && npx tsc --noEmit
+```
+
+### Finding Type Definitions
+```bash
+# Find all PdfObjects definitions
+grep -r "interface PdfObjects" client/src/renderer/features/
+
+# Find all imports of PdfObjects
+grep -r "import.*PdfObjects" client/src/renderer/features/
+```
 
 ---
 
 ## User Feedback History
 
-1. **"Great that worked"** - Backend input name fix
-2. **Black header for entry points** - Entry point styling
-3. **"That is not what I wanted"** - Correction on ExecutedEntryPoint design (should reuse ExecutedModule)
-4. **Handle ID error** - React Flow edge connection failure
-5. **Console log expansion** - Debugging handle rendering
-6. **"That worked"** - Confirming handle fix
-7. **ExecutionEdge analysis request** - Current task
+1. **"Awesome, all of the pipeline stuff is totally working now"** - Pipeline work complete, move to templates
+2. **Request to refactor templates** - "build out the directory structure of templates to match the others"
+3. **Directive to start with API layer** - "start via the api, and the types, and then working our way through the component tree"
+4. **Request for analysis** - "Make no changes, just provide an analysis"
+5. **Approval to implement** - "Ok, please implement those improvements in that case"
+6. **PdfObjects issue identified** - "we need to first fix the reference to the pdf objects"
+7. **Architectural improvement** - "PdfObjects type should exist in pdf/types.ts instead of pdf/api/types.ts"
+8. **Session continuity** - "create / update continuity.md...commit all uncommited changes and push to remote"
 
 ---
 
 ## Quick Start for Next Session
 
 1. Read this document completely
-2. Review ExecutionEdge reference: `executedViewer-old/ExecutionEdge.tsx`
-3. Create new `ExecutionEdge.tsx` in ExecutedPipelineViewer directory
-4. Register edge type in ExecutedPipelineViewer.tsx
-5. Extract execution values and attach to edge data
-6. Test with real pipeline execution data
+2. Review git status to verify all changes are committed
+3. Continue with templates component tree refactoring
+4. Follow established patterns from modules/pipelines features
+5. Focus on component structure, not API layer (already complete)
 
 ---
 
 ## Additional Context
 
-- User manages all testing and development servers
-- Never run `npm run dev` or development servers
-- Commit substantial changes with conventional commit messages
-- Update CHANGELOG.md after session completion
-- ExecutedPipelineViewer is read-only (no editing functionality)
-- This replaces old executedViewer-old implementation
+### Session Rituals (from CLAUDE.md)
+- Read CHANGELOG.md before starting work
+- Append new entry to CHANGELOG.md after session
+- Rotate to last 10 entries only
+- Commit substantial changes with conventional commit format
+- Never run `npm run dev` or development servers (user manages testing)
+
+### Commit Discipline
+**Substantial change = any of**:
+- Functional behavior changed or new feature added
+- Database schema / migrations modified
+- Public API, CLI flags, or file formats changed
+- Refactor exceeding ~30 lines in a file, or multi-file edits
+- Dependency or build config updated
+
+**Current session**: Qualifies as substantial (multi-file refactor, type system changes)
 
 ---
 
-## Architecture Decisions
+## Success Criteria
 
-### Why Reuse ExecutedModule for Entry Points?
-- **Consistency**: Same styling and structure as regular modules
-- **Simplicity**: No duplicate component code
-- **Maintainability**: Changes to module styling apply to entry points
-
-### Why Iterate Pipeline State Instead of Execution Steps?
-- **Completeness**: Pipeline state is the source of truth for structure
-- **Resilience**: Handles missing execution data gracefully
-- **Edge Connections**: Ensures all handles exist for React Flow
-
-### Why Dagre Layout?
-- **Hierarchical**: Natural left-to-right flow from entry points to outputs
-- **Automatic**: No manual positioning needed
-- **Consistent**: Same layout algorithm as pipeline builder
+- [x] Templates API types follow naming conventions
+- [x] No unnecessary type aliases
+- [x] PdfObjects type consolidated to single source
+- [x] Domain types separated from API types
+- [x] TypeScript compilation: 0 errors
+- [x] All imports work across feature boundaries
+- [ ] Changes committed and pushed to remote
+- [ ] Templates component tree refactored (future work)
 
 ---
 
 ## End of Continuity Document
 
-**Next Action**: Implement ExecutionEdge component following the pending tasks above.
+**Current Status**: Templates API layer refactored, PdfObjects consolidated, ready to commit
 
-**Success Criteria**:
-- Edges display with smooth orthogonal paths
-- Value labels show execution data
-- Type-colored edges match data types
-- Hover effects work properly
-- All tests in Testing Checklist pass
+**Next Immediate Action**: Commit changes and push to remote
 
-**Estimated Time**: 1-2 hours for full ExecutionEdge implementation and testing
+**Next Development Action**: Begin templates component tree refactoring
+
+**Estimated Time for Component Refactoring**: 2-4 hours depending on component complexity
+
+---
+
+## Architecture Pattern Summary
+
+**Feature Structure** (Established Pattern):
+```
+features/{feature-name}/
+├── types.ts              # Domain types (business entities)
+├── api/
+│   ├── types.ts          # API request/response DTOs
+│   ├── hooks.ts          # TanStack Query hooks
+│   └── index.ts          # API exports (export *)
+├── components/           # React components
+├── hooks/                # React hooks (non-API)
+└── index.ts              # Feature public API (explicit exports)
+```
+
+**Cross-Feature Type Imports**: Allowed and encouraged to avoid duplication
+```typescript
+// templates/types.ts
+import type { BBox, PdfObjects } from '../pdf';
+```
+
+**Type Naming**:
+- Request: `{Verb}{Entity}Request` (CreateTemplateRequest)
+- Response: Use domain types directly (TemplateDetail)
+- No HTTP method prefixes (Post, Get, Put)
+- No unnecessary aliases
+
+**Export Patterns**:
+- api/index.ts: `export *` for simplicity
+- feature/index.ts: Explicit exports for clear public API

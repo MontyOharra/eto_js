@@ -430,6 +430,7 @@ function PipelineGraphInner({
     }
 
     // Create edges from connections
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const newEdges: Edge[] = pipelineState.connections.map((connection, _) => {
       // Find source and target nodes by searching for pins
       let sourceNodeId = '';

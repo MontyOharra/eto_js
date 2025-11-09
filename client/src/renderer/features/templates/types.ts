@@ -1,4 +1,13 @@
-// Domain types for Templates feature
+/**
+ * Templates Domain Types
+ * Represents templates, template versions, and extraction fields
+ * Imports PDF domain types from pdf feature
+ */
+
+import type { BBox, PdfObjects } from '../pdf';
+
+// Re-export for convenience
+export type { BBox, PdfObjects };
 
 export type TemplateStatus = 'active' | 'inactive';
 
@@ -10,8 +19,6 @@ export type PdfObjectType =
   | 'graphic_curve'
   | 'image'
   | 'table';
-
-export type BBox = [number, number, number, number]; // [x0, y0, x1, y1]
 
 // =============================================================================
 // Nested Types
@@ -29,60 +36,8 @@ export interface VersionListItem {
   version_number: number;
 }
 
-// PdfObjects format (matches backend storage)
-export interface PdfObjects {
-  text_words: Array<{
-    type: 'text_word';
-    page: number;
-    bbox: BBox;
-    text: string;
-    fontname?: string;
-    fontsize?: number;
-  }>;
-  text_lines: Array<{
-    type: 'text_line';
-    page: number;
-    bbox: BBox;
-    text?: string;
-  }>;
-  graphic_rects: Array<{
-    type: 'graphic_rect';
-    page: number;
-    bbox: BBox;
-    linewidth?: number;
-  }>;
-  graphic_lines: Array<{
-    type: 'graphic_line';
-    page: number;
-    bbox: BBox;
-    linewidth?: number;
-  }>;
-  graphic_curves: Array<{
-    type: 'graphic_curve';
-    page: number;
-    bbox: BBox;
-    points?: Array<[number, number]>;
-    linewidth?: number;
-  }>;
-  images: Array<{
-    type: 'image';
-    page: number;
-    bbox: BBox;
-    format: string;
-    colorspace: string;
-    bits: number;
-  }>;
-  tables: Array<{
-    type: 'table';
-    page: number;
-    bbox: BBox;
-    rows: number;
-    cols: number;
-  }>;
-}
-
 // Legacy SignatureObject type - kept for backward compatibility but deprecated
-// Use PdfObjects instead
+// Use PdfObjects (from pdf feature) instead
 export interface SignatureObject {
   object_type: PdfObjectType;
   page: number;
