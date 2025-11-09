@@ -874,13 +874,10 @@ function PipelineView({ versionDetail }: PipelineViewProps) {
     return (
       <div className="h-full w-full bg-gray-900">
         <PipelineGraph
-          moduleTemplates={modules}
-          selectedModuleId={null}
-          onModulePlaced={() => {}}
-          viewOnly={true}
-          initialPipelineState={pipeline.pipeline_state}
-          initialVisualState={pipeline.visual_state}
-          entryPoints={pipeline.pipeline_state.entry_points}
+          pipelineState={pipeline.pipeline_state}
+          visualState={pipeline.visual_state}
+          mode="view"
+          modules={modules}
         />
       </div>
     );
