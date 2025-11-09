@@ -9,7 +9,7 @@ import { ModuleInstance, NodePin } from "../types";
 import {
   calculateTypePropagation,
   applyTypeUpdates,
-  findPin,
+  findPinInModule,
   getPinsWithTypeVar,
 } from "../utils/typeSystem";
 import { updateEdgeColors } from "../utils/edgeUtils";
@@ -51,7 +51,7 @@ export function useNodeUpdates({
       if (!module?.data?.moduleInstance) return;
 
       const moduleInstance = module.data.moduleInstance as ModuleInstance;
-      const pin = findPin(moduleInstance, pinId);
+      const pin = findPinInModule(moduleInstance, pinId);
       if (!pin) return;
 
       // Build initial updates list

@@ -52,7 +52,6 @@ import {
   serializeToVisualState,
 } from "../../utils/serialization";
 import { getEffectiveAllowedTypes } from "../../utils/typeSystem";
-import { findPin } from "../../utils/typeSystem";
 
 export interface PipelineGraphProps {
   viewOnly: boolean;

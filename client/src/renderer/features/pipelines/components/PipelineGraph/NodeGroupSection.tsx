@@ -32,11 +32,6 @@ export interface NodeGroupSectionProps {
     handleId: string,
     handleType: "source" | "target"
   ) => void;
-  pendingConnection?: {
-    sourceHandleId: string;
-    sourceNodeId: string;
-    handleType: "source" | "target";
-  } | null;
   getEffectiveAllowedTypes?: (
     moduleId: string,
     pinId: string,
@@ -61,7 +56,6 @@ export function NodeGroupSection({
   onTextFocus,
   onTextBlur,
   onHandleClick,
-  pendingConnection,
   getEffectiveAllowedTypes,
 }: NodeGroupSectionProps) {
   // Get the NodeGroup from template
@@ -74,7 +68,7 @@ export function NodeGroupSection({
 
   const minCount = nodeGroup?.min_count || 1;
   const maxCount = nodeGroup?.max_count;
-
+ 
   const canAdd = maxCount == null || nodes.length < maxCount;
   const canRemove = nodes.length > minCount;
 
@@ -111,7 +105,6 @@ export function NodeGroupSection({
             onTextFocus={onTextFocus}
             onTextBlur={onTextBlur}
             onHandleClick={onHandleClick}
-            pendingConnection={pendingConnection}
             getEffectiveAllowedTypes={getEffectiveAllowedTypes}
           />
         ))}

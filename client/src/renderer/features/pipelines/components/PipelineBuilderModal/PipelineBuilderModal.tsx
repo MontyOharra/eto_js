@@ -5,10 +5,11 @@
  * 2. Pipeline Builder: Build the transformation pipeline
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { generateEntryPointId } from "../../utils/idGenerator";
 import { createEntryPoint } from "../../utils/moduleFactory";
 import { PipelineEditor } from "../PipelineEditor";
+import { usePipelineValidation } from "../../hooks";
 import type {
   EntryPoint,
   PipelineState,
@@ -48,22 +49,65 @@ export function PipelineBuilderModal({
   // Visual state - node positions
   const [visualState, setVisualState] = useState<VisualState>({});
 
+  // Create complete pipeline state for validation (includes entry points)
+  const completePipelineState = useMemo<PipelineState>(() => ({
+    ...pipelineState,
+    entry_points: entryPoints,
+  }), [pipelineState, entryPoints]);
+
+  // Validate pipeline automatically when it changes
+  const {
+    isValid: isPipelineValid,
+    error: pipelineValidationError,
+    isValidating: isPipelineValidating,
+  } = usePipelineValidation(currentStep === "pipeline" ? completePipelineState : null);
+
   // Handle entry points from step 1
   const handleEntryPointsConfirm = useCallback((points: Array<{ id: string; name: string }>) => {
     const newEntryPoints: EntryPoint[] = points.map((p) => {
-      // Use existing ID if it's an entry point ID (ep_*), otherwise generate new one
-      const entryPointId = p.id.startsWith('ep_') ? p.id : generateEntryPointId();
+      // Try to find existing entry point with the same name to preserve it
+      const existingEntryPoint = entryPoints.find(ep => ep.name === p.name);
 
-      // Use factory to create entry point from template
-      return createEntryPoint(entryPointId, p.name);
+      if (existingEntryPoint) {
+        // Preserve existing entry point (keeps ID, connections, visual position)
+        return existingEntryPoint;
+      } else {
+        // Create new entry point for new names
+        const entryPointId = generateEntryPointId();
+        return createEntryPoint(entryPointId, p.name);
+      }
     });
 
     // Store entry points in separate state (not in pipelineState until save)
     setEntryPoints(newEntryPoints);
 
+    // Clean up orphaned connections from removed entry points
+    const entryPointOutputIds = new Set(
+      newEntryPoints.flatMap(ep => ep.outputs.map(output => output.node_id))
+    );
+    const cleanedConnections = pipelineState.connections.filter(
+      conn => !conn.from_node_id.startsWith('ep_') || entryPointOutputIds.has(conn.from_node_id)
+    );
+
+    // Clean up orphaned visual state entries
+    const entryPointIds = new Set(newEntryPoints.map(ep => ep.entry_point_id));
+    const cleanedVisualState = Object.fromEntries(
+      Object.entries(visualState).filter(
+        ([nodeId]) => !nodeId.startsWith('ep_') || entryPointIds.has(nodeId)
+      )
+    );
+
+    // Update pipeline state and visual state if needed
+    if (cleanedConnections.length !== pipelineState.connections.length) {
+      setPipelineState({ ...pipelineState, connections: cleanedConnections });
+    }
+    if (Object.keys(cleanedVisualState).length !== Object.keys(visualState).length) {
+      setVisualState(cleanedVisualState);
+    }
+
     // Move to pipeline builder step
     setCurrentStep("pipeline");
-  }, []);
+  }, [entryPoints, pipelineState, visualState]);
 
   const handleBack = () => {
     if (currentStep === "pipeline") {
@@ -212,12 +256,28 @@ export function PipelineBuilderModal({
                 Next
               </button>
             ) : (
-              <button
-                onClick={handleSave}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
-              >
-                Save Pipeline
-              </button>
+              <div className="relative group">
+                <button
+                  onClick={handleSave}
+                  disabled={!isPipelineValid || isPipelineValidating}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-md transition-colors"
+                >
+                  {isPipelineValidating ? "Validating..." : "Save Pipeline"}
+                </button>
+                {/* Tooltip on hover when disabled */}
+                {(!isPipelineValid || isPipelineValidating) && (
+                  <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block z-10">
+                    <div className="bg-gray-800 text-amber-400 text-xs px-3 py-2 rounded shadow-lg whitespace-nowrap border border-amber-400/30">
+                      {isPipelineValidating
+                        ? "Validating pipeline..."
+                        : pipelineValidationError
+                          ? `[${pipelineValidationError.code}] ${pipelineValidationError.message}`
+                          : "Pipeline validation failed"}
+                      <div className="absolute top-full right-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-gray-800"></div>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>

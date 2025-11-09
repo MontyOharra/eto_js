@@ -7,18 +7,10 @@
 import { useState } from "react";
 import { ModuleTemplate } from "../../../modules/types";
 import { ModuleInstance, NodePin } from "../../types";
-import { getTextColor } from "../../utils/moduleUtils";
 import { ModuleBody } from "./ModuleBody";
+import { ModuleHeader } from "./ModuleHeader";
+import { ModuleConfig } from "./ModuleConfig";
 
-// ============================================================================
-// Type Definitions
-// ============================================================================
-
-interface PendingConnection {
-  sourceHandleId: string;
-  sourceNodeId: string;
-  handleType: "source" | "target";
-}
 
 export interface ModuleProps {
   data: {
@@ -42,7 +34,6 @@ export interface ModuleProps {
     onConfigChange?: (moduleId: string, configKey: string, value: any) => void;
 
     // Connection management
-    pendingConnection?: PendingConnection | null;
     onHandleClick?: (
       nodeId: string,
       handleId: string,
@@ -56,7 +47,6 @@ export interface ModuleProps {
       baseAllowedTypes: string[]
     ) => string[];
     getConnectedOutputName?: (
-      moduleId: string,
       inputPinId: string
     ) => string | undefined;
 
@@ -81,7 +71,6 @@ export function Module({ data }: ModuleProps) {
     onAddNode,
     onRemoveNode,
     onConfigChange,
-    pendingConnection,
     onHandleClick,
     getEffectiveAllowedTypes,
     getConnectedOutputName,
@@ -95,9 +84,6 @@ export function Module({ data }: ModuleProps) {
   const [highlightedTypeVar, setHighlightedTypeVar] = useState<string | null>(
     null
   );
-
-  const headerColor = template.color || "#4B5563";
-  const textColor = getTextColor(headerColor);
 
   // Check if module has both inputs and outputs for sizing
   const hasInputs = moduleInstance.inputs.length > 0;
@@ -115,46 +101,11 @@ export function Module({ data }: ModuleProps) {
       onMouseLeave={() => onModuleMouseLeave?.()}
     >
       {/* Module Header */}
-      <div
-        className="px-4 py-2 rounded-t-lg border-b border-gray-600"
-        style={{ backgroundColor: headerColor }}
-      >
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold" style={{ color: textColor }}>
-            {template.title}
-          </h3>
-          <div className="flex items-center gap-2">
-            <span
-              className="text-xs font-mono opacity-75"
-              style={{ color: textColor }}
-            >
-              {moduleInstance.module_instance_id}
-            </span>
-            {onDeleteModule && (
-              <button
-                onClick={() => onDeleteModule(moduleInstance.module_instance_id)}
-                className="opacity-75 hover:opacity-100 transition-opacity"
-                style={{ color: textColor }}
-                title="Delete module"
-              >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
+      <ModuleHeader
+        moduleInstance={moduleInstance}
+        template={template}
+        onDeleteModule={onDeleteModule}
+      />
 
       {/* Module Body */}
       <ModuleBody
@@ -166,14 +117,18 @@ export function Module({ data }: ModuleProps) {
         onTextFocus={onTextFocus}
         onTextBlur={onTextBlur}
         onHandleClick={onHandleClick}
-        pendingConnection={pendingConnection}
         getEffectiveAllowedTypes={getEffectiveAllowedTypes}
         getConnectedOutputName={getConnectedOutputName}
         highlightedTypeVar={highlightedTypeVar}
         onTypeVarFocus={setHighlightedTypeVar}
       />
 
-      {/* TODO: Module Config section */}
+      {/* Module Config */}
+      <ModuleConfig
+        moduleInstance={moduleInstance}
+        template={template}
+        onConfigChange={onConfigChange}
+      />
     </div>
   );
 }

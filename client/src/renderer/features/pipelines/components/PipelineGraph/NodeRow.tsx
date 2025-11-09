@@ -53,7 +53,6 @@ export function NodeRow({
   onTextFocus,
   onTextBlur,
   onHandleClick,
-  pendingConnection,
   getEffectiveAllowedTypes,
 }: NodeRowProps) {
   const isHighlighted = node.type_var && node.type_var === highlightedTypeVar;

@@ -5,7 +5,7 @@
 
 import { Node, Edge, Position } from "@xyflow/react";
 import { ModuleInstance } from "../types";
-import { findPin } from "./typeSystem";
+import { findPinInModule } from "./typeSystem";
 import { TYPE_COLORS } from "./moduleUtils";
 
 /**
@@ -29,8 +29,8 @@ export function getEdgeColor(nodes: Node[], edge: Edge): string {
   const sourceModule = sourceNode.data.moduleInstance as ModuleInstance;
   const targetModule = targetNode.data.moduleInstance as ModuleInstance;
 
-  const sourcePin = findPin(sourceModule, edge.sourceHandle!);
-  const targetPin = findPin(targetModule, edge.targetHandle!);
+  const sourcePin = findPinInModule(sourceModule, edge.sourceHandle!);
+  const targetPin = findPinInModule(targetModule, edge.targetHandle!);
 
   // Use source pin type for color (they should match if connected)
   const type = sourcePin?.type || targetPin?.type || "str";

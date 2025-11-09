@@ -1,35 +1,13 @@
-/**
- * EntryPoint Component
- * Wrapper around Module component with hardcoded values for entry points
- *
- * Entry points reuse the Module component but with:
- * - Black header color
- * - "Entry Point" as module name
- * - No inputs
- * - Single output with the entry point name and configurable type
- */
-
 import { Module } from "./Module";
 import { ModuleInstance, EntryPoint as EntryPointType } from "../../types";
 import { ENTRY_POINT_TEMPLATE } from "../../utils/moduleFactory";
 
-// ============================================================================
-// Type Definitions
-// ============================================================================
-
-interface PendingConnection {
-  sourceHandleId: string;
-  sourceNodeId: string;
-  handleType: "source" | "target";
-}
 
 export interface EntryPointProps {
   data: {
     // Core data (always required)
     entryPoint: EntryPointType;
 
-    // Connection management (optional, for future use)
-    pendingConnection?: PendingConnection | null;
     onHandleClick?: (
       nodeId: string,
       handleId: string,
@@ -47,7 +25,7 @@ export interface EntryPointProps {
 // ============================================================================
 
 export function EntryPoint({ data }: EntryPointProps) {
-  const { entryPoint, pendingConnection, onHandleClick, onModuleMouseEnter, onModuleMouseLeave } = data;
+  const { entryPoint, onHandleClick, onModuleMouseEnter, onModuleMouseLeave } = data;
 
   // Create synthetic ModuleInstance from EntryPoint
   const moduleInstance: ModuleInstance = {
@@ -64,8 +42,6 @@ export function EntryPoint({ data }: EntryPointProps) {
       data={{
         moduleInstance,
         template: ENTRY_POINT_TEMPLATE,
-        // Pass through connection management
-        pendingConnection,
         onHandleClick,
         // Pass through interaction callbacks
         onModuleMouseEnter,

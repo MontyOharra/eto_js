@@ -3,8 +3,7 @@
  * Pure functions for type constraint validation and propagation
  */
 
-import { Node, Edge } from "@xyflow/react";
-import { ModuleInstance, NodePin } from "../types";
+import { PipelineState, EntryPoint, ModuleInstance, NodePin } from "../types";
 
 /**
  * Calculate intersection of two type arrays
@@ -26,12 +25,43 @@ function getAllPins(moduleInstance: ModuleInstance): NodePin[] {
 /**
  * Find a pin by ID within a module instance
  */
-export function findPin(
+export function findPinInModule(
   moduleInstance: ModuleInstance,
   pinId: string
 ): NodePin | undefined {
   const allPins = getAllPins(moduleInstance);
   return allPins.find((p) => p.node_id === pinId);
+}
+
+/**
+ * Find a module by ID in pipeline state
+ */
+function findModule(
+  pipelineState: PipelineState,
+  effectiveEntryPoints: EntryPoint[],
+  moduleId: string
+): { module: ModuleInstance; isEntryPoint: boolean } | undefined {
+  // Check if it's an entry point
+  const entryPoint = effectiveEntryPoints.find((ep) => ep.entry_point_id === moduleId);
+  if (entryPoint) {
+    // Convert EntryPoint to ModuleInstance structure
+    const moduleInstance: ModuleInstance = {
+      module_instance_id: entryPoint.entry_point_id,
+      module_ref: "entry_point:1.0.0",
+      config: {},
+      inputs: [],
+      outputs: entryPoint.outputs,
+    };
+    return { module: moduleInstance, isEntryPoint: true };
+  }
+
+  // Check regular modules
+  const module = pipelineState.modules.find((m) => m.module_instance_id === moduleId);
+  if (module) {
+    return { module, isEntryPoint: false };
+  }
+
+  return undefined;
 }
 
 /**
@@ -49,25 +79,24 @@ export function getPinsWithTypeVar(
  * Calculate effective allowed types for a pin based on entire connection graph.
  * Uses BFS to traverse all connected pins and typevar siblings.
  *
- * @param nodes - All nodes in the graph
- * @param edges - All edges in the graph
+ * @param pipelineState - Pipeline state containing modules and connections
+ * @param effectiveEntryPoints - Entry points in the pipeline
  * @param moduleId - Module containing the pin
  * @param pinId - Pin to calculate effective types for
  * @param baseAllowedTypes - Base allowed types from template
  * @returns Intersection of all type constraints in the connected graph
  */
 export function getEffectiveAllowedTypes(
-  nodes: Node[],
-  edges: Edge[],
+  pipelineState: PipelineState,
+  effectiveEntryPoints: EntryPoint[],
   moduleId: string,
   pinId: string,
   baseAllowedTypes: string[]
 ): string[] {
-  const module = nodes.find((n) => n.id === moduleId);
-  if (!module?.data?.moduleInstance) return baseAllowedTypes;
+  const moduleData = findModule(pipelineState, effectiveEntryPoints, moduleId);
+  if (!moduleData) return baseAllowedTypes;
 
-  const moduleInstance = module.data.moduleInstance as ModuleInstance;
-  const currentPin = findPin(moduleInstance, pinId);
+  const currentPin = findPinInModule(moduleData.module, pinId);
   if (!currentPin) return baseAllowedTypes;
 
   // Use BFS to traverse the entire connected graph and collect all type restrictions
@@ -80,7 +109,7 @@ export function getEffectiveAllowedTypes(
 
   // If current pin has typevar, add all typevar siblings to start
   if (currentPin.type_var) {
-    const typeVarPins = getPinsWithTypeVar(moduleInstance, currentPin.type_var);
+    const typeVarPins = getPinsWithTypeVar(moduleData.module, currentPin.type_var);
     typeVarPins.forEach((pin) => {
       queue.push({ moduleId, pinId: pin.node_id });
     });
@@ -94,11 +123,10 @@ export function getEffectiveAllowedTypes(
     visited.add(key);
 
     // Get the module and pin
-    const mod = nodes.find((n) => n.id === current.moduleId);
-    if (!mod?.data?.moduleInstance) continue;
+    const modData = findModule(pipelineState, effectiveEntryPoints, current.moduleId);
+    if (!modData) continue;
 
-    const modInstance = mod.data.moduleInstance as ModuleInstance;
-    const pin = findPin(modInstance, current.pinId);
+    const pin = findPinInModule(modData.module, current.pinId);
     if (!pin) continue;
 
     // Intersect with this pin's allowed types
@@ -109,24 +137,26 @@ export function getEffectiveAllowedTypes(
 
     // If this pin has a typevar, add all typevar siblings
     if (pin.type_var) {
-      const typeVarPins = getPinsWithTypeVar(modInstance, pin.type_var);
+      const typeVarPins = getPinsWithTypeVar(modData.module, pin.type_var);
       typeVarPins.forEach((p) => {
         queue.push({ moduleId: current.moduleId, pinId: p.node_id });
       });
     }
 
-    // Find all connected pins via edges
-    edges.forEach((edge) => {
-      if (
-        edge.source === current.moduleId &&
-        edge.sourceHandle === current.pinId
-      ) {
-        queue.push({ moduleId: edge.target!, pinId: edge.targetHandle! });
-      } else if (
-        edge.target === current.moduleId &&
-        edge.targetHandle === current.pinId
-      ) {
-        queue.push({ moduleId: edge.source!, pinId: edge.sourceHandle! });
+    // Find all connected pins via connections
+    pipelineState.connections.forEach((conn) => {
+      if (conn.from_node_id === current.pinId) {
+        // Find which module owns the target pin
+        const targetModuleId = findModuleIdForPin(pipelineState, effectiveEntryPoints, conn.to_node_id);
+        if (targetModuleId) {
+          queue.push({ moduleId: targetModuleId, pinId: conn.to_node_id });
+        }
+      } else if (conn.to_node_id === current.pinId) {
+        // Find which module owns the source pin
+        const sourceModuleId = findModuleIdForPin(pipelineState, effectiveEntryPoints, conn.from_node_id);
+        if (sourceModuleId) {
+          queue.push({ moduleId: sourceModuleId, pinId: conn.from_node_id });
+        }
       }
     });
   }
@@ -135,43 +165,84 @@ export function getEffectiveAllowedTypes(
 }
 
 /**
+ * Find which module owns a given pin (internal helper)
+ */
+function findModuleIdForPin(
+  pipelineState: PipelineState,
+  effectiveEntryPoints: EntryPoint[],
+  pinId: string
+): string | undefined {
+  // Check entry points
+  for (const ep of effectiveEntryPoints) {
+    if (ep.outputs.some((p) => p.node_id === pinId)) {
+      return ep.entry_point_id;
+    }
+  }
+
+  // Check modules
+  for (const module of pipelineState.modules) {
+    const allPins = [...module.inputs, ...module.outputs];
+    if (allPins.some((p) => p.node_id === pinId)) {
+      return module.module_instance_id;
+    }
+  }
+
+  return undefined;
+}
+
+/**
  * Validate if two pins can be connected based on type constraints.
  * Uses effective allowed types which account for existing connections and typevars.
  *
- * @param nodes - All nodes in the graph
- * @param edges - All edges in the graph
+ * @param pipelineState - Pipeline state containing modules and connections
+ * @param effectiveEntryPoints - Entry points in the pipeline
  * @param sourceModuleId - ID of source module
- * @param sourcePin - Source pin to connect from
+ * @param sourcePinId - ID of source pin to connect from
  * @param targetModuleId - ID of target module
- * @param targetPin - Target pin to connect to
+ * @param targetPinId - ID of target pin to connect to
  * @returns Object with validation result and suggested type if valid
  */
 export function validateConnection(
-  nodes: Node[],
-  edges: Edge[],
+  pipelineState: PipelineState,
+  effectiveEntryPoints: EntryPoint[],
   sourceModuleId: string,
-  sourcePin: NodePin,
+  sourcePinId: string,
   targetModuleId: string,
-  targetPin: NodePin
+  targetPinId: string
 ): {
   valid: boolean;
   suggestedType?: string;
   typeIntersection?: string[];
 } {
+  // Find source and target pins
+  const sourceModuleData = findModule(pipelineState, effectiveEntryPoints, sourceModuleId);
+  const targetModuleData = findModule(pipelineState, effectiveEntryPoints, targetModuleId);
+
+  if (!sourceModuleData || !targetModuleData) {
+    return { valid: false };
+  }
+
+  const sourcePin = findPinInModule(sourceModuleData.module, sourcePinId);
+  const targetPin = findPinInModule(targetModuleData.module, targetPinId);
+
+  if (!sourcePin || !targetPin) {
+    return { valid: false };
+  }
+
   // Calculate effective allowed types for both pins based on graph context
   const sourceEffectiveTypes = getEffectiveAllowedTypes(
-    nodes,
-    edges,
+    pipelineState,
+    effectiveEntryPoints,
     sourceModuleId,
-    sourcePin.node_id,
+    sourcePinId,
     sourcePin.allowed_types || ["str"]
   );
 
   const targetEffectiveTypes = getEffectiveAllowedTypes(
-    nodes,
-    edges,
+    pipelineState,
+    effectiveEntryPoints,
     targetModuleId,
-    targetPin.node_id,
+    targetPinId,
     targetPin.allowed_types || ["str"]
   );
 
@@ -221,14 +292,14 @@ export interface TypeUpdate {
  * Calculate all type updates that need to cascade through the graph.
  * Uses BFS to propagate type changes through connections and typevars.
  *
- * @param nodes - All nodes in graph
- * @param edges - All edges in graph
+ * @param pipelineState - Pipeline state containing modules and connections
+ * @param effectiveEntryPoints - Entry points in the pipeline
  * @param initialUpdates - Initial type changes to propagate
  * @returns Array of all updates to apply
  */
 export function calculateTypePropagation(
-  nodes: Node[],
-  edges: Edge[],
+  pipelineState: PipelineState,
+  effectiveEntryPoints: EntryPoint[],
   initialUpdates: TypeUpdate[]
 ): TypeUpdate[] {
   const allUpdates: TypeUpdate[] = [];
@@ -242,35 +313,39 @@ export function calculateTypePropagation(
     if (processed.has(key)) continue;
     processed.add(key);
 
-    const moduleNode = nodes.find((n) => n.id === update.moduleId);
-    if (!moduleNode?.data?.moduleInstance) continue;
+    const moduleData = findModule(pipelineState, effectiveEntryPoints, update.moduleId);
+    if (!moduleData) continue;
 
-    const moduleInstance = moduleNode.data.moduleInstance as ModuleInstance;
-    const targetPin = findPin(moduleInstance, update.pinId);
+    const targetPin = findPinInModule(moduleData.module, update.pinId);
     if (!targetPin) continue;
+
+    // Skip entry point pins - they are always 'str' and readonly
+    if (moduleData.isEntryPoint) {
+      continue;
+    }
 
     // Skip if type is already correct
     if (targetPin.type === update.newType) {
       // Still need to propagate to connections
-      edges.forEach((edge) => {
-        if (
-          edge.source === update.moduleId &&
-          edge.sourceHandle === update.pinId
-        ) {
-          queue.push({
-            moduleId: edge.target!,
-            pinId: edge.targetHandle!,
-            newType: update.newType,
-          });
-        } else if (
-          edge.target === update.moduleId &&
-          edge.targetHandle === update.pinId
-        ) {
-          queue.push({
-            moduleId: edge.source!,
-            pinId: edge.sourceHandle!,
-            newType: update.newType,
-          });
+      pipelineState.connections.forEach((conn) => {
+        if (conn.from_node_id === update.pinId) {
+          const targetModuleId = findModuleIdForPin(pipelineState, effectiveEntryPoints, conn.to_node_id);
+          if (targetModuleId) {
+            queue.push({
+              moduleId: targetModuleId,
+              pinId: conn.to_node_id,
+              newType: update.newType,
+            });
+          }
+        } else if (conn.to_node_id === update.pinId) {
+          const sourceModuleId = findModuleIdForPin(pipelineState, effectiveEntryPoints, conn.from_node_id);
+          if (sourceModuleId) {
+            queue.push({
+              moduleId: sourceModuleId,
+              pinId: conn.from_node_id,
+              newType: update.newType,
+            });
+          }
         }
       });
       continue;
@@ -288,7 +363,7 @@ export function calculateTypePropagation(
     // If pin has typevar, add all typevar siblings to queue
     if (targetPin.type_var) {
       const typeVarPins = getPinsWithTypeVar(
-        moduleInstance,
+        moduleData.module,
         targetPin.type_var
       );
       typeVarPins.forEach((pin) => {
@@ -303,25 +378,25 @@ export function calculateTypePropagation(
     }
 
     // Add all connected pins to queue
-    edges.forEach((edge) => {
-      if (
-        edge.source === update.moduleId &&
-        edge.sourceHandle === update.pinId
-      ) {
-        queue.push({
-          moduleId: edge.target!,
-          pinId: edge.targetHandle!,
-          newType: update.newType,
-        });
-      } else if (
-        edge.target === update.moduleId &&
-        edge.targetHandle === update.pinId
-      ) {
-        queue.push({
-          moduleId: edge.source!,
-          pinId: edge.sourceHandle!,
-          newType: update.newType,
-        });
+    pipelineState.connections.forEach((conn) => {
+      if (conn.from_node_id === update.pinId) {
+        const targetModuleId = findModuleIdForPin(pipelineState, effectiveEntryPoints, conn.to_node_id);
+        if (targetModuleId) {
+          queue.push({
+            moduleId: targetModuleId,
+            pinId: conn.to_node_id,
+            newType: update.newType,
+          });
+        }
+      } else if (conn.to_node_id === update.pinId) {
+        const sourceModuleId = findModuleIdForPin(pipelineState, effectiveEntryPoints, conn.from_node_id);
+        if (sourceModuleId) {
+          queue.push({
+            moduleId: sourceModuleId,
+            pinId: conn.from_node_id,
+            newType: update.newType,
+          });
+        }
       }
     });
   }
@@ -330,9 +405,13 @@ export function calculateTypePropagation(
 }
 
 /**
- * Apply type updates to nodes array immutably
+ * Apply type updates to pipeline state immutably
+ * Returns updated PipelineState with all type changes applied
  */
-export function applyTypeUpdates(nodes: Node[], updates: TypeUpdate[]): Node[] {
+export function applyTypeUpdates(
+  pipelineState: PipelineState,
+  updates: TypeUpdate[]
+): PipelineState {
   // Group updates by module
   const updatesByModule = new Map<string, Map<string, string>>();
 
@@ -343,33 +422,30 @@ export function applyTypeUpdates(nodes: Node[], updates: TypeUpdate[]): Node[] {
     updatesByModule.get(update.moduleId)!.set(update.pinId, update.newType);
   });
 
-  // Apply updates
-  return nodes.map((node) => {
-    const moduleUpdates = updatesByModule.get(node.id);
-    if (!moduleUpdates || !node.data?.moduleInstance) return node;
+  // Apply updates to modules (skip entry points - they're always 'str')
+  const updatedModules = pipelineState.modules.map((module) => {
+    const moduleUpdates = updatesByModule.get(module.module_instance_id);
+    if (!moduleUpdates) return module;
 
-    const moduleInstance = node.data.moduleInstance as ModuleInstance;
-
-    const updatedInputs = moduleInstance.inputs.map((input) => {
+    const updatedInputs = module.inputs.map((input) => {
       const newType = moduleUpdates.get(input.node_id);
       return newType ? { ...input, type: newType } : input;
     });
 
-    const updatedOutputs = moduleInstance.outputs.map((output) => {
+    const updatedOutputs = module.outputs.map((output) => {
       const newType = moduleUpdates.get(output.node_id);
       return newType ? { ...output, type: newType } : output;
     });
 
     return {
-      ...node,
-      data: {
-        ...node.data,
-        moduleInstance: {
-          ...moduleInstance,
-          inputs: updatedInputs,
-          outputs: updatedOutputs,
-        },
-      },
+      ...module,
+      inputs: updatedInputs,
+      outputs: updatedOutputs,
     };
   });
+
+  return {
+    ...pipelineState,
+    modules: updatedModules,
+  };
 }

@@ -29,18 +29,12 @@ export interface ModuleBodyProps {
     handleId: string,
     handleType: "source" | "target"
   ) => void;
-  pendingConnection?: {
-    sourceHandleId: string;
-    sourceNodeId: string;
-    handleType: "source" | "target";
-  } | null;
   getEffectiveAllowedTypes?: (
     moduleId: string,
     pinId: string,
     baseAllowedTypes: string[]
   ) => string[];
   getConnectedOutputName?: (
-    moduleId: string,
     inputPinId: string
   ) => string | undefined;
   highlightedTypeVar?: string | null;
@@ -56,7 +50,6 @@ export function ModuleBody({
   onTextFocus,
   onTextBlur,
   onHandleClick,
-  pendingConnection,
   getEffectiveAllowedTypes,
   getConnectedOutputName,
   highlightedTypeVar = null,
@@ -86,7 +79,6 @@ export function ModuleBody({
   const getConnectedName = (inputNodeId: string): string | undefined => {
     if (!getConnectedOutputName) return undefined;
     return getConnectedOutputName(
-      moduleInstance.module_instance_id,
       inputNodeId
     );
   };
@@ -120,7 +112,6 @@ export function ModuleBody({
               onTextFocus={onTextFocus}
               onTextBlur={onTextBlur}
               onHandleClick={onHandleClick}
-              pendingConnection={pendingConnection}
               getEffectiveAllowedTypes={getEffectiveAllowedTypes}
             />
           ))}
@@ -148,7 +139,6 @@ export function ModuleBody({
               onTextFocus={onTextFocus}
               onTextBlur={onTextBlur}
               onHandleClick={onHandleClick}
-              pendingConnection={pendingConnection}
               getEffectiveAllowedTypes={getEffectiveAllowedTypes}
             />
           ))}

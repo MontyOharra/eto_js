@@ -10,7 +10,7 @@ import {
   validateConnection,
   calculateTypePropagation,
   applyTypeUpdates,
-  findPin,
+  findPinInModule,
 } from "../utils/typeSystem";
 import {
   createStyledEdge,
@@ -70,8 +70,8 @@ export function useConnectionManager({
       const sourceModule = sourceNode.data.moduleInstance as ModuleInstance;
       const targetModule = targetNode.data.moduleInstance as ModuleInstance;
 
-      const sourcePin = findPin(sourceModule, sourcePinId);
-      const targetPin = findPin(targetModule, targetPinId);
+      const sourcePin = findPinInModule(sourceModule, sourcePinId);
+      const targetPin = findPinInModule(targetModule, targetPinId);
 
       if (!sourcePin || !targetPin) {
         console.error("Could not find source or target pin");

@@ -5,7 +5,7 @@
  * - Edit mode: Full editing capabilities (add/remove modules, edit connections, etc.)
  */
 
-import { useCallback, useState, useEffect, useMemo } from 'react';
+import { useCallback, useState, useEffect, useMemo, useRef } from 'react';
 import {
   ReactFlow,
   Node,
@@ -31,8 +31,9 @@ import {
   updatePinInModule,
 } from '../../utils/moduleFactory';
 import { getTypeColor } from '../../utils/edgeUtils';
-import { findPinInPipeline, synchronizeTypeVarUpdate, pinsCanConnect } from '../../utils/moduleUtils';
+import { findPinInPipeline, synchronizeTypeVarUpdate } from '../../utils';
 import { calculateNewEntryPointPosition } from '../../utils/layoutUtils';
+import { getEffectiveAllowedTypes, validateConnection, calculateTypePropagation, applyTypeUpdates, TypeUpdate } from '../../utils/typeSystem';
 import { Module } from './Module';
 import { EntryPoint as EntryPointComponent } from './EntryPoint';
 
@@ -63,12 +64,11 @@ function PipelineGraphInner({
   entryPoints,
   mode = 'view',
   modules = [],
-  selectedModuleId,
   onModulePlaced,
   onPipelineStateChange,
   onVisualStateChange,
 }: PipelineGraphProps) {
-  const { fitView, screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition } = useReactFlow();
 
   // Internal state - React Flow manages positions
   const [nodes, setNodes] = useState<Node[]>([]);
@@ -81,6 +81,58 @@ function PipelineGraphInner({
     [entryPoints, pipelineState?.entry_points]
   );
 
+  // Effective types cache - pre-calculated for all pins
+  const [effectiveTypesCache, setEffectiveTypesCache] = useState<
+    Map<string, string[]>
+  >(new Map());
+
+  // Track connections removed during current drag operation (for immediate validation)
+  const removedConnectionsRef = useRef<Set<string>>(new Set());
+
+  // Recalculate effective types cache when connections or modules change
+  useEffect(() => {
+    if (!pipelineState) {
+      setEffectiveTypesCache(new Map());
+      return;
+    }
+
+    const newCache = new Map<string, string[]>();
+
+    // Calculate effective types for all pins in all modules
+    pipelineState.modules.forEach((module) => {
+      [...module.inputs, ...module.outputs].forEach((pin) => {
+        const key = `${module.module_instance_id}:${pin.node_id}`;
+        const effectiveTypes = getEffectiveAllowedTypes(
+          pipelineState,
+          effectiveEntryPoints,
+          module.module_instance_id,
+          pin.node_id,
+          pin.allowed_types || []
+        );
+        newCache.set(key, effectiveTypes);
+      });
+    });
+
+    // Entry points always allow 'str' only
+    effectiveEntryPoints.forEach((ep) => {
+      ep.outputs.forEach((pin) => {
+        const key = `${ep.entry_point_id}:${pin.node_id}`;
+        newCache.set(key, ['str']);
+      });
+    });
+
+    setEffectiveTypesCache(newCache);
+  }, [pipelineState, effectiveEntryPoints]);
+
+  // Helper to get cached effective types for a pin
+  const getEffectiveAllowedTypesForPin = useCallback(
+    (moduleId: string, pinId: string): string[] => {
+      const key = `${moduleId}:${pinId}`;
+      return effectiveTypesCache.get(key) || [];
+    },
+    [effectiveTypesCache]
+  );
+
   // Helper to find a pin by its node_id
   const findPin = useCallback(
     (nodeId: string): NodePin | undefined => {
@@ -90,7 +142,7 @@ function PipelineGraphInner({
     [pipelineState, effectiveEntryPoints]
   );
 
-  // Handle updating a node (type or name change)
+  // Handle updating a node (type or name change) with type propagation
   const handleUpdateNode = useCallback(
     (moduleId: string, nodeId: string, updates: Partial<NodePin>) => {
       if (!pipelineState || !onPipelineStateChange) return;
@@ -103,26 +155,60 @@ function PipelineGraphInner({
 
       const module = pipelineState.modules[moduleIndex];
 
-      // Handle type changes with type_var synchronization
-      let updatedModule = module;
+      // Handle type changes with type propagation
       if (updates.type) {
+        // First, apply type_var synchronization within the module
         const result = synchronizeTypeVarUpdate(module, nodeId, updates.type);
-        updatedModule = result.updatedModule;
+
+        // Apply to temporary state
+        const updatedModules = [...pipelineState.modules];
+        updatedModules[moduleIndex] = result.updatedModule;
+        const tempPipelineState = {
+          ...pipelineState,
+          modules: updatedModules,
+        };
+
+        // Build initial updates for type propagation
+        // Include the main pin and all type_var siblings
+        const initialUpdates: TypeUpdate[] = [
+          { moduleId, pinId: nodeId, newType: updates.type }
+        ];
+
+        if (result.wasTypeVarUpdate) {
+          const allPins = [...result.updatedModule.inputs, ...result.updatedModule.outputs];
+          const targetPin = allPins.find(p => p.node_id === nodeId);
+          if (targetPin?.type_var) {
+            allPins.forEach(pin => {
+              if (pin.type_var === targetPin.type_var && pin.node_id !== nodeId) {
+                initialUpdates.push({ moduleId, pinId: pin.node_id, newType: updates.type });
+              }
+            });
+          }
+        }
+
+        // Calculate propagation through connections
+        const allUpdates = calculateTypePropagation(
+          tempPipelineState,
+          effectiveEntryPoints,
+          initialUpdates
+        );
+
+        // Apply all type updates
+        const finalPipelineState = applyTypeUpdates(tempPipelineState, allUpdates);
+        onPipelineStateChange(finalPipelineState);
       } else {
-        // Non-type update (e.g., name change)
-        updatedModule = updatePinInModule(module, nodeId, updates);
+        // Non-type update (e.g., name change) - no propagation needed
+        const updatedModule = updatePinInModule(module, nodeId, updates);
+        const updatedModules = [...pipelineState.modules];
+        updatedModules[moduleIndex] = updatedModule;
+
+        onPipelineStateChange({
+          ...pipelineState,
+          modules: updatedModules,
+        });
       }
-
-      // Update pipeline state
-      const updatedModules = [...pipelineState.modules];
-      updatedModules[moduleIndex] = updatedModule;
-
-      onPipelineStateChange({
-        ...pipelineState,
-        modules: updatedModules,
-      });
     },
-    [pipelineState, onPipelineStateChange]
+    [pipelineState, effectiveEntryPoints, onPipelineStateChange]
   );
 
   // Handle adding a new node to a module
@@ -207,6 +293,59 @@ function PipelineGraphInner({
     [pipelineState, visualState, onPipelineStateChange, onVisualStateChange]
   );
 
+  // Handle config changes
+  const handleConfigChange = useCallback(
+    (moduleId: string, configKey: string, value: any) => {
+      if (!pipelineState || !onPipelineStateChange) return;
+
+      // Find the module to update
+      const moduleIndex = pipelineState.modules.findIndex(
+        (m) => m.module_instance_id === moduleId
+      );
+      if (moduleIndex === -1) return;
+
+      const module = pipelineState.modules[moduleIndex];
+
+      // Update config
+      const updatedModule = {
+        ...module,
+        config: {
+          ...module.config,
+          [configKey]: value,
+        },
+      };
+
+      // Update pipeline state
+      const updatedModules = [...pipelineState.modules];
+      updatedModules[moduleIndex] = updatedModule;
+
+      onPipelineStateChange({
+        ...pipelineState,
+        modules: updatedModules,
+      });
+    },
+    [pipelineState, onPipelineStateChange]
+  );
+
+  // Get the name of the output pin connected to an input pin
+  const getConnectedOutputName = useCallback(
+    (inputPinId: string): string | undefined => {
+      if (!pipelineState) return undefined;
+
+      // Find the connection where this input is the target
+      const connection = pipelineState.connections.find(
+        (conn) => conn.to_node_id === inputPinId
+      );
+
+      if (!connection) return undefined;
+
+      // Find the source output pin
+      const sourcePin = findPin(connection.from_node_id);
+      return sourcePin?.name;
+    },
+    [pipelineState, findPin]
+  );
+
   // Initialize/update nodes when pipeline state or modules change
   useEffect(() => {
     if (!pipelineState) {
@@ -215,13 +354,22 @@ function PipelineGraphInner({
     }
 
     const newNodes: Node[] = [];
+    const newPositions: Record<string, { x: number; y: number }> = {};
 
     // Create entry point nodes from effectiveEntryPoints
     effectiveEntryPoints.forEach((entryPoint) => {
+      let position = visualState?.[entryPoint.entry_point_id];
+
+      if (!position) {
+        // Calculate position for new entry point
+        position = calculateNewEntryPointPosition(newNodes);
+        newPositions[entryPoint.entry_point_id] = position;
+      }
+
       newNodes.push({
         id: entryPoint.entry_point_id,
         type: 'entryPoint',
-        position: visualState?.[entryPoint.entry_point_id] || calculateNewEntryPointPosition(newNodes),
+        position,
         data: {
           entryPoint,
         },
@@ -253,13 +401,26 @@ function PipelineGraphInner({
           onUpdateNode: mode === 'edit' ? handleUpdateNode : undefined,
           onAddNode: mode === 'edit' ? handleAddNode : undefined,
           onRemoveNode: mode === 'edit' ? handleRemoveNode : undefined,
+          onConfigChange: mode === 'edit' ? handleConfigChange : undefined,
+          // Type narrowing - provide effective allowed types
+          getEffectiveAllowedTypes: getEffectiveAllowedTypesForPin,
+          // Connected output name for inputs
+          getConnectedOutputName: getConnectedOutputName,
         },
         draggable: mode === 'edit',
       });
     });
 
     setNodes(newNodes);
-  }, [pipelineState, visualState, modules, mode, effectiveEntryPoints, handleDeleteModule, handleUpdateNode, handleAddNode, handleRemoveNode]);
+
+    // Persist any newly calculated entry point positions to visualState
+    if (Object.keys(newPositions).length > 0 && onVisualStateChange) {
+      onVisualStateChange({
+        ...visualState,
+        ...newPositions,
+      });
+    }
+  }, [pipelineState, visualState, modules, mode, effectiveEntryPoints, handleDeleteModule, handleUpdateNode, handleAddNode, handleRemoveNode, handleConfigChange, getEffectiveAllowedTypesForPin, getConnectedOutputName, onVisualStateChange]);
 
   // Initialize/update edges when pipeline state changes
   useEffect(() => {
@@ -269,7 +430,7 @@ function PipelineGraphInner({
     }
 
     // Create edges from connections
-    const newEdges: Edge[] = pipelineState.connections.map((connection, index) => {
+    const newEdges: Edge[] = pipelineState.connections.map((connection, _) => {
       // Find source and target nodes by searching for pins
       let sourceNodeId = '';
       let targetNodeId = '';
@@ -383,30 +544,61 @@ function PipelineGraphInner({
     [mode, pipelineState, onPipelineStateChange]
   );
 
-  // Validate connection based on shared allowed types
+  // Validate connection based on effective allowed types (with type narrowing)
   const isValidConnection = useCallback(
     (connection: Connection) => {
       if (!connection.sourceHandle || !connection.targetHandle) return false;
+      if (!connection.source || !connection.target) return false;
+      if (!pipelineState) return false;
 
-      const sourcePin = findPin(connection.sourceHandle);
-      const targetPin = findPin(connection.targetHandle);
+      // Create temporary pipelineState excluding connections that were removed during this drag
+      // This allows validation to work correctly even before React state update completes
+      const tempPipelineState = {
+        ...pipelineState,
+        connections: pipelineState.connections.filter((conn) => {
+          const connKey = `${conn.from_node_id}-${conn.to_node_id}`;
+          return !removedConnectionsRef.current.has(connKey);
+        }),
+      };
 
-      if (!sourcePin || !targetPin) return false;
+      // Use validateConnection from typeSystem with effective types
+      const result = validateConnection(
+        tempPipelineState,
+        effectiveEntryPoints,
+        connection.source,
+        connection.sourceHandle,
+        connection.target,
+        connection.targetHandle
+      );
 
-      // Check if pins can connect (share at least one allowed type)
-      return pinsCanConnect(sourcePin, targetPin);
+      return result.valid;
     },
-    [findPin]
+    [pipelineState, effectiveEntryPoints]
   );
 
-  // Handle new connections
+  // Handle new connections with type propagation
   const onConnect = useCallback(
     (connection: Connection) => {
+      // Clear removed connections tracker (drag operation complete)
+      removedConnectionsRef.current.clear();
+
       if (mode === 'view' || !pipelineState || !onPipelineStateChange) return;
       if (!connection.source || !connection.target || !connection.sourceHandle || !connection.targetHandle) return;
 
       const sourceHandle = connection.sourceHandle;
       const targetHandle = connection.targetHandle;
+
+      // Validate connection and get suggested type
+      const validation = validateConnection(
+        pipelineState,
+        effectiveEntryPoints,
+        connection.source,
+        sourceHandle,
+        connection.target,
+        targetHandle
+      );
+
+      if (!validation.valid || !validation.suggestedType) return;
 
       // Check if this exact connection already exists (prevent duplicates)
       const isDuplicate = pipelineState.connections.some(
@@ -424,24 +616,96 @@ function PipelineGraphInner({
         from_node_id: sourceHandle,
         to_node_id: targetHandle,
       };
+      updatedConnections.push(newConnection);
 
-      // Add to pipeline state
-      onPipelineStateChange({
+      // Create temporary pipeline state with new connection for type propagation
+      const tempPipelineState = {
         ...pipelineState,
-        connections: [...updatedConnections, newConnection],
-      });
+        connections: updatedConnections,
+      };
+
+      // Calculate type propagation
+      const initialUpdates: TypeUpdate[] = [
+        { moduleId: connection.source, pinId: sourceHandle, newType: validation.suggestedType },
+        { moduleId: connection.target, pinId: targetHandle, newType: validation.suggestedType },
+      ];
+
+      const allUpdates = calculateTypePropagation(
+        tempPipelineState,
+        effectiveEntryPoints,
+        initialUpdates
+      );
+
+      // Apply type updates to create final pipeline state
+      const finalPipelineState = applyTypeUpdates(tempPipelineState, allUpdates);
+
+      // Single state update with connections and type changes
+      onPipelineStateChange(finalPipelineState);
+    },
+    [mode, pipelineState, effectiveEntryPoints, onPipelineStateChange]
+  );
+
+  // Handle connection start - remove existing connections from the pin being dragged
+  const onConnectStart = useCallback(
+    (_event: any, params: { nodeId: string | null; handleId: string | null; handleType: string | null }) => {
+      if (mode === 'view' || !pipelineState || !onPipelineStateChange) return;
+      if (!params.handleId) return;
+
+      // Check if this pin already has a connection
+      const existingConnection = pipelineState.connections.find(
+        (conn) => conn.from_node_id === params.handleId || conn.to_node_id === params.handleId
+      );
+
+      // If there's an existing connection, remove it immediately
+      if (existingConnection) {
+        // Track this removed connection for immediate validation during drag
+        const connKey = `${existingConnection.from_node_id}-${existingConnection.to_node_id}`;
+        removedConnectionsRef.current.add(connKey);
+
+        const updatedConnections = pipelineState.connections.filter(
+          (conn) => conn !== existingConnection
+        );
+
+        // Update pipeline state without the connection
+        // This allows the pin's type to be unconstrained for the new connection
+        onPipelineStateChange({
+          ...pipelineState,
+          connections: updatedConnections,
+        });
+      }
     },
     [mode, pipelineState, onPipelineStateChange]
   );
 
-  // Handle edge reconnection
+  // Handle connection end (including cancelled drags)
+  const onConnectEnd = useCallback(() => {
+    // Clear removed connections tracker
+    removedConnectionsRef.current.clear();
+  }, []);
+
+  // Handle edge reconnection with type propagation
   const onReconnect = useCallback(
     (oldEdge: Edge, newConnection: Connection) => {
+      // Clear removed connections tracker (drag operation complete)
+      removedConnectionsRef.current.clear();
+
       if (mode === 'view' || !pipelineState || !onPipelineStateChange) return;
       if (!newConnection.source || !newConnection.target || !newConnection.sourceHandle || !newConnection.targetHandle) return;
 
       const newSourceHandle = newConnection.sourceHandle;
       const newTargetHandle = newConnection.targetHandle;
+
+      // Validate new connection and get suggested type
+      const validation = validateConnection(
+        pipelineState,
+        effectiveEntryPoints,
+        newConnection.source,
+        newSourceHandle,
+        newConnection.target,
+        newTargetHandle
+      );
+
+      if (!validation.valid || !validation.suggestedType) return;
 
       // Check if this exact connection already exists (prevent duplicates)
       const isDuplicate = pipelineState.connections.some(
@@ -463,13 +727,33 @@ function PipelineGraphInner({
         from_node_id: newSourceHandle,
         to_node_id: newTargetHandle,
       };
+      updatedConnections.push(newConn);
 
-      onPipelineStateChange({
+      // Create temporary pipeline state with new connection for type propagation
+      const tempPipelineState = {
         ...pipelineState,
-        connections: [...updatedConnections, newConn],
-      });
+        connections: updatedConnections,
+      };
+
+      // Calculate type propagation
+      const initialUpdates: TypeUpdate[] = [
+        { moduleId: newConnection.source, pinId: newSourceHandle, newType: validation.suggestedType },
+        { moduleId: newConnection.target, pinId: newTargetHandle, newType: validation.suggestedType },
+      ];
+
+      const allUpdates = calculateTypePropagation(
+        tempPipelineState,
+        effectiveEntryPoints,
+        initialUpdates
+      );
+
+      // Apply type updates to create final pipeline state
+      const finalPipelineState = applyTypeUpdates(tempPipelineState, allUpdates);
+
+      // Single state update with connections and type changes
+      onPipelineStateChange(finalPipelineState);
     },
-    [mode, pipelineState, onPipelineStateChange]
+    [mode, pipelineState, effectiveEntryPoints, onPipelineStateChange]
   );
 
   // Handle drag over to enable drop
@@ -570,6 +854,8 @@ function PipelineGraphInner({
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onConnectStart={onConnectStart}
+        onConnectEnd={onConnectEnd}
         onReconnect={onReconnect}
         isValidConnection={isValidConnection}
         nodesDraggable={mode === 'edit'}
