@@ -35,6 +35,7 @@ export function PipelineBuilderModal({
   onSave,
 }: PipelineBuilderModalProps) {
   const [currentStep, setCurrentStep] = useState<BuilderStep>("entry-points");
+  const [isSaving, setIsSaving] = useState(false);
 
   // Entry points - managed separately and passed as external prop
   const [entryPoints, setEntryPoints] = useState<EntryPoint[]>([]);
@@ -115,36 +116,39 @@ export function PipelineBuilderModal({
     }
   };
 
-  const handleSave = () => {
-    // Merge entry points into pipeline state for saving
-    const completePipelineState: PipelineState = {
-      ...pipelineState,
-      entry_points: entryPoints,
-    };
+  const handleSave = async () => {
+    setIsSaving(true);
 
-    const data: PipelineData = {
-      pipeline_state: completePipelineState,
-      visual_state: visualState,
-    };
+    try {
+      // Merge entry points into pipeline state for saving
+      const completePipelineState: PipelineState = {
+        ...pipelineState,
+        entry_points: entryPoints,
+      };
 
-    // Debug logging - print state in readable format
-    console.log('='.repeat(80));
-    console.log('PIPELINE DATA (NOT SAVING - DEBUG ONLY)');
-    console.log('='.repeat(80));
+      const data: PipelineData = {
+        pipeline_state: completePipelineState,
+        visual_state: visualState,
+      };
 
-    console.log('\n📊 PIPELINE STATE:');
-    console.log(JSON.stringify(completePipelineState, null, 2));
+      // Call parent's save handler (which calls the API)
+      await onSave(data);
 
-    console.log('\n📐 VISUAL STATE:');
-    console.log(JSON.stringify(visualState, null, 2));
-
-    console.log('\n📦 COMPLETE DATA OBJECT:');
-    console.log(JSON.stringify(data, null, 2));
-
-    console.log('\n' + '='.repeat(80));
-
-    // TODO: Re-enable saving when ready
-    // await onSave(data);
+      // Reset modal state on successful save (parent will close modal)
+      setCurrentStep("entry-points");
+      setEntryPoints([]);
+      setPipelineState({
+        entry_points: [],
+        modules: [],
+        connections: [],
+      });
+      setVisualState({});
+    } catch (error) {
+      // Error is already handled by parent component (shows alert)
+      console.error("[PipelineBuilderModal] Save failed:", error);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleCancel = () => {
@@ -232,7 +236,8 @@ export function PipelineBuilderModal({
           {/* Cancel on the left */}
           <button
             onClick={handleCancel}
-            className="px-4 py-2 text-sm font-medium text-gray-300 bg-gray-700 hover:bg-gray-600 rounded-md transition-colors"
+            disabled={isSaving}
+            className="px-4 py-2 text-sm font-medium text-gray-300 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed rounded-md transition-colors"
           >
             Cancel
           </button>
@@ -242,7 +247,8 @@ export function PipelineBuilderModal({
             {currentStep === "pipeline" && (
               <button
                 onClick={handleBack}
-                className="px-4 py-2 text-sm font-medium text-gray-300 bg-gray-700 hover:bg-gray-600 rounded-md transition-colors"
+                disabled={isSaving}
+                className="px-4 py-2 text-sm font-medium text-gray-300 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed rounded-md transition-colors"
               >
                 Back
               </button>
@@ -259,13 +265,17 @@ export function PipelineBuilderModal({
               <div className="relative group">
                 <button
                   onClick={handleSave}
-                  disabled={!isPipelineValid || isPipelineValidating}
+                  disabled={!isPipelineValid || isPipelineValidating || isSaving}
                   className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-md transition-colors"
                 >
-                  {isPipelineValidating ? "Validating..." : "Save Pipeline"}
+                  {isSaving
+                    ? "Saving..."
+                    : isPipelineValidating
+                      ? "Validating..."
+                      : "Save Pipeline"}
                 </button>
                 {/* Tooltip on hover when disabled */}
-                {(!isPipelineValid || isPipelineValidating) && (
+                {(!isPipelineValid || isPipelineValidating) && !isSaving && (
                   <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block z-10">
                     <div className="bg-gray-800 text-amber-400 text-xs px-3 py-2 rounded shadow-lg whitespace-nowrap border border-amber-400/30">
                       {isPipelineValidating
