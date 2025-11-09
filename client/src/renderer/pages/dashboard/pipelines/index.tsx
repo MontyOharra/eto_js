@@ -85,10 +85,10 @@ function PipelinesPage() {
 
   const handleSavePipeline = async (data: PipelineData) => {
     try {
-      // TODO: Serialize data to backend format when ready
+      // Map to backend field names (pipeline_state and visual_state)
       const backendData = {
-        pipeline_json: data.pipeline_state,
-        visual_json: data.visual_state,
+        pipeline_state: data.pipeline_state,
+        visual_state: data.visual_state,
       };
 
       const result = await createPipeline(backendData);
