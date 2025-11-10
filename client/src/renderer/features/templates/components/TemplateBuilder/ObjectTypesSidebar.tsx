@@ -3,7 +3,7 @@
  * Left sidebar with template metadata inputs and object type visibility toggles
  */
 
-import { ObjectTypeButton } from './ObjectTypeButton';
+import { ObjectTypeAccordion } from './ObjectTypeAccordion';
 
 // Object type configurations
 const OBJECT_TYPE_NAMES: Record<string, string> = {
@@ -24,6 +24,15 @@ const OBJECT_TYPE_COLORS: Record<string, string> = {
   table: '#ffa500',           // Orange
 };
 
+interface ObjectItem {
+  id: string;
+  page: number;
+  text?: string;
+  bbox: [number, number, number, number];
+  type: string;
+  [key: string]: any;
+}
+
 interface ObjectTypesSidebarProps {
   templateName: string;
   templateDescription: string;
@@ -31,8 +40,9 @@ interface ObjectTypesSidebarProps {
   onTemplateDescriptionChange: (description: string) => void;
   typeCounts: Record<string, number>;
   selectedTypeCounts: Record<string, number>;
-  selectedTypes: Set<string>;
-  onTypeToggle: (type: string) => void;
+  objectsByType: Record<string, ObjectItem[]>;
+  selectedObjectIds: Set<string>;
+  onObjectToggle: (objectId: string) => void;
   onShowAll: () => void;
   onHideAll: () => void;
 }
@@ -44,8 +54,9 @@ export function ObjectTypesSidebar({
   onTemplateDescriptionChange,
   typeCounts,
   selectedTypeCounts,
-  selectedTypes,
-  onTypeToggle,
+  objectsByType,
+  selectedObjectIds,
+  onObjectToggle,
   onShowAll,
   onHideAll,
 }: ObjectTypesSidebarProps) {
@@ -105,24 +116,26 @@ export function ObjectTypesSidebar({
         </button>
       </div>
 
-      {/* Object Type Buttons */}
+      {/* Object Type Accordions */}
       <div className="space-y-2">
         {Object.entries(OBJECT_TYPE_NAMES).map(([type, label]) => {
           const count = typeCounts[type] || 0;
           const selectedCount = selectedTypeCounts[type] || 0;
+          const objects = objectsByType[type] || [];
 
           // Don't render if no objects of this type
           if (count === 0) return null;
 
           return (
-            <ObjectTypeButton
+            <ObjectTypeAccordion
               key={type}
               label={label}
               color={OBJECT_TYPE_COLORS[type]}
               count={count}
               selectedCount={selectedCount}
-              isSelected={selectedTypes.has(type)}
-              onToggle={() => onTypeToggle(type)}
+              objects={objects}
+              selectedObjectIds={selectedObjectIds}
+              onObjectToggle={onObjectToggle}
             />
           );
         })}

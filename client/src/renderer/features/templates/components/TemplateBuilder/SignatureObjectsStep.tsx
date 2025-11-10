@@ -149,6 +149,30 @@ export function SignatureObjectsStep({
     };
   }, [selectedSignatureObjects]);
 
+  // Group objects by type with IDs for accordion display
+  const objectsByType = useMemo(() => {
+    const flatObjects = getFlattenedObjects();
+    const grouped: Record<string, any[]> = {
+      text_word: [],
+      graphic_rect: [],
+      graphic_line: [],
+      graphic_curve: [],
+      image: [],
+      table: [],
+    };
+
+    flatObjects.forEach((obj, idx) => {
+      const id = `${obj.type}-${obj.page}-${obj.bbox.join('-')}-${idx}`;
+      const objectWithId = { ...obj, id };
+
+      if (grouped[obj.type]) {
+        grouped[obj.type].push(objectWithId);
+      }
+    });
+
+    return grouped;
+  }, [getFlattenedObjects]);
+
   // Handlers
   const handleTypeToggle = (type: string) => {
     const newSelected = new Set(selectedTypes);
@@ -231,8 +255,9 @@ export function SignatureObjectsStep({
         onTemplateDescriptionChange={onTemplateDescriptionChange}
         typeCounts={typeCounts}
         selectedTypeCounts={selectedTypeCounts}
-        selectedTypes={selectedTypes}
-        onTypeToggle={handleTypeToggle}
+        objectsByType={objectsByType}
+        selectedObjectIds={selectedObjectIds}
+        onObjectToggle={handleObjectClick}
         onShowAll={handleShowAll}
         onHideAll={handleHideAll}
       />
