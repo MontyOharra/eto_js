@@ -662,16 +662,6 @@ class PdfTemplateService:
                 return False
         return True
 
-    def _match_text_lines(self, pdf_lines: list, template_lines: list) -> bool:
-        """Match text line objects - returns True if all template lines found"""
-        if not template_lines:
-            return True
-
-        for template_line in template_lines:
-            if not self._find_text_line_match(pdf_lines, template_line):
-                return False
-        return True
-
     def _match_graphic_rects(self, pdf_rects: list, template_rects: list) -> bool:
         """Match graphic rectangle objects"""
         if not template_rects:
@@ -741,18 +731,6 @@ class PdfTemplateService:
                         similarity = self._calculate_text_similarity(template_word.text, pdf_word.text)
                         if similarity >= content_similarity_threshold:
                             return True
-        return False
-
-    def _find_text_line_match(self, pdf_lines: list, template_line) -> bool:
-        """Find matching text line by position (text lines only have bbox, no text content)"""
-        position_tolerance = 15.0  # Slightly more tolerance for lines
-
-        for pdf_line in pdf_lines:
-            if pdf_line.page != template_line.page:
-                continue
-
-            if self._positions_match(pdf_line.bbox, template_line.bbox, position_tolerance):
-                return True
         return False
 
     def _find_graphic_rect_match(self, pdf_rects: list, template_rect) -> bool:

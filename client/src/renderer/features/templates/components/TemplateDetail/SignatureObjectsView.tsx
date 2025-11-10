@@ -7,6 +7,7 @@
 import { useMemo } from 'react';
 import { PdfViewer, usePdfViewer } from '../../../pdf';
 import type { PdfObjects } from '../../types';
+import { OBJECT_TYPE_COLORS } from '../../constants';
 
 interface SignatureObjectsViewProps {
   pdfUrl: string;
@@ -47,13 +48,13 @@ export function SignatureObjectsView({
       });
     };
 
-    // Add all object types with colors matching TemplateBuilder
-    addObjects(signatureObjects.text_words, 'text_word', '#3b82f6');      // blue
-    addObjects(signatureObjects.graphic_rects, 'graphic_rect', '#f59e0b'); // amber
-    addObjects(signatureObjects.graphic_lines, 'graphic_line', '#ef4444'); // red
-    addObjects(signatureObjects.graphic_curves, 'graphic_curve', '#8b5cf6'); // purple
-    addObjects(signatureObjects.images, 'image', '#ec4899');              // pink
-    addObjects(signatureObjects.tables, 'table', '#06b6d4');              // cyan
+    // Add all object types with colors from centralized constants
+    addObjects(signatureObjects.text_words, 'text_word', OBJECT_TYPE_COLORS.text_word);
+    addObjects(signatureObjects.graphic_rects, 'graphic_rect', OBJECT_TYPE_COLORS.graphic_rect);
+    addObjects(signatureObjects.graphic_lines, 'graphic_line', OBJECT_TYPE_COLORS.graphic_line);
+    addObjects(signatureObjects.graphic_curves, 'graphic_curve', OBJECT_TYPE_COLORS.graphic_curve);
+    addObjects(signatureObjects.images, 'image', OBJECT_TYPE_COLORS.image);
+    addObjects(signatureObjects.tables, 'table', OBJECT_TYPE_COLORS.table);
 
     return flat;
   }, [signatureObjects]);
@@ -78,7 +79,7 @@ export function SignatureObjectsView({
           {objectCounts.text_words > 0 && (
             <div className="flex items-center justify-between p-2 bg-gray-800 rounded">
               <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#3b82f6' }}></div>
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: OBJECT_TYPE_COLORS.text_word }}></div>
                 <span className="text-sm text-gray-300">Text Words</span>
               </div>
               <span className="text-sm font-medium text-white">{objectCounts.text_words}</span>
@@ -88,7 +89,7 @@ export function SignatureObjectsView({
           {objectCounts.graphic_rects > 0 && (
             <div className="flex items-center justify-between p-2 bg-gray-800 rounded">
               <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#f59e0b' }}></div>
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: OBJECT_TYPE_COLORS.graphic_rect }}></div>
                 <span className="text-sm text-gray-300">Graphic Rects</span>
               </div>
               <span className="text-sm font-medium text-white">{objectCounts.graphic_rects}</span>
@@ -98,7 +99,7 @@ export function SignatureObjectsView({
           {objectCounts.graphic_lines > 0 && (
             <div className="flex items-center justify-between p-2 bg-gray-800 rounded">
               <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#ef4444' }}></div>
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: OBJECT_TYPE_COLORS.graphic_line }}></div>
                 <span className="text-sm text-gray-300">Graphic Lines</span>
               </div>
               <span className="text-sm font-medium text-white">{objectCounts.graphic_lines}</span>
@@ -108,7 +109,7 @@ export function SignatureObjectsView({
           {objectCounts.graphic_curves > 0 && (
             <div className="flex items-center justify-between p-2 bg-gray-800 rounded">
               <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#8b5cf6' }}></div>
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: OBJECT_TYPE_COLORS.graphic_curve }}></div>
                 <span className="text-sm text-gray-300">Graphic Curves</span>
               </div>
               <span className="text-sm font-medium text-white">{objectCounts.graphic_curves}</span>
@@ -118,7 +119,7 @@ export function SignatureObjectsView({
           {objectCounts.images > 0 && (
             <div className="flex items-center justify-between p-2 bg-gray-800 rounded">
               <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#ec4899' }}></div>
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: OBJECT_TYPE_COLORS.image }}></div>
                 <span className="text-sm text-gray-300">Images</span>
               </div>
               <span className="text-sm font-medium text-white">{objectCounts.images}</span>
@@ -128,7 +129,7 @@ export function SignatureObjectsView({
           {objectCounts.tables > 0 && (
             <div className="flex items-center justify-between p-2 bg-gray-800 rounded">
               <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#06b6d4' }}></div>
+                <div className="w-3 h-3 rounded" style={{ backgroundColor: OBJECT_TYPE_COLORS.table }}></div>
                 <span className="text-sm text-gray-300">Tables</span>
               </div>
               <span className="text-sm font-medium text-white">{objectCounts.tables}</span>

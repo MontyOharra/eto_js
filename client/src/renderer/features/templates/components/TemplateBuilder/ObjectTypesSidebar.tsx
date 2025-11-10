@@ -4,25 +4,7 @@
  */
 
 import { ObjectTypeAccordion } from './ObjectTypeAccordion';
-
-// Object type configurations
-const OBJECT_TYPE_NAMES: Record<string, string> = {
-  text_word: 'Text Words',
-  graphic_rect: 'Rectangles',
-  graphic_line: 'Lines',
-  graphic_curve: 'Curves',
-  image: 'Images',
-  table: 'Tables',
-};
-
-const OBJECT_TYPE_COLORS: Record<string, string> = {
-  text_word: '#ff0000',       // Red
-  graphic_rect: '#0000ff',    // Blue
-  graphic_line: '#b45a00',    // Dark orange
-  graphic_curve: '#ff00ff',   // Magenta
-  image: '#00ffff',           // Cyan
-  table: '#ffa500',           // Orange
-};
+import { OBJECT_TYPE_NAMES, OBJECT_TYPE_COLORS } from '../../constants';
 
 interface ObjectItem {
   id: string;

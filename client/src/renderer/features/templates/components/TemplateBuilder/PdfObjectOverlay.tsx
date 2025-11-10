@@ -6,26 +6,7 @@
 
 import { useMemo, useState } from 'react';
 import { usePdfViewer } from '../../../pdf';
-
-// Object type color mappings (with transparency)
-const OBJECT_COLORS: Record<string, string> = {
-  text_word: 'rgba(255, 0, 0, 0.2)',
-  graphic_rect: 'rgba(0, 0, 255, 0.2)',
-  graphic_line: 'rgba(180, 90, 0, 0.3)', // Dark orange
-  graphic_curve: 'rgba(255, 0, 255, 0.2)',
-  image: 'rgba(0, 255, 255, 0.2)',
-  table: 'rgba(255, 165, 0, 0.3)',
-};
-
-// Border colors (more opaque)
-const OBJECT_BORDER_COLORS: Record<string, string> = {
-  text_word: 'rgba(255, 0, 0, 0.6)',
-  graphic_rect: 'rgba(0, 0, 255, 0.6)',
-  graphic_line: 'rgba(180, 90, 0, 0.8)',
-  graphic_curve: 'rgba(255, 0, 255, 0.6)',
-  image: 'rgba(0, 255, 255, 0.6)',
-  table: 'rgba(255, 165, 0, 0.7)',
-};
+import { OBJECT_FILL_COLORS, OBJECT_BORDER_COLORS } from '../../constants';
 
 // Gray colors for hidden selected objects
 const HIDDEN_SELECTED_COLOR = 'rgba(128, 128, 128, 0.3)';
@@ -142,7 +123,7 @@ export function PdfObjectOverlay({
       borderColor = HIDDEN_SELECTED_BORDER;
       borderWidth = '3px';
     } else {
-      const baseColor = OBJECT_COLORS[obj.type] || 'rgba(128, 128, 128, 0.2)';
+      const baseColor = OBJECT_FILL_COLORS[obj.type] || 'rgba(128, 128, 128, 0.2)';
       backgroundColor = isSelected ? increaseOpacity(baseColor) : baseColor;
       borderColor = OBJECT_BORDER_COLORS[obj.type] || 'rgba(128, 128, 128, 0.6)';
       borderWidth = isSelected ? '3px' : '1px';
