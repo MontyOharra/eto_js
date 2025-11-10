@@ -7,6 +7,7 @@ interface ObjectTypeButtonProps {
   label: string; // 'Text Words', 'Rectangles', etc.
   color: string; // '#ff0000'
   count: number;
+  selectedCount: number;
   isSelected: boolean;
   onToggle: () => void;
 }
@@ -15,6 +16,7 @@ export function ObjectTypeButton({
   label,
   color,
   count,
+  selectedCount,
   isSelected,
   onToggle,
 }: ObjectTypeButtonProps) {
@@ -37,7 +39,18 @@ export function ObjectTypeButton({
         ></div>
         <span className="text-left">{label}</span>
       </div>
-      <span className="font-medium ml-2">{count.toLocaleString()}</span>
+      <div className="flex items-center space-x-2">
+        {selectedCount > 0 && (
+          <span className="text-blue-400 font-semibold">
+            [{selectedCount}/{count}]
+          </span>
+        )}
+        {selectedCount === 0 && (
+          <span className="font-medium text-gray-500">
+            ({count})
+          </span>
+        )}
+      </div>
     </button>
   );
 }

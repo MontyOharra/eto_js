@@ -137,6 +137,17 @@ export function SignatureObjectsStep({
     };
   }, [pdfObjects]);
 
+  // Get selected counts for each type
+  const selectedTypeCounts = useMemo((): Record<string, number> => {
+    return {
+      text_word: selectedSignatureObjects.text_words?.length || 0,
+      graphic_rect: selectedSignatureObjects.graphic_rects?.length || 0,
+      graphic_line: selectedSignatureObjects.graphic_lines?.length || 0,
+      graphic_curve: selectedSignatureObjects.graphic_curves?.length || 0,
+      image: selectedSignatureObjects.images?.length || 0,
+      table: selectedSignatureObjects.tables?.length || 0,
+    };
+  }, [selectedSignatureObjects]);
 
   // Handlers
   const handleTypeToggle = (type: string) => {
@@ -219,6 +230,7 @@ export function SignatureObjectsStep({
         onTemplateNameChange={onTemplateNameChange}
         onTemplateDescriptionChange={onTemplateDescriptionChange}
         typeCounts={typeCounts}
+        selectedTypeCounts={selectedTypeCounts}
         selectedTypes={selectedTypes}
         onTypeToggle={handleTypeToggle}
         onShowAll={handleShowAll}

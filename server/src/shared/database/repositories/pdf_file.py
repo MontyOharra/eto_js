@@ -13,7 +13,6 @@ from shared.types.pdf_files import (
     PdfFileCreate,
     PdfObjects,
     TextWord,
-    TextLine,
     GraphicRect,
     GraphicLine,
     GraphicCurve,
@@ -79,13 +78,6 @@ class PdfFileRepository(BaseRepository[PdfFileModel]):
                     fontsize=w["fontsize"]
                 )
                 for w in data.get("text_words", [])
-            ],
-            text_lines=[
-                TextLine(
-                    page=l["page"],
-                    bbox=tuple(l["bbox"])
-                )
-                for l in data.get("text_lines", [])
             ],
             graphic_rects=[
                 GraphicRect(

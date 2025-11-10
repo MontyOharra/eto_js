@@ -46,7 +46,7 @@ class PdfTemplateVersionRepository(BaseRepository[PdfTemplateVersionModel]):
     def _deserialize_pdf_objects(self, json_str: str) -> PdfObjects:
         """Convert JSON string from DB directly to PdfObjects dataclass."""
         from shared.types.pdf_files import (
-            TextWord, TextLine, GraphicRect, GraphicLine,
+            TextWord, GraphicRect, GraphicLine,
             GraphicCurve, Image, Table
         )
 
@@ -62,13 +62,6 @@ class PdfTemplateVersionRepository(BaseRepository[PdfTemplateVersionModel]):
                     fontsize=w["fontsize"]
                 )
                 for w in data.get("text_words", [])
-            ],
-            text_lines=[
-                TextLine(
-                    page=l["page"],
-                    bbox=tuple(l["bbox"])
-                )
-                for l in data.get("text_lines", [])
             ],
             graphic_rects=[
                 GraphicRect(
