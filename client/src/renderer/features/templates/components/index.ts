@@ -1,4 +1,3 @@
-export * from './ui';
-export * from './cards';
-export * from './builder';
-export * from './modals';
+export * from "./TemplateCard";
+export * from "./TemplateBuilder-old";
+export * from "./TemplateDetail-old";

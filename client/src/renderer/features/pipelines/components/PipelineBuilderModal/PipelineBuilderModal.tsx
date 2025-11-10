@@ -216,7 +216,6 @@ export function PipelineBuilderModal({
             <EntryPointsStep
               initialEntryPoints={entryPoints}
               onConfirm={handleEntryPointsConfirm}
-              onCancel={handleCancel}
             />
           )}
 
@@ -299,12 +298,10 @@ export function PipelineBuilderModal({
 // Step components
 function EntryPointsStep({
   initialEntryPoints = [],
-  onConfirm,
-  onCancel,
+  onConfirm
 }: {
   initialEntryPoints?: EntryPoint[];
   onConfirm: (points: Array<{ id: string; name: string }>) => void;
-  onCancel: () => void;
 }) {
   // Convert EntryPoint[] to local format, or start with one empty entry point
   const [entryPoints, setEntryPoints] = useState<Array<{ id: string; name: string }>>(() => {

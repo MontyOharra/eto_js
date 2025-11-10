@@ -1,5 +1,5 @@
-import { TemplateListItem } from '../../types';
-import { TemplateStatusBadge } from '../ui/TemplateStatusBadge';
+import { TemplateListItem } from "../../types";
+import { TemplateStatusBadge } from "./TemplateStatusBadge";
 
 interface TemplateCardProps {
   template: TemplateListItem;
@@ -28,7 +28,7 @@ export function TemplateCard({
           {/* Fixed height description area - always renders to keep layout consistent */}
           <div className="h-10">
             <p className="text-sm text-gray-400 line-clamp-2">
-              {template.description || ''}
+              {template.description || ""}
             </p>
           </div>
         </div>
@@ -64,7 +64,7 @@ export function TemplateCard({
             View Details
           </button>
         )}
-        {template.status === 'inactive' && onActivate && (
+        {template.status === "inactive" && onActivate && (
           <button
             onClick={() => onActivate(template.id)}
             className="px-3 py-1.5 text-sm bg-green-600 hover:bg-green-700 text-white rounded transition-colors"
@@ -72,7 +72,7 @@ export function TemplateCard({
             Activate
           </button>
         )}
-        {template.status === 'active' && onDeactivate && (
+        {template.status === "active" && onDeactivate && (
           <button
             onClick={() => onDeactivate(template.id)}
             className="px-3 py-1.5 text-sm bg-yellow-600 hover:bg-yellow-700 text-white rounded transition-colors"

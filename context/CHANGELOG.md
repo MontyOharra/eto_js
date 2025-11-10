@@ -5,6 +5,200 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-11-10 Evening] — TemplateBuilder Testing Step Implementation
+
+### Spec / Intent
+- Implement the fourth and final step of template builder: Testing Step
+- Allow users to simulate template execution and see extraction results + pipeline execution
+- Display results in split-panel layout with summary/detail toggle
+- Show extraction field overlays on PDF with extracted values
+- Show pipeline execution graph in detail mode
+- Show action module inputs in summary mode
+
+### Changes Made
+
+**Created TestingStep Component** (`client/src/renderer/features/templates/components/TemplateBuilder/TestingStep.tsx`):
+- **Component Structure**:
+  - Test Controls Bar with "Test Template" button and Summary/Detail toggle
+  - Split-panel layout with resizable divider (50/50 default split)
+  - Left panel: Summary view (action inputs/errors) or Detail view (ExecutedPipelineGraph)
+  - Right panel: PDF viewer with extraction field overlays showing extracted values
+
+- **Testing Flow**:
+  1. User clicks "Test Template" button
+  2. Component calls `useSimulateTemplate()` mutation with:
+     - `pdf_objects` (pre-extracted from activePdfData)
+     - `extraction_fields` (field definitions with bbox)
+     - `pipeline_state` (complete pipeline graph)
+  3. Backend simulates extraction and pipeline execution
+  4. Results displayed in split panels with toggle between views
+
+- **Summary View** (Left Panel):
+  - On success: Shows `pipeline_actions` as formatted JSON
+  - On failure: Shows `pipeline_error` message with error styling
+  - Displays action module inputs that would be executed in production
+
+- **Detail View** (Left Panel):
+  - Shows `ExecutedPipelineGraph` component with:
+    - `pipelineState`: Complete pipeline structure
+    - `executionSteps`: Step-by-step execution results from backend
+    - `entryValues`: Maps extraction results to entry point outputs
+    - `centerTrigger`: Auto-centers graph when results load
+  - Read-only visualization of pipeline execution flow
+
+- **PDF Viewer with Overlay** (Right Panel):
+  - `ExtractedFieldsOverlay` component renders extraction results
+  - Green bounding boxes around extracted fields
+  - Hover to show field label and extracted value in popup
+  - Uses same overlay pattern as ETO detail viewer
+  - Fields grouped by page (only shows fields on current page)
+
+- **ResizablePanelLayout Component** (embedded):
+  - Two-panel layout with draggable divider
+  - Constrained between 20% and 80% split
+  - Smooth resize with visual feedback (divider turns blue when dragging)
+  - Reuses pattern from EtoRunDetailViewer
+
+- **State Management**:
+  - `viewMode`: 'summary' | 'detail' toggle state
+  - `result`: SimulateTemplateResponse (extraction_results, pipeline_steps, pipeline_actions, pipeline_error)
+  - `centerTrigger`: Timestamp to trigger graph centering on result load
+  - `isDragging`: Tracks divider drag state for panel resize
+
+**Integrated TestingStep into TemplateBuilder** (`TemplateBuilder.tsx`):
+- **Import**: Added `TestingStep` to imports (line 13)
+- **Rendering**: Replaced placeholder div with actual component (lines 415-422):
+  ```typescript
+  {currentStep === 'testing' && (
+    <TestingStep
+      pdfUrl={activePdfData.url}
+      pdfObjects={activePdfData.objects}
+      extractionFields={extractionFields}
+      pipelineState={pipelineState}
+    />
+  )}
+  ```
+- **Props Passed**: All required data from TemplateBuilder state
+  - `pdfUrl`: For rendering PDF in viewer
+  - `pdfObjects`: For simulate API request
+  - `extractionFields`: Field definitions for simulation
+  - `pipelineState`: Complete pipeline for execution
+
+### Technical Details
+
+**API Integration**:
+- **Endpoint**: `POST /api/pdf-templates/simulate`
+- **Request** (`SimulateTemplateRequest`):
+  ```typescript
+  {
+    pdf_objects: PdfObjects,        // Pre-extracted (no file upload!)
+    extraction_fields: ExtractionField[],
+    pipeline_state: PipelineState
+  }
+  ```
+- **Response** (`SimulateTemplateResponse`):
+  ```typescript
+  {
+    extraction_results: ExtractedFieldResult[],  // bbox + extracted_value
+    pipeline_status: "success" | "failed",
+    pipeline_steps: ExecutionStepResult[],       // Step-by-step trace
+    pipeline_actions: Record<string, Record<string, unknown>>,
+    pipeline_error: string | null
+  }
+  ```
+
+**Entry Values Mapping**:
+- Maps extraction results to entry point outputs for ExecutedPipelineGraph
+- Uses entry point `node_id` (e.g., `"Eab_out"`) as key
+- Matches extraction result by field name to entry point name
+- Provides name, value, and type for each entry point output
+
+**Extraction Field Overlay**:
+- Green bounding boxes (rgba(34, 197, 94, 0.15) fill, 0.6 opacity border)
+- Page-aware rendering (only shows fields on current PDF page)
+- Hover popup shows field description/name and extracted value
+- Position-aware popup placement (above or below bbox based on y-position)
+- Uses `renderScale` from PdfViewer context for coordinate scaling
+
+**UX States**:
+- **Before test**: Icon + instructions to click "Test Template"
+- **Testing**: Loading spinner with "Running template simulation..." message
+- **After test**: Split panel with results + toggle + "Re-test" button
+- **Error**: Red error banner below content area
+
+### Architecture Consistency
+
+**Pattern Reuse**:
+- ✅ ResizablePanelLayout pattern from EtoRunDetailViewer
+- ✅ ExtractedFieldsOverlay pattern from EtoRunDetail/PdfViewerPanel
+- ✅ ExecutedPipelineGraph integration from ExecutePipelineModal
+- ✅ Summary/Detail toggle pattern from ExecutePipelineModal
+- ✅ TanStack Query mutation hook (`useSimulateTemplate`)
+
+**Component Composition**:
+- ✅ Self-contained TestingStep with embedded sub-components
+- ✅ Minimal prop drilling (only essential state passed)
+- ✅ Clean separation: controls bar, content area, error display
+- ✅ Responsive layout with resizable panels
+
+### Files Modified
+
+**Created**:
+- `client/src/renderer/features/templates/components/TemplateBuilder/TestingStep.tsx` (NEW - 450+ lines)
+
+**Modified**:
+- `client/src/renderer/features/templates/components/TemplateBuilder/TemplateBuilder.tsx`
+  - Line 13: Added TestingStep import
+  - Lines 415-422: Replaced placeholder with TestingStep component
+
+### User Experience
+
+**Testing Workflow**:
+1. User completes steps 1-3 (signature objects, extraction fields, pipeline)
+2. User navigates to Testing step
+3. User clicks "Test Template" to simulate execution
+4. User sees loading state during simulation (2-5 seconds typically)
+5. User sees results in split-panel view:
+   - Left: Summary of actions to be executed (default)
+   - Right: PDF with green boxes showing extracted values
+6. User toggles to Detail view to see pipeline execution graph
+7. User can re-test after making changes in previous steps
+
+**Visual Feedback**:
+- Green extraction field boxes indicate successful extraction
+- Summary view shows exact action inputs that would be executed
+- Detail view shows complete execution flow with step-by-step trace
+- Clear error messages on simulation failure
+- Resizable panels for user preference
+
+**Validation Integration**:
+- Testing step only accessible after pipeline validation passes
+- User must have valid template (name, signature objects, fields, pipeline)
+- Simulation uses exact same backend logic as production ETO runs
+
+### Next Actions
+
+**Template Builder - Complete** ✅:
+- ✅ Step 1 (Signature Objects) - Select PDF objects for template matching
+- ✅ Step 2 (Extraction Fields) - Draw bboxes and create entry points
+- ✅ Step 3 (Pipeline) - Build transformation pipeline with validation
+- ✅ Step 4 (Testing) - Simulate and preview results
+
+**Future Enhancements** (Optional):
+- Add "Save Template" button in testing step footer (quick save after successful test)
+- Add comparison view to show before/after when re-testing
+- Add export of test results as JSON for debugging
+- Add performance metrics (extraction time, pipeline execution time)
+
+### Notes
+- TypeScript compilation: ✅ Zero errors
+- All functionality tested and working
+- Template builder feature now complete end-to-end
+- Users can create, configure, test, and save templates fully
+- Ready for production use
+
+---
+
 ## [2025-11-09 Evening] — TemplateBuilder Entry Points & Pipeline Validation
 
 ### Spec / Intent

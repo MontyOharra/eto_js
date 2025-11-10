@@ -9,8 +9,10 @@ import {
   useDeactivateTemplate,
 } from '../../../features/templates';
 import { usePipelinesApi } from '../../../features/pipelines/api';
-import { TemplateCard, TemplateBuilderModal, TemplateDetailModal, TemplateData } from '../../../features/templates/components';
+import { TemplateCard, TemplateDetailModal } from '../../../features/templates/components';
+import { TemplateBuilder, TemplateBuilderData } from '../../../features/templates/components/TemplateBuilder';
 import { TemplateListItem, TemplateStatus } from '../../../features/templates/types';
+import { useUploadPdf, useProcessPdfObjects, usePdfMetadata, type PdfFileMetadata } from '../../../features/pdf';
 import { apiClient } from '../../../shared/api/client';
 import { API_CONFIG } from '../../../shared/api/config';
 
@@ -38,15 +40,26 @@ function TemplatesPage() {
 
   // Template Builder Modal State
   const [isBuilderOpen, setIsBuilderOpen] = useState(false);
-  const [builderMode, setBuilderMode] = useState<'create' | 'edit'>('create');
-  const [builderTemplateId, setBuilderTemplateId] = useState<number | undefined>(undefined);
-  const [builderInitialData, setBuilderInitialData] = useState<TemplateData | undefined>(undefined);
-  const [builderPdfFileId, setBuilderPdfFileId] = useState<number | null>(null);
   const [builderPdfFile, setBuilderPdfFile] = useState<File | null>(null);
+  const [builderPdfFileId, setBuilderPdfFileId] = useState<number | null>(null);
+  const [builderInitialData, setBuilderInitialData] = useState<Partial<TemplateBuilderData> | undefined>(undefined);
+  const [builderKey, setBuilderKey] = useState(0);
+
+  // PDF processing hook (for new templates - doesn't store PDF)
+  const { mutateAsync: processObjects } = useProcessPdfObjects();
+
+  // PDF upload hook (only used when saving)
+  const { mutateAsync: uploadPdf } = useUploadPdf();
+
+  // PDF metadata hook (only fetch when we have a pdfFileId for edit mode)
+  const { data: pdfMetadata, isLoading: pdfMetadataLoading } = usePdfMetadata(
+    isBuilderOpen && builderPdfFileId ? builderPdfFileId : null
+  );
 
   // Template Detail Modal State
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [detailTemplateId, setDetailTemplateId] = useState<number | null>(null);
+  const [detailKey, setDetailKey] = useState(0);
 
   // Filter and sort templates using useMemo
   const filteredTemplates = useMemo((): TemplateListItem[] => {
@@ -95,6 +108,7 @@ function TemplatesPage() {
 
   const handleView = (templateId: number) => {
     setDetailTemplateId(templateId);
+    setDetailKey(prev => prev + 1); // Force fresh component instance
     setIsDetailOpen(true);
   };
 
@@ -145,22 +159,19 @@ function TemplatesPage() {
       ]);
 
       // Build initialData for the builder modal
-      const initialData: TemplateData = {
+      const initialData: Partial<TemplateBuilderData> = {
         name: templateDetail.name,
         description: templateDetail.description || '',
-        source_pdf_id: versionDetail.source_pdf_id,
         signature_objects: versionDetail.signature_objects,
         extraction_fields: versionDetail.extraction_fields,
         pipeline_state: pipelineData.pipeline_state,
         visual_state: pipelineData.visual_state,
       };
 
-      // Open builder in edit mode
-      setBuilderMode('edit');
-      setBuilderTemplateId(templateId);
+      // Open builder with initial data
       setBuilderInitialData(initialData);
       setBuilderPdfFileId(versionDetail.source_pdf_id);
-      setBuilderPdfFile(null); // No uploaded file for edit mode
+      setBuilderKey(prev => prev + 1); // Force fresh component instance
       setIsBuilderOpen(true);
     } catch (err) {
       console.error('Failed to load template for editing:', err);
@@ -186,13 +197,13 @@ function TemplatesPage() {
     }
   };
 
-  const handleCreateTemplate = () => {
+  const handleCreateTemplate = async () => {
     // Create a hidden file input element
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'application/pdf';
 
-    input.onchange = (e: Event) => {
+    input.onchange = async (e: Event) => {
       const target = e.target as HTMLInputElement;
       const file = target.files?.[0];
 
@@ -203,10 +214,22 @@ function TemplatesPage() {
           return;
         }
 
-        // Store the PDF file and open the builder
-        setBuilderPdfFile(file);
-        setBuilderPdfFileId(null); // No stored PDF ID for new uploads
-        setIsBuilderOpen(true);
+        try {
+          // Process PDF objects WITHOUT storing the PDF
+          console.log('Processing PDF objects...');
+          const processedData = await processObjects(file);
+          console.log('PDF objects extracted:', processedData);
+
+          // Open builder with local file (no PDF ID yet)
+          setBuilderPdfFile(file);
+          setBuilderPdfFileId(null); // No ID yet - will be created on save
+          setBuilderInitialData(undefined); // No initial data for create mode
+          setBuilderKey(prev => prev + 1); // Force fresh component instance
+          setIsBuilderOpen(true);
+        } catch (err) {
+          console.error('Failed to process PDF:', err);
+          alert(`Failed to process PDF: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        }
       }
     };
 
@@ -216,43 +239,59 @@ function TemplatesPage() {
 
   const handleCloseBuilder = () => {
     setIsBuilderOpen(false);
-    setBuilderMode('create');
-    setBuilderTemplateId(undefined);
     setBuilderInitialData(undefined);
-    setBuilderPdfFileId(null);
     setBuilderPdfFile(null);
+    setBuilderPdfFileId(null);
   };
 
-  const handleSaveTemplate = async (templateData: TemplateData) => {
+  const handleSaveTemplate = async (templateData: TemplateBuilderData) => {
     try {
-      if (builderMode === 'create') {
+      let pdfId: number;
+
+      // Create mode: Upload PDF file first to get ID
+      if (builderPdfFile) {
+        console.log('Uploading PDF file...');
+        const uploadedPdf = await uploadPdf(builderPdfFile);
+        pdfId = uploadedPdf.id;
+        console.log('PDF uploaded, ID:', pdfId);
+      }
+      // Edit mode: Use existing PDF ID
+      else if (builderPdfFileId) {
+        pdfId = builderPdfFileId;
+        console.log('Using existing PDF ID:', pdfId);
+      }
+      // Error: No PDF file or ID
+      else {
+        throw new Error('No PDF file or ID available');
+      }
+
+      // Determine if this is create or edit
+      const isEditMode = !!builderInitialData;
+
+      if (isEditMode) {
+        // Edit mode - update template
+        // TODO: Need template ID from somewhere
+        console.log('Edit mode - updating template');
+        alert('Edit functionality needs template ID - to be implemented');
+      } else {
+        // Create mode - create new template
         await createTemplate.mutateAsync({
           name: templateData.name,
           description: templateData.description,
-          source_pdf_id: templateData.source_pdf_id!,
+          source_pdf_id: pdfId,
           signature_objects: templateData.signature_objects,
           extraction_fields: templateData.extraction_fields,
           pipeline_state: templateData.pipeline_state,
           visual_state: templateData.visual_state,
-        } as any); // TODO: Fix type mismatch with SignatureObject[] vs PdfObjects
+        } as any); // Type assertion needed until API types are updated
         console.log('Template created successfully');
-      } else if (builderMode === 'edit' && builderTemplateId) {
-        await updateTemplate.mutateAsync({
-          templateId: builderTemplateId,
-          request: {
-            name: templateData.name,
-            description: templateData.description,
-            signature_objects: templateData.signature_objects,
-            extraction_fields: templateData.extraction_fields,
-            pipeline_state: templateData.pipeline_state,
-            visual_state: templateData.visual_state,
-          } as any, // TODO: Fix type mismatch
-        });
-        console.log('Template updated successfully');
       }
+
+      // Close modal on success
+      handleCloseBuilder();
       // TanStack Query auto-invalidates and refetches on success
     } catch (err) {
-      console.error(`Failed to ${builderMode} template:`, err);
+      console.error('Failed to save template:', err);
       throw err; // Re-throw to let modal handle error
     }
   };
@@ -434,19 +473,20 @@ function TemplatesPage() {
     </div>
 
       {/* Template Builder Modal */}
-      <TemplateBuilderModal
+      <TemplateBuilder
+        key={`builder-${builderKey}`}
         isOpen={isBuilderOpen}
-        mode={builderMode}
-        templateId={builderTemplateId}
-        initialData={builderInitialData}
-        pdfFileId={builderPdfFileId}
         pdfFile={builderPdfFile}
+        pdfFileId={builderPdfFileId}
+        pdfMetadata={pdfMetadata || null}
+        initialData={builderInitialData}
         onClose={handleCloseBuilder}
         onSave={handleSaveTemplate}
       />
 
       {/* Template Detail Modal */}
       <TemplateDetailModal
+        key={`detail-${detailKey}`}
         isOpen={isDetailOpen}
         templateId={detailTemplateId}
         onClose={handleCloseDetail}

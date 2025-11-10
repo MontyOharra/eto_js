@@ -7,10 +7,10 @@
 import { useEffect, useState, useMemo } from "react";
 import { useTemplateDetail, useTemplateVersionDetail } from "../../api";
 import { TemplateDetail, TemplateVersionDetail, PdfObjects } from "../../types";
-import { TemplateStatusBadge } from "../ui/TemplateStatusBadge";
+import { TemplateStatusBadge } from "../TemplateCard/TemplateStatusBadge";
 import { usePdfData, PdfViewer, usePdfViewer } from "../../../pdf";
 import { usePipelinesApi, PipelineDetail } from "../../../pipelines";
-import { useModules } from '../../../modules';
+import { useModules } from "../../../modules";
 import { PipelineGraph } from "../../../pipelines";
 
 interface TemplateDetailModalProps {
@@ -774,15 +774,15 @@ function PipelineView({ versionDetail }: PipelineViewProps) {
   const {
     data: modules = [],
     isLoading: modulesLoading,
-    error: modulesError
+    error: modulesError,
   } = useModules();
 
-  console.log('[PipelineView] RENDER - modules status:', {
+  console.log("[PipelineView] RENDER - modules status:", {
     modulesCount: modules.length,
     modulesLoading,
     hasModulesError: !!modulesError,
     modulesError: modulesError?.message || modulesError,
-    sampleModules: modules.slice(0, 3).map(m => m.id)
+    sampleModules: modules.slice(0, 3).map((m) => m.id),
   });
 
   const [pipeline, setPipeline] = useState<PipelineDetailResponse | null>(null);
@@ -796,8 +796,10 @@ function PipelineView({ versionDetail }: PipelineViewProps) {
       setError(null);
 
       try {
-        const pipelineData = await getPipeline(versionDetail.pipeline_definition_id);
-        console.log('[PipelineView] Loaded pipeline data:', pipelineData);
+        const pipelineData = await getPipeline(
+          versionDetail.pipeline_definition_id
+        );
+        console.log("[PipelineView] Loaded pipeline data:", pipelineData);
         setPipeline(pipelineData);
       } catch (err) {
         console.error("Failed to load pipeline:", err);
@@ -814,11 +816,11 @@ function PipelineView({ versionDetail }: PipelineViewProps) {
 
   // Log modules state for debugging
   useEffect(() => {
-    console.log('[PipelineView] Modules state:', {
+    console.log("[PipelineView] Modules state:", {
       modulesCount: modules.length,
       modulesLoading,
       modulesError,
-      modules: modules.map(m => ({ id: m.id, title: m.title }))
+      modules: modules.map((m) => ({ id: m.id, title: m.title })),
     });
   }, [modules, modulesLoading, modulesError]);
 
@@ -828,7 +830,7 @@ function PipelineView({ versionDetail }: PipelineViewProps) {
       <div className="h-full w-full bg-gray-900 flex items-center justify-center">
         <div className="text-center">
           <div className="text-white text-lg mb-2">
-            {modulesLoading ? 'Loading modules...' : 'Loading pipeline...'}
+            {modulesLoading ? "Loading modules..." : "Loading pipeline..."}
           </div>
           <div className="text-gray-400 text-sm">Please wait</div>
         </div>
@@ -845,7 +847,9 @@ function PipelineView({ versionDetail }: PipelineViewProps) {
             Error Loading Modules
           </h3>
           <p className="text-red-200">
-            {modulesError instanceof Error ? modulesError.message : 'Failed to load module catalog'}
+            {modulesError instanceof Error
+              ? modulesError.message
+              : "Failed to load module catalog"}
           </p>
         </div>
       </div>
