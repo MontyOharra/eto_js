@@ -205,7 +205,6 @@ export function TemplateBuilder({
         // Must have at least one signature object selected
         const hasObjects =
           selectedSignatureObjects.text_words.length > 0 ||
-          selectedSignatureObjects.text_lines.length > 0 ||
           selectedSignatureObjects.graphic_rects.length > 0 ||
           selectedSignatureObjects.graphic_lines.length > 0 ||
           selectedSignatureObjects.graphic_curves.length > 0 ||
@@ -275,7 +274,6 @@ export function TemplateBuilder({
     // Step 1: Signature objects (requires template name + signature objects)
     const hasSignatureObjects =
       selectedSignatureObjects.text_words.length > 0 ||
-      selectedSignatureObjects.text_lines.length > 0 ||
       selectedSignatureObjects.graphic_rects.length > 0 ||
       selectedSignatureObjects.graphic_lines.length > 0 ||
       selectedSignatureObjects.graphic_curves.length > 0 ||
