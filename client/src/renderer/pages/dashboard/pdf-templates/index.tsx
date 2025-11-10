@@ -11,7 +11,7 @@ import {
 import { usePipelinesApi } from '../../../features/pipelines/api';
 import { TemplateCard } from '../../../features/templates/components';
 import { TemplateBuilder, TemplateBuilderData } from '../../../features/templates/components/TemplateBuilder';
-import { TemplateDetailModal } from '../../../features/templates/components/TemplateDetail-old';
+import { TemplateDetailModal } from '../../../features/templates/components/TemplateDetail';
 import { TemplateListItem, TemplateStatus } from '../../../features/templates/types';
 import { useUploadPdf, useProcessPdfObjects, usePdfMetadata, type PdfFileMetadata } from '../../../features/pdf';
 import { apiClient } from '../../../shared/api/client';

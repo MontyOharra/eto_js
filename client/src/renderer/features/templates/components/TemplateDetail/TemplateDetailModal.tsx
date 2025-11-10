@@ -136,8 +136,8 @@ export function TemplateDetailModal({
   const error = templateError || versionError || (currentStep === 'pipeline' ? pipelineError : null);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-      <div className="bg-gray-900 rounded-lg shadow-xl w-full h-full max-w-[95vw] max-h-[95vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-gray-900 rounded-lg w-full max-w-[95vw] h-[95vh] overflow-hidden flex flex-col shadow-2xl border border-gray-700">
         {/* Header */}
         <TemplateDetailHeader
           templateName={templateDetail?.name || 'Loading...'}
