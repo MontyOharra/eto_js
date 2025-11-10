@@ -24,7 +24,6 @@ interface PdfViewerSectionProps {
 
 export function PdfViewerSection({
   pdfUrl,
-  pdfFileId,
   pdfObjects,
   selectedTypes,
   selectedObjects,

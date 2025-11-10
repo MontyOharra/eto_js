@@ -15,9 +15,6 @@ import { createEntryPoint } from '../../../pipelines/utils/moduleFactory';
 
 interface ExtractionFieldsStepProps {
   pdfUrl: string;                     // PDF URL (either blob URL or backend URL)
-  pdfObjects: PdfObjects;             // PDF objects (fetched by parent)
-  pdfFile: File | null;               // For simulate functionality (create mode)
-  pdfFileId: number | null;           // For simulate functionality (edit mode)
   templateName: string;
   templateDescription: string;
   extractionFields: ExtractionField[];
@@ -40,9 +37,6 @@ function extractionFieldToEntryPoint(field: ExtractionField): EntryPoint {
 
 export function ExtractionFieldsStep({
   pdfUrl,
-  pdfObjects,
-  pdfFile,
-  pdfFileId,
   templateName,
   templateDescription,
   extractionFields,
@@ -176,8 +170,7 @@ export function ExtractionFieldsStep({
     e: React.MouseEvent,
     pageElement: HTMLElement,
     currentPage: number,
-    scale: number,
-    pageHeight: number
+    scale: number
   ) => {
     // Only allow drawing when not viewing/editing fields
     if (stagedFieldId || tempFieldData) return;
@@ -196,8 +189,7 @@ export function ExtractionFieldsStep({
     e: React.MouseEvent,
     pageElement: HTMLElement,
     currentPage: number,
-    scale: number,
-    pageHeight: number
+    scale: number
   ) => {
     if (!isDrawing || !drawingBox) return;
 
@@ -219,9 +211,7 @@ export function ExtractionFieldsStep({
   const handleMouseUp = (
     e: React.MouseEvent,
     pageElement: HTMLElement,
-    currentPage: number,
-    scale: number,
-    pageHeight: number
+    currentPage: number
   ) => {
     if (!isDrawing || !drawingBox) return;
 
@@ -383,14 +373,9 @@ export function ExtractionFieldsStep({
     <div className="h-full w-full flex">
       {/* Sidebar - Field Management */}
       <ExtractionFieldsSidebar
-        pdfFile={pdfFile}
-        pdfFileId={pdfFileId}
         templateName={templateName}
         templateDescription={templateDescription}
         extractionFields={extractionFields}
-        selectedSignatureObjects={selectedSignatureObjects}
-        pipelineState={pipelineState}
-        visualState={visualState}
         mode={sidebarMode}
         selectedFieldId={stagedFieldId}
         showSignatureObjects={showSignatureObjects}

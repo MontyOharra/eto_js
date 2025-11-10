@@ -13,7 +13,6 @@ interface ObjectTypeButtonProps {
 }
 
 export function ObjectTypeButton({
-  type,
   label,
   color,
   count,

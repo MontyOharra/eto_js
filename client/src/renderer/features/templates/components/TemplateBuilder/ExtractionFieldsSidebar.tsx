@@ -7,20 +7,14 @@
  */
 
 import { useRef, useEffect, useState } from 'react';
-import type { ExtractionField, PdfObjects } from '../../types';
-import type { PipelineState, VisualState } from '../../../pipelines/types';
+import type { ExtractionField } from '../../types';
 
 export type SidebarMode = 'list' | 'create' | 'detail';
 
 interface ExtractionFieldsSidebarProps {
-  pdfFile: File | null;
-  pdfFileId: number | null;
   templateName: string;
   templateDescription: string;
   extractionFields: ExtractionField[];
-  selectedSignatureObjects: PdfObjects;
-  pipelineState: PipelineState;
-  visualState: VisualState;
   mode: SidebarMode;
   selectedFieldId: string | null;
   showSignatureObjects: boolean;
@@ -49,12 +43,9 @@ interface ExtractionFieldsSidebarProps {
 }
 
 export function ExtractionFieldsSidebar({
-  pdfFile,
-  pdfFileId,
   templateName,
   templateDescription,
   extractionFields,
-  pipelineState,
   mode,
   selectedFieldId,
   showSignatureObjects,
