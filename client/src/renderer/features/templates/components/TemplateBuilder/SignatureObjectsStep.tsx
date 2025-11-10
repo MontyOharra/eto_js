@@ -118,7 +118,10 @@ export function SignatureObjectsStep({
       return 'text_word';
     }
     if ('linewidth' in obj && 'points' in obj) return 'graphic_curve';
-    if ('linewidth' in obj && obj.bbox[2] - obj.bbox[0] < 2) return 'graphic_line';
+    // Check for both vertical lines (width < 2) and horizontal lines (height < 2)
+    if ('linewidth' in obj && (obj.bbox[2] - obj.bbox[0] < 2 || obj.bbox[3] - obj.bbox[1] < 2)) {
+      return 'graphic_line';
+    }
     if ('linewidth' in obj) return 'graphic_rect';
     if ('format' in obj) return 'image';
     if ('rows' in obj && 'cols' in obj) return 'table';
