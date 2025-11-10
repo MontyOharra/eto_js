@@ -101,6 +101,37 @@ export function TemplateBuilder({
   const [centerTrigger, setCenterTrigger] = useState<number>(0);
   const simulateMutation = useSimulateTemplate();
 
+  // Reset all state when modal closes (isOpen becomes false)
+  useEffect(() => {
+    if (!isOpen) {
+      // Reset to clean state for next open
+      setCurrentStep('signature-objects');
+      setTemplateName('');
+      setTemplateDescription('');
+      setSelectedSignatureObjects({
+        text_words: [],
+        text_lines: [],
+        graphic_rects: [],
+        graphic_lines: [],
+        graphic_curves: [],
+        images: [],
+        tables: [],
+      });
+      setExtractionFields([]);
+      setPipelineState({
+        entry_points: [],
+        modules: [],
+        connections: [],
+      });
+      setVisualState({});
+      setViewMode('summary');
+      setSimulationResult(null);
+      setCenterTrigger(0);
+      setIsSaving(false);
+      setProcessedData(null);
+    }
+  }, [isOpen]);
+
   // PDF Data Management - Centralized at TemplateBuilder level
   // Create mode: Process local PDF file
   const { mutateAsync: processObjects, isPending: isProcessing } = useProcessPdfObjects();

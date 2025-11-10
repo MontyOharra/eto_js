@@ -15,11 +15,6 @@ class TextWord(BaseModel):
     fontsize: float
 
 
-class TextLine(BaseModel):
-    page: int
-    bbox: Tuple[float, float, float, float]  # [x0, y0, x1, y1]
-
-
 class GraphicRect(BaseModel):
     page: int
     bbox: Tuple[float, float, float, float]  # [x0, y0, x1, y1]
@@ -56,7 +51,6 @@ class Table(BaseModel):
 
 class PdfObjects(BaseModel):
     text_words: List[TextWord]
-    text_lines: List[TextLine]
     graphic_rects: List[GraphicRect]
     graphic_lines: List[GraphicLine]
     graphic_curves: List[GraphicCurve]

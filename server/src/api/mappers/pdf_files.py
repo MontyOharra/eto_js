@@ -2,14 +2,13 @@
 PDF Files Mappers
 Convert between domain dataclasses and API Pydantic models
 """
-from shared.types.pdf_files import PdfFile, PdfObjects, TextWord, TextLine, GraphicRect, GraphicLine, GraphicCurve, Image, Table
+from shared.types.pdf_files import PdfFile, PdfObjects, TextWord, GraphicRect, GraphicLine, GraphicCurve, Image, Table
 from api.schemas.pdf_files import (
     PdfFile as PdfFilePydantic,
     GetPdfObjectsResponse,
     ProcessPdfObjectsResponse,
     PdfObjects as PdfObjectsPydantic,
     TextWord as TextWordPydantic,
-    TextLine as TextLinePydantic,
     GraphicRect as GraphicRectPydantic,
     GraphicLine as GraphicLinePydantic,
     GraphicCurve as GraphicCurvePydantic,
@@ -46,10 +45,6 @@ def convert_pdf_objects(objects: PdfObjects) -> PdfObjectsPydantic:
                 fontsize=obj.fontsize
             )
             for obj in objects.text_words
-        ],
-        text_lines=[
-            TextLinePydantic(page=obj.page, bbox=obj.bbox)
-            for obj in objects.text_lines
         ],
         graphic_rects=[
             GraphicRectPydantic(page=obj.page, bbox=obj.bbox, linewidth=obj.linewidth)

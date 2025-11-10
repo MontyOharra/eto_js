@@ -15,13 +15,6 @@ class TextWord:
 
 
 @dataclass(frozen=True)
-class TextLine:
-    """Single text line boundary"""
-    page: int
-    bbox: tuple[float, float, float, float]
-
-
-@dataclass(frozen=True)
 class GraphicRect:
     """Rectangle graphic object"""
     page: int
@@ -72,7 +65,6 @@ class PdfObjects:
     Replaces raw dict with strongly-typed structure.
     """
     text_words: list[TextWord]
-    text_lines: list[TextLine]
     graphic_rects: list[GraphicRect]
     graphic_lines: list[GraphicLine]
     graphic_curves: list[GraphicCurve]

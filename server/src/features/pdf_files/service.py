@@ -17,7 +17,6 @@ from shared.types.pdf_files import (
     PdfFileCreate,
     PdfObjects,
     TextWord,
-    TextLine,
     GraphicRect,
     GraphicLine,
     GraphicCurve,
@@ -393,7 +392,7 @@ class PdfFilesService:
 
             # Count total objects for logging
             total_objects = (
-                len(extracted_objects.text_words) + len(extracted_objects.text_lines) +
+                len(extracted_objects.text_words) +
                 len(extracted_objects.graphic_rects) + len(extracted_objects.graphic_lines) +
                 len(extracted_objects.graphic_curves) + len(extracted_objects.images) +
                 len(extracted_objects.tables)
@@ -402,7 +401,7 @@ class PdfFilesService:
             # Calculate page count from objects
             page_count = 0
             for obj_list in [
-                extracted_objects.text_words, extracted_objects.text_lines,
+                extracted_objects.text_words,
                 extracted_objects.graphic_rects, extracted_objects.graphic_lines,
                 extracted_objects.graphic_curves, extracted_objects.images,
                 extracted_objects.tables
@@ -505,7 +504,6 @@ class PdfFilesService:
 
         # Initialize lists for typed objects
         text_words: list[TextWord] = []
-        text_lines: list[TextLine] = []
         graphic_rects: list[GraphicRect] = []
         graphic_lines: list[GraphicLine] = []
         graphic_curves: list[GraphicCurve] = []
@@ -531,52 +529,6 @@ class PdfFilesService:
                             fontsize=float(word.get('size', 0.0))  # Ensure float
                         ))
 
-                    # Extract text lines → Group text words into lines by y-coordinate
-                    # Sort words by y-position (top to bottom) then x-position (left to right)
-                    sorted_words = sorted(words, key=lambda w: (w['top'], w['x0']))
-
-                    # Group words into lines based on y-coordinate proximity
-                    current_line_words = []
-                    current_line_y = None
-                    y_tolerance = 5.0  # pixels - words within this tolerance are on same line
-
-                    for word in sorted_words:
-                        word_y = (word['top'] + word['bottom']) / 2  # Center y-coordinate
-
-                        if current_line_y is None or abs(word_y - current_line_y) <= y_tolerance:
-                            # Same line
-                            current_line_words.append(word)
-                            if current_line_y is None:
-                                current_line_y = word_y
-                        else:
-                            # New line - create TextLine from current line words
-                            if current_line_words:
-                                min_x0 = min(w['x0'] for w in current_line_words)
-                                min_top = min(w['top'] for w in current_line_words)
-                                max_x1 = max(w['x1'] for w in current_line_words)
-                                max_bottom = max(w['bottom'] for w in current_line_words)
-
-                                text_lines.append(TextLine(
-                                    page=page_num,
-                                    bbox=(min_x0, min_top, max_x1, max_bottom)
-                                ))
-
-                            # Start new line
-                            current_line_words = [word]
-                            current_line_y = word_y
-
-                    # Don't forget the last line
-                    if current_line_words:
-                        min_x0 = min(w['x0'] for w in current_line_words)
-                        min_top = min(w['top'] for w in current_line_words)
-                        max_x1 = max(w['x1'] for w in current_line_words)
-                        max_bottom = max(w['bottom'] for w in current_line_words)
-
-                        text_lines.append(TextLine(
-                            page=page_num,
-                            bbox=(min_x0, min_top, max_x1, max_bottom)
-                        ))
-
                     # Extract graphic lines → GraphicLine dataclasses
                     lines = page.lines
                     for line in lines:
@@ -587,8 +539,27 @@ class PdfFilesService:
                         ))
 
                     # Extract rectangles → GraphicRect dataclasses
+                    # Filter out full-page rectangles (useless and block other objects)
                     rects = page.rects
+                    page_width = page.width
+                    page_height = page.height
+                    page_area = page_width * page_height
+
                     for rect in rects:
+                        # Calculate rectangle area
+                        rect_width = rect['x1'] - rect['x0']
+                        rect_height = rect['y1'] - rect['y0']
+                        rect_area = rect_width * rect_height
+
+                        # Skip rectangles that cover ≥95% of page area
+                        area_ratio = rect_area / page_area if page_area > 0 else 0
+                        if area_ratio >= 0.95:
+                            logger.debug(
+                                f"Skipping full-page rectangle on page {page_num} "
+                                f"(covers {area_ratio:.1%} of page)"
+                            )
+                            continue
+
                         graphic_rects.append(GraphicRect(
                             page=page_num,
                             bbox=(rect['x0'], rect['y0'], rect['x1'], rect['y1']),
@@ -635,7 +606,7 @@ class PdfFilesService:
                         ))
 
             total_objects = (
-                len(text_words) + len(text_lines) + len(graphic_rects) +
+                len(text_words) + len(graphic_rects) +
                 len(graphic_lines) + len(graphic_curves) + len(images) + len(tables)
             )
             logger.debug(
@@ -646,7 +617,6 @@ class PdfFilesService:
             # Return typed container
             return PdfObjects(
                 text_words=text_words,
-                text_lines=text_lines,
                 graphic_rects=graphic_rects,
                 graphic_lines=graphic_lines,
                 graphic_curves=graphic_curves,

@@ -56,7 +56,6 @@ export function SignatureObjectsStep({
 
     // Add all object types
     addObjects(pdfObjects.text_words, 'text_word');
-    addObjects(pdfObjects.text_lines, 'text_line');
     addObjects(pdfObjects.graphic_rects, 'graphic_rect');
     addObjects(pdfObjects.graphic_lines, 'graphic_line');
     addObjects(pdfObjects.graphic_curves, 'graphic_curve');
@@ -86,7 +85,6 @@ export function SignatureObjectsStep({
     // Flatten signature objects to match against
     const flatSignatureObjects: any[] = [
       ...selectedSignatureObjects.text_words,
-      ...selectedSignatureObjects.text_lines,
       ...selectedSignatureObjects.graphic_rects,
       ...selectedSignatureObjects.graphic_lines,
       ...selectedSignatureObjects.graphic_curves,

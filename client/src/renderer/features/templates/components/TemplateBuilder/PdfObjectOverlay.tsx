@@ -10,7 +10,6 @@ import { usePdfViewer } from '../../../pdf';
 // Object type color mappings (with transparency)
 const OBJECT_COLORS: Record<string, string> = {
   text_word: 'rgba(255, 0, 0, 0.2)',
-  text_line: 'rgba(0, 255, 0, 0.2)',
   graphic_rect: 'rgba(0, 0, 255, 0.2)',
   graphic_line: 'rgba(180, 90, 0, 0.3)', // Dark orange
   graphic_curve: 'rgba(255, 0, 255, 0.2)',
@@ -21,7 +20,6 @@ const OBJECT_COLORS: Record<string, string> = {
 // Border colors (more opaque)
 const OBJECT_BORDER_COLORS: Record<string, string> = {
   text_word: 'rgba(255, 0, 0, 0.6)',
-  text_line: 'rgba(0, 255, 0, 0.6)',
   graphic_rect: 'rgba(0, 0, 255, 0.6)',
   graphic_line: 'rgba(180, 90, 0, 0.8)',
   graphic_curve: 'rgba(255, 0, 255, 0.6)',
@@ -65,11 +63,16 @@ export function PdfObjectOverlay({
   // Objects to render: visible (selected types) + hidden selected
   const objectsToRender = useMemo(() => {
     return objects
-      .map((obj, idx) => ({
-        obj,
-        index: idx,
-        id: getObjectId(obj, idx),
-      }))
+      .map((obj, idx) => {
+        const [x0, y0, x1, y1] = obj.bbox;
+        const area = (x1 - x0) * (y1 - y0);
+        return {
+          obj,
+          index: idx,
+          id: getObjectId(obj, idx),
+          area,
+        };
+      })
       .filter(({ obj, id }) => {
         // Show if on current page
         if (obj.page !== currentPage) return false;
@@ -91,7 +94,7 @@ export function PdfObjectOverlay({
 
   const pageHeight = pdfDimensions.height;
 
-  const renderObjectBox = (obj: PdfObject, index: number, objectId: string) => {
+  const renderObjectBox = (obj: PdfObject, index: number, objectId: string, renderIndex: number) => {
     const [x0, y0, x1, y1] = obj.bbox;
 
     // Coordinate transformation
@@ -101,7 +104,6 @@ export function PdfObjectOverlay({
 
     // List of types that DON'T need Y-axis flipping
     const noFlipping = obj.type === 'text_word' ||
-                       obj.type === 'text_line' ||
                        obj.type === 'table' ||
                        obj.type === 'graphic_curve';
 
@@ -164,6 +166,13 @@ export function PdfObjectOverlay({
     const hitboxOffsetX = (hitboxWidth - objectWidth) / 2;
     const hitboxOffsetY = (hitboxHeight - objectHeight) / 2;
 
+    // Z-index: Calculate based on inverse of area (smaller area = higher z-index)
+    // Use a large number divided by area to get inverse relationship
+    // Add 1 to area to avoid division by zero
+    const { area } = objectsToRender[renderIndex];
+    const baseZIndex = Math.floor(1000000 / (area + 1));
+    const zIndex = isSelected ? baseZIndex + 10000000 : baseZIndex;
+
     const style: React.CSSProperties = {
       position: 'absolute',
       left: `${x0 * renderScale - hitboxOffsetX}px`,
@@ -172,7 +181,7 @@ export function PdfObjectOverlay({
       height: `${hitboxHeight}px`,
       pointerEvents: isHiddenSelected ? 'none' : 'auto',
       cursor: isHiddenSelected ? 'default' : 'pointer',
-      zIndex: isSelected ? 10 : 1,
+      zIndex,
       // Use padding to create visual element centered in hitbox
       padding: `${hitboxOffsetY}px ${hitboxOffsetX}px`,
       boxSizing: 'border-box',
@@ -203,7 +212,9 @@ export function PdfObjectOverlay({
 
   return (
     <>
-      {objectsToRender.map(({ obj, index, id }) => renderObjectBox(obj, index, id))}
+      {objectsToRender.map(({ obj, index, id }, renderIndex) =>
+        renderObjectBox(obj, index, id, renderIndex)
+      )}
     </>
   );
 }

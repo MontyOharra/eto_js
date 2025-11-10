@@ -13,7 +13,6 @@ export type TemplateStatus = 'active' | 'inactive';
 
 export type PdfObjectType =
   | 'text_word'
-  | 'text_line'
   | 'graphic_rect'
   | 'graphic_line'
   | 'graphic_curve'

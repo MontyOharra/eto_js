@@ -12,7 +12,7 @@ from shared.types.pdf_templates import (
     PdfVersionSummary,
     ExtractionField,
 )
-from shared.types.pdf_files import PdfObjects, TextWord, TextLine, GraphicRect, GraphicLine, GraphicCurve, Image, Table
+from shared.types.pdf_files import PdfObjects, TextWord, GraphicRect, GraphicLine, GraphicCurve, Image, Table
 from api.schemas.pdf_templates import (
     TemplateListItem,
     TemplateVersionSummary,
@@ -26,7 +26,6 @@ from api.schemas.pdf_templates import (
 from api.schemas.pdf_files import (
     PdfObjects as PdfObjectsPydantic,
     TextWord as TextWordPydantic,
-    TextLine as TextLinePydantic,
     GraphicRect as GraphicRectPydantic,
     GraphicLine as GraphicLinePydantic,
     GraphicCurve as GraphicCurvePydantic,
@@ -48,10 +47,6 @@ def convert_pdf_objects_to_api(objects: PdfObjects) -> PdfObjectsPydantic:
                 fontsize=obj.fontsize
             )
             for obj in objects.text_words
-        ],
-        text_lines=[
-            TextLinePydantic(page=obj.page, bbox=obj.bbox)
-            for obj in objects.text_lines
         ],
         graphic_rects=[
             GraphicRectPydantic(page=obj.page, bbox=obj.bbox, linewidth=obj.linewidth)
@@ -104,10 +99,6 @@ def convert_pdf_objects_to_domain(objects_schema: PdfObjectsPydantic) -> PdfObje
                 fontsize=obj.fontsize
             )
             for obj in objects_schema.text_words
-        ],
-        text_lines=[
-            TextLine(page=obj.page, bbox=obj.bbox)
-            for obj in objects_schema.text_lines
         ],
         graphic_rects=[
             GraphicRect(page=obj.page, bbox=obj.bbox, linewidth=obj.linewidth)

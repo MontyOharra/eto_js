@@ -22,11 +22,6 @@ export interface TextWordObject {
   fontsize: number;
 }
 
-export interface TextLineObject {
-  page: number;
-  bbox: BBox;
-}
-
 export interface GraphicRectObject {
   page: number;
   bbox: BBox;
@@ -68,7 +63,6 @@ export interface TableObject {
  */
 export interface PdfObjects {
   text_words: TextWordObject[];
-  text_lines: TextLineObject[];
   graphic_rects: GraphicRectObject[];
   graphic_lines: GraphicLineObject[];
   graphic_curves: GraphicCurveObject[];

@@ -8,7 +8,6 @@ import { ObjectTypeButton } from './ObjectTypeButton';
 // Object type configurations
 const OBJECT_TYPE_NAMES: Record<string, string> = {
   text_word: 'Text Words',
-  text_line: 'Text Lines',
   graphic_rect: 'Rectangles',
   graphic_line: 'Lines',
   graphic_curve: 'Curves',
@@ -18,7 +17,6 @@ const OBJECT_TYPE_NAMES: Record<string, string> = {
 
 const OBJECT_TYPE_COLORS: Record<string, string> = {
   text_word: '#ff0000',       // Red
-  text_line: '#00ff00',       // Green
   graphic_rect: '#0000ff',    // Blue
   graphic_line: '#b45a00',    // Dark orange
   graphic_curve: '#ff00ff',   // Magenta
