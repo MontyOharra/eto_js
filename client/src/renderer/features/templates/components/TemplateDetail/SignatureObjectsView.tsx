@@ -61,14 +61,14 @@ export function SignatureObjectsView({
   return (
     <div className="h-full flex">
       {/* Sidebar */}
-      <div className="w-80 border-r border-gray-700 bg-gray-800 p-4 overflow-y-auto">
-        <h3 className="text-lg font-semibold text-white mb-4">Signature Objects</h3>
+      <div className="w-80 border-r border-gray-700 bg-gray-900 p-4 overflow-y-auto">
+        <h3 className="text-sm font-semibold text-white mb-4">Signature Objects</h3>
         <p className="text-sm text-gray-400 mb-4">
           These objects uniquely identify this template type.
         </p>
 
         {/* Total count */}
-        <div className="mb-4 p-3 bg-gray-700 rounded-lg">
+        <div className="mb-4 p-3 bg-gray-800 rounded">
           <div className="text-sm text-gray-400">Total Objects</div>
           <div className="text-2xl font-bold text-white">{totalCount}</div>
         </div>
@@ -76,7 +76,7 @@ export function SignatureObjectsView({
         {/* Object counts by type */}
         <div className="space-y-2">
           {objectCounts.text_words > 0 && (
-            <div className="flex items-center justify-between p-2 bg-gray-700 rounded">
+            <div className="flex items-center justify-between p-2 bg-gray-800 rounded">
               <div className="flex items-center space-x-2">
                 <div className="w-3 h-3 rounded" style={{ backgroundColor: '#3b82f6' }}></div>
                 <span className="text-sm text-gray-300">Text Words</span>
@@ -86,7 +86,7 @@ export function SignatureObjectsView({
           )}
 
           {objectCounts.graphic_rects > 0 && (
-            <div className="flex items-center justify-between p-2 bg-gray-700 rounded">
+            <div className="flex items-center justify-between p-2 bg-gray-800 rounded">
               <div className="flex items-center space-x-2">
                 <div className="w-3 h-3 rounded" style={{ backgroundColor: '#f59e0b' }}></div>
                 <span className="text-sm text-gray-300">Graphic Rects</span>
@@ -96,7 +96,7 @@ export function SignatureObjectsView({
           )}
 
           {objectCounts.graphic_lines > 0 && (
-            <div className="flex items-center justify-between p-2 bg-gray-700 rounded">
+            <div className="flex items-center justify-between p-2 bg-gray-800 rounded">
               <div className="flex items-center space-x-2">
                 <div className="w-3 h-3 rounded" style={{ backgroundColor: '#ef4444' }}></div>
                 <span className="text-sm text-gray-300">Graphic Lines</span>
@@ -106,7 +106,7 @@ export function SignatureObjectsView({
           )}
 
           {objectCounts.graphic_curves > 0 && (
-            <div className="flex items-center justify-between p-2 bg-gray-700 rounded">
+            <div className="flex items-center justify-between p-2 bg-gray-800 rounded">
               <div className="flex items-center space-x-2">
                 <div className="w-3 h-3 rounded" style={{ backgroundColor: '#8b5cf6' }}></div>
                 <span className="text-sm text-gray-300">Graphic Curves</span>
@@ -116,7 +116,7 @@ export function SignatureObjectsView({
           )}
 
           {objectCounts.images > 0 && (
-            <div className="flex items-center justify-between p-2 bg-gray-700 rounded">
+            <div className="flex items-center justify-between p-2 bg-gray-800 rounded">
               <div className="flex items-center space-x-2">
                 <div className="w-3 h-3 rounded" style={{ backgroundColor: '#ec4899' }}></div>
                 <span className="text-sm text-gray-300">Images</span>
@@ -126,7 +126,7 @@ export function SignatureObjectsView({
           )}
 
           {objectCounts.tables > 0 && (
-            <div className="flex items-center justify-between p-2 bg-gray-700 rounded">
+            <div className="flex items-center justify-between p-2 bg-gray-800 rounded">
               <div className="flex items-center space-x-2">
                 <div className="w-3 h-3 rounded" style={{ backgroundColor: '#06b6d4' }}></div>
                 <span className="text-sm text-gray-300">Tables</span>

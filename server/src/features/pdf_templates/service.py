@@ -553,7 +553,6 @@ class PdfTemplateService:
         # Check each object type
         return (
             self._match_text_words(pdf_objects.text_words, template_objects.text_words) and
-            self._match_text_lines(pdf_objects.text_lines, template_objects.text_lines) and
             self._match_graphic_rects(pdf_objects.graphic_rects, template_objects.graphic_rects) and
             self._match_graphic_lines(pdf_objects.graphic_lines, template_objects.graphic_lines) and
             self._match_graphic_curves(pdf_objects.graphic_curves, template_objects.graphic_curves) and
@@ -619,7 +618,6 @@ class PdfTemplateService:
         """Count total objects across all types"""
         return (
             len(objects.text_words) +
-            len(objects.text_lines) +
             len(objects.graphic_rects) +
             len(objects.graphic_lines) +
             len(objects.graphic_curves) +
@@ -634,7 +632,6 @@ class PdfTemplateService:
         """
         weights = {
             'text_words': 1.0,
-            'text_lines': 2.0,
             'graphic_rects': 1.5,
             'graphic_lines': 1.2,
             'graphic_curves': 1.3,
@@ -644,7 +641,6 @@ class PdfTemplateService:
 
         score = (
             len(objects.text_words) * weights['text_words'] +
-            len(objects.text_lines) * weights['text_lines'] +
             len(objects.graphic_rects) * weights['graphic_rects'] +
             len(objects.graphic_lines) * weights['graphic_lines'] +
             len(objects.graphic_curves) * weights['graphic_curves'] +

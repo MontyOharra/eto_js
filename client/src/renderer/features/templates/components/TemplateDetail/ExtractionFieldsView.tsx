@@ -20,14 +20,14 @@ export function ExtractionFieldsView({
   return (
     <div className="h-full flex">
       {/* Sidebar */}
-      <div className="w-80 border-r border-gray-700 bg-gray-800 p-4 overflow-y-auto">
-        <h3 className="text-lg font-semibold text-white mb-4">Extraction Fields</h3>
+      <div className="w-80 border-r border-gray-700 bg-gray-900 p-4 overflow-y-auto">
+        <h3 className="text-sm font-semibold text-white mb-4">Extraction Fields</h3>
         <p className="text-sm text-gray-400 mb-4">
           Fields to extract from matching documents.
         </p>
 
         {/* Total count */}
-        <div className="mb-4 p-3 bg-gray-700 rounded-lg">
+        <div className="mb-4 p-3 bg-gray-800 rounded">
           <div className="text-sm text-gray-400">Total Fields</div>
           <div className="text-2xl font-bold text-white">{extractionFields.length}</div>
         </div>
@@ -40,7 +40,7 @@ export function ExtractionFieldsView({
             </div>
           ) : (
             extractionFields.map((field, idx) => (
-              <div key={idx} className="p-3 bg-gray-700 rounded-lg">
+              <div key={idx} className="p-3 bg-gray-800 rounded">
                 <div className="font-medium text-white text-sm mb-1">
                   {field.name}
                 </div>

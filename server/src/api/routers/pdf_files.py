@@ -137,7 +137,7 @@ async def process_pdf_objects(
     # Calculate page count from objects
     page_count = 0
     for obj_list in [
-        objects.text_words, objects.text_lines, objects.graphic_rects,
+        objects.text_words, objects.graphic_rects,
         objects.graphic_lines, objects.graphic_curves, objects.images, objects.tables
     ]:
         for obj in obj_list:

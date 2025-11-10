@@ -138,7 +138,6 @@ class PdfFileRepository(BaseRepository[PdfFileModel]):
                 # Return empty typed structure
                 extracted_objects = PdfObjects(
                     text_words=[],
-                    text_lines=[],
                     graphic_rects=[],
                     graphic_lines=[],
                     graphic_curves=[],
@@ -149,7 +148,6 @@ class PdfFileRepository(BaseRepository[PdfFileModel]):
             # No objects extracted
             extracted_objects = PdfObjects(
                 text_words=[],
-                text_lines=[],
                 graphic_rects=[],
                 graphic_lines=[],
                 graphic_curves=[],
