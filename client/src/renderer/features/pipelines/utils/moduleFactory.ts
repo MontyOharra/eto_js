@@ -334,3 +334,89 @@ export function createEntryPoint(
     outputs: outputs,
   };
 }
+
+/**
+ * Enrich a module instance loaded from backend with template metadata
+ *
+ * When modules are loaded from backend, pins only have:
+ *   node_id, type, name, position_index, group_index
+ *
+ * This function reconstructs missing fields from the template:
+ *   direction, label, type_var, allowed_types
+ *
+ * These fields are needed for proper rendering and type checking.
+ */
+export function enrichModuleWithTemplate(
+  moduleInstance: ModuleInstance,
+  template: ModuleTemplate
+): ModuleInstance {
+  const typeParams = template.meta?.io_shape?.type_params || {};
+  const inputShape = template.meta?.io_shape?.inputs;
+  const outputShape = template.meta?.io_shape?.outputs;
+
+  // Enrich input pins
+  const enrichedInputs = moduleInstance.inputs.map((pin) => {
+    // Find the NodeGroup for this pin using group_index
+    const nodeGroup = inputShape?.nodes?.[pin.group_index];
+    if (!nodeGroup) {
+      console.warn(`No NodeGroup found for input pin at group_index ${pin.group_index}`);
+      return pin;
+    }
+
+    const typeVar = nodeGroup.typing?.type_var;
+
+    // Calculate allowed_types the same way createPins does
+    let allowedTypes: string[];
+    if (typeVar && typeParams[typeVar]) {
+      const typeParamTypes = typeParams[typeVar];
+      allowedTypes = typeParamTypes.length === 0 ? ALL_TYPES : typeParamTypes;
+    } else {
+      const directTypes = nodeGroup.typing?.allowed_types || ["str"];
+      allowedTypes = directTypes.length === 0 ? ALL_TYPES : directTypes;
+    }
+
+    return {
+      ...pin,
+      direction: "in" as const,
+      label: nodeGroup.label,
+      type_var: typeVar,
+      allowed_types: allowedTypes,
+    };
+  });
+
+  // Enrich output pins
+  const enrichedOutputs = moduleInstance.outputs.map((pin) => {
+    // Find the NodeGroup for this pin using group_index
+    const nodeGroup = outputShape?.nodes?.[pin.group_index];
+    if (!nodeGroup) {
+      console.warn(`No NodeGroup found for output pin at group_index ${pin.group_index}`);
+      return pin;
+    }
+
+    const typeVar = nodeGroup.typing?.type_var;
+
+    // Calculate allowed_types the same way createPins does
+    let allowedTypes: string[];
+    if (typeVar && typeParams[typeVar]) {
+      const typeParamTypes = typeParams[typeVar];
+      allowedTypes = typeParamTypes.length === 0 ? ALL_TYPES : typeParamTypes;
+    } else {
+      const directTypes = nodeGroup.typing?.allowed_types || ["str"];
+      allowedTypes = directTypes.length === 0 ? ALL_TYPES : directTypes;
+    }
+
+    return {
+      ...pin,
+      direction: "out" as const,
+      label: nodeGroup.label,
+      type_var: typeVar,
+      allowed_types: allowedTypes,
+    };
+  });
+
+  return {
+    ...moduleInstance,
+    inputs: enrichedInputs,
+    outputs: enrichedOutputs,
+  };
+}

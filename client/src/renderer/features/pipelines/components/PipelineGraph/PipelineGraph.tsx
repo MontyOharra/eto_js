@@ -29,6 +29,7 @@ import {
   addPinToModule,
   removePinFromModule,
   updatePinInModule,
+  enrichModuleWithTemplate,
 } from '../../utils/moduleFactory';
 import { getTypeColor } from '../../utils/edgeUtils';
 import { findPinInPipeline, synchronizeTypeVarUpdate } from '../../utils';
@@ -80,6 +81,32 @@ function PipelineGraphInner({
     () => entryPoints ?? pipelineState?.entry_points ?? [],
     [entryPoints, pipelineState?.entry_points]
   );
+
+  // Enrich pipeline state with template metadata when loaded from backend
+  // Backend only stores: node_id, type, name, position_index, group_index
+  // We reconstruct: direction, label, type_var, allowed_types from templates
+  const enrichedPipelineState = useMemo(() => {
+    if (!pipelineState) return undefined;
+
+    const enrichedModules = pipelineState.modules.map((moduleInstance) => {
+      // Find template by parsing module_ref (e.g., "text_cleaner:1.0.0")
+      const [templateId] = moduleInstance.module_ref.split(':');
+      const template = modules.find((t) => t.id === templateId);
+
+      if (!template) {
+        console.warn(`[PipelineGraph] Template not found for module: ${moduleInstance.module_ref}`);
+        return moduleInstance; // Return unchanged if template not found
+      }
+
+      // Enrich with template metadata
+      return enrichModuleWithTemplate(moduleInstance, template);
+    });
+
+    return {
+      ...pipelineState,
+      modules: enrichedModules,
+    };
+  }, [pipelineState, modules]);
 
   // Effective types cache - pre-calculated for all pins
   const [effectiveTypesCache, setEffectiveTypesCache] = useState<
@@ -348,7 +375,7 @@ function PipelineGraphInner({
 
   // Initialize/update nodes when pipeline state or modules change
   useEffect(() => {
-    if (!pipelineState) {
+    if (!enrichedPipelineState) {
       setNodes([]);
       return;
     }
@@ -377,8 +404,8 @@ function PipelineGraphInner({
       });
     });
 
-    // Create module nodes
-    pipelineState.modules.forEach((moduleInstance) => {
+    // Create module nodes (using enriched state with template metadata)
+    enrichedPipelineState.modules.forEach((moduleInstance) => {
       // Find the template for this module
       const [templateId] = moduleInstance.module_ref.split(':');
       const template = modules.find((t) => t.id === templateId);
@@ -429,7 +456,7 @@ function PipelineGraphInner({
         ...newPositions,
       });
     }
-  }, [pipelineState, visualState, modules, mode, effectiveEntryPoints, handleDeleteModule, handleUpdateNode, handleAddNode, handleRemoveNode, handleConfigChange, getEffectiveAllowedTypesForPin, getConnectedOutputName, onVisualStateChange]);
+  }, [enrichedPipelineState, visualState, modules, mode, effectiveEntryPoints, handleDeleteModule, handleUpdateNode, handleAddNode, handleRemoveNode, handleConfigChange, getEffectiveAllowedTypesForPin, getConnectedOutputName, onVisualStateChange]);
 
   // Initialize/update edges when pipeline state changes
   useEffect(() => {
