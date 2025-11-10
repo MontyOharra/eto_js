@@ -37,6 +37,35 @@ export function SignatureObjectsStep({
   const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
   const [selectedObjectIds, setSelectedObjectIds] = useState<Set<string>>(new Set());
 
+
+  // Flatten PDF objects for overlay rendering
+  const getFlattenedObjects = useCallback((): Array<any> => {
+    const flatObjects: Array<any> = [];
+
+    // Helper to add objects with their type (preserving all original fields)
+    const addObjects = (objects: any[] | undefined, type: string) => {
+      if (!objects) return;
+      objects.forEach((obj) => {
+        flatObjects.push({
+          ...obj, // Preserve all original fields
+          type,
+          page: obj.page || 1,
+        });
+      });
+    };
+
+    // Add all object types
+    addObjects(pdfObjects.text_words, 'text_word');
+    addObjects(pdfObjects.text_lines, 'text_line');
+    addObjects(pdfObjects.graphic_rects, 'graphic_rect');
+    addObjects(pdfObjects.graphic_lines, 'graphic_line');
+    addObjects(pdfObjects.graphic_curves, 'graphic_curve');
+    addObjects(pdfObjects.images, 'image');
+    addObjects(pdfObjects.tables, 'table');
+
+    return flatObjects;
+  }, [pdfObjects]);
+
   // Initialize selectedObjectIds from selectedSignatureObjects when component mounts
   useEffect(() => {
 
@@ -111,33 +140,6 @@ export function SignatureObjectsStep({
     };
   }, [pdfObjects]);
 
-  // Flatten PDF objects for overlay rendering
-  const getFlattenedObjects = useCallback((): Array<any> => {
-    const flatObjects: Array<any> = [];
-
-    // Helper to add objects with their type (preserving all original fields)
-    const addObjects = (objects: any[] | undefined, type: string) => {
-      if (!objects) return;
-      objects.forEach((obj) => {
-        flatObjects.push({
-          ...obj, // Preserve all original fields
-          type,
-          page: obj.page || 1,
-        });
-      });
-    };
-
-    // Add all object types
-    addObjects(pdfObjects.text_words, 'text_word');
-    addObjects(pdfObjects.text_lines, 'text_line');
-    addObjects(pdfObjects.graphic_rects, 'graphic_rect');
-    addObjects(pdfObjects.graphic_lines, 'graphic_line');
-    addObjects(pdfObjects.graphic_curves, 'graphic_curve');
-    addObjects(pdfObjects.images, 'image');
-    addObjects(pdfObjects.tables, 'table');
-
-    return flatObjects;
-  }, [pdfObjects]);
 
   // Handlers
   const handleTypeToggle = (type: string) => {

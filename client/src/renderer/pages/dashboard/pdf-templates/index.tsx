@@ -9,8 +9,9 @@ import {
   useDeactivateTemplate,
 } from '../../../features/templates';
 import { usePipelinesApi } from '../../../features/pipelines/api';
-import { TemplateCard, TemplateDetailModal } from '../../../features/templates/components';
+import { TemplateCard } from '../../../features/templates/components';
 import { TemplateBuilder, TemplateBuilderData } from '../../../features/templates/components/TemplateBuilder';
+import { TemplateDetailModal } from '../../../features/templates/components/TemplateDetail-old';
 import { TemplateListItem, TemplateStatus } from '../../../features/templates/types';
 import { useUploadPdf, useProcessPdfObjects, usePdfMetadata, type PdfFileMetadata } from '../../../features/pdf';
 import { apiClient } from '../../../shared/api/client';

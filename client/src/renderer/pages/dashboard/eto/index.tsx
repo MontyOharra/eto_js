@@ -13,8 +13,9 @@ import {
   type EtoRunListItem,
   type EtoRunStatus,
 } from '../../../features/eto';
-import { TemplateBuilderModal } from '../../../features/templates/components';
+import { TemplateBuilder } from '../../../features/templates/components';
 import { useCreateTemplate, useActivateTemplate } from '../../../features/templates';
+import { usePdfMetadata } from '../../../features/pdf';
 
 export const Route = createFileRoute('/dashboard/eto/')({
   component: EtoPage,
@@ -39,6 +40,9 @@ function EtoPage() {
   // State for template builder modal
   const [templateBuilderPdfId, setTemplateBuilderPdfId] = useState<number | null>(null);
   const [templateBuilderRunId, setTemplateBuilderRunId] = useState<number | null>(null);
+
+  // Fetch PDF metadata for template builder
+  const { data: pdfMetadata } = usePdfMetadata(templateBuilderPdfId);
 
   // SSE connection status
   const [isLiveConnected, setIsLiveConnected] = useState(false);
@@ -368,11 +372,11 @@ function EtoPage() {
       />
 
       {/* Template Builder Modal */}
-      <TemplateBuilderModal
+      <TemplateBuilder
         isOpen={templateBuilderPdfId !== null}
-        mode="create"
-        pdfFileId={templateBuilderPdfId}
         pdfFile={null}
+        pdfFileId={templateBuilderPdfId}
+        pdfMetadata={pdfMetadata || null}
         onClose={() => {
           setTemplateBuilderPdfId(null);
           setTemplateBuilderRunId(null);
