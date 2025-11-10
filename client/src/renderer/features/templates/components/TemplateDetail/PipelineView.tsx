@@ -3,6 +3,7 @@
  * Read-only view of pipeline using PipelineGraph in view mode
  */
 
+import { useCallback } from 'react';
 import { PipelineGraph } from '../../../pipelines/components/PipelineGraph';
 import type { PipelineState, VisualState } from '../../../pipelines/types';
 
@@ -15,14 +16,14 @@ export function PipelineView({
   pipelineState,
   visualState,
 }: PipelineViewProps) {
-  // No-op callbacks for view mode (prevent infinite loop)
-  const handlePipelineStateChange = () => {
+  // No-op callbacks for view mode (memoized to prevent infinite loop)
+  const handlePipelineStateChange = useCallback(() => {
     // Read-only view - no state changes
-  };
+  }, []);
 
-  const handleVisualStateChange = () => {
+  const handleVisualStateChange = useCallback(() => {
     // Read-only view - no state changes
-  };
+  }, []);
 
   return (
     <div className="h-full flex flex-col bg-gray-900">
