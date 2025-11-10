@@ -115,7 +115,7 @@ export function SignatureObjectsStep({
   // Helper: Determine type from object (check which array it came from)
   const getTypeFromObject = (obj: any): string => {
     if ('text' in obj && 'fontname' in obj && 'fontsize' in obj) {
-      return obj.text.includes(' ') ? 'text_line' : 'text_word';
+      return 'text_word';
     }
     if ('linewidth' in obj && 'points' in obj) return 'graphic_curve';
     if ('linewidth' in obj && obj.bbox[2] - obj.bbox[0] < 2) return 'graphic_line';
@@ -129,7 +129,6 @@ export function SignatureObjectsStep({
   const typeCounts = useMemo((): Record<string, number> => {
     return {
       text_word: pdfObjects.text_words?.length || 0,
-      text_line: pdfObjects.text_lines?.length || 0,
       graphic_rect: pdfObjects.graphic_rects?.length || 0,
       graphic_line: pdfObjects.graphic_lines?.length || 0,
       graphic_curve: pdfObjects.graphic_curves?.length || 0,
@@ -175,7 +174,6 @@ export function SignatureObjectsStep({
       const flatObjects = getFlattenedObjects();
       const pdfObjectsFormat: PdfObjects = {
         text_words: [],
-        text_lines: [],
         graphic_rects: [],
         graphic_lines: [],
         graphic_curves: [],
@@ -193,8 +191,6 @@ export function SignatureObjectsStep({
           // Map type names to PdfObjects field names
           if (type === 'text_word') {
             pdfObjectsFormat.text_words.push(objWithoutType);
-          } else if (type === 'text_line') {
-            pdfObjectsFormat.text_lines.push(objWithoutType);
           } else if (type === 'graphic_rect') {
             pdfObjectsFormat.graphic_rects.push(objWithoutType);
           } else if (type === 'graphic_line') {

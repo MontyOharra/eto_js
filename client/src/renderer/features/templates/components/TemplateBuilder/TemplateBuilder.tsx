@@ -64,7 +64,6 @@ export function TemplateBuilder({
   const [selectedSignatureObjects, setSelectedSignatureObjects] = useState<PdfObjects>(
     initialData?.signature_objects || {
       text_words: [],
-      text_lines: [],
       graphic_rects: [],
       graphic_lines: [],
       graphic_curves: [],
@@ -110,7 +109,6 @@ export function TemplateBuilder({
       setTemplateDescription('');
       setSelectedSignatureObjects({
         text_words: [],
-        text_lines: [],
         graphic_rects: [],
         graphic_lines: [],
         graphic_curves: [],

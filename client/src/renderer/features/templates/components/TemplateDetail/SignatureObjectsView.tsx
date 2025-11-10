@@ -21,7 +21,6 @@ export function SignatureObjectsView({
   const objectCounts = useMemo(() => {
     return {
       text_words: signatureObjects.text_words?.length || 0,
-      text_lines: signatureObjects.text_lines?.length || 0,
       graphic_rects: signatureObjects.graphic_rects?.length || 0,
       graphic_lines: signatureObjects.graphic_lines?.length || 0,
       graphic_curves: signatureObjects.graphic_curves?.length || 0,
@@ -50,7 +49,6 @@ export function SignatureObjectsView({
 
     // Add all object types with colors matching TemplateBuilder
     addObjects(signatureObjects.text_words, 'text_word', '#3b82f6');      // blue
-    addObjects(signatureObjects.text_lines, 'text_line', '#10b981');      // green
     addObjects(signatureObjects.graphic_rects, 'graphic_rect', '#f59e0b'); // amber
     addObjects(signatureObjects.graphic_lines, 'graphic_line', '#ef4444'); // red
     addObjects(signatureObjects.graphic_curves, 'graphic_curve', '#8b5cf6'); // purple
@@ -84,16 +82,6 @@ export function SignatureObjectsView({
                 <span className="text-sm text-gray-300">Text Words</span>
               </div>
               <span className="text-sm font-medium text-white">{objectCounts.text_words}</span>
-            </div>
-          )}
-
-          {objectCounts.text_lines > 0 && (
-            <div className="flex items-center justify-between p-2 bg-gray-700 rounded">
-              <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 rounded" style={{ backgroundColor: '#10b981' }}></div>
-                <span className="text-sm text-gray-300">Text Lines</span>
-              </div>
-              <span className="text-sm font-medium text-white">{objectCounts.text_lines}</span>
             </div>
           )}
 

@@ -75,7 +75,6 @@ export function ExtractionFieldsStep({
     const flat: any[] = [];
 
     selectedSignatureObjects.text_words.forEach(obj => flat.push({ ...obj, type: 'text_word' }));
-    selectedSignatureObjects.text_lines.forEach(obj => flat.push({ ...obj, type: 'text_line' }));
     selectedSignatureObjects.graphic_rects.forEach(obj => flat.push({ ...obj, type: 'graphic_rect' }));
     selectedSignatureObjects.graphic_lines.forEach(obj => flat.push({ ...obj, type: 'graphic_line' }));
     selectedSignatureObjects.graphic_curves.forEach(obj => flat.push({ ...obj, type: 'graphic_curve' }));
