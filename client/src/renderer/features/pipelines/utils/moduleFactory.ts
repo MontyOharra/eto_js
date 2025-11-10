@@ -420,3 +420,53 @@ export function enrichModuleWithTemplate(
     outputs: enrichedOutputs,
   };
 }
+
+/**
+ * Enrich an entry point loaded from backend with template metadata
+ *
+ * When entry points are loaded from backend, outputs only have:
+ *   node_id, type, name, position_index, group_index
+ *
+ * This function reconstructs missing fields from ENTRY_POINT_TEMPLATE:
+ *   direction, label, type_var, allowed_types
+ */
+export function enrichEntryPoint(entryPoint: EntryPoint): EntryPoint {
+  const typeParams = ENTRY_POINT_TEMPLATE.meta?.io_shape?.type_params || {};
+  const outputShape = ENTRY_POINT_TEMPLATE.meta?.io_shape?.outputs;
+
+  // Enrich output pins (entry points only have outputs)
+  const enrichedOutputs = entryPoint.outputs.map((pin) => {
+    // Entry points always use the first (and only) NodeGroup in the template
+    const nodeGroup = outputShape?.nodes?.[0];
+    if (!nodeGroup) {
+      console.warn(`No NodeGroup found in ENTRY_POINT_TEMPLATE`);
+      return pin;
+    }
+
+    const typeVar = nodeGroup.typing?.type_var;
+
+    // Calculate allowed_types (should always be ["str"] for entry points)
+    let allowedTypes: string[];
+    if (typeVar && typeParams[typeVar]) {
+      const typeParamTypes = typeParams[typeVar];
+      allowedTypes = typeParamTypes.length === 0 ? ALL_TYPES : typeParamTypes;
+    } else {
+      const directTypes = nodeGroup.typing?.allowed_types || ["str"];
+      allowedTypes = directTypes.length === 0 ? ALL_TYPES : directTypes;
+    }
+
+    return {
+      ...pin,
+      direction: "out" as const,
+      label: nodeGroup.label,
+      type_var: typeVar,
+      allowed_types: allowedTypes,
+      readonly: true, // Entry point names are always read-only
+    };
+  });
+
+  return {
+    ...entryPoint,
+    outputs: enrichedOutputs,
+  };
+}

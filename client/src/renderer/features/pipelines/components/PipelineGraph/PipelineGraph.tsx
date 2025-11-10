@@ -30,6 +30,7 @@ import {
   removePinFromModule,
   updatePinInModule,
   enrichModuleWithTemplate,
+  enrichEntryPoint,
 } from '../../utils/moduleFactory';
 import { getTypeColor } from '../../utils/edgeUtils';
 import { findPinInPipeline, synchronizeTypeVarUpdate } from '../../utils';
@@ -76,11 +77,14 @@ function PipelineGraphInner({
   const [edges, setEdges] = useState<Edge[]>([]);
 
   // Use external entry points if provided, otherwise use pipelineState.entry_points
-  // Memoized to prevent unnecessary re-renders
-  const effectiveEntryPoints = useMemo(
-    () => entryPoints ?? pipelineState?.entry_points ?? [],
-    [entryPoints, pipelineState?.entry_points]
-  );
+  // Enrich entry points with template metadata (similar to modules)
+  // Backend only stores: node_id, type, name, position_index, group_index
+  // We reconstruct: direction, label, type_var, allowed_types
+  const effectiveEntryPoints = useMemo(() => {
+    const rawEntryPoints = entryPoints ?? pipelineState?.entry_points ?? [];
+    // Enrich each entry point to add missing fields from ENTRY_POINT_TEMPLATE
+    return rawEntryPoints.map(enrichEntryPoint);
+  }, [entryPoints, pipelineState?.entry_points]);
 
   // Enrich pipeline state with template metadata when loaded from backend
   // Backend only stores: node_id, type, name, position_index, group_index
