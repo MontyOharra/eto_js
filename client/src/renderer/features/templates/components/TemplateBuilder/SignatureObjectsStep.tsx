@@ -6,7 +6,7 @@
  * - Edit mode: Fetches PDF from existing ID
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { ObjectTypesSidebar } from './ObjectTypesSidebar';
 import { PdfViewerSection } from './PdfViewerSection';
 import type { PdfObjects } from '../../types';
@@ -83,7 +83,7 @@ export function SignatureObjectsStep({
     });
 
     setSelectedObjectIds(idsToSelect);
-  }, [pdfObjects, selectedSignatureObjects]);
+  }, [pdfObjects, selectedSignatureObjects, getFlattenedObjects]);
 
   // Helper: Determine type from object (check which array it came from)
   const getTypeFromObject = (obj: any): string => {
@@ -112,7 +112,7 @@ export function SignatureObjectsStep({
   }, [pdfObjects]);
 
   // Flatten PDF objects for overlay rendering
-  const getFlattenedObjects = (): Array<any> => {
+  const getFlattenedObjects = useCallback((): Array<any> => {
     const flatObjects: Array<any> = [];
 
     // Helper to add objects with their type (preserving all original fields)
@@ -137,7 +137,7 @@ export function SignatureObjectsStep({
     addObjects(pdfObjects.tables, 'table');
 
     return flatObjects;
-  };
+  }, [pdfObjects]);
 
   // Handlers
   const handleTypeToggle = (type: string) => {

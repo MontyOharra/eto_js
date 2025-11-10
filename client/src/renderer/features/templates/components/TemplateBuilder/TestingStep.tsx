@@ -4,25 +4,20 @@
  * Shows extraction results and pipeline execution in split-panel layout
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ExecutedPipelineGraph } from '../../../pipelines/components/ExecutedPipelineGraph';
 import { PdfViewer, usePdfViewer } from '../../../pdf';
-import type { PdfObjects, ExtractionField } from '../../types';
 import type { PipelineState } from '../../../pipelines/types';
 import type { SimulateTemplateResponse } from '../../api/types';
 
 interface TestingStepProps {
   pdfUrl: string;
-  pdfObjects: PdfObjects;
-  extractionFields: ExtractionField[];
   pipelineState: PipelineState;
   viewMode: 'summary' | 'detail';
   result: SimulateTemplateResponse | null;
   isLoading: boolean;
   centerTrigger: number;
 }
-
-type ViewMode = 'summary' | 'detail';
 
 /**
  * ExtractedFieldsOverlay
@@ -148,7 +143,7 @@ function ResizablePanelLayout({
     onDragStateChange?.(true);
   };
 
-  const handleMouseMove = (e: MouseEvent) => {
+  const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isDragging) return;
 
     const container = document.querySelector('.resizable-panel-container');
@@ -164,12 +159,12 @@ function ResizablePanelLayout({
 
     // Call onResize callback during drag
     onResize?.();
-  };
+  }, [isDragging, onResize]);
 
-  const handleMouseUp = () => {
+  const handleMouseUp = useCallback(() => {
     setIsDragging(false);
     onDragStateChange?.(false);
-  };
+  }, [onDragStateChange]);
 
   // Attach/detach global mouse event listeners
   useEffect(() => {
@@ -181,7 +176,7 @@ function ResizablePanelLayout({
         document.removeEventListener('mouseup', handleMouseUp);
       };
     }
-  }, [isDragging]);
+  }, [isDragging, handleMouseMove, handleMouseUp]);
 
   return (
     <div className="flex h-full resizable-panel-container">
@@ -261,8 +256,6 @@ function PdfViewerWithAutoFit({
 
 export function TestingStep({
   pdfUrl,
-  pdfObjects,
-  extractionFields,
   pipelineState,
   viewMode,
   result,

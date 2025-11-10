@@ -15,7 +15,6 @@ interface PdfObject {
 
 interface PdfViewerSectionProps {
   pdfUrl: string;
-  pdfFileId: number;
   pdfObjects: PdfObject[];
   selectedTypes: Set<string>;
   selectedObjects: Set<string>;

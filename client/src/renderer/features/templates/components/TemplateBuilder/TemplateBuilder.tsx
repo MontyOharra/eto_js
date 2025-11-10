@@ -142,11 +142,14 @@ export function TemplateBuilder({
   const pdfError = fetchError;
 
   // Normalize data structure (both modes now have same shape: { objects: PdfObjects, url: string })
-  const activePdfData = pdfFile
-    ? processedData
-    : pdfData
-      ? { objects: pdfData.objectsData.objects, url: pdfData.url }
-      : null;
+  const activePdfData = useMemo(() => {
+    if (pdfFile) {
+      return processedData;
+    } else if (pdfData) {
+      return { objects: pdfData.objectsData.objects, url: pdfData.url };
+    }
+    return null;
+  }, [pdfFile, processedData, pdfData]);
 
   // Create complete pipeline state for validation (includes entry points)
   const completePipelineState = useMemo<PipelineState>(() => ({
@@ -197,7 +200,7 @@ export function TemplateBuilder({
       default:
         return false;
     }
-  }, [currentStep, selectedSignatureObjects, extractionFields, templateName, pipelineState, isPipelineValid, isPipelineValidating]);
+  }, [currentStep, selectedSignatureObjects, extractionFields, templateName, isPipelineValid, isPipelineValidating]);
 
   const validationMessage = useMemo(() => {
     if (canProceed) return undefined;
@@ -273,7 +276,7 @@ export function TemplateBuilder({
     }
 
     return completed;
-  }, [selectedSignatureObjects, extractionFields, templateName, pipelineState, isPipelineValid, isPipelineValidating]);
+  }, [selectedSignatureObjects, extractionFields, templateName, isPipelineValid, isPipelineValidating]);
 
   // Navigation handlers
   const handleNext = useCallback(() => {

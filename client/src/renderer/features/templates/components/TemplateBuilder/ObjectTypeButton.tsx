@@ -4,7 +4,6 @@
  */
 
 interface ObjectTypeButtonProps {
-  type: string; // 'text_word', 'graphic_rect', etc.
   label: string; // 'Text Words', 'Rectangles', etc.
   color: string; // '#ff0000'
   count: number;
