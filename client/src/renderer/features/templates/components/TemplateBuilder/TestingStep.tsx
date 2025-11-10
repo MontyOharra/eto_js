@@ -5,7 +5,6 @@
  */
 
 import { useState, useEffect } from 'react';
-import { useSimulateTemplate } from '../../api/hooks';
 import { ExecutedPipelineGraph } from '../../../pipelines/components/ExecutedPipelineGraph';
 import { PdfViewer, usePdfViewer } from '../../../pdf';
 import type { PdfObjects, ExtractionField } from '../../types';
@@ -17,6 +16,10 @@ interface TestingStepProps {
   pdfObjects: PdfObjects;
   extractionFields: ExtractionField[];
   pipelineState: PipelineState;
+  viewMode: 'summary' | 'detail';
+  result: SimulateTemplateResponse | null;
+  isLoading: boolean;
+  centerTrigger: number;
 }
 
 type ViewMode = 'summary' | 'detail';
@@ -129,11 +132,13 @@ function ResizablePanelLayout({
   rightPanel,
   defaultSplitPercentage = 50,
   onDragStateChange,
+  onResize,
 }: {
   leftPanel: React.ReactNode;
   rightPanel: React.ReactNode;
   defaultSplitPercentage?: number;
   onDragStateChange?: (isDragging: boolean) => void;
+  onResize?: () => void;
 }) {
   const [leftWidth, setLeftWidth] = useState(defaultSplitPercentage);
   const [isDragging, setIsDragging] = useState(false);
@@ -156,6 +161,9 @@ function ResizablePanelLayout({
     // Constrain between 20% and 80%
     const constrainedPercentage = Math.min(Math.max(percentage, 20), 80);
     setLeftWidth(constrainedPercentage);
+
+    // Call onResize callback during drag
+    onResize?.();
   };
 
   const handleMouseUp = () => {
@@ -196,85 +204,72 @@ function ResizablePanelLayout({
   );
 }
 
-export function TestingStep({
+/**
+ * PdfViewerWithAutoFit
+ * PDF viewer that auto-fits on resize
+ */
+function PdfViewerWithAutoFit({
   pdfUrl,
-  pdfObjects,
-  extractionFields,
-  pipelineState,
-}: TestingStepProps) {
-  const [viewMode, setViewMode] = useState<ViewMode>('summary');
-  const [result, setResult] = useState<SimulateTemplateResponse | null>(null);
-  const [centerTrigger, setCenterTrigger] = useState<number>(0);
-  const [isDragging, setIsDragging] = useState(false);
+  extractionResults,
+  isDragging,
+}: {
+  pdfUrl: string;
+  extractionResults?: SimulateTemplateResponse['extraction_results'];
+  isDragging: boolean;
+}) {
+  const { fitToWidth, pdfDimensions } = usePdfViewer();
+  const containerRef = useState<HTMLDivElement | null>(null)[0];
 
-  const simulateMutation = useSimulateTemplate();
+  // Trigger fitToWidth when dragging (resizing)
+  useEffect(() => {
+    if (!isDragging || !pdfDimensions) return;
 
-  const handleTest = async () => {
-    try {
-      const response = await simulateMutation.mutateAsync({
-        pdf_objects: pdfObjects,
-        extraction_fields: extractionFields,
-        pipeline_state: pipelineState,
-      });
-      setResult(response);
-      setCenterTrigger(Date.now());
-    } catch (err) {
-      console.error('Template simulation failed:', err);
-    }
-  };
+    const pdfViewerContainer = document.querySelector('.pdf-viewer-container');
+    if (!pdfViewerContainer) return;
+
+    const containerWidth = pdfViewerContainer.clientWidth;
+    const sidebarWidth = 64; // w-16 = 64px
+    fitToWidth(containerWidth, sidebarWidth);
+  }, [isDragging, fitToWidth, pdfDimensions]);
 
   const handlePdfError = (error: Error) => {
     console.error('PDF load error:', error);
   };
 
   return (
-    <div className="h-full flex flex-col">
-      {/* Test Controls Bar */}
-      <div className="flex-shrink-0 bg-gray-800 border-b border-gray-700 px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <h3 className="text-lg font-semibold text-white">Template Testing</h3>
-
-          {/* View Mode Toggle - Only show after testing */}
-          {result && (
-            <div className="flex items-center bg-gray-700 rounded-lg p-1 border-l border-gray-600 ml-4">
-              <button
-                onClick={() => setViewMode('summary')}
-                className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                  viewMode === 'summary'
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-400 hover:text-gray-200'
-                }`}
-              >
-                Summary
-              </button>
-              <button
-                onClick={() => setViewMode('detail')}
-                className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
-                  viewMode === 'detail'
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-400 hover:text-gray-200'
-                }`}
-              >
-                Detail
-              </button>
-            </div>
+    <div className="bg-gray-800 border border-gray-700 rounded-lg h-full overflow-hidden relative pr-4 pl-1 py-4 pdf-viewer-container">
+      <PdfViewer pdfUrl={pdfUrl} onError={handlePdfError}>
+        <PdfViewer.Canvas pdfUrl={pdfUrl} onError={handlePdfError}>
+          {extractionResults && extractionResults.length > 0 && (
+            <ExtractedFieldsOverlay fields={extractionResults} />
           )}
-        </div>
+        </PdfViewer.Canvas>
+        <PdfViewer.ControlsSidebar position="right" />
+      </PdfViewer>
+    </div>
+  );
+}
 
-        {/* Test Button */}
-        <button
-          onClick={handleTest}
-          disabled={simulateMutation.isPending}
-          className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-        >
-          {simulateMutation.isPending ? 'Testing...' : result ? 'Re-test' : 'Test Template'}
-        </button>
-      </div>
+export function TestingStep({
+  pdfUrl,
+  pdfObjects,
+  extractionFields,
+  pipelineState,
+  viewMode,
+  result,
+  isLoading,
+  centerTrigger,
+}: TestingStepProps) {
+  const [isDragging, setIsDragging] = useState(false);
 
-      {/* Content - Split Panel Layout */}
-      <div className="flex-1 overflow-hidden">
-        <div className="pr-4 pl-2 py-4 h-full">
-          {!result && !simulateMutation.isPending && (
+  const handleResize = () => {
+    // Resize handler - fitToWidth is called in PdfViewerWithAutoFit
+  };
+
+  return (
+    <div className="h-full overflow-hidden">
+      <div className="pr-4 pl-2 py-4 h-full">
+        {!result && !isLoading && (
             <div className="h-full flex items-center justify-center">
               <div className="text-center">
                 <div className="text-gray-400 mb-4">
@@ -298,7 +293,7 @@ export function TestingStep({
             </div>
           )}
 
-          {simulateMutation.isPending && (
+        {isLoading && (
             <div className="h-full flex items-center justify-center">
               <div className="text-center">
                 <div className="text-blue-400 mb-4">
@@ -310,10 +305,11 @@ export function TestingStep({
             </div>
           )}
 
-          {result && (
+        {result && (
             <ResizablePanelLayout
               defaultSplitPercentage={50}
               onDragStateChange={setIsDragging}
+              onResize={handleResize}
               leftPanel={
                 <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 flex flex-col h-full overflow-hidden">
                   <h3 className="text-lg font-semibold text-white mb-3">
@@ -382,32 +378,14 @@ export function TestingStep({
                 </div>
               }
               rightPanel={
-                <div className="bg-gray-800 border border-gray-700 rounded-lg h-full overflow-hidden relative pr-4 pl-1 py-4">
-                  <PdfViewer pdfUrl={pdfUrl} onError={handlePdfError}>
-                    <PdfViewer.Canvas pdfUrl={pdfUrl} onError={handlePdfError}>
-                      {/* Show extraction field overlay with results */}
-                      {result.extraction_results && result.extraction_results.length > 0 && (
-                        <ExtractedFieldsOverlay fields={result.extraction_results} />
-                      )}
-                    </PdfViewer.Canvas>
-                    <PdfViewer.ControlsSidebar position="right" />
-                  </PdfViewer>
-                </div>
+                <PdfViewerWithAutoFit
+                  pdfUrl={pdfUrl}
+                  extractionResults={result.extraction_results}
+                  isDragging={isDragging}
+                />
               }
             />
-          )}
-
-          {/* Error Display */}
-          {simulateMutation.isError && (
-            <div className="mt-4 bg-red-900/30 border border-red-700 rounded-lg p-4">
-              <p className="text-red-200">
-                {simulateMutation.error instanceof Error
-                  ? simulateMutation.error.message
-                  : 'Template simulation failed'}
-              </p>
-            </div>
-          )}
-        </div>
+        )}
       </div>
     </div>
   );

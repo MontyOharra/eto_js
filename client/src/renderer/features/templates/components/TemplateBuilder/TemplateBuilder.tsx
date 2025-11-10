@@ -16,6 +16,8 @@ import type { PipelineState, VisualState } from '../../../pipelines/types';
 import { usePdfData, useProcessPdfObjects } from '../../../pdf';
 import type { PdfFileMetadata } from '../../../pdf';
 import { usePipelineValidation } from '../../../pipelines/hooks';
+import { useSimulateTemplate } from '../../api/hooks';
+import type { SimulateTemplateResponse } from '../../api/types';
 
 // Step type
 type BuilderStep = 'signature-objects' | 'extraction-fields' | 'pipeline' | 'testing';
@@ -92,6 +94,12 @@ export function TemplateBuilder({
 
   // Saving state
   const [isSaving, setIsSaving] = useState(false);
+
+  // Testing state
+  const [viewMode, setViewMode] = useState<'summary' | 'detail'>('summary');
+  const [simulationResult, setSimulationResult] = useState<SimulateTemplateResponse | null>(null);
+  const [centerTrigger, setCenterTrigger] = useState<number>(0);
+  const simulateMutation = useSimulateTemplate();
 
   // PDF Data Management - Centralized at TemplateBuilder level
   // Create mode: Process local PDF file
@@ -294,6 +302,25 @@ export function TemplateBuilder({
     onClose();
   }, [onClose]);
 
+  const handleTest = useCallback(async () => {
+    if (!canProceed || !activePdfData) return;
+
+    try {
+      const response = await simulateMutation.mutateAsync({
+        pdf_objects: activePdfData.objects,
+        extraction_fields: extractionFields,
+        pipeline_state: pipelineState,
+      });
+      setSimulationResult(response);
+      setCenterTrigger(Date.now());
+      // Navigate to testing step
+      setCurrentStep('testing');
+    } catch (err) {
+      console.error('[TemplateBuilder] Simulation failed:', err);
+      // Error is handled by mutation
+    }
+  }, [canProceed, activePdfData, extractionFields, pipelineState, simulateMutation]);
+
   const handleSave = useCallback(async () => {
     if (!canProceed) return;
 
@@ -418,6 +445,10 @@ export function TemplateBuilder({
                   pdfObjects={activePdfData.objects}
                   extractionFields={extractionFields}
                   pipelineState={pipelineState}
+                  viewMode={viewMode}
+                  result={simulationResult}
+                  isLoading={simulateMutation.isPending}
+                  centerTrigger={centerTrigger}
                 />
               )}
             </>
@@ -431,10 +462,14 @@ export function TemplateBuilder({
           canProceed={canProceed}
           validationMessage={validationMessage}
           isSaving={isSaving}
+          isTesting={simulateMutation.isPending}
+          viewMode={viewMode}
           onBack={handleBack}
           onNext={handleNext}
+          onTest={handleTest}
           onSave={handleSave}
           onCancel={handleCancel}
+          onViewModeChange={setViewMode}
         />
       </div>
     </div>

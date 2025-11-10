@@ -19,16 +19,22 @@ const STEPS: StepConfig[] = [
   { id: 'testing', number: 4, label: 'Testing' },
 ];
 
+type ViewMode = 'summary' | 'detail';
+
 interface TemplateBuilderFooterProps {
   currentStep: BuilderStep;
   completedSteps: Set<BuilderStep>;
   canProceed: boolean;
   validationMessage?: string;
   isSaving?: boolean;
+  isTesting?: boolean;
+  viewMode?: ViewMode;
   onBack: () => void;
   onNext: () => void;
+  onTest?: () => void;
   onSave: () => void;
   onCancel: () => void;
+  onViewModeChange?: (mode: ViewMode) => void;
 }
 
 export function TemplateBuilderFooter({
@@ -37,13 +43,18 @@ export function TemplateBuilderFooter({
   canProceed,
   validationMessage,
   isSaving = false,
+  isTesting = false,
+  viewMode = 'summary',
   onBack,
   onNext,
+  onTest,
   onSave,
   onCancel,
+  onViewModeChange,
 }: TemplateBuilderFooterProps) {
   const isFirstStep = currentStep === 'signature-objects';
   const isLastStep = currentStep === 'testing';
+  const isPipelineStep = currentStep === 'pipeline';
   const currentStepNumber = STEPS.find((s) => s.id === currentStep)?.number || 1;
 
   return (
@@ -103,11 +114,37 @@ export function TemplateBuilderFooter({
 
       {/* Action Buttons */}
       <div className="flex items-center space-x-3">
+        {/* Summary/Detail Toggle - Only show on testing step */}
+        {isLastStep && onViewModeChange && (
+          <div className="flex items-center bg-gray-700 rounded-lg p-1 mr-2">
+            <button
+              onClick={() => onViewModeChange('summary')}
+              className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                viewMode === 'summary'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              Summary
+            </button>
+            <button
+              onClick={() => onViewModeChange('detail')}
+              className={`px-3 py-1 text-sm font-medium rounded-md transition-colors ${
+                viewMode === 'detail'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              Detail
+            </button>
+          </div>
+        )}
+
         {/* Back Button */}
         {!isFirstStep && (
           <button
             onClick={onBack}
-            disabled={isSaving}
+            disabled={isSaving || isTesting}
             className="px-4 py-2 text-sm bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
           >
             ← Back
@@ -117,13 +154,13 @@ export function TemplateBuilderFooter({
         {/* Cancel Button */}
         <button
           onClick={onCancel}
-          disabled={isSaving}
+          disabled={isSaving || isTesting}
           className="px-4 py-2 text-sm bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
         >
           Cancel
         </button>
 
-        {/* Next / Save Button with Tooltip */}
+        {/* Test / Next / Save Button with Tooltip */}
         {isLastStep ? (
           <div className="relative group">
             <button
@@ -132,6 +169,28 @@ export function TemplateBuilderFooter({
               className="px-6 py-2 text-sm bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
             >
               {isSaving ? 'Saving...' : 'Save Template'}
+            </button>
+            {/* Tooltip - only show when button is disabled and there's a validation message */}
+            {!canProceed && validationMessage && (
+              <div className="absolute bottom-full right-0 mb-2 hidden group-hover:block">
+                <div className="bg-gray-800 text-amber-400 text-xs rounded-lg py-2 px-3 whitespace-nowrap shadow-lg border border-gray-700">
+                  {validationMessage}
+                  {/* Arrow pointing down */}
+                  <div className="absolute top-full right-4 -mt-1">
+                    <div className="border-4 border-transparent border-t-gray-800"></div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : isPipelineStep ? (
+          <div className="relative group">
+            <button
+              onClick={onTest}
+              disabled={!canProceed || isTesting}
+              className="px-6 py-2 text-sm bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
+            >
+              {isTesting ? 'Testing...' : 'Test →'}
             </button>
             {/* Tooltip - only show when button is disabled and there's a validation message */}
             {!canProceed && validationMessage && (
