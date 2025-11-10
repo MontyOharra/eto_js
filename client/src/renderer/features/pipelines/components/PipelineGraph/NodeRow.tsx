@@ -78,6 +78,12 @@ export function NodeRow({
     }
   };
 
+  // Prevent default drag behavior to avoid ghost elements
+  const handleDragStart = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
   // For input nodes, display connected output name or "Not Connected"
   const connectedOutputName =
     direction === "input" ? getConnectedOutputName?.(node.node_id) : undefined;
@@ -110,6 +116,7 @@ export function NodeRow({
         }}
         data-handleid={node.node_id}
         onClick={handleClick}
+        onDragStart={handleDragStart}
       />
 
       {/* Node Content - Mirrored layout based on direction */}
