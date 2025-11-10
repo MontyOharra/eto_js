@@ -182,6 +182,8 @@ class PdfTemplateService:
            → Validate/compile pipeline → Create pipeline_definition + compiled_plan + steps
            → Create new version with new pipeline_definition_id, return
 
+        Templates can be updated even when active. New versions are created automatically.
+
         Args:
             template_id: Template ID to update
             update_data: Unified PdfTemplateUpdate with all possible fields
@@ -191,7 +193,6 @@ class PdfTemplateService:
 
         Raises:
             ObjectNotFoundError: Template not found
-            ConflictError: Template is active and wizard data is being changed
             ValidationError: Pipeline validation fails
         """
         from shared.types.pdf_templates import PdfVersionCreate
@@ -214,12 +215,6 @@ class PdfTemplateService:
         pipeline_changed = update_data.pipeline_state is not None or update_data.visual_state is not None
 
         wizard_data_changed = signature_changed or extraction_changed or pipeline_changed
-
-        # Check: Cannot update wizard data while template is active
-        if wizard_data_changed and template.status == "active":
-            raise ConflictError(
-                f"Template {template_id} is active. Deactivate first before updating wizard data."
-            )
 
         # ==================== Case 1: Only Metadata Changed ====================
         if metadata_changed and not wizard_data_changed:

@@ -124,10 +124,10 @@ async def update_pdf_template(
     3. Complex Case: Pipeline fields → Validate/compile/create pipeline → Create new version
 
     All updates are atomic using unit-of-work pattern.
+    Templates can be updated even when active (new version created automatically).
 
     Errors:
     - 404: Template not found
-    - 409: Template is active (deactivate first to update wizard data)
     - 400: Pipeline validation fails
     """
     update_data = convert_update_template_request(request)
