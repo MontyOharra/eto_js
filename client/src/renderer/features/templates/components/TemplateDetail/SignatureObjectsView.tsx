@@ -4,7 +4,7 @@
  * All signature objects are always visible (no toggle)
  */
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { PdfViewer, usePdfViewer } from '../../../pdf';
 import type { PdfObjects } from '../../types';
 import { OBJECT_TYPE_COLORS } from '../../constants';
@@ -18,19 +18,37 @@ export function SignatureObjectsView({
   pdfUrl,
   signatureObjects,
 }: SignatureObjectsViewProps) {
+  // Visibility state for each object type (all visible by default)
+  const [visibleTypes, setVisibleTypes] = useState<Set<string>>(
+    new Set(['text_word', 'graphic_rect', 'graphic_line', 'graphic_curve', 'image', 'table'])
+  );
+
   // Count total signature objects by type
   const objectCounts = useMemo(() => {
     return {
-      text_words: signatureObjects.text_words?.length || 0,
-      graphic_rects: signatureObjects.graphic_rects?.length || 0,
-      graphic_lines: signatureObjects.graphic_lines?.length || 0,
-      graphic_curves: signatureObjects.graphic_curves?.length || 0,
-      images: signatureObjects.images?.length || 0,
-      tables: signatureObjects.tables?.length || 0,
+      text_word: signatureObjects.text_words?.length || 0,
+      graphic_rect: signatureObjects.graphic_rects?.length || 0,
+      graphic_line: signatureObjects.graphic_lines?.length || 0,
+      graphic_curve: signatureObjects.graphic_curves?.length || 0,
+      image: signatureObjects.images?.length || 0,
+      table: signatureObjects.tables?.length || 0,
     };
   }, [signatureObjects]);
 
   const totalCount = Object.values(objectCounts).reduce((sum, count) => sum + count, 0);
+
+  // Toggle visibility of a type
+  const toggleTypeVisibility = (type: string) => {
+    setVisibleTypes((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(type)) {
+        newSet.delete(type);
+      } else {
+        newSet.add(type);
+      }
+      return newSet;
+    });
+  };
 
   // Flatten signature objects for overlay rendering
   const flattenedObjects = useMemo(() => {
@@ -59,6 +77,11 @@ export function SignatureObjectsView({
     return flat;
   }, [signatureObjects]);
 
+  // Filter objects based on visibility
+  const visibleObjects = useMemo(() => {
+    return flattenedObjects.filter((obj) => visibleTypes.has(obj.type));
+  }, [flattenedObjects, visibleTypes]);
+
   return (
     <div className="h-full flex">
       {/* Sidebar */}
@@ -76,64 +99,106 @@ export function SignatureObjectsView({
 
         {/* Object counts by type */}
         <div className="space-y-2">
-          {objectCounts.text_words > 0 && (
-            <div className="flex items-center justify-between p-2 bg-gray-800 rounded">
+          {objectCounts.text_word > 0 && (
+            <button
+              onClick={() => toggleTypeVisibility('text_word')}
+              className={`w-full flex items-center justify-between p-2 rounded transition-colors ${
+                visibleTypes.has('text_word')
+                  ? 'bg-gray-700 text-white'
+                  : 'bg-gray-800 text-gray-500 opacity-60'
+              }`}
+            >
               <div className="flex items-center space-x-2">
                 <div className="w-3 h-3 rounded" style={{ backgroundColor: OBJECT_TYPE_COLORS.text_word }}></div>
-                <span className="text-sm text-gray-300">Text Words</span>
+                <span className="text-sm">Text Words</span>
               </div>
-              <span className="text-sm font-medium text-white">{objectCounts.text_words}</span>
-            </div>
+              <span className="text-sm font-medium">{objectCounts.text_word}</span>
+            </button>
           )}
 
-          {objectCounts.graphic_rects > 0 && (
-            <div className="flex items-center justify-between p-2 bg-gray-800 rounded">
+          {objectCounts.graphic_rect > 0 && (
+            <button
+              onClick={() => toggleTypeVisibility('graphic_rect')}
+              className={`w-full flex items-center justify-between p-2 rounded transition-colors ${
+                visibleTypes.has('graphic_rect')
+                  ? 'bg-gray-700 text-white'
+                  : 'bg-gray-800 text-gray-500 opacity-60'
+              }`}
+            >
               <div className="flex items-center space-x-2">
                 <div className="w-3 h-3 rounded" style={{ backgroundColor: OBJECT_TYPE_COLORS.graphic_rect }}></div>
-                <span className="text-sm text-gray-300">Graphic Rects</span>
+                <span className="text-sm">Graphic Rects</span>
               </div>
-              <span className="text-sm font-medium text-white">{objectCounts.graphic_rects}</span>
-            </div>
+              <span className="text-sm font-medium">{objectCounts.graphic_rect}</span>
+            </button>
           )}
 
-          {objectCounts.graphic_lines > 0 && (
-            <div className="flex items-center justify-between p-2 bg-gray-800 rounded">
+          {objectCounts.graphic_line > 0 && (
+            <button
+              onClick={() => toggleTypeVisibility('graphic_line')}
+              className={`w-full flex items-center justify-between p-2 rounded transition-colors ${
+                visibleTypes.has('graphic_line')
+                  ? 'bg-gray-700 text-white'
+                  : 'bg-gray-800 text-gray-500 opacity-60'
+              }`}
+            >
               <div className="flex items-center space-x-2">
                 <div className="w-3 h-3 rounded" style={{ backgroundColor: OBJECT_TYPE_COLORS.graphic_line }}></div>
-                <span className="text-sm text-gray-300">Graphic Lines</span>
+                <span className="text-sm">Graphic Lines</span>
               </div>
-              <span className="text-sm font-medium text-white">{objectCounts.graphic_lines}</span>
-            </div>
+              <span className="text-sm font-medium">{objectCounts.graphic_line}</span>
+            </button>
           )}
 
-          {objectCounts.graphic_curves > 0 && (
-            <div className="flex items-center justify-between p-2 bg-gray-800 rounded">
+          {objectCounts.graphic_curve > 0 && (
+            <button
+              onClick={() => toggleTypeVisibility('graphic_curve')}
+              className={`w-full flex items-center justify-between p-2 rounded transition-colors ${
+                visibleTypes.has('graphic_curve')
+                  ? 'bg-gray-700 text-white'
+                  : 'bg-gray-800 text-gray-500 opacity-60'
+              }`}
+            >
               <div className="flex items-center space-x-2">
                 <div className="w-3 h-3 rounded" style={{ backgroundColor: OBJECT_TYPE_COLORS.graphic_curve }}></div>
-                <span className="text-sm text-gray-300">Graphic Curves</span>
+                <span className="text-sm">Graphic Curves</span>
               </div>
-              <span className="text-sm font-medium text-white">{objectCounts.graphic_curves}</span>
-            </div>
+              <span className="text-sm font-medium">{objectCounts.graphic_curve}</span>
+            </button>
           )}
 
-          {objectCounts.images > 0 && (
-            <div className="flex items-center justify-between p-2 bg-gray-800 rounded">
+          {objectCounts.image > 0 && (
+            <button
+              onClick={() => toggleTypeVisibility('image')}
+              className={`w-full flex items-center justify-between p-2 rounded transition-colors ${
+                visibleTypes.has('image')
+                  ? 'bg-gray-700 text-white'
+                  : 'bg-gray-800 text-gray-500 opacity-60'
+              }`}
+            >
               <div className="flex items-center space-x-2">
                 <div className="w-3 h-3 rounded" style={{ backgroundColor: OBJECT_TYPE_COLORS.image }}></div>
-                <span className="text-sm text-gray-300">Images</span>
+                <span className="text-sm">Images</span>
               </div>
-              <span className="text-sm font-medium text-white">{objectCounts.images}</span>
-            </div>
+              <span className="text-sm font-medium">{objectCounts.image}</span>
+            </button>
           )}
 
-          {objectCounts.tables > 0 && (
-            <div className="flex items-center justify-between p-2 bg-gray-800 rounded">
+          {objectCounts.table > 0 && (
+            <button
+              onClick={() => toggleTypeVisibility('table')}
+              className={`w-full flex items-center justify-between p-2 rounded transition-colors ${
+                visibleTypes.has('table')
+                  ? 'bg-gray-700 text-white'
+                  : 'bg-gray-800 text-gray-500 opacity-60'
+              }`}
+            >
               <div className="flex items-center space-x-2">
                 <div className="w-3 h-3 rounded" style={{ backgroundColor: OBJECT_TYPE_COLORS.table }}></div>
-                <span className="text-sm text-gray-300">Tables</span>
+                <span className="text-sm">Tables</span>
               </div>
-              <span className="text-sm font-medium text-white">{objectCounts.tables}</span>
-            </div>
+              <span className="text-sm font-medium">{objectCounts.table}</span>
+            </button>
           )}
         </div>
       </div>
@@ -142,7 +207,7 @@ export function SignatureObjectsView({
       <div className="flex-1 bg-gray-900 p-4 overflow-auto">
         <PdfViewer pdfUrl={pdfUrl}>
           <PdfViewer.Canvas pdfUrl={pdfUrl}>
-            <SignatureObjectsOverlay objects={flattenedObjects} />
+            <SignatureObjectsOverlay objects={visibleObjects} />
           </PdfViewer.Canvas>
           <PdfViewer.ControlsSidebar position="right" />
         </PdfViewer>
