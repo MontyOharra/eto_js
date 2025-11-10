@@ -389,12 +389,21 @@ function PipelineGraphInner({
         return;
       }
 
+      // In view mode, mark all outputs as readonly
+      const moduleInstanceForDisplay = mode === 'view' ? {
+        ...moduleInstance,
+        outputs: moduleInstance.outputs.map(output => ({
+          ...output,
+          readonly: true,
+        })),
+      } : moduleInstance;
+
       newNodes.push({
         id: moduleInstance.module_instance_id,
         type: 'module',
         position: visualState?.[moduleInstance.module_instance_id] || { x: 0, y: 0 },
         data: {
-          moduleInstance,
+          moduleInstance: moduleInstanceForDisplay,
           template,
           // Edit callbacks
           onDeleteModule: mode === 'edit' ? handleDeleteModule : undefined,
