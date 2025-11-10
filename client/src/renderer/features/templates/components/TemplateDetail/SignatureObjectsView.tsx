@@ -159,13 +159,20 @@ interface SignatureObjectsOverlayProps {
 function SignatureObjectsOverlay({
   objects,
 }: SignatureObjectsOverlayProps) {
-  const { renderScale, currentPage } = usePdfViewer();
+  const { renderScale, currentPage, pdfDimensions } = usePdfViewer();
 
   // Filter objects for current page
   const pageObjects = useMemo(
     () => objects.filter((obj) => obj.page === currentPage),
     [objects, currentPage]
   );
+
+  // Don't render if PDF dimensions aren't loaded yet
+  if (!pdfDimensions) {
+    return null;
+  }
+
+  const pageHeight = pdfDimensions.height;
 
   return (
     <div
@@ -180,10 +187,31 @@ function SignatureObjectsOverlay({
     >
       {pageObjects.map((obj, idx) => {
         const [x0, y0, x1, y1] = obj.bbox;
+
+        // Coordinate transformation
+        // Text objects, tables, and curves don't need Y-axis flipping
+        // Graphics (rects, lines) and images need flipping
+        let screenY0: number, screenY1: number;
+
+        // List of types that DON'T need Y-axis flipping
+        const noFlipping = obj.type === 'text_word' ||
+                           obj.type === 'table' ||
+                           obj.type === 'graphic_curve';
+
+        if (noFlipping) {
+          // Don't flip Y coordinates for text, table, and curve objects
+          screenY0 = y0;
+          screenY1 = y1;
+        } else {
+          // Flip Y coordinates for graphic objects (rects, lines) and images
+          screenY0 = pageHeight - y1;
+          screenY1 = pageHeight - y0;
+        }
+
         const width = (x1 - x0) * renderScale;
-        const height = (y1 - y0) * renderScale;
+        const height = (screenY1 - screenY0) * renderScale;
         const left = x0 * renderScale;
-        const top = y0 * renderScale;
+        const top = screenY0 * renderScale;
 
         return (
           <div
