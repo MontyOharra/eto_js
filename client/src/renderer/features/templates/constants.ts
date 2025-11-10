@@ -21,7 +21,7 @@ export const OBJECT_TYPE_COLORS: Record<string, string> = {
   graphic_line: '#ef4444', // red-500
   graphic_curve: '#8b5cf6', // purple-500
   image: '#ec4899',        // pink-500
-  table: '#06b6d4',        // cyan-500
+  table: '#22c55e',        // green-500
 };
 
 /**
