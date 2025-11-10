@@ -8,17 +8,21 @@ import { formatFileSize } from '../../../../shared/utils/formatUtils';
 
 interface TemplateBuilderHeaderProps {
   pdfMetadata: PdfFileMetadata | null;
+  mode: 'create' | 'version';
   onClose: () => void;
 }
 
 export function TemplateBuilderHeader({
   pdfMetadata,
+  mode,
   onClose,
 }: TemplateBuilderHeaderProps) {
   return (
     <div className="flex items-center justify-between p-4 border-b border-gray-700 flex-shrink-0">
       <div className="flex items-center space-x-4">
-        <h2 className="text-xl font-semibold text-white">Template Builder</h2>
+        <h2 className="text-xl font-semibold text-white">
+          {mode === 'create' ? 'Create New Template' : 'Create Template Version'}
+        </h2>
 
         {pdfMetadata && (
           <>

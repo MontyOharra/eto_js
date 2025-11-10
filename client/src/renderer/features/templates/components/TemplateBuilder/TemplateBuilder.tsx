@@ -28,8 +28,9 @@ interface TemplateBuilderProps {
   pdfFile: File | null;          // For create mode (local file)
   pdfFileId: number | null;       // For edit mode (existing PDF)
   pdfMetadata: PdfFileMetadata | null;
+  templateId?: number;            // If provided, creating new version of existing template
   onClose: () => void;
-  onSave: (data: TemplateBuilderData) => Promise<void>;
+  onSave: (data: TemplateBuilderData, templateId?: number) => Promise<void>;
   initialData?: Partial<TemplateBuilderData>;
 }
 
@@ -49,6 +50,7 @@ export function TemplateBuilder({
   pdfFile,
   pdfFileId,
   pdfMetadata,
+  templateId,
   onClose,
   onSave,
   initialData,
@@ -366,7 +368,7 @@ export function TemplateBuilder({
         visual_state: visualState,
       };
 
-      await onSave(data);
+      await onSave(data, templateId);
       // Parent will close modal on success
     } catch (error) {
       console.error('[TemplateBuilder] Save failed:', error);
@@ -376,6 +378,7 @@ export function TemplateBuilder({
     }
   }, [
     canProceed,
+    templateId,
     templateName,
     templateDescription,
     pdfFileId,
@@ -393,7 +396,11 @@ export function TemplateBuilder({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="bg-gray-900 rounded-lg w-full max-w-[95vw] h-[95vh] overflow-hidden flex flex-col shadow-2xl border border-gray-700">
         {/* Header */}
-        <TemplateBuilderHeader pdfMetadata={pdfMetadata} onClose={handleCancel} />
+        <TemplateBuilderHeader
+          pdfMetadata={pdfMetadata}
+          mode={templateId ? 'version' : 'create'}
+          onClose={handleCancel}
+        />
 
         {/* Body - Dynamic Step Content */}
         <div className="flex-1 overflow-hidden">

@@ -43,6 +43,7 @@ function TemplatesPage() {
   const [isBuilderOpen, setIsBuilderOpen] = useState(false);
   const [builderPdfFile, setBuilderPdfFile] = useState<File | null>(null);
   const [builderPdfFileId, setBuilderPdfFileId] = useState<number | null>(null);
+  const [builderTemplateId, setBuilderTemplateId] = useState<number | null>(null);
   const [builderInitialData, setBuilderInitialData] = useState<Partial<TemplateBuilderData> | undefined>(undefined);
   const [builderKey, setBuilderKey] = useState(0);
 
@@ -169,9 +170,10 @@ function TemplatesPage() {
         visual_state: pipelineData.visual_state,
       };
 
-      // Open builder with initial data
+      // Open builder with initial data AND template ID
       setBuilderInitialData(initialData);
       setBuilderPdfFileId(versionDetail.source_pdf_id);
+      setBuilderTemplateId(templateId);
       setBuilderKey(prev => prev + 1); // Force fresh component instance
       setIsBuilderOpen(true);
     } catch (err) {
@@ -221,9 +223,10 @@ function TemplatesPage() {
           const processedData = await processObjects(file);
           console.log('PDF objects extracted:', processedData);
 
-          // Open builder with local file (no PDF ID yet)
+          // Open builder with local file (no PDF ID or template ID yet)
           setBuilderPdfFile(file);
           setBuilderPdfFileId(null); // No ID yet - will be created on save
+          setBuilderTemplateId(null); // No template ID for create mode
           setBuilderInitialData(undefined); // No initial data for create mode
           setBuilderKey(prev => prev + 1); // Force fresh component instance
           setIsBuilderOpen(true);
@@ -243,9 +246,10 @@ function TemplatesPage() {
     setBuilderInitialData(undefined);
     setBuilderPdfFile(null);
     setBuilderPdfFileId(null);
+    setBuilderTemplateId(null);
   };
 
-  const handleSaveTemplate = async (templateData: TemplateBuilderData) => {
+  const handleSaveTemplate = async (templateData: TemplateBuilderData, templateId?: number) => {
     try {
       let pdfId: number;
 
@@ -266,16 +270,24 @@ function TemplatesPage() {
         throw new Error('No PDF file or ID available');
       }
 
-      // Determine if this is create or edit
-      const isEditMode = !!builderInitialData;
-
-      if (isEditMode) {
-        // Edit mode - update template
-        // TODO: Need template ID from somewhere
-        console.log('Edit mode - updating template');
-        alert('Edit functionality needs template ID - to be implemented');
+      if (templateId) {
+        // VERSION MODE: Update existing template (creates new version)
+        console.log('Creating new version for template:', templateId);
+        await updateTemplate.mutateAsync({
+          templateId,
+          request: {
+            name: templateData.name,
+            description: templateData.description,
+            signature_objects: templateData.signature_objects,
+            extraction_fields: templateData.extraction_fields,
+            pipeline_state: templateData.pipeline_state,
+            visual_state: templateData.visual_state,
+          },
+        });
+        console.log('Template version created successfully');
       } else {
-        // Create mode - create new template
+        // CREATE MODE: Create new template
+        console.log('Creating new template');
         await createTemplate.mutateAsync({
           name: templateData.name,
           description: templateData.description,
@@ -284,7 +296,7 @@ function TemplatesPage() {
           extraction_fields: templateData.extraction_fields,
           pipeline_state: templateData.pipeline_state,
           visual_state: templateData.visual_state,
-        } as any); // Type assertion needed until API types are updated
+        } as any);
         console.log('Template created successfully');
       }
 
@@ -480,6 +492,7 @@ function TemplatesPage() {
         pdfFile={builderPdfFile}
         pdfFileId={builderPdfFileId}
         pdfMetadata={pdfMetadata || null}
+        templateId={builderTemplateId || undefined}
         initialData={builderInitialData}
         onClose={handleCloseBuilder}
         onSave={handleSaveTemplate}
