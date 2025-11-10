@@ -48,8 +48,8 @@ function ExtractedFieldsOverlay({
       top: `${y0 * renderScale}px`,
       width: `${(x1 - x0) * renderScale}px`,
       height: `${(y1 - y0) * renderScale}px`,
-      backgroundColor: 'rgba(34, 197, 94, 0.15)', // Green with transparency
-      border: `2px solid rgba(34, 197, 94, ${isHovered ? '1' : '0.6'})`,
+      backgroundColor: 'rgba(59, 130, 246, 0.15)', // Blue with transparency
+      border: `2px solid rgba(59, 130, 246, ${isHovered ? '1' : '0.6'})`,
       borderRadius: '2px',
       cursor: 'default',
       transition: 'border-color 0.15s ease-in-out, background-color 0.15s ease-in-out',
@@ -78,7 +78,7 @@ function ExtractedFieldsOverlay({
               left: `${x0 * renderScale}px`,
               top: `${labelY * renderScale}px`,
               backgroundColor: 'rgba(17, 24, 39, 0.95)',
-              border: '2px solid rgba(34, 197, 94, 0.8)',
+              border: '2px solid rgba(59, 130, 246, 0.8)',
               borderRadius: '8px',
               padding: '16px 20px',
               fontSize: '24px',
