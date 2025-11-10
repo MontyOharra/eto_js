@@ -5,6 +5,346 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
+## [2025-11-09 Evening] — TemplateBuilder Entry Points & Pipeline Validation
+
+### Spec / Intent
+- Fix entry point generation to match PipelineBuilderModal implementation exactly
+- Implement automatic pipeline validation with visual feedback in TemplateBuilder
+- Add validation bouncing behavior (disabled Next button with hover tooltips)
+- Ensure pipeline step requires valid backend-validated pipeline before proceeding to testing
+
+### Changes Made
+
+**Entry Point Creation Fix** (`ExtractionFieldsStep.tsx`):
+- **Root Cause**: Manual entry point creation with wrong node_id format and missing properties
+  - Was using `N{xxx}` format from `generateNodeId()` instead of `E{xx}_out` format
+  - Missing `allowed_types`, `readonly`, and `type_var` handling
+  - Inconsistent with PipelineBuilderModal which uses factory function
+- **Solution**: Use standard `createEntryPoint()` factory function from moduleFactory
+  - Changed from manual structure creation to: `createEntryPoint(entryPointId, field.name)`
+  - Now generates proper format: `{entryPointId}_out` (e.g., `Eab_out`)
+  - Includes all required properties: `allowed_types: ['str']`, `readonly: true`
+  - Consistent with ENTRY_POINT_TEMPLATE single source of truth
+- **Cleanup Logic Update**:
+  - Changed orphaned connection filter from `startsWith('N')` to `endsWith('_out')`
+  - Properly identifies entry point output pins for cleanup on field deletion
+
+**Pipeline Validation Implementation** (`TemplateBuilder.tsx`):
+- **Added `usePipelineValidation` hook** (lines 17, 142-153):
+  ```typescript
+  import { usePipelineValidation } from '../../../pipelines/hooks';
+
+  const completePipelineState = useMemo<PipelineState>(() => ({
+    ...pipelineState,
+    entry_points: pipelineState.entry_points,
+  }), [pipelineState]);
+
+  const {
+    isValid: isPipelineValid,
+    error: pipelineValidationError,
+    isValidating: isPipelineValidating,
+  } = usePipelineValidation(currentStep === 'pipeline' ? completePipelineState : null);
+  ```
+- **Updated validation logic** (lines 179-183):
+  - Changed from local checks (`modules.length > 0`) to backend validation
+  - Now requires: `isPipelineValid && !isPipelineValidating`
+- **Enhanced validation messages** (lines 206-219):
+  - Shows "Validating pipeline..." while validation in progress
+  - Shows specific backend error: `[error.code] error.message` on failure
+  - Provides helpful hints for common issues (no modules, no entry points)
+- **Updated step completion tracking** (lines 252-259):
+  - Pipeline step only marked complete when `isPipelineValid && !isPipelineValidating`
+  - Green checkmark appears only after successful backend validation
+
+### Technical Details
+
+**Entry Point Structure**:
+```typescript
+// BEFORE (Manual - WRONG):
+{
+  entry_point_id: "Eab",
+  name: "hawb",
+  outputs: [{
+    node_id: "N123",              // ❌ Wrong format
+    direction: 'out',
+    type: 'str',
+    name: "hawb",
+    label: "hawb",
+    position_index: 0,
+    group_index: 0,
+    // ❌ Missing: allowed_types, readonly, type_var
+  }]
+}
+
+// AFTER (Factory - CORRECT):
+{
+  entry_point_id: "Eab",
+  name: "hawb",
+  outputs: [{
+    node_id: "Eab_out",           // ✅ Correct format
+    direction: 'out',
+    type: 'str',
+    name: "hawb",
+    label: "Output",
+    position_index: 0,
+    group_index: 0,
+    readonly: true,               // ✅ Present
+    allowed_types: ['str'],       // ✅ Present
+    type_var: undefined,          // ✅ Handled
+  }]
+}
+```
+
+**Validation Flow**:
+1. User makes changes to pipeline (add module, create connection, etc.)
+2. PipelineState updates in TemplateBuilder
+3. usePipelineValidation hook detects change, starts 500ms debounce timer
+4. After debounce, hook calls `/api/pipelines/validate` with complete pipeline state
+5. Backend validates: type compatibility, connections, module configuration
+6. Hook updates: `isPipelineValid`, `pipelineValidationError`, `isValidating`
+7. TemplateBuilder reacts:
+   - `canProceed` becomes false if invalid
+   - "Next" button disables
+   - Hover tooltip shows validation error message
+   - Step indicator shows pipeline step as incomplete (no checkmark)
+
+**Validation Debouncing**:
+- Default: 500ms delay after last change
+- Prevents excessive API calls while user is actively editing
+- Same pattern as PipelineBuilderModal
+
+### Architecture Consistency
+
+**Now Matches PipelineBuilderModal**:
+- ✅ Entry points created with `createEntryPoint()` factory
+- ✅ Uses `ENTRY_POINT_TEMPLATE` as single source of truth
+- ✅ Entry point output pins have `E{xx}_out` format
+- ✅ Pipeline validation uses `usePipelineValidation` hook
+- ✅ Validation debounced to 500ms
+- ✅ Next button disabled during validation and on errors
+- ✅ Hover tooltips show validation error details
+- ✅ Step completion tracking respects validation state
+
+### Files Modified
+
+**Entry Point Fix**:
+- `client/src/renderer/features/templates/components/TemplateBuilder/ExtractionFieldsStep.tsx`
+  - Line 13-14: Updated imports (added `createEntryPoint`, removed `generateNodeId`)
+  - Line 34-39: Simplified `extractionFieldToEntryPoint()` to use factory
+  - Line 119-121: Fixed cleanup filter to use `endsWith('_out')`
+
+**Pipeline Validation**:
+- `client/src/renderer/features/templates/components/TemplateBuilder/TemplateBuilder.tsx`
+  - Line 17: Added `usePipelineValidation` import
+  - Line 142-153: Added pipeline validation hook with memoized state
+  - Line 179-183: Updated `canProceed` logic for pipeline step
+  - Line 191: Added dependencies to `canProceed` useMemo
+  - Line 206-219: Enhanced validation messages with backend errors
+  - Line 225: Added dependencies to `validationMessage` useMemo
+  - Line 252-259: Updated `completedSteps` logic for pipeline step
+  - Line 267: Added dependencies to `completedSteps` useMemo
+
+### Validation Behavior
+
+**Next Button States**:
+- **Disabled + "Validating pipeline..."**: Validation in progress
+- **Disabled + "[error_code] error message"**: Validation failed with specific error
+- **Disabled + "Pipeline must have at least one module"**: No modules in pipeline
+- **Disabled + "Pipeline must have entry points"**: No entry points (should not happen in TemplateBuilder)
+- **Enabled**: Pipeline is valid and ready for testing step
+
+**Step Indicator**:
+- Pipeline step (3) shows gray number until validation passes
+- Shows green checkmark only when `isPipelineValid && !isPipelineValidating`
+- User can navigate back to pipeline step anytime to fix issues
+
+### User Experience
+
+**Validation Feedback**:
+- Clear visual indication when pipeline is invalid
+- Specific error messages help user understand what's wrong
+- Validation happens automatically as user builds pipeline
+- No need to click "Next" to discover validation errors
+- Same UX patterns as standalone PipelineBuilderModal
+
+**Entry Point Reliability**:
+- Entry points now render correctly in PipelineEditor
+- All connections work properly
+- Type system validation functions correctly
+- No React Flow errors about missing handles
+
+### Next Actions
+
+**Testing Step Implementation** (Pending):
+- Build out the testing step UI (currently shows placeholder)
+- Implement template simulation workflow
+- Display extraction results
+- Show pipeline execution trace
+- Allow users to test template before saving
+
+**Current Status**:
+- ✅ Step 1 (Signature Objects) - Complete
+- ✅ Step 2 (Extraction Fields) - Complete with entry point generation
+- ✅ Step 3 (Pipeline) - Complete with validation
+- ⏳ Step 4 (Testing) - Placeholder only, needs implementation
+
+### Notes
+- TypeScript compilation: ✅ Zero errors
+- All changes maintain consistency with PipelineBuilderModal patterns
+- Entry point fix ensures template builder's pipeline editor works identically to standalone pipeline builder
+- Validation prevents users from proceeding with invalid pipelines
+- User can now confidently build complete, valid templates
+- Session continuity: Ready to implement testing step next
+
+---
+
+## [2025-11-09 23:30] — Templates API Refactoring & PdfObjects Type Consolidation
+
+### Spec / Intent
+- Refactor templates feature to match architecture patterns from modules/pipelines
+- Align templates API type naming with established conventions
+- Fix critical PdfObjects type duplication between pdf and templates features
+- Separate domain types from API types following feature-first architecture
+- Establish single source of truth for PDF object type definitions
+
+### Changes Made
+
+**Templates API Type Refactoring** (4 files):
+- Renamed request types to remove HTTP method prefixes:
+  - `PostTemplateCreateRequest` → `CreateTemplateRequest`
+  - `PutTemplateUpdateRequest` → `UpdateTemplateRequest`
+  - `PostTemplateSimulateRequest` → `SimulateTemplateRequest`
+  - `PostTemplateSimulateResponse` → `SimulateTemplateResponse`
+- Removed unnecessary type aliases (use domain types directly in TanStack Query hooks)
+- Removed unused `GetTemplatesResponse` interface (backend returns array directly)
+- Simplified `api/index.ts` to use `export *` pattern (36 lines → 7 lines)
+- Updated all hook implementations with new type names
+
+**PdfObjects Type Consolidation** (8 files):
+- **Created `pdf/types.ts`** (NEW FILE) - Canonical location for PDF domain types
+  - Moved BBox, PdfObjects, and all PDF object interfaces from api/types.ts
+  - All required fields marked as required (not optional)
+  - Matches backend Pydantic schemas exactly
+  - NO `type` discriminator field (backend doesn't have it)
+- **Updated `pdf/api/types.ts`** - Now imports domain types from ../types.ts and re-exports
+- **Updated `pdf/index.ts`** - Domain types exported first, separated from API types
+- **Removed duplicate PdfObjects from `templates/types.ts`** - Deleted 81 lines of incorrect definitions
+- **Updated `templates/types.ts`** - Now imports BBox and PdfObjects from pdf feature
+- **Updated `templates/api/types.ts`** - Imports PdfObjects from pdf feature (not local duplicate)
+- **Updated `templates/index.ts`** - Re-exports PdfObjects from pdf feature
+
+**Critical Fix - Type Structure Correctness**:
+```typescript
+// BEFORE (templates/types.ts - INCORRECT):
+text_words: Array<{
+  type: 'text_word';     // ❌ Backend doesn't have this
+  fontname?: string;     // ❌ Should be required
+  fontsize?: number;     // ❌ Should be required
+}>
+
+// AFTER (pdf/types.ts - CORRECT):
+export interface TextWordObject {
+  page: number;
+  bbox: BBox;
+  text: string;
+  fontname: string;   // ✅ Required (matches backend)
+  fontsize: number;   // ✅ Required (matches backend)
+}
+```
+
+### Technical Details
+
+**Architecture Decisions**:
+1. **Domain vs API Types Separation**:
+   - `types.ts`: Domain types (business entities, used across features)
+   - `api/types.ts`: API request/response DTOs (wire format)
+   - Example: PdfObjects is a domain type → belongs in `pdf/types.ts`
+
+2. **Cross-Feature Type Imports**:
+   - Features can import domain types from other features
+   - Avoids duplication, ensures single source of truth
+   - Templates imports PdfObjects from pdf feature
+
+3. **Type Naming Conventions**:
+   - Request types: `{Verb}{Entity}Request` (CreateTemplateRequest)
+   - Response types: Use domain types directly (TemplateDetail)
+   - No HTTP method prefixes (Post/Get/Put)
+   - No unnecessary aliases
+
+4. **Export Patterns**:
+   - `api/index.ts`: `export *` for simplicity
+   - `feature/index.ts`: Explicit exports for clear public API
+
+**Backend Schema Verification**:
+- Read `server/src/api/schemas/pdf_files.py` to verify correct structure
+- Backend: Required fields are required, no `type` discriminator
+- Frontend: Aligned all types to match backend exactly
+
+### Files Modified
+
+**Created**:
+- `client/src/renderer/features/pdf/types.ts` (NEW - 95 lines)
+
+**Modified**:
+- `client/src/renderer/features/pdf/api/types.ts`
+- `client/src/renderer/features/pdf/index.ts`
+- `client/src/renderer/features/templates/types.ts` (81 lines deleted)
+- `client/src/renderer/features/templates/api/types.ts`
+- `client/src/renderer/features/templates/api/hooks.ts`
+- `client/src/renderer/features/templates/api/index.ts`
+- `client/src/renderer/features/templates/index.ts`
+- `context/CONTINUITY.md` (updated for session handoff)
+
+**Stats**: 11 files changed, 744 insertions(+), 800 deletions (-56 net lines)
+
+### Architecture Status
+
+**Templates Feature - API Layer Complete** ✅:
+- ✅ Type naming aligned with modules/pipelines patterns
+- ✅ No unnecessary type aliases (use domain types directly)
+- ✅ Clean separation of domain vs API types
+- ✅ Single source of truth for PdfObjects (pdf/types.ts)
+- ✅ Simplified exports with `export *` pattern
+- ✅ TypeScript compilation: 0 errors
+
+**Next Phase - Templates Component Tree**:
+- Analyze templates component structure
+- Compare with modules/pipelines component patterns
+- Refactor components to match established architecture
+- Follow "start with API, work through component tree" approach
+
+### Root Cause Analysis
+
+**PdfObjects Duplication Issue**:
+- **How it happened**: Templates feature created its own PdfObjects definition instead of importing from pdf feature
+- **What was wrong**:
+  1. Extra `type` discriminator field (backend doesn't have this)
+  2. Required fields marked as optional (`fontname?`, `fontsize?`, `linewidth?`)
+  3. Two different type definitions for same data structure
+- **Why it matters**: Type mismatches can cause runtime errors when data doesn't match expected shape
+- **Solution**: Created `pdf/types.ts` as canonical domain type location, removed duplicate
+
+### User Feedback
+- User identified PdfObjects duplication: "we need to first fix the reference to the pdf objects"
+- User requested architectural improvement: "PdfObjects type should exist in pdf/types.ts instead of pdf/api/types.ts since it is not specific to the api"
+- User approved API refactoring: "Ok, please implement those improvements in that case"
+
+### Next Actions
+- ✅ Templates API layer refactored
+- ✅ PdfObjects type consolidated
+- ✅ Changes committed and pushed
+- ⏳ Next: Templates component tree refactoring
+- Follow established patterns from modules/pipelines features
+
+### Notes
+- TypeScript compilation: ✅ Zero errors
+- Git commit: `refactor: Consolidate PdfObjects types and align templates API naming`
+- Session continuity documented in `context/CONTINUITY.md`
+- Ready to proceed with templates component refactoring
+- User directive: "start via the api, and the types, and then working our way through the component tree"
+
+---
+
 ## [2025-01-09 17:45] — Pipeline System Complete ✅
 
 ### Spec / Intent
