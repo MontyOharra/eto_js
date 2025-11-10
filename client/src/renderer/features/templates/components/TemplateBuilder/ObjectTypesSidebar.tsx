@@ -42,7 +42,9 @@ interface ObjectTypesSidebarProps {
   selectedTypeCounts: Record<string, number>;
   objectsByType: Record<string, ObjectItem[]>;
   selectedObjectIds: Set<string>;
+  visibleTypes: Set<string>;
   onObjectToggle: (objectId: string) => void;
+  onTypeToggle: (type: string) => void;
   onShowAll: () => void;
   onHideAll: () => void;
 }
@@ -56,7 +58,9 @@ export function ObjectTypesSidebar({
   selectedTypeCounts,
   objectsByType,
   selectedObjectIds,
+  visibleTypes,
   onObjectToggle,
+  onTypeToggle,
   onShowAll,
   onHideAll,
 }: ObjectTypesSidebarProps) {
@@ -122,6 +126,7 @@ export function ObjectTypesSidebar({
           const count = typeCounts[type] || 0;
           const selectedCount = selectedTypeCounts[type] || 0;
           const objects = objectsByType[type] || [];
+          const isVisible = visibleTypes.has(type);
 
           // Don't render if no objects of this type
           if (count === 0) return null;
@@ -135,7 +140,9 @@ export function ObjectTypesSidebar({
               selectedCount={selectedCount}
               objects={objects}
               selectedObjectIds={selectedObjectIds}
+              isVisible={isVisible}
               onObjectToggle={onObjectToggle}
+              onVisibilityToggle={() => onTypeToggle(type)}
             />
           );
         })}

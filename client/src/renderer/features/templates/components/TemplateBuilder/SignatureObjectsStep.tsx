@@ -257,7 +257,9 @@ export function SignatureObjectsStep({
         selectedTypeCounts={selectedTypeCounts}
         objectsByType={objectsByType}
         selectedObjectIds={selectedObjectIds}
+        visibleTypes={selectedTypes}
         onObjectToggle={handleObjectClick}
+        onTypeToggle={handleTypeToggle}
         onShowAll={handleShowAll}
         onHideAll={handleHideAll}
       />
