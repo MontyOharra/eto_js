@@ -15,6 +15,15 @@ export function PipelineView({
   pipelineState,
   visualState,
 }: PipelineViewProps) {
+  // No-op callbacks for view mode (prevent infinite loop)
+  const handlePipelineStateChange = () => {
+    // Read-only view - no state changes
+  };
+
+  const handleVisualStateChange = () => {
+    // Read-only view - no state changes
+  };
+
   return (
     <div className="h-full flex flex-col bg-gray-900">
       {/* Info banner */}
@@ -33,6 +42,8 @@ export function PipelineView({
           pipelineState={pipelineState}
           visualState={visualState}
           mode="view"
+          onPipelineStateChange={handlePipelineStateChange}
+          onVisualStateChange={handleVisualStateChange}
         />
       </div>
     </div>

@@ -5,7 +5,7 @@
  */
 
 import { useMemo } from 'react';
-import { PdfViewer } from '../../../pdf/components/PdfViewer';
+import { PdfViewer, usePdfViewer } from '../../../pdf';
 import type { PdfObjects } from '../../types';
 
 interface SignatureObjectsViewProps {
@@ -139,16 +139,12 @@ export function SignatureObjectsView({
 
       {/* PDF Viewer with overlay */}
       <div className="flex-1 bg-gray-900 p-4 overflow-auto">
-        <PdfViewer
-          pdfUrl={pdfUrl}
-          overlayRenderer={(currentPage, renderScale) => (
-            <SignatureObjectsOverlay
-              objects={flattenedObjects}
-              currentPage={currentPage}
-              renderScale={renderScale}
-            />
-          )}
-        />
+        <PdfViewer pdfUrl={pdfUrl}>
+          <PdfViewer.Canvas pdfUrl={pdfUrl}>
+            <SignatureObjectsOverlay objects={flattenedObjects} />
+          </PdfViewer.Canvas>
+          <PdfViewer.ControlsSidebar position="right" />
+        </PdfViewer>
       </div>
     </div>
   );
@@ -157,15 +153,13 @@ export function SignatureObjectsView({
 // Overlay component to render signature object bounding boxes
 interface SignatureObjectsOverlayProps {
   objects: any[];
-  currentPage: number;
-  renderScale: number;
 }
 
 function SignatureObjectsOverlay({
   objects,
-  currentPage,
-  renderScale,
 }: SignatureObjectsOverlayProps) {
+  const { renderScale, currentPage } = usePdfViewer();
+
   // Filter objects for current page
   const pageObjects = useMemo(
     () => objects.filter((obj) => obj.page === currentPage),
@@ -173,7 +167,16 @@ function SignatureObjectsOverlay({
   );
 
   return (
-    <>
+    <div
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        pointerEvents: 'none',
+      }}
+    >
       {pageObjects.map((obj, idx) => {
         const [x0, y0, x1, y1] = obj.bbox;
         const width = (x1 - x0) * renderScale;
@@ -197,6 +200,6 @@ function SignatureObjectsOverlay({
           />
         );
       })}
-    </>
+    </div>
   );
 }

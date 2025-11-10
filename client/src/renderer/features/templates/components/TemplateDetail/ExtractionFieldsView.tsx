@@ -5,7 +5,7 @@
  */
 
 import { useMemo } from 'react';
-import { PdfViewer } from '../../../pdf/components/PdfViewer';
+import { PdfViewer, usePdfViewer } from '../../../pdf';
 import type { ExtractionField } from '../../types';
 
 interface ExtractionFieldsViewProps {
@@ -60,16 +60,12 @@ export function ExtractionFieldsView({
 
       {/* PDF Viewer with overlay */}
       <div className="flex-1 bg-gray-900 p-4 overflow-auto">
-        <PdfViewer
-          pdfUrl={pdfUrl}
-          overlayRenderer={(currentPage, renderScale) => (
-            <ExtractionFieldsOverlay
-              fields={extractionFields}
-              currentPage={currentPage}
-              renderScale={renderScale}
-            />
-          )}
-        />
+        <PdfViewer pdfUrl={pdfUrl}>
+          <PdfViewer.Canvas pdfUrl={pdfUrl}>
+            <ExtractionFieldsOverlay fields={extractionFields} />
+          </PdfViewer.Canvas>
+          <PdfViewer.ControlsSidebar position="right" />
+        </PdfViewer>
       </div>
     </div>
   );
@@ -78,15 +74,13 @@ export function ExtractionFieldsView({
 // Overlay component to render extraction field bounding boxes
 interface ExtractionFieldsOverlayProps {
   fields: ExtractionField[];
-  currentPage: number;
-  renderScale: number;
 }
 
 function ExtractionFieldsOverlay({
   fields,
-  currentPage,
-  renderScale,
 }: ExtractionFieldsOverlayProps) {
+  const { renderScale, currentPage } = usePdfViewer();
+
   // Filter fields for current page
   const pageFields = useMemo(
     () => fields.filter((field) => field.page === currentPage),
@@ -94,7 +88,16 @@ function ExtractionFieldsOverlay({
   );
 
   return (
-    <>
+    <div
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        pointerEvents: 'none',
+      }}
+    >
       {pageFields.map((field, idx) => {
         const [x0, y0, x1, y1] = field.bbox;
         const width = (x1 - x0) * renderScale;
@@ -111,8 +114,8 @@ function ExtractionFieldsOverlay({
               top: `${top}px`,
               width: `${width}px`,
               height: `${height}px`,
-              border: '2px solid #22c55e', // green
-              backgroundColor: 'rgba(34, 197, 94, 0.1)',
+              border: '2px solid #3b82f6', // blue (matching TestingStep)
+              backgroundColor: 'rgba(59, 130, 246, 0.15)',
               pointerEvents: 'none',
             }}
             title={field.name}
@@ -123,7 +126,7 @@ function ExtractionFieldsOverlay({
                 position: 'absolute',
                 top: '-20px',
                 left: '0',
-                backgroundColor: '#22c55e',
+                backgroundColor: '#3b82f6',
                 color: 'white',
                 padding: '2px 6px',
                 borderRadius: '4px',
@@ -138,6 +141,6 @@ function ExtractionFieldsOverlay({
           </div>
         );
       })}
-    </>
+    </div>
   );
 }
