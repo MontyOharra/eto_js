@@ -205,20 +205,12 @@ function ResizablePanelLayout({
 }
 
 /**
- * PdfViewerWithAutoFit
- * PDF viewer that auto-fits on resize
+ * AutoFitOnResize
+ * Triggers PDF fit-to-width when resize divider is dragged
+ * Must be used as child of PdfViewer to access context
  */
-function PdfViewerWithAutoFit({
-  pdfUrl,
-  extractionResults,
-  isDragging,
-}: {
-  pdfUrl: string;
-  extractionResults?: SimulateTemplateResponse['extraction_results'];
-  isDragging: boolean;
-}) {
+function AutoFitOnResize({ isDragging }: { isDragging: boolean }) {
   const { fitToWidth, pdfDimensions } = usePdfViewer();
-  const containerRef = useState<HTMLDivElement | null>(null)[0];
 
   // Trigger fitToWidth when dragging (resizing)
   useEffect(() => {
@@ -232,6 +224,22 @@ function PdfViewerWithAutoFit({
     fitToWidth(containerWidth, sidebarWidth);
   }, [isDragging, fitToWidth, pdfDimensions]);
 
+  return null;
+}
+
+/**
+ * PdfViewerWithAutoFit
+ * PDF viewer that auto-fits on resize
+ */
+function PdfViewerWithAutoFit({
+  pdfUrl,
+  extractionResults,
+  isDragging,
+}: {
+  pdfUrl: string;
+  extractionResults?: SimulateTemplateResponse['extraction_results'];
+  isDragging: boolean;
+}) {
   const handlePdfError = (error: Error) => {
     console.error('PDF load error:', error);
   };
@@ -239,6 +247,7 @@ function PdfViewerWithAutoFit({
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-lg h-full overflow-hidden relative pr-4 pl-1 py-4 pdf-viewer-container">
       <PdfViewer pdfUrl={pdfUrl} onError={handlePdfError}>
+        <AutoFitOnResize isDragging={isDragging} />
         <PdfViewer.Canvas pdfUrl={pdfUrl} onError={handlePdfError}>
           {extractionResults && extractionResults.length > 0 && (
             <ExtractedFieldsOverlay fields={extractionResults} />

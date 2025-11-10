@@ -5,7 +5,161 @@ This document tracks major development milestones and features implemented in th
 
 ---
 
-## [2025-11-10 Evening] — TemplateBuilder Testing Step Implementation
+## [2025-11-10 Evening - Part 2] — TemplateBuilder Testing UX Improvements
+
+### Spec / Intent
+- Move testing controls from step header to footer for cleaner interface
+- Change pipeline step "Next" button to "Test" and trigger simulation immediately
+- Add PDF viewer auto-fit when resizing panels
+- Consolidate all step navigation and view controls in footer
+
+### Changes Made
+
+**Footer Enhancements** (`TemplateBuilderFooter.tsx`):
+- **Test Button on Pipeline Step**: Changed "Next →" to "Test →" when on pipeline step
+  - Green button color (instead of blue) to indicate action
+  - Shows "Testing..." state during simulation
+  - Disabled during testing
+- **Summary/Detail Toggle**: Added toggle that only shows on testing step
+  - Positioned before Back/Cancel buttons in footer
+  - Same styling as previous header toggle
+  - Controlled by parent TemplateBuilder state
+- **New Props**:
+  - `isTesting`: Boolean to show loading state
+  - `viewMode`: Current view mode ('summary' | 'detail')
+  - `onTest`: Callback to trigger simulation
+  - `onViewModeChange`: Callback to change view mode
+
+**TestingStep Refactor** (`TestingStep.tsx`):
+- **Removed Test Controls Bar**: Eliminated entire header section with test button
+- **Props-Based State**: Now receives state from parent instead of managing locally
+  - `viewMode`: Controlled by parent
+  - `result`: Simulation results from parent
+  - `isLoading`: Loading state from parent
+  - `centerTrigger`: Graph centering trigger from parent
+- **PDF Viewer Auto-Fit**:
+  - Created `PdfViewerWithAutoFit` component
+  - Calls `fitToWidth()` whenever resize divider is dragged
+  - Uses `.pdf-viewer-container` class for container width calculation
+  - Triggers during `isDragging` state changes
+- **ResizablePanelLayout Enhancement**:
+  - Added `onResize` callback prop
+  - Calls callback during mouse move when dragging
+  - Enables real-time PDF fit during resize
+
+**TemplateBuilder Integration** (`TemplateBuilder.tsx`):
+- **Simulation State Management**:
+  - `viewMode` state: Controls summary/detail toggle
+  - `simulationResult` state: Stores simulation response
+  - `centerTrigger` state: Triggers graph centering
+  - `useSimulateTemplate()` hook: TanStack Query mutation
+- **Test Handler**:
+  - `handleTest()` function triggers simulation
+  - Calls API with pdf_objects, extraction_fields, pipeline_state
+  - Stores result and sets center trigger
+  - Auto-navigates to testing step after simulation starts
+- **Props Passed to Footer**:
+  - `isTesting={simulateMutation.isPending}`
+  - `viewMode={viewMode}`
+  - `onTest={handleTest}`
+  - `onViewModeChange={setViewMode}`
+- **Props Passed to TestingStep**:
+  - All simulation state and controls from parent
+
+### Technical Details
+
+**Simulation Flow**:
+1. User completes pipeline step (validation passes)
+2. User clicks "Test →" button in footer
+3. `handleTest()` called in TemplateBuilder
+4. Simulation API request sent (`simulateMutation.mutateAsync`)
+5. Footer shows "Testing..." state
+6. On success: result stored, step changes to 'testing'
+7. TestingStep renders with simulation results
+8. User can toggle Summary/Detail view from footer
+
+**PDF Auto-Fit Flow**:
+1. User drags resize divider
+2. `isDragging` state set to true
+3. ResizablePanelLayout calls `onResize()` on mouse move
+4. PdfViewerWithAutoFit useEffect triggers on `isDragging` change
+5. Container width measured via `.pdf-viewer-container` querySelector
+6. `fitToWidth(containerWidth, sidebarWidth)` called
+7. PDF scales to fit new panel width
+
+**State Architecture**:
+```
+TemplateBuilder (root)
+  ├─ viewMode: 'summary' | 'detail'
+  ├─ simulationResult: SimulateTemplateResponse | null
+  ├─ centerTrigger: number
+  └─ simulateMutation: TanStack Query mutation
+      │
+      ├──> TestingStep (receives all state as props)
+      │    └─ Displays results based on viewMode
+      │
+      └──> TemplateBuilderFooter (controls state)
+           ├─ Test button (triggers handleTest)
+           └─ Summary/Detail toggle (changes viewMode)
+```
+
+### UX Improvements
+
+**Before**:
+- Test button in step header (separate from navigation)
+- "Next" button on pipeline step (misleading - doesn't test)
+- Toggle in step header (inconsistent placement)
+- PDF didn't resize when dragging divider
+
+**After**:
+- All controls in footer (consistent navigation)
+- "Test" button on pipeline step (clear action)
+- Toggle in footer (only on testing step)
+- PDF auto-fits during panel resize
+
+**User Benefits**:
+- ✅ Cleaner interface (no redundant headers)
+- ✅ Immediate testing (one click from pipeline)
+- ✅ Consistent control placement (all in footer)
+- ✅ Better PDF visibility (auto-fit on resize)
+- ✅ Clear testing state (button shows "Testing...")
+
+### Files Modified
+
+**Modified**:
+- `client/src/renderer/features/templates/components/TemplateBuilder/TemplateBuilderFooter.tsx`
+  - Added Test button for pipeline step
+  - Added Summary/Detail toggle for testing step
+  - Added props: isTesting, viewMode, onTest, onViewModeChange
+- `client/src/renderer/features/templates/components/TemplateBuilder/TestingStep.tsx`
+  - Removed test controls bar (entire header section)
+  - Changed to controlled component (props-based state)
+  - Added PdfViewerWithAutoFit component
+  - Added PDF auto-fit on resize
+- `client/src/renderer/features/templates/components/TemplateBuilder/TemplateBuilder.tsx`
+  - Added simulation state management
+  - Added handleTest function
+  - Integrated useSimulateTemplate mutation
+  - Auto-navigation to testing step on test trigger
+
+### Next Actions
+
+**Template Builder - Complete** ✅:
+- ✅ All 4 steps implemented
+- ✅ Testing UX optimized
+- ✅ Footer controls consolidated
+- ✅ PDF viewer enhancements
+- Ready for production use
+
+### Notes
+- TypeScript compilation: ✅ Zero errors
+- All UX improvements tested and working
+- Footer now single source of truth for navigation
+- Testing flow simplified and more intuitive
+
+---
+
+## [2025-11-10 Evening - Part 1] — TemplateBuilder Testing Step Implementation
 
 ### Spec / Intent
 - Implement the fourth and final step of template builder: Testing Step
