@@ -98,8 +98,7 @@ export function TemplateDetailModal({
   // Handle version selection
   const handleVersionChange = (versionId: number) => {
     setSelectedVersionId(versionId);
-    // Reset to first step when changing versions
-    setCurrentStep('signature-objects');
+    // Keep current step when changing versions for better UX
   };
 
   // Handle edit button
