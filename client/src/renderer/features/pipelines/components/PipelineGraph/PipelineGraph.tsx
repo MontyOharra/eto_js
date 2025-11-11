@@ -122,19 +122,19 @@ function PipelineGraphInner({
 
   // Recalculate effective types cache when connections or modules change
   useEffect(() => {
-    if (!pipelineState) {
+    if (!enrichedPipelineState) {
       setEffectiveTypesCache(new Map());
       return;
     }
 
     const newCache = new Map<string, string[]>();
 
-    // Calculate effective types for all pins in all modules
-    pipelineState.modules.forEach((module) => {
+    // Calculate effective types for all pins in all modules (use enriched state for correct allowed_types)
+    enrichedPipelineState.modules.forEach((module) => {
       [...module.inputs, ...module.outputs].forEach((pin) => {
         const key = `${module.module_instance_id}:${pin.node_id}`;
         const effectiveTypes = getEffectiveAllowedTypes(
-          pipelineState,
+          enrichedPipelineState,
           effectiveEntryPoints,
           module.module_instance_id,
           pin.node_id,
@@ -153,7 +153,7 @@ function PipelineGraphInner({
     });
 
     setEffectiveTypesCache(newCache);
-  }, [pipelineState, effectiveEntryPoints]);
+  }, [enrichedPipelineState, effectiveEntryPoints]);
 
   // Helper to get cached effective types for a pin
   const getEffectiveAllowedTypesForPin = useCallback(
@@ -176,27 +176,28 @@ function PipelineGraphInner({
   // Handle updating a node (type or name change) with type propagation
   const handleUpdateNode = useCallback(
     (moduleId: string, nodeId: string, updates: Partial<NodePin>) => {
-      if (!pipelineState || !onPipelineStateChange) return;
+      if (!pipelineState || !enrichedPipelineState || !onPipelineStateChange) return;
 
-      // Find the module to update
+      // Find the module to update in both raw and enriched states
       const moduleIndex = pipelineState.modules.findIndex(
         (m) => m.module_instance_id === moduleId
       );
       if (moduleIndex === -1) return;
 
       const module = pipelineState.modules[moduleIndex];
+      const enrichedModule = enrichedPipelineState.modules[moduleIndex];
 
       // Handle type changes with type propagation
       if (updates.type) {
-        // First, apply type_var synchronization within the module
-        const result = synchronizeTypeVarUpdate(module, nodeId, updates.type);
+        // First, apply type_var synchronization within the module (use enriched for correct metadata)
+        const result = synchronizeTypeVarUpdate(enrichedModule, nodeId, updates.type);
 
-        // Apply to temporary state
-        const updatedModules = [...pipelineState.modules];
-        updatedModules[moduleIndex] = result.updatedModule;
-        const tempPipelineState = {
-          ...pipelineState,
-          modules: updatedModules,
+        // Apply to temporary enriched state for type propagation calculation
+        const updatedEnrichedModules = [...enrichedPipelineState.modules];
+        updatedEnrichedModules[moduleIndex] = result.updatedModule;
+        const tempEnrichedPipelineState = {
+          ...enrichedPipelineState,
+          modules: updatedEnrichedModules,
         };
 
         // Build initial updates for type propagation
@@ -217,15 +218,21 @@ function PipelineGraphInner({
           }
         }
 
-        // Calculate propagation through connections
+        // Calculate propagation through connections (use enriched state for correct allowed_types)
         const allUpdates = calculateTypePropagation(
-          tempPipelineState,
+          tempEnrichedPipelineState,
           effectiveEntryPoints,
           initialUpdates
         );
 
-        // Apply all type updates
-        const finalPipelineState = applyTypeUpdates(tempPipelineState, allUpdates);
+        // Apply all type updates to RAW state (we persist raw data)
+        const updatedModules = [...pipelineState.modules];
+        updatedModules[moduleIndex] = updatePinInModule(module, nodeId, updates);
+        const tempRawPipelineState = {
+          ...pipelineState,
+          modules: updatedModules,
+        };
+        const finalPipelineState = applyTypeUpdates(tempRawPipelineState, allUpdates);
         onPipelineStateChange(finalPipelineState);
       } else {
         // Non-type update (e.g., name change) - no propagation needed
@@ -239,7 +246,7 @@ function PipelineGraphInner({
         });
       }
     },
-    [pipelineState, effectiveEntryPoints, onPipelineStateChange]
+    [pipelineState, enrichedPipelineState, effectiveEntryPoints, onPipelineStateChange]
   );
 
   // Handle adding a new node to a module
@@ -590,13 +597,13 @@ function PipelineGraphInner({
     (connection: Connection) => {
       if (!connection.sourceHandle || !connection.targetHandle) return false;
       if (!connection.source || !connection.target) return false;
-      if (!pipelineState) return false;
+      if (!enrichedPipelineState) return false;
 
       // Create temporary pipelineState excluding connections that were removed during this drag
       // This allows validation to work correctly even before React state update completes
       const tempPipelineState = {
-        ...pipelineState,
-        connections: pipelineState.connections.filter((conn) => {
+        ...enrichedPipelineState,
+        connections: enrichedPipelineState.connections.filter((conn) => {
           const connKey = `${conn.from_node_id}-${conn.to_node_id}`;
           return !removedConnectionsRef.current.has(connKey);
         }),
@@ -614,7 +621,7 @@ function PipelineGraphInner({
 
       return result.valid;
     },
-    [pipelineState, effectiveEntryPoints]
+    [enrichedPipelineState, effectiveEntryPoints]
   );
 
   // Handle new connections with type propagation
@@ -623,15 +630,15 @@ function PipelineGraphInner({
       // Clear removed connections tracker (drag operation complete)
       removedConnectionsRef.current.clear();
 
-      if (mode === 'view' || !pipelineState || !onPipelineStateChange) return;
+      if (mode === 'view' || !pipelineState || !enrichedPipelineState || !onPipelineStateChange) return;
       if (!connection.source || !connection.target || !connection.sourceHandle || !connection.targetHandle) return;
 
       const sourceHandle = connection.sourceHandle;
       const targetHandle = connection.targetHandle;
 
-      // Validate connection and get suggested type
+      // Validate connection and get suggested type (use enriched state for correct allowed_types)
       const validation = validateConnection(
-        pipelineState,
+        enrichedPipelineState,
         effectiveEntryPoints,
         connection.source,
         sourceHandle,
@@ -659,31 +666,35 @@ function PipelineGraphInner({
       };
       updatedConnections.push(newConnection);
 
-      // Create temporary pipeline state with new connection for type propagation
-      const tempPipelineState = {
-        ...pipelineState,
+      // Create temporary enriched pipeline state with new connection for type propagation
+      const tempEnrichedPipelineState = {
+        ...enrichedPipelineState,
         connections: updatedConnections,
       };
 
-      // Calculate type propagation
+      // Calculate type propagation (use enriched state for correct allowed_types)
       const initialUpdates: TypeUpdate[] = [
         { moduleId: connection.source, pinId: sourceHandle, newType: validation.suggestedType },
         { moduleId: connection.target, pinId: targetHandle, newType: validation.suggestedType },
       ];
 
       const allUpdates = calculateTypePropagation(
-        tempPipelineState,
+        tempEnrichedPipelineState,
         effectiveEntryPoints,
         initialUpdates
       );
 
-      // Apply type updates to create final pipeline state
-      const finalPipelineState = applyTypeUpdates(tempPipelineState, allUpdates);
+      // Apply type updates to RAW pipeline state (not enriched - we persist raw data)
+      const tempRawPipelineState = {
+        ...pipelineState,
+        connections: updatedConnections,
+      };
+      const finalPipelineState = applyTypeUpdates(tempRawPipelineState, allUpdates);
 
       // Single state update with connections and type changes
       onPipelineStateChange(finalPipelineState);
     },
-    [mode, pipelineState, effectiveEntryPoints, onPipelineStateChange]
+    [mode, pipelineState, enrichedPipelineState, effectiveEntryPoints, onPipelineStateChange]
   );
 
   // Handle connection start - remove existing connections from the pin being dragged
