@@ -2,7 +2,7 @@
 SQL Lookup Transform Module
 Executes a SQL SELECT query against configured database and returns results
 """
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Literal
 from pydantic import BaseModel, Field
 
 from shared.types import TransformModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
@@ -19,13 +19,13 @@ class SqlLookupConfig(BaseModel):
         default="DATABASE_ETO",
         description="Database connection to use (must match env var name like DATABASE_ETO)"
     )
-    on_multiple_rows: str = Field(
+    on_multiple_rows: Literal["error", "first", "last"] = Field(
         default="error",
-        description="How to handle multiple rows: 'first', 'last', or 'error'"
+        description="How to handle multiple rows"
     )
-    on_no_rows: str = Field(
+    on_no_rows: Literal["error", "null"] = Field(
         default="error",
-        description="How to handle no rows: 'null' or 'error'"
+        description="How to handle no rows"
     )
 
 
@@ -69,7 +69,7 @@ class SqlLookup(TransformModule):
                     nodes=[
                         NodeGroup(
                             label="param",
-                            min_count=0,
+                            min_count=1,
                             max_count=20,
                             typing=NodeTypeRule(allowed_types=["str", "int", "float", "bool"])
                         )
