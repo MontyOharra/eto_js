@@ -1,13 +1,11 @@
 # Project Changelog
 
-## [2025-11-11 18:45] — SQL Lookup Module Implementation
+## [2025-11-11 18:45] — SQL Lookup Module (Schema Only)
 ### Spec / Intent
 - Create generic database query module for SQL SELECT lookups
-- Support named placeholders {input_name} for query parameters
-- Support AS keyword for column aliases in SELECT clause
+- Schema-only implementation (no execution logic yet)
 - Variable input/output pins matched by name to SQL template
-- Simple config: SQL text + database dropdown (no fancy UI)
-- Return single row with configurable handling of multiple/zero results
+- Simple config: SQL text + database dropdown
 
 ### Changes Made
 - Files: `server/src/pipeline_modules/transform/sql_lookup.py`
@@ -15,29 +13,24 @@
   - Created SqlLookup transform module with SqlLookupConfig Pydantic model
   - Variable-count NodeGroups: 0-20 input params, 1-20 output fields
   - Config fields: sql_template, database (env var), on_multiple_rows (error/first/last), on_no_rows (error/null)
-  - validate_wiring() parses SQL template to extract {placeholders} and SELECT columns, validates pin names match
-  - run() method gets connection from env, parameterizes SQL (converts {name} to $1, $2), executes with psycopg2
-  - Helper methods: _parameterize_sql() for PostgreSQL parameterized queries, _parse_select_columns() for AS keyword support
-  - Uses RealDictCursor for column name access in results
+  - run() method raises NotImplementedError - execution logic to be added later
+  - Module will appear in frontend module selector after server restart + sync
 
 ### Design Decisions
-- Named placeholders match pin names (self-documenting queries)
-- Parameterized queries prevent SQL injection
-- AS keyword allows renaming columns: SELECT customer_name AS cust
+- Schema-only for now - no database execution implemented
+- Named placeholders {input_name} in SQL template will map to input pin names
+- Output pins will map to column names or AS aliases from SELECT clause
 - Simple text config instead of complex form builder
-- Database selection via env var names (e.g., DATABASE_ETO)
 
 ### Next Actions
-- Test sql_lookup module with sample database connection
-- Verify pin name matching in validate_wiring()
-- Test AS keyword support
-- Test error handling (multiple rows, no rows)
-- Verify frontend integration
+- Restart server to auto-discover module
+- Call POST /admin/sync-modules to sync module to database catalog
+- Module will then appear in frontend
+- Implement execution logic later
 
 ### Notes
-- Module uses PostgreSQL psycopg2 driver
-- Could be extended to support other databases in future
-- Error messages show available columns when mismatch occurs
+- Module imports successfully
+- Uses project's standard SQLAlchemy approach (not psycopg2)
 
 ## [2025-11-11 17:15] — TypeVar Synchronization Bug Fix
 ### Spec / Intent
