@@ -205,6 +205,10 @@ def _serialize_io_for_audit(
     for pin in pins:
         if pin.node_id in io_dict:
             raw_value = io_dict[pin.node_id]
+            # Skip sentinel values (ExecutionCancelled, BranchNotTaken)
+            # These are internal control flow markers and should not be serialized
+            if isinstance(raw_value, (ExecutionCancelled, BranchNotTaken)):
+                continue
             result[pin.node_id] = {
                 "name": pin.name,
                 "value": _serialize_value(raw_value, pin.type),
@@ -258,6 +262,11 @@ def _serialize_inputs_for_audit(
     for pin in pins:
         if pin.node_id in io_dict:
             raw_value = io_dict[pin.node_id]
+
+            # Skip sentinel values (ExecutionCancelled, BranchNotTaken)
+            # These are internal control flow markers and should not be serialized
+            if isinstance(raw_value, (ExecutionCancelled, BranchNotTaken)):
+                continue
 
             # Look up the upstream pin that's connected to this input
             upstream_pin_id = input_field_mappings.get(pin.node_id)
@@ -350,6 +359,11 @@ def _convert_to_upstream_named_inputs(
 
     # For each input, find its upstream output pin name
     for input_pin_id, value in inputs_dict.items():
+        # Skip sentinel values (ExecutionCancelled, BranchNotTaken)
+        # These are internal control flow markers and should not be included in action inputs
+        if isinstance(value, (ExecutionCancelled, BranchNotTaken)):
+            continue
+
         upstream_pin_id = input_field_mappings.get(input_pin_id)
         if upstream_pin_id and upstream_pin_id in node_id_to_name:
             upstream_name = node_id_to_name[upstream_pin_id]
