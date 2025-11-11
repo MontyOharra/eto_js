@@ -189,8 +189,16 @@ function PipelineGraphInner({
 
       // Handle type changes with type propagation
       if (updates.type) {
+        console.log('[TypeVar DEBUG] ========== START TYPE UPDATE ==========');
+        console.log('[TypeVar DEBUG] Module:', moduleId, 'Pin:', nodeId, 'New Type:', updates.type);
+
         // First, apply type_var synchronization within the module (use enriched for correct metadata)
         const result = synchronizeTypeVarUpdate(enrichedModule, nodeId, updates.type);
+
+        console.log('[TypeVar DEBUG] After synchronizeTypeVarUpdate:');
+        console.log('[TypeVar DEBUG]   wasTypeVarUpdate:', result.wasTypeVarUpdate);
+        console.log('[TypeVar DEBUG]   updatedModule inputs:', result.updatedModule.inputs.map(p => ({ id: p.node_id, name: p.name, type: p.type, type_var: p.type_var })));
+        console.log('[TypeVar DEBUG]   updatedModule outputs:', result.updatedModule.outputs.map(p => ({ id: p.node_id, name: p.name, type: p.type, type_var: p.type_var })));
 
         // Apply to temporary enriched state for type propagation calculation
         const updatedEnrichedModules = [...enrichedPipelineState.modules];
@@ -218,12 +226,16 @@ function PipelineGraphInner({
           }
         }
 
+        console.log('[TypeVar DEBUG] initialUpdates:', initialUpdates);
+
         // Calculate propagation through connections (use enriched state for correct allowed_types)
         const allUpdates = calculateTypePropagation(
           tempEnrichedPipelineState,
           effectiveEntryPoints,
           initialUpdates
         );
+
+        console.log('[TypeVar DEBUG] allUpdates (after propagation):', allUpdates);
 
         // Apply all type updates to RAW state (we persist raw data)
         const updatedModules = [...pipelineState.modules];
@@ -232,7 +244,13 @@ function PipelineGraphInner({
           ...pipelineState,
           modules: updatedModules,
         };
+        console.log('[TypeVar DEBUG] tempRawPipelineState module before applyTypeUpdates:', tempRawPipelineState.modules[moduleIndex].inputs.map(p => ({ id: p.node_id, type: p.type })), tempRawPipelineState.modules[moduleIndex].outputs.map(p => ({ id: p.node_id, type: p.type })));
+
         const finalPipelineState = applyTypeUpdates(tempRawPipelineState, allUpdates);
+
+        console.log('[TypeVar DEBUG] finalPipelineState module after applyTypeUpdates:', finalPipelineState.modules[moduleIndex].inputs.map(p => ({ id: p.node_id, type: p.type })), finalPipelineState.modules[moduleIndex].outputs.map(p => ({ id: p.node_id, type: p.type })));
+        console.log('[TypeVar DEBUG] ========== END TYPE UPDATE ==========');
+
         onPipelineStateChange(finalPipelineState);
       } else {
         // Non-type update (e.g., name change) - no propagation needed

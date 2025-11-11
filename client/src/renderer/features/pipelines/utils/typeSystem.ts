@@ -324,7 +324,17 @@ export function calculateTypePropagation(
       continue;
     }
 
-    // Skip if type is already correct
+    // Check if new type is allowed
+    const allowedTypes = targetPin.allowed_types || [];
+    if (allowedTypes.length > 0 && !allowedTypes.includes(update.newType)) {
+      continue; // Type not allowed, skip
+    }
+
+    // Record this update (even if type is already correct in enriched state)
+    // We need it in allUpdates to apply to raw state
+    allUpdates.push(update);
+
+    // Skip further processing if type is already correct (already processed by synchronizeTypeVarUpdate)
     if (targetPin.type === update.newType) {
       // Still need to propagate to connections
       pipelineState.connections.forEach((conn) => {
@@ -350,15 +360,6 @@ export function calculateTypePropagation(
       });
       continue;
     }
-
-    // Check if new type is allowed
-    const allowedTypes = targetPin.allowed_types || [];
-    if (allowedTypes.length > 0 && !allowedTypes.includes(update.newType)) {
-      continue; // Type not allowed, skip
-    }
-
-    // Record this update
-    allUpdates.push(update);
 
     // If pin has typevar, add all typevar siblings to queue
     if (targetPin.type_var) {
