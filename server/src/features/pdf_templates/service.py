@@ -449,22 +449,26 @@ class PdfTemplateService:
 
     # ==================== Template Matching ====================
 
-    def match_template(self, pdf_objects: PdfObjects) -> Optional[tuple[int, int]]:
+    def match_template(self, pdf_objects: PdfObjects, pdf_page_count: int) -> Optional[tuple[int, int]]:
         """
         Find the best matching template for a PDF document.
 
-        A template matches if ALL signature objects are found in the PDF.
+        A template matches if:
+        1. ALL signature objects are found in the PDF
+        2. Page count exactly matches template's expected page_count
+
         Among matching templates, ranking:
         1. First by total object count (more objects = better match)
         2. For ties, weighted ranking by object type priority
 
         Args:
             pdf_objects: PDF objects extracted from the document
+            pdf_page_count: Number of pages in the incoming PDF
 
         Returns:
             Tuple of (template_id, version_id) if match found, None otherwise
         """
-        logger.info("Starting template matching")
+        logger.info(f"Starting template matching for PDF with {pdf_page_count} pages")
 
         try:
             # Get all active templates
@@ -490,18 +494,37 @@ class PdfTemplateService:
                         logger.debug(f"Template {template.id} current version not found, skipping")
                         continue
 
+                    # Get source PDF page count for this template
+                    source_pdf = self.pdf_files_service.get_pdf_file(template.source_pdf_id)
+                    template_page_count = source_pdf.page_count
+
+                    # Validate page count first (early rejection for performance)
+                    if template_page_count is None:
+                        logger.warning(
+                            f"Template {template.id} source PDF has no page_count, skipping"
+                        )
+                        continue
+
+                    if pdf_page_count != template_page_count:
+                        logger.debug(
+                            f"Template {template.id} (version {current_version.version_number}): "
+                            f"Page count mismatch - PDF has {pdf_page_count} pages, "
+                            f"template expects {template_page_count} pages"
+                        )
+                        continue  # Skip this template
+
                     # Check if all signature objects from current version are found in PDF
                     if self._is_complete_subset_match(pdf_objects, current_version.signature_objects):
                         total_count = self._count_total_objects(current_version.signature_objects)
                         matching_templates.append((template, current_version, total_count))
                         logger.debug(
                             f"Template {template.id} (version {current_version.version_number}): "
-                            f"COMPLETE MATCH with {total_count} objects"
+                            f"COMPLETE MATCH with {total_count} objects and {pdf_page_count} pages"
                         )
                     else:
                         logger.debug(
                             f"Template {template.id} (version {current_version.version_number}): "
-                            f"incomplete match - skipped"
+                            f"Incomplete object match - skipped"
                         )
 
                 except Exception as e:

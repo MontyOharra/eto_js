@@ -747,16 +747,32 @@ class EtoRunsService:
         )
         logger.debug(f"Run {run_id}: Set template_matching started_at")
 
-        # Step 3: Get PDF objects from PDF file
+        # Step 3: Get PDF file with objects AND page count
         run = self.eto_run_repo.get_by_id(run_id)
         if not run:
             raise ServiceError(f"Run {run_id} not found")
 
-        pdf_objects = self.pdf_files_service.get_pdf_objects(run.pdf_file_id)
-        logger.debug(f"Run {run_id}: Retrieved PDF objects from file {run.pdf_file_id}")
+        pdf_file = self.pdf_files_service.get_pdf_file(run.pdf_file_id)
+        pdf_objects = pdf_file.extracted_objects
+        pdf_page_count = pdf_file.page_count
 
-        # Step 4: Call template matching service
-        match_result = self.pdf_template_service.match_template(pdf_objects)
+        # Validate page_count exists
+        if pdf_page_count is None:
+            raise ServiceError(
+                f"PDF file {run.pdf_file_id} has no page_count. "
+                f"Cannot perform template matching without page count."
+            )
+
+        logger.debug(
+            f"Run {run_id}: Retrieved PDF {run.pdf_file_id} "
+            f"with {pdf_page_count} pages"
+        )
+
+        # Step 4: Call template matching service WITH page_count
+        match_result = self.pdf_template_service.match_template(
+            pdf_objects=pdf_objects,
+            pdf_page_count=pdf_page_count
+        )
 
         # Step 5: Handle match result
         if match_result is None:

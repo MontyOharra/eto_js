@@ -61,6 +61,22 @@ class ExecutionCancelled:
         return f"ExecutionCancelled({self.reason})"
 
 
+class BranchNotTaken:
+    """
+    Sentinel class to indicate a module did not execute because its branch was not selected.
+
+    Used by conditional branching modules (if_branch) to skip execution of modules
+    in the non-selected branch path. Similar to ExecutionCancelled but with different
+    semantic meaning - the branch was intentionally not selected based on a condition,
+    not cancelled due to an error.
+    """
+    def __init__(self, reason: str = "Branch not selected"):
+        self.reason = reason
+
+    def __repr__(self):
+        return f"BranchNotTaken({self.reason})"
+
+
 class StepResultCollector:
     """
     Thread-safe collector for execution step results.
@@ -929,6 +945,22 @@ class PipelineExecutionService:
 
                 # DO NOT record step result - module didn't execute, shouldn't appear in steps array
                 # This ensures not_executed modules are truly absent from execution results
+
+                return outputs_dict  # Return sentinel values for downstream propagation
+
+            # Check if any upstream input is BranchNotTaken sentinel
+            # If so, skip execution and propagate branch skip downstream
+            branch_not_taken = [val for val in values if isinstance(val, BranchNotTaken)]
+            if branch_not_taken:
+                reason = branch_not_taken[0].reason  # Use first branch reason
+                logger.info(f"Skipping module {step.module_instance_id} - branch not selected: {reason}")
+
+                # Create BranchNotTaken sentinel for all outputs
+                sentinel = BranchNotTaken(reason)
+                outputs_dict = {pin.node_id: sentinel for pin in ctx.outputs}
+
+                # DO NOT record step result - module didn't execute, shouldn't appear in steps array
+                # Branch not taken modules don't appear in execution results
 
                 return outputs_dict  # Return sentinel values for downstream propagation
 
