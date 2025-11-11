@@ -23,7 +23,7 @@ interface JSONSchema {
 interface ConfigSectionProps {
   schema: JSONSchema;
   config: Record<string, any>;
-  onConfigChange: (key: string, value: any) => void;
+  onConfigChange?: (key: string, value: any) => void;
 }
 
 // String field component with local state for responsive typing
@@ -49,7 +49,7 @@ const StringField: React.FC<{
         type="text"
         value={localValue}
         onChange={(e) => setLocalValue(e.target.value)}
-        onBlur={() => onConfigChange(configKey, localValue)}
+        onBlur={() => onConfigChange?.(configKey, localValue)}
         disabled={isViewMode}
         className={`nodrag w-full px-2 py-1 text-xs bg-gray-700 border border-gray-600 rounded text-gray-200 focus:outline-none focus:border-blue-500 ${isViewMode ? 'opacity-60 cursor-default' : ''}`}
       />
@@ -89,7 +89,7 @@ const NumberField: React.FC<{
           const parsed = propertyType === "integer"
             ? parseInt(String(localValue), 10)
             : parseFloat(String(localValue));
-          onConfigChange(configKey, isNaN(parsed) ? defaultValue : parsed);
+          onConfigChange?.(configKey, isNaN(parsed) ? defaultValue : parsed);
         }}
         step={propertyType === "integer" ? "1" : "any"}
         disabled={isViewMode}
@@ -120,9 +120,7 @@ export const ConfigSection: React.FC<ConfigSectionProps> = ({
     const description = property.description;
 
     const handleChange = (newValue: any) => {
-      if (onConfigChange) {
-        onConfigChange(key, newValue);
-      }
+      onConfigChange?.(key, newValue);
     };
 
     // Boolean checkbox

@@ -73,7 +73,7 @@ export function ModuleConfig({
         <ConfigSection
           schema={template.config_schema}
           config={moduleInstance.config}
-          onConfigChange={handleConfigChange}
+          onConfigChange={onConfigChange ? handleConfigChange : undefined}
         />
       )}
     </div>
