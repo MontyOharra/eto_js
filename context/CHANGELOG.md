@@ -1,5 +1,60 @@
 # Project Changelog
 
+## [2025-11-11 19:30] — Services Parameter Separation Architecture
+
+### Spec / Intent
+- Separate services from execution context for cleaner separation of concerns
+- Context should only contain I/O metadata (input/output pins)
+- Services should be passed as explicit separate parameter
+- Improves code clarity and makes dependencies explicit
+
+### Changes Made
+- Files: `shared/types/modules.py`, `shared/types/pipelines.py`, `features/pipeline_execution/service.py`, all 16 modules in `pipeline_modules/`
+- Summary:
+  - Updated `BaseModule.run()` signature: added `services: Optional[Any] = None` parameter
+  - Removed `services` field from `ModuleExecutionContext` dataclass
+  - Updated pipeline execution service to pass services separately to `run()`
+  - Updated all 16 existing module signatures to accept services parameter
+  - Modules using services (lookup_hawb, create_order) now access via `services` param instead of `context.services`
+
+### Technical Details
+
+**Before**:
+```python
+@dataclass
+class ModuleExecutionContext:
+    inputs: List[NodeInstance]
+    outputs: List[NodeInstance]
+    module_instance_id: str
+    services: Optional[Any] = None  # ← Services mixed with I/O metadata
+
+def run(self, inputs, cfg, context):
+    db = context.services.get_connection('htc_db')  # ← Accessing via context
+```
+
+**After**:
+```python
+@dataclass
+class ModuleExecutionContext:
+    inputs: List[NodeInstance]  # Only I/O metadata
+    outputs: List[NodeInstance]
+    module_instance_id: str
+    # services field removed
+
+def run(self, inputs, cfg, context, services=None):
+    db = services.get_connection('htc_db')  # ← Explicit services parameter
+```
+
+### Next Actions
+- Implement SQL lookup database dropdown (see context/docs/sql_lookup_database_dropdown.md)
+- Decide between dynamic schema generation or API endpoint approach
+- Implement SQL lookup execution logic
+
+### Notes
+- All existing modules updated with new signature (backward compatible via default parameter)
+- No breaking changes to module functionality
+- Cleaner separation: context for I/O, services for dependencies
+
 ## [2025-11-11 18:45] — SQL Lookup Module (Schema Only)
 ### Spec / Intent
 - Create generic database query module for SQL SELECT lookups
