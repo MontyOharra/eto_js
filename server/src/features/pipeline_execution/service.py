@@ -905,7 +905,6 @@ class PipelineExecutionService:
             inputs=inputs_metadata,
             outputs=outputs_metadata,
             module_instance_id=step.module_instance_id,
-            services=self.services,
         )
 
         # Gather upstream producers
@@ -1000,7 +999,8 @@ class PipelineExecutionService:
                         outputs_dict = handlerInstance.run(
                             inputs=inputs_dict,  # Use raw node_id keyed inputs
                             cfg=config_instance,
-                            context=ctx
+                            context=ctx,
+                            services=self.services
                         )
                         error = None
 
@@ -1065,7 +1065,8 @@ class PipelineExecutionService:
                     outputs_dict = handlerInstance.run(
                         inputs=inputs_dict,
                         cfg=config_instance,
-                        context=ctx
+                        context=ctx,
+                        services=self.services
                     )
                     error = None
                     logger.debug(f"Executed {module_kind} module {step.module_instance_id}")
