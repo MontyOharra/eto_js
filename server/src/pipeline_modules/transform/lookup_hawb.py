@@ -56,7 +56,7 @@ class LookupHawb(TransformModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: LookupHawbConfig, context: Any = None) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: LookupHawbConfig, context: Any = None, services: Any = None) -> Dict[str, Any]:
         """
         Execute the lookup hawb transform.
 
@@ -65,12 +65,13 @@ class LookupHawb(TransformModule):
         Args:
             inputs: Dictionary with input values (search_text)
             cfg: Configuration (empty for now)
-            context: Execution context with services
+            context: Execution context with I/O metadata
+            services: Service container for database access
 
         Returns:
             Dictionary with output: {"hawb": found_hawb_value}
         """
-        if not context or not context.services:
+        if not services:
             raise RuntimeError("LookupHawb requires service container access")
 
         # Get input value by group_index (order in meta definition)
@@ -82,7 +83,7 @@ class LookupHawb(TransformModule):
 
         # Get the HTC database connection
         try:
-            htc_db = context.services.get_connection('htc_db')
+            htc_db = services.get_connection('htc_db')
             logger.info("[LOOKUP HAWB] Successfully accessed htc_db connection")
         except ValueError as e:
             logger.error(f"[LOOKUP HAWB] Failed to access htc_db: {e}")

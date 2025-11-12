@@ -55,7 +55,7 @@ class CreateOrder(ActionModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: CreateOrderConfig, context: Any = None) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: CreateOrderConfig, context: Any = None, services: Any = None) -> Dict[str, Any]:
         """
         Execute the create order action.
 
@@ -64,18 +64,19 @@ class CreateOrder(ActionModule):
         Args:
             inputs: Dictionary with input values (hawb, search_text)
             cfg: Configuration (empty for now)
-            context: Execution context with services
+            context: Execution context with I/O metadata
+            services: Service container for database access
 
         Returns:
             Empty dict (actions don't produce outputs)
         """
-        if not context or not context.services:
+        if not services:
             raise RuntimeError("CreateOrder requires service container access")
 
         # Get input values by matching context input nodes to inputs dict
         hawb_input = next(node for node in context.inputs if node.group_index == 0)
         search_text_input = next(node for node in context.inputs if node.group_index == 1)
-        
+
         hawb = inputs[hawb_input.node_id]
         search_text = inputs[search_text_input.node_id]
 
@@ -83,7 +84,7 @@ class CreateOrder(ActionModule):
 
         # Get the HTC database connection
         try:
-            htc_db = context.services.get_connection('htc_db')
+            htc_db = services.get_connection('htc_db')
             logger.info("[CREATE ORDER] Successfully accessed htc_db connection")
         except ValueError as e:
             logger.error(f"[CREATE ORDER] Failed to access htc_db: {e}")

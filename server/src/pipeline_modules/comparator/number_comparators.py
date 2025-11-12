@@ -104,7 +104,7 @@ class NumberGreaterThan(ComparatorModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: NumberGreaterThanConfig, context: Any = None) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: NumberGreaterThanConfig, context: Any = None, services: Any = None) -> Dict[str, Any]:
         import math
 
         # Get the single input value (there should be exactly one)

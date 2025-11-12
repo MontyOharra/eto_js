@@ -65,7 +65,7 @@ class BooleanOr(LogicModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: BooleanOrConfig, context: Any) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: BooleanOrConfig, context: Any, services: Any = None) -> Dict[str, Any]:
         """
         Execute boolean OR operation
 

@@ -88,7 +88,7 @@ class SqlLookup(TransformModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: SqlLookupConfig, context: Any) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: SqlLookupConfig, context: Any, services: Any = None) -> Dict[str, Any]:
         """
         Execute SQL lookup query
         TODO: Implement execution logic

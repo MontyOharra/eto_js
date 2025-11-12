@@ -61,7 +61,7 @@ class DataDuplicator(TransformModule):
             )
         )
         
-    def run(self, inputs: Dict[str, Any], cfg: DataDuplicatorConfig, context: Any) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: DataDuplicatorConfig, context: Any, services: Any = None) -> Dict[str, Any]:
         """
         Duplicate input value to all output pins
 

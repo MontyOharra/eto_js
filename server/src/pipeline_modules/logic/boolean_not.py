@@ -59,7 +59,7 @@ class BooleanNot(LogicModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: BooleanNotConfig, context: Any) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: BooleanNotConfig, context: Any, services: Any = None) -> Dict[str, Any]:
         """
         Execute boolean NOT operation
 

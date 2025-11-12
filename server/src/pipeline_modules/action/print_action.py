@@ -48,7 +48,7 @@ class PrintAction(ActionModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: PrintActionConfig, context: Any = None) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: PrintActionConfig, context: Any = None, services: Any = None) -> Dict[str, Any]:
         """
         Execute the print action
 

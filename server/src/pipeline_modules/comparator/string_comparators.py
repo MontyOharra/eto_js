@@ -47,7 +47,7 @@ class StringEquals(ComparatorModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: StringEqualsConfig, context: Any) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: StringEqualsConfig, context: Any, services: Any = None) -> Dict[str, Any]:
         # Extract input
         input_node_id = list(inputs.keys())[0]
         value = inputs[input_node_id]
@@ -110,7 +110,7 @@ class StringContains(ComparatorModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: StringContainsConfig, context: Any) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: StringContainsConfig, context: Any, services: Any = None) -> Dict[str, Any]:
         # Extract input
         input_node_id = list(inputs.keys())[0]
         text = inputs[input_node_id]
@@ -173,7 +173,7 @@ class StringStartsWith(ComparatorModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: StringStartsWithConfig, context: Any) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: StringStartsWithConfig, context: Any, services: Any = None) -> Dict[str, Any]:
         # Extract input
         input_node_id = list(inputs.keys())[0]
         text = inputs[input_node_id]
@@ -236,7 +236,7 @@ class StringEndsWith(ComparatorModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: StringEndsWithConfig, context: Any) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: StringEndsWithConfig, context: Any, services: Any = None) -> Dict[str, Any]:
         # Extract input
         input_node_id = list(inputs.keys())[0]
         text = inputs[input_node_id]
@@ -298,7 +298,7 @@ class StringMatchesRegex(ComparatorModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: StringMatchesRegexConfig, context: Any) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: StringMatchesRegexConfig, context: Any, services: Any = None) -> Dict[str, Any]:
         # Extract input
         input_node_id = list(inputs.keys())[0]
         text = inputs[input_node_id]
@@ -360,7 +360,7 @@ class StringIsEmpty(ComparatorModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: StringIsEmptyConfig, context: Any) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: StringIsEmptyConfig, context: Any, services: Any = None) -> Dict[str, Any]:
         # Extract input
         input_node_id = list(inputs.keys())[0]
         text = inputs[input_node_id]

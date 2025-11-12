@@ -60,7 +60,7 @@ class TypeConverter(TransformModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: TypeConverterConfig, context: Any = None) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: TypeConverterConfig, context: Any = None, services: Any = None) -> Dict[str, Any]:
         """
         Execute type conversion
 
