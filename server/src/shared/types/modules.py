@@ -118,9 +118,18 @@ class BaseModule(ABC):
         return []
     
     @abstractmethod
-    def run(self, inputs: Dict[str, Any], cfg: Any, context: Optional[Any]) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: Any, context: Optional[Any], services: Optional[Any] = None) -> Dict[str, Any]:
         """
         Execute the module logic
+
+        Args:
+            inputs: Dictionary of input values keyed by node_id
+            cfg: Validated configuration instance (Pydantic model)
+            context: Execution context with I/O metadata (inputs/outputs pins)
+            services: Service container for accessing databases, repositories, etc.
+
+        Returns:
+            Dictionary of output values keyed by node_id
         """
         return {}
 

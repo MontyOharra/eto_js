@@ -86,10 +86,11 @@ class ModuleExecutionContext:
     """
     Context passed to module handlers during execution.
 
-    Contains node metadata and references to services.
+    Contains I/O metadata for the module instance.
     Module handlers should access fields directly (e.g., context.outputs[0].node_id).
+
+    Note: Services are passed as a separate parameter to run(), not via context.
     """
     inputs: List[NodeInstance]  # Input pins metadata
     outputs: List[NodeInstance]  # Output pins metadata
     module_instance_id: str  # For debugging/logging
-    services: Optional[Any] = None  # Access to service container (ServiceContainer type)
