@@ -153,6 +153,12 @@ class PipelineCompiler:
             for module_id in layer:
                 module = indices.module_by_id[module_id]
 
+                # DEBUG: Log module inputs before creating node_metadata
+                logger.debug(f"[COMPILATION DEBUG] module_id={module_id}")
+                logger.debug(f"[COMPILATION DEBUG] module.inputs={module.inputs}")
+                for inp in module.inputs:
+                    logger.debug(f"[COMPILATION DEBUG]   Input pin: node_id={inp.node_id}, name={inp.name}, group_index={inp.group_index}")
+
                 # Build input field mappings
                 input_field_mappings = PipelineCompiler._build_input_mappings(
                     module, pipeline.connections
@@ -163,6 +169,9 @@ class PipelineCompiler:
                     "inputs": list(module.inputs),
                     "outputs": list(module.outputs)
                 }
+
+                # DEBUG: Log what's in node_metadata
+                logger.debug(f"[COMPILATION DEBUG] node_metadata inputs={node_metadata['inputs']}")
 
                 # Extract module_id from module_ref (format: "module_id:version")
                 # The module_ref column has FK to module_catalog.id which only contains module_id

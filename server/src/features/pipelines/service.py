@@ -65,17 +65,23 @@ class PipelineService:
     step_repository: PipelineDefinitionStepRepository
     module_catalog_repository: ModuleRepository
     pipeline_execution_service: 'PipelineExecutionService'
+    modules_service: Any  # ModulesService
+    services: Any  # Services container for database access
 
-    def __init__(self, connection_manager: DatabaseConnectionManager, pipeline_execution_service: 'PipelineExecutionService') -> None:
+    def __init__(self, connection_manager: DatabaseConnectionManager, pipeline_execution_service: 'PipelineExecutionService', modules_service: Any, services: Any = None) -> None:
         """
         Initialize pipeline service
 
         Args:
             connection_manager: Database connection manager
             pipeline_execution_service: Pipeline execution service for running compiled pipelines
+            modules_service: Modules service for registry access
+            services: Optional services container for database access during validation
         """
         self.connection_manager = connection_manager
         self.pipeline_execution_service = pipeline_execution_service
+        self.modules_service = modules_service
+        self.services = services
         self.definition_repository = PipelineDefinitionRepository(connection_manager=connection_manager)
         self.compiled_plan_repository = PipelineCompiledPlanRepository(connection_manager=connection_manager)
         self.step_repository = PipelineDefinitionStepRepository(connection_manager=connection_manager)
@@ -164,7 +170,14 @@ class PipelineService:
         Raises:
             PipelineValidationError: If validation fails at any stage
         """
-        validator = PipelineValidator(module_catalog_repo=self.module_catalog_repository)
+        # Get the module registry from modules service
+        module_registry = self.modules_service._registry
+
+        validator = PipelineValidator(
+            module_catalog_repo=self.module_catalog_repository,
+            module_registry=module_registry,
+            services=self.services
+        )
         validator.validate(pipeline_state)
 
     def _check_for_cycles(self, pipeline_state: PipelineState, indices: PipelineIndices) -> None:
@@ -541,6 +554,13 @@ class PipelineService:
             ServiceError: If compilation fails
         """
         try:
+            # DEBUG: Log pruned_pipeline modules before compilation
+            logger.debug("[COMPILATION DEBUG] Pruned pipeline modules:")
+            for module in pruned_pipeline.modules:
+                logger.debug(f"[COMPILATION DEBUG]   Module {module.module_instance_id}:")
+                for inp in module.inputs:
+                    logger.debug(f"[COMPILATION DEBUG]     Input: node_id={inp.node_id}, name={inp.name}, group_index={inp.group_index}")
+
             # Build indices for compilation
             indices = self._build_indices(pruned_pipeline)
 
@@ -612,6 +632,14 @@ class PipelineService:
         try:
             # Steps 1-3: Validation, pruning, checksum (read-only, outside transaction)
             logger.info("Validating pipeline structure")
+
+            # DEBUG: Log original pipeline_state before any processing
+            logger.debug("[COMPILATION DEBUG] Original pipeline_state modules:")
+            for module in create_data.pipeline_state.modules:
+                logger.debug(f"[COMPILATION DEBUG]   Module {module.module_instance_id} ({module.module_ref}):")
+                for inp in module.inputs:
+                    logger.debug(f"[COMPILATION DEBUG]     Input: node_id={inp.node_id}, name={inp.name}, group_index={inp.group_index}")
+
             self._validate_pipeline(create_data.pipeline_state)
 
             logger.info("Pruning dead branches")

@@ -46,7 +46,7 @@ class NumberEquals(ComparatorModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: NumberEqualsConfig, context: Any) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: NumberEqualsConfig, context: Any = None, services: Any = None) -> Dict[str, Any]:
         # Extract input
         input_node_id = list(inputs.keys())[0]
         value = inputs[input_node_id]
@@ -192,7 +192,7 @@ class NumberLessThan(ComparatorModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: NumberLessThanConfig, context: Any) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: NumberLessThanConfig, context: Any = None, services: Any = None) -> Dict[str, Any]:
         import math
 
         # Extract input
@@ -269,7 +269,7 @@ class NumberInRange(ComparatorModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: NumberInRangeConfig, context: Any) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: NumberInRangeConfig, context: Any = None, services: Any = None) -> Dict[str, Any]:
         import math
 
         # Extract input
@@ -350,7 +350,7 @@ class NumberIsEven(ComparatorModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: NumberIsEvenConfig, context: Any) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: NumberIsEvenConfig, context: Any = None, services: Any = None) -> Dict[str, Any]:
         # Extract input
         input_node_id = list(inputs.keys())[0]
         number = inputs[input_node_id]
@@ -403,7 +403,7 @@ class NumberIsOdd(ComparatorModule):
             )
         )
 
-    def run(self, inputs: Dict[str, Any], cfg: NumberIsOddConfig, context: Any) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Any], cfg: NumberIsOddConfig, context: Any = None, services: Any = None) -> Dict[str, Any]:
         # Extract input
         input_node_id = list(inputs.keys())[0]
         number = inputs[input_node_id]

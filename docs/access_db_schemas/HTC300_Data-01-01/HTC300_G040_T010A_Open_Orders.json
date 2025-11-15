@@ -1,0 +1,623 @@
+{
+  "table": {
+    "name": "HTC300_G040_T010A Open Orders",
+    "column_count": 75
+  },
+  "columns": [
+    {
+      "name": "M_CoID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 1
+    },
+    {
+      "name": "M_BrID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 2
+    },
+    {
+      "name": "M_OrderNo",
+      "type": "DOUBLE",
+      "size": 53,
+      "nullable": true,
+      "position": 3
+    },
+    {
+      "name": "M_OrderType",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 4
+    },
+    {
+      "name": "M_CustomerID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 5
+    },
+    {
+      "name": "m_Customer",
+      "type": "VARCHAR",
+      "size": 255,
+      "nullable": true,
+      "position": 6
+    },
+    {
+      "name": "M_CustAssessorials",
+      "type": "VARCHAR",
+      "size": 100,
+      "nullable": true,
+      "position": 7
+    },
+    {
+      "name": "M_CustAgent",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 8
+    },
+    {
+      "name": "M_Tariff",
+      "type": "VARCHAR",
+      "size": 50,
+      "nullable": true,
+      "position": 9
+    },
+    {
+      "name": "M_HAWB",
+      "type": "VARCHAR",
+      "size": 125,
+      "nullable": true,
+      "position": 10
+    },
+    {
+      "name": "M_MAWB",
+      "type": "VARCHAR",
+      "size": 125,
+      "nullable": true,
+      "position": 11
+    },
+    {
+      "name": "M_ProNbr",
+      "type": "VARCHAR",
+      "size": 50,
+      "nullable": true,
+      "position": 12
+    },
+    {
+      "name": "M_OrderNotes",
+      "type": "LONGCHAR",
+      "size": 1073741823,
+      "nullable": true,
+      "position": 13
+    },
+    {
+      "name": "M_PUDate",
+      "type": "VARCHAR",
+      "size": 10,
+      "nullable": true,
+      "position": 14
+    },
+    {
+      "name": "M_PUTimeStart",
+      "type": "VARCHAR",
+      "size": 11,
+      "nullable": true,
+      "position": 15
+    },
+    {
+      "name": "M_PUTimeEnd",
+      "type": "VARCHAR",
+      "size": 11,
+      "nullable": true,
+      "position": 16
+    },
+    {
+      "name": "M_DelDate",
+      "type": "VARCHAR",
+      "size": 10,
+      "nullable": true,
+      "position": 17
+    },
+    {
+      "name": "M_DelTimeStart",
+      "type": "VARCHAR",
+      "size": 11,
+      "nullable": true,
+      "position": 18
+    },
+    {
+      "name": "M_DelTimeEnd",
+      "type": "VARCHAR",
+      "size": 11,
+      "nullable": true,
+      "position": 19
+    },
+    {
+      "name": "M_PUSpecificYN",
+      "type": "BIT",
+      "size": 1,
+      "nullable": false,
+      "position": 20
+    },
+    {
+      "name": "M_DelSpecificYN",
+      "type": "BIT",
+      "size": 1,
+      "nullable": false,
+      "position": 21
+    },
+    {
+      "name": "M_DeclaredValue",
+      "type": "CURRENCY",
+      "size": 19,
+      "nullable": true,
+      "position": 22
+    },
+    {
+      "name": "M_PUID",
+      "type": "DOUBLE",
+      "size": 53,
+      "nullable": true,
+      "position": 23
+    },
+    {
+      "name": "M_PUCo",
+      "type": "VARCHAR",
+      "size": 125,
+      "nullable": true,
+      "position": 24
+    },
+    {
+      "name": "M_PULocn",
+      "type": "VARCHAR",
+      "size": 255,
+      "nullable": true,
+      "position": 25
+    },
+    {
+      "name": "M_PUZip",
+      "type": "VARCHAR",
+      "size": 10,
+      "nullable": true,
+      "position": 26
+    },
+    {
+      "name": "M_PULatitude",
+      "type": "VARCHAR",
+      "size": 13,
+      "nullable": true,
+      "position": 27
+    },
+    {
+      "name": "M_PULongitude",
+      "type": "VARCHAR",
+      "size": 13,
+      "nullable": true,
+      "position": 28
+    },
+    {
+      "name": "M_PUACI",
+      "type": "VARCHAR",
+      "size": 1,
+      "nullable": true,
+      "position": 29
+    },
+    {
+      "name": "M_PUAssessorials",
+      "type": "VARCHAR",
+      "size": 100,
+      "nullable": true,
+      "position": 30
+    },
+    {
+      "name": "M_PUContactName",
+      "type": "VARCHAR",
+      "size": 50,
+      "nullable": true,
+      "position": 31
+    },
+    {
+      "name": "M_PUContactMeans",
+      "type": "VARCHAR",
+      "size": 50,
+      "nullable": true,
+      "position": 32
+    },
+    {
+      "name": "M_PUNotes",
+      "type": "LONGCHAR",
+      "size": 1073741823,
+      "nullable": true,
+      "position": 33
+    },
+    {
+      "name": "M_PUCarrierYN",
+      "type": "BIT",
+      "size": 1,
+      "nullable": false,
+      "position": 34
+    },
+    {
+      "name": "M_PUCarrierGroundYN",
+      "type": "BIT",
+      "size": 1,
+      "nullable": false,
+      "position": 35
+    },
+    {
+      "name": "M_PUIntlYN",
+      "type": "BIT",
+      "size": 1,
+      "nullable": false,
+      "position": 36
+    },
+    {
+      "name": "M_PULocalYN",
+      "type": "BIT",
+      "size": 1,
+      "nullable": false,
+      "position": 37
+    },
+    {
+      "name": "M_PUBranchYN",
+      "type": "BIT",
+      "size": 1,
+      "nullable": false,
+      "position": 38
+    },
+    {
+      "name": "M_DelID",
+      "type": "DOUBLE",
+      "size": 53,
+      "nullable": true,
+      "position": 39
+    },
+    {
+      "name": "M_DelCo",
+      "type": "VARCHAR",
+      "size": 125,
+      "nullable": true,
+      "position": 40
+    },
+    {
+      "name": "M_DelLocn",
+      "type": "VARCHAR",
+      "size": 255,
+      "nullable": true,
+      "position": 41
+    },
+    {
+      "name": "M_DelZip",
+      "type": "VARCHAR",
+      "size": 10,
+      "nullable": true,
+      "position": 42
+    },
+    {
+      "name": "M_DelLatitude",
+      "type": "VARCHAR",
+      "size": 13,
+      "nullable": true,
+      "position": 43
+    },
+    {
+      "name": "M_DelLongitude",
+      "type": "VARCHAR",
+      "size": 13,
+      "nullable": true,
+      "position": 44
+    },
+    {
+      "name": "M_DelACI",
+      "type": "VARCHAR",
+      "size": 1,
+      "nullable": true,
+      "position": 45
+    },
+    {
+      "name": "M_Del_Assessorials",
+      "type": "VARCHAR",
+      "size": 100,
+      "nullable": true,
+      "position": 46
+    },
+    {
+      "name": "M_DelContactName",
+      "type": "VARCHAR",
+      "size": 50,
+      "nullable": true,
+      "position": 47
+    },
+    {
+      "name": "M_DelContactMeans",
+      "type": "VARCHAR",
+      "size": 50,
+      "nullable": true,
+      "position": 48
+    },
+    {
+      "name": "M_DelNotes",
+      "type": "LONGCHAR",
+      "size": 1073741823,
+      "nullable": true,
+      "position": 49
+    },
+    {
+      "name": "M_DelCarrierYN",
+      "type": "BIT",
+      "size": 1,
+      "nullable": false,
+      "position": 50
+    },
+    {
+      "name": "M_DelCarrierGroundYN",
+      "type": "BIT",
+      "size": 1,
+      "nullable": false,
+      "position": 51
+    },
+    {
+      "name": "M_DelIntlYN",
+      "type": "BIT",
+      "size": 1,
+      "nullable": false,
+      "position": 52
+    },
+    {
+      "name": "M_DelLocalYN",
+      "type": "BIT",
+      "size": 1,
+      "nullable": false,
+      "position": 53
+    },
+    {
+      "name": "M_DelBranchYN",
+      "type": "BIT",
+      "size": 1,
+      "nullable": false,
+      "position": 54
+    },
+    {
+      "name": "M_Driver",
+      "type": "VARCHAR",
+      "size": 30,
+      "nullable": true,
+      "position": 55
+    },
+    {
+      "name": "M_PODSig",
+      "type": "VARCHAR",
+      "size": 125,
+      "nullable": true,
+      "position": 56
+    },
+    {
+      "name": "M_PODDate",
+      "type": "VARCHAR",
+      "size": 10,
+      "nullable": true,
+      "position": 57
+    },
+    {
+      "name": "M_PODTime",
+      "type": "VARCHAR",
+      "size": 11,
+      "nullable": true,
+      "position": 58
+    },
+    {
+      "name": "M_PODNotes",
+      "type": "LONGCHAR",
+      "size": 1073741823,
+      "nullable": true,
+      "position": 59
+    },
+    {
+      "name": "M_Status",
+      "type": "VARCHAR",
+      "size": 25,
+      "nullable": true,
+      "position": 60
+    },
+    {
+      "name": "m_StatSeq",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 61
+    },
+    {
+      "name": "M_Rate",
+      "type": "CURRENCY",
+      "size": 19,
+      "nullable": true,
+      "position": 62
+    },
+    {
+      "name": "M_FSC",
+      "type": "CURRENCY",
+      "size": 19,
+      "nullable": true,
+      "position": 63
+    },
+    {
+      "name": "M_Services",
+      "type": "CURRENCY",
+      "size": 19,
+      "nullable": true,
+      "position": 64
+    },
+    {
+      "name": "M_Charges",
+      "type": "CURRENCY",
+      "size": 19,
+      "nullable": true,
+      "position": 65
+    },
+    {
+      "name": "M_Costs",
+      "type": "CURRENCY",
+      "size": 19,
+      "nullable": true,
+      "position": 66
+    },
+    {
+      "name": "M_StorageChgs",
+      "type": "CURRENCY",
+      "size": 19,
+      "nullable": true,
+      "position": 67
+    },
+    {
+      "name": "M_Adjustments",
+      "type": "CURRENCY",
+      "size": 19,
+      "nullable": true,
+      "position": 68
+    },
+    {
+      "name": "M_RatingNotes",
+      "type": "LONGCHAR",
+      "size": 1073741823,
+      "nullable": true,
+      "position": 69
+    },
+    {
+      "name": "M_QBCustomerListID",
+      "type": "VARCHAR",
+      "size": 38,
+      "nullable": true,
+      "position": 70
+    },
+    {
+      "name": "M_QBCustFullName",
+      "type": "VARCHAR",
+      "size": 255,
+      "nullable": true,
+      "position": 71
+    },
+    {
+      "name": "M_QBInvoiceRefNumber",
+      "type": "VARCHAR",
+      "size": 11,
+      "nullable": true,
+      "position": 72
+    },
+    {
+      "name": "M_QBInvoiceLineSeqNo",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 73
+    },
+    {
+      "name": "M_AutoAssessYN",
+      "type": "BIT",
+      "size": 1,
+      "nullable": false,
+      "position": 74
+    },
+    {
+      "name": "M_WgtChgsCalcYN",
+      "type": "BIT",
+      "size": 1,
+      "nullable": false,
+      "position": 75
+    }
+  ],
+  "indexes": [
+    {
+      "name": "PrimaryKey",
+      "unique": true,
+      "columns": [
+        {
+          "name": "M_CoID",
+          "position": 1
+        },
+        {
+          "name": "M_BrID",
+          "position": 2
+        },
+        {
+          "name": "M_OrderNo",
+          "position": 3
+        }
+      ]
+    },
+    {
+      "name": "CustomerID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "M_CustomerID",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "M_CoID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "M_CoID",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "M_DelID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "M_DelID",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "M_HAWB",
+      "unique": false,
+      "columns": [
+        {
+          "name": "M_HAWB",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "M_PUID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "M_PUID",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "M_QBCustomerListID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "M_QBCustomerListID",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "m_StatSeq",
+      "unique": false,
+      "columns": [
+        {
+          "name": "m_StatSeq",
+          "position": 1
+        }
+      ]
+    }
+  ]
+}

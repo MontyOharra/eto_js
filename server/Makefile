@@ -18,10 +18,11 @@ $(VENV_DIR): ## Create virtual environment
 	python -m venv $(VENV_DIR)
 	@echo "Virtual environment created at $(VENV_DIR)"
 
-install-deps: $(VENV_DIR) requirements.txt ## Install Python dependencies from requirements.txt
+install-deps: $(VENV_DIR) requirements.txt requirements-dev.txt ## Install Python dependencies from requirements.txt and requirements-dev.txt
 	$(PYTHON) -m pip install --upgrade pip
 	$(PIP) install -r requirements.txt
-	@echo "Dependencies installed"
+	$(PIP) install -r requirements-dev.txt
+	@echo "Dependencies installed (production + development)"
 
 create-dirs: ## Create necessary directories (logs, storage)
 	@mkdir -p logs storage

@@ -4,10 +4,10 @@ Executes a SQL SELECT query against configured database and returns results
 """
 import logging
 import re
-from typing import Dict, Any, List, Literal, Set
+from typing import Dict, Any, List, Literal, Set, Tuple
 from pydantic import BaseModel, Field
 import sqlparse
-from sqlparse.sql import IdentifierList, Identifier, Token
+from sqlparse.sql import IdentifierList, Identifier, Token, Where
 from sqlparse.tokens import Keyword, DML
 
 from shared.types import TransformModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
@@ -154,6 +154,110 @@ class SqlLookup(TransformModule):
 
         return schema
 
+    @classmethod
+    def validate_config(cls, cfg: SqlLookupConfig, inputs: List[Any], outputs: List[Any], services: Any = None) -> List[str]:
+        """
+        Validate SQL lookup configuration.
+
+        Checks:
+        1. SQL template can be parsed
+        2. Placeholders in SQL match input pin names
+        3. Column names/aliases in SELECT match output pin names
+        4. Table referenced in SQL exists in the selected database (if services provided)
+
+        Args:
+            cfg: Validated config instance
+            inputs: List of input pins for this module instance
+            outputs: List of output pins for this module instance
+            services: Optional services container for database access
+
+        Returns:
+            List of error messages (empty if valid)
+        """
+        errors = []
+
+        logger.info(f"[SQL LOOKUP VALIDATE_CONFIG] Starting validation")
+        logger.info(f"[SQL LOOKUP VALIDATE_CONFIG] SQL template: {cfg.sql_template}")
+        logger.info(f"[SQL LOOKUP VALIDATE_CONFIG] Database: {cfg.database}")
+        logger.info(f"[SQL LOOKUP VALIDATE_CONFIG] Services available: {services is not None}")
+
+        # Extract placeholders from SQL template
+        try:
+            placeholders = cls._extract_placeholders(cfg.sql_template)
+            logger.info(f"[SQL LOOKUP VALIDATE_CONFIG] Extracted placeholders: {placeholders}")
+        except Exception as e:
+            logger.error(f"[SQL LOOKUP VALIDATE_CONFIG] Failed to extract placeholders: {e}")
+            return [f"Failed to extract placeholders from SQL: {e}"]
+
+        # Parse SELECT clause to get expected output columns
+        try:
+            expected_columns = cls._extract_select_columns(cfg.sql_template)
+            logger.info(f"[SQL LOOKUP VALIDATE_CONFIG] Extracted columns: {expected_columns}")
+        except ValueError as e:
+            logger.error(f"[SQL LOOKUP VALIDATE_CONFIG] Failed to parse SELECT: {e}")
+            return [f"Failed to parse SELECT clause: {e}"]
+        except Exception as e:
+            logger.error(f"[SQL LOOKUP VALIDATE_CONFIG] Unexpected error parsing SQL: {e}")
+            return [f"Unexpected error parsing SQL: {e}"]
+
+        # Build name-to-pin mappings
+        input_names = {pin.name for pin in inputs if pin.name}  # Filter out empty names
+        output_names = {pin.name for pin in outputs if pin.name}  # Filter out empty names
+
+        logger.info(f"[SQL LOOKUP VALIDATE_CONFIG] Input pin names: {input_names}")
+        logger.info(f"[SQL LOOKUP VALIDATE_CONFIG] Output pin names: {output_names}")
+
+        # Validate all placeholders have matching input pins
+        missing_inputs = placeholders - input_names
+        if missing_inputs:
+            errors.append(
+                f"SQL template references placeholders that don't match input pin names: {sorted(missing_inputs)}. "
+                f"Available input pins: {sorted(input_names)}"
+            )
+
+        # Validate all output columns have matching output pins
+        missing_outputs = set(expected_columns) - output_names
+        if missing_outputs:
+            errors.append(
+                f"SELECT clause references columns that don't match output pin names: {sorted(missing_outputs)}. "
+                f"Available output pins: {sorted(output_names)}"
+            )
+
+        # Warn if there are extra inputs/outputs not used in SQL (not an error, just informational)
+        # This helps users catch typos or unused pins
+        unused_inputs = input_names - placeholders
+        if unused_inputs:
+            # This is just a warning, not an error - could be logged but not block validation
+            logger.info(f"[SQL LOOKUP VALIDATION] Unused input pins (not referenced in SQL): {sorted(unused_inputs)}")
+
+        unused_outputs = output_names - set(expected_columns)
+        if unused_outputs:
+            # This is just a warning, not an error
+            logger.info(f"[SQL LOOKUP VALIDATION] Unused output pins (not in SELECT clause): {sorted(unused_outputs)}")
+
+        # Validate table exists in database (if services available)
+        if services:
+            try:
+                logger.info(f"[SQL LOOKUP VALIDATION] Checking if table exists in database '{cfg.database}'")
+                table_name = cls._extract_table_name(cfg.sql_template)
+                logger.info(f"[SQL LOOKUP VALIDATION] Extracted table name: {table_name}")
+
+                if table_name:
+                    db_connection = services.get_connection(cfg.database)
+                    if not cls._table_exists(db_connection, table_name):
+                        errors.append(f"Table '{table_name}' does not exist in database '{cfg.database}'")
+                    else:
+                        logger.info(f"[SQL LOOKUP VALIDATION] Table '{table_name}' exists in database '{cfg.database}'")
+                else:
+                    logger.warning("[SQL LOOKUP VALIDATION] Could not extract table name from SQL template")
+            except Exception as e:
+                logger.error(f"[SQL LOOKUP VALIDATION] Error checking table existence: {e}")
+                errors.append(f"Failed to validate table existence: {e}")
+        else:
+            logger.info("[SQL LOOKUP VALIDATION] Skipping table validation (services not available)")
+
+        return errors
+
     @staticmethod
     def _extract_placeholders(sql_template: str) -> Set[str]:
         """
@@ -192,7 +296,12 @@ class SqlLookup(TransformModule):
         columns = []
         in_select = False
 
+        logger.info(f"[SQL LOOKUP] Parsing SQL: {sql_template}")
+        logger.info(f"[SQL LOOKUP] Token breakdown:")
+
         for token in statement.tokens:
+            logger.info(f"  Token: type={token.ttype}, value={repr(token.value)}, class={type(token).__name__}")
+
             # Skip whitespace and comments
             if token.is_whitespace or token.ttype in (sqlparse.tokens.Comment.Single, sqlparse.tokens.Comment.Multiline):
                 continue
@@ -200,27 +309,42 @@ class SqlLookup(TransformModule):
             # Check for SELECT keyword
             if token.ttype is DML and token.value.upper() == 'SELECT':
                 in_select = True
+                logger.info(f"    -> Found SELECT keyword")
                 continue
 
             # If we're past SELECT, look for column list
             if in_select:
                 if token.ttype is Keyword:
                     # Hit FROM or another keyword, done with columns
+                    logger.info(f"    -> Hit keyword {token.value.upper()}, stopping column extraction")
+                    break
+
+                # Check for WHERE clause or other SQL clauses
+                if isinstance(token, Where):
+                    logger.info(f"    -> Hit WHERE clause, stopping column extraction")
                     break
 
                 if isinstance(token, IdentifierList):
                     # Multiple columns
+                    logger.info(f"    -> Found IdentifierList")
                     for identifier in token.get_identifiers():
-                        columns.append(_get_column_name(identifier))
+                        col_name = _get_column_name(identifier)
+                        columns.append(col_name)
+                        logger.info(f"      -> Extracted column: {col_name}")
                 elif isinstance(token, Identifier):
                     # Single column
-                    columns.append(_get_column_name(token))
+                    col_name = _get_column_name(token)
+                    columns.append(col_name)
+                    logger.info(f"    -> Found Identifier, extracted column: {col_name}")
                 elif token.ttype not in (sqlparse.tokens.Whitespace, sqlparse.tokens.Punctuation):
                     # Single token column (no alias)
                     col_name = token.value.strip()
                     if col_name == '*':
                         raise ValueError("SELECT * is not supported. Please explicitly list column names.")
                     columns.append(col_name)
+                    logger.info(f"    -> Found single token column: {col_name}")
+
+        logger.info(f"[SQL LOOKUP] Extracted columns: {columns}")
 
         if not columns:
             raise ValueError("No columns found in SELECT clause")
@@ -260,6 +384,97 @@ class SqlLookup(TransformModule):
         return sql
 
     @staticmethod
+    def _convert_to_parameterized_sql(sql_template: str) -> Tuple[str, List[str]]:
+        """
+        Convert SQL template with {placeholder} syntax to parameterized SQL with ? placeholders.
+
+        Args:
+            sql_template: SQL with {placeholder} syntax
+
+        Returns:
+            Tuple of (parameterized_sql, ordered_placeholder_names)
+
+        Example:
+            Input: "SELECT * FROM users WHERE id={user_id} AND status={status}"
+            Output: ("SELECT * FROM users WHERE id=? AND status=?", ["user_id", "status"])
+        """
+        import re
+
+        # Find all {placeholder} occurrences in order
+        placeholder_pattern = r'\{([a-zA-Z_][a-zA-Z0-9_]*)\}'
+        matches = re.finditer(placeholder_pattern, sql_template)
+
+        # Track placeholders in the order they appear
+        ordered_placeholders = []
+        for match in matches:
+            placeholder_name = match.group(1)
+            ordered_placeholders.append(placeholder_name)
+
+        # Replace all {placeholder} with ? in the SQL
+        parameterized_sql = re.sub(placeholder_pattern, '?', sql_template)
+
+        return parameterized_sql, ordered_placeholders
+
+    @staticmethod
+    def _convert_to_type(value: Any, target_type: str) -> Any:
+        """
+        Convert database value to target output type.
+
+        Args:
+            value: Value from database (could be None)
+            target_type: Target type ("str", "int", "float", "bool", "datetime")
+
+        Returns:
+            Converted value, or None if input is None
+
+        Raises:
+            ValueError: If conversion fails
+        """
+        # Handle NULL/None
+        if value is None:
+            return None
+
+        try:
+            if target_type == "str":
+                return str(value)
+            elif target_type == "int":
+                return int(value)
+            elif target_type == "float":
+                return float(value)
+            elif target_type == "bool":
+                # Handle various boolean representations
+                if isinstance(value, bool):
+                    return value
+                if isinstance(value, (int, float)):
+                    return bool(value)
+                if isinstance(value, str):
+                    return value.lower() in ('true', '1', 'yes', 'y', 't')
+                return bool(value)
+            elif target_type == "datetime":
+                # If already datetime, return as-is
+                if hasattr(value, 'year'):  # datetime-like object
+                    return value
+                # If string, try parsing (database driver usually handles this)
+                if isinstance(value, str):
+                    from datetime import datetime
+                    # Try common formats
+                    for fmt in ["%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%m/%d/%Y"]:
+                        try:
+                            return datetime.strptime(value, fmt)
+                        except ValueError:
+                            continue
+                    raise ValueError(f"Could not parse datetime from: {value}")
+                return value
+            else:
+                # Unknown type, return as-is
+                logger.warning(f"Unknown target type '{target_type}', returning value as-is")
+                return value
+
+        except (ValueError, TypeError) as e:
+            logger.error(f"Failed to convert {value} (type: {type(value).__name__}) to {target_type}: {e}")
+            raise ValueError(f"Type conversion failed for {value} -> {target_type}: {e}")
+
+    @staticmethod
     def _get_default_value_for_type(type_str: str) -> Any:
         """
         Get default dummy value for a given type.
@@ -278,6 +493,72 @@ class SqlLookup(TransformModule):
             "datetime": None  # Could use datetime.now() but None is simpler
         }
         return defaults.get(type_str, None)
+
+    @staticmethod
+    def _extract_table_name(sql_template: str) -> str | None:
+        """
+        Extract table name from SQL query.
+
+        Args:
+            sql_template: SQL SELECT query
+
+        Returns:
+            Table name if found, None otherwise (without brackets or quotes)
+        """
+        try:
+            # Parse SQL
+            parsed = sqlparse.parse(sql_template)
+            if not parsed:
+                return None
+
+            statement = parsed[0]
+
+            # Find FROM keyword and get next identifier
+            from_seen = False
+            for token in statement.tokens:
+                if from_seen and isinstance(token, sqlparse.sql.Identifier):
+                    # Return the table name (first part before any alias)
+                    table_name = str(token.get_real_name())
+                    # Remove SQL Server brackets and quotes
+                    return table_name.strip('[]"\'')
+                elif token.ttype is sqlparse.tokens.Keyword and token.value.upper() == 'FROM':
+                    from_seen = True
+                elif from_seen and token.ttype is not sqlparse.tokens.Whitespace:
+                    # Could be a direct name token instead of Identifier
+                    token_value = str(token).strip()
+                    # Remove any alias (split on space)
+                    table_name = token_value.split()[0]
+                    # Remove SQL Server brackets and quotes
+                    return table_name.strip('[]"\'')
+
+            return None
+        except Exception as e:
+            logger.error(f"Failed to extract table name from SQL: {e}")
+            return None
+
+    @staticmethod
+    def _table_exists(db_connection: Any, table_name: str) -> bool:
+        """
+        Check if a table exists in the database.
+
+        Args:
+            db_connection: Database connection (pyodbc connection)
+            table_name: Name of the table to check
+
+        Returns:
+            True if table exists, False otherwise
+        """
+        try:
+            # Use pyodbc cursor.tables() method to check if table exists
+            with db_connection.cursor() as cursor:
+                # Get all tables
+                tables = cursor.tables(tableType='TABLE').fetchall()
+                # Check if our table exists (case-insensitive comparison)
+                table_names = [row.table_name.lower() for row in tables]
+                return table_name.lower() in table_names
+        except Exception as e:
+            logger.error(f"Failed to check if table '{table_name}' exists: {e}")
+            raise
 
     def run(self, inputs: Dict[str, Any], cfg: SqlLookupConfig, context: Any, services: Any = None) -> Dict[str, Any]:
         """
@@ -343,26 +624,98 @@ class SqlLookup(TransformModule):
             input_values[placeholder] = value
             logger.info(f"[SQL LOOKUP] Input '{placeholder}' = {value} (type: {type(value).__name__})")
 
-        # Step 7: Build the final SQL statement
-        final_sql = self._build_sql_statement(cfg.sql_template, input_values)
+        # Step 7: Convert SQL template to parameterized form
+        parameterized_sql, param_names = self._convert_to_parameterized_sql(cfg.sql_template)
+        logger.info(f"[SQL LOOKUP] Parameterized SQL: {parameterized_sql}")
+        logger.info(f"[SQL LOOKUP] Parameters (in order): {param_names}")
 
-        # Step 8: Print to console
-        logger.info("=" * 80)
-        logger.info("[SQL LOOKUP] GENERATED SQL STATEMENT:")
-        logger.info(final_sql)
-        logger.info("=" * 80)
-        print("\n" + "=" * 80)
-        print("[SQL LOOKUP] GENERATED SQL STATEMENT:")
-        print(final_sql)
-        print("=" * 80 + "\n")
+        # Step 8: Build parameter tuple in correct order
+        param_values = tuple(input_values[name] for name in param_names)
+        logger.info(f"[SQL LOOKUP] Parameter values: {param_values}")
 
-        # Step 9: Return dummy values for outputs based on their types
+        # Step 9: Get database connection from services
+        if not services:
+            raise RuntimeError("Services container not available - cannot access database connections")
+
+        try:
+            db_connection = services.get_connection(cfg.database)
+            logger.info(f"[SQL LOOKUP] Retrieved connection for database: {cfg.database}")
+        except Exception as e:
+            raise RuntimeError(f"Failed to get database connection '{cfg.database}': {e}")
+
+        # Step 10: Execute parameterized query
+        try:
+            logger.info("=" * 80)
+            logger.info("[SQL LOOKUP] Executing parameterized SQL query...")
+            logger.info(f"SQL: {parameterized_sql}")
+            logger.info(f"Params: {param_values}")
+            logger.info("=" * 80)
+
+            with db_connection.cursor() as cursor:
+                cursor.execute(parameterized_sql, param_values)
+                rows = cursor.fetchall()
+                # Capture column information before cursor closes
+                # cursor.description is a list of tuples: [(col_name, type_code, ...), ...]
+                column_info = cursor.description if cursor.description else []
+
+            logger.info(f"[SQL LOOKUP] Query returned {len(rows)} row(s)")
+
+        except Exception as e:
+            logger.error(f"[SQL LOOKUP] Query execution failed: {e}")
+            raise RuntimeError(f"SQL query execution failed: {e}")
+
+        # Step 11: Handle result cardinality based on configuration
+        if len(rows) == 0:
+            # No rows returned
+            if cfg.on_no_rows == "error":
+                raise RuntimeError("SQL query returned no rows (on_no_rows='error')")
+            # Return None/null for all outputs
+            logger.info("[SQL LOOKUP] No rows returned, returning None for all outputs")
+            outputs = {}
+            for column_name in expected_columns:
+                pin = output_name_to_pin[column_name]
+                outputs[pin.node_id] = None
+            return outputs
+
+        if len(rows) > 1:
+            # Multiple rows returned
+            if cfg.on_multiple_rows == "error":
+                raise RuntimeError(f"SQL query returned {len(rows)} rows (on_multiple_rows='error')")
+            elif cfg.on_multiple_rows == "first":
+                row = rows[0]
+                logger.info(f"[SQL LOOKUP] Multiple rows returned, using first row")
+            else:  # "last"
+                row = rows[-1]
+                logger.info(f"[SQL LOOKUP] Multiple rows returned, using last row")
+        else:
+            row = rows[0]
+
+        # Step 12: Map row columns to outputs with type conversion
         outputs = {}
-        for column_name in expected_columns:
-            pin = output_name_to_pin[column_name]
-            dummy_value = self._get_default_value_for_type(pin.type)
-            outputs[pin.node_id] = dummy_value
-            logger.info(f"[SQL LOOKUP] Output '{column_name}' = {dummy_value} (type: {pin.type})")
+        try:
+            for column_name in expected_columns:
+                pin = output_name_to_pin[column_name]
 
-        logger.info(f"[SQL LOOKUP] Execution complete (dummy mode)")
+                # Access column value by name (case-insensitive for Access)
+                try:
+                    # Try accessing by attribute name (pyodbc Row objects support this)
+                    column_value = getattr(row, column_name, None)
+                    if column_value is None and hasattr(row, column_name.lower()):
+                        column_value = getattr(row, column_name.lower())
+                except AttributeError:
+                    # Fallback: Access by index if we know the column order
+                    # This requires matching column_name to cursor.description
+                    raise RuntimeError(f"Could not access column '{column_name}' from result row")
+
+                # Convert to target type
+                converted_value = self._convert_to_type(column_value, pin.type)
+                outputs[pin.node_id] = converted_value
+
+                logger.info(f"[SQL LOOKUP] Output '{column_name}' = {converted_value} (type: {pin.type}, db_value: {column_value})")
+
+        except Exception as e:
+            logger.error(f"[SQL LOOKUP] Failed to map results to outputs: {e}")
+            raise RuntimeError(f"Failed to map query results to outputs: {e}")
+
+        logger.info(f"[SQL LOOKUP] Execution complete - returned {len(outputs)} outputs")
         return outputs

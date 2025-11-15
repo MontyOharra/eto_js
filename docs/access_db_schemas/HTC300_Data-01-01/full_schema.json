@@ -1,0 +1,618 @@
+{
+  "database": {
+    "file_name": "HTC300_Data-01-01.accdb",
+    "file_path": "C:\\HTC_Apps_Full-8-20-25\\HTC300_Data-01-01.accdb",
+    "file_type": ".accdb"
+  },
+  "tables": [
+    {
+      "name": "HTC300_G000_T000 Archive Update History",
+      "columns": [],
+      "error": "unpack_from requires a buffer of at least 8 bytes for unpacking 8 bytes at offset 0 (actual buffer size is 3)"
+    },
+    {
+      "name": "HTC300_G000_T000 Error Log",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G000_T000 Holidays",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G000_T000 Last QB RefNumber Assigned",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G000_T000 Over Night Update History",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G000_T020 Branch Info",
+      "columns": [],
+      "error": "'NoneType' object is not subscriptable"
+    },
+    {
+      "name": "HTC300_G000_T030 Co Info Chg History",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G000_T040 Branch Info Chg History",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G010_T010 DFW_ACI_Data",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G010_T020 DFW_ACI_Data Updates",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G010_T030 ACI Update History",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G020_T010 Status Values",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G020_T010 Status Values Updates",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G020_T030 Status Update History",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G025_T025 Positions Change History",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G030_T010 Customers",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G030_T010 Customers Updates",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G030_T030 Customer Update History",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G040_T000 Last OrderNo Assigned",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G040_T005 Orders In Work",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G040_T010A Open Orders",
+      "columns": [],
+      "error": "'NoneType' object is not subscriptable"
+    },
+    {
+      "name": "HTC300_G040_T010B Invoiced Orders",
+      "columns": [],
+      "error": "'NoneType' object is not subscriptable"
+    },
+    {
+      "name": "HTC300_G040_T010C Remaining Orders",
+      "columns": [],
+      "error": "'NoneType' object is not subscriptable"
+    },
+    {
+      "name": "HTC300_G040_T010D Dock Orders",
+      "columns": [],
+      "error": "'NoneType' object is not subscriptable"
+    },
+    {
+      "name": "HTC300_G040_T010E Service Orders",
+      "columns": [],
+      "error": "'NoneType' object is not subscriptable"
+    },
+    {
+      "name": "HTC300_G040_T011A Open Order Assessorials",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G040_T011B Invoiced Order Assessorials",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G040_T011C Remaining Order Assessorials",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G040_T011D Dock Order Assessorials",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G040_T011E Service Order Assessorials",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G040_T012A Open Order Dims",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G040_T012B Invoiced Order Dims",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G040_T012C Remaining Order Dims",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G040_T012D Dock Order Dims",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G040_T012E Service Order Dims",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G040_T013A Open Order Drivers",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G040_T013B Invoiced Order Drivers",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G040_T013C Remaining Order Drivers",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G040_T013D Dock Order Drivers",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G040_T013E Service Order Drivers",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G040_T014A Open Order Attachments",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G040_T014B Invoiced Order Attachments",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G040_T014C Remaining Order Attachments",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G040_T014D Dock Order Attachments",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G040_T014E Service Order Attachments",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G040_T030 Orders Update History",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G040_T040 HAWB Values",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G050_T010 Accessorials",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G050_T010 Accessorials Updates",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G050_T030 Accessorials Update History",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G060_T010 Addresses",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G060_T010 Addresses Updates",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G060_T011 FavKeyChrCounts",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G060_T030 Addresses Update History",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G070_T010 Rates",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G070_T020 Rates Update",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G070_T030 Rates Update History",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G080_T010 Agents",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G080_T020 Agent Certifications",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G080_T030 Agents Change History",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G090_T020 Staff Certifications",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G090_T030 Staff Chg History",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G090_T040 Staff Role Values",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G100_T020 Certification Trainers",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G100_T021 Certifaction Trainer Change History",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G100_T030 CertificationTestCatalogChgHistory",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G101_T010 Certification Tests",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G101_T012 Certification Tests Change History",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G101_T014 Copmleted Tests",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_G200_T010 No Invoice Customers",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_New_G020_T010 Status Values",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_New_G025_T010 Positions",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_New_G050_T010 Assessorials",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_New_G070_T010 Rates",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_new_G010_T010 DFW_ACI_Data",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "HTC300_new_G090_T040 Staff Role Values",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "MSysAccessStorage",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "MSysComplexType_Attachment",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "MSysComplexType_Decimal",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "MSysComplexType_GUID",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "MSysComplexType_IEEEDouble",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "MSysComplexType_IEEESingle",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "MSysComplexType_Long",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "MSysComplexType_Short",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "MSysComplexType_Text",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "MSysComplexType_UnsignedByte",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "MSysNameMap",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "MSysNavPaneGroupCategories",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "MSysNavPaneGroupToObjects",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "MSysNavPaneGroups",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "MSysNavPaneObjectIDs",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "MSysObjects",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "MSysResources",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "Paste Errors",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "f_2D727F3858044C81B76F4004B307737E_Data",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "f_96501AEB260E4C40925FBCF2C8A19D2E_CoLogo",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "test",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "~TMPCLP164531",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "~TMPCLP164691",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "~TMPCLP164692",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    },
+    {
+      "name": "~TMPCLP164841",
+      "columns": [],
+      "error": "'collections.defaultdict' object has no attribute 'columns'"
+    }
+  ],
+  "table_count": 101,
+  "table_names": [
+    "HTC300_G000_T000 Archive Update History",
+    "HTC300_G000_T000 Error Log",
+    "HTC300_G000_T000 Holidays",
+    "HTC300_G000_T000 Last QB RefNumber Assigned",
+    "HTC300_G000_T000 Over Night Update History",
+    "HTC300_G000_T020 Branch Info",
+    "HTC300_G000_T030 Co Info Chg History",
+    "HTC300_G000_T040 Branch Info Chg History",
+    "HTC300_G010_T010 DFW_ACI_Data",
+    "HTC300_G010_T020 DFW_ACI_Data Updates",
+    "HTC300_G010_T030 ACI Update History",
+    "HTC300_G020_T010 Status Values",
+    "HTC300_G020_T010 Status Values Updates",
+    "HTC300_G020_T030 Status Update History",
+    "HTC300_G025_T025 Positions Change History",
+    "HTC300_G030_T010 Customers",
+    "HTC300_G030_T010 Customers Updates",
+    "HTC300_G030_T030 Customer Update History",
+    "HTC300_G040_T000 Last OrderNo Assigned",
+    "HTC300_G040_T005 Orders In Work",
+    "HTC300_G040_T010A Open Orders",
+    "HTC300_G040_T010B Invoiced Orders",
+    "HTC300_G040_T010C Remaining Orders",
+    "HTC300_G040_T010D Dock Orders",
+    "HTC300_G040_T010E Service Orders",
+    "HTC300_G040_T011A Open Order Assessorials",
+    "HTC300_G040_T011B Invoiced Order Assessorials",
+    "HTC300_G040_T011C Remaining Order Assessorials",
+    "HTC300_G040_T011D Dock Order Assessorials",
+    "HTC300_G040_T011E Service Order Assessorials",
+    "HTC300_G040_T012A Open Order Dims",
+    "HTC300_G040_T012B Invoiced Order Dims",
+    "HTC300_G040_T012C Remaining Order Dims",
+    "HTC300_G040_T012D Dock Order Dims",
+    "HTC300_G040_T012E Service Order Dims",
+    "HTC300_G040_T013A Open Order Drivers",
+    "HTC300_G040_T013B Invoiced Order Drivers",
+    "HTC300_G040_T013C Remaining Order Drivers",
+    "HTC300_G040_T013D Dock Order Drivers",
+    "HTC300_G040_T013E Service Order Drivers",
+    "HTC300_G040_T014A Open Order Attachments",
+    "HTC300_G040_T014B Invoiced Order Attachments",
+    "HTC300_G040_T014C Remaining Order Attachments",
+    "HTC300_G040_T014D Dock Order Attachments",
+    "HTC300_G040_T014E Service Order Attachments",
+    "HTC300_G040_T030 Orders Update History",
+    "HTC300_G040_T040 HAWB Values",
+    "HTC300_G050_T010 Accessorials",
+    "HTC300_G050_T010 Accessorials Updates",
+    "HTC300_G050_T030 Accessorials Update History",
+    "HTC300_G060_T010 Addresses",
+    "HTC300_G060_T010 Addresses Updates",
+    "HTC300_G060_T011 FavKeyChrCounts",
+    "HTC300_G060_T030 Addresses Update History",
+    "HTC300_G070_T010 Rates",
+    "HTC300_G070_T020 Rates Update",
+    "HTC300_G070_T030 Rates Update History",
+    "HTC300_G080_T010 Agents",
+    "HTC300_G080_T020 Agent Certifications",
+    "HTC300_G080_T030 Agents Change History",
+    "HTC300_G090_T020 Staff Certifications",
+    "HTC300_G090_T030 Staff Chg History",
+    "HTC300_G090_T040 Staff Role Values",
+    "HTC300_G100_T020 Certification Trainers",
+    "HTC300_G100_T021 Certifaction Trainer Change History",
+    "HTC300_G100_T030 CertificationTestCatalogChgHistory",
+    "HTC300_G101_T010 Certification Tests",
+    "HTC300_G101_T012 Certification Tests Change History",
+    "HTC300_G101_T014 Copmleted Tests",
+    "HTC300_G200_T010 No Invoice Customers",
+    "HTC300_New_G020_T010 Status Values",
+    "HTC300_New_G025_T010 Positions",
+    "HTC300_New_G050_T010 Assessorials",
+    "HTC300_New_G070_T010 Rates",
+    "HTC300_new_G010_T010 DFW_ACI_Data",
+    "HTC300_new_G090_T040 Staff Role Values",
+    "MSysAccessStorage",
+    "MSysComplexType_Attachment",
+    "MSysComplexType_Decimal",
+    "MSysComplexType_GUID",
+    "MSysComplexType_IEEEDouble",
+    "MSysComplexType_IEEESingle",
+    "MSysComplexType_Long",
+    "MSysComplexType_Short",
+    "MSysComplexType_Text",
+    "MSysComplexType_UnsignedByte",
+    "MSysNameMap",
+    "MSysNavPaneGroupCategories",
+    "MSysNavPaneGroupToObjects",
+    "MSysNavPaneGroups",
+    "MSysNavPaneObjectIDs",
+    "MSysObjects",
+    "MSysResources",
+    "Paste Errors",
+    "f_2D727F3858044C81B76F4004B307737E_Data",
+    "f_96501AEB260E4C40925FBCF2C8A19D2E_CoLogo",
+    "test",
+    "~TMPCLP164531",
+    "~TMPCLP164691",
+    "~TMPCLP164692",
+    "~TMPCLP164841"
+  ]
+}

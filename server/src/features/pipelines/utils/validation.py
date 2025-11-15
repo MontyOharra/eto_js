@@ -2,6 +2,7 @@
 Pipeline Validation
 Validates pipeline structure through multiple stages
 """
+import logging
 from typing import Dict, List, Set, Optional
 from collections import Counter
 from pydantic import ValidationError as PydanticValidationError
@@ -13,6 +14,8 @@ from shared.exceptions import (
     GraphValidationError,
 )
 from shared.utils.registry import get_registry
+
+logger = logging.getLogger(__name__)
 
 # Allowed types for module pins
 ALLOWED_PIN_TYPES = {"str", "int", "float", "bool", "datetime"}
@@ -32,15 +35,19 @@ class PipelineValidator:
     Fails immediately on first error encountered.
     """
 
-    def __init__(self, module_catalog_repo=None):
+    def __init__(self, module_catalog_repo=None, module_registry=None, services=None):
         """
         Initialize validator
 
         Args:
             module_catalog_repo: Optional repository for module catalog lookups
+            module_registry: Optional module registry (defaults to singleton)
+            services: Optional services container for database access during validation
         """
         self.module_catalog_repo = module_catalog_repo
-        self.module_registry = get_registry()
+        # Use provided registry or fall back to singleton
+        self.module_registry = module_registry if module_registry is not None else get_registry()
+        self.services = services
 
     def validate(self, pipeline_state: PipelineState) -> None:
         """
@@ -266,19 +273,28 @@ class PipelineValidator:
         Raises:
             ModuleValidationError: If module validation fails
         """
+        logger.info(f"[VALIDATION DEBUG] _validate_modules called with {len(pipeline_state.modules)} modules")
+        logger.info(f"[VALIDATION DEBUG] module_catalog_repo is None: {self.module_catalog_repo is None}")
+
         # Check 1: At least one action module must be present
         self._check_action_modules(pipeline_state)
 
         # Skip module catalog validation if no repository provided
         if not self.module_catalog_repo:
+            logger.warning("[VALIDATION] Skipping module validation - no catalog repository provided!")
             return
 
         for module in pipeline_state.modules:
+            logger.info(f"[VALIDATION DEBUG] Validating module {module.module_instance_id} ({module.module_ref})")
+
             # Parse module_ref (format: "module_id:version")
             module_id, version = self._parse_module_ref(module.module_ref)
+            logger.info(f"[VALIDATION DEBUG] Parsed: module_id={module_id}, version={version}")
 
             # Lookup module in catalog
             template = self.module_catalog_repo.get_by_module_ref(module_id, version)
+            logger.info(f"[VALIDATION DEBUG] Template found: {template is not None}")
+
             if not template:
                 raise ModuleValidationError(
                     message=f"Module '{module_id}:{version}' not found in catalog",
@@ -290,12 +306,15 @@ class PipelineValidator:
                 )
 
             # Validate group cardinalities
+            logger.info(f"[VALIDATION DEBUG] Checking group cardinality...")
             self._check_group_cardinality(module, template)
 
             # Validate type variable unification
+            logger.info(f"[VALIDATION DEBUG] Checking type variables...")
             self._check_type_variables(module, template)
 
             # Validate config schema
+            logger.info(f"[VALIDATION DEBUG] Checking config...")
             self._check_config(module, template)
 
     def _check_action_modules(self, pipeline_state: PipelineState) -> None:
@@ -488,19 +507,24 @@ class PipelineValidator:
         Raises:
             ModuleValidationError: If config validation fails
         """
+        logger.info(f"[VALIDATION DEBUG] _check_config called for module {module.module_instance_id}")
         config_schema = template.config_schema
 
         # Parse module_ref to get module_id
         module_id, _ = self._parse_module_ref(module.module_ref)
+        logger.info(f"[VALIDATION DEBUG] module_id: {module_id}")
 
         # Get module handler from registry
         handler = self.module_registry.get(module_id)
+        logger.info(f"[VALIDATION DEBUG] Handler found in registry: {handler is not None}")
+        logger.info(f"[VALIDATION DEBUG] Registry has {len(self.module_registry.get_all())} modules registered")
+        logger.info(f"[VALIDATION DEBUG] Registered module IDs: {list(self.module_registry.get_all().keys())}")
 
         if handler:
             # Validate config using Pydantic (comprehensive validation)
             try:
                 ConfigModel = handler.config_class()
-                ConfigModel(**module.config)
+                config_instance = ConfigModel(**module.config)
             except PydanticValidationError as e:
                 # Take first error (fail fast)
                 first_error = e.errors()[0]
@@ -514,6 +538,27 @@ class PipelineValidator:
                         "type": first_error["type"]
                     }
                 )
+
+            # Call custom validation if method exists (beyond Pydantic schema validation)
+            if hasattr(handler, 'validate_config') and callable(handler.validate_config):
+                logger.info(f"[VALIDATION DEBUG] Calling validate_config for module {module.module_instance_id} ({module_id})")
+                logger.info(f"[VALIDATION DEBUG] Inputs: {[(p.node_id, p.name) for p in module.inputs]}")
+                logger.info(f"[VALIDATION DEBUG] Outputs: {[(p.node_id, p.name) for p in module.outputs]}")
+
+                validation_errors = handler.validate_config(config_instance, module.inputs, module.outputs, services=self.services)
+
+                logger.info(f"[VALIDATION DEBUG] Validation errors returned: {validation_errors}")
+
+                if validation_errors:
+                    # Fail fast on first custom validation error
+                    raise ModuleValidationError(
+                        message=f"Config validation failed: {validation_errors[0]}",
+                        code="custom_validation_failed",
+                        where={
+                            "module_instance_id": module.module_instance_id,
+                            "errors": validation_errors
+                        }
+                    )
         else:
             # Fallback: Check required fields only (if handler not in registry)
             if "required" in config_schema:

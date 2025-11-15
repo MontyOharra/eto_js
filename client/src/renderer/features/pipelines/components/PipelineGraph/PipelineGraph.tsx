@@ -253,14 +253,38 @@ function PipelineGraphInner({
 
         onPipelineStateChange(finalPipelineState);
       } else {
-        // Non-type update (e.g., name change) - no propagation needed
+        // Non-type update (e.g., name change)
         const updatedModule = updatePinInModule(module, nodeId, updates);
         const updatedModules = [...pipelineState.modules];
         updatedModules[moduleIndex] = updatedModule;
 
+        // If this is a name change on an output pin, propagate to connected input pins
+        let finalModules = updatedModules;
+        if (updates.name !== undefined) {
+          const pin = [...module.inputs, ...module.outputs].find(p => p.node_id === nodeId);
+          if (pin && pin.direction === 'out') {
+            // Find all connections from this output pin
+            const connectionsFromThisPin = pipelineState.connections.filter(
+              conn => conn.from_node_id === nodeId
+            );
+
+            // Update each connected input pin's name
+            finalModules = finalModules.map(mod => {
+              let updatedMod = mod;
+              connectionsFromThisPin.forEach(conn => {
+                const inputPin = mod.inputs.find(p => p.node_id === conn.to_node_id);
+                if (inputPin) {
+                  updatedMod = updatePinInModule(updatedMod, conn.to_node_id, { name: updates.name });
+                }
+              });
+              return updatedMod;
+            });
+          }
+        }
+
         onPipelineStateChange({
           ...pipelineState,
-          modules: updatedModules,
+          modules: finalModules,
         });
       }
     },
@@ -703,11 +727,55 @@ function PipelineGraphInner({
       );
 
       // Apply type updates to RAW pipeline state (not enriched - we persist raw data)
+      // IMPORTANT: Use effectiveEntryPoints to ensure entry points are included
+      // (they might come from separate prop instead of pipelineState.entry_points)
       const tempRawPipelineState = {
         ...pipelineState,
+        entry_points: entryPoints ?? pipelineState.entry_points, // Use external entry points if provided
         connections: updatedConnections,
       };
-      const finalPipelineState = applyTypeUpdates(tempRawPipelineState, allUpdates);
+      console.log('[DEBUG] tempRawPipelineState.entry_points:', tempRawPipelineState.entry_points);
+      let finalPipelineState = applyTypeUpdates(tempRawPipelineState, allUpdates);
+      console.log('[DEBUG] finalPipelineState.entry_points after applyTypeUpdates:', finalPipelineState.entry_points);
+
+      // Update input node name to match connected output node name
+      // Find the source pin (output) - could be from a module OR an entry point
+      let sourcePin = null;
+
+      console.log('[NAME PROPAGATION] Connection:', { source: connection.source, sourceHandle, target: connection.target, targetHandle });
+      console.log('[NAME PROPAGATION] Entry points:', finalPipelineState.entry_points.map(ep => ({ id: ep.entry_point_id, name: ep.name, outputs: ep.outputs })));
+      console.log('[NAME PROPAGATION] Modules:', finalPipelineState.modules.map(m => ({ id: m.module_instance_id, outputs: m.outputs.map(o => ({ id: o.node_id, name: o.name })) })));
+
+      // Check if source is a module
+      const sourceModule = finalPipelineState.modules.find(m => m.module_instance_id === connection.source);
+      if (sourceModule) {
+        sourcePin = sourceModule.outputs.find(p => p.node_id === sourceHandle);
+        console.log('[NAME PROPAGATION] Found source module:', sourceModule.module_instance_id, 'sourcePin:', sourcePin);
+      } else {
+        // Check if source is an entry point
+        const sourceEntryPoint = finalPipelineState.entry_points.find(ep => ep.entry_point_id === connection.source);
+        console.log('[NAME PROPAGATION] Looking for entry point with id:', connection.source, 'found:', sourceEntryPoint);
+        if (sourceEntryPoint) {
+          sourcePin = sourceEntryPoint.outputs.find(p => p.node_id === sourceHandle);
+          console.log('[NAME PROPAGATION] Found source entry point:', sourceEntryPoint.entry_point_id, 'sourcePin:', sourcePin);
+        }
+      }
+
+      if (sourcePin && sourcePin.name) {
+        console.log('[NAME PROPAGATION] Applying name from source pin:', sourcePin.name, 'to target handle:', targetHandle);
+        // Update the target input pin's name to match
+        finalPipelineState = {
+          ...finalPipelineState,
+          modules: finalPipelineState.modules.map(mod => {
+            if (mod.module_instance_id === connection.target) {
+              return updatePinInModule(mod, targetHandle, { name: sourcePin.name });
+            }
+            return mod;
+          })
+        };
+      } else {
+        console.log('[NAME PROPAGATION] No source pin found or source pin has no name. sourcePin:', sourcePin);
+      }
 
       // Single state update with connections and type changes
       onPipelineStateChange(finalPipelineState);

@@ -60,3 +60,12 @@ dist-*/
 
 */storage/
 */logs/
+
+# Test databases (too large, contain real data)
+server/tests/test_databases/*.accdb
+server/tests/test_databases/*.mdb
+
+# Test coverage reports
+htmlcov/
+.coverage
+.pytest_cache/

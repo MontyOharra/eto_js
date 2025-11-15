@@ -64,7 +64,8 @@ class LlmParser(TransformModule):
     def run(self,
            inputs: Dict[str, Any],
            cfg: BaseModel,
-           context: Any = None) -> Dict[str, Any]:
+           context: Any = None,
+           services: Any = None) -> Dict[str, Any]:
         """
         Execute the module with given inputs and configuration
 

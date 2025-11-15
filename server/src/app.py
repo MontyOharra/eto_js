@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 # Global variables to store initialized database connections
 _connection_manager = None  # Primary 'main' connection
 _connection_managers = {}  # All named connections
+_database_manager = None  # DatabaseManager for multi-database access
 
 
 class DatabaseConnectionError(Exception):
@@ -211,7 +212,7 @@ def configure_logging():
 
 async def initialize_database_connection() -> None:
     """Initialize all database connections from configuration"""
-    global _connection_manager, _connection_managers
+    global _connection_manager, _connection_managers, _database_manager
 
     try:
         logger.debug("Loading database configuration...")
@@ -242,6 +243,11 @@ async def initialize_database_connection() -> None:
         if not _connection_manager:
             raise DatabaseConnectionError("Primary 'main' database connection not configured")
 
+        # Create DatabaseManager for multi-database access
+        from shared.database.database_manager import DatabaseManager
+        _database_manager = DatabaseManager(_connection_managers)
+        logger.info("DatabaseManager created for pipeline module access")
+
         logger.info(f"Initialized {len(_connection_managers)} database connection(s)")
 
     except Exception as e:
@@ -251,7 +257,7 @@ async def initialize_database_connection() -> None:
 
 async def initialize_services() -> None:
     """Initialize all services using the ServiceContainer singleton"""
-    global _connection_manager, _connection_managers
+    global _connection_manager, _connection_managers, _database_manager
 
     try:
         logger.debug("Initializing services via ServiceContainer...")
@@ -265,7 +271,8 @@ async def initialize_services() -> None:
         ServiceContainer.initialize(
             connection_manager=_connection_manager,
             pdf_storage_path=pdf_storage_path,
-            connection_managers=_connection_managers
+            connection_managers=_connection_managers,
+            database_manager=_database_manager
         )
         logger.info("ServiceContainer initialized successfully")
 

@@ -113,8 +113,22 @@ async def create_pipeline(
 
     Pipeline compilation happens during creation (validation and optimization).
     """
+    # DEBUG: Log what API receives from frontend
+    logger.debug("[API DEBUG] Received pipeline from frontend:")
+    for module in request.pipeline_state.modules:
+        logger.debug(f"[API DEBUG]   Module {module.module_instance_id} ({module.module_ref}):")
+        for inp in module.inputs:
+            logger.debug(f"[API DEBUG]     Input: node_id={inp.node_id}, name={inp.name}, group_index={inp.group_index}")
+
     # Convert API request to domain type
     pipeline_create = convert_create_request(request)
+
+    # DEBUG: Log after conversion to domain type
+    logger.debug("[API DEBUG] After conversion to domain:")
+    for module in pipeline_create.pipeline_state.modules:
+        logger.debug(f"[API DEBUG]   Module {module.module_instance_id} ({module.module_ref}):")
+        for inp in module.inputs:
+            logger.debug(f"[API DEBUG]     Input: node_id={inp.node_id}, name={inp.name}, group_index={inp.group_index}")
 
     # Create pipeline (service handles validation, compilation, persistence)
     pipeline = pipeline_service.create_pipeline_definition(pipeline_create)

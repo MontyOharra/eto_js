@@ -96,6 +96,46 @@ class BaseModule(ABC):
         return cls.ConfigModel
 
     @classmethod
+    def validate_config(cls, cfg: BaseModel, inputs: List[Any], outputs: List[Any], services: Any = None) -> List[str]:
+        """
+        Optional custom config validation hook.
+        Called after Pydantic schema validation passes.
+
+        This method allows modules to implement custom validation logic that goes beyond
+        basic schema validation. For example:
+        - Validating SQL queries reference correct input/output pin names
+        - Checking interdependent config fields
+        - Validating external resource references
+        - Checking database tables/schemas exist (requires services parameter)
+
+        Args:
+            cfg: Validated config instance (Pydantic model)
+            inputs: List of input pins for this module instance (NodeInstance objects)
+            outputs: List of output pins for this module instance (NodeInstance objects)
+            services: Optional services container providing access to database connections, etc.
+
+        Returns:
+            List of error messages (empty list if valid)
+
+        Example:
+            @classmethod
+            def validate_config(cls, cfg, inputs, outputs, services=None):
+                errors = []
+                input_names = {pin.name for pin in inputs}
+                if cfg.required_input not in input_names:
+                    errors.append(f"Config references undefined input: {cfg.required_input}")
+
+                # Check database table exists (if services provided)
+                if services and hasattr(cfg, 'table_name'):
+                    db_conn = services.get_database_connection(cfg.database)
+                    if not table_exists(db_conn, cfg.table_name):
+                        errors.append(f"Table '{cfg.table_name}' does not exist in database")
+
+                return errors
+        """
+        return []  # Default: no custom validation
+
+    @classmethod
     def validate_wiring(cls,
                        module_instance_id: str,
                        cfg: Dict[str, Any],
@@ -116,7 +156,7 @@ class BaseModule(ABC):
             List of validation errors (empty if valid)
         """
         return []
-    
+
     @abstractmethod
     def run(self, inputs: Dict[str, Any], cfg: Any, context: Optional[Any], services: Optional[Any] = None) -> Dict[str, Any]:
         """

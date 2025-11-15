@@ -79,19 +79,18 @@ class DatabaseConfig:
     """
     Complete database configuration for the application.
 
-    Supports multiple named database connections for different purposes:
+    Supports multiple named database connections dynamically loaded from environment:
     - main: Primary application database (ETO runs, PDFs, pipelines, etc.)
-    - htc_db: Legacy HTC orders database for CreateOrder action (optional)
+    - Any other database with a *_CONNECTION_STRING environment variable
     """
-    main: DatabaseConnectionConfig
-    htc_db: DatabaseConnectionConfig
+    connections: Dict[str, DatabaseConnectionConfig]
 
     def get_connection(self, name: str) -> DatabaseConnectionConfig:
         """
         Get a database connection config by name.
 
         Args:
-            name: Connection name ("main" or "htc_db")
+            name: Connection name (e.g., "main", "htc_300_db", "htc_000_db")
 
         Returns:
             DatabaseConnectionConfig for the requested connection
@@ -99,30 +98,27 @@ class DatabaseConfig:
         Raises:
             ValueError: If connection name not found or not configured
         """
-        if name == "main":
-            return self.main
-        elif name == "htc_db":
-            if not self.htc_db:
-                raise ValueError(
-                    "Orders database not configured. "
-                    "Set htc_db_CONNECTION_STRING environment variable in .env file."
-                )
-            return self.htc_db
-        else:
-            raise ValueError(f"Unknown database connection: {name}")
+        if name not in self.connections:
+            available = list(self.connections.keys())
+            raise ValueError(
+                f"Unknown database connection: '{name}'. "
+                f"Available connections: {available}"
+            )
+        return self.connections[name]
 
     @classmethod
     def from_environment(cls) -> 'DatabaseConfig':
         """
         Load database configuration from environment variables.
 
-        Expected configuration:
+        Automatically discovers all database connections from environment variables:
+        - DATABASE_URL → main database (required)
+        - *_CONNECTION_STRING → additional databases (optional)
 
-        Main Database (required):
-        - Environment: DATABASE_URL
-
-        Orders Database (optional):
-        - Environment: htc_db_CONNECTION_STRING
+        Examples:
+        - HTC_300_DB_CONNECTION_STRING → htc_300_db
+        - HTC_000_DB_CONNECTION_STRING → htc_000_db
+        - MY_DB_CONNECTION_STRING → my_db
 
         Returns:
             DatabaseConfig instance
@@ -130,6 +126,8 @@ class DatabaseConfig:
         Raises:
             ValueError: If required configuration (DATABASE_URL) is missing
         """
+        connections = {}
+
         # Main database (required)
         main = DatabaseConnectionConfig.from_environment(
             name="main",
@@ -140,21 +138,36 @@ class DatabaseConfig:
         if not main:
             raise ValueError("DATABASE_URL environment variable not set")
 
-        # Orders database (optional)
-        htc_db = DatabaseConnectionConfig.from_environment(
-            name="htc_db",
-            env_var_name="HTC_DB_CONNECTION_STRING",
-            description="Legacy HTC orders database",
-            required=False
-        )
-        
-        if not htc_db:
-            raise ValueError("HTC_DB_CONNECTION_STRING environment variable not set")
+        connections["main"] = main
+        logger.info("Loaded main database connection")
 
-        return cls(
-            main=main,
-            htc_db=htc_db
-        )
+        # Auto-discover additional databases from environment
+        # Look for any env vars ending with _CONNECTION_STRING
+        discovered_count = 0
+        for env_var_name, env_var_value in os.environ.items():
+            if env_var_name.endswith("_CONNECTION_STRING") and env_var_value:
+                # Convert env var name to database name
+                # HTC_300_DB_CONNECTION_STRING → htc_300_db
+                db_name = env_var_name.replace("_CONNECTION_STRING", "").lower()
+
+                try:
+                    db_config = DatabaseConnectionConfig.from_environment(
+                        name=db_name,
+                        env_var_name=env_var_name,
+                        description=f"Database: {db_name}",
+                        required=False
+                    )
+
+                    if db_config:
+                        connections[db_name] = db_config
+                        discovered_count += 1
+                        logger.info(f"Auto-discovered database connection: {db_name} (type: {db_config.connection_type})")
+                except Exception as e:
+                    logger.warning(f"Failed to load database connection from {env_var_name}: {e}")
+
+        logger.info(f"Database configuration complete: 1 main + {discovered_count} additional connections")
+
+        return cls(connections=connections)
 
     def get_all_connections(self) -> Dict[str, DatabaseConnectionConfig]:
         """
@@ -163,7 +176,4 @@ class DatabaseConfig:
         Returns:
             Dictionary mapping connection names to their configs
         """
-        connections = {"main": self.main}
-        if self.htc_db:
-            connections["htc_db"] = self.htc_db
-        return connections
+        return dict(self.connections)
