@@ -28,3 +28,6 @@ pdfplumber>=0.7.6
 # Data processing
 requests>=2.31.0
 sqlparse>=0.4.0
+
+# Fuzzy string matching
+rapidfuzz>=3.0.0
