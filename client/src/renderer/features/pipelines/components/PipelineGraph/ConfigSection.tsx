@@ -3,7 +3,7 @@
  * Renders individual config fields based on JSON Schema
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 
 interface JSONSchemaProperty {
   type: string;
@@ -36,22 +36,32 @@ const StringField: React.FC<{
   isViewMode?: boolean;
 }> = ({ configKey, value, label, description, onConfigChange, isViewMode = false }) => {
   const [localValue, setLocalValue] = useState(value ?? "");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Sync when external value changes
   useEffect(() => {
     setLocalValue(value ?? "");
   }, [value]);
 
+  // Auto-resize textarea based on content
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  }, [localValue]);
+
   return (
     <div className="mb-2.5">
       <label className="block text-xs text-gray-200 mb-1">{label}</label>
-      <input
-        type="text"
+      <textarea
+        ref={textareaRef}
         value={localValue}
         onChange={(e) => setLocalValue(e.target.value)}
         onBlur={() => onConfigChange?.(configKey, localValue)}
         disabled={isViewMode}
-        className={`nodrag w-full px-2 py-1 text-xs bg-gray-700 border border-gray-600 rounded text-gray-200 focus:outline-none focus:border-blue-500 ${isViewMode ? 'opacity-60 cursor-default' : ''}`}
+        rows={1}
+        className={`nodrag w-full min-w-0 px-2 py-1 text-xs bg-gray-700 border border-gray-600 rounded text-gray-200 focus:outline-none focus:border-blue-500 resize-none overflow-hidden ${isViewMode ? 'opacity-60 cursor-default' : ''}`}
       />
       {description && (
         <p className="text-[10px] text-gray-400 mt-0.5">{description}</p>
@@ -93,7 +103,7 @@ const NumberField: React.FC<{
         }}
         step={propertyType === "integer" ? "1" : "any"}
         disabled={isViewMode}
-        className={`nodrag w-full px-2 py-1 text-xs bg-gray-700 border border-gray-600 rounded text-gray-200 focus:outline-none focus:border-blue-500 ${isViewMode ? 'opacity-60 cursor-default' : ''}`}
+        className={`nodrag w-full min-w-0 px-2 py-1 text-xs bg-gray-700 border border-gray-600 rounded text-gray-200 focus:outline-none focus:border-blue-500 ${isViewMode ? 'opacity-60 cursor-default' : ''}`}
       />
       {description && (
         <p className="text-[10px] text-gray-400 mt-0.5">{description}</p>
@@ -189,7 +199,7 @@ export const ConfigSection: React.FC<ConfigSectionProps> = ({
             value={value ?? ""}
             onChange={(e) => handleChange(e.target.value)}
             disabled={isViewMode}
-            className={`nodrag w-full px-2 py-1 text-xs bg-gray-700 border border-gray-600 rounded text-gray-200 focus:outline-none focus:border-blue-500 ${isViewMode ? 'opacity-60 cursor-default' : ''}`}
+            className={`nodrag w-full min-w-0 px-2 py-1 text-xs bg-gray-700 border border-gray-600 rounded text-gray-200 focus:outline-none focus:border-blue-500 ${isViewMode ? 'opacity-60 cursor-default' : ''}`}
           >
             {property.enum.map((option) => (
               <option key={option} value={option}>
