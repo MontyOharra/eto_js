@@ -25,6 +25,7 @@ lerna-debug.log*
 .venv/
 venv/
 env/
+conda_env/
 
 # Python bytecode files and cache
 __pycache__/
