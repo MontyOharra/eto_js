@@ -57,9 +57,9 @@ class ServiceContainer:
     _initialized: bool = False
     _services: Dict[str, Any] = {}
     _service_definitions: Dict[str, Dict[str, Any]] = {}
-    _connection_manager: Optional['DatabaseConnectionManager'] = None  # Primary 'main' connection
-    _connection_managers: Dict[str, 'DatabaseConnectionManager'] = {}  # All named connections
-    _database_manager: Optional[Any] = None  # DatabaseManager for multi-database access
+    _connection_manager: Optional['DatabaseConnectionManager'] = None  # Primary 'main' connection (meta/system DB)
+    _connection_managers: Dict[str, 'DatabaseConnectionManager'] = {}  # All named connections (includes 'main')
+    _data_database_manager: Optional[Any] = None  # DataDatabaseManager for business databases only (excludes 'main')
     _pdf_storage_path: Optional[str] = None
     _resolving: List[str] = []
 
@@ -70,11 +70,11 @@ class ServiceContainer:
         Can be called multiple times safely (will only initialize once).
 
         Args:
-            connection_manager: Primary database connection manager (backward compatibility)
+            connection_manager: Primary database connection manager (meta/system DB)
             pdf_storage_path: Path for PDF file storage
-            connection_managers: Optional dict of named database connection managers
-                                 e.g., {'main': manager1, 'orders_db': manager2}
-            database_manager: Optional DatabaseManager for multi-database access
+            connection_managers: Optional dict of ALL database connection managers
+                                 e.g., {'main': manager1, 'htc_db': manager2}
+            database_manager: DataDatabaseManager for business databases (excludes 'main')
             **kwargs: Additional configuration parameters
         """
         if cls._initialized:
@@ -84,9 +84,9 @@ class ServiceContainer:
         logger.info("Initializing ServiceContainer...")
 
         # Store core dependencies
-        cls._connection_manager = connection_manager
+        cls._connection_manager = connection_manager  # Meta/system database (main)
         cls._pdf_storage_path = pdf_storage_path
-        cls._database_manager = database_manager
+        cls._data_database_manager = database_manager  # Business databases only (for modules)
 
         # Store all connection managers
         if connection_managers:
@@ -98,7 +98,7 @@ class ServiceContainer:
             logger.info("Registered single 'main' database connection")
 
         if database_manager:
-            logger.info("DatabaseManager registered for multi-database access")
+            logger.info("DataDatabaseManager registered for pipeline module access (business databases only)")
 
         # Store any additional configuration
         for key, value in kwargs.items():
@@ -148,13 +148,13 @@ class ServiceContainer:
             },
             'pipeline_execution': {
                 'class': 'features.pipeline_execution.service.PipelineExecutionService',
-                'args': [cls._connection_manager, cls._database_manager],
+                'args': [cls._connection_manager, cls._data_database_manager],
                 'singleton': True,
                 'description': 'Pipeline execution service for running compiled pipelines'
             },
             'pipelines': {
                 'class': 'features.pipelines.service.PipelineService',
-                'args': [cls._connection_manager, '_service:pipeline_execution', '_service:modules', cls._database_manager],
+                'args': [cls._connection_manager, '_service:pipeline_execution', '_service:modules', cls._data_database_manager],
                 'singleton': True,
                 'description': 'Pipeline compilation and execution service'
             },

@@ -243,10 +243,17 @@ async def initialize_database_connection() -> None:
         if not _connection_manager:
             raise DatabaseConnectionError("Primary 'main' database connection not configured")
 
-        # Create DatabaseManager for multi-database access
-        from shared.database.database_manager import DatabaseManager
-        _database_manager = DatabaseManager(_connection_managers)
-        logger.info("DatabaseManager created for pipeline module access")
+        # Create DataDatabaseManager for business/data databases only (excludes 'main')
+        # Pipeline modules should only access business data, never system metadata
+        from shared.database.data_database_manager import DataDatabaseManager
+
+        business_databases = {
+            name: manager
+            for name, manager in _connection_managers.items()
+            if name != 'main'  # Exclude meta/system database
+        }
+        _database_manager = DataDatabaseManager(business_databases)
+        logger.info(f"DataDatabaseManager created for pipeline modules with {len(business_databases)} business database(s)")
 
         logger.info(f"Initialized {len(_connection_managers)} database connection(s)")
 

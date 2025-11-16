@@ -129,8 +129,12 @@ class SqlLookup(TransformModule):
             from shared.services.service_container import ServiceContainer
 
             if ServiceContainer.is_initialized():
-                # Get available connection names from ServiceContainer
-                available_connections = list(ServiceContainer._connection_managers.keys())
+                # Get available business database connections (excludes 'main' system DB)
+                data_db_manager = ServiceContainer._data_database_manager
+                if data_db_manager:
+                    available_connections = data_db_manager.list_databases()
+                else:
+                    available_connections = []
 
                 if available_connections:
                     # Inject as enum for dropdown rendering
