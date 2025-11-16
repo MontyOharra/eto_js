@@ -7,6 +7,7 @@
 import { useState, useEffect } from "react";
 import { PipelineGraph } from "../PipelineGraph/PipelineGraph";
 import { ExecutePipelineModal } from "../ExecutePipelineModal";
+import { PipelineBuilderModal } from "../PipelineBuilderModal";
 import { usePipelinesApi, PipelineDetail } from "../../";
 import { useModules } from "../../../modules";
 
@@ -21,7 +22,7 @@ export function PipelineViewerModal({
   pipelineId,
   onClose,
 }: PipelineViewerModalProps) {
-  const { getPipeline } = usePipelinesApi();
+  const { getPipeline, createPipeline } = usePipelinesApi();
 
   // Fetch modules using TanStack Query
   const { data: modules = [] } = useModules();
@@ -30,6 +31,7 @@ export function PipelineViewerModal({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showExecuteModal, setShowExecuteModal] = useState(false);
+  const [showBuilderModal, setShowBuilderModal] = useState(false);
 
   // Load pipeline when modal opens
   useEffect(() => {
@@ -67,6 +69,23 @@ export function PipelineViewerModal({
     }
   }, [isOpen]);
 
+  // Handle saving edited pipeline (creates new pipeline)
+  const handleSavePipeline = async (pipelineData: {
+    pipeline_state: any;
+    visual_state: any;
+  }) => {
+    try {
+      await createPipeline(pipelineData);
+      alert("Pipeline saved successfully!");
+      setShowBuilderModal(false);
+    } catch (err) {
+      console.error("Failed to save pipeline:", err);
+      alert(
+        err instanceof Error ? err.message : "Failed to save pipeline"
+      );
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -82,12 +101,20 @@ export function PipelineViewerModal({
           </div>
           <div className="flex items-center gap-3">
             {pipeline && (
-              <button
-                onClick={() => setShowExecuteModal(true)}
-                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded transition-colors font-medium"
-              >
-                Execute Pipeline
-              </button>
+              <>
+                <button
+                  onClick={() => setShowBuilderModal(true)}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors font-medium"
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={() => setShowExecuteModal(true)}
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded transition-colors font-medium"
+                >
+                  Execute Pipeline
+                </button>
+              </>
             )}
             <button
               onClick={onClose}
@@ -150,6 +177,19 @@ export function PipelineViewerModal({
           pipelineId={pipelineId}
           entryPoints={pipeline.pipeline_state.entry_points}
           onClose={() => setShowExecuteModal(false)}
+        />
+      )}
+
+      {/* Pipeline Builder Modal for editing */}
+      {pipeline && (
+        <PipelineBuilderModal
+          isOpen={showBuilderModal}
+          onClose={() => setShowBuilderModal(false)}
+          onSave={handleSavePipeline}
+          initialData={{
+            pipeline_state: pipeline.pipeline_state,
+            visual_state: pipeline.visual_state,
+          }}
         />
       )}
     </div>

@@ -20,6 +20,7 @@ interface PipelineBuilderModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (pipelineData: PipelineData) => Promise<void>;
+  initialData?: PipelineData; // Optional initial data for editing
 }
 
 export interface PipelineData {
@@ -33,22 +34,27 @@ export function PipelineBuilderModal({
   isOpen,
   onClose,
   onSave,
+  initialData,
 }: PipelineBuilderModalProps) {
   const [currentStep, setCurrentStep] = useState<BuilderStep>("entry-points");
   const [isSaving, setIsSaving] = useState(false);
 
   // Entry points - managed separately and passed as external prop
-  const [entryPoints, setEntryPoints] = useState<EntryPoint[]>([]);
+  const [entryPoints, setEntryPoints] = useState<EntryPoint[]>(
+    () => initialData?.pipeline_state.entry_points || []
+  );
 
   // Pipeline state (modules and connections only - entry points managed externally)
   const [pipelineState, setPipelineState] = useState<PipelineState>({
     entry_points: [], // Will be populated on save
-    modules: [],
-    connections: [],
+    modules: initialData?.pipeline_state.modules || [],
+    connections: initialData?.pipeline_state.connections || [],
   });
 
   // Visual state - node positions
-  const [visualState, setVisualState] = useState<VisualState>({});
+  const [visualState, setVisualState] = useState<VisualState>(
+    () => initialData?.visual_state || {}
+  );
 
   // Create complete pipeline state for validation (includes entry points)
   const completePipelineState = useMemo<PipelineState>(() => ({
