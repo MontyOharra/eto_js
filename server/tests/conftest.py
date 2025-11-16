@@ -12,6 +12,7 @@ Usage in tests:
 import pytest
 import os
 import sys
+from pathlib import Path
 
 # Add src to path so imports work
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -26,21 +27,44 @@ def test_connection_managers():
     """
     Initialize test database connections.
 
-    Uses TEST_*_CONNECTION_STRING env vars for test databases.
-    Connections are created once per test session and reused across all tests.
+    Auto-discovers .accdb files in tests/test_databases/ and creates connections.
+    Also supports TEST_*_CONNECTION_STRING env vars for additional databases.
 
-    Environment variables expected:
-    - TEST_HTC_300_DB_CONNECTION_STRING: Access database connection
-    - TEST_HTC_000_DB_CONNECTION_STRING: Access database connection
-    - TEST_DATABASE_URL: Main SQL Server test database
+    Auto-discovery mapping (filename -> database name):
+    - "HTC300_Data-01-01.accdb" -> "htc300_data_01_01"
+    - "HTC000_Data_Staff.accdb" -> "htc000_data_staff"
+    - "HTC350D ETO Parameters.accdb" -> "htc350d_eto_parameters"
+
+    Connections are created once per test session and reused across all tests.
 
     Returns:
         dict: Mapping of database names to ConnectionManager instances
     """
     managers = {}
 
-    # Load all test database connections from environment
-    # Look for env vars like TEST_HTC_300_DB_CONNECTION_STRING
+    # Auto-discover .accdb files in test_databases/
+    test_db_dir = Path(__file__).parent / "test_databases"
+
+    if test_db_dir.exists():
+        for db_file in test_db_dir.glob("*.accdb"):
+            # Generate database name from filename
+            # "HTC300_Data-01-01.accdb" -> "htc300_data_01_01"
+            db_name = db_file.stem.lower().replace("-", "_").replace(" ", "_")
+
+            # Build connection string
+            conn_string = f"Driver={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={db_file.absolute()};"
+
+            try:
+                # Create connection manager
+                manager = AccessConnectionManager(conn_string)
+                manager.initialize_connection()
+
+                managers[db_name] = manager
+                print(f"✓ Test database connected: {db_name} ({db_file.name})")
+            except Exception as e:
+                print(f"✗ Failed to connect to {db_file.name}: {e}")
+
+    # Also load test database connections from environment variables (backward compatibility)
     test_env_vars = {
         k: v for k, v in os.environ.items()
         if k.startswith('TEST_') and k.endswith('_CONNECTION_STRING')
@@ -50,23 +74,36 @@ def test_connection_managers():
         # Extract database name: TEST_HTC_300_DB_CONNECTION_STRING -> htc_300_db
         db_name = env_var.replace('TEST_', '').replace('_CONNECTION_STRING', '').lower()
 
-        # Detect connection type based on connection string format
-        if conn_string.strip().startswith("Driver="):
-            # Access database (pyodbc)
-            manager = AccessConnectionManager(conn_string)
-            manager.initialize_connection()
-        else:
-            # SQLAlchemy database (SQL Server, PostgreSQL, etc.)
-            manager = DatabaseConnectionManager(conn_string)
+        # Skip if already added via auto-discovery
+        if db_name in managers:
+            continue
 
-        managers[db_name] = manager
-        print(f"✓ Test database connected: {db_name}")
+        # Detect connection type based on connection string format
+        try:
+            if conn_string.strip().startswith("Driver="):
+                # Access database (pyodbc)
+                manager = AccessConnectionManager(conn_string)
+                manager.initialize_connection()
+            else:
+                # SQLAlchemy database (SQL Server, PostgreSQL, etc.)
+                manager = DatabaseConnectionManager(conn_string)
+
+            managers[db_name] = manager
+            print(f"✓ Test database connected: {db_name} (from env)")
+        except Exception as e:
+            print(f"✗ Failed to connect to {db_name}: {e}")
 
     # Also add main test database if configured
-    if 'TEST_DATABASE_URL' in os.environ:
-        main_manager = DatabaseConnectionManager(os.environ['TEST_DATABASE_URL'])
-        managers['main'] = main_manager
-        print("✓ Test database connected: main")
+    if 'TEST_DATABASE_URL' in os.environ and 'main' not in managers:
+        try:
+            main_manager = DatabaseConnectionManager(os.environ['TEST_DATABASE_URL'])
+            managers['main'] = main_manager
+            print("✓ Test database connected: main")
+        except Exception as e:
+            print(f"✗ Failed to connect to main database: {e}")
+
+    if not managers:
+        print("⚠ Warning: No test databases found. Place .accdb files in tests/test_databases/")
 
     yield managers
 

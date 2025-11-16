@@ -1,0 +1,85 @@
+{
+  "table": {
+    "name": "HTC300_G040_T012A Open Order Dims",
+    "column_count": 11
+  },
+  "columns": [
+    {
+      "name": "OD_CoID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 1
+    },
+    {
+      "name": "OD_BrID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 2
+    },
+    {
+      "name": "OD_OrderNo",
+      "type": "DOUBLE",
+      "size": 53,
+      "nullable": true,
+      "position": 3
+    },
+    {
+      "name": "OD_DimID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 4
+    },
+    {
+      "name": "OD_UnitType",
+      "type": "VARCHAR",
+      "size": 7,
+      "nullable": true,
+      "position": 5
+    },
+    {
+      "name": "OD_UnitQty",
+      "type": "INTEGER",
+      "size": 10,
+      "nullable": true,
+      "position": 6
+    },
+    {
+      "name": "OD_UnitHeight",
+      "type": "INTEGER",
+      "size": 10,
+      "nullable": true,
+      "position": 7
+    },
+    {
+      "name": "OD_UnitLength",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 8
+    },
+    {
+      "name": "OD_UnitWidth",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 9
+    },
+    {
+      "name": "OD_UnitWeight",
+      "type": "DOUBLE",
+      "size": 53,
+      "nullable": true,
+      "position": 10
+    },
+    {
+      "name": "OD_UnitDimWeight",
+      "type": "DOUBLE",
+      "size": 53,
+      "nullable": true,
+      "position": 11
+    }
+  ]
+}

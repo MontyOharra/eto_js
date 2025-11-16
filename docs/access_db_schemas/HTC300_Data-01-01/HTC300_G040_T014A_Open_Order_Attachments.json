@@ -1,0 +1,128 @@
+{
+  "table": {
+    "name": "HTC300_G040_T014A Open Order Attachments",
+    "column_count": 6
+  },
+  "columns": [
+    {
+      "name": "Att_CoID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 1
+    },
+    {
+      "name": "Att_BrID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 2
+    },
+    {
+      "name": "Att_OrderNo",
+      "type": "DOUBLE",
+      "size": 53,
+      "nullable": true,
+      "position": 3
+    },
+    {
+      "name": "Att_CustID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 4
+    },
+    {
+      "name": "Att_Path",
+      "type": "VARCHAR",
+      "size": 255,
+      "nullable": true,
+      "position": 5
+    },
+    {
+      "name": "ATT_Size",
+      "type": "DOUBLE",
+      "size": 53,
+      "nullable": true,
+      "position": 6
+    }
+  ],
+  "indexes": [
+    {
+      "name": "Att_Path",
+      "unique": true,
+      "columns": [
+        {
+          "name": "Att_Path",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "PrimaryKey",
+      "unique": true,
+      "columns": [
+        {
+          "name": "Att_CoID",
+          "position": 1
+        },
+        {
+          "name": "Att_BrID",
+          "position": 2
+        },
+        {
+          "name": "Att_OrderNo",
+          "position": 3
+        },
+        {
+          "name": "Att_CustID",
+          "position": 4
+        },
+        {
+          "name": "Att_Path",
+          "position": 5
+        }
+      ]
+    },
+    {
+      "name": "Att_BrID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "Att_BrID",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "Att_CustID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "Att_CustID",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "Att_OrderNo",
+      "unique": false,
+      "columns": [
+        {
+          "name": "Att_OrderNo",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "tt_CoID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "Att_CoID",
+          "position": 1
+        }
+      ]
+    }
+  ]
+}

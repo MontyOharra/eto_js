@@ -20,33 +20,37 @@ tests/
 
 ```bash
 cd server
-pip install -r requirements-dev.txt
+make install-deps
 ```
 
-### 2. Copy Test Databases
+### 2. Add Test Databases (Auto-Discovery)
 
-Copy your production Access databases to `tests/test_databases/` with `_Test` suffix:
+Simply place your Access database files (`.accdb`) in `tests/test_databases/`:
 
 ```
 tests/test_databases/
-├── HTC300_Data_Test.accdb
-└── HTC000_Data_Test.accdb
+├── HTC300_Data-01-01.accdb
+├── HTC000_Data_Staff.accdb
+└── HTC350D ETO Parameters.accdb
 ```
+
+**That's it!** The test framework will automatically discover and connect to these databases.
+
+**Database Name Mapping (filename → database name in tests):**
+- `HTC300_Data-01-01.accdb` → `htc300_data_01_01`
+- `HTC000_Data_Staff.accdb` → `htc000_data_staff`
+- `HTC350D ETO Parameters.accdb` → `htc350d_eto_parameters`
 
 **Note:** These files are gitignored and will not be committed.
 
-### 3. Configure Test Environment Variables
+### 3. (Optional) Additional Databases via Environment Variables
 
-Create a `.env.test` file in the `server/` directory (or add to existing `.env`):
+If you need to connect to databases outside `test_databases/`, use environment variables:
 
 ```bash
-# Test Database Connections
-TEST_HTC_300_DB_CONNECTION_STRING="Driver={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=C:/Users/YourUser/software_projects/eto_js/server/tests/test_databases/HTC300_Data_Test.accdb;"
-TEST_HTC_000_DB_CONNECTION_STRING="Driver={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=C:/Users/YourUser/software_projects/eto_js/server/tests/test_databases/HTC000_Data_Test.accdb;"
+# .env.test (optional)
 TEST_DATABASE_URL="mssql+pyodbc://test:test@localhost:49172/eto_test?driver=ODBC+Driver+17+for+SQL+Server&TrustServerCertificate=yes"
 ```
-
-**Important:** Update the `DBQ=` paths to match your actual file locations.
 
 ## Running Tests
 
@@ -104,8 +108,14 @@ def test_my_module(db_services):
 The `db_services` fixture provides a `DatabaseManager` instance configured with test database connections. Use it exactly like the `services` parameter in production:
 
 ```python
-def test_sql_lookup(db_services):
-    # db_services.get_connection("htc_300_db") returns test database connection
+def test_fuzzy_lookup(db_services):
+    # Access auto-discovered databases by name
+    config = FuzzyDatabaseLookupConfig(
+        database="htc300_data_01_01",  # Auto-discovered from HTC300_Data-01-01.accdb
+        table="Addresses",
+        search_column="AddressText",
+        return_column="AddressID"
+    )
     result = module.run(inputs, config, context, services=db_services)
 ```
 
@@ -115,9 +125,19 @@ def test_sql_lookup(db_services):
 - `@pytest.mark.unit` - Tests that don't require databases
 - `@pytest.mark.slow` - Long-running tests
 
-## Next Steps
+## Quick Start
 
-1. Copy your production databases to `tests/test_databases/`
-2. Update `.env.test` with correct file paths
-3. Run `pytest` to verify setup
-4. Start writing tests for your modules!
+1. Place `.accdb` files in `tests/test_databases/`
+2. Run `make test-all` to verify setup
+3. Start writing tests!
+
+## Database Name Reference
+
+To find the database name for your tests, use this formula:
+1. Take the filename (without `.accdb`)
+2. Convert to lowercase
+3. Replace `-` and spaces with `_`
+
+Examples:
+- `My Database.accdb` → `my_database`
+- `Data-2024-01.accdb` → `data_2024_01`

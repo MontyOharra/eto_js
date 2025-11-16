@@ -1,0 +1,127 @@
+{
+  "table": {
+    "name": "HTC300_G040_T011A Open Order Assessorials",
+    "column_count": 17
+  },
+  "columns": [
+    {
+      "name": "OA_COID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 1
+    },
+    {
+      "name": "OA_BrID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 2
+    },
+    {
+      "name": "OA_OrderNo",
+      "type": "DOUBLE",
+      "size": 53,
+      "nullable": true,
+      "position": 3
+    },
+    {
+      "name": "OA_AssNo",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 4
+    },
+    {
+      "name": "OA_AssParent",
+      "type": "VARCHAR",
+      "size": 1,
+      "nullable": true,
+      "position": 5
+    },
+    {
+      "name": "OA_AssID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 6
+    },
+    {
+      "name": "OA_ShipperFee",
+      "type": "CURRENCY",
+      "size": 19,
+      "nullable": true,
+      "position": 7
+    },
+    {
+      "name": "OA_MinutesWaitTime",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 8
+    },
+    {
+      "name": "OA_AWBValue",
+      "type": "CURRENCY",
+      "size": 19,
+      "nullable": true,
+      "position": 9
+    },
+    {
+      "name": "OA_HowMuch",
+      "type": "CURRENCY",
+      "size": 19,
+      "nullable": true,
+      "position": 10
+    },
+    {
+      "name": "OA_HowManyMiles",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 11
+    },
+    {
+      "name": "OA_HowManyHrs",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 12
+    },
+    {
+      "name": "OA_HowManyCount",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 13
+    },
+    {
+      "name": "OA_TotalCharges",
+      "type": "CURRENCY",
+      "size": 19,
+      "nullable": true,
+      "position": 14
+    },
+    {
+      "name": "OA_HowMuchPerPound",
+      "type": "CURRENCY",
+      "size": 19,
+      "nullable": true,
+      "position": 15
+    },
+    {
+      "name": "OA_Presentation",
+      "type": "VARCHAR",
+      "size": 255,
+      "nullable": true,
+      "position": 16
+    },
+    {
+      "name": "OA_PayCommYN",
+      "type": "BIT",
+      "size": 1,
+      "nullable": false,
+      "position": 17
+    }
+  ]
+}

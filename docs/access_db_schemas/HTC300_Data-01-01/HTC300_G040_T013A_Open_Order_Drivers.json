@@ -1,0 +1,142 @@
+{
+  "table": {
+    "name": "HTC300_G040_T013A Open Order Drivers",
+    "column_count": 10
+  },
+  "columns": [
+    {
+      "name": "ODvr_CoID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 1
+    },
+    {
+      "name": "ODvr_BrID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 2
+    },
+    {
+      "name": "ODvr_OrderNo",
+      "type": "DOUBLE",
+      "size": 53,
+      "nullable": true,
+      "position": 3
+    },
+    {
+      "name": "ODvr_DvrNo",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 4
+    },
+    {
+      "name": "ODvr_EmpID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 5
+    },
+    {
+      "name": "ODvr_Name",
+      "type": "VARCHAR",
+      "size": 75,
+      "nullable": true,
+      "position": 6
+    },
+    {
+      "name": "ODvr_Leg",
+      "type": "VARCHAR",
+      "size": 1,
+      "nullable": true,
+      "position": 7
+    },
+    {
+      "name": "ODvr_Role",
+      "type": "VARCHAR",
+      "size": 1,
+      "nullable": true,
+      "position": 8
+    },
+    {
+      "name": "ODvr_CommissionDue",
+      "type": "CURRENCY",
+      "size": 19,
+      "nullable": true,
+      "position": 9
+    },
+    {
+      "name": "ODvr_CommPaidDate",
+      "type": "VARCHAR",
+      "size": 10,
+      "nullable": true,
+      "position": 10
+    }
+  ],
+  "indexes": [
+    {
+      "name": "PrimaryKey",
+      "unique": true,
+      "columns": [
+        {
+          "name": "ODvr_CoID",
+          "position": 1
+        },
+        {
+          "name": "ODvr_BrID",
+          "position": 2
+        },
+        {
+          "name": "ODvr_OrderNo",
+          "position": 3
+        },
+        {
+          "name": "ODvr_DvrNo",
+          "position": 4
+        }
+      ]
+    },
+    {
+      "name": "ODvr_BrID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "ODvr_BrID",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "ODvr_CoID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "ODvr_CoID",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "ODvr_ID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "ODvr_EmpID",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "ODvr_OrderNo",
+      "unique": false,
+      "columns": [
+        {
+          "name": "ODvr_OrderNo",
+          "position": 1
+        }
+      ]
+    }
+  ]
+}
