@@ -224,6 +224,10 @@ export function NodeRow({
                   target.style.height = "auto";
                   target.style.height = target.scrollHeight + "px";
                 }}
+                onMouseDown={(e) => {
+                  // Prevent ReactFlow from starting pan on mousedown
+                  e.stopPropagation();
+                }}
                 onFocus={onTextFocus}
                 // eslint-disable-next-line @typescript-eslint/no-unused-vars
                 onBlur={(_event) => {

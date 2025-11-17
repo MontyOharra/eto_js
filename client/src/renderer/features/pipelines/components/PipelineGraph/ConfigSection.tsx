@@ -58,6 +58,10 @@ const StringField: React.FC<{
         ref={textareaRef}
         value={localValue}
         onChange={(e) => setLocalValue(e.target.value)}
+        onMouseDown={(e) => {
+          // Prevent ReactFlow from starting pan on mousedown
+          e.stopPropagation();
+        }}
         onBlur={() => onConfigChange?.(configKey, localValue)}
         disabled={isViewMode}
         rows={1}
@@ -95,6 +99,10 @@ const NumberField: React.FC<{
         type="number"
         value={localValue}
         onChange={(e) => setLocalValue(e.target.value)}
+        onMouseDown={(e) => {
+          // Prevent ReactFlow from starting pan on mousedown
+          e.stopPropagation();
+        }}
         onBlur={() => {
           const parsed = propertyType === "integer"
             ? parseInt(String(localValue), 10)
@@ -143,6 +151,10 @@ export const ConfigSection: React.FC<ConfigSectionProps> = ({
                 type="checkbox"
                 checked={value ?? false}
                 onChange={(e) => handleChange(e.target.checked)}
+                onMouseDown={(e) => {
+                  // Prevent ReactFlow from starting pan on mousedown
+                  e.stopPropagation();
+                }}
                 disabled={isViewMode}
                 className={`nodrag peer w-4 h-4 rounded border border-gray-600 bg-gray-700 appearance-none ${isViewMode ? 'cursor-default opacity-60' : 'cursor-pointer'} checked:bg-blue-500 checked:border-blue-500 hover:border-gray-500 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800 disabled:hover:border-gray-600`}
               />
@@ -198,6 +210,10 @@ export const ConfigSection: React.FC<ConfigSectionProps> = ({
           <select
             value={value ?? ""}
             onChange={(e) => handleChange(e.target.value)}
+            onMouseDown={(e) => {
+              // Prevent ReactFlow from starting pan on mousedown
+              e.stopPropagation();
+            }}
             disabled={isViewMode}
             className={`nodrag w-full min-w-0 px-2 py-1 text-xs bg-gray-700 border border-gray-600 rounded text-gray-200 focus:outline-none focus:border-blue-500 ${isViewMode ? 'opacity-60 cursor-default' : ''}`}
           >

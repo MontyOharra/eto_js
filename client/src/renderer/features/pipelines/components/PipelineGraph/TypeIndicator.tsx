@@ -81,6 +81,10 @@ export function TypeIndicator({
       value={node.type}
       onChange={(e) => onTypeChange(node.node_id, e.target.value)}
       onClick={handleClick}
+      onMouseDown={(e) => {
+        // Prevent ReactFlow from starting pan on mousedown
+        e.stopPropagation();
+      }}
       onBlur={handleBlur}
       className="w-full text-[9px] text-white px-0.5 py-0.5 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 min-h-[24px] bg-gray-700"
       style={{
