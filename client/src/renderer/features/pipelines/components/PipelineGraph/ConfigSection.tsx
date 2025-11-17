@@ -58,6 +58,10 @@ const StringField: React.FC<{
         ref={textareaRef}
         value={localValue}
         onChange={(e) => setLocalValue(e.target.value)}
+        onPointerDown={(e) => {
+          // Prevent ReactFlow from intercepting pointer events
+          e.stopPropagation();
+        }}
         onMouseDown={(e) => {
           // Prevent ReactFlow from starting pan on mousedown
           e.stopPropagation();
@@ -99,6 +103,10 @@ const NumberField: React.FC<{
         type="number"
         value={localValue}
         onChange={(e) => setLocalValue(e.target.value)}
+        onPointerDown={(e) => {
+          // Prevent ReactFlow from intercepting pointer events
+          e.stopPropagation();
+        }}
         onMouseDown={(e) => {
           // Prevent ReactFlow from starting pan on mousedown
           e.stopPropagation();
@@ -151,6 +159,10 @@ export const ConfigSection: React.FC<ConfigSectionProps> = ({
                 type="checkbox"
                 checked={value ?? false}
                 onChange={(e) => handleChange(e.target.checked)}
+                onPointerDown={(e) => {
+                  // Prevent ReactFlow from intercepting pointer events
+                  e.stopPropagation();
+                }}
                 onMouseDown={(e) => {
                   // Prevent ReactFlow from starting pan on mousedown
                   e.stopPropagation();
@@ -210,6 +222,10 @@ export const ConfigSection: React.FC<ConfigSectionProps> = ({
           <select
             value={value ?? ""}
             onChange={(e) => handleChange(e.target.value)}
+            onPointerDown={(e) => {
+              // Prevent ReactFlow from intercepting pointer events
+              e.stopPropagation();
+            }}
             onMouseDown={(e) => {
               // Prevent ReactFlow from starting pan on mousedown
               e.stopPropagation();

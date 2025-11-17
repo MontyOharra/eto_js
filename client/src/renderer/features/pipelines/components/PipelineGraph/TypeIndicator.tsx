@@ -81,6 +81,10 @@ export function TypeIndicator({
       value={node.type}
       onChange={(e) => onTypeChange(node.node_id, e.target.value)}
       onClick={handleClick}
+      onPointerDown={(e) => {
+        // Prevent ReactFlow from intercepting pointer events
+        e.stopPropagation();
+      }}
       onMouseDown={(e) => {
         // Prevent ReactFlow from starting pan on mousedown
         e.stopPropagation();

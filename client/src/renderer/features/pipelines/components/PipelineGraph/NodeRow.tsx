@@ -224,6 +224,10 @@ export function NodeRow({
                   target.style.height = "auto";
                   target.style.height = target.scrollHeight + "px";
                 }}
+                onPointerDown={(e) => {
+                  // Prevent ReactFlow from intercepting pointer events
+                  e.stopPropagation();
+                }}
                 onMouseDown={(e) => {
                   // Prevent ReactFlow from starting pan on mousedown
                   e.stopPropagation();

@@ -1002,6 +1002,7 @@ function PipelineGraphInner({
         edgesReconnectable={mode === 'edit'}
         reconnectRadius={20}
         panOnDrag={true}
+        selectNodesOnDrag={false}
         zoomOnScroll={true}
         minZoom={0.1}
         maxZoom={4}
