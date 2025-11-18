@@ -8,8 +8,8 @@ from pydantic import BaseModel
 from enum import Enum
 from datetime import datetime
 
-# Type alias for allowed node types - equivalent to TypeScript union: "str" | "float" | "datetime" | "bool" | "int"
-AllowedNodeType = Literal["str", "float", "datetime", "bool", "int"]
+# Type alias for allowed node types - equivalent to TypeScript union: "str" | "float" | "datetime" | "date" | "time" | "bool" | "int"
+AllowedNodeType = Literal["str", "float", "datetime", "date", "time", "bool", "int"]
 
 
 class ModuleKind(str, Enum):
