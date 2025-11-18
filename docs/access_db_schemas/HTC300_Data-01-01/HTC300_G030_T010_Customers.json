@@ -1,0 +1,243 @@
+{
+  "table": {
+    "name": "HTC300_G030_T010 Customers",
+    "column_count": 25
+  },
+  "columns": [
+    {
+      "name": "Cus_CoID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 1
+    },
+    {
+      "name": "Cus_BrID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 2
+    },
+    {
+      "name": "CustomerID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 3
+    },
+    {
+      "name": "Customer",
+      "type": "VARCHAR",
+      "size": 100,
+      "nullable": true,
+      "position": 4
+    },
+    {
+      "name": "Cus_AddrLn1",
+      "type": "VARCHAR",
+      "size": 100,
+      "nullable": true,
+      "position": 5
+    },
+    {
+      "name": "Cus_AddrLn2",
+      "type": "VARCHAR",
+      "size": 255,
+      "nullable": true,
+      "position": 6
+    },
+    {
+      "name": "Cus_City",
+      "type": "VARCHAR",
+      "size": 100,
+      "nullable": true,
+      "position": 7
+    },
+    {
+      "name": "Cus_State",
+      "type": "VARCHAR",
+      "size": 2,
+      "nullable": true,
+      "position": 8
+    },
+    {
+      "name": "Cus_Country",
+      "type": "VARCHAR",
+      "size": 100,
+      "nullable": true,
+      "position": 9
+    },
+    {
+      "name": "Cus_Zip",
+      "type": "VARCHAR",
+      "size": 10,
+      "nullable": true,
+      "position": 10
+    },
+    {
+      "name": "Cus_Phone",
+      "type": "VARCHAR",
+      "size": 25,
+      "nullable": true,
+      "position": 11
+    },
+    {
+      "name": "Cus_Extension",
+      "type": "VARCHAR",
+      "size": 12,
+      "nullable": true,
+      "position": 12
+    },
+    {
+      "name": "Cus_Notes",
+      "type": "VARCHAR",
+      "size": 255,
+      "nullable": true,
+      "position": 13
+    },
+    {
+      "name": "Cus_Tariff",
+      "type": "VARCHAR",
+      "size": 25,
+      "nullable": true,
+      "position": 14
+    },
+    {
+      "name": "Cus_FSC",
+      "type": "DOUBLE",
+      "size": 53,
+      "nullable": true,
+      "position": 15
+    },
+    {
+      "name": "Cus_Assessorials",
+      "type": "VARCHAR",
+      "size": 255,
+      "nullable": true,
+      "position": 16
+    },
+    {
+      "name": "Cus_Remarks",
+      "type": "LONGCHAR",
+      "size": 1073741823,
+      "nullable": true,
+      "position": 17
+    },
+    {
+      "name": "Cus_Status",
+      "type": "BIT",
+      "size": 1,
+      "nullable": false,
+      "position": 18
+    },
+    {
+      "name": "Cus_OmitQBInvoice",
+      "type": "BIT",
+      "size": 1,
+      "nullable": false,
+      "position": 19
+    },
+    {
+      "name": "Cus_QBCustomerRefListID",
+      "type": "VARCHAR",
+      "size": 38,
+      "nullable": true,
+      "position": 20
+    },
+    {
+      "name": "Cus_QBCustomerRefFullName",
+      "type": "VARCHAR",
+      "size": 255,
+      "nullable": true,
+      "position": 21
+    },
+    {
+      "name": "Cus_DateAdded",
+      "type": "DATETIME",
+      "size": 19,
+      "nullable": true,
+      "position": 22
+    },
+    {
+      "name": "Cus_DateLastChanged",
+      "type": "DATETIME",
+      "size": 19,
+      "nullable": true,
+      "position": 23
+    },
+    {
+      "name": "Cus_GCRFExemptYN",
+      "type": "BIT",
+      "size": 1,
+      "nullable": false,
+      "position": 24
+    },
+    {
+      "name": "Cus_SandHCreditYN",
+      "type": "BIT",
+      "size": 1,
+      "nullable": false,
+      "position": 25
+    }
+  ],
+  "indexes": [
+    {
+      "name": "CustomerID",
+      "unique": true,
+      "columns": [
+        {
+          "name": "CustomerID",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "PrimaryKey",
+      "unique": true,
+      "columns": [
+        {
+          "name": "Cus_CoID",
+          "position": 1
+        },
+        {
+          "name": "Cus_BrID",
+          "position": 2
+        },
+        {
+          "name": "CustomerID",
+          "position": 3
+        }
+      ]
+    },
+    {
+      "name": "Cus_BrID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "Cus_BrID",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "Cus_COID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "Cus_CoID",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "Cus_QBCustomerRefListID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "Cus_QBCustomerRefListID",
+          "position": 1
+        }
+      ]
+    }
+  ]
+}

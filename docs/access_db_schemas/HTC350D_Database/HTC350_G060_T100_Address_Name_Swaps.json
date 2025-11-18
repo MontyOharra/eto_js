@@ -1,0 +1,100 @@
+{
+  "table": {
+    "name": "HTC350_G060_T100 Address Name Swaps",
+    "column_count": 6
+  },
+  "columns": [
+    {
+      "name": "NameSwap_CoID",
+      "type": "DOUBLE",
+      "size": 53,
+      "nullable": true,
+      "position": 1
+    },
+    {
+      "name": "NameSwap_BrID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 2
+    },
+    {
+      "name": "NameSwap_GivenName",
+      "type": "VARCHAR",
+      "size": 255,
+      "nullable": true,
+      "position": 3
+    },
+    {
+      "name": "NameSwap_SubNameID",
+      "type": "DOUBLE",
+      "size": 53,
+      "nullable": true,
+      "position": 4
+    },
+    {
+      "name": "NameSwap_SubName",
+      "type": "VARCHAR",
+      "size": 255,
+      "nullable": true,
+      "position": 5
+    },
+    {
+      "name": "NameSwap_Active",
+      "type": "BIT",
+      "size": 1,
+      "nullable": false,
+      "position": 6
+    }
+  ],
+  "indexes": [
+    {
+      "name": "PrimaryKey",
+      "unique": true,
+      "columns": [
+        {
+          "name": "NameSwap_CoID",
+          "position": 1
+        },
+        {
+          "name": "NameSwap_BrID",
+          "position": 2
+        },
+        {
+          "name": "NameSwap_GivenName",
+          "position": 3
+        }
+      ]
+    },
+    {
+      "name": "NameSwap_BrID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "NameSwap_BrID",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "NameSwap_CoID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "NameSwap_CoID",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "NameSwap_SubNameID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "NameSwap_SubNameID",
+          "position": 1
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,316 @@
+{
+  "table": {
+    "name": "HTC300_G060_T010 Addresses",
+    "column_count": 34
+  },
+  "columns": [
+    {
+      "name": "FavCoID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 1
+    },
+    {
+      "name": "FavBrID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 2
+    },
+    {
+      "name": "FavID",
+      "type": "DOUBLE",
+      "size": 53,
+      "nullable": true,
+      "position": 3
+    },
+    {
+      "name": "FavKeycheck",
+      "type": "VARCHAR",
+      "size": 100,
+      "nullable": true,
+      "position": 4
+    },
+    {
+      "name": "FavKeyCounts",
+      "type": "VARCHAR",
+      "size": 255,
+      "nullable": true,
+      "position": 5
+    },
+    {
+      "name": "FavBranchAddressYN",
+      "type": "BIT",
+      "size": 1,
+      "nullable": false,
+      "position": 6
+    },
+    {
+      "name": "FavCompany",
+      "type": "VARCHAR",
+      "size": 100,
+      "nullable": true,
+      "position": 7
+    },
+    {
+      "name": "FavLocnName",
+      "type": "VARCHAR",
+      "size": 100,
+      "nullable": true,
+      "position": 8
+    },
+    {
+      "name": "FavAddrLn1",
+      "type": "VARCHAR",
+      "size": 150,
+      "nullable": true,
+      "position": 9
+    },
+    {
+      "name": "FavAddrLn2",
+      "type": "VARCHAR",
+      "size": 150,
+      "nullable": true,
+      "position": 10
+    },
+    {
+      "name": "FavCity",
+      "type": "VARCHAR",
+      "size": 255,
+      "nullable": true,
+      "position": 11
+    },
+    {
+      "name": "FavState",
+      "type": "VARCHAR",
+      "size": 2,
+      "nullable": true,
+      "position": 12
+    },
+    {
+      "name": "FavZip",
+      "type": "VARCHAR",
+      "size": 7,
+      "nullable": true,
+      "position": 13
+    },
+    {
+      "name": "FavCountry",
+      "type": "VARCHAR",
+      "size": 25,
+      "nullable": true,
+      "position": 14
+    },
+    {
+      "name": "FavLatitude",
+      "type": "VARCHAR",
+      "size": 13,
+      "nullable": true,
+      "position": 15
+    },
+    {
+      "name": "FavLongitude",
+      "type": "VARCHAR",
+      "size": 13,
+      "nullable": true,
+      "position": 16
+    },
+    {
+      "name": "FavACIListed",
+      "type": "BIT",
+      "size": 1,
+      "nullable": false,
+      "position": 17
+    },
+    {
+      "name": "FavACIID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 18
+    },
+    {
+      "name": "FavFirstName",
+      "type": "VARCHAR",
+      "size": 50,
+      "nullable": true,
+      "position": 19
+    },
+    {
+      "name": "FavLastName",
+      "type": "VARCHAR",
+      "size": 50,
+      "nullable": true,
+      "position": 20
+    },
+    {
+      "name": "FavEMail",
+      "type": "VARCHAR",
+      "size": 100,
+      "nullable": true,
+      "position": 21
+    },
+    {
+      "name": "FavPhone",
+      "type": "VARCHAR",
+      "size": 12,
+      "nullable": true,
+      "position": 22
+    },
+    {
+      "name": "FavExt",
+      "type": "VARCHAR",
+      "size": 5,
+      "nullable": true,
+      "position": 23
+    },
+    {
+      "name": "FavAssessorials",
+      "type": "VARCHAR",
+      "size": 100,
+      "nullable": true,
+      "position": 24
+    },
+    {
+      "name": "FavCarrierYN",
+      "type": "BIT",
+      "size": 1,
+      "nullable": false,
+      "position": 25
+    },
+    {
+      "name": "FavLocalYN",
+      "type": "BIT",
+      "size": 1,
+      "nullable": false,
+      "position": 26
+    },
+    {
+      "name": "FavInternational",
+      "type": "BIT",
+      "size": 1,
+      "nullable": false,
+      "position": 27
+    },
+    {
+      "name": "FavWaitTimeDefault",
+      "type": "DOUBLE",
+      "size": 53,
+      "nullable": true,
+      "position": 28
+    },
+    {
+      "name": "FavActive",
+      "type": "BIT",
+      "size": 1,
+      "nullable": false,
+      "position": 29
+    },
+    {
+      "name": "FavDateAdded",
+      "type": "DATETIME",
+      "size": 19,
+      "nullable": true,
+      "position": 30
+    },
+    {
+      "name": "FavAddedBy",
+      "type": "VARCHAR",
+      "size": 25,
+      "nullable": true,
+      "position": 31
+    },
+    {
+      "name": "FavDateModified",
+      "type": "DATETIME",
+      "size": 19,
+      "nullable": true,
+      "position": 32
+    },
+    {
+      "name": "FavChgdby",
+      "type": "VARCHAR",
+      "size": 25,
+      "nullable": true,
+      "position": 33
+    },
+    {
+      "name": "FavGroundCarrierYN",
+      "type": "BIT",
+      "size": 1,
+      "nullable": false,
+      "position": 34
+    }
+  ],
+  "indexes": [
+    {
+      "name": "PrimaryKey",
+      "unique": true,
+      "columns": [
+        {
+          "name": "FavCoID",
+          "position": 1
+        },
+        {
+          "name": "FavBrID",
+          "position": 2
+        },
+        {
+          "name": "FavID",
+          "position": 3
+        }
+      ]
+    },
+    {
+      "name": "FavACIID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "FavACIID",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "FavBrID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "FavBrID",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "FavCoID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "FavCoID",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "FavID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "FavID",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "FavKeycheck",
+      "unique": false,
+      "columns": [
+        {
+          "name": "FavKeycheck",
+          "position": 1
+        }
+      ]
+    }
+  ]
+}
