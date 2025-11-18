@@ -15,6 +15,7 @@ class TextCleanerConfig(BaseModel):
     strip_whitespace: bool = Field(True, description="Remove leading/trailing whitespace")
     normalize_spaces: bool = Field(True, description="Convert multiple spaces to single space")
     remove_empty_lines: bool = Field(False, description="Remove empty lines")
+    replace_newlines_with_spaces: bool = Field(False, description="Replace newline characters with spaces")
     to_lowercase: bool = Field(False, description="Convert text to lowercase")
 
 @register
@@ -30,7 +31,7 @@ class BasicTextCleaner(TransformModule):
     title = "Basic Text Cleaner"
     description = "Clean and normalize text by removing extra whitespace and applying basic transformations"
     category = "Text"
-    color = "#EC4899"  # Pink
+    color = "#0EA5E9"  # Sky blue
 
     # Configuration model
     ConfigModel = TextCleanerConfig
@@ -86,6 +87,10 @@ class BasicTextCleaner(TransformModule):
 
         # Apply cleaning operations based on configuration
         cleaned_text = input_text
+
+        if cfg.replace_newlines_with_spaces:
+            # Replace newlines with spaces (do this first before other operations)
+            cleaned_text = cleaned_text.replace('\r\n', ' ').replace('\n', ' ').replace('\r', ' ')
 
         if cfg.strip_whitespace:
             cleaned_text = cleaned_text.strip()
