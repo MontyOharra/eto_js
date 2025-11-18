@@ -8,7 +8,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 from shared.types import MiscModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
-from features.modules.utils.decorators import register
+from features.modules.utils.decorators import register  # Not currently registered - see @register comment below
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ class NextOrderNumberConfig(BaseModel):
     )
 
 
-@register
+# @register  # DEREGISTERED - Logic will be moved into create order action
 class NextOrderNumber(MiscModule):
     """
     Next Order Number Generator
@@ -34,6 +34,9 @@ class NextOrderNumber(MiscModule):
     5. Returning the new order number
 
     Replicates legacy VBA NextOrderNo function with hardcoded CoID=1, BrID=1
+
+    NOTE: This module is currently deregistered. The logic will be incorporated
+    into the create order action module. Keeping this file for reference.
     """
 
     # Class metadata
@@ -42,7 +45,7 @@ class NextOrderNumber(MiscModule):
     title = "Next Order Number"
     description = "Generate next available order number (legacy VBA logic)"
     category = "Generator"
-    color = "#10B981"  # Green
+    color = "#000000"  # Black
 
     # Configuration model
     ConfigModel = NextOrderNumberConfig
