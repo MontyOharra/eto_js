@@ -10,8 +10,8 @@ import { updatePinInModule } from "./moduleFactory";
  */
 export const TYPE_COLORS: Record<string, string> = {
   str: "#3B82F6", // blue-500
-  int: "#EF4444", // red-500
-  float: "#F59E0B", // amber-500
+  int: "#DC2626", // red-600 (dark red)
+  float: "#FCA5A5", // red-300 (light red)
   bool: "#10B981", // green-500
   datetime: "#8B5CF6", // purple-500
 };
