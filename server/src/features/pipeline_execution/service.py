@@ -1092,6 +1092,19 @@ class PipelineExecutionService:
                     for out_id, out_val in outputs_dict.items():
                         val_type = type(out_val).__name__
                         is_sentinel = isinstance(out_val, (ExecutionCancelled, BranchNotTaken))
+
+                        # DEBUG: Check class identity for BranchNotTaken
+                        if val_type == "BranchNotTaken":
+                            logger.warning(f"[ISINSTANCE DEBUG] Found BranchNotTaken object:")
+                            logger.warning(f"  type(out_val) = {type(out_val)}")
+                            logger.warning(f"  id(type(out_val)) = {id(type(out_val))}")
+                            logger.warning(f"  BranchNotTaken class = {BranchNotTaken}")
+                            logger.warning(f"  id(BranchNotTaken) = {id(BranchNotTaken)}")
+                            logger.warning(f"  isinstance check = {is_sentinel}")
+                            logger.warning(f"  type(out_val) is BranchNotTaken = {type(out_val) is BranchNotTaken}")
+                            logger.warning(f"  type(out_val).__module__ = {type(out_val).__module__}")
+                            logger.warning(f"  BranchNotTaken.__module__ = {BranchNotTaken.__module__}")
+
                         if is_sentinel:
                             logger.warning(f"[SENTINEL DEBUG]     🚫 {out_id}: {val_type} - SENTINEL: {out_val}")
                         else:
