@@ -560,9 +560,12 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                         error_dict = None
                         if step.error:
                             try:
+                                # Try to parse as JSON first (for future structured errors)
                                 error_dict = json.loads(step.error)
-                            except (json.JSONDecodeError, TypeError) as e:
-                                logger.warning(f"Failed to parse error for step {step.id}: {e}")
+                            except (json.JSONDecodeError, TypeError):
+                                # If not JSON, treat as plain string error message
+                                # Wrap in dict structure for consistency
+                                error_dict = {"message": step.error}
 
                         steps_list.append(EtoRunPipelineExecutionStepDetailView(
                             id=step.id,
