@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class PrintActionConfig(BaseModel):
     """Configuration for print action"""
-    prefix: str = Field("", description="Optional prefix to add before message")
+    pass
 
 @register
 class PrintAction(ActionModule):
@@ -29,7 +29,7 @@ class PrintAction(ActionModule):
     title = "Print to Server Log"
     description = "Prints a message to the server backend logs"
     category = "Print"
-    color = "#DC2626"  # Red
+    color = "#92400E"  # Brown (amber-900)
     ConfigModel = PrintActionConfig
 
     @classmethod
@@ -64,10 +64,7 @@ class PrintAction(ActionModule):
         message = list(inputs.values())[0]
 
         # Log message with optional prefix (using WARNING level to ensure visibility)
-        if cfg.prefix:
-            log_message = f"[ACTION] {cfg.prefix}{message}"
-        else:
-            log_message = f"[ACTION] {message}"
+        log_message = f"[ACTION] {message}"
 
         logger.warning(log_message)  # Using WARNING to ensure it shows in logs
         print(log_message)  # Also print to stdout for console visibility
