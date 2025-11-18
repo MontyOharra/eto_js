@@ -40,6 +40,116 @@ const edgeTypes = {
   executionEdge: ExecutionEdge,
 };
 
+/**
+ * PinData interface matching the structure used in node data
+ */
+interface PinData {
+  name: string;
+  value: string;
+  type: string;
+  group_index: number;
+  label: string;
+}
+
+/**
+ * Node Height Calculation Constants
+ *
+ * These values must match the Tailwind CSS classes used in the ExecutedModule components:
+ *
+ * - HEADER_HEIGHT (28px):
+ *   - ExecutedModuleHeader: py-2 padding (6px × 2) + text line height (~16px)
+ *
+ * - GROUP_LABEL_HEIGHT (24px):
+ *   - ExecutedNodeGroup: mb-2 margin (8px) + label line (~16px)
+ *
+ * - ROW_HEIGHT (36px):
+ *   - ExecutedModuleRow: py-1.5 (6px × 2) + min-h-[24px]
+ *
+ * - ROW_GAP (4px):
+ *   - ExecutedNodeGroup: space-y-1 class
+ *
+ * - GROUP_GAP (12px):
+ *   - ExecutedNodeGroup: mb-3 class
+ *
+ * - BODY_PADDING (12px):
+ *   - ExecutedModuleBody: py-2 on columns (6px × 2)
+ *
+ * - ERROR_HEIGHT (60px):
+ *   - Error box with mx-3 mb-3 and content
+ *
+ * ⚠️ WARNING: If you change CSS classes in ExecutedModule components,
+ *             update these constants accordingly!
+ */
+const HEADER_HEIGHT = 28;
+const GROUP_LABEL_HEIGHT = 24;
+const ROW_HEIGHT = 36;
+const ROW_GAP = 4;
+const GROUP_GAP = 12;
+const BODY_PADDING = 12;
+const ERROR_HEIGHT = 60;
+const MIN_NODE_HEIGHT = 100;
+
+/**
+ * Count the number of unique groups in a pins object
+ */
+function countGroups(pins: Record<string, PinData>): number {
+  const groupIndices = new Set<number>();
+  Object.values(pins).forEach(pin => groupIndices.add(pin.group_index));
+  return groupIndices.size;
+}
+
+/**
+ * Count the number of rows (pins) in a pins object
+ */
+function countRows(pins: Record<string, PinData>): number {
+  return Object.keys(pins).length;
+}
+
+/**
+ * Calculate the height of a single column (inputs or outputs)
+ */
+function calculateColumnHeight(numGroups: number, numRows: number): number {
+  if (numRows === 0) return 0;
+
+  const groupsHeight = numGroups * GROUP_LABEL_HEIGHT;
+  const rowsHeight = numRows * ROW_HEIGHT;
+  const rowGapsHeight = Math.max(0, numRows - 1) * ROW_GAP;
+  const groupGapsHeight = Math.max(0, numGroups - 1) * GROUP_GAP;
+
+  return groupsHeight + rowsHeight + rowGapsHeight + groupGapsHeight;
+}
+
+/**
+ * Calculate the total height of a node based on its content
+ */
+function calculateNodeHeight(nodeData: {
+  inputs: Record<string, PinData>;
+  outputs: Record<string, PinData>;
+  error?: string | null;
+}): number {
+  // Count groups and rows
+  const numInputGroups = countGroups(nodeData.inputs);
+  const numInputRows = countRows(nodeData.inputs);
+  const numOutputGroups = countGroups(nodeData.outputs);
+  const numOutputRows = countRows(nodeData.outputs);
+
+  // Calculate column heights
+  const inputHeight = calculateColumnHeight(numInputGroups, numInputRows);
+  const outputHeight = calculateColumnHeight(numOutputGroups, numOutputRows);
+
+  // Use max height since columns are side-by-side
+  const bodyContentHeight = Math.max(inputHeight, outputHeight);
+
+  // Add error height if present
+  const errorBoxHeight = nodeData.error ? ERROR_HEIGHT : 0;
+
+  // Calculate total height
+  const totalHeight = HEADER_HEIGHT + bodyContentHeight + BODY_PADDING + errorBoxHeight;
+
+  // Ensure minimum height
+  return Math.max(MIN_NODE_HEIGHT, totalHeight);
+}
+
 // Use dagre to calculate node positions (left-to-right layout)
 const getLayoutedElements = (
   nodes: Node[],
@@ -50,13 +160,14 @@ const getLayoutedElements = (
   dagreGraph.setDefaultEdgeLabel(() => ({}));
 
   const nodeWidth = 220;
-  const nodeHeight = 180;
 
   // Configure layout: LR (left-to-right), ranksep for horizontal spacing, nodesep for vertical
   dagreGraph.setGraph({ rankdir: direction, ranksep: 450, nodesep: 200 });
 
   nodes.forEach((node) => {
-    dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });
+    // Calculate dynamic height based on node content
+    const height = calculateNodeHeight(node.data);
+    dagreGraph.setNode(node.id, { width: nodeWidth, height });
   });
 
   edges.forEach((edge) => {
@@ -67,11 +178,14 @@ const getLayoutedElements = (
 
   const layoutedNodes = nodes.map((node) => {
     const nodeWithPosition = dagreGraph.node(node.id);
+    // Recalculate height for proper centering
+    const height = calculateNodeHeight(node.data);
+
     return {
       ...node,
       position: {
         x: nodeWithPosition.x - nodeWidth / 2,
-        y: nodeWithPosition.y - nodeHeight / 2,
+        y: nodeWithPosition.y - height / 2,
       },
     };
   });
