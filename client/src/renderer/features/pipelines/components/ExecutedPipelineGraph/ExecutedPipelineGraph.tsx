@@ -92,7 +92,8 @@ const MIN_NODE_HEIGHT = 100;
 /**
  * Count the number of unique groups in a pins object
  */
-function countGroups(pins: Record<string, PinData>): number {
+function countGroups(pins: Record<string, PinData> | undefined): number {
+  if (!pins) return 0;
   const groupIndices = new Set<number>();
   Object.values(pins).forEach(pin => groupIndices.add(pin.group_index));
   return groupIndices.size;
@@ -101,7 +102,8 @@ function countGroups(pins: Record<string, PinData>): number {
 /**
  * Count the number of rows (pins) in a pins object
  */
-function countRows(pins: Record<string, PinData>): number {
+function countRows(pins: Record<string, PinData> | undefined): number {
+  if (!pins) return 0;
   return Object.keys(pins).length;
 }
 
@@ -123,8 +125,8 @@ function calculateColumnHeight(numGroups: number, numRows: number): number {
  * Calculate the total height of a node based on its content
  */
 function calculateNodeHeight(nodeData: {
-  inputs: Record<string, PinData>;
-  outputs: Record<string, PinData>;
+  inputs?: Record<string, PinData>;
+  outputs?: Record<string, PinData>;
   error?: string | null;
 }): number {
   // Count groups and rows
