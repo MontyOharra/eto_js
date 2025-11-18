@@ -110,7 +110,7 @@ class IfBranch(LogicModule):
             TypeError: If condition is not a boolean
         """
         # Import sentinel here to avoid circular import
-        from features.pipeline_execution.service import BranchNotTaken
+        from src.features.pipeline_execution.service import BranchNotTaken
 
         # Get inputs (ordered: [Condition, Value] based on meta())
         condition_input = context.inputs[0]  # "Condition" group
@@ -129,17 +129,11 @@ class IfBranch(LogicModule):
 
         # Route value: send to selected path, sentinel to other
         if condition:
-            logger.warning(f"[SENTINEL DEBUG] 🔀 IfBranch: Condition=True, routing to TRUE path")
-            logger.warning(f"[SENTINEL DEBUG]     ✅ {true_path_output} ← value (type: {type(value).__name__})")
-            logger.warning(f"[SENTINEL DEBUG]     🚫 {false_path_output} ← BranchNotTaken('Condition evaluated to false')")
             return {
                 true_path_output: value,  # Send actual value to true path
                 false_path_output: BranchNotTaken("Condition evaluated to false")
             }
         else:
-            logger.warning(f"[SENTINEL DEBUG] 🔀 IfBranch: Condition=False, routing to FALSE path")
-            logger.warning(f"[SENTINEL DEBUG]     🚫 {true_path_output} ← BranchNotTaken('Condition evaluated to true')")
-            logger.warning(f"[SENTINEL DEBUG]     ✅ {false_path_output} ← value (type: {type(value).__name__})")
             return {
                 true_path_output: BranchNotTaken("Condition evaluated to true"),
                 false_path_output: value  # Send actual value to false path
