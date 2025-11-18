@@ -2,11 +2,14 @@
 If Branch Logic Module
 Conditional routing - routes data to one of two downstream paths based on boolean condition
 """
+import logging
 from typing import Dict, Any
 from pydantic import BaseModel
 
 from shared.types import LogicModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
 from features.modules.utils.decorators import register
+
+logger = logging.getLogger(__name__)
 
 
 class IfBranchConfig(BaseModel):
@@ -126,11 +129,17 @@ class IfBranch(LogicModule):
 
         # Route value: send to selected path, sentinel to other
         if condition:
+            logger.warning(f"[SENTINEL DEBUG] 🔀 IfBranch: Condition=True, routing to TRUE path")
+            logger.warning(f"[SENTINEL DEBUG]     ✅ {true_path_output} ← value (type: {type(value).__name__})")
+            logger.warning(f"[SENTINEL DEBUG]     🚫 {false_path_output} ← BranchNotTaken('Condition evaluated to false')")
             return {
                 true_path_output: value,  # Send actual value to true path
                 false_path_output: BranchNotTaken("Condition evaluated to false")
             }
         else:
+            logger.warning(f"[SENTINEL DEBUG] 🔀 IfBranch: Condition=False, routing to FALSE path")
+            logger.warning(f"[SENTINEL DEBUG]     🚫 {true_path_output} ← BranchNotTaken('Condition evaluated to true')")
+            logger.warning(f"[SENTINEL DEBUG]     ✅ {false_path_output} ← value (type: {type(value).__name__})")
             return {
                 true_path_output: BranchNotTaken("Condition evaluated to true"),
                 false_path_output: value  # Send actual value to false path
