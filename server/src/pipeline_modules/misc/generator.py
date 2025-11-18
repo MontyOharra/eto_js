@@ -27,7 +27,7 @@ class Generator(MiscModule):
     title = "Value Generator"
     description = "Output a configured value (no inputs required)"
     category = "Generator"
-    color = "#10B981"  # Green
+    color = "#000000"  # Green
 
     # Configuration model
     ConfigModel = GeneratorConfig
