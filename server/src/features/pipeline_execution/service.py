@@ -945,17 +945,6 @@ class PipelineExecutionService:
             values = resolved[:len(input_ids)]
             inputs_dict = {inp_id: val for inp_id, val in zip(input_ids, values)}
 
-            # DEBUG: Log all inputs and detect sentinels
-            logger.info(f"[SENTINEL DEBUG] Module {step.module_instance_id} received {len(values)} input values:")
-            for inp_id, val in zip(input_ids, values):
-                val_type = type(val).__name__
-                is_sentinel = isinstance(val, (ExecutionCancelled, BranchNotTaken))
-                if is_sentinel:
-                    logger.warning(f"  ⚠️  {inp_id}: {val_type} - SENTINEL: {val}")
-                else:
-                    val_preview = str(val)[:50] if val is not None else "None"
-                    logger.info(f"      {inp_id}: {val_type} = {val_preview}")
-
             # Check if any upstream input is ExecutionCancelled sentinel
             # If so, skip execution and propagate cancellation downstream
             cancelled_inputs = [val for val in values if isinstance(val, ExecutionCancelled)]
@@ -977,16 +966,11 @@ class PipelineExecutionService:
             branch_not_taken = [val for val in values if isinstance(val, BranchNotTaken)]
             if branch_not_taken:
                 reason = branch_not_taken[0].reason  # Use first branch reason
-                logger.warning(f"[SENTINEL DEBUG] ⏭️  Skipping module {step.module_instance_id} - branch not selected: {reason}")
-                logger.warning(f"[SENTINEL DEBUG] Found {len(branch_not_taken)} BranchNotTaken sentinel(s) in inputs")
+                logger.info(f"Skipping module {step.module_instance_id} due to branch not taken: {reason}")
 
                 # Create BranchNotTaken sentinel for all outputs
                 sentinel = BranchNotTaken(reason)
                 outputs_dict = {pin.node_id: sentinel for pin in ctx.outputs}
-
-                logger.warning(f"[SENTINEL DEBUG] 📤 Propagating BranchNotTaken to {len(ctx.outputs)} output pins:")
-                for pin in ctx.outputs:
-                    logger.warning(f"[SENTINEL DEBUG]     {pin.node_id} → BranchNotTaken({reason})")
 
                 # DO NOT record step result - module didn't execute, shouldn't appear in steps array
                 # Branch not taken modules don't appear in execution results
@@ -1086,30 +1070,6 @@ class PipelineExecutionService:
                     )
                     error = None
                     logger.debug(f"Executed {module_kind} module {step.module_instance_id}")
-
-                    # DEBUG: Log outputs and detect sentinels being returned
-                    logger.info(f"[SENTINEL DEBUG] Module {step.module_instance_id} returned {len(outputs_dict)} outputs:")
-                    for out_id, out_val in outputs_dict.items():
-                        val_type = type(out_val).__name__
-                        is_sentinel = isinstance(out_val, (ExecutionCancelled, BranchNotTaken))
-
-                        # DEBUG: Check class identity for BranchNotTaken
-                        if val_type == "BranchNotTaken":
-                            logger.warning(f"[ISINSTANCE DEBUG] Found BranchNotTaken object:")
-                            logger.warning(f"  type(out_val) = {type(out_val)}")
-                            logger.warning(f"  id(type(out_val)) = {id(type(out_val))}")
-                            logger.warning(f"  BranchNotTaken class = {BranchNotTaken}")
-                            logger.warning(f"  id(BranchNotTaken) = {id(BranchNotTaken)}")
-                            logger.warning(f"  isinstance check = {is_sentinel}")
-                            logger.warning(f"  type(out_val) is BranchNotTaken = {type(out_val) is BranchNotTaken}")
-                            logger.warning(f"  type(out_val).__module__ = {type(out_val).__module__}")
-                            logger.warning(f"  BranchNotTaken.__module__ = {BranchNotTaken.__module__}")
-
-                        if is_sentinel:
-                            logger.warning(f"[SENTINEL DEBUG]     🚫 {out_id}: {val_type} - SENTINEL: {out_val}")
-                        else:
-                            val_preview = str(out_val)[:50] if out_val is not None else "None"
-                            logger.info(f"[SENTINEL DEBUG]     ✅ {out_id}: {val_type} = {val_preview}")
                 except Exception as e:
                     outputs_dict = {}
                     error = f"{type(e).__name__}: {e}"
