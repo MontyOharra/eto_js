@@ -20,7 +20,7 @@ class NumberEquals(ComparatorModule):
     title = "Number Equals"
     description = "Check if input number equals a configured value"
     category = "Number"
-    color = "#F59E0B"  # Orange
+    color = "#EF4444"  # red-500 (middle ground between light and dark red)
     ConfigModel = NumberEqualsConfig
 
     @classmethod
@@ -78,7 +78,7 @@ class NumberGreaterThan(ComparatorModule):
     title = "Number Greater Than"
     description = "Check if input number is greater than a threshold"
     category = "Number"
-    color = "#F59E0B"  # Orange
+    color = "#EF4444"  # red-500 (middle ground between light and dark red)
     ConfigModel = NumberGreaterThanConfig
 
     @classmethod
@@ -166,7 +166,7 @@ class NumberLessThan(ComparatorModule):
     title = "Number Less Than"
     description = "Check if input number is less than a threshold"
     category = "Number"
-    color = "#F59E0B"  # Orange
+    color = "#EF4444"  # red-500 (middle ground between light and dark red)
     ConfigModel = NumberLessThanConfig
 
     @classmethod
@@ -227,193 +227,4 @@ class NumberLessThan(ComparatorModule):
         # Perform the comparison
         result = value < cfg.threshold
 
-        return {output_node_id: result}
-
-
-# Number In Range
-class NumberInRangeConfig(BaseModel):
-    min: Union[int, float] = Field(..., description="Minimum value (inclusive if inclusive=True)")
-    max: Union[int, float] = Field(..., description="Maximum value (inclusive if inclusive=True)")
-    inclusive: bool = Field(True, description="Whether range bounds are inclusive")
-
-@register
-class NumberInRange(ComparatorModule):
-    id = "number_in_range"
-    version = "1.0.0"
-    title = "Number In Range"
-    description = "Check if input number is within a specified range"
-    category = "Number"
-    color = "#F59E0B"  # Orange
-    ConfigModel = NumberInRangeConfig
-
-    @classmethod
-    def meta(cls) -> ModuleMeta:
-        return ModuleMeta(
-            io_shape=IOShape(
-                inputs=IOSideShape(nodes=[
-                    NodeGroup(
-                        label="value",
-                        min_count=1,
-                        max_count=1,
-                        typing=NodeTypeRule(allowed_types=["int", "float"])
-                    )
-                ]),
-                outputs=IOSideShape(nodes=[
-                    NodeGroup(
-                        label="in_range",
-                        min_count=1,
-                        max_count=1,
-                        typing=NodeTypeRule(allowed_types=["bool"])
-                    )
-                ])
-            )
-        )
-
-    def run(self, inputs: Dict[str, Any], cfg: NumberInRangeConfig, context: Any = None, services: Any = None) -> Dict[str, Any]:
-        import math
-
-        # Extract input
-        input_node_id = list(inputs.keys())[0]
-        value = inputs[input_node_id]
-
-        # Get output node_id from context
-        output_node_id = context.outputs[0].node_id
-
-        # Handle None
-        if value is None:
-            return {output_node_id: False}
-
-        # Validate input type
-        if not isinstance(value, (int, float)):
-            raise TypeError(f"Expected int or float, got {type(value).__name__}")
-
-        # Handle NaN - always outside any range
-        if math.isnan(value):
-            return {output_node_id: False}
-
-        # Handle infinity
-        if math.isinf(value):
-            if math.isinf(cfg.min) or math.isinf(cfg.max):
-                # Special case: if range bounds include infinity
-                if cfg.inclusive:
-                    result = cfg.min <= value <= cfg.max
-                else:
-                    result = cfg.min < value < cfg.max
-            else:
-                # Finite range, infinite value = not in range
-                result = False
-            return {output_node_id: result}
-
-        # Normal range check
-        if cfg.inclusive:
-            result = cfg.min <= value <= cfg.max
-        else:
-            result = cfg.min < value < cfg.max
-
-        return {output_node_id: result}
-
-
-# Number Is Even
-class NumberIsEvenConfig(BaseModel):
-    pass  # No configuration needed
-
-@register
-class NumberIsEven(ComparatorModule):
-    id = "number_is_even"
-    version = "1.0.0"
-    title = "Number Is Even"
-    description = "Check if input integer is even"
-    category = "Number"
-    color = "#F59E0B"  # Orange
-    ConfigModel = NumberIsEvenConfig
-
-    @classmethod
-    def meta(cls) -> ModuleMeta:
-        return ModuleMeta(
-            io_shape=IOShape(
-                inputs=IOSideShape(nodes=[
-                    NodeGroup(
-                        label="number",
-                        min_count=1,
-                        max_count=1,
-                        typing=NodeTypeRule(allowed_types=["int"])
-                    )
-                ]),
-                outputs=IOSideShape(nodes=[
-                    NodeGroup(
-                        label="is_even",
-                        min_count=1,
-                        max_count=1,
-                        typing=NodeTypeRule(allowed_types=["bool"])
-                    )
-                ])
-            )
-        )
-
-    def run(self, inputs: Dict[str, Any], cfg: NumberIsEvenConfig, context: Any = None, services: Any = None) -> Dict[str, Any]:
-        # Extract input
-        input_node_id = list(inputs.keys())[0]
-        number = inputs[input_node_id]
-
-        # Get output node_id from context
-        output_node_id = context.outputs[0].node_id
-
-        # Validate input type
-        if not isinstance(number, int):
-            raise TypeError(f"Expected int, got {type(number).__name__}")
-
-        result = number % 2 == 0
-        return {output_node_id: result}
-
-
-# Number Is Odd
-class NumberIsOddConfig(BaseModel):
-    pass  # No configuration needed
-
-@register
-class NumberIsOdd(ComparatorModule):
-    id = "number_is_odd"
-    version = "1.0.0"
-    title = "Number Is Odd"
-    description = "Check if input integer is odd"
-    category = "Number"
-    color = "#F59E0B"  # Orange
-    ConfigModel = NumberIsOddConfig
-
-    @classmethod
-    def meta(cls) -> ModuleMeta:
-        return ModuleMeta(
-            io_shape=IOShape(
-                inputs=IOSideShape(nodes=[
-                    NodeGroup(
-                        label="number",
-                        min_count=1,
-                        max_count=1,
-                        typing=NodeTypeRule(allowed_types=["int"])
-                    )
-                ]),
-                outputs=IOSideShape(nodes=[
-                    NodeGroup(
-                        label="is_odd",
-                        min_count=1,
-                        max_count=1,
-                        typing=NodeTypeRule(allowed_types=["bool"])
-                    )
-                ])
-            )
-        )
-
-    def run(self, inputs: Dict[str, Any], cfg: NumberIsOddConfig, context: Any = None, services: Any = None) -> Dict[str, Any]:
-        # Extract input
-        input_node_id = list(inputs.keys())[0]
-        number = inputs[input_node_id]
-
-        # Get output node_id from context
-        output_node_id = context.outputs[0].node_id
-
-        # Validate input type
-        if not isinstance(number, int):
-            raise TypeError(f"Expected int, got {type(number).__name__}")
-
-        result = number % 2 != 0
         return {output_node_id: result}
