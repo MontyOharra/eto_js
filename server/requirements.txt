@@ -31,3 +31,9 @@ sqlparse>=0.4.0
 
 # Fuzzy string matching
 rapidfuzz>=3.0.0
+
+# Address parsing
+usaddress>=0.5.10
+
+# LLM APIs for text extraction
+openai>=1.0.0
