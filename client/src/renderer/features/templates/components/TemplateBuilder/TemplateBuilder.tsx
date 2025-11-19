@@ -141,8 +141,8 @@ export function TemplateBuilder({
 
       setVisualState({});
 
-      // Clear processed PDF data to trigger re-extraction with new pages
-      setProcessedData(null);
+      // Clear extracted objects to trigger re-extraction with new pages
+      setExtractedObjects(null);
 
       // Go back to step 1 if we're on a later step
       if (currentStep !== 'page-selection') {
@@ -187,14 +187,16 @@ export function TemplateBuilder({
       setSimulationResult(null);
       setCenterTrigger(0);
       setIsSaving(false);
-      setProcessedData(null);
+      setPdfBlobUrl(null);
+      setExtractedObjects(null);
     }
   }, [isOpen, templateId]);
 
   // PDF Data Management - Centralized at TemplateBuilder level
   // Create mode: Process local PDF file
   const { mutateAsync: processObjects, isPending: isProcessing } = useProcessPdfObjects();
-  const [processedData, setProcessedData] = useState<{ objects: PdfObjects; url: string } | null>(null);
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+  const [extractedObjects, setExtractedObjects] = useState<PdfObjects | null>(null);
 
   // Edit mode: Fetch PDF data from backend
   // In version/edit mode (templateId exists), fetch all objects - no page filtering
@@ -204,51 +206,64 @@ export function TemplateBuilder({
     undefined // Don't filter by pages for stored PDFs - get all objects
   );
 
-  // Process local file when modal opens (create mode)
+  // Create blob URL immediately when pdfFile is provided (for PageSelectionStep to display PDF)
   useEffect(() => {
-    if (pdfFile && !processedData) {
+    if (pdfFile && !pdfBlobUrl) {
+      const blobUrl = URL.createObjectURL(pdfFile);
+      setPdfBlobUrl(blobUrl);
+      console.log('[TemplateBuilder] Created blob URL for PDF preview');
+    }
+  }, [pdfFile, pdfBlobUrl]);
+
+  // Extract objects only after page selection is complete (create mode)
+  // Don't extract objects until user has selected pages and moved to signature-objects step
+  useEffect(() => {
+    if (pdfFile && !extractedObjects && currentStep !== 'page-selection' && selectedPages.length > 0) {
       const processPdf = async () => {
         try {
+          console.log('[TemplateBuilder] Extracting objects for selected pages:', selectedPages);
           // Pass selectedPages for filtering (convert 0-indexed to 1-indexed)
           const result = await processObjects({
             pdfFile,
-            pages: selectedPages.length > 0 ? selectedPages.map(p => p + 1) : undefined,
+            pages: selectedPages.map(p => p + 1), // Always has pages since we check selectedPages.length > 0
           });
-          const blobUrl = URL.createObjectURL(pdfFile);
-          setProcessedData({
-            objects: result.objects,
-            url: blobUrl,
-          });
+          setExtractedObjects(result.objects);
         } catch (err) {
           console.error('Failed to process PDF:', err);
         }
       };
       processPdf();
     }
-  }, [pdfFile, processObjects, processedData, selectedPages]);
+  }, [pdfFile, processObjects, extractedObjects, currentStep, selectedPages]);
 
   // Cleanup blob URL on unmount
   useEffect(() => {
     return () => {
-      if (processedData?.url) {
-        URL.revokeObjectURL(processedData.url);
+      if (pdfBlobUrl) {
+        URL.revokeObjectURL(pdfBlobUrl);
       }
     };
-  }, [processedData]);
+  }, [pdfBlobUrl]);
 
   // Determine which data source to use
   const isLoadingPdf = pdfFile ? isProcessing : isFetching;
   const pdfError = fetchError;
 
   // Normalize data structure (both modes now have same shape: { objects: PdfObjects, url: string })
+  // For page-selection step, only URL is needed; objects can be null
   const activePdfData = useMemo(() => {
     if (pdfFile) {
-      return processedData;
+      // Create mode: use blob URL and extracted objects (null during page-selection step)
+      if (pdfBlobUrl) {
+        return { objects: extractedObjects, url: pdfBlobUrl };
+      }
+      return null;
     } else if (pdfData) {
+      // Edit mode: use fetched data
       return { objects: pdfData.objectsData.objects, url: pdfData.url };
     }
     return null;
-  }, [pdfFile, processedData, pdfData]);
+  }, [pdfFile, pdfBlobUrl, extractedObjects, pdfData]);
 
   // Create complete pipeline state for validation (includes entry points)
   const completePipelineState = useMemo<PipelineState>(() => ({
@@ -547,7 +562,16 @@ export function TemplateBuilder({
                 />
               )}
 
-              {currentStep === 'signature-objects' && (
+              {currentStep === 'signature-objects' && !activePdfData.objects && (
+                <div className="flex items-center justify-center h-full bg-gray-900">
+                  <div className="text-center">
+                    <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mb-4"></div>
+                    <p className="text-gray-400">Extracting objects from selected pages...</p>
+                  </div>
+                </div>
+              )}
+
+              {currentStep === 'signature-objects' && activePdfData.objects && (
                 <SignatureObjectsStep
                   pdfUrl={activePdfData.url}
                   pdfObjects={activePdfData.objects}
@@ -561,7 +585,7 @@ export function TemplateBuilder({
                 />
               )}
 
-              {currentStep === 'extraction-fields' && (
+              {currentStep === 'extraction-fields' && activePdfData.objects && (
                 <ExtractionFieldsStep
                   pdfUrl={activePdfData.url}
                   pdfObjects={activePdfData.objects}
@@ -591,7 +615,7 @@ export function TemplateBuilder({
                 />
               )}
 
-              {currentStep === 'testing' && (
+              {currentStep === 'testing' && activePdfData.objects && (
                 <TestingStep
                   pdfUrl={activePdfData.url}
                   pdfObjects={activePdfData.objects}
