@@ -4,7 +4,7 @@
  * Manages state for signature objects, extraction fields, and pipeline
  */
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { TemplateBuilderHeader } from './TemplateBuilderHeader';
 import { TemplateBuilderFooter } from './TemplateBuilderFooter';
 import { PageSelectionStep } from './PageSelectionStep';
@@ -101,6 +101,55 @@ export function TemplateBuilder({
 
   // Saving state
   const [isSaving, setIsSaving] = useState(false);
+
+  // Track previous selected pages to detect changes
+  const prevSelectedPagesRef = useRef<number[]>([]);
+
+  // Reset all state when selected pages change (only in create mode)
+  useEffect(() => {
+    if (templateId) return; // Only apply in create mode
+
+    // Compare current selectedPages with previous
+    const prevPages = prevSelectedPagesRef.current;
+    const currentPages = selectedPages;
+
+    // Check if pages have actually changed
+    const hasChanged =
+      prevPages.length !== currentPages.length ||
+      prevPages.some((page, idx) => page !== currentPages[idx]);
+
+    if (hasChanged && prevPages.length > 0) {
+      // Pages changed after initial selection - reset all subsequent state
+      console.log('[TemplateBuilder] Selected pages changed, resetting all state');
+
+      setSelectedSignatureObjects({
+        text_words: [],
+        graphic_rects: [],
+        graphic_lines: [],
+        graphic_curves: [],
+        images: [],
+        tables: [],
+      });
+
+      setExtractionFields([]);
+
+      setPipelineState({
+        entry_points: [],
+        modules: [],
+        connections: [],
+      });
+
+      setVisualState({});
+
+      // Go back to step 1 if we're on a later step
+      if (currentStep !== 'page-selection') {
+        setCurrentStep('page-selection');
+      }
+    }
+
+    // Update ref for next comparison
+    prevSelectedPagesRef.current = [...currentPages];
+  }, [selectedPages, templateId, currentStep]);
 
   // Testing state
   const [viewMode, setViewMode] = useState<'summary' | 'detail'>('summary');
