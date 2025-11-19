@@ -13,6 +13,7 @@ function DashboardLayout() {
     { name: "Templates", href: "/dashboard/pdf-templates" },
     { name: "Transformation Pipeline", href: "/dashboard/pipelines" },
     { name: "Configurations", href: "/dashboard/configs" },
+    { name: "Test", href: "/dashboard/test" },
   ];
 
   return (

@@ -13,6 +13,7 @@ import { Route as LoginRouteImport } from './pages/login'
 import { Route as DashboardRouteRouteImport } from './pages/dashboard/route'
 import { Route as IndexRouteImport } from './pages/index'
 import { Route as DashboardIndexRouteImport } from './pages/dashboard/index'
+import { Route as DashboardTestIndexRouteImport } from './pages/dashboard/test/index'
 import { Route as DashboardPipelinesIndexRouteImport } from './pages/dashboard/pipelines/index'
 import { Route as DashboardPdfTemplatesIndexRouteImport } from './pages/dashboard/pdf-templates/index'
 import { Route as DashboardEtoIndexRouteImport } from './pages/dashboard/eto/index'
@@ -36,6 +37,11 @@ const IndexRoute = IndexRouteImport.update({
 const DashboardIndexRoute = DashboardIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => DashboardRouteRoute,
+} as any)
+const DashboardTestIndexRoute = DashboardTestIndexRouteImport.update({
+  id: '/test/',
+  path: '/test/',
   getParentRoute: () => DashboardRouteRoute,
 } as any)
 const DashboardPipelinesIndexRoute = DashboardPipelinesIndexRouteImport.update({
@@ -69,6 +75,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/eto': typeof DashboardEtoIndexRoute
   '/dashboard/pdf-templates': typeof DashboardPdfTemplatesIndexRoute
   '/dashboard/pipelines': typeof DashboardPipelinesIndexRoute
+  '/dashboard/test': typeof DashboardTestIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -78,6 +85,7 @@ export interface FileRoutesByTo {
   '/dashboard/eto': typeof DashboardEtoIndexRoute
   '/dashboard/pdf-templates': typeof DashboardPdfTemplatesIndexRoute
   '/dashboard/pipelines': typeof DashboardPipelinesIndexRoute
+  '/dashboard/test': typeof DashboardTestIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -89,6 +97,7 @@ export interface FileRoutesById {
   '/dashboard/eto/': typeof DashboardEtoIndexRoute
   '/dashboard/pdf-templates/': typeof DashboardPdfTemplatesIndexRoute
   '/dashboard/pipelines/': typeof DashboardPipelinesIndexRoute
+  '/dashboard/test/': typeof DashboardTestIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -101,6 +110,7 @@ export interface FileRouteTypes {
     | '/dashboard/eto'
     | '/dashboard/pdf-templates'
     | '/dashboard/pipelines'
+    | '/dashboard/test'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -110,6 +120,7 @@ export interface FileRouteTypes {
     | '/dashboard/eto'
     | '/dashboard/pdf-templates'
     | '/dashboard/pipelines'
+    | '/dashboard/test'
   id:
     | '__root__'
     | '/'
@@ -120,6 +131,7 @@ export interface FileRouteTypes {
     | '/dashboard/eto/'
     | '/dashboard/pdf-templates/'
     | '/dashboard/pipelines/'
+    | '/dashboard/test/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -156,6 +168,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/dashboard/'
       preLoaderRoute: typeof DashboardIndexRouteImport
+      parentRoute: typeof DashboardRouteRoute
+    }
+    '/dashboard/test/': {
+      id: '/dashboard/test/'
+      path: '/test'
+      fullPath: '/dashboard/test'
+      preLoaderRoute: typeof DashboardTestIndexRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
     '/dashboard/pipelines/': {
@@ -195,6 +214,7 @@ interface DashboardRouteRouteChildren {
   DashboardEtoIndexRoute: typeof DashboardEtoIndexRoute
   DashboardPdfTemplatesIndexRoute: typeof DashboardPdfTemplatesIndexRoute
   DashboardPipelinesIndexRoute: typeof DashboardPipelinesIndexRoute
+  DashboardTestIndexRoute: typeof DashboardTestIndexRoute
 }
 
 const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
@@ -203,6 +223,7 @@ const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
   DashboardEtoIndexRoute: DashboardEtoIndexRoute,
   DashboardPdfTemplatesIndexRoute: DashboardPdfTemplatesIndexRoute,
   DashboardPipelinesIndexRoute: DashboardPipelinesIndexRoute,
+  DashboardTestIndexRoute: DashboardTestIndexRoute,
 }
 
 const DashboardRouteRouteWithChildren = DashboardRouteRoute._addFileChildren(
