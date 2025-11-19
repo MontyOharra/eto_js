@@ -447,7 +447,7 @@ export function TemplateBuilder({
         />
 
         {/* Body - Dynamic Step Content */}
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-hidden min-h-0">
           {/* Loading state for PDF */}
           {isLoadingPdf && (
             <div className="h-full w-full flex items-center justify-center bg-gray-900">

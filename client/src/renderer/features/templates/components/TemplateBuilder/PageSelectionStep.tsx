@@ -74,44 +74,47 @@ export function PageSelectionStep({
   }, [numPages]);
 
   return (
-    <Document
-      file={pdfUrl}
-      onLoadSuccess={onDocumentLoadSuccess}
-      loading={
-        <div className="flex items-center justify-center h-full w-full bg-gray-900">
-          <p className="text-gray-400">Loading PDF...</p>
-        </div>
-      }
-      error={
-        <div className="flex items-center justify-center h-full w-full bg-gray-900">
-          <p className="text-red-400">Failed to load PDF</p>
-        </div>
-      }
-    >
-      {numPages > 0 ? (
-        <div className="flex h-full w-full bg-gray-900 overflow-hidden">
-          <PageListSidebar
-            totalPages={numPages}
-            selectedPages={selectedPages}
-            onTogglePage={handleTogglePage}
-            onSelectAll={handleSelectAll}
-            onDeselectAll={handleDeselectAll}
-            onFocusPage={setFocusedPageIndex}
-          />
+    <div className="h-full w-full overflow-hidden">
+      <Document
+        file={pdfUrl}
+        onLoadSuccess={onDocumentLoadSuccess}
+        className="h-full w-full"
+        loading={
+          <div className="flex items-center justify-center h-full w-full bg-gray-900">
+            <p className="text-gray-400">Loading PDF...</p>
+          </div>
+        }
+        error={
+          <div className="flex items-center justify-center h-full w-full bg-gray-900">
+            <p className="text-red-400">Failed to load PDF</p>
+          </div>
+        }
+      >
+        {numPages > 0 ? (
+          <div className="flex h-full w-full bg-gray-900 overflow-hidden">
+            <PageListSidebar
+              totalPages={numPages}
+              selectedPages={selectedPages}
+              onTogglePage={handleTogglePage}
+              onSelectAll={handleSelectAll}
+              onDeselectAll={handleDeselectAll}
+              onFocusPage={setFocusedPageIndex}
+            />
 
-          <PageCarousel
-            totalPages={numPages}
-            selectedPages={selectedPages}
-            onTogglePage={handleTogglePage}
-            focusedPageIndex={focusedPageIndex}
-            onFocusChange={setFocusedPageIndex}
-          />
-        </div>
-      ) : (
-        <div className="flex items-center justify-center h-full w-full bg-gray-900">
-          <p className="text-gray-400">Loading pages...</p>
-        </div>
-      )}
-    </Document>
+            <PageCarousel
+              totalPages={numPages}
+              selectedPages={selectedPages}
+              onTogglePage={handleTogglePage}
+              focusedPageIndex={focusedPageIndex}
+              onFocusChange={setFocusedPageIndex}
+            />
+          </div>
+        ) : (
+          <div className="flex items-center justify-center h-full w-full bg-gray-900">
+            <p className="text-gray-400">Loading pages...</p>
+          </div>
+        )}
+      </Document>
+    </div>
   );
 }

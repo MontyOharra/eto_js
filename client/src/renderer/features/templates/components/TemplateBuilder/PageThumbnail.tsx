@@ -23,13 +23,23 @@ export function PageThumbnail({
   className = '',
 }: PageThumbnailProps) {
   const [isLoading, setIsLoading] = useState(true);
+  const [baseDimensions, setBaseDimensions] = useState<{ width: number; height: number } | null>(null);
+
+  // Fixed high-quality render width
+  const RENDER_WIDTH = 500; // Fixed render width at high quality
 
   console.log('[PageThumbnail] Rendering page:', pageNumber, 'width:', width);
+
+  // Calculate the scale factor to transform rendered page to desired width
+  const displayScale = baseDimensions ? width / baseDimensions.width : width / RENDER_WIDTH;
+
+  // Calculate actual displayed height after transform
+  const displayHeight = baseDimensions ? baseDimensions.height * displayScale : (width * 11 / 8.5);
 
   return (
     <div
       className={`
-        relative cursor-pointer transition-all
+        relative cursor-pointer
         ${isSelected ? 'ring-4 ring-blue-500' : 'ring-1 ring-gray-600'}
         rounded overflow-hidden bg-gray-900
         hover:ring-blue-400
@@ -38,6 +48,8 @@ export function PageThumbnail({
       style={{
         width: `${width}px`,
         minWidth: `${width}px`,
+        height: `${displayHeight}px`,
+        transition: 'none', // Remove all transitions for instant resizing
       }}
       onClick={() => onClick?.(pageNumber)}
     >
@@ -60,32 +72,43 @@ export function PageThumbnail({
       {isLoading && (
         <div
           className="absolute inset-0 flex items-center justify-center bg-gray-800"
-          style={{ width, aspectRatio: '8.5 / 11' }}
+          style={{ aspectRatio: '8.5 / 11' }}
         >
           <p className="text-gray-500 text-xs">Loading...</p>
         </div>
       )}
 
-      {/* PDF Page */}
-      <Page
-        pageNumber={pageNumber}
-        width={width}
-        renderTextLayer={false}
-        renderAnnotationLayer={false}
-        onLoadSuccess={(page) => {
-          console.log('[PageThumbnail] Page loaded successfully:', pageNumber);
-          setIsLoading(false);
+      {/* PDF Page with CSS scaling */}
+      <div
+        style={{
+          transform: `scale(${displayScale})`,
+          transformOrigin: 'top left',
+          width: `${RENDER_WIDTH}px`,
         }}
-        onLoadError={(error) => {
-          console.error('[PageThumbnail] Page load error:', pageNumber, error);
-        }}
-        loading=""
-        error={
-          <div className="flex items-center justify-center h-full bg-gray-800">
-            <p className="text-red-400 text-xs">Error loading page {pageNumber}</p>
-          </div>
-        }
-      />
+      >
+        <Page
+          pageNumber={pageNumber}
+          width={RENDER_WIDTH}
+          renderTextLayer={false}
+          renderAnnotationLayer={false}
+          onLoadSuccess={(page) => {
+            console.log('[PageThumbnail] Page loaded successfully:', pageNumber);
+            // Store base dimensions at scale 1.0
+            const viewport = page.getViewport({ scale: 1.0 });
+            setBaseDimensions({ width: viewport.width, height: viewport.height });
+            setIsLoading(false);
+          }}
+          onLoadError={(error) => {
+            console.error('[PageThumbnail] Page load error:', pageNumber, error);
+          }}
+          loading=""
+          error={
+            <div className="flex items-center justify-center h-full bg-gray-800">
+              <p className="text-red-400 text-xs">Error loading page {pageNumber}</p>
+            </div>
+          }
+        />
+      </div>
     </div>
   );
 }

@@ -4,7 +4,7 @@
  * Center page is in focus and can be clicked to select/deselect
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { PageThumbnail } from './PageThumbnail';
 
 interface PageCarouselProps {
@@ -23,6 +23,8 @@ export function PageCarousel({
   onFocusChange,
 }: PageCarouselProps) {
   const selectedSet = new Set(selectedPages);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
   const canGoPrev = focusedPageIndex > 0;
   const canGoNext = focusedPageIndex < totalPages - 1;
@@ -38,6 +40,80 @@ export function PageCarousel({
       onFocusChange(focusedPageIndex + 1);
     }
   };
+
+  // Measure container size on mount and resize
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    let rafId: number | null = null;
+
+    const updateSize = () => {
+      if (containerRef.current) {
+        const { width, height } = containerRef.current.getBoundingClientRect();
+
+        // Update immediately using requestAnimationFrame for smooth updates
+        if (width > 0 && height > 0) {
+          setContainerSize({ width, height });
+        }
+      }
+    };
+
+    const handleResize = (entries: ResizeObserverEntry[]) => {
+      // Cancel any pending updates
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+      }
+
+      // Schedule update on next frame
+      rafId = requestAnimationFrame(updateSize);
+    };
+
+    // Initial measurement
+    updateSize();
+
+    // Watch for resize - throttled to animation frames
+    const resizeObserver = new ResizeObserver(handleResize);
+    resizeObserver.observe(containerRef.current);
+
+    return () => {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+      }
+      resizeObserver.disconnect();
+    };
+  }, []);
+
+  // Calculate thumbnail widths based on container size
+  // Standard letter aspect ratio: 8.5:11 = 0.773
+  const PDF_ASPECT_RATIO = 8.5 / 11;
+
+  // Calculate max widths that fit in the container
+  // Layout: [btn] [side] [center] [side] [btn]
+  // Allocate: 48px per button, gaps between elements
+  const buttonWidth = 48;
+  const gapWidth = 16;
+  const totalGaps = 4; // gaps between 5 elements
+
+  const availableWidth = containerSize.width - (2 * buttonWidth) - (totalGaps * gapWidth);
+  const availableHeight = containerSize.height; // Use full container height (padding already in container)
+
+  // Distribute width: center gets 50%, sides get 20% each (10% padding)
+  const maxCenterWidth = availableWidth * 0.5;
+  const maxSideWidth = availableWidth * 0.2;
+
+  // Calculate width based on height constraint (maintaining aspect ratio)
+  // Reserve space for the "Click to select" text (40px)
+  const maxCenterWidthByHeight = (availableHeight - 40) * PDF_ASPECT_RATIO;
+  const maxSideWidthByHeight = availableHeight * PDF_ASPECT_RATIO * 0.5; // sides are smaller
+
+  // Use the smaller of width/height constraints
+  // Default to reasonable sizes if container not measured yet
+  const centerWidth = containerSize.width > 0 && containerSize.height > 0
+    ? Math.max(150, Math.min(maxCenterWidth, maxCenterWidthByHeight, 500))
+    : 400;
+  const sideWidth = containerSize.width > 0 && containerSize.height > 0
+    ? Math.max(100, Math.min(maxSideWidth, maxSideWidthByHeight, 250))
+    : 200;
 
   // Keyboard navigation
   useEffect(() => {
@@ -74,8 +150,8 @@ export function PageCarousel({
       </div>
 
       {/* Carousel container - Flexible height */}
-      <div className="flex-1 flex items-center justify-center p-6 overflow-hidden min-h-0">
-        <div className="flex items-center justify-center gap-4 max-h-full">
+      <div ref={containerRef} className="flex-1 flex items-center justify-center p-6 overflow-hidden min-h-0" style={{ border: '3px solid green' }}>
+        <div className="flex items-center justify-center gap-4 w-full h-full" style={{ border: '2px solid blue' }}>
           {/* Left navigation button */}
           <button
             onClick={handlePrev}
@@ -90,23 +166,23 @@ export function PageCarousel({
 
           {/* Left page (preview or placeholder) */}
           {leftPage !== null ? (
-            <div className="opacity-50 hover:opacity-70 transition-opacity cursor-pointer">
+            <div className="opacity-50 hover:opacity-70 cursor-pointer flex-shrink-0 flex items-center justify-center" style={{ width: `${sideWidth}px`, transition: 'opacity 200ms', border: '2px solid orange' }}>
               <PageThumbnail
                 pageNumber={leftPage + 1}
-                width={250}
+                width={sideWidth}
                 isSelected={selectedSet.has(leftPage)}
                 onClick={() => onTogglePage(leftPage)}
               />
             </div>
           ) : (
-            <div style={{ width: '250px', minWidth: '250px' }} />
+            <div style={{ width: `${sideWidth}px`, flexShrink: 0, border: '2px solid orange' }} />
           )}
 
           {/* Center page (focused) */}
-          <div className="flex flex-col items-center">
+          <div className="flex flex-col items-center flex-shrink-0" style={{ width: `${centerWidth}px`, border: '2px solid purple' }}>
             <PageThumbnail
               pageNumber={centerPage + 1}
-              width={500}
+              width={centerWidth}
               isSelected={selectedSet.has(centerPage)}
               onClick={() => onTogglePage(centerPage)}
               className="shadow-2xl"
@@ -118,16 +194,16 @@ export function PageCarousel({
 
           {/* Right page (preview or placeholder) */}
           {rightPage !== null ? (
-            <div className="opacity-50 hover:opacity-70 transition-opacity cursor-pointer">
+            <div className="opacity-50 hover:opacity-70 cursor-pointer flex-shrink-0 flex items-center justify-center" style={{ width: `${sideWidth}px`, transition: 'opacity 200ms', border: '2px solid orange' }}>
               <PageThumbnail
                 pageNumber={rightPage + 1}
-                width={250}
+                width={sideWidth}
                 isSelected={selectedSet.has(rightPage)}
                 onClick={() => onTogglePage(rightPage)}
               />
             </div>
           ) : (
-            <div style={{ width: '250px', minWidth: '250px' }} />
+            <div style={{ width: `${sideWidth}px`, flexShrink: 0, border: '2px solid orange' }} />
           )}
 
           {/* Right navigation button */}
@@ -142,16 +218,6 @@ export function PageCarousel({
             </svg>
           </button>
         </div>
-      </div>
-
-      {/* Keyboard hint - Fixed height */}
-      <div className="p-3 border-t border-gray-700 text-center flex-shrink-0 h-12 flex items-center justify-center">
-        <p className="text-gray-400 text-xs">
-          Use <kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-300">←</kbd>{' '}
-          <kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-300">→</kbd> to navigate
-          {' • '}
-          <kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-300">Space</kbd> to select
-        </p>
       </div>
     </div>
   );
