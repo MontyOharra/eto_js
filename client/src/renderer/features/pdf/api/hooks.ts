@@ -152,6 +152,10 @@ export function useUploadPdf() {
 export function useProcessPdfObjects() {
   return useMutation({
     mutationFn: async ({ pdfFile, pages }: { pdfFile: File; pages?: number[] }): Promise<PdfProcessResponse> => {
+      if (!pdfFile) {
+        throw new Error('PDF file is required');
+      }
+
       const formData = new FormData();
       formData.append('pdf_file', pdfFile);
 

@@ -13,7 +13,7 @@ import { TemplateCard } from '../../../features/templates/components';
 import { TemplateBuilder, TemplateBuilderData } from '../../../features/templates/components/TemplateBuilder';
 import { TemplateDetailModal } from '../../../features/templates/components/TemplateDetail';
 import { TemplateListItem, TemplateStatus } from '../../../features/templates/types';
-import { useUploadPdf, useProcessPdfObjects, usePdfMetadata, type PdfFileMetadata } from '../../../features/pdf';
+import { useUploadPdf, usePdfMetadata, type PdfFileMetadata } from '../../../features/pdf';
 import { apiClient } from '../../../shared/api/client';
 import { API_CONFIG } from '../../../shared/api/config';
 
@@ -46,9 +46,6 @@ function TemplatesPage() {
   const [builderTemplateId, setBuilderTemplateId] = useState<number | null>(null);
   const [builderInitialData, setBuilderInitialData] = useState<Partial<TemplateBuilderData> | undefined>(undefined);
   const [builderKey, setBuilderKey] = useState(0);
-
-  // PDF processing hook (for new templates - doesn't store PDF)
-  const { mutateAsync: processObjects } = useProcessPdfObjects();
 
   // PDF upload hook (only used when saving)
   const { mutateAsync: uploadPdf } = useUploadPdf();
@@ -217,23 +214,14 @@ function TemplatesPage() {
           return;
         }
 
-        try {
-          // Process PDF objects WITHOUT storing the PDF
-          console.log('Processing PDF objects...');
-          const processedData = await processObjects(file);
-          console.log('PDF objects extracted:', processedData);
-
-          // Open builder with local file (no PDF ID or template ID yet)
-          setBuilderPdfFile(file);
-          setBuilderPdfFileId(null); // No ID yet - will be created on save
-          setBuilderTemplateId(null); // No template ID for create mode
-          setBuilderInitialData(undefined); // No initial data for create mode
-          setBuilderKey(prev => prev + 1); // Force fresh component instance
-          setIsBuilderOpen(true);
-        } catch (err) {
-          console.error('Failed to process PDF:', err);
-          alert(`Failed to process PDF: ${err instanceof Error ? err.message : 'Unknown error'}`);
-        }
+        // Open builder with local file (no PDF ID or template ID yet)
+        // Object extraction will happen inside the modal after user selects pages
+        setBuilderPdfFile(file);
+        setBuilderPdfFileId(null); // No ID yet - will be created on save
+        setBuilderTemplateId(null); // No template ID for create mode
+        setBuilderInitialData(undefined); // No initial data for create mode
+        setBuilderKey(prev => prev + 1); // Force fresh component instance
+        setIsBuilderOpen(true);
       }
     };
 
