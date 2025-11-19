@@ -141,6 +141,9 @@ export function TemplateBuilder({
 
       setVisualState({});
 
+      // Clear processed PDF data to trigger re-extraction with new pages
+      setProcessedData(null);
+
       // Go back to step 1 if we're on a later step
       if (currentStep !== 'page-selection') {
         setCurrentStep('page-selection');
@@ -194,14 +197,23 @@ export function TemplateBuilder({
   const [processedData, setProcessedData] = useState<{ objects: PdfObjects; url: string } | null>(null);
 
   // Edit mode: Fetch PDF data from backend
-  const { data: pdfData, isLoading: isFetching, error: fetchError } = usePdfData(pdfFileId);
+  // In version/edit mode (templateId exists), fetch all objects - no page filtering
+  // In create mode with pdfFileId (unlikely scenario), would use selectedPages but we use pdfFile in create mode
+  const { data: pdfData, isLoading: isFetching, error: fetchError } = usePdfData(
+    pdfFileId,
+    undefined // Don't filter by pages for stored PDFs - get all objects
+  );
 
   // Process local file when modal opens (create mode)
   useEffect(() => {
     if (pdfFile && !processedData) {
       const processPdf = async () => {
         try {
-          const result = await processObjects(pdfFile);
+          // Pass selectedPages for filtering (convert 0-indexed to 1-indexed)
+          const result = await processObjects({
+            pdfFile,
+            pages: selectedPages.length > 0 ? selectedPages.map(p => p + 1) : undefined,
+          });
           const blobUrl = URL.createObjectURL(pdfFile);
           setProcessedData({
             objects: result.objects,
@@ -213,7 +225,7 @@ export function TemplateBuilder({
       };
       processPdf();
     }
-  }, [pdfFile, processObjects, processedData]);
+  }, [pdfFile, processObjects, processedData, selectedPages]);
 
   // Cleanup blob URL on unmount
   useEffect(() => {

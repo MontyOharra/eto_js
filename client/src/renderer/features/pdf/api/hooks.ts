@@ -24,9 +24,9 @@ export interface PdfData {
   metadata: PdfFileMetadata;
 }
 
-export function usePdfData(pdfFileId: number | null) {
+export function usePdfData(pdfFileId: number | null, pages?: number[]) {
   return useQuery({
-    queryKey: ['pdf', pdfFileId],
+    queryKey: ['pdf', pdfFileId, pages],
     queryFn: async (): Promise<PdfData> => {
       if (!pdfFileId) {
         throw new Error('No PDF file ID provided');
@@ -34,7 +34,12 @@ export function usePdfData(pdfFileId: number | null) {
 
       // Fetch PDF objects and metadata in parallel
       const [objectsData, metadata] = await Promise.all([
-        apiClient.get<PdfObjectsResponse>(`${baseUrl}/${pdfFileId}/objects`).then(res => res.data),
+        apiClient.get<PdfObjectsResponse>(
+          `${baseUrl}/${pdfFileId}/objects`,
+          {
+            params: pages ? { pages } : undefined,
+          }
+        ).then(res => res.data),
         apiClient.get<PdfFileMetadata>(`${baseUrl}/${pdfFileId}`).then(res => res.data),
       ]);
 
@@ -78,10 +83,11 @@ export function usePdfMetadata(pdfFileId: number | null) {
  */
 export function usePdfObjects(
   pdfFileId: number | null,
-  objectType?: string
+  objectType?: string,
+  pages?: number[]
 ) {
   return useQuery({
-    queryKey: ['pdf', 'objects', pdfFileId, objectType],
+    queryKey: ['pdf', 'objects', pdfFileId, objectType, pages],
     queryFn: async (): Promise<PdfObjectsResponse> => {
       if (!pdfFileId) {
         throw new Error('No PDF file ID provided');
@@ -90,7 +96,10 @@ export function usePdfObjects(
       const response = await apiClient.get<PdfObjectsResponse>(
         `${baseUrl}/${pdfFileId}/objects`,
         {
-          params: objectType ? { object_type: objectType } : undefined,
+          params: {
+            ...(objectType ? { object_type: objectType } : {}),
+            ...(pages ? { pages } : {}),
+          },
         }
       );
       return response.data;
@@ -142,12 +151,17 @@ export function useUploadPdf() {
  */
 export function useProcessPdfObjects() {
   return useMutation({
-    mutationFn: async (pdfFile: File): Promise<PdfProcessResponse> => {
+    mutationFn: async ({ pdfFile, pages }: { pdfFile: File; pages?: number[] }): Promise<PdfProcessResponse> => {
       const formData = new FormData();
       formData.append('pdf_file', pdfFile);
 
+      // Add pages as query parameter if provided
+      const url = pages
+        ? `${baseUrl}/process-objects?${new URLSearchParams({ pages: pages.join(',') })}`
+        : `${baseUrl}/process-objects`;
+
       const response = await apiClient.post<PdfProcessResponse>(
-        `${baseUrl}/process-objects`,
+        url,
         formData,
         {
           headers: {
