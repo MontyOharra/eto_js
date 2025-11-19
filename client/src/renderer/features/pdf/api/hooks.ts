@@ -155,15 +155,11 @@ export function useProcessPdfObjects() {
       const formData = new FormData();
       formData.append('pdf_file', pdfFile);
 
-      // Add pages as query parameter if provided
-      const url = pages
-        ? `${baseUrl}/process-objects?${new URLSearchParams({ pages: pages.join(',') })}`
-        : `${baseUrl}/process-objects`;
-
       const response = await apiClient.post<PdfProcessResponse>(
-        url,
+        `${baseUrl}/process-objects`,
         formData,
         {
+          params: pages ? { pages } : undefined,
           headers: {
             'Content-Type': 'multipart/form-data',
           },
