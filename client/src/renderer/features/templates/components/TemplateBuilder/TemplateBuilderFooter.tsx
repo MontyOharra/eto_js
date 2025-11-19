@@ -4,7 +4,7 @@
  * Includes step progress indicator
  */
 
-type BuilderStep = 'signature-objects' | 'extraction-fields' | 'pipeline' | 'testing';
+type BuilderStep = 'page-selection' | 'signature-objects' | 'extraction-fields' | 'pipeline' | 'testing';
 
 interface StepConfig {
   id: BuilderStep;
@@ -12,7 +12,15 @@ interface StepConfig {
   label: string;
 }
 
-const STEPS: StepConfig[] = [
+const CREATE_MODE_STEPS: StepConfig[] = [
+  { id: 'page-selection', number: 1, label: 'Pages' },
+  { id: 'signature-objects', number: 2, label: 'Signature Objects' },
+  { id: 'extraction-fields', number: 3, label: 'Extraction Fields' },
+  { id: 'pipeline', number: 4, label: 'Pipeline' },
+  { id: 'testing', number: 5, label: 'Testing' },
+];
+
+const VERSION_MODE_STEPS: StepConfig[] = [
   { id: 'signature-objects', number: 1, label: 'Signature Objects' },
   { id: 'extraction-fields', number: 2, label: 'Extraction Fields' },
   { id: 'pipeline', number: 3, label: 'Pipeline' },
@@ -29,6 +37,7 @@ interface TemplateBuilderFooterProps {
   isSaving?: boolean;
   isTesting?: boolean;
   viewMode?: ViewMode;
+  mode: 'create' | 'version';
   onBack: () => void;
   onNext: () => void;
   onTest?: () => void;
@@ -45,6 +54,7 @@ export function TemplateBuilderFooter({
   isSaving = false,
   isTesting = false,
   viewMode = 'summary',
+  mode,
   onBack,
   onNext,
   onTest,
@@ -52,7 +62,12 @@ export function TemplateBuilderFooter({
   onCancel,
   onViewModeChange,
 }: TemplateBuilderFooterProps) {
-  const isFirstStep = currentStep === 'signature-objects';
+  // Select steps array based on mode
+  const STEPS = mode === 'create' ? CREATE_MODE_STEPS : VERSION_MODE_STEPS;
+
+  const isFirstStep = mode === 'create'
+    ? currentStep === 'page-selection'
+    : currentStep === 'signature-objects';
   const isLastStep = currentStep === 'testing';
   const isPipelineStep = currentStep === 'pipeline';
   const currentStepNumber = STEPS.find((s) => s.id === currentStep)?.number || 1;

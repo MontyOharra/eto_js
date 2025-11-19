@@ -7,6 +7,7 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { TemplateBuilderHeader } from './TemplateBuilderHeader';
 import { TemplateBuilderFooter } from './TemplateBuilderFooter';
+import { PageSelectionStep } from './PageSelectionStep';
 import { SignatureObjectsStep } from './SignatureObjectsStep';
 import { ExtractionFieldsStep } from './ExtractionFieldsStep';
 import { PipelineStep } from './PipelineStep';
@@ -20,7 +21,7 @@ import { useSimulateTemplate } from '../../api/hooks';
 import type { SimulateTemplateResponse } from '../../api/types';
 
 // Step type
-type BuilderStep = 'signature-objects' | 'extraction-fields' | 'pipeline' | 'testing';
+type BuilderStep = 'page-selection' | 'signature-objects' | 'extraction-fields' | 'pipeline' | 'testing';
 
 // Props interface
 interface TemplateBuilderProps {
@@ -55,12 +56,17 @@ export function TemplateBuilder({
   onSave,
   initialData,
 }: TemplateBuilderProps) {
-  // Current step
-  const [currentStep, setCurrentStep] = useState<BuilderStep>('signature-objects');
+  // Current step - Start with page-selection for create mode, signature-objects for version mode
+  const [currentStep, setCurrentStep] = useState<BuilderStep>(() => {
+    return templateId ? 'signature-objects' : 'page-selection';
+  });
 
   // Template metadata
   const [templateName, setTemplateName] = useState(initialData?.name || '');
   const [templateDescription, setTemplateDescription] = useState(initialData?.description || '');
+
+  // Selected pages state (for create mode only)
+  const [selectedPages, setSelectedPages] = useState<number[]>([]);
 
   // Signature objects state
   const [selectedSignatureObjects, setSelectedSignatureObjects] = useState<PdfObjects>(
@@ -106,9 +112,10 @@ export function TemplateBuilder({
   useEffect(() => {
     if (!isOpen) {
       // Reset to clean state for next open
-      setCurrentStep('signature-objects');
+      setCurrentStep(templateId ? 'signature-objects' : 'page-selection');
       setTemplateName('');
       setTemplateDescription('');
+      setSelectedPages([]);
       setSelectedSignatureObjects({
         text_words: [],
         graphic_rects: [],
@@ -130,7 +137,7 @@ export function TemplateBuilder({
       setIsSaving(false);
       setProcessedData(null);
     }
-  }, [isOpen]);
+  }, [isOpen, templateId]);
 
   // PDF Data Management - Centralized at TemplateBuilder level
   // Create mode: Process local PDF file
@@ -197,13 +204,16 @@ export function TemplateBuilder({
 
   // Validation logic
   const canProceed = useMemo(() => {
-    // Template name is required for all steps
-    if (templateName.trim().length === 0) {
-      return false;
-    }
-
     switch (currentStep) {
+      case 'page-selection': {
+        // Must have at least one page selected
+        return selectedPages.length > 0;
+      }
       case 'signature-objects': {
+        // Template name is required for all non-page-selection steps
+        if (templateName.trim().length === 0) {
+          return false;
+        }
         // Must have at least one signature object selected
         const hasObjects =
           selectedSignatureObjects.text_words.length > 0 ||
@@ -215,37 +225,56 @@ export function TemplateBuilder({
         return hasObjects;
       }
       case 'extraction-fields': {
+        // Template name required
+        if (templateName.trim().length === 0) {
+          return false;
+        }
         // Must have at least one extraction field
         return extractionFields.length > 0;
       }
       case 'pipeline': {
+        // Template name required
+        if (templateName.trim().length === 0) {
+          return false;
+        }
         // Must have valid pipeline to proceed to testing
         // Use backend validation result
         return isPipelineValid && !isPipelineValidating;
       }
       case 'testing': {
+        // Template name required
+        if (templateName.trim().length === 0) {
+          return false;
+        }
         // All requirements already checked above
         return true;
       }
       default:
         return false;
     }
-  }, [currentStep, selectedSignatureObjects, extractionFields, templateName, isPipelineValid, isPipelineValidating]);
+  }, [currentStep, selectedPages, selectedSignatureObjects, extractionFields, templateName, isPipelineValid, isPipelineValidating]);
 
   const validationMessage = useMemo(() => {
     if (canProceed) return undefined;
 
-    // Template name is required for all steps - check this first
-    if (templateName.trim().length === 0) {
-      return 'Enter a template name to continue';
-    }
-
     switch (currentStep) {
+      case 'page-selection':
+        return 'Select at least one page to continue';
       case 'signature-objects':
+        // Template name is required for all non-page-selection steps
+        if (templateName.trim().length === 0) {
+          return 'Enter a template name to continue';
+        }
         return 'Select at least one signature object to continue';
       case 'extraction-fields':
+        if (templateName.trim().length === 0) {
+          return 'Enter a template name to continue';
+        }
         return 'Create at least one extraction field to continue';
       case 'pipeline':
+        if (templateName.trim().length === 0) {
+          return 'Enter a template name to continue';
+        }
         if (isPipelineValidating) {
           return 'Validating pipeline...';
         }
@@ -260,18 +289,26 @@ export function TemplateBuilder({
         }
         return 'Pipeline is not valid';
       case 'testing':
+        if (templateName.trim().length === 0) {
+          return 'Enter a template name to continue';
+        }
         return 'All requirements met';
       default:
         return undefined;
     }
-  }, [canProceed, currentStep, templateName, pipelineState, isPipelineValidating, pipelineValidationError]);
+  }, [canProceed, currentStep, selectedPages, templateName, pipelineState, isPipelineValidating, pipelineValidationError]);
 
   // Track completed steps
   const completedSteps = useMemo(() => {
     const completed = new Set<BuilderStep>();
 
-    // Template name is required for all steps
+    // Template name is required for all steps except page-selection
     const hasTemplateName = templateName.trim().length > 0;
+
+    // Step 0: Page selection (only for create mode)
+    if (!templateId && selectedPages.length > 0) {
+      completed.add('page-selection');
+    }
 
     // Step 1: Signature objects (requires template name + signature objects)
     const hasSignatureObjects =
@@ -305,13 +342,15 @@ export function TemplateBuilder({
     }
 
     return completed;
-  }, [selectedSignatureObjects, extractionFields, templateName, isPipelineValid, isPipelineValidating]);
+  }, [templateId, selectedPages, selectedSignatureObjects, extractionFields, templateName, isPipelineValid, isPipelineValidating]);
 
   // Navigation handlers
   const handleNext = useCallback(() => {
     if (!canProceed) return;
 
-    if (currentStep === 'signature-objects') {
+    if (currentStep === 'page-selection') {
+      setCurrentStep('signature-objects');
+    } else if (currentStep === 'signature-objects') {
       setCurrentStep('extraction-fields');
     } else if (currentStep === 'extraction-fields') {
       setCurrentStep('pipeline');
@@ -321,14 +360,19 @@ export function TemplateBuilder({
   }, [currentStep, canProceed]);
 
   const handleBack = useCallback(() => {
-    if (currentStep === 'extraction-fields') {
+    if (currentStep === 'signature-objects') {
+      // Only go back to page-selection if in create mode
+      if (!templateId) {
+        setCurrentStep('page-selection');
+      }
+    } else if (currentStep === 'extraction-fields') {
       setCurrentStep('signature-objects');
     } else if (currentStep === 'pipeline') {
       setCurrentStep('extraction-fields');
     } else if (currentStep === 'testing') {
       setCurrentStep('pipeline');
     }
-  }, [currentStep]);
+  }, [currentStep, templateId]);
 
   const handleCancel = useCallback(() => {
     onClose();
@@ -434,6 +478,14 @@ export function TemplateBuilder({
           {/* Steps - Only render when PDF data is available */}
           {!isLoadingPdf && !pdfError && activePdfData && (
             <>
+              {currentStep === 'page-selection' && (
+                <PageSelectionStep
+                  pdfUrl={activePdfData.url}
+                  selectedPages={selectedPages}
+                  onPagesChange={setSelectedPages}
+                />
+              )}
+
               {currentStep === 'signature-objects' && (
                 <SignatureObjectsStep
                   pdfUrl={activePdfData.url}
@@ -501,6 +553,7 @@ export function TemplateBuilder({
           isSaving={isSaving}
           isTesting={simulateMutation.isPending}
           viewMode={viewMode}
+          mode={templateId ? 'version' : 'create'}
           onBack={handleBack}
           onNext={handleNext}
           onTest={handleTest}
