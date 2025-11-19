@@ -150,8 +150,8 @@ export function PageCarousel({
       </div>
 
       {/* Carousel container - Flexible height */}
-      <div ref={containerRef} className="flex-1 flex items-center justify-center p-6 overflow-hidden min-h-0" style={{ border: '3px solid green' }}>
-        <div className="flex items-center justify-center gap-4 w-full h-full" style={{ border: '2px solid blue' }}>
+      <div ref={containerRef} className="flex-1 flex items-center justify-center p-6 overflow-hidden min-h-0">
+        <div className="flex items-center justify-center gap-4 w-full h-full">
           {/* Left navigation button */}
           <button
             onClick={handlePrev}
@@ -166,7 +166,7 @@ export function PageCarousel({
 
           {/* Left page (preview or placeholder) */}
           {leftPage !== null ? (
-            <div className="opacity-50 hover:opacity-70 cursor-pointer flex-shrink-0 flex items-center justify-center" style={{ width: `${sideWidth}px`, transition: 'opacity 200ms', border: '2px solid orange' }}>
+            <div className="opacity-50 hover:opacity-70 cursor-pointer flex-shrink-0 flex items-center justify-center" style={{ width: `${sideWidth}px`, transition: 'opacity 200ms' }}>
               <PageThumbnail
                 pageNumber={leftPage + 1}
                 width={sideWidth}
@@ -175,11 +175,11 @@ export function PageCarousel({
               />
             </div>
           ) : (
-            <div style={{ width: `${sideWidth}px`, flexShrink: 0, border: '2px solid orange' }} />
+            <div style={{ width: `${sideWidth}px`, flexShrink: 0 }} />
           )}
 
           {/* Center page (focused) */}
-          <div className="flex flex-col items-center flex-shrink-0" style={{ width: `${centerWidth}px`, border: '2px solid purple' }}>
+          <div className="flex flex-col items-center flex-shrink-0" style={{ width: `${centerWidth}px` }}>
             <PageThumbnail
               pageNumber={centerPage + 1}
               width={centerWidth}
@@ -194,7 +194,7 @@ export function PageCarousel({
 
           {/* Right page (preview or placeholder) */}
           {rightPage !== null ? (
-            <div className="opacity-50 hover:opacity-70 cursor-pointer flex-shrink-0 flex items-center justify-center" style={{ width: `${sideWidth}px`, transition: 'opacity 200ms', border: '2px solid orange' }}>
+            <div className="opacity-50 hover:opacity-70 cursor-pointer flex-shrink-0 flex items-center justify-center" style={{ width: `${sideWidth}px`, transition: 'opacity 200ms' }}>
               <PageThumbnail
                 pageNumber={rightPage + 1}
                 width={sideWidth}
@@ -203,7 +203,7 @@ export function PageCarousel({
               />
             </div>
           ) : (
-            <div style={{ width: `${sideWidth}px`, flexShrink: 0, border: '2px solid orange' }} />
+            <div style={{ width: `${sideWidth}px`, flexShrink: 0 }} />
           )}
 
           {/* Right navigation button */}

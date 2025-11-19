@@ -30,11 +30,14 @@ export function PageThumbnail({
 
   console.log('[PageThumbnail] Rendering page:', pageNumber, 'width:', width);
 
-  // Calculate the scale factor to transform rendered page to desired width
-  const displayScale = baseDimensions ? width / baseDimensions.width : width / RENDER_WIDTH;
+  // Calculate the scale factor to transform rendered page to fill the desired width
+  // Scale is simply: desired width / rendered width
+  const displayScale = width / RENDER_WIDTH;
 
-  // Calculate actual displayed height after transform
-  const displayHeight = baseDimensions ? baseDimensions.height * displayScale : (width * 11 / 8.5);
+  // Calculate actual displayed height after transform based on PDF aspect ratio
+  const displayHeight = baseDimensions
+    ? (RENDER_WIDTH * baseDimensions.height / baseDimensions.width) * displayScale
+    : (width * 11 / 8.5);
 
   return (
     <div
