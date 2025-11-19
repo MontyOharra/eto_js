@@ -493,6 +493,7 @@ export function TemplateBuilder({
                   templateName={templateName}
                   templateDescription={templateDescription}
                   selectedSignatureObjects={selectedSignatureObjects}
+                  selectedPages={!templateId ? selectedPages : undefined}
                   onTemplateNameChange={setTemplateName}
                   onTemplateDescriptionChange={setTemplateDescription}
                   onSignatureObjectsChange={setSelectedSignatureObjects}
@@ -509,6 +510,7 @@ export function TemplateBuilder({
                   templateDescription={templateDescription}
                   extractionFields={extractionFields}
                   selectedSignatureObjects={selectedSignatureObjects}
+                  selectedPages={!templateId ? selectedPages : undefined}
                   pipelineState={pipelineState}
                   visualState={visualState}
                   onTemplateNameChange={setTemplateName}

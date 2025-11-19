@@ -19,6 +19,7 @@ interface PdfViewerSectionProps {
   selectedTypes: Set<string>;
   selectedObjects: Set<string>;
   onObjectClick: (objectId: string) => void;
+  selectedPages?: number[]; // 0-indexed page numbers to display
 }
 
 export function PdfViewerSection({
@@ -27,10 +28,11 @@ export function PdfViewerSection({
   selectedTypes,
   selectedObjects,
   onObjectClick,
+  selectedPages,
 }: PdfViewerSectionProps) {
   return (
     <div className="flex-1 overflow-hidden bg-gray-800">
-      <PdfViewer pdfUrl={pdfUrl}>
+      <PdfViewer pdfUrl={pdfUrl} selectedPages={selectedPages}>
         <PdfViewer.Canvas pdfUrl={pdfUrl}>
           <PdfObjectOverlay
             objects={pdfObjects}

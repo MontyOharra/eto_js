@@ -77,6 +77,13 @@ export interface PdfViewerProps {
   maxScale?: number;
   scaleStep?: number;
   /**
+   * Optional array of 0-indexed page numbers to display as a virtual subset.
+   * Example: [1, 2, 3, 6] means show only PDF pages 2, 3, 4, and 7 (0-indexed).
+   * Page numbers displayed to user will be remapped: 2→1, 3→2, 4→3, 7→4
+   * If not provided, all pages are shown.
+   */
+  selectedPages?: number[];
+  /**
    * Children should include PdfViewer.Canvas with any overlays as children of Canvas.
    * See component documentation above for proper overlay scaling/positioning.
    */
@@ -94,6 +101,7 @@ export function PdfViewer({
   minScale = 0.5,
   maxScale = 3.0,
   scaleStep = 0.25,
+  selectedPages,
   children,
   onScaleChange,
   onPageChange,
@@ -101,11 +109,54 @@ export function PdfViewer({
   // State
   const [scale, setScaleState] = useState(initialScale);
   const [currentPage, setCurrentPageState] = useState(initialPage);
-  const [numPages, setNumPages] = useState<number | null>(null);
+  const [totalPagesInPdf, setTotalPagesInPdf] = useState<number | null>(null);
   const [pdfDimensions, setPdfDimensions] = useState<PdfDimensions | null>(null);
 
   // Fixed high-quality render scale (matches PdfCanvas)
   const RENDER_SCALE = 3.0;
+
+  // Page mapping logic for virtual pages
+  // If selectedPages is provided, we show a subset; otherwise show all pages
+  const isVirtualMode = selectedPages && selectedPages.length > 0;
+  const sortedSelectedPages = isVirtualMode
+    ? [...selectedPages].sort((a, b) => a - b)
+    : null;
+
+  // Virtual page count (number of pages user sees)
+  const numPages = isVirtualMode ? sortedSelectedPages!.length : totalPagesInPdf;
+
+  // Map virtual page (1-indexed, what user sees) to actual PDF page (1-indexed)
+  const virtualToActualPage = (virtualPage: number): number => {
+    if (!isVirtualMode || !sortedSelectedPages) {
+      return virtualPage; // No mapping needed
+    }
+    // Virtual page is 1-indexed, array is 0-indexed
+    const zeroIndexedVirtual = virtualPage - 1;
+    if (zeroIndexedVirtual < 0 || zeroIndexedVirtual >= sortedSelectedPages.length) {
+      return 1; // Fallback
+    }
+    // sortedSelectedPages contains 0-indexed page numbers, convert to 1-indexed
+    return sortedSelectedPages[zeroIndexedVirtual] + 1;
+  };
+
+  // Map actual PDF page (1-indexed) to virtual page (1-indexed)
+  const actualToVirtualPage = (actualPage: number): number => {
+    if (!isVirtualMode || !sortedSelectedPages) {
+      return actualPage; // No mapping needed
+    }
+    // Convert actual page to 0-indexed
+    const zeroIndexedActual = actualPage - 1;
+    // Find index in selectedPages array
+    const virtualIndex = sortedSelectedPages.indexOf(zeroIndexedActual);
+    if (virtualIndex === -1) {
+      return 1; // Fallback if page not in selection
+    }
+    // Convert back to 1-indexed
+    return virtualIndex + 1;
+  };
+
+  // Actual PDF page being rendered (1-indexed)
+  const actualPdfPage = virtualToActualPage(currentPage);
 
   // Sync with external state (controlled component)
   useEffect(() => {
@@ -193,7 +244,7 @@ export function PdfViewer({
 
   // Callbacks for Canvas component
   const onDocumentLoadSuccess = useCallback((loadedNumPages: number) => {
-    setNumPages(loadedNumPages);
+    setTotalPagesInPdf(loadedNumPages);
     // Don't reset to first page - preserve user's current page
   }, []);
 
@@ -205,8 +256,9 @@ export function PdfViewer({
   const contextValue: PdfViewerContextValue = {
     scale,
     renderScale: RENDER_SCALE, // Fixed render scale for overlay calculations
-    currentPage,
-    numPages,
+    currentPage, // Virtual page (what user sees)
+    actualPdfPage, // Actual PDF page (for rendering)
+    numPages, // Virtual page count
     pdfDimensions,
     setScale,
     setCurrentPage,

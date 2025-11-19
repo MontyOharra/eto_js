@@ -1,5 +1,133 @@
 # CHANGELOG
 
+## [2025-11-18] — Page-Segment Template Matching Design & Test Dashboard Prototype
+
+### Spec / Intent
+- Design new page-segment-based template matching system to handle multi-document PDFs
+- Create comprehensive UI/UX design for displaying matched and unmatched page segments
+- Prototype new unified ETO dashboard with table-based layout
+- Document get_order_number module implementation
+
+### Changes Made
+- Files Created:
+  - `docs/misc/page-segment-matching-design.md` - Complete design spec for segment-based matching (449 lines)
+  - `docs/misc/create-order-module-spec.md` - Order creation module specification (392 lines)
+  - `server/src/pipeline_modules/misc/get_order_number.py` - Module to check if order exists for HAWB
+  - `client/src/renderer/features/test/` - New feature directory structure for dashboard prototyping
+  - `client/src/renderer/pages/dashboard/test/index.tsx` - Test dashboard page with mock data
+
+- Files Modified:
+  - `client/src/renderer/pages/dashboard/route.tsx` - Added "Test" tab to navigation
+
+### Page-Segment Matching System Design
+
+**Problem Statement**:
+- Current system: 1 PDF = 1 template match (fails for multi-document PDFs)
+- Need: Match different page ranges to different templates within same PDF
+
+**Solution Architecture**:
+1. **New Database Table**: `eto_run_page_segments`
+   - Represents contiguous page ranges (start_page, end_page)
+   - Status: matched, unmatched, manually_assigned, ignored
+   - Links to template_version_id and match_confidence
+
+2. **Sliding Window Algorithm**:
+   - Try all possible page ranges against all templates
+   - Resolve overlaps by prioritizing confidence, coverage, position
+   - Identify unmatched gaps between matched segments
+
+3. **Updated Relationships**:
+   - Extractions and pipeline executions link to page_segment_id (not eto_run_id)
+   - Each segment processes independently through extraction/transformation
+
+**UI/UX Design** (Option 2: Dedicated Detail Page):
+- Main dashboard: Unified table showing all ETO runs
+- Row columns: PDF filename, segments status, overall status, source, timestamps
+- Click row → Full-page detail view with segment cards
+- Each segment card shows: page range, template match, extraction results, actions
+- Segment-level actions: Reprocess, Assign Template, Ignore
+- Global actions: Rematch Entire PDF, Reprocess All Unmatched
+
+**Key Components Designed**:
+- `PageSegmentTimeline` - Visual timeline of page segments with color coding
+- `UnmatchedSegmentActionPanel` - User actions for unmatched pages
+- `SegmentExecutionList` - Per-segment processing status
+- `SegmentStatusSummary` - At-a-glance match status (e.g., "10/15 pages matched")
+
+**Selective Reprocessing**:
+- Critical workflow: Only reprocess failed/unmatched segments
+- Preserve successful segment results
+- Support manual template assignment and segment ignore
+
+### Test Dashboard Prototype
+
+**Structure**:
+- Created feature directory: `client/src/renderer/features/test/` with api/, components/, hooks/ subdirectories
+- Created page route: `/dashboard/test/`
+- Added navigation tab in dashboard layout
+
+**Current Implementation**:
+- Mock data: 5 items with name field (test1-test5)
+- Table layout: Header row with "Name" column
+- Data rows: Line-separated, no background, hover effect
+- Clean, modern dashboard aesthetic
+
+**Suggested Columns for Production** (from ETO run analysis):
+1. **Core**: PDF Filename, Run ID
+2. **Status**: Overall Status, Processing Step, **Segments Status** (NEW: "3/5 matched, 2 unmatched")
+3. **Source**: Email/Manual, Received Date
+4. **Templates**: Matched Templates (NEW: Single or "Multiple"), Match Confidence (NEW)
+5. **Timing**: Started At, Completed At, Duration
+6. **Metadata**: File Size, Page Count
+7. **Results**: Fields Extracted (NEW: across all segments), Errors
+
+### Module Development
+
+**get_order_number Module**:
+- Input: HAWB (str)
+- Outputs: order_exists (bool), order_number (int)
+- Searches `HTC300_G040_T010A Open Orders` table
+- Config: database connection, on_multiple_orders (first/last/error)
+
+**create_order Module** (specification only):
+- 16 fixed inputs (customer, hawb, mawb, addresses, dates, times, notes, pieces, weight)
+- 1 output (order_number)
+- Internal operations: customer lookup, address lookup, order type determination, validation
+- Database inserts: Orders, Dimensions, History, HAWB Values tables
+- Complex order type logic (10 types based on pickup/delivery flags and ACI ranges)
+
+### Architectural Decisions
+
+**Why Option 2 (Dedicated Detail Page)**:
+- Selective reprocessing: Each segment needs independent actions
+- Segment cards with per-segment "Reprocess" buttons
+- "Reprocess All Unmatched" vs "Rematch Entire PDF" distinction
+- Better screen real estate for complex multi-segment PDFs
+- Clear visual indication of segment status
+
+**Migration Strategy**:
+1. Create eto_run_page_segments table (backward compatible)
+2. Migrate existing runs to single-segment model
+3. Implement sliding window matching algorithm
+4. Update frontend to show segment-based view
+5. Cleanup: Drop eto_run_template_matchings table
+
+### Next Actions
+- Implement page-segment database schema
+- Build sliding window matching algorithm
+- Create segment detail page UI components
+- Add more columns to test dashboard prototype
+- Wire up test dashboard to real ETO runs data
+
+### Notes
+- Page-segment design solves multi-document PDF problem comprehensively
+- Selective reprocessing is critical workflow requirement
+- Test dashboard provides clean prototyping environment
+- Design focuses on user clarity for partial matches (key UX challenge)
+- Column suggestions based on current ETO run table analysis
+
+---
+
 ## [2025-11-11] — VBA to Modern System Comparison Analysis
 
 ### Spec / Intent
