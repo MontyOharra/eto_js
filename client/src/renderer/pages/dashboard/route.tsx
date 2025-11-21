@@ -27,9 +27,7 @@ function DashboardLayout() {
           <div className="flex items-end justify-between px-2">
             <div className="flex">
               {tabs.map((tab, index) => {
-                const isActive = tab.href === "/dashboard/pipelines"
-                  ? location.pathname.startsWith("/dashboard/pipelines")
-                  : location.pathname === tab.href;
+                const isActive = location.pathname === tab.href || location.pathname.startsWith(tab.href + '/');
                 return (
                   <Link
                     key={tab.name}

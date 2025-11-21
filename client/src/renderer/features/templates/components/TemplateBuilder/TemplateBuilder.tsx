@@ -14,7 +14,7 @@ import { PipelineStep } from './PipelineStep';
 import { TestingStep } from './TestingStep';
 import type { PdfObjects, ExtractionField } from '../../types';
 import type { PipelineState, VisualState } from '../../../pipelines/types';
-import { usePdfData, useProcessPdfObjects } from '../../../pdf';
+import { usePdfData, useProcessPdfObjects, createSubsetPdf } from '../../../pdf';
 import type { PdfFileMetadata } from '../../../pdf';
 import { usePipelineValidation } from '../../../pipelines/hooks';
 import { useSimulateTemplate } from '../../api/hooks';
@@ -39,11 +39,12 @@ interface TemplateBuilderProps {
 export interface TemplateBuilderData {
   name: string;
   description: string;
-  source_pdf_id: number;
+  source_pdf_id?: number; // Optional: Set by parent after uploading PDF
   signature_objects: PdfObjects;
   extraction_fields: ExtractionField[];
   pipeline_state: PipelineState;
   visual_state: VisualState;
+  pdf_file?: File; // Optional: Only provided when PDF needs to be uploaded
 }
 
 export function TemplateBuilder({
@@ -105,6 +106,24 @@ export function TemplateBuilder({
   // Track previous selected pages to detect changes
   const prevSelectedPagesRef = useRef<number[]>([]);
 
+  // PDF Data Management - Centralized at TemplateBuilder level
+  // Create mode: Process local PDF file
+  const { mutateAsync: processObjects, isPending: isProcessing } = useProcessPdfObjects();
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+  const [extractedObjects, setExtractedObjects] = useState<PdfObjects | null>(null);
+
+  // Subset PDF state (only created when user selects partial pages)
+  const [subsetPdfFile, setSubsetPdfFile] = useState<File | null>(null);
+  const [subsetPdfBlobUrl, setSubsetPdfBlobUrl] = useState<string | null>(null);
+  const [isCreatingSubset, setIsCreatingSubset] = useState(false);
+  const [subsetCreationError, setSubsetCreationError] = useState<string | null>(null);
+
+  // Edit mode: Fetch PDF data from backend
+  const { data: pdfData, isLoading: isFetching, error: fetchError } = usePdfData(
+    pdfFileId,
+    undefined // Don't filter by pages for stored PDFs - get all objects
+  );
+
   // Reset all state when selected pages change (only in create mode)
   useEffect(() => {
     if (templateId) return; // Only apply in create mode
@@ -143,6 +162,14 @@ export function TemplateBuilder({
 
       // Clear extracted objects to trigger re-extraction with new pages
       setExtractedObjects(null);
+
+      // Clear subset PDF - will be recreated with new pages
+      if (subsetPdfBlobUrl) {
+        URL.revokeObjectURL(subsetPdfBlobUrl);
+      }
+      setSubsetPdfFile(null);
+      setSubsetPdfBlobUrl(null);
+      setSubsetCreationError(null);
 
       // Go back to step 1 if we're on a later step
       if (currentStep !== 'page-selection') {
@@ -189,22 +216,17 @@ export function TemplateBuilder({
       setIsSaving(false);
       setPdfBlobUrl(null);
       setExtractedObjects(null);
+
+      // Clear subset PDF state
+      if (subsetPdfBlobUrl) {
+        URL.revokeObjectURL(subsetPdfBlobUrl);
+      }
+      setSubsetPdfFile(null);
+      setSubsetPdfBlobUrl(null);
+      setSubsetCreationError(null);
+      setIsCreatingSubset(false);
     }
-  }, [isOpen, templateId]);
-
-  // PDF Data Management - Centralized at TemplateBuilder level
-  // Create mode: Process local PDF file
-  const { mutateAsync: processObjects, isPending: isProcessing } = useProcessPdfObjects();
-  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
-  const [extractedObjects, setExtractedObjects] = useState<PdfObjects | null>(null);
-
-  // Edit mode: Fetch PDF data from backend
-  // In version/edit mode (templateId exists), fetch all objects - no page filtering
-  // In create mode with pdfFileId (unlikely scenario), would use selectedPages but we use pdfFile in create mode
-  const { data: pdfData, isLoading: isFetching, error: fetchError } = usePdfData(
-    pdfFileId,
-    undefined // Don't filter by pages for stored PDFs - get all objects
-  );
+  }, [isOpen, templateId, subsetPdfBlobUrl]);
 
   // Create blob URL immediately when pdfFile is provided (for PageSelectionStep to display PDF)
   useEffect(() => {
@@ -215,55 +237,168 @@ export function TemplateBuilder({
     }
   }, [pdfFile, pdfBlobUrl]);
 
-  // Extract objects only after page selection is complete (create mode)
-  // Don't extract objects until user has selected pages and moved to signature-objects step
+  // Create subset PDF when transitioning away from page-selection (only if partial pages selected)
+  // This happens automatically when selectedPages changes and we're past page-selection step
   useEffect(() => {
-    if (pdfFile && !extractedObjects && currentStep !== 'page-selection' && selectedPages.length > 0) {
-      const processPdf = async () => {
-        try {
-          console.log('[TemplateBuilder] Extracting objects for selected pages:', selectedPages);
-          // Pass selectedPages for filtering (convert 0-indexed to 1-indexed)
-          const result = await processObjects({
-            pdfFile,
-            pages: selectedPages.map(p => p + 1), // Always has pages since we check selectedPages.length > 0
-          });
-          setExtractedObjects(result.objects);
-        } catch (err) {
-          console.error('Failed to process PDF:', err);
-        }
-      };
-      processPdf();
-    }
-  }, [pdfFile, processObjects, extractedObjects, currentStep, selectedPages]);
+    // Only run in create mode when we have a PDF file
+    if (!pdfFile) return;
 
-  // Cleanup blob URL on unmount
+    // Only run after page selection step
+    if (currentStep === 'page-selection') return;
+
+    // Only run if we have selected pages
+    if (selectedPages.length === 0) return;
+
+    // If subset already exists and pages haven't changed, don't recreate
+    if (subsetPdfFile) return;
+
+    const createSubset = async () => {
+      // Always create a new template PDF from selected pages
+      // This ensures templates have their own independent PDF files
+      console.log(`[TemplateBuilder] Creating template PDF with ${selectedPages.length} pages`);
+      setIsCreatingSubset(true);
+      setSubsetCreationError(null);
+
+      try {
+        const subset = await createSubsetPdf(pdfFile, selectedPages);
+        setSubsetPdfFile(subset);
+
+        const blobUrl = URL.createObjectURL(subset);
+        setSubsetPdfBlobUrl(blobUrl);
+
+        console.log('[TemplateBuilder] Template PDF created successfully');
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        console.error('[TemplateBuilder] Failed to create template PDF:', errorMsg);
+        setSubsetCreationError(errorMsg);
+      } finally {
+        setIsCreatingSubset(false);
+      }
+    };
+
+    createSubset();
+  }, [pdfFile, currentStep, selectedPages, subsetPdfFile]);
+
+  // Create subset PDF in edit mode (download from backend, then create subset)
+  useEffect(() => {
+    // Only run in edit mode when we have pdfData
+    if (!pdfData || pdfFile) return;
+
+    // Only run after page selection step
+    if (currentStep === 'page-selection') return;
+
+    // Only run if we have selected pages
+    if (selectedPages.length === 0) return;
+
+    // If subset already exists, don't recreate
+    if (subsetPdfFile) return;
+
+    const createSubsetFromBackend = async () => {
+      // Always create a new template PDF from selected pages
+      // This ensures templates have their own independent PDF files
+      console.log(`[TemplateBuilder] Edit mode: Creating template PDF with ${selectedPages.length} pages`);
+      setIsCreatingSubset(true);
+      setSubsetCreationError(null);
+
+      try {
+        // Fetch the PDF file from backend
+        const response = await fetch(pdfData.url);
+        const blob = await response.blob();
+        const pdfFileFromBackend = new File([blob], pdfMetadata?.filename || 'document.pdf', {
+          type: 'application/pdf',
+        });
+
+        // Create template PDF from selected pages
+        const subset = await createSubsetPdf(pdfFileFromBackend, selectedPages);
+        setSubsetPdfFile(subset);
+
+        const blobUrl = URL.createObjectURL(subset);
+        setSubsetPdfBlobUrl(blobUrl);
+
+        console.log('[TemplateBuilder] Edit mode: Template PDF created successfully');
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        console.error('[TemplateBuilder] Edit mode: Failed to create template PDF:', errorMsg);
+        setSubsetCreationError(errorMsg);
+      } finally {
+        setIsCreatingSubset(false);
+      }
+    };
+
+    createSubsetFromBackend();
+  }, [pdfData, pdfFile, pdfMetadata, currentStep, selectedPages, subsetPdfFile]);
+
+  // Extract objects from the appropriate PDF (original or subset)
+  useEffect(() => {
+    // Only run after page selection step
+    if (currentStep === 'page-selection') return;
+
+    // Don't extract if we already have objects
+    if (extractedObjects) return;
+
+    // Determine which PDF to use
+    const pdfToProcess = subsetPdfFile || pdfFile;
+    if (!pdfToProcess) return;
+
+    const processPdf = async () => {
+      try {
+        console.log('[TemplateBuilder] Extracting objects from PDF');
+        // No pages parameter needed - we're processing the whole PDF (original or subset)
+        const result = await processObjects(pdfToProcess);
+        setExtractedObjects(result.objects);
+      } catch (err) {
+        console.error('Failed to process PDF:', err);
+      }
+    };
+
+    processPdf();
+  }, [pdfFile, subsetPdfFile, processObjects, extractedObjects, currentStep]);
+
+  // Cleanup blob URLs ONLY on component unmount (not on re-renders)
   useEffect(() => {
     return () => {
+      // Only revoke on unmount, not when URLs change during normal operation
       if (pdfBlobUrl) {
         URL.revokeObjectURL(pdfBlobUrl);
       }
+      if (subsetPdfBlobUrl) {
+        URL.revokeObjectURL(subsetPdfBlobUrl);
+      }
     };
-  }, [pdfBlobUrl]);
+  }, []); // Empty deps = only run on mount/unmount
 
   // Determine which data source to use
-  const isLoadingPdf = pdfFile ? isProcessing : isFetching;
-  const pdfError = fetchError;
+  const isLoadingPdf = pdfFile ? (isProcessing || isCreatingSubset) : isFetching;
+  const pdfError = fetchError || subsetCreationError;
 
   // Normalize data structure (both modes now have same shape: { objects: PdfObjects, url: string })
-  // For page-selection step, only URL is needed; objects can be null
+  // For page-selection step, use original PDF
+  // For all other steps, use subset PDF if available, otherwise original PDF
   const activePdfData = useMemo(() => {
     if (pdfFile) {
-      // Create mode: use blob URL and extracted objects (null during page-selection step)
-      if (pdfBlobUrl) {
-        return { objects: extractedObjects, url: pdfBlobUrl };
+      // Create mode
+      if (currentStep === 'page-selection') {
+        // Page selection step: show original PDF
+        return pdfBlobUrl ? { objects: null, url: pdfBlobUrl } : null;
+      } else {
+        // Other steps: show subset PDF if available, otherwise original PDF
+        const urlToUse = subsetPdfBlobUrl || pdfBlobUrl;
+        return urlToUse ? { objects: extractedObjects, url: urlToUse } : null;
       }
-      return null;
     } else if (pdfData) {
-      // Edit mode: use fetched data
-      return { objects: pdfData.objectsData.objects, url: pdfData.url };
+      // Edit mode
+      if (currentStep === 'page-selection') {
+        // Page selection step: show original PDF from backend
+        return { objects: pdfData.objectsData.objects, url: pdfData.url };
+      } else {
+        // Other steps: show subset PDF if available, otherwise original PDF
+        const urlToUse = subsetPdfBlobUrl || pdfData.url;
+        const objectsToUse = extractedObjects || pdfData.objectsData.objects;
+        return { objects: objectsToUse, url: urlToUse };
+      }
     }
     return null;
-  }, [pdfFile, pdfBlobUrl, extractedObjects, pdfData]);
+  }, [pdfFile, pdfBlobUrl, subsetPdfBlobUrl, extractedObjects, pdfData, currentStep]);
 
   // Create complete pipeline state for validation (includes entry points)
   const completePipelineState = useMemo<PipelineState>(() => ({
@@ -280,6 +415,22 @@ export function TemplateBuilder({
 
   // Validation logic
   const canProceed = useMemo(() => {
+    // Can't proceed while creating subset PDF
+    if (isCreatingSubset) {
+      return false;
+    }
+
+    // If there was an error creating the subset PDF, can't proceed
+    if (subsetCreationError) {
+      return false;
+    }
+
+    // In create mode (has pdfFile), must have subset PDF created
+    // In version mode (no pdfFile), subset is not required (reuse existing template PDF)
+    if (pdfFile && !subsetPdfFile && currentStep !== 'page-selection') {
+      return false;
+    }
+
     switch (currentStep) {
       case 'page-selection': {
         // Must have at least one page selected
@@ -328,9 +479,24 @@ export function TemplateBuilder({
       default:
         return false;
     }
-  }, [currentStep, selectedPages, selectedSignatureObjects, extractionFields, templateName, isPipelineValid, isPipelineValidating]);
+  }, [currentStep, selectedPages, selectedSignatureObjects, extractionFields, templateName, isPipelineValid, isPipelineValidating, isCreatingSubset, subsetCreationError, pdfFile, subsetPdfFile]);
 
   const validationMessage = useMemo(() => {
+    // Show message while creating subset PDF
+    if (isCreatingSubset) {
+      return 'Creating template PDF...';
+    }
+
+    // Show error if subset PDF creation failed
+    if (subsetCreationError) {
+      return `Failed to create template PDF: ${subsetCreationError}`;
+    }
+
+    // Show message if waiting for subset PDF creation
+    if (pdfFile && !subsetPdfFile && currentStep !== 'page-selection') {
+      return 'Waiting for template PDF to be created...';
+    }
+
     if (canProceed) return undefined;
 
     switch (currentStep) {
@@ -372,7 +538,7 @@ export function TemplateBuilder({
       default:
         return undefined;
     }
-  }, [canProceed, currentStep, selectedPages, templateName, pipelineState, isPipelineValidating, pipelineValidationError]);
+  }, [canProceed, currentStep, selectedPages, templateName, pipelineState, isPipelineValidating, pipelineValidationError, isCreatingSubset, subsetCreationError, pdfFile, subsetPdfFile]);
 
   // Track completed steps
   const completedSteps = useMemo(() => {
@@ -403,22 +569,22 @@ export function TemplateBuilder({
       completed.add('extraction-fields');
     }
 
-    // Step 3: Pipeline (requires template name + valid pipeline)
+    // Step 3: Pipeline (requires template name + valid pipeline with modules)
+    const hasPipelineModules = pipelineState.modules.length > 0;
     if (
       hasTemplateName &&
+      hasPipelineModules &&
       isPipelineValid &&
       !isPipelineValidating
     ) {
       completed.add('pipeline');
     }
 
-    // Step 4: Testing (requires template name - same as step 1-3)
-    if (hasTemplateName) {
-      completed.add('testing');
-    }
+    // Step 4: Testing (no completion criteria - it's a verification step)
+    // Users can proceed to save without needing to "complete" this step
 
     return completed;
-  }, [templateId, selectedPages, selectedSignatureObjects, extractionFields, templateName, isPipelineValid, isPipelineValidating]);
+  }, [templateId, selectedPages, selectedSignatureObjects, extractionFields, templateName, pipelineState, isPipelineValid, isPipelineValidating]);
 
   // Navigation handlers
   const handleNext = useCallback(() => {
@@ -478,15 +644,31 @@ export function TemplateBuilder({
 
     setIsSaving(true);
     try {
+      // Always use the subset PDF (created from selected pages)
+      // Subset PDF is created whenever selectedPages changes in both create and edit modes
+      // This ensures templates always have their own independent PDF files
+      const pdfToSave = subsetPdfFile || pdfFile;
+
+      console.log('[TemplateBuilder] Saving template:');
+      console.log('  pdfFile:', pdfFile?.name);
+      console.log('  subsetPdfFile:', subsetPdfFile?.name);
+      console.log('  pdfToSave:', pdfToSave?.name);
+      console.log('  selectedPages:', selectedPages);
+
       const data: TemplateBuilderData = {
         name: templateName,
         description: templateDescription,
-        source_pdf_id: pdfFileId,
         signature_objects: selectedSignatureObjects,
         extraction_fields: extractionFields,
         pipeline_state: pipelineState,
         visual_state: visualState,
+        ...(pdfToSave && { pdf_file: pdfToSave }),
       };
+
+      console.log('[TemplateBuilder] Template data:', {
+        ...data,
+        pdf_file: data.pdf_file?.name,
+      });
 
       await onSave(data, templateId);
       // Parent will close modal on success
@@ -501,7 +683,9 @@ export function TemplateBuilder({
     templateId,
     templateName,
     templateDescription,
+    pdfFile,
     pdfFileId,
+    subsetPdfFile,
     selectedSignatureObjects,
     extractionFields,
     pipelineState,

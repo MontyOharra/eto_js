@@ -24,9 +24,9 @@ export interface PdfData {
   metadata: PdfFileMetadata;
 }
 
-export function usePdfData(pdfFileId: number | null, pages?: number[]) {
+export function usePdfData(pdfFileId: number | null) {
   return useQuery({
-    queryKey: ['pdf', pdfFileId, pages],
+    queryKey: ['pdf', pdfFileId],
     queryFn: async (): Promise<PdfData> => {
       if (!pdfFileId) {
         throw new Error('No PDF file ID provided');
@@ -35,10 +35,7 @@ export function usePdfData(pdfFileId: number | null, pages?: number[]) {
       // Fetch PDF objects and metadata in parallel
       const [objectsData, metadata] = await Promise.all([
         apiClient.get<PdfObjectsResponse>(
-          `${baseUrl}/${pdfFileId}/objects`,
-          {
-            params: pages ? { pages } : undefined,
-          }
+          `${baseUrl}/${pdfFileId}/objects`
         ).then(res => res.data),
         apiClient.get<PdfFileMetadata>(`${baseUrl}/${pdfFileId}`).then(res => res.data),
       ]);
@@ -83,11 +80,10 @@ export function usePdfMetadata(pdfFileId: number | null) {
  */
 export function usePdfObjects(
   pdfFileId: number | null,
-  objectType?: string,
-  pages?: number[]
+  objectType?: string
 ) {
   return useQuery({
-    queryKey: ['pdf', 'objects', pdfFileId, objectType, pages],
+    queryKey: ['pdf', 'objects', pdfFileId, objectType],
     queryFn: async (): Promise<PdfObjectsResponse> => {
       if (!pdfFileId) {
         throw new Error('No PDF file ID provided');
@@ -96,10 +92,7 @@ export function usePdfObjects(
       const response = await apiClient.get<PdfObjectsResponse>(
         `${baseUrl}/${pdfFileId}/objects`,
         {
-          params: {
-            ...(objectType ? { object_type: objectType } : {}),
-            ...(pages ? { pages } : {}),
-          },
+          params: objectType ? { object_type: objectType } : undefined,
         }
       );
       return response.data;
@@ -151,7 +144,7 @@ export function useUploadPdf() {
  */
 export function useProcessPdfObjects() {
   return useMutation({
-    mutationFn: async ({ pdfFile, pages }: { pdfFile: File; pages?: number[] }): Promise<PdfProcessResponse> => {
+    mutationFn: async (pdfFile: File): Promise<PdfProcessResponse> => {
       if (!pdfFile) {
         throw new Error('PDF file is required');
       }
@@ -163,7 +156,6 @@ export function useProcessPdfObjects() {
         `${baseUrl}/process-objects`,
         formData,
         {
-          params: pages ? { pages } : undefined,
           headers: {
             'Content-Type': 'multipart/form-data',
           },

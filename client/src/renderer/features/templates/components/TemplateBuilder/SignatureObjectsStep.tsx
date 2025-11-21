@@ -17,7 +17,6 @@ interface SignatureObjectsStepProps {
   templateName: string;
   templateDescription: string;
   selectedSignatureObjects: PdfObjects;
-  selectedPages?: number[];      // Optional 0-indexed page numbers to display
   onTemplateNameChange: (name: string) => void;
   onTemplateDescriptionChange: (description: string) => void;
   onSignatureObjectsChange: (objects: PdfObjects) => void;
@@ -29,7 +28,6 @@ export function SignatureObjectsStep({
   templateName,
   templateDescription,
   selectedSignatureObjects,
-  selectedPages,
   onTemplateNameChange,
   onTemplateDescriptionChange,
   onSignatureObjectsChange,
@@ -273,7 +271,6 @@ export function SignatureObjectsStep({
         pdfObjects={getFlattenedObjects()}
         selectedTypes={selectedTypes}
         selectedObjects={selectedObjectIds}
-        selectedPages={selectedPages}
         onObjectClick={handleObjectClick}
       />
     </div>

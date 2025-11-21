@@ -19,7 +19,6 @@ interface ExtractionFieldsStepProps {
   templateDescription: string;
   extractionFields: ExtractionField[];
   selectedSignatureObjects: PdfObjects;
-  selectedPages?: number[];           // Optional 0-indexed page numbers to display
   pipelineState: PipelineState;
   visualState: VisualState;
   onTemplateNameChange: (name: string) => void;
@@ -42,7 +41,6 @@ export function ExtractionFieldsStep({
   templateDescription,
   extractionFields,
   selectedSignatureObjects,
-  selectedPages,
   pipelineState,
   visualState,
   onTemplateNameChange,
@@ -399,7 +397,7 @@ export function ExtractionFieldsStep({
 
       {/* PDF Viewer */}
       <div className="flex-1 overflow-hidden bg-gray-800">
-        <PdfViewer pdfUrl={pdfUrl} selectedPages={selectedPages}>
+        <PdfViewer pdfUrl={pdfUrl}>
           <PdfViewer.Canvas
             pdfUrl={pdfUrl}
             onMouseDown={handleMouseDown}

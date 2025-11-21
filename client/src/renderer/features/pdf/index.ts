@@ -40,3 +40,6 @@ export { usePdfViewer } from './components/PdfViewer/PdfViewerContext';
 
 // Hooks
 export { usePdfCoordinates } from './hooks';
+
+// Utilities
+export { createSubsetPdf } from './utils/createSubsetPdf';

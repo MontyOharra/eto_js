@@ -7,7 +7,7 @@
 import { useMemo, useState } from 'react';
 import { PdfViewer, usePdfViewer } from '../../../pdf';
 import type { PdfObjects } from '../../types';
-import { OBJECT_TYPE_COLORS } from '../../constants';
+import { OBJECT_TYPE_COLORS, OBJECT_FILL_COLORS, OBJECT_BORDER_COLORS } from '../../constants';
 
 interface SignatureObjectsViewProps {
   pdfUrl: string;
@@ -54,25 +54,24 @@ export function SignatureObjectsView({
   const flattenedObjects = useMemo(() => {
     const flat: Array<any> = [];
 
-    const addObjects = (objects: any[] | undefined, type: string, color: string) => {
+    const addObjects = (objects: any[] | undefined, type: string) => {
       if (!objects) return;
       objects.forEach((obj) => {
         flat.push({
           ...obj,
           type,
-          color,
           page: obj.page || 1,
         });
       });
     };
 
-    // Add all object types with colors from centralized constants
-    addObjects(signatureObjects.text_words, 'text_word', OBJECT_TYPE_COLORS.text_word);
-    addObjects(signatureObjects.graphic_rects, 'graphic_rect', OBJECT_TYPE_COLORS.graphic_rect);
-    addObjects(signatureObjects.graphic_lines, 'graphic_line', OBJECT_TYPE_COLORS.graphic_line);
-    addObjects(signatureObjects.graphic_curves, 'graphic_curve', OBJECT_TYPE_COLORS.graphic_curve);
-    addObjects(signatureObjects.images, 'image', OBJECT_TYPE_COLORS.image);
-    addObjects(signatureObjects.tables, 'table', OBJECT_TYPE_COLORS.table);
+    // Add all object types
+    addObjects(signatureObjects.text_words, 'text_word');
+    addObjects(signatureObjects.graphic_rects, 'graphic_rect');
+    addObjects(signatureObjects.graphic_lines, 'graphic_line');
+    addObjects(signatureObjects.graphic_curves, 'graphic_curve');
+    addObjects(signatureObjects.images, 'image');
+    addObjects(signatureObjects.tables, 'table');
 
     return flat;
   }, [signatureObjects]);
@@ -278,6 +277,10 @@ function SignatureObjectsOverlay({
         const left = x0 * renderScale;
         const top = screenY0 * renderScale;
 
+        // Get colors from centralized constants (matches builder styling)
+        const fillColor = OBJECT_FILL_COLORS[obj.type] || 'rgba(128, 128, 128, 0.2)';
+        const borderColor = OBJECT_BORDER_COLORS[obj.type] || 'rgba(128, 128, 128, 0.6)';
+
         return (
           <div
             key={idx}
@@ -287,8 +290,8 @@ function SignatureObjectsOverlay({
               top: `${top}px`,
               width: `${width}px`,
               height: `${height}px`,
-              border: `2px solid ${obj.color}`,
-              backgroundColor: `${obj.color}15`, // 15 = ~9% opacity
+              border: `2px solid ${borderColor}`,
+              backgroundColor: fillColor,
               pointerEvents: 'none',
             }}
           />

@@ -8,6 +8,7 @@ import {
   useActivateTemplate,
   useDeactivateTemplate,
 } from '../../../features/templates';
+import type { CreateTemplateRequest } from '../../../features/templates/api/types';
 import { usePipelinesApi } from '../../../features/pipelines/api';
 import { TemplateCard } from '../../../features/templates/components';
 import { TemplateBuilder, TemplateBuilderData } from '../../../features/templates/components/TemplateBuilder';
@@ -239,23 +240,48 @@ function TemplatesPage() {
 
   const handleSaveTemplate = async (templateData: TemplateBuilderData, templateId?: number) => {
     try {
-      let pdfId: number;
+      let pdfId: number | undefined;
 
-      // Create mode: Upload PDF file first to get ID
-      if (builderPdfFile) {
-        console.log('Uploading PDF file...');
-        const uploadedPdf = await uploadPdf(builderPdfFile);
+      console.log('[handleSaveTemplate] Called with:');
+      console.log('  templateData.pdf_file:', templateData.pdf_file?.name);
+      console.log('  builderPdfFile:', builderPdfFile?.name);
+      console.log('  builderPdfFileId:', builderPdfFileId);
+      console.log('  templateId:', templateId);
+
+      // New template creation: Upload subset PDF created from selected pages
+      // templateData.pdf_file contains the subset PDF (always provided in create mode)
+      // Even if all pages selected, a new PDF is created to ensure template independence
+      const pdfToUpload = templateData.pdf_file || builderPdfFile;
+      console.log('[handleSaveTemplate] pdfToUpload:', pdfToUpload?.name);
+
+      if (pdfToUpload) {
+        console.log('[handleSaveTemplate] Uploading PDF file:', pdfToUpload.name, 'size:', pdfToUpload.size);
+        const uploadedPdf = await uploadPdf(pdfToUpload);
         pdfId = uploadedPdf.id;
-        console.log('PDF uploaded, ID:', pdfId);
+        console.log('[handleSaveTemplate] PDF uploaded successfully, ID:', pdfId);
+
+        if (!pdfId) {
+          throw new Error('PDF upload succeeded but returned no ID');
+        }
       }
-      // Edit mode: Use existing PDF ID
-      else if (builderPdfFileId) {
+      // Version mode: Reuse existing template's PDF (no new PDF needed)
+      else if (builderPdfFileId != null) {
         pdfId = builderPdfFileId;
-        console.log('Using existing PDF ID:', pdfId);
+        console.log('[handleSaveTemplate] Version mode: Using existing PDF ID:', pdfId);
       }
       // Error: No PDF file or ID
       else {
-        throw new Error('No PDF file or ID available');
+        console.error('[handleSaveTemplate] ERROR: No PDF available!');
+        console.error('  pdfToUpload:', pdfToUpload);
+        console.error('  builderPdfFileId:', builderPdfFileId);
+        console.error('  templateData:', templateData);
+        throw new Error('No PDF file or ID available - cannot create template without a PDF');
+      }
+
+      // Final validation: ensure pdfId exists before proceeding
+      if (!pdfId) {
+        console.error('[handleSaveTemplate] ERROR: pdfId is undefined after all branches!');
+        throw new Error('Internal error: PDF ID not set');
       }
 
       if (templateId) {
@@ -275,17 +301,27 @@ function TemplatesPage() {
         console.log('Template version created successfully');
       } else {
         // CREATE MODE: Create new template
-        console.log('Creating new template');
-        await createTemplate.mutateAsync({
+        console.log('[handleSaveTemplate] Creating new template with PDF ID:', pdfId);
+
+        // Build request object with proper typing
+        const createRequest: CreateTemplateRequest = {
           name: templateData.name,
-          description: templateData.description,
+          description: templateData.description || '',
           source_pdf_id: pdfId,
           signature_objects: templateData.signature_objects,
           extraction_fields: templateData.extraction_fields,
           pipeline_state: templateData.pipeline_state,
           visual_state: templateData.visual_state,
-        } as any);
-        console.log('Template created successfully');
+        };
+
+        console.log('[handleSaveTemplate] Request payload:', {
+          ...createRequest,
+          signature_objects: `${Object.keys(createRequest.signature_objects).length} object types`,
+          extraction_fields: `${createRequest.extraction_fields.length} fields`,
+        });
+
+        await createTemplate.mutateAsync(createRequest);
+        console.log('[handleSaveTemplate] Template created successfully');
       }
 
       // Close modal on success

@@ -13,9 +13,10 @@ import {
   type EtoRunListItem,
   type EtoRunStatus,
 } from '../../../features/eto';
-import { TemplateBuilder } from '../../../features/templates/components';
+import { TemplateBuilder, type TemplateBuilderData } from '../../../features/templates/components';
 import { useCreateTemplate, useActivateTemplate } from '../../../features/templates';
-import { usePdfMetadata } from '../../../features/pdf';
+import type { CreateTemplateRequest } from '../../../features/templates/api/types';
+import { usePdfMetadata, useUploadPdf } from '../../../features/pdf';
 
 export const Route = createFileRoute('/dashboard/eto/')({
   component: EtoPage,
@@ -33,6 +34,7 @@ function EtoPage() {
   const deleteMutation = useDeleteRuns();
   const createTemplate = useCreateTemplate();
   const activateTemplate = useActivateTemplate();
+  const { mutateAsync: uploadPdf } = useUploadPdf();
 
   // State for run detail modal
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
@@ -153,32 +155,63 @@ function EtoPage() {
     }
   };
 
-  const handleSaveTemplate = async (templateData: any) => {
-    console.log('Saving template:', templateData);
+  const handleSaveTemplate = async (templateData: TemplateBuilderData) => {
+    console.log('[ETO handleSaveTemplate] Called with:', {
+      pdf_file: templateData.pdf_file?.name,
+      templateBuilderPdfId,
+      templateBuilderRunId,
+    });
 
     try {
-      // Call API to save template
-      const createdTemplate = await createTemplate.mutateAsync({
+      let pdfId: number | undefined;
+
+      // Step 1: Upload subset PDF if provided, otherwise use existing PDF ID
+      if (templateData.pdf_file) {
+        console.log('[ETO handleSaveTemplate] Uploading subset PDF:', templateData.pdf_file.name, 'size:', templateData.pdf_file.size);
+        const uploadedPdf = await uploadPdf(templateData.pdf_file);
+        pdfId = uploadedPdf.id;
+        console.log('[ETO handleSaveTemplate] PDF uploaded successfully, ID:', pdfId);
+
+        if (!pdfId) {
+          throw new Error('PDF upload succeeded but returned no ID');
+        }
+      } else if (templateBuilderPdfId != null) {
+        // Fallback: use existing PDF from ETO run (shouldn't happen with new subset PDF flow)
+        pdfId = templateBuilderPdfId;
+        console.log('[ETO handleSaveTemplate] Using existing PDF ID from ETO run:', pdfId);
+      } else {
+        throw new Error('No PDF file or ID available - cannot create template without a PDF');
+      }
+
+      // Final validation
+      if (!pdfId) {
+        throw new Error('Internal error: PDF ID not set');
+      }
+
+      // Step 2: Create template with uploaded PDF ID
+      console.log('[ETO handleSaveTemplate] Creating template with PDF ID:', pdfId);
+      const createRequest: CreateTemplateRequest = {
         name: templateData.name,
-        description: templateData.description,
-        source_pdf_id: templateData.source_pdf_id!,
+        description: templateData.description || '',
+        source_pdf_id: pdfId,
         signature_objects: templateData.signature_objects,
         extraction_fields: templateData.extraction_fields,
         pipeline_state: templateData.pipeline_state,
         visual_state: templateData.visual_state,
-      } as any);
+      };
 
-      console.log('Template created successfully:', createdTemplate.id);
+      const createdTemplate = await createTemplate.mutateAsync(createRequest);
+      console.log('[ETO handleSaveTemplate] Template created successfully:', createdTemplate.id);
 
-      // Automatically activate the template
+      // Step 3: Automatically activate the template
       await activateTemplate.mutateAsync(createdTemplate.id);
-      console.log('Template activated successfully');
+      console.log('[ETO handleSaveTemplate] Template activated successfully');
 
-      // Reprocess the ETO run if it was built from a run
+      // Step 4: Reprocess the ETO run if it was built from a run
       if (templateBuilderRunId) {
-        console.log('Reprocessing ETO run:', templateBuilderRunId);
+        console.log('[ETO handleSaveTemplate] Reprocessing ETO run:', templateBuilderRunId);
         await reprocessMutation.mutateAsync({ run_ids: [templateBuilderRunId] });
-        console.log('ETO run reprocessed successfully');
+        console.log('[ETO handleSaveTemplate] ETO run reprocessed successfully');
       }
 
       // Close modal
@@ -187,7 +220,7 @@ function EtoPage() {
 
       // TanStack Query will auto-refetch when mutations complete
     } catch (err) {
-      console.error('Failed to create/activate template:', err);
+      console.error('[ETO handleSaveTemplate] Failed to create/activate template:', err);
       // Re-throw to let modal handle error display
       throw err;
     }

@@ -152,8 +152,7 @@ class PdfFilesService:
     def get_pdf_objects(
         self,
         pdf_id: int,
-        object_type: str | None = None,
-        pages: list[int] | None = None
+        object_type: str | None = None
     ) -> PdfObjects:
         """
         Get all extracted objects for a PDF.
@@ -163,7 +162,6 @@ class PdfFilesService:
         Args:
             pdf_id: PDF record ID
             object_type: Optional filter (not implemented - would require creating filtered PdfObjects)
-            pages: Optional list of page numbers to filter (1-indexed). If None, returns all pages.
 
         Returns:
             PdfObjects dataclass with typed objects
@@ -176,20 +174,13 @@ class PdfFilesService:
         if not metadata:
             raise ObjectNotFoundError(f"PDF {pdf_id} not found")
 
-        objects = metadata.extracted_objects
-
-        # Filter by pages if specified
-        if pages is not None:
-            objects = self._filter_objects_by_pages(objects, pages)
-
         # Note: object_type filtering not implemented (would require constructing new PdfObjects)
-        return objects
+        return metadata.extracted_objects
 
     def extract_objects_from_bytes(
         self,
         pdf_bytes: bytes,
-        filename: str,
-        pages: list[int] | None = None
+        filename: str
     ) -> PdfObjects:
         """
         Extract objects from PDF bytes without storing the PDF.
@@ -207,7 +198,6 @@ class PdfFilesService:
         Args:
             pdf_bytes: Raw PDF file bytes
             filename: Original filename (for logging/error messages)
-            pages: Optional list of page numbers to filter (1-indexed). If None, extracts all pages.
 
         Returns:
             PdfObjects dataclass with typed objects
@@ -228,11 +218,10 @@ class PdfFilesService:
                 tmp_file.write(pdf_bytes)
 
             try:
-                # Extract objects from temporary file (returns dict)
+                # Extract objects from temporary file
                 extracted_objects = self._extract_objects_from_file(
                     tmp_path,
-                    filename,
-                    pages=pages
+                    filename
                 )
 
                 return extracted_objects
@@ -408,7 +397,7 @@ class PdfFilesService:
                 len(extracted_objects.tables)
             )
 
-            # Calculate page count from objects
+            # Calculate page count from objects (pages are 1-indexed)
             page_count = 0
             for obj_list in [
                 extracted_objects.text_words,
@@ -417,7 +406,7 @@ class PdfFilesService:
                 extracted_objects.tables
             ]:
                 for obj in obj_list:
-                    page_count = max(page_count, obj.page + 1)
+                    page_count = max(page_count, obj.page)
 
             # Create database record with typed extracted_objects
             pdf_create = PdfFileCreate(
@@ -481,33 +470,10 @@ class PdfFilesService:
         # Return as-is for primitive types
         return value
 
-    def _filter_objects_by_pages(self, objects: PdfObjects, pages: list[int]) -> PdfObjects:
-        """
-        Filter PdfObjects to only include objects from specified pages.
-
-        Args:
-            objects: PdfObjects to filter
-            pages: List of page numbers (1-indexed) to include
-
-        Returns:
-            New PdfObjects containing only objects from specified pages
-        """
-        page_set = set(pages)  # O(1) lookups
-
-        return PdfObjects(
-            text_words=[w for w in objects.text_words if w.page in page_set],
-            graphic_rects=[r for r in objects.graphic_rects if r.page in page_set],
-            graphic_lines=[l for l in objects.graphic_lines if l.page in page_set],
-            graphic_curves=[c for c in objects.graphic_curves if c.page in page_set],
-            images=[i for i in objects.images if i.page in page_set],
-            tables=[t for t in objects.tables if t.page in page_set],
-        )
-
     def _extract_objects_from_file(
         self,
         file_path: Path,
-        filename: str,
-        pages: list[int] | None = None
+        filename: str
     ) -> PdfObjects:
         """
         Extract objects from PDF file using pdfplumber.
@@ -527,7 +493,6 @@ class PdfFilesService:
         Args:
             file_path: Path to PDF file on filesystem
             filename: Original filename (for logging)
-            pages: Optional list of page numbers to extract (1-indexed). If None, extracts all pages.
 
         Returns:
             PdfObjects dataclass with typed objects (all clean, JSON-serializable)
@@ -544,17 +509,10 @@ class PdfFilesService:
         images: list[Image] = []
         tables: list[Table] = []
 
-        # Convert pages list to set for O(1) lookups
-        page_set = set(pages) if pages is not None else None
-
         try:
             with pdfplumber.open(file_path) as pdf:
                 for page in pdf.pages:
-                    page_num = page.page_number  # Keep 1-indexed
-
-                    # Skip this page if not in the requested pages list
-                    if page_set is not None and page_num not in page_set:
-                        continue
+                    page_num = page.page_number  # 1-indexed
 
                     # Extract text words → TextWord dataclasses
                     words = page.extract_words()

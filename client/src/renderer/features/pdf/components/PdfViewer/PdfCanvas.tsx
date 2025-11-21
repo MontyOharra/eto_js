@@ -21,7 +21,7 @@ export interface PdfCanvasProps {
 export function PdfCanvas({ pdfUrl, onError, children, onMouseDown, onMouseMove, onMouseUp, onClick }: PdfCanvasProps) {
   const {
     scale, // User's zoom level
-    actualPdfPage, // Actual PDF page to render
+    currentPage, // Current PDF page to render
     pdfDimensions,
     setScale,
     onDocumentLoadSuccess,
@@ -136,7 +136,7 @@ export function PdfCanvas({ pdfUrl, onError, children, onMouseDown, onMouseMove,
                   }}
                 >
                   <Page
-                    pageNumber={actualPdfPage}
+                    pageNumber={currentPage}
                     scale={RENDER_SCALE}
                     renderTextLayer={false}
                     renderAnnotationLayer={false}
@@ -150,22 +150,22 @@ export function PdfCanvas({ pdfUrl, onError, children, onMouseDown, onMouseMove,
                       className="absolute top-0 left-0 w-full h-full"
                       onMouseDown={(e) => {
                         if (onMouseDown && pageWrapperRef.current) {
-                          onMouseDown(e, pageWrapperRef.current, actualPdfPage, scale, pdfDimensions.height);
+                          onMouseDown(e, pageWrapperRef.current, currentPage, scale, pdfDimensions.height);
                         }
                       }}
                       onMouseMove={(e) => {
                         if (onMouseMove && pageWrapperRef.current) {
-                          onMouseMove(e, pageWrapperRef.current, actualPdfPage, scale, pdfDimensions.height);
+                          onMouseMove(e, pageWrapperRef.current, currentPage, scale, pdfDimensions.height);
                         }
                       }}
                       onMouseUp={(e) => {
                         if (onMouseUp && pageWrapperRef.current) {
-                          onMouseUp(e, pageWrapperRef.current, actualPdfPage, scale, pdfDimensions.height);
+                          onMouseUp(e, pageWrapperRef.current, currentPage, scale, pdfDimensions.height);
                         }
                       }}
                       onClick={(e) => {
                         if (onClick && pageWrapperRef.current) {
-                          onClick(e, pageWrapperRef.current, actualPdfPage, scale, pdfDimensions.height);
+                          onClick(e, pageWrapperRef.current, currentPage, scale, pdfDimensions.height);
                         }
                       }}
                     >

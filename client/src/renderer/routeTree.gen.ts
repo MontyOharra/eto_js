@@ -18,6 +18,7 @@ import { Route as DashboardPipelinesIndexRouteImport } from './pages/dashboard/p
 import { Route as DashboardPdfTemplatesIndexRouteImport } from './pages/dashboard/pdf-templates/index'
 import { Route as DashboardEtoIndexRouteImport } from './pages/dashboard/eto/index'
 import { Route as DashboardConfigsIndexRouteImport } from './pages/dashboard/configs/index'
+import { Route as DashboardTestRunIdRouteImport } from './pages/dashboard/test/$runId'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -65,12 +66,18 @@ const DashboardConfigsIndexRoute = DashboardConfigsIndexRouteImport.update({
   path: '/configs/',
   getParentRoute: () => DashboardRouteRoute,
 } as any)
+const DashboardTestRunIdRoute = DashboardTestRunIdRouteImport.update({
+  id: '/test/$runId',
+  path: '/test/$runId',
+  getParentRoute: () => DashboardRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRouteRouteWithChildren
   '/login': typeof LoginRoute
   '/dashboard/': typeof DashboardIndexRoute
+  '/dashboard/test/$runId': typeof DashboardTestRunIdRoute
   '/dashboard/configs': typeof DashboardConfigsIndexRoute
   '/dashboard/eto': typeof DashboardEtoIndexRoute
   '/dashboard/pdf-templates': typeof DashboardPdfTemplatesIndexRoute
@@ -81,6 +88,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/dashboard': typeof DashboardIndexRoute
+  '/dashboard/test/$runId': typeof DashboardTestRunIdRoute
   '/dashboard/configs': typeof DashboardConfigsIndexRoute
   '/dashboard/eto': typeof DashboardEtoIndexRoute
   '/dashboard/pdf-templates': typeof DashboardPdfTemplatesIndexRoute
@@ -93,6 +101,7 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRouteRouteWithChildren
   '/login': typeof LoginRoute
   '/dashboard/': typeof DashboardIndexRoute
+  '/dashboard/test/$runId': typeof DashboardTestRunIdRoute
   '/dashboard/configs/': typeof DashboardConfigsIndexRoute
   '/dashboard/eto/': typeof DashboardEtoIndexRoute
   '/dashboard/pdf-templates/': typeof DashboardPdfTemplatesIndexRoute
@@ -106,6 +115,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/login'
     | '/dashboard/'
+    | '/dashboard/test/$runId'
     | '/dashboard/configs'
     | '/dashboard/eto'
     | '/dashboard/pdf-templates'
@@ -116,6 +126,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/dashboard'
+    | '/dashboard/test/$runId'
     | '/dashboard/configs'
     | '/dashboard/eto'
     | '/dashboard/pdf-templates'
@@ -127,6 +138,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/login'
     | '/dashboard/'
+    | '/dashboard/test/$runId'
     | '/dashboard/configs/'
     | '/dashboard/eto/'
     | '/dashboard/pdf-templates/'
@@ -205,11 +217,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardConfigsIndexRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
+    '/dashboard/test/$runId': {
+      id: '/dashboard/test/$runId'
+      path: '/test/$runId'
+      fullPath: '/dashboard/test/$runId'
+      preLoaderRoute: typeof DashboardTestRunIdRouteImport
+      parentRoute: typeof DashboardRouteRoute
+    }
   }
 }
 
 interface DashboardRouteRouteChildren {
   DashboardIndexRoute: typeof DashboardIndexRoute
+  DashboardTestRunIdRoute: typeof DashboardTestRunIdRoute
   DashboardConfigsIndexRoute: typeof DashboardConfigsIndexRoute
   DashboardEtoIndexRoute: typeof DashboardEtoIndexRoute
   DashboardPdfTemplatesIndexRoute: typeof DashboardPdfTemplatesIndexRoute
@@ -219,6 +239,7 @@ interface DashboardRouteRouteChildren {
 
 const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
   DashboardIndexRoute: DashboardIndexRoute,
+  DashboardTestRunIdRoute: DashboardTestRunIdRoute,
   DashboardConfigsIndexRoute: DashboardConfigsIndexRoute,
   DashboardEtoIndexRoute: DashboardEtoIndexRoute,
   DashboardPdfTemplatesIndexRoute: DashboardPdfTemplatesIndexRoute,

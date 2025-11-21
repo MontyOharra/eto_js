@@ -3,7 +3,7 @@ PDF Files API Router
 API endpoints for PDF file access and object extraction
 """
 import logging
-from fastapi import APIRouter, Depends, UploadFile, File, status
+from fastapi import APIRouter, Depends, UploadFile, File, Query, status
 from fastapi.responses import Response
 
 from api.schemas.pdf_files import (
@@ -98,8 +98,7 @@ async def download_pdf(
 @router.get("/{id}/objects", response_model=GetPdfObjectsResponse)
 async def get_pdf_objects(
     id: int,
-    object_type: str | None = None,
-    pages: list[int] | None = None,
+    object_type: str | None = Query(None),
     pdf_service: PdfFilesService = Depends(
         lambda: ServiceContainer.get_pdf_files_service()
     )
@@ -110,9 +109,8 @@ async def get_pdf_objects(
     Args:
         id: PDF file ID
         object_type: Optional object type filter (not currently implemented)
-        pages: Optional list of page numbers to filter (1-indexed). If None, returns all pages.
     """
-    objects = pdf_service.get_pdf_objects(id, object_type, pages)
+    objects = pdf_service.get_pdf_objects(id, object_type)
     pdf = pdf_service.get_pdf_file(id)
     return convert_pdf_objects_response(
         pdf_file_id=id,
@@ -124,7 +122,6 @@ async def get_pdf_objects(
 @router.post("/process-objects", response_model=ProcessPdfObjectsResponse)
 async def process_pdf_objects(
     pdf_file: UploadFile = File(...),
-    pages: list[int] | None = None,
     pdf_service: PdfFilesService = Depends(
         lambda: ServiceContainer.get_pdf_files_service()
     )
@@ -134,7 +131,6 @@ async def process_pdf_objects(
 
     Args:
         pdf_file: PDF file to process
-        pages: Optional list of page numbers to filter (1-indexed). If None, returns all pages.
     """
     # Validate file upload
     if not pdf_file or not pdf_file.filename or not pdf_file.filename.endswith('.pdf'):
@@ -146,8 +142,7 @@ async def process_pdf_objects(
     # Extract objects (returns typed PdfObjects)
     objects = pdf_service.extract_objects_from_bytes(
         pdf_bytes,
-        pdf_file.filename or "uploaded.pdf",
-        pages=pages
+        pdf_file.filename or "uploaded.pdf"
     )
 
     # Calculate page count from objects

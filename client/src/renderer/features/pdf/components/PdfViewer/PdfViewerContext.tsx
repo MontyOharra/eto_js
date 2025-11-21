@@ -20,9 +20,8 @@ export interface PdfViewerContextValue {
   // State
   scale: number; // User's zoom level (0.5 - 3.0)
   renderScale: number; // Fixed scale PDF is rendered at (for overlay calculations)
-  currentPage: number; // Virtual page number shown to user (1-indexed)
-  actualPdfPage: number; // Actual PDF page being rendered (1-indexed)
-  numPages: number | null; // Virtual page count (or total if no selection)
+  currentPage: number; // Current page number (1-indexed)
+  numPages: number | null; // Total page count
   pdfDimensions: PdfDimensions | null;
 
   // Actions
