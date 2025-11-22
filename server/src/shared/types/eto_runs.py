@@ -4,7 +4,10 @@ Dataclasses representing eto_runs table and related operations
 """
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Literal, Optional, Dict, Any, TypedDict
+from typing import Literal, Optional, Dict, Any, TypedDict, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from shared.types.eto_sub_runs import EtoSubRunDetailView
 
 # =========================
 # Type Aliases for Enums
@@ -217,7 +220,7 @@ class EtoRunDetailView:
 
     # Sub-runs (list of all sub-runs for this PDF)
     # Will be split into matchedSubRuns, needsTemplateSubRuns, skippedSubRuns by API mapper
-    sub_runs: list[Any]  # TODO: Change to list['EtoSubRunDetailView'] once eto_sub_runs.py created
+    sub_runs: list['EtoSubRunDetailView']
 
     # Timestamps
     created_at: datetime
