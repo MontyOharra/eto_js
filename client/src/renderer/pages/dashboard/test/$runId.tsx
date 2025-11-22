@@ -10,8 +10,8 @@ const mockEtoRunDetail = {
   pdfFilename: 'receipts_jan_2024.pdf',
   source: 'Manual Upload',
   sourceDate: '2024-01-15 10:40:18',
-  masterStatus: 'success',
-  totalPages: 8,
+  masterStatus: 'failure',
+  totalPages: 15,
   createdAt: '2024-01-15 10:45:32',
   lastUpdated: '2024-01-15 11:02:14',
   processingStep: 'sub_runs',
@@ -20,18 +20,17 @@ const mockEtoRunDetail = {
   pdfFile: {
     id: 123,
     storagePath: '/storage/uploads/receipts_jan_2024.pdf',
-    fileSize: '2.4 MB',
+    fileSize: '3.8 MB',
   },
 
   // Email details (if from email)
-  emailDetails: null, // Would be populated if source was email
+  emailDetails: null,
 
-  // Sub-runs breakdown
-  subRuns: [
+  // Matched sub-runs (with template matches)
+  matchedSubRuns: [
     {
       id: 1,
-      pageStart: 1,
-      pageEnd: 3,
+      pages: [1, 2, 3],
       status: 'success',
       template: {
         id: 5,
@@ -43,14 +42,14 @@ const mockEtoRunDetail = {
         total: '$1,245.67',
         date: '2024-01-10',
         invoiceNumber: 'INV-2024-001',
+        poNumber: 'PO-9876',
       },
       processedAt: '2024-01-15 10:52:08',
       errorMessage: null,
     },
     {
       id: 2,
-      pageStart: 4,
-      pageEnd: 5,
+      pages: [4, 5],
       status: 'success',
       template: {
         id: 5,
@@ -62,31 +61,64 @@ const mockEtoRunDetail = {
         total: '$842.33',
         date: '2024-01-12',
         invoiceNumber: 'INV-2024-045',
+        poNumber: 'PO-9877',
       },
       processedAt: '2024-01-15 10:58:22',
       errorMessage: null,
     },
     {
       id: 3,
-      pageStart: 6,
-      pageEnd: 8,
-      status: 'needs_template',
-      template: null,
+      pages: [8, 9],
+      status: 'failure',
+      template: {
+        id: 7,
+        name: 'Shipping Invoice Template',
+        description: 'UPS/FedEx shipping invoice format',
+      },
       extractedData: null,
-      processedAt: null,
-      errorMessage: null,
+      processedAt: '2024-01-15 11:01:45',
+      errorMessage: 'Failed to extract tracking number: OCR confidence too low (0.42)',
+    },
+    {
+      id: 4,
+      pages: [12],
+      status: 'failure',
+      template: {
+        id: 5,
+        name: 'Vendor Receipt Template',
+        description: 'Standard vendor receipt format',
+      },
+      extractedData: null,
+      processedAt: '2024-01-15 11:02:10',
+      errorMessage: 'Missing required field: total amount not found in expected region',
     },
   ],
 
-  // Actions/history log
-  activityLog: [
-    { timestamp: '2024-01-15 10:45:32', action: 'Run created', user: 'System' },
-    { timestamp: '2024-01-15 10:45:35', action: 'Template matching started', user: 'System' },
-    { timestamp: '2024-01-15 10:45:42', action: 'Found 2 template matches', user: 'System' },
-    { timestamp: '2024-01-15 10:45:45', action: 'Sub-run processing started', user: 'System' },
-    { timestamp: '2024-01-15 10:52:08', action: 'Sub-run 1 completed successfully', user: 'System' },
-    { timestamp: '2024-01-15 10:58:22', action: 'Sub-run 2 completed successfully', user: 'System' },
-    { timestamp: '2024-01-15 11:02:14', action: 'Run completed with 3 unmatched pages', user: 'System' },
+  // Needs template sub-runs (no template match found)
+  needsTemplateSubRuns: [
+    {
+      id: 5,
+      pages: [6, 7],
+      status: 'needs_template',
+      createdAt: '2024-01-15 10:47:22',
+    },
+    {
+      id: 6,
+      pages: [13],
+      status: 'needs_template',
+      createdAt: '2024-01-15 10:47:22',
+    },
+  ],
+
+  // Skipped sub-runs (user explicitly skipped)
+  skippedSubRuns: [
+    {
+      id: 7,
+      pages: [10, 11, 14, 15],
+      status: 'skipped',
+      skippedAt: '2024-01-15 11:05:18',
+      skippedReason: 'Consolidated from failed extraction attempts',
+    },
   ],
 };
 
@@ -169,7 +201,7 @@ function EtoRunDetailPage() {
               </div>
               <div>
                 <p className="text-gray-400 text-sm">Templates Matched</p>
-                <p className="text-white text-lg font-semibold mt-1">{mockEtoRunDetail.subRuns.filter(sr => sr.template).length}</p>
+                <p className="text-white text-lg font-semibold mt-1">{mockEtoRunDetail.matchedSubRuns.length}</p>
               </div>
               <div>
                 <p className="text-gray-400 text-sm">Processing Time</p>
@@ -178,104 +210,167 @@ function EtoRunDetailPage() {
             </div>
           </div>
 
-          {/* Sub-runs Section */}
-          <div className="bg-gray-800 rounded-lg p-6 flex flex-col min-h-0 flex-1">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-white">Sub-runs ({mockEtoRunDetail.subRuns.length})</h2>
-              <span className="text-gray-400 text-sm">
-                {mockEtoRunDetail.subRuns.filter(sr => sr.status === 'needs_template').length} need attention
-              </span>
-            </div>
+          {/* Sub-runs Section - Matched Templates */}
+          {mockEtoRunDetail.matchedSubRuns.length > 0 && (
+            <div className="bg-gray-800 rounded-lg p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold text-white">Matched Templates ({mockEtoRunDetail.matchedSubRuns.length})</h2>
+                <span className="text-gray-400 text-sm">
+                  {mockEtoRunDetail.matchedSubRuns.filter(sr => sr.status === 'success').length} successful, {mockEtoRunDetail.matchedSubRuns.filter(sr => sr.status === 'failure').length} failed
+                </span>
+              </div>
 
-            <div className="space-y-3 overflow-y-auto pr-2 flex-1">
-              {mockEtoRunDetail.subRuns.map((subRun) => {
-                const renderButtons = () => {
-                  switch (subRun.status) {
-                    case 'success':
-                      return (
-                        <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium transition-colors">
-                          View
-                        </button>
-                      );
-                    case 'failure':
-                      return (
-                        <>
-                          <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium transition-colors">
-                            View
-                          </button>
-                          <button className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm font-medium transition-colors">
-                            Reprocess
-                          </button>
-                          <button className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-md text-sm font-medium transition-colors">
-                            Skip
-                          </button>
-                        </>
-                      );
-                    case 'needs_template':
-                      return (
-                        <>
-                          <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium transition-colors">
-                            Build Template
-                          </button>
-                          <button className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm font-medium transition-colors">
-                            Reprocess
-                          </button>
-                          <button className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-md text-sm font-medium transition-colors">
-                            Skip
-                          </button>
-                        </>
-                      );
-                    case 'skipped':
-                      return (
-                        <>
-                          <button className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm font-medium transition-colors">
-                            Reprocess
-                          </button>
-                          <button className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm font-medium transition-colors">
-                            Delete
-                          </button>
-                        </>
-                      );
-                    case 'processing':
-                    case 'not_started':
-                    default:
-                      return null;
-                  }
-                };
-
-                return (
+              <div className="space-y-3">
+                {mockEtoRunDetail.matchedSubRuns.map((subRun) => (
                   <div
                     key={subRun.id}
-                    className="bg-gray-700/30 rounded-lg p-4 border border-gray-700 hover:border-gray-600 transition-colors"
+                    className={`rounded-lg p-4 border transition-colors ${
+                      subRun.status === 'failure'
+                        ? 'bg-red-900/10 border-red-700/50 hover:border-red-600'
+                        : 'bg-gray-700/30 border-gray-700 hover:border-gray-600'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${getStatusColor(subRun.status)}`}>
+                          {getStatusIcon(subRun.status)}
+                        </span>
+                        <h3 className="text-white font-semibold">
+                          Pages {subRun.pages.join(', ')} • {subRun.template.name}
+                        </h3>
+                      </div>
+
+                      <div className="flex gap-2">
+                        {subRun.status === 'success' && (
+                          <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium transition-colors whitespace-nowrap">
+                            View Details
+                          </button>
+                        )}
+                        {subRun.status === 'failure' && (
+                          <>
+                            <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium transition-colors whitespace-nowrap">
+                              View Details
+                            </button>
+                            <button className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm font-medium transition-colors whitespace-nowrap">
+                              Reprocess
+                            </button>
+                            <button className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-md text-sm font-medium transition-colors whitespace-nowrap">
+                              Skip
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {subRun.status === 'success' && subRun.extractedData && (
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm ml-11">
+                        {Object.entries(subRun.extractedData).map(([key, value]) => (
+                          <div key={key} className="flex gap-2">
+                            <span className="text-gray-500 capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}:</span>
+                            <span className="text-gray-300">{value as string}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {subRun.status === 'failure' && subRun.errorMessage && (
+                      <div className="p-3 bg-red-900/20 border border-red-700/30 rounded text-sm">
+                        <p className="text-red-300">{subRun.errorMessage}</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Needs Template Section */}
+          {mockEtoRunDetail.needsTemplateSubRuns.length > 0 && (
+            <div className="bg-gray-800 rounded-lg p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold text-white">Needs Template ({mockEtoRunDetail.needsTemplateSubRuns.length})</h2>
+                <span className="text-yellow-400 text-sm">
+                  {mockEtoRunDetail.needsTemplateSubRuns.reduce((acc, sr) => acc + sr.pages.length, 0)} pages unmatched
+                </span>
+              </div>
+
+              <div className="space-y-3">
+                {mockEtoRunDetail.needsTemplateSubRuns.map((subRun) => (
+                  <div
+                    key={subRun.id}
+                    className="bg-yellow-900/10 rounded-lg p-4 border border-yellow-700/50 hover:border-yellow-600 transition-colors"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${getStatusColor(subRun.status)}`}>
-                          {getStatusIcon(subRun.status)}
+                        <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${getStatusColor('needs_template')}`}>
+                          {getStatusIcon('needs_template')}
                         </span>
                         <div>
                           <h3 className="text-white font-semibold">
-                            Pages {subRun.pageStart}-{subRun.pageEnd}
-                            {subRun.template && ` • ${subRun.template.name}`}
+                            Pages {subRun.pages.join(', ')}
                           </h3>
-                          {subRun.template && (
-                            <p className="text-gray-400 text-sm">{subRun.template.description}</p>
-                          )}
-                          {subRun.status === 'needs_template' && (
-                            <p className="text-yellow-400 text-sm">No matching template found</p>
-                          )}
+                          <p className="text-yellow-400 text-sm">No matching template found</p>
                         </div>
                       </div>
 
                       <div className="flex gap-2">
-                        {renderButtons()}
+                        <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium transition-colors whitespace-nowrap">
+                          Build Template
+                        </button>
+                        <button className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm font-medium transition-colors whitespace-nowrap">
+                          Reprocess
+                        </button>
+                        <button className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-md text-sm font-medium transition-colors whitespace-nowrap">
+                          Skip
+                        </button>
                       </div>
                     </div>
                   </div>
-                );
-              })}
+                ))}
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Skipped Section */}
+          {mockEtoRunDetail.skippedSubRuns.length > 0 && (
+            <div className="bg-gray-800 rounded-lg p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold text-white">Skipped ({mockEtoRunDetail.skippedSubRuns.length})</h2>
+                <span className="text-gray-400 text-sm">
+                  {mockEtoRunDetail.skippedSubRuns.reduce((acc, sr) => acc + sr.pages.length, 0)} pages skipped
+                </span>
+              </div>
+
+              <div className="space-y-3">
+                {mockEtoRunDetail.skippedSubRuns.map((subRun) => (
+                  <div
+                    key={subRun.id}
+                    className="bg-gray-700/50 rounded-lg p-4 border border-gray-600 hover:border-gray-500 transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-gray-400 bg-gray-400/10`}>
+                          ⊘
+                        </span>
+                        <div>
+                          <h3 className="text-white font-semibold">
+                            Pages {subRun.pages.join(', ')}
+                          </h3>
+                          <p className="text-gray-400 text-sm">{subRun.skippedReason}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <button className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm font-medium transition-colors whitespace-nowrap">
+                          Reprocess
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Sidebar - 1 column */}
@@ -288,7 +383,10 @@ function EtoRunDetailPage() {
                 View PDF
               </button>
               {(() => {
-                const hasNonSuccessRuns = mockEtoRunDetail.subRuns.some(sr => sr.status !== 'success');
+                const hasFailedRuns = mockEtoRunDetail.matchedSubRuns.some(sr => sr.status === 'failure');
+                const hasNeedsTemplate = mockEtoRunDetail.needsTemplateSubRuns.length > 0;
+                const hasNonSuccessRuns = hasFailedRuns || hasNeedsTemplate;
+
                 return (
                   <>
                     <button
@@ -345,16 +443,22 @@ function EtoRunDetailPage() {
             <div className="flex flex-wrap gap-2">
               {Array.from({ length: mockEtoRunDetail.totalPages }, (_, i) => {
                 const pageNum = i + 1;
-                const subRun = mockEtoRunDetail.subRuns.find(
-                  sr => pageNum >= sr.pageStart && pageNum <= sr.pageEnd
-                );
-                const statusColor = subRun ? getStatusColor(subRun.status) : 'text-gray-500 bg-gray-500/10';
+
+                // Check all sub-run types for this page
+                const matchedSubRun = mockEtoRunDetail.matchedSubRuns.find(sr => sr.pages.includes(pageNum));
+                const needsTemplateSubRun = mockEtoRunDetail.needsTemplateSubRuns.find(sr => sr.pages.includes(pageNum));
+                const skippedSubRun = mockEtoRunDetail.skippedSubRuns.find(sr => sr.pages.includes(pageNum));
+
+                const subRun = matchedSubRun || needsTemplateSubRun || skippedSubRun;
+                const status = matchedSubRun?.status || needsTemplateSubRun?.status || skippedSubRun?.status;
+                const statusColor = status ? getStatusColor(status) : 'text-gray-500 bg-gray-500/10';
+                const tooltipText = matchedSubRun?.template?.name || (needsTemplateSubRun ? 'No template' : (skippedSubRun ? 'Skipped' : 'Unprocessed'));
 
                 return (
                   <div
                     key={pageNum}
                     className={`w-10 h-10 flex items-center justify-center rounded text-sm font-semibold ${statusColor}`}
-                    title={subRun?.template?.name || 'No template'}
+                    title={tooltipText}
                   >
                     {pageNum}
                   </div>
@@ -364,11 +468,19 @@ function EtoRunDetailPage() {
             <div className="mt-4 flex flex-wrap gap-3 text-xs">
               <div className="flex items-center gap-1">
                 <div className="w-3 h-3 rounded bg-green-400/10"></div>
-                <span className="text-gray-400">Processed</span>
+                <span className="text-gray-400">Success</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 rounded bg-red-400/10"></div>
+                <span className="text-gray-400">Failed</span>
               </div>
               <div className="flex items-center gap-1">
                 <div className="w-3 h-3 rounded bg-yellow-400/10"></div>
                 <span className="text-gray-400">Needs Template</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 rounded bg-gray-400/10"></div>
+                <span className="text-gray-400">Skipped</span>
               </div>
             </div>
           </div>

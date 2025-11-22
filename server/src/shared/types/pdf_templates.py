@@ -188,3 +188,33 @@ class TemplateSimulateResult:
     extraction_fields: list[ExtractionField]
     extracted_data: dict[str, str]
     execution_result: PipelineExecutionResult
+
+
+# ========== Multi-Template Matching Dataclasses ==========
+
+@dataclass(frozen=True)
+class TemplateMatch:
+    """
+    Single template match for a consecutive page range.
+
+    Represents pages that matched a specific template version.
+    matched_pages is always consecutive (e.g., [1, 2, 3] or [5, 6]).
+    """
+    template_id: int
+    version_id: int
+    matched_pages: list[int]  # Consecutive pages, 1-indexed
+
+
+@dataclass(frozen=True)
+class TemplateMatchingResult:
+    """
+    Complete multi-template matching result for entire PDF.
+
+    Contains all matched template ranges and any unmatched pages.
+    Used to create EtoSubRuns after template matching stage.
+
+    matches: Ordered by page appearance (first match has lowest page numbers)
+    unmatched_pages: All pages that didn't match any template (can be non-consecutive)
+    """
+    matches: list[TemplateMatch]
+    unmatched_pages: list[int]  # Can be non-consecutive, 1-indexed

@@ -21,8 +21,10 @@ from shared.types.pdf_templates import (
     ExtractionField as ExtractionFieldDomain,
     TemplateSimulateData,
     TemplateSimulateResult,
+    TemplateMatch,
+    TemplateMatchingResult,
 )
-from shared.types.pdf_files import PdfObjects
+from shared.types.pdf_files import PdfObjects, PdfFile
 from shared.types.pipelines import PipelineState as PipelineStateDomain
 from shared.types.pipeline_definition_step import PipelineDefinitionStepCreate
 from shared.exceptions.service import ObjectNotFoundError, ConflictError, ServiceError
@@ -557,6 +559,368 @@ class PdfTemplateService:
             logger.error(f"Error in template matching: {e}", exc_info=True)
             return None
 
+    def match_templates_multi_page(self, pdf_file: PdfFile) -> TemplateMatchingResult:
+        """
+        Match templates page-by-page with multi-template support.
+
+        NEW ALGORITHM (replacing match_template for multi-template matching):
+        - Processes PDF page by page
+        - Each page can match a different template
+        - Matches are consecutive page ranges
+        - Greedy approach: once pages are matched, they're consumed
+
+        Args:
+            pdf_file: Complete PDF file with extracted objects and page_count
+
+        Returns:
+            TemplateMatchingResult with all matches and unmatched pages
+        """
+        from shared.types.pdf_templates import TemplateMatch, TemplateMatchingResult
+
+        logger.info(f"Starting multi-page template matching for PDF {pdf_file.id} ({pdf_file.page_count} pages)")
+
+        try:
+            # Get all active templates
+            active_templates = self.template_repository.list_templates(status="active")
+            assert pdf_file.page_count is not None
+            if not active_templates:
+                logger.info("No active templates found for matching")
+                # All pages are unmatched
+                return TemplateMatchingResult(
+                    matches=[],
+                    unmatched_pages=list(range(1, pdf_file.page_count + 1))
+                )
+
+            matches: list[TemplateMatch] = []
+            unmatched_pages: list[int] = []
+
+            current_page = 1
+            total_pages = pdf_file.page_count
+
+            # Process each page (or page range)
+            while current_page <= total_pages:
+                logger.info(f"[MATCH-DEBUG] ========== Processing PDF page {current_page} ==========")
+
+                # Find all templates that could match starting at current_page
+                candidate_templates: list[tuple[PdfTemplateListView, PdfTemplateVersion, int]] = []
+
+                for template in active_templates:
+                    try:
+                        # Skip if no current version
+                        if template.current_version_id is None:
+                            logger.debug(f"Template {template.id} has no current version, skipping")
+                            continue
+
+                        # Get the current version
+                        current_version = self.version_repository.get_by_id(template.current_version_id)
+                        if not current_version:
+                            logger.debug(f"Template {template.id} current version not found, skipping")
+                            continue
+
+                        # Get template page count from source PDF
+                        source_pdf = self.pdf_files_service.get_pdf_file(template.source_pdf_id)
+                        template_page_count = source_pdf.page_count
+
+                        if template_page_count is None:
+                            logger.warning(f"Template {template.id} source PDF has no page_count, skipping")
+                            continue
+
+                        # Check if template can fit (enough remaining pages)
+                        if current_page + template_page_count - 1 > total_pages:
+                            logger.debug(
+                                f"Template {template.id}: Not enough pages left "
+                                f"(needs {template_page_count}, have {total_pages - current_page + 1})"
+                            )
+                            continue
+
+                        # Check if ALL template signature objects exist in PDF pages
+                        if self._is_complete_multi_page_match(
+                            pdf_file=pdf_file,
+                            start_page=current_page,
+                            template_version=current_version,
+                            template_page_count=template_page_count
+                        ):
+                            candidate_templates.append((template, current_version, template_page_count))
+                            logger.debug(
+                                f"Template {template.id} (version {current_version.version_number}): "
+                                f"MATCH for pages {current_page}-{current_page + template_page_count - 1}"
+                            )
+                        else:
+                            logger.debug(
+                                f"Template {template.id} (version {current_version.version_number}): "
+                                f"No match starting at page {current_page}"
+                            )
+
+                    except Exception as e:
+                        logger.warning(f"Error checking template {template.id}: {e}")
+                        continue
+
+                if not candidate_templates:
+                    # No match for this page
+                    logger.info(f"[MATCH-DEBUG] Page {current_page}: No template match found")
+                    unmatched_pages.append(current_page)
+                    current_page += 1
+                    continue
+
+                # Find best match among candidates
+                # Convert to format expected by existing _find_best_match
+                # Need to calculate total object count for ranking
+                candidates_with_count = []
+                for template, version, page_count in candidate_templates:
+                    total_count = self._count_total_objects(version.signature_objects)
+                    candidates_with_count.append((template, version, total_count))
+
+                try:
+                    best_template, best_version, total_count = self._find_best_match(candidates_with_count)
+                    # Get the page count for the best match
+                    best_page_count = None
+                    for template, version, page_count in candidate_templates:
+                        if template.id == best_template.id and version.id == best_version.id:
+                            best_page_count = page_count
+                            break
+
+                    if best_page_count is None:
+                        raise ValueError("Could not find page count for best match")
+
+                except ValueError as e:
+                    logger.error(f"Error finding best match: {e}")
+                    unmatched_pages.append(current_page)
+                    current_page += 1
+                    continue
+
+                # Record match
+                matched_page_range = list(range(current_page, current_page + best_page_count))
+                matches.append(TemplateMatch(
+                    template_id=best_template.id,
+                    version_id=best_version.id,
+                    matched_pages=matched_page_range
+                ))
+
+                # Update version usage statistics
+                self.version_repository.increment_usage_count(best_version.id)
+
+                logger.info(
+                    f"[MATCH-DEBUG] Match recorded: Template {best_template.id} '{best_template.name}' "
+                    f"(version {best_version.version_number}) for pages {matched_page_range}"
+                )
+
+                # Skip past matched pages (greedy consumption)
+                logger.info(f"[MATCH-DEBUG] Advancing from page {current_page} to page {current_page + best_page_count}")
+                current_page += best_page_count
+
+            logger.info(
+                f"Multi-page matching complete: {len(matches)} matches, "
+                f"{len(unmatched_pages)} unmatched pages"
+            )
+
+            return TemplateMatchingResult(
+                matches=matches,
+                unmatched_pages=unmatched_pages
+            )
+
+        except Exception as e:
+            logger.error(f"Error in multi-page template matching: {e}", exc_info=True)
+            raise ServiceError(f"Multi-page template matching failed: {str(e)}") from e
+
+    def _filter_objects_by_page(self, pdf_objects: PdfObjects, page_num: int) -> PdfObjects:
+        """
+        Extract objects for a specific page from PdfObjects.
+
+        Args:
+            pdf_objects: Complete PdfObjects with all pages
+            page_num: Page number to filter (1-indexed)
+
+        Returns:
+            PdfObjects containing only objects from the specified page
+        """
+        return PdfObjects(
+            text_words=[obj for obj in pdf_objects.text_words if obj.page == page_num],
+            graphic_rects=[obj for obj in pdf_objects.graphic_rects if obj.page == page_num],
+            graphic_lines=[obj for obj in pdf_objects.graphic_lines if obj.page == page_num],
+            graphic_curves=[obj for obj in pdf_objects.graphic_curves if obj.page == page_num],
+            images=[obj for obj in pdf_objects.images if obj.page == page_num],
+            tables=[obj for obj in pdf_objects.tables if obj.page == page_num]
+        )
+
+
+    def _group_objects_by_page(self, pdf_objects: PdfObjects) -> dict[int, PdfObjects]:
+        """
+        Group PDF objects by page number.
+
+        Args:
+            pdf_objects: Complete PdfObjects with all pages
+
+        Returns:
+            Dictionary mapping page_num -> PdfObjects for that page
+        """
+        # Find all unique page numbers across all object types
+        all_pages: set[int] = set()
+
+        for obj in pdf_objects.text_words:
+            all_pages.add(obj.page)
+        for obj in pdf_objects.graphic_rects:
+            all_pages.add(obj.page)
+        for obj in pdf_objects.graphic_lines:
+            all_pages.add(obj.page)
+        for obj in pdf_objects.graphic_curves:
+            all_pages.add(obj.page)
+        for obj in pdf_objects.images:
+            all_pages.add(obj.page)
+        for obj in pdf_objects.tables:
+            all_pages.add(obj.page)
+
+        # Build dictionary
+        result: dict[int, PdfObjects] = {}
+        for page_num in sorted(all_pages):
+            result[page_num] = self._filter_objects_by_page(pdf_objects, page_num)
+
+        return result
+
+    def _remap_page_numbers(self, pdf_objects: PdfObjects, from_page: int, to_page: int) -> PdfObjects:
+        """
+        Remap page numbers in PdfObjects from one page to another.
+
+        This is critical for multi-template matching where we need to compare
+        template objects (with page numbers from the source PDF) against
+        target PDF objects (with different page numbers).
+
+        Example: Template page 1 objects need to match PDF page 5
+        - Template objects have .page = 1
+        - PDF objects have .page = 5
+        - We remap template objects to .page = 5 so comparison works
+
+        Args:
+            pdf_objects: PdfObjects to remap
+            from_page: Original page number to remap from
+            to_page: Target page number to remap to
+
+        Returns:
+            New PdfObjects with remapped page numbers
+        """
+        from dataclasses import replace
+
+        # Remap each object type
+        remapped_text_words = [
+            replace(obj, page=to_page) if obj.page == from_page else obj
+            for obj in pdf_objects.text_words
+        ]
+        remapped_graphic_rects = [
+            replace(obj, page=to_page) if obj.page == from_page else obj
+            for obj in pdf_objects.graphic_rects
+        ]
+        remapped_graphic_lines = [
+            replace(obj, page=to_page) if obj.page == from_page else obj
+            for obj in pdf_objects.graphic_lines
+        ]
+        remapped_graphic_curves = [
+            replace(obj, page=to_page) if obj.page == from_page else obj
+            for obj in pdf_objects.graphic_curves
+        ]
+        remapped_images = [
+            replace(obj, page=to_page) if obj.page == from_page else obj
+            for obj in pdf_objects.images
+        ]
+        remapped_tables = [
+            replace(obj, page=to_page) if obj.page == from_page else obj
+            for obj in pdf_objects.tables
+        ]
+
+        return PdfObjects(
+            text_words=remapped_text_words,
+            graphic_rects=remapped_graphic_rects,
+            graphic_lines=remapped_graphic_lines,
+            graphic_curves=remapped_graphic_curves,
+            images=remapped_images,
+            tables=remapped_tables
+        )
+
+    def _is_complete_multi_page_match(
+        self,
+        pdf_file: PdfFile,
+        start_page: int,
+        template_version: PdfTemplateVersion,
+        template_page_count: int
+    ) -> bool:
+        """
+        Check if ALL template signature objects exist in PDF pages for multi-page template.
+
+        For multi-page templates:
+        - Template page 1 objects must exist in PDF page start_page
+        - Template page 2 objects must exist in PDF page start_page + 1
+        - etc.
+
+        Args:
+            pdf_file: Complete PDF file with extracted objects
+            start_page: Starting page in PDF to match against (1-indexed)
+            template_version: Template version with signature objects
+            template_page_count: Number of pages in template
+
+        Returns:
+            True if ALL template signature objects match across all pages
+        """
+        logger.debug(
+            f"[MATCH-DEBUG] _is_complete_multi_page_match called: "
+            f"start_page={start_page}, template_page_count={template_page_count}, "
+            f"pdf_total_pages={pdf_file.page_count}"
+        )
+
+        # Group template signature objects by page
+        template_objects_by_page = self._group_objects_by_page(template_version.signature_objects)
+
+        logger.debug(
+            f"[MATCH-DEBUG] Template objects grouped by page: "
+            f"pages={list(template_objects_by_page.keys())}"
+        )
+
+        # Group PDF objects by page (cache for efficiency)
+        pdf_objects_by_page = self._group_objects_by_page(pdf_file.extracted_objects)
+
+        # Check each template page against corresponding PDF page
+        for template_page_num in range(1, template_page_count + 1):
+            pdf_page_num = start_page + template_page_num - 1
+
+            # Get objects for this specific page
+            template_page_objects = template_objects_by_page.get(template_page_num, PdfObjects(
+                text_words=[], graphic_rects=[], graphic_lines=[],
+                graphic_curves=[], images=[], tables=[]
+            ))
+            pdf_page_objects = pdf_objects_by_page.get(pdf_page_num, PdfObjects(
+                text_words=[], graphic_rects=[], graphic_lines=[],
+                graphic_curves=[], images=[], tables=[]
+            ))
+
+            logger.debug(
+                f"[MATCH-DEBUG] Comparing template_page={template_page_num} vs pdf_page={pdf_page_num}: "
+                f"template_objs={self._count_total_objects(template_page_objects)}, "
+                f"pdf_objs={self._count_total_objects(pdf_page_objects)}"
+            )
+
+            # CRITICAL FIX: Remap template object page numbers to match PDF page numbers
+            # Template objects have page numbers from the source PDF (1, 2, 3...)
+            # But we need to compare them against potentially different PDF pages
+            # Example: Template page 1 needs to match PDF page 5
+            # So we remap all template objects from page=1 to page=5 before comparison
+            remapped_template_objects = self._remap_page_numbers(
+                template_page_objects,
+                from_page=template_page_num,
+                to_page=pdf_page_num
+            )
+
+            logger.debug(
+                f"[MATCH-DEBUG] Remapped template objects from page {template_page_num} to page {pdf_page_num}"
+            )
+
+            # Check if ALL template objects on this page exist in PDF page
+            # Uses existing _is_complete_subset_match method
+            if not self._is_complete_subset_match(pdf_page_objects, remapped_template_objects):
+                logger.debug(
+                    f"[MATCH-DEBUG] FAILED: Template page {template_page_num} objects not found in PDF page {pdf_page_num}"
+                )
+                return False
+
+        logger.debug(f"[MATCH-DEBUG] SUCCESS: All {template_page_count} template pages matched starting at PDF page {start_page}")
+        return True
+
     def _is_complete_subset_match(self, pdf_objects: PdfObjects, template_objects: PdfObjects) -> bool:
         """
         Check if template signature objects are a complete subset of PDF objects.
@@ -569,14 +933,23 @@ class PdfTemplateService:
             True if ALL template objects are found in PDF, False otherwise
         """
         # Check each object type
-        return (
-            self._match_text_words(pdf_objects.text_words, template_objects.text_words) and
-            self._match_graphic_rects(pdf_objects.graphic_rects, template_objects.graphic_rects) and
-            self._match_graphic_lines(pdf_objects.graphic_lines, template_objects.graphic_lines) and
-            self._match_graphic_curves(pdf_objects.graphic_curves, template_objects.graphic_curves) and
-            self._match_images(pdf_objects.images, template_objects.images) and
-            self._match_tables(pdf_objects.tables, template_objects.tables)
+        text_match = self._match_text_words(pdf_objects.text_words, template_objects.text_words)
+        rect_match = self._match_graphic_rects(pdf_objects.graphic_rects, template_objects.graphic_rects)
+        line_match = self._match_graphic_lines(pdf_objects.graphic_lines, template_objects.graphic_lines)
+        curve_match = self._match_graphic_curves(pdf_objects.graphic_curves, template_objects.graphic_curves)
+        image_match = self._match_images(pdf_objects.images, template_objects.images)
+        table_match = self._match_tables(pdf_objects.tables, template_objects.tables)
+
+        logger.debug(
+            f"[MATCH-DEBUG] Object type matches: text={text_match} ({len(template_objects.text_words)} template), "
+            f"rects={rect_match} ({len(template_objects.graphic_rects)} template), "
+            f"lines={line_match} ({len(template_objects.graphic_lines)} template), "
+            f"curves={curve_match} ({len(template_objects.graphic_curves)} template), "
+            f"images={image_match} ({len(template_objects.images)} template), "
+            f"tables={table_match} ({len(template_objects.tables)} template)"
         )
+
+        return text_match and rect_match and line_match and curve_match and image_match and table_match
 
     def _find_best_match(
         self,

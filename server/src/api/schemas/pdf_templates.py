@@ -115,3 +115,26 @@ class SimulateTemplateResponse(BaseModel):
     pipeline_steps: List[ExecutionStepResult]  # Reuse from pipelines
     pipeline_actions: Dict[str, Dict[str, Any]]  # {module_instance_id: inputs}
     pipeline_error: Optional[str] = None
+
+
+# ========== Test Multi-Template Matching Schemas ==========
+
+class TemplateMatchResult(BaseModel):
+    """Single template match for a consecutive page range"""
+    template_id: int
+    template_name: str
+    version_id: int
+    version_number: int
+    matched_pages: List[int]  # Consecutive pages, 1-indexed
+
+
+class TestMultiTemplateMatchingResponse(BaseModel):
+    """
+    Response for POST /pdf-templates/test-multi-match
+    Temporary endpoint for e2e testing multi-template matching
+    """
+    pdf_id: int
+    pdf_filename: str
+    total_pages: int
+    matches: List[TemplateMatchResult]
+    unmatched_pages: List[int]  # Can be non-consecutive, 1-indexed
