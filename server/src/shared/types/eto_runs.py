@@ -40,6 +40,7 @@ class EtoRunUpdate(TypedDict, total=False):
     """
     status: str
     processing_step: str | None
+    is_read: bool
     error_type: str | None
     error_message: str | None
     error_details: str | None
@@ -57,6 +58,7 @@ class EtoRun:
     pdf_file_id: int
     status: str
     processing_step: Optional[str]
+    is_read: bool
     error_type: Optional[str]
     error_message: Optional[str]
     error_details: Optional[str]
@@ -75,16 +77,16 @@ class EtoRunListView:
     - eto_runs table (core fields)
     - pdf_files table (PDF info)
     - emails table (source info, if email-sourced)
-    - eto_run_template_matchings (template matching result)
-    - pdf_template_versions (matched template version)
-    - pdf_templates (template details)
+    - eto_sub_runs table (aggregated sub-run data)
 
     Used by repository's get_all_with_relations() method.
+    Powers the GET /api/eto-runs list endpoint.
     """
     # Core ETO run fields
     id: int
     status: str
     processing_step: Optional[str]
+    is_read: bool
     started_at: Optional[datetime]
     completed_at: Optional[datetime]
     error_type: Optional[str]
@@ -103,35 +105,27 @@ class EtoRunListView:
     email_subject: Optional[str]
     email_folder_name: Optional[str]
 
-    # Matched template info (all None if no successful match)
-    template_id: Optional[int]
-    template_name: Optional[str]
-    template_version_id: Optional[int]
-    template_version_num: Optional[int]
+    # Sub-run status counts (aggregated from eto_sub_runs)
+    sub_run_success_count: int
+    sub_run_failure_count: int
+    sub_run_needs_template_count: int
+    sub_run_skipped_count: int
+
+    # Page arrays - actual page numbers (aggregated from eto_sub_runs)
+    pages_matched: list[int]      # Pages with template matches
+    pages_unmatched: list[int]    # Pages with no match (needs_template)
+    pages_skipped: list[int]      # Pages manually skipped
+
+    # Timestamps
+    created_at: datetime
+    updated_at: datetime
 
 
 # =========================
 # Detail View Stage Types
 # =========================
-
-@dataclass
-class EtoRunTemplateMatchingDetailView:
-    """
-    Template matching stage with denormalized template info.
-    Combines EtoRunTemplateMatching with template name/version data.
-
-    Used in EtoRunDetailView to provide full template matching context.
-    """
-    # From EtoRunTemplateMatching
-    status: Literal["processing", "success", "failure"]
-    matched_template_version_id: Optional[int]
-    started_at: Optional[datetime]
-    completed_at: Optional[datetime]
-
-    # Denormalized from joined template data
-    matched_template_name: Optional[str] = None
-    matched_version_number: Optional[int] = None
-
+# NOTE: These stage types are now used within EtoSubRunDetailView
+# rather than directly in EtoRunDetailView
 
 @dataclass
 class EtoRunExtractionDetailView:
@@ -186,22 +180,22 @@ class EtoRunPipelineExecutionDetailView:
 @dataclass
 class EtoRunDetailView:
     """
-    Complete detailed view for a single ETO run with all stage data.
+    Complete detailed view for a single ETO run with all sub-run data.
 
     Used by GET /eto-runs/{id} endpoint to return full run details including:
     - Core run data
     - PDF file info
     - Email source info (if applicable)
-    - Stage 1: Template matching data
-    - Stage 2: Data extraction data
-    - Stage 3: Pipeline execution data
+    - List of all sub-runs (each with their template, extraction, and pipeline data)
 
-    Composed in service layer by fetching run + all related records.
+    Composed in service layer by fetching run + all sub-runs with their stages.
+    Powers the GET /api/eto-runs/{id} detail endpoint.
     """
     # Core run data
     id: int
     status: str
     processing_step: Optional[str]
+    is_read: bool
     started_at: Optional[datetime]
     completed_at: Optional[datetime]
     error_type: Optional[str]
@@ -221,13 +215,10 @@ class EtoRunDetailView:
     email_subject: Optional[str]
     email_folder_name: Optional[str]
 
-    # Stage data (optional - depends on run progress)
-    template_matching: Optional[EtoRunTemplateMatchingDetailView] = None
-    extraction: Optional[EtoRunExtractionDetailView] = None
-    pipeline_execution: Optional[EtoRunPipelineExecutionDetailView] = None
+    # Sub-runs (list of all sub-runs for this PDF)
+    # Will be split into matchedSubRuns, needsTemplateSubRuns, skippedSubRuns by API mapper
+    sub_runs: list[Any]  # TODO: Change to list['EtoSubRunDetailView'] once eto_sub_runs.py created
 
-    # Matched template info (denormalized from template_matching for convenience)
-    matched_template_id: Optional[int] = None
-    matched_template_name: Optional[str] = None
-    matched_template_version_id: Optional[int] = None
-    matched_template_version_num: Optional[int] = None
+    # Timestamps
+    created_at: datetime
+    updated_at: datetime

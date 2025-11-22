@@ -26,7 +26,6 @@ from shared.types.eto_runs import (
     EtoRunUpdate,
     EtoRunListView,
     EtoRunDetailView,
-    EtoRunTemplateMatchingDetailView,
     EtoRunExtractionDetailView,
     EtoRunPipelineExecutionDetailView,
 )
@@ -69,6 +68,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
             pdf_file_id=model.pdf_file_id,
             status=model.status,
             processing_step=model.processing_step,
+            is_read=model.is_read,
             error_type=model.error_type,
             error_message=model.error_message,
             error_details=model.error_details,
@@ -619,8 +619,34 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
             )
             
             
+    def mark_as_read(self, run_id: int) -> None:
+        """
+        Mark an ETO run as read.
+
+        Args:
+            run_id: ETO run ID
+
+        Raises:
+            ObjectNotFoundError: If run not found
+        """
+        self.update(run_id, {"is_read": True})
+        logger.debug(f"Marked ETO run {run_id} as read")
+
+    def mark_as_unread(self, run_id: int) -> None:
+        """
+        Mark an ETO run as unread.
+
+        Args:
+            run_id: ETO run ID
+
+        Raises:
+            ObjectNotFoundError: If run not found
+        """
+        self.update(run_id, {"is_read": False})
+        logger.debug(f"Marked ETO run {run_id} as unread")
+
     def get_matched_template_extraction_fields(self, run_if: int) -> Optional[List[ExtractionField]]:
         with self._get_session() as session:
             row = (
-                
+
             )
