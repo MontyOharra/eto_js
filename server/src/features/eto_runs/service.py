@@ -839,10 +839,12 @@ class EtoRunsService:
 
         Workflow (for each run):
         1. Verify run exists and status is "failure", "skipped", or "needs_template"
-        2. Delete all stage records (template_matching, extraction, pipeline_execution)
-        3. Reset run to "not_started" status
-        4. Clear error fields
-        5. Worker will automatically pick up and reprocess from beginning
+        2. Get all sub-runs for the parent run
+        3. Delete sub-run stage records (extraction, pipeline_execution)
+        4. Reset each sub-run to "not_started" status
+        5. Reset parent run to "processing" status
+        6. Clear error fields
+        7. Worker will automatically pick up sub-runs and reprocess
 
         Args:
             run_ids: List of ETO run IDs to reprocess
@@ -869,35 +871,43 @@ class EtoRunsService:
         for run_id in run_ids:
             logger.debug(f"Reprocessing run {run_id}")
 
-            # Delete stage records (cascade delete should handle related records)
-            # Template matching
-            matching = self.template_matching_repo.get_by_eto_run_id(run_id)
-            if matching:
-                self.template_matching_repo.delete(matching.id)
-                logger.debug(f"Deleted template_matching record for run {run_id}")
+            # Get all sub-runs for this parent run
+            sub_runs = self.sub_run_repo.get_by_eto_run_id(run_id)
 
-            # Extraction
-            extraction = self.extraction_repo.get_by_eto_run_id(run_id)
-            if extraction:
-                self.extraction_repo.delete(extraction.id)
-                logger.debug(f"Deleted extraction record for run {run_id}")
+            # Delete stage records for each sub-run
+            for sub_run in sub_runs:
+                # Delete extraction record
+                extraction = self.sub_run_extraction_repo.get_by_sub_run_id(sub_run.id)
+                if extraction:
+                    self.sub_run_extraction_repo.delete(extraction.id)
+                    logger.debug(f"Deleted extraction record for sub-run {sub_run.id}")
 
-            # Pipeline execution (and steps)
-            pipeline_execution = self.pipeline_execution_repo.get_by_eto_run_id(run_id)
-            if pipeline_execution:
-                self.pipeline_execution_repo.delete(pipeline_execution.id)
-                logger.debug(f"Deleted pipeline_execution record for run {run_id}")
+                # Delete pipeline execution record (cascade deletes steps)
+                pipeline_execution = self.sub_run_pipeline_execution_repo.get_by_sub_run_id(sub_run.id)
+                if pipeline_execution:
+                    self.sub_run_pipeline_execution_repo.delete(pipeline_execution.id)
+                    logger.debug(f"Deleted pipeline_execution record for sub-run {sub_run.id}")
 
-            # Reset run to not_started status
+                # Reset sub-run to not_started status
+                self.sub_run_repo.update(sub_run.id, {
+                    "status": "not_started",
+                    "error_type": None,
+                    "error_message": None,
+                    "error_details": None,
+                    "started_at": None,
+                    "completed_at": None,
+                })
+                logger.debug(f"Reset sub-run {sub_run.id} to not_started")
+
+            # Reset parent run to processing status
             self.eto_run_repo.update(
                 run_id,
                 EtoRunUpdate(
-                    status="not_started",
-                    processing_step=None,
+                    status="processing",
                     error_type=None,
                     error_message=None,
                     error_details=None,
-                    started_at=None,
+                    started_at=datetime.now(timezone.utc),
                     completed_at=None,
                 )
             )
@@ -907,11 +917,11 @@ class EtoRunsService:
                 "run_updated",
                 {
                     "id": run_id,
-                    "status": "not_started",
+                    "status": "processing",
                 }
             )
 
-            logger.monitor(f"Run {run_id}: Reset to not_started for reprocessing")
+            logger.monitor(f"Run {run_id}: Reset to processing for reprocessing ({len(sub_runs)} sub-runs)")
 
         logger.info(f"Successfully reprocessed {len(run_ids)} ETO runs")
 
@@ -979,9 +989,14 @@ class EtoRunsService:
 
         Workflow (for each run):
         1. Verify run exists and status is "skipped"
-        2. Delete all stage records (cascade delete)
-        3. Delete run record
-        4. Note: PDF file is NOT deleted (may be referenced elsewhere)
+        2. Delete run record (cascade delete handles sub-runs and their stage records)
+        3. Note: PDF file is NOT deleted (may be referenced elsewhere)
+
+        Database cascade chain:
+        - eto_runs → eto_sub_runs (CASCADE)
+        - eto_sub_runs → eto_sub_run_extractions (CASCADE)
+        - eto_sub_runs → eto_sub_run_pipeline_executions (CASCADE)
+        - eto_sub_run_pipeline_executions → eto_sub_run_pipeline_execution_steps (CASCADE)
 
         Restrictions:
         - Can only delete runs with status="skipped"
@@ -1008,30 +1023,11 @@ class EtoRunsService:
                     f"Only 'skipped' runs can be deleted."
                 )
 
-        # Delete each run
+        # Delete each run (cascade handles sub-runs and stage records)
         for run_id in run_ids:
             logger.debug(f"Deleting run {run_id}")
 
-            # Delete stage records first (explicit cascade)
-            # Template matching
-            matching = self.template_matching_repo.get_by_eto_run_id(run_id)
-            if matching:
-                self.template_matching_repo.delete(matching.id)
-                logger.debug(f"Deleted template_matching record for run {run_id}")
-
-            # Extraction
-            extraction = self.extraction_repo.get_by_eto_run_id(run_id)
-            if extraction:
-                self.extraction_repo.delete(extraction.id)
-                logger.debug(f"Deleted extraction record for run {run_id}")
-
-            # Pipeline execution (and steps)
-            pipeline_execution = self.pipeline_execution_repo.get_by_eto_run_id(run_id)
-            if pipeline_execution:
-                self.pipeline_execution_repo.delete(pipeline_execution.id)
-                logger.debug(f"Deleted pipeline_execution record for run {run_id}")
-
-            # Delete the run itself
+            # Delete the run (cascade deletes sub-runs and all related records)
             self.eto_run_repo.delete(run_id)
 
             # Broadcast deletion event

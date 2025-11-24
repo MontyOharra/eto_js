@@ -426,7 +426,7 @@ class EtoSubRunModel(BaseModel):
     __tablename__ = "eto_sub_runs"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    eto_run_id: Mapped[int] = mapped_column(ForeignKey("eto_runs.id"), nullable=False, index=True)
+    eto_run_id: Mapped[int] = mapped_column(ForeignKey("eto_runs.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Page set this sub-run represents (JSON array of page numbers)
     matched_pages: Mapped[str] = mapped_column(Text, nullable=False)
@@ -490,7 +490,7 @@ class EtoSubRunExtractionModel(BaseModel):
     __tablename__ = "eto_sub_run_extractions"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    sub_run_id: Mapped[int] = mapped_column(ForeignKey("eto_sub_runs.id"), nullable=False, index=True)
+    sub_run_id: Mapped[int] = mapped_column(ForeignKey("eto_sub_runs.id", ondelete="CASCADE"), nullable=False, index=True)
 
     status: Mapped[str] = mapped_column(
         ETO_STEP_STATUS,
@@ -527,7 +527,7 @@ class EtoSubRunPipelineExecutionModel(BaseModel):
     __tablename__ = "eto_sub_run_pipeline_executions"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    sub_run_id: Mapped[int] = mapped_column(ForeignKey("eto_sub_runs.id"), nullable=False, index=True)
+    sub_run_id: Mapped[int] = mapped_column(ForeignKey("eto_sub_runs.id", ondelete="CASCADE"), nullable=False, index=True)
 
     status: Mapped[str] = mapped_column(
         ETO_STEP_STATUS,
@@ -568,7 +568,7 @@ class EtoSubRunPipelineExecutionStepModel(BaseModel):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     pipeline_execution_id: Mapped[int] = mapped_column(
-        ForeignKey("eto_sub_run_pipeline_executions.id"), nullable=False, index=True
+        ForeignKey("eto_sub_run_pipeline_executions.id", ondelete="CASCADE"), nullable=False, index=True
     )
 
     module_instance_id: Mapped[str] = mapped_column(String(100), nullable=False)
