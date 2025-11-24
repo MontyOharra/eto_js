@@ -1,0 +1,1 @@
+export { MultiTemplateTest } from './MultiTemplateTest';
