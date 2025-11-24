@@ -850,7 +850,7 @@ class PipelineService:
 
         # Simulate pipeline (compile_and_execute is for testing/simulation)
         execution_result = self.pipeline_execution_service.simulate_pipeline(
-            steps=compiled_steps,
+            steps=compiled_steps, #type: ignore
             entry_values_by_name=entry_values,
             pipeline_state=pruned_pipeline
         )

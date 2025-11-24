@@ -4,6 +4,7 @@ Dataclasses for email records stored in database
 """
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -14,7 +15,7 @@ class Email:
     Used by services and repositories for complete email data.
     """
     id: int
-    config_id: int
+    config_id: Optional[int]
     message_id: str
     sender_email: str
     subject: str

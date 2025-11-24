@@ -30,7 +30,6 @@ class EtoSubRunCreate:
     eto_run_id: int
     matched_pages: str  # JSON string like "[1,2,3]"
     template_version_id: Optional[int]  # NULL for unmatched pages
-    sequence: Optional[int] = None
     is_unmatched_group: bool = False
 
 
@@ -71,7 +70,6 @@ class EtoSubRun:
     matched_pages: str  # JSON string like "[1,2,3]"
     template_version_id: Optional[int]
     status: str
-    sequence: Optional[int]
     is_unmatched_group: bool
     error_type: Optional[str]
     error_message: Optional[str]
@@ -102,7 +100,6 @@ class EtoSubRunDetailView:
     eto_run_id: int
     matched_pages: list[int]  # Parsed from JSON string
     status: str
-    sequence: Optional[int]
     is_unmatched_group: bool
 
     # Template info (None for unmatched groups)

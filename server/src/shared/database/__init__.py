@@ -18,10 +18,10 @@ from .models import (
     PipelineDefinitionStepModel,
     # ETO run models
     EtoRunModel,
-    EtoRunTemplateMatchingModel,
-    EtoRunExtractionModel,
-    EtoRunPipelineExecutionModel,
-    EtoRunPipelineExecutionStepModel,
+    EtoSubRunModel,
+    EtoSubRunExtractionModel,
+    EtoSubRunPipelineExecutionModel,
+    EtoSubRunPipelineExecutionStepModel,
 )
 
 from .connection import DatabaseConnectionManager, init_database_connection, get_connection_manager
@@ -46,10 +46,10 @@ __all__ = [
     'PipelineDefinitionStepModel',
     # ETO run models
     'EtoRunModel',
-    'EtoRunTemplateMatchingModel',
-    'EtoRunExtractionModel',
-    'EtoRunPipelineExecutionModel',
-    'EtoRunPipelineExecutionStepModel',
+    'EtoSubRunModel',
+    'EtoSubRunExtractionModel',
+    'EtoSubRunPipelineExecutionModel',
+    'EtoSubRunPipelineExecutionStepModel',
     # Connection management
     'DatabaseConnectionManager',
     'AccessConnectionManager',

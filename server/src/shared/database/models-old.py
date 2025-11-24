@@ -22,43 +22,6 @@ class BaseModel(DeclarativeBase):
 
 
 # =========================
-# ENUMS for new ETO design
-# =========================
-
-# Parent orchestration status
-ETO_MASTER_STATUS = SAEnum(
-    'not_started', 'processing', 'success', 'failure',
-    name='eto_master_status',
-    native_enum=False,
-    validate_strings=True
-)
-
-# Parent processing step
-ETO_RUN_PROCESSING_STEP = SAEnum(
-    'template_matching', 'sub_runs',
-    name='eto_run_processing_step',
-    native_enum=False,
-    validate_strings=True
-)
-
-# Sub-run status (business logic level)
-ETO_RUN_STATUS = SAEnum(
-    'not_started', 'processing', 'success', 'failure', 'needs_template', 'skipped',
-    name='eto_run_status',
-    native_enum=False,
-    validate_strings=True
-)
-
-# Stage-level status (extraction, pipeline execution)
-ETO_STEP_STATUS = SAEnum(
-    'processing', 'success', 'failure',
-    name='eto_step_status',
-    native_enum=False,
-    validate_strings=True
-)
-
-
-# =========================
 # email_configs
 # =========================
 
@@ -233,7 +196,7 @@ class PdfTemplateVersionModel(BaseModel):
     # Relationships
     pdf_template: Mapped["PdfTemplateModel"] = relationship(back_populates="versions", foreign_keys=[pdf_template_id])
     pipeline_definition: Mapped["PipelineDefinitionModel"] = relationship(back_populates="template_versions")
-    sub_runs: Mapped[List["EtoSubRunModel"]] = relationship(back_populates="template_version")
+    template_matching_runs: Mapped[List["EtoRunTemplateMatchingModel"]] = relationship(back_populates="matched_template_version")
 
 
 # =========================
@@ -365,7 +328,7 @@ class PipelineDefinitionStepModel(BaseModel):
 
 
 # =========================
-# eto_runs (NEW: parent orchestration level)
+# eto_runs (parent of stage runs)
 # =========================
 
 class EtoRunModel(BaseModel):
@@ -374,30 +337,25 @@ class EtoRunModel(BaseModel):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     pdf_file_id: Mapped[int] = mapped_column(ForeignKey("pdf_files.id"), nullable=False, index=True)
 
-    # Parent orchestration status
     status: Mapped[str] = mapped_column(
-        ETO_MASTER_STATUS,
+        SAEnum("not_started", "processing", "success", "failure", "needs_template", "skipped",
+               name="eto_run_status", native_enum=False),
         nullable=False,
         server_default="not_started",
     )
-
-    # Processing step indicator
     processing_step: Mapped[Optional[str]] = mapped_column(
-        ETO_RUN_PROCESSING_STEP,
+        SAEnum("template_matching", "data_extraction", "data_transformation",
+               name="eto_run_processing_step", native_enum=True),
         nullable=True,
     )
 
-    # User interaction tracking
-    is_read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-
-    # Error tracking (system-level failures)
     error_type: Mapped[Optional[str]] = mapped_column(String(50))
     error_message: Mapped[Optional[str]] = mapped_column(Text)
     error_details: Mapped[Optional[str]] = mapped_column(Text)
 
-    # Timestamps
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
     )
@@ -407,102 +365,47 @@ class EtoRunModel(BaseModel):
 
     # Relationships
     pdf_file: Mapped["PdfFileModel"] = relationship(back_populates="eto_runs")
-    sub_runs: Mapped[List["EtoSubRunModel"]] = relationship(
-        back_populates="eto_run", cascade="all, delete-orphan"
+    template_matching_runs: Mapped[List["EtoRunTemplateMatchingModel"]] = relationship(
+        back_populates="run", cascade="all, delete-orphan"
+    )
+    extraction_runs: Mapped[List["EtoRunExtractionModel"]] = relationship(
+        back_populates="run", cascade="all, delete-orphan"
+    )
+    pipeline_execution_runs: Mapped[List["EtoRunPipelineExecutionModel"]] = relationship(
+        back_populates="run", cascade="all, delete-orphan"
     )
 
     __table_args__ = (
         Index("idx_eto_runs_status", "status"),
         Index("idx_eto_runs_processing_step", "processing_step"),
-        Index("idx_eto_runs_pdf_file", "pdf_file_id"),
+        Index("idx_eto_runs_pdf_file_id", "pdf_file_id"),
     )
 
 
 # =========================
-# eto_sub_runs (NEW: per page-set business logic)
+# Stage: Template Matching
 # =========================
 
-class EtoSubRunModel(BaseModel):
-    __tablename__ = "eto_sub_runs"
+class EtoRunTemplateMatchingModel(BaseModel):
+    __tablename__ = "eto_run_template_matchings"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     eto_run_id: Mapped[int] = mapped_column(ForeignKey("eto_runs.id"), nullable=False, index=True)
 
-    # Page set this sub-run represents (JSON array of page numbers)
-    matched_pages: Mapped[str] = mapped_column(Text, nullable=False)
-
-    # Template matched to this page set (NULL for unmatched group)
-    template_version_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("pdf_template_versions.id"), nullable=True, index=True
-    )
-
-    # Sub-run business logic status
     status: Mapped[str] = mapped_column(
-        ETO_RUN_STATUS,
-        nullable=False,
-        server_default="not_started",
-    )
-
-    # Ordering within parent run
-    sequence: Mapped[Optional[int]] = mapped_column(Integer)
-
-    # Flag for the single unmatched group per run
-    is_unmatched_group: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-
-    # Error tracking (business-level failures)
-    error_type: Mapped[Optional[str]] = mapped_column(String(50))
-    error_message: Mapped[Optional[str]] = mapped_column(Text)
-    error_details: Mapped[Optional[str]] = mapped_column(Text)
-
-    # Timestamps
-    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
-    )
-
-    # Relationships
-    eto_run: Mapped["EtoRunModel"] = relationship(back_populates="sub_runs")
-    template_version: Mapped[Optional["PdfTemplateVersionModel"]] = relationship(back_populates="sub_runs")
-    extractions: Mapped[List["EtoSubRunExtractionModel"]] = relationship(
-        back_populates="sub_run", cascade="all, delete-orphan"
-    )
-    pipeline_executions: Mapped[List["EtoSubRunPipelineExecutionModel"]] = relationship(
-        back_populates="sub_run", cascade="all, delete-orphan"
-    )
-
-    __table_args__ = (
-        Index("idx_eto_sub_runs_status", "status"),
-        Index("idx_eto_sub_runs_eto_run", "eto_run_id"),
-        Index("idx_eto_sub_runs_template_version", "template_version_id"),
-        Index("idx_eto_sub_runs_unmatched", "is_unmatched_group"),
-    )
-
-
-# =========================
-# eto_sub_run_extractions (NEW: extraction stage per sub-run)
-# =========================
-
-class EtoSubRunExtractionModel(BaseModel):
-    __tablename__ = "eto_sub_run_extractions"
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    sub_run_id: Mapped[int] = mapped_column(ForeignKey("eto_sub_runs.id"), nullable=False, index=True)
-
-    status: Mapped[str] = mapped_column(
-        ETO_STEP_STATUS,
+        SAEnum("processing", "success", "failure",
+               name="eto_step_status_tm", native_enum=False),
         nullable=False,
         server_default="processing",
     )
 
-    extracted_data: Mapped[Optional[str]] = mapped_column(Text)
-    error_message: Mapped[Optional[str]] = mapped_column(Text)
+    matched_template_version_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("pdf_template_versions.id"), index=True
+    )
 
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
     )
@@ -511,35 +414,74 @@ class EtoSubRunExtractionModel(BaseModel):
     )
 
     # Relationships
-    sub_run: Mapped["EtoSubRunModel"] = relationship(back_populates="extractions")
+    run: Mapped["EtoRunModel"] = relationship(back_populates="template_matching_runs")
+    matched_template_version: Mapped[Optional["PdfTemplateVersionModel"]] = relationship(
+        back_populates="template_matching_runs"
+    )
 
     __table_args__ = (
-        Index("idx_eto_sub_run_extractions_sub_run", "sub_run_id"),
-        Index("idx_eto_sub_run_extractions_status", "status"),
+        Index("idx_eto_template_matching_runs_status", "status"),
     )
 
 
 # =========================
-# eto_sub_run_pipeline_executions (NEW: pipeline execution per sub-run)
+# Stage: Data Extraction
 # =========================
 
-class EtoSubRunPipelineExecutionModel(BaseModel):
-    __tablename__ = "eto_sub_run_pipeline_executions"
+class EtoRunExtractionModel(BaseModel):
+    __tablename__ = "eto_run_extractions"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    sub_run_id: Mapped[int] = mapped_column(ForeignKey("eto_sub_runs.id"), nullable=False, index=True)
+    eto_run_id: Mapped[int] = mapped_column(ForeignKey("eto_runs.id"), nullable=False, index=True)
 
     status: Mapped[str] = mapped_column(
-        ETO_STEP_STATUS,
+        SAEnum("processing", "success", "failure",
+               name="eto_step_status_ex", native_enum=False),
+        nullable=False,
+        server_default="processing",
+    )
+    extracted_data: Mapped[Optional[str]] = mapped_column(Text)
+
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+    )
+
+    # Relationships
+    run: Mapped["EtoRunModel"] = relationship(back_populates="extraction_runs")
+
+    __table_args__ = (
+        Index("idx_eto_extraction_runs_status", "status"),
+    )
+
+
+# =========================
+# Stage: Pipeline Execution (run)
+# =========================
+
+class EtoRunPipelineExecutionModel(BaseModel):
+    __tablename__ = "eto_run_pipeline_executions"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    eto_run_id: Mapped[int] = mapped_column(ForeignKey("eto_runs.id"), nullable=False, index=True)
+
+    status: Mapped[str] = mapped_column(
+        SAEnum("processing", "success", "failure",
+               name="eto_step_status_px", native_enum=False),
         nullable=False,
         server_default="processing",
     )
 
     executed_actions: Mapped[Optional[str]] = mapped_column(Text)
-    error_message: Mapped[Optional[str]] = mapped_column(Text)
 
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
     )
@@ -548,32 +490,26 @@ class EtoSubRunPipelineExecutionModel(BaseModel):
     )
 
     # Relationships
-    sub_run: Mapped["EtoSubRunModel"] = relationship(back_populates="pipeline_executions")
-    steps: Mapped[List["EtoSubRunPipelineExecutionStepModel"]] = relationship(
-        back_populates="pipeline_execution", cascade="all, delete-orphan"
-    )
-
-    __table_args__ = (
-        Index("idx_eto_sub_run_pipeline_exec_sub_run", "sub_run_id"),
-        Index("idx_eto_sub_run_pipeline_exec_status", "status"),
+    run: Mapped["EtoRunModel"] = relationship(back_populates="pipeline_execution_runs")
+    steps: Mapped[List["EtoRunPipelineExecutionStepModel"]] = relationship(
+        back_populates="run", cascade="all, delete-orphan"
     )
 
 
 # =========================
-# eto_sub_run_pipeline_execution_steps (NEW: individual step logs)
+# Stage: Pipeline Execution (steps)
 # =========================
 
-class EtoSubRunPipelineExecutionStepModel(BaseModel):
-    __tablename__ = "eto_sub_run_pipeline_execution_steps"
+class EtoRunPipelineExecutionStepModel(BaseModel):
+    __tablename__ = "eto_run_pipeline_execution_steps"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    pipeline_execution_id: Mapped[int] = mapped_column(
-        ForeignKey("eto_sub_run_pipeline_executions.id"), nullable=False, index=True
+    run_id: Mapped[int] = mapped_column(
+        ForeignKey("eto_run_pipeline_executions.id"), nullable=False, index=True
     )
 
     module_instance_id: Mapped[str] = mapped_column(String(100), nullable=False)
     step_number: Mapped[int] = mapped_column(Integer, nullable=False)
-
     inputs: Mapped[Optional[str]] = mapped_column(Text)
     outputs: Mapped[Optional[str]] = mapped_column(Text)
     error: Mapped[Optional[str]] = mapped_column(Text)
@@ -586,9 +522,8 @@ class EtoSubRunPipelineExecutionStepModel(BaseModel):
     )
 
     # Relationships
-    pipeline_execution: Mapped["EtoSubRunPipelineExecutionModel"] = relationship(back_populates="steps")
+    run: Mapped["EtoRunPipelineExecutionModel"] = relationship(back_populates="steps")
 
     __table_args__ = (
-        Index("idx_eto_sub_run_pipeline_step_exec", "pipeline_execution_id"),
-        Index("idx_eto_sub_run_pipeline_step_number", "step_number"),
+        Index("idx_execution_steps_module", "module_instance_id"),
     )

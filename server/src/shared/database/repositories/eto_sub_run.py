@@ -58,7 +58,6 @@ class EtoSubRunRepository(BaseRepository[EtoSubRunModel]):
             matched_pages=model.matched_pages,
             template_version_id=model.template_version_id,
             status=model.status,
-            sequence=model.sequence,
             is_unmatched_group=model.is_unmatched_group,
             error_type=model.error_type,
             error_message=model.error_message,
@@ -87,7 +86,6 @@ class EtoSubRunRepository(BaseRepository[EtoSubRunModel]):
                 eto_run_id=data.eto_run_id,
                 matched_pages=data.matched_pages,
                 template_version_id=data.template_version_id,
-                sequence=data.sequence,
                 is_unmatched_group=data.is_unmatched_group,
                 # status defaults to "not_started" via model default
                 # timestamps auto-set by server_default
@@ -178,24 +176,32 @@ class EtoSubRunRepository(BaseRepository[EtoSubRunModel]):
 
     def get_by_eto_run_id(self, eto_run_id: int) -> List[EtoSubRun]:
         """
-        Get all sub-runs for a parent ETO run, ordered by sequence.
+        Get all sub-runs for a parent ETO run, ordered by first page number.
 
         Args:
             eto_run_id: Parent ETO run ID
 
         Returns:
-            List of EtoSubRun dataclasses, ordered by sequence (nulls last)
+            List of EtoSubRun dataclasses, ordered by first page in matched_pages
         """
         with self._get_session() as session:
             models = (
                 session.query(self.model_class)
                 .filter_by(eto_run_id=eto_run_id)
-                .order_by(
-                    self.model_class.sequence.asc().nullslast(),
-                    self.model_class.created_at.asc()
-                )
+                .order_by(self.model_class.created_at.asc())  # Fallback ordering
                 .all()
             )
+
+            # Sort by first page number in matched_pages JSON
+            import json
+            def get_first_page(model):
+                try:
+                    pages = json.loads(model.matched_pages)
+                    return min(pages) if pages else float('inf')
+                except:
+                    return float('inf')
+
+            models.sort(key=get_first_page)
 
             return [self._model_to_domain(model) for model in models]
 
@@ -276,7 +282,6 @@ class EtoSubRunRepository(BaseRepository[EtoSubRunModel]):
                     EtoSubRunModel.eto_run_id,
                     EtoSubRunModel.matched_pages,
                     EtoSubRunModel.status,
-                    EtoSubRunModel.sequence,
                     EtoSubRunModel.is_unmatched_group,
                     EtoSubRunModel.template_version_id,
                     EtoSubRunModel.error_type,
@@ -330,7 +335,6 @@ class EtoSubRunRepository(BaseRepository[EtoSubRunModel]):
                 eto_run_id=row.eto_run_id,
                 matched_pages=matched_pages_list,
                 status=row.status,
-                sequence=row.sequence,
                 is_unmatched_group=row.is_unmatched_group,
                 # Template info (None for unmatched)
                 template_id=row.template_id,

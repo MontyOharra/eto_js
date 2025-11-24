@@ -138,3 +138,42 @@ def extract_data_from_pdf_objects(
         logger.debug(f"Field '{field.name}' extracted: '{extracted_text}'")
 
     return extraction_results
+
+
+def extract_data_from_pdf_pages(
+    pdf_file_service: 'PdfFilesService',
+    pdf_file_id: int,
+    extraction_fields: list['ExtractionField'],
+    page_numbers: list[int]
+) -> list[ExtractedFieldData]:
+    """
+    Extract text from PDF using extraction fields, filtered to specific pages only.
+
+    Used by multi-template sub-runs where only a subset of pages should be extracted.
+    Calls the standard extraction function and filters results to specified pages.
+
+    Args:
+        pdf_file_service: PDF files service for accessing PDF objects
+        pdf_file_id: PDF file ID to extract from
+        extraction_fields: List of ExtractionField domain objects
+        page_numbers: List of page numbers to include (1-indexed)
+
+    Returns:
+        List of ExtractedFieldData for specified pages only
+    """
+    logger.debug(f"Extracting data from PDF file {pdf_file_id} for pages {page_numbers}")
+
+    # Filter extraction fields to only those on specified pages
+    filtered_fields = [
+        field for field in extraction_fields
+        if field.page in page_numbers
+    ]
+
+    logger.debug(f"Filtered {len(extraction_fields)} fields to {len(filtered_fields)} fields for specified pages")
+
+    # Use standard extraction function with filtered fields
+    return extract_data_from_pdf(
+        pdf_file_service=pdf_file_service,
+        pdf_file_id=pdf_file_id,
+        extraction_fields=filtered_fields
+    )
