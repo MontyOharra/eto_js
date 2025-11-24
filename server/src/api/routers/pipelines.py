@@ -248,8 +248,9 @@ async def execute_pipeline(
     logger.info(f"Simulating pipeline {id} with {len(steps)} steps")
 
     # Simulate pipeline (testing endpoint - no action execution)
+    # Steps from DB have `id` field but execution service is DB-agnostic and doesn't use it
     result = execution_service.simulate_pipeline(
-        steps=steps,
+        steps=steps,  # type: ignore[arg-type]
         entry_values_by_name=request.entry_values,
         pipeline_state=pipeline.pipeline_state
     )

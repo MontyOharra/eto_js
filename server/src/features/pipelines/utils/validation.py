@@ -546,6 +546,7 @@ class PipelineValidator:
                 logger.info(f"[VALIDATION DEBUG] Outputs: {[(p.node_id, p.name) for p in module.outputs]}")
 
                 validation_errors = handler.validate_config(config_instance, module.inputs, module.outputs, services=self.services)
+                assert isinstance(validation_errors, list)
 
                 logger.info(f"[VALIDATION DEBUG] Validation errors returned: {validation_errors}")
 

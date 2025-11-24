@@ -497,7 +497,10 @@ class ImapIntegration(BaseEmailIntegration):
         try:
             # Fetch email data - fetch() expects str, not bytes
             # Convert bytes to str if necessary (from search results)
-            msg_id_str = msg_id.decode('utf-8') if isinstance(msg_id, bytes) else msg_id
+            if isinstance(msg_id, bytes):
+                msg_id_str = msg_id.decode('utf-8')
+            else:
+                msg_id_str = str(msg_id)
             status, msg_data = self.imap.fetch(msg_id_str, '(RFC822)')
 
             if status != 'OK' or not msg_data[0]:
@@ -509,7 +512,10 @@ class ImapIntegration(BaseEmailIntegration):
             email_message = email.message_from_bytes(email_body)
 
             # Extract fields
-            message_uid = msg_id.decode('utf-8') if isinstance(msg_id, bytes) else msg_id
+            if isinstance(msg_id, bytes):
+                message_uid = msg_id.decode('utf-8')
+            else:
+                message_uid = str(msg_id)
             subject = self._decode_header_value(email_message.get('Subject', ''))
             sender_email = self._extract_email_address(email_message.get('From', ''))
             sender_name = self._extract_name(email_message.get('From', ''))
@@ -613,6 +619,7 @@ class ImapIntegration(BaseEmailIntegration):
 
             # Parse email
             email_body = msg_data[0][1]
+            assert isinstance(email_body, bytes)
             email_message = email.message_from_bytes(email_body)
 
             # Extract attachments
@@ -663,28 +670,11 @@ class ImapIntegration(BaseEmailIntegration):
     # ========== Email State Management ==========
 
     def mark_as_read(self, message_id: str, folder_name: str = "INBOX") -> bool:
-        """Mark email as read"""
-        if not self.is_connected or not self.imap:
-            return False
-
-        try:
-            # Select folder
-            if folder_name != self.current_folder:
-                if not self.select_folder(folder_name):
-                    return False
-
-            # Mark as seen
-            status, response = self.imap.store(message_id.encode(), '+FLAGS', '\\Seen')
-
-            if status == 'OK':
-                self.logger.debug(f"Marked message {message_id} as read")
-                return True
-
-            return False
-
-        except Exception as e:
-            self.logger.error(f"Error marking message as read: {e}")
-            return False
+        """
+        No-op implementation - emails are left unread after processing.
+        Required by base class abstract method.
+        """
+        return True
 
     # ========== Helper Methods ==========
 
