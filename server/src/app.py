@@ -60,20 +60,9 @@ def get_log_level() -> int:
 
 
 def setup_custom_log_levels():
-    """Setup custom logging levels"""
-    # Add TRACE level (5) - for very detailed tracing
-    logging.addLevelName(5, 'TRACE')
-    def trace(self, message, *args, **kwargs):
-        if self.isEnabledFor(5):
-            self._log(5, message, args, **kwargs)
-    setattr(logging.Logger, 'trace', trace)  # Use setattr to avoid type checker warnings
-
-    # Add MONITOR level (7) - for monitoring loops
-    logging.addLevelName(7, 'MONITOR')
-    def monitor(self, message, *args, **kwargs):
-        if self.isEnabledFor(7):
-            self._log(7, message, args, **kwargs)
-    setattr(logging.Logger, 'monitor', monitor)  # Use setattr to avoid type checker warnings
+    """Setup custom logging levels using MonitorLogger class"""
+    from shared.logging import setup_logger_class
+    setup_logger_class()
 
 
 class ColoredFormatter(logging.Formatter):
