@@ -6,7 +6,7 @@ import asyncio
 import logging
 from typing import Callable, Optional, List, Set, Dict, Any
 
-from shared.types.eto_runs import EtoRun
+from shared.types.eto_sub_runs import EtoSubRun
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ class EtoWorker:
     def __init__(
         self,
         process_run_callback: Callable[[int], bool],
-        get_pending_runs_callback: Callable[[int], List[EtoRun]],
+        get_pending_runs_callback: Callable[[int], List[EtoSubRun]],
         reset_run_callback: Callable[[int], None],
         enabled: bool = True,
         max_concurrent_runs: int = 10,
@@ -236,7 +236,7 @@ class EtoWorker:
             if not pending_runs:
                 return  # No work to do
 
-            logger.monitor(f"Processing batch of {len(pending_runs)} ETO runs concurrently")  # type: ignore
+            logger.info(f"Processing batch of {len(pending_runs)} ETO sub-runs concurrently")
 
             # Process all runs concurrently
             tasks = [
@@ -258,7 +258,7 @@ class EtoWorker:
                     if isinstance(result, Exception):
                         logger.error(f"Run {pending_runs[i].id} failed: {result}")
             else:
-                logger.monitor(f"Batch completed successfully: {successful} runs processed")  # type: ignore
+                logger.info(f"Batch completed successfully: {successful} sub-runs processed")
 
         except Exception as e:
             logger.error(f"Error processing pending runs batch: {e}", exc_info=True)

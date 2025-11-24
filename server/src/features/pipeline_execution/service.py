@@ -22,8 +22,6 @@ from shared.database import DatabaseConnectionManager
 from shared.database.repositories import (
     PipelineDefinitionRepository,
     PipelineDefinitionStepRepository,
-    EtoRunPipelineExecutionRepository,
-    EtoRunPipelineExecutionStepRepository,
     ModuleRepository,
 )
 from features.modules.utils.registry import ModuleRegistry
@@ -395,8 +393,6 @@ class PipelineExecutionService:
     connection_manager: DatabaseConnectionManager
     pipeline_repo: PipelineDefinitionRepository
     step_repo: PipelineDefinitionStepRepository
-    run_repo: EtoRunPipelineExecutionRepository
-    exec_step_repo: EtoRunPipelineExecutionStepRepository
     module_catalog_repo: ModuleRepository
     module_registry: ModuleRegistry
     services: Optional[Any]
@@ -426,8 +422,6 @@ class PipelineExecutionService:
         # Initialize repositories
         self.pipeline_repo = PipelineDefinitionRepository(connection_manager=connection_manager)
         self.step_repo = PipelineDefinitionStepRepository(connection_manager=connection_manager)
-        self.run_repo = EtoRunPipelineExecutionRepository(connection_manager=connection_manager)
-        self.exec_step_repo = EtoRunPipelineExecutionStepRepository(connection_manager=connection_manager)
         self.module_catalog_repo = ModuleRepository(connection_manager=connection_manager)
 
         logger.info("PipelineExecutionService initialized")

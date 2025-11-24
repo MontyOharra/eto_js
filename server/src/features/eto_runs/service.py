@@ -4,17 +4,18 @@ Business logic for ETO run lifecycle and orchestration
 """
 import asyncio
 import json
-import logging
 import os
 from typing import Optional, List, Dict, Any, Set
 from datetime import datetime, timezone
 
+from shared.logging import get_logger
+
 from shared.database import DatabaseConnectionManager
 from shared.database.repositories.eto_run import EtoRunRepository
-from shared.database.repositories.eto_run_pipeline_execution import EtoRunPipelineExecutionRepository
-from shared.database.repositories.eto_run_template_matching import EtoRunTemplateMatchingRepository
-from shared.database.repositories.eto_run_extraction import EtoRunExtractionRepository
-from shared.database.repositories.eto_run_pipeline_execution_step import EtoRunPipelineExecutionStepRepository
+from shared.database.repositories.eto_sub_run import EtoSubRunRepository
+from shared.database.repositories.eto_sub_run_extraction import EtoSubRunExtractionRepository
+from shared.database.repositories.eto_sub_run_pipeline_execution import EtoSubRunPipelineExecutionRepository
+from shared.database.repositories.eto_sub_run_pipeline_execution_step import EtoSubRunPipelineExecutionStepRepository
 
 from shared.events.eto_events import eto_event_manager
 
@@ -30,26 +31,27 @@ from shared.types.eto_runs import (
     EtoRunListView,
     EtoRunDetailView,
 )
-from shared.types.eto_run_pipeline_executions import (
-    EtoRunPipelineExecution,
-    EtoRunPipelineExecutionCreate,
-    EtoRunPipelineExecutionUpdate,
+from shared.types.eto_sub_runs import (
+    EtoSubRun,
+    EtoSubRunCreate,
+    EtoSubRunUpdate,
 )
-from shared.types.eto_run_pipeline_execution_steps import (
-    EtoRunPipelineExecutionStep,
-    EtoRunPipelineExecutionStepCreate,
-    EtoRunPipelineExecutionStepUpdate,
+from shared.types.eto_sub_run_extractions import (
+    EtoSubRunExtraction,
+    EtoSubRunExtractionCreate,
+    EtoSubRunExtractionUpdate,
 )
-from shared.types.eto_run_template_matchings import (
-    EtoRunTemplateMatching,
-    EtoRunTemplateMatchingCreate,
-    EtoRunTemplateMatchingUpdate,
+from shared.types.eto_sub_run_pipeline_executions import (
+    EtoSubRunPipelineExecution,
+    EtoSubRunPipelineExecutionCreate,
+    EtoSubRunPipelineExecutionUpdate,
 )
-from shared.types.eto_run_extractions import (
-    EtoRunExtraction,
-    EtoRunExtractionCreate,
-    EtoRunExtractionUpdate,
+from shared.types.eto_sub_run_pipeline_execution_steps import (
+    EtoSubRunPipelineExecutionStep,
+    EtoSubRunPipelineExecutionStepCreate,
+    EtoSubRunPipelineExecutionStepUpdate,
 )
+from shared.types.pdf_templates import TemplateMatchingResult
 
 from shared.exceptions.service import ObjectNotFoundError, ServiceError
 
@@ -65,7 +67,7 @@ if TYPE_CHECKING:
     from features.pdf_files.service import PdfFilesService
     from features.pipeline_execution.service import PipelineExecutionService
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class EtoRunsService:
@@ -98,10 +100,10 @@ class EtoRunsService:
     # ==================== Repositories ====================
 
     eto_run_repo: EtoRunRepository
-    pipeline_execution_repo: EtoRunPipelineExecutionRepository
-    pipeline_execution_step_repo: EtoRunPipelineExecutionStepRepository
-    template_matching_repo: EtoRunTemplateMatchingRepository
-    extraction_repo: EtoRunExtractionRepository
+    sub_run_repo: EtoSubRunRepository
+    sub_run_extraction_repo: EtoSubRunExtractionRepository
+    sub_run_pipeline_execution_repo: EtoSubRunPipelineExecutionRepository
+    sub_run_pipeline_execution_step_repo: EtoSubRunPipelineExecutionStepRepository
 
     def __init__(
         self,
@@ -129,10 +131,10 @@ class EtoRunsService:
 
         # Initialize repositories
         self.eto_run_repo: EtoRunRepository = EtoRunRepository(connection_manager=connection_manager)
-        self.pipeline_execution_repo: EtoRunPipelineExecutionRepository = EtoRunPipelineExecutionRepository(connection_manager=connection_manager)
-        self.pipeline_execution_step_repo: EtoRunPipelineExecutionStepRepository = EtoRunPipelineExecutionStepRepository(connection_manager=connection_manager)
-        self.template_matching_repo: EtoRunTemplateMatchingRepository = EtoRunTemplateMatchingRepository(connection_manager=connection_manager)
-        self.extraction_repo: EtoRunExtractionRepository = EtoRunExtractionRepository(connection_manager=connection_manager)
+        self.sub_run_repo: EtoSubRunRepository = EtoSubRunRepository(connection_manager=connection_manager)
+        self.sub_run_extraction_repo: EtoSubRunExtractionRepository = EtoSubRunExtractionRepository(connection_manager=connection_manager)
+        self.sub_run_pipeline_execution_repo: EtoSubRunPipelineExecutionRepository = EtoSubRunPipelineExecutionRepository(connection_manager=connection_manager)
+        self.sub_run_pipeline_execution_step_repo: EtoSubRunPipelineExecutionStepRepository = EtoSubRunPipelineExecutionStepRepository(connection_manager=connection_manager)
 
         # Worker configuration from environment
         worker_enabled = os.getenv('ETO_WORKER_ENABLED', 'true').lower() == 'true'
@@ -143,9 +145,9 @@ class EtoRunsService:
         # Initialize ETO worker
         logger.debug("Initializing ETO worker...")
         self.worker = EtoWorker(
-            process_run_callback=self.process_run,
-            get_pending_runs_callback=lambda limit: self.list_runs(status='not_started', limit=limit),
-            reset_run_callback=self._reset_run_to_not_started,
+            process_run_callback=self.process_sub_run,
+            get_pending_runs_callback=lambda limit: self.sub_run_repo.get_by_status('not_started', limit=limit),
+            reset_run_callback=self._reset_sub_run_to_not_started,
             enabled=worker_enabled,
             max_concurrent_runs=max_concurrent_runs,
             polling_interval=polling_interval,
@@ -163,42 +165,88 @@ class EtoRunsService:
 
     def create_run(self, pdf_file_id: int) -> EtoRun:
         """
-        Create new ETO run with status = "not_started".
-        Called by email ingestion service when new PDF is received.
+        Create ETO run and immediately perform multi-template matching.
+        Creates sub-runs that worker will pick up for processing.
 
         Args:
             pdf_file_id: ID of PDF file to process
 
         Returns:
-            Created EtoRun dataclass
+            Created EtoRun with status="processing"
 
         Raises:
             ObjectNotFoundError: If PDF file doesn't exist
-            ServiceError: If run creation fails
+            ServiceError: If template matching fails (critical error)
         """
         logger.info(f"Creating ETO run for PDF file {pdf_file_id}")
 
         try:
-            # Validate PDF file exists
+            # 1. Validate PDF file exists
             pdf_file = self.pdf_files_service.get_pdf_file(pdf_file_id)
-            logger.debug(f"Validated PDF file {pdf_file_id} exists (hash: {pdf_file.file_hash})")
+            logger.debug(f"Validated PDF file {pdf_file_id} exists")
 
-            # Create run with status = "not_started"
+            # 2. Create parent run with status="processing"
             run = self.eto_run_repo.create(EtoRunCreate(pdf_file_id=pdf_file_id))
+            self.eto_run_repo.update(run.id, {
+                "status": "processing",
+                "started_at": datetime.now(timezone.utc)
+            })
 
-            # Broadcast creation event to all connected SSE clients
+            # Broadcast creation event
             eto_event_manager.broadcast_sync(
                 "run_created",
                 {
                     "id": run.id,
                     "pdf_file_id": run.pdf_file_id,
-                    "status": run.status,
-                    "processing_step": run.processing_step,
+                    "status": "processing",
                     "created_at": run.created_at.isoformat() if run.created_at else None,
                 }
             )
 
-            logger.info(f"Created ETO run {run.id} for PDF {pdf_file_id}")
+            # 3. Run multi-template matching (FAST operation)
+            logger.debug(f"Run {run.id}: Starting multi-template matching")
+            match_result: TemplateMatchingResult = self.pdf_template_service.match_templates_multi_page(pdf_file)
+
+            logger.debug(
+                f"Run {run.id}: Template matching complete - "
+                f"{len(match_result.matches)} matches, "
+                f"{len(match_result.unmatched_pages)} unmatched pages"
+            )
+
+            # 4. Create sub-runs for matched page sets
+            for match in match_result.matches:
+                self.sub_run_repo.create(EtoSubRunCreate(
+                    eto_run_id=run.id,
+                    matched_pages=json.dumps(match.matched_pages),
+                    template_version_id=match.version_id,
+                    is_unmatched_group=False
+                    # status defaults to "not_started" - worker will pick up
+                ))
+                logger.debug(
+                    f"Run {run.id}: Created sub-run for pages {match.matched_pages} "
+                    f"with template version {match.version_id}"
+                )
+
+            # 5. Create unmatched sub-run if needed
+            if match_result.unmatched_pages:
+                unmatched_sub_run = self.sub_run_repo.create(EtoSubRunCreate(
+                    eto_run_id=run.id,
+                    matched_pages=json.dumps(match_result.unmatched_pages),
+                    template_version_id=None,
+                    is_unmatched_group=True
+                ))
+                # Update status to needs_template
+                self.sub_run_repo.update(unmatched_sub_run.id, {"status": "needs_template"})
+
+                logger.debug(
+                    f"Run {run.id}: Created unmatched sub-run for pages {match_result.unmatched_pages}"
+                )
+
+            logger.info(
+                f"Created ETO run {run.id} with {len(match_result.matches)} matched sub-runs "
+                f"and {1 if match_result.unmatched_pages else 0} unmatched sub-run"
+            )
+
             return run
 
         except ObjectNotFoundError:
@@ -207,7 +255,17 @@ class EtoRunsService:
             raise
 
         except Exception as e:
-            logger.error(f"Failed to create ETO run for PDF {pdf_file_id}: {e}", exc_info=True)
+            # Critical error during template matching - mark parent run as failed
+            logger.error(f"Critical error creating run for PDF {pdf_file_id}: {e}", exc_info=True)
+
+            if 'run' in locals():
+                self.eto_run_repo.update(run.id, {
+                    "status": "failure",
+                    "completed_at": datetime.now(timezone.utc),
+                    "error_type": "TemplateMatchingSystemError",
+                    "error_message": str(e)
+                })
+
             raise ServiceError(f"Failed to create ETO run: {str(e)}") from e
 
     def list_runs(
@@ -242,7 +300,7 @@ class EtoRunsService:
                 desc=desc
             )
 
-            logger.monitor(f"Retrieved {len(runs)} ETO runs")  # type: ignore
+            logger.monitor(f"Retrieved {len(runs)} ETO runs")
             return runs
 
         except Exception as e:
@@ -285,7 +343,7 @@ class EtoRunsService:
                 desc=desc
             )
 
-            logger.monitor(f"Retrieved {len(runs)} ETO runs with relations")  # type: ignore
+            logger.monitor(f"Retrieved {len(runs)} ETO runs with relations")
             return runs
 
         except Exception as e:
@@ -345,12 +403,433 @@ class EtoRunsService:
 
         logger.debug(
             f"Retrieved ETO run detail {run_id}: status={detail.status}, "
-            f"has_matching={detail.template_matching is not None}, "
-            f"has_extraction={detail.extraction is not None}, "
-            f"has_pipeline={detail.pipeline_execution is not None}"
+            f"sub_runs={len(detail.sub_runs)}"
         )
         return detail
-    
+
+    # ==================== Worker Processing Methods ====================
+
+    def process_sub_run(self, sub_run_id: int) -> bool:
+        """
+        Execute extraction + pipeline for a single sub-run.
+        Called by worker for sub-runs with status="not_started".
+
+        Workflow:
+        1. Update sub-run to "processing"
+        2. Execute Stage 1: Data Extraction (for this sub-run's pages only)
+        3. Execute Stage 2: Pipeline Execution (with this sub-run's data)
+        4. Update sub-run to "success" or "failure"
+        5. Update parent run status based on all sub-runs
+
+        Args:
+            sub_run_id: ETO sub-run ID to process
+
+        Returns:
+            True if successful, False if failed
+        """
+        logger.monitor(f"Starting sub-run processing for sub-run {sub_run_id}")
+
+        # Get sub-run and validate
+        sub_run = self.sub_run_repo.get_by_id(sub_run_id)
+        if not sub_run:
+            logger.error(f"Sub-run {sub_run_id} not found")
+            raise ObjectNotFoundError(f"Sub-run {sub_run_id} not found")
+
+        try:
+            # Update to processing status
+            started_at = datetime.now(timezone.utc)
+            self.sub_run_repo.update(sub_run_id, {
+                "status": "processing",
+                "started_at": started_at
+            })
+
+            # Broadcast status change
+            eto_event_manager.broadcast_sync("sub_run_updated", {
+                "id": sub_run_id,
+                "eto_run_id": sub_run.eto_run_id,
+                "status": "processing",
+                "started_at": started_at.isoformat(),
+            })
+
+            # Stage 1: Data Extraction
+            try:
+                extracted_data = self._process_sub_run_extraction(sub_run_id)
+                logger.debug(f"Sub-run {sub_run_id}: Extracted {len(extracted_data)} fields")
+
+            except Exception as e:
+                logger.error(f"Sub-run {sub_run_id}: Extraction error: {e}", exc_info=True)
+                self._mark_sub_run_failure(sub_run_id, error=e, error_type="DataExtractionError")
+                self._update_parent_run_status(sub_run.eto_run_id)
+                return False
+
+            # Stage 2: Pipeline Execution
+            try:
+                self._process_sub_run_pipeline(sub_run_id, extracted_data)
+
+            except Exception as e:
+                logger.error(f"Sub-run {sub_run_id}: Pipeline error: {e}", exc_info=True)
+                self._mark_sub_run_failure(sub_run_id, error=e, error_type="PipelineExecutionError")
+                self._update_parent_run_status(sub_run.eto_run_id)
+                return False
+
+            # All stages completed successfully
+            self._mark_sub_run_success(sub_run_id)
+            self._update_parent_run_status(sub_run.eto_run_id)
+            logger.monitor(f"Sub-run {sub_run_id}: All stages completed successfully")
+            return True
+
+        except Exception as e:
+            # Unexpected error
+            logger.error(f"Sub-run {sub_run_id}: Unexpected system error: {e}", exc_info=True)
+            self._mark_sub_run_failure(sub_run_id, error=e, error_type="UnexpectedSystemError")
+            self._update_parent_run_status(sub_run.eto_run_id)
+            return False
+
+    # ==================== Stage Processing Methods (Sub-Run) ====================
+
+    def _process_sub_run_extraction(self, sub_run_id: int) -> list:
+        """
+        Execute data extraction stage for a single sub-run.
+
+        Extracts data only from pages that belong to this sub-run using the
+        template version associated with this sub-run.
+
+        Args:
+            sub_run_id: Sub-run ID
+
+        Returns:
+            List of extracted data records (one per page in sub-run)
+
+        Raises:
+            Exception: If extraction fails
+        """
+        logger.info(f"Sub-run {sub_run_id}: Starting extraction stage")
+
+        # Get sub-run with template info
+        sub_run = self.sub_run_repo.get_by_id(sub_run_id)
+        if not sub_run:
+            raise ObjectNotFoundError(f"Sub-run {sub_run_id} not found")
+
+        if not sub_run.template_version_id:
+            raise ValidationError(f"Sub-run {sub_run_id} has no template version (unmatched group)")
+
+        # Get parent run for PDF file ID
+        parent_run = self.eto_run_repo.get_by_id(sub_run.eto_run_id)
+        if not parent_run:
+            raise ObjectNotFoundError(f"Parent run {sub_run.eto_run_id} not found")
+
+        # Get template version for extraction fields
+        template_version = self.pdf_template_service.get_version_by_id(sub_run.template_version_id)
+
+        # Parse matched pages from JSON
+        matched_pages = json.loads(sub_run.matched_pages)
+
+        # Extract data from sub-run's pages only
+        extracted_data = self._extract_data_from_pdf_pages(
+            pdf_file_id=parent_run.pdf_file_id,
+            extraction_fields=template_version.extraction_fields,
+            page_numbers=matched_pages
+        )
+
+        # Create extraction record
+        extraction = self.sub_run_extraction_repo.create(
+            EtoSubRunExtractionCreate(sub_run_id=sub_run_id)
+        )
+
+        # Update with results
+        self.sub_run_extraction_repo.update(extraction.id, {
+            "status": "success",
+            "extracted_data": json.dumps(extracted_data),
+            "started_at": datetime.now(timezone.utc),
+            "completed_at": datetime.now(timezone.utc)
+        })
+
+        logger.info(f"Sub-run {sub_run_id}: Extraction completed - {len(extracted_data)} pages extracted")
+
+        return extracted_data
+
+    def _process_sub_run_pipeline(self, sub_run_id: int, extracted_data: list) -> None:
+        """
+        Execute pipeline execution stage for a single sub-run.
+
+        Executes the pipeline with extracted data, persisting step results and actions.
+        Uses PRODUCTION mode (execute_actions=True) - actions actually execute.
+
+        Args:
+            sub_run_id: Sub-run ID
+            extracted_data: Extracted data from previous stage (list of field dicts)
+
+        Raises:
+            Exception: If pipeline execution fails
+        """
+        logger.monitor(f"Sub-run {sub_run_id}: Executing pipeline execution stage")
+
+        # Step 1: Get sub-run with template info
+        sub_run = self.sub_run_repo.get_by_id(sub_run_id)
+        if not sub_run:
+            raise ObjectNotFoundError(f"Sub-run {sub_run_id} not found")
+
+        if not sub_run.template_version_id:
+            raise ValidationError(f"Sub-run {sub_run_id} has no template version (unmatched group)")
+
+        # Step 2: Create pipeline_execution record
+        started_at = datetime.now(timezone.utc)
+        pipeline_execution = self.sub_run_pipeline_execution_repo.create(
+            EtoSubRunPipelineExecutionCreate(
+                sub_run_id=sub_run_id,
+                started_at=started_at
+            )
+        )
+        logger.debug(f"Sub-run {sub_run_id}: Created pipeline_execution record {pipeline_execution.id}")
+
+        # Step 3: Get template version with pipeline_definition_id
+        template_version = self.pdf_template_service.get_version_by_id(sub_run.template_version_id)
+        logger.debug(
+            f"Sub-run {sub_run_id}: Retrieved template version {sub_run.template_version_id} "
+            f"with pipeline_definition_id {template_version.pipeline_definition_id}"
+        )
+
+        # Step 4: Get pipeline definition with pipeline_state
+        pipeline_definition = self.pipeline_execution_service.pipeline_repo.get_by_id(
+            template_version.pipeline_definition_id
+        )
+        if not pipeline_definition:
+            raise ServiceError(
+                f"Pipeline definition {template_version.pipeline_definition_id} not found "
+                f"for template version {sub_run.template_version_id}"
+            )
+        logger.debug(
+            f"Sub-run {sub_run_id}: Retrieved pipeline definition {pipeline_definition.id} "
+            f"with compiled plan {pipeline_definition.compiled_plan_id}"
+        )
+
+        # Step 5: Get compiled steps
+        if not pipeline_definition.compiled_plan_id:
+            raise ServiceError(
+                f"Pipeline definition {pipeline_definition.id} is not compiled. "
+                f"Cannot execute uncompiled pipeline."
+            )
+
+        compiled_steps = self.pipeline_execution_service.step_repo.get_steps_by_plan_id(
+            pipeline_definition.compiled_plan_id
+        )
+        if not compiled_steps:
+            raise ServiceError(
+                f"No compiled steps found for pipeline {pipeline_definition.id} "
+                f"(plan {pipeline_definition.compiled_plan_id})"
+            )
+        logger.debug(
+            f"Sub-run {sub_run_id}: Retrieved {len(compiled_steps)} compiled steps "
+            f"from plan {pipeline_definition.compiled_plan_id}"
+        )
+
+        # Step 6: Convert extracted_data list to dict format for pipeline execution
+        # Pipeline expects: {field_name: extracted_value}
+        extracted_data_dict = {
+            result["name"]: result["extracted_value"]
+            for result in extracted_data
+        }
+
+        # Step 7: Execute pipeline with PRODUCTION mode (execute_actions=True)
+        from shared.types.pipeline_execution import PipelineExecutionResult
+
+        execution_result: PipelineExecutionResult = self.pipeline_execution_service.execute_pipeline(
+            steps=compiled_steps,  # type: ignore[arg-type]
+            entry_values_by_name=extracted_data_dict,
+            pipeline_state=pipeline_definition.pipeline_state
+        )
+        logger.debug(
+            f"Sub-run {sub_run_id}: Pipeline execution completed with status={execution_result.status}, "
+            f"{len(execution_result.steps)} steps, {len(execution_result.executed_actions)} actions"
+        )
+
+        # Step 8: Persist ALL step results to database (batch after completion)
+        for step_result in execution_result.steps:
+            # Serialize step inputs/outputs to JSON strings
+            inputs_json = json.dumps(step_result.inputs) if step_result.inputs else None
+            outputs_json = json.dumps(step_result.outputs) if step_result.outputs else None
+
+            # Create step record
+            self.sub_run_pipeline_execution_step_repo.create(
+                EtoSubRunPipelineExecutionStepCreate(
+                    pipeline_execution_id=pipeline_execution.id,
+                    module_instance_id=step_result.module_instance_id,
+                    step_number=step_result.step_number,
+                    inputs=inputs_json,
+                    outputs=outputs_json,
+                    error=step_result.error
+                )
+            )
+
+        logger.debug(f"Sub-run {sub_run_id}: Persisted {len(execution_result.steps)} step results to database")
+
+        # Step 9: Store executed_actions as JSON
+        executed_actions_json = json.dumps(execution_result.executed_actions) if execution_result.executed_actions else None
+
+        # Step 10: Update pipeline_execution record with final status
+        completed_at = datetime.now(timezone.utc)
+        final_status = "success" if execution_result.status == "success" else "failure"
+
+        self.sub_run_pipeline_execution_repo.update(
+            pipeline_execution.id,
+            {
+                "status": final_status,
+                "executed_actions": executed_actions_json,
+                "completed_at": completed_at
+            }
+        )
+        logger.debug(
+            f"Sub-run {sub_run_id}: Updated pipeline_execution record to status={final_status}"
+        )
+
+        # Step 11: If pipeline failed, raise error to mark sub-run as failed
+        if execution_result.status != "success":
+            error_msg = execution_result.error or "Pipeline execution failed"
+            logger.error(f"Sub-run {sub_run_id}: Pipeline execution failed: {error_msg}")
+            raise ServiceError(f"Pipeline execution failed: {error_msg}")
+
+        logger.monitor(f"Sub-run {sub_run_id}: Pipeline execution completed successfully")
+
+    def _extract_data_from_pdf_pages(
+        self,
+        pdf_file_id: int,
+        extraction_fields: list,
+        page_numbers: list[int]
+    ) -> list:
+        """
+        Wrapper for PDF extraction that filters results to specific pages only.
+
+        Calls the utility function to extract data from all pages, then filters
+        to only the pages specified for this sub-run.
+
+        Args:
+            pdf_file_id: PDF file ID
+            extraction_fields: List of field definitions for extraction
+            page_numbers: List of page numbers to include (1-indexed)
+
+        Returns:
+            List of extracted data records for specified pages only
+        """
+        from features.eto_runs.utils.extraction import extract_data_from_pdf_pages
+
+        return extract_data_from_pdf_pages(
+            pdf_file_service=self.pdf_files_service,
+            pdf_file_id=pdf_file_id,
+            extraction_fields=extraction_fields,
+            page_numbers=page_numbers
+        )
+
+    # ==================== Helper Methods (Sub-Run) ====================
+
+    def _mark_sub_run_success(self, sub_run_id: int) -> None:
+        """
+        Mark sub-run as successfully completed.
+
+        Updates status to "success" and sets completed_at timestamp.
+
+        Args:
+            sub_run_id: Sub-run ID
+        """
+        logger.info(f"Sub-run {sub_run_id}: Marking as success")
+
+        self.sub_run_repo.update(sub_run_id, {
+            "status": "success",
+            "completed_at": datetime.now(timezone.utc)
+        })
+
+    def _mark_sub_run_failure(
+        self,
+        sub_run_id: int,
+        error: Exception,
+        error_type: Optional[str] = None
+    ) -> None:
+        """
+        Mark sub-run as failed and record error details.
+
+        Updates status to "failure", sets error fields, and sets completed_at timestamp.
+
+        Args:
+            sub_run_id: Sub-run ID
+            error: Exception that caused the failure
+            error_type: Optional error type classification (inferred from exception if not provided)
+        """
+        # Infer error type if not provided
+        if error_type is None:
+            error_type = type(error).__name__
+
+        error_message = str(error)
+        completed_at = datetime.now(timezone.utc)
+
+        logger.error(f"Sub-run {sub_run_id}: Marking as failure - {error_type}: {error}")
+
+        self.sub_run_repo.update(sub_run_id, {
+            "status": "failure",
+            "error_type": error_type,
+            "error_message": error_message,
+            "error_details": None,  # TODO: Add stack trace or additional context if needed
+            "completed_at": completed_at
+        })
+
+    def _update_parent_run_status(self, run_id: int) -> None:
+        """
+        Update parent run status based on all sub-run statuses.
+
+        Status logic:
+        - "processing": Has any sub-runs with status "not_started" or "processing"
+        - "success": All sub-runs completed (regardless of individual success/failure)
+
+        Note: Parent "failure" status is ONLY set for critical template matching errors,
+        not for individual sub-run failures.
+
+        Args:
+            run_id: Parent ETO run ID
+        """
+        logger.debug(f"Run {run_id}: Updating parent status based on sub-runs")
+
+        # Get all sub-runs for parent
+        sub_runs = self.sub_run_repo.get_by_eto_run_id(run_id)
+
+        if not sub_runs:
+            # No sub-runs - should not happen in normal flow
+            logger.warning(f"Run {run_id}: No sub-runs found")
+            return
+
+        # Check if any sub-runs are still active
+        active_statuses = {"not_started", "processing"}
+        has_active = any(sub.status in active_statuses for sub in sub_runs)
+
+        if has_active:
+            # Keep parent in "processing" status
+            self.eto_run_repo.update(run_id, {"status": "processing"})
+            logger.debug(f"Run {run_id}: Status remains 'processing' (has active sub-runs)")
+        else:
+            # All sub-runs completed - mark parent as success
+            self.eto_run_repo.update(run_id, {
+                "status": "success",
+                "completed_at": datetime.now(timezone.utc)
+            })
+            logger.info(f"Run {run_id}: All sub-runs completed - marked as success")
+
+    def _reset_sub_run_to_not_started(self, sub_run_id: int) -> None:
+        """
+        Reset a sub-run back to not_started status.
+
+        Used by worker cleanup when a sub-run crashes during processing.
+        Clears processing timestamps and error fields.
+
+        Args:
+            sub_run_id: Sub-run ID
+        """
+        logger.info(f"Sub-run {sub_run_id}: Resetting to not_started")
+
+        self.sub_run_repo.update(sub_run_id, {
+            "status": "not_started",
+            "started_at": None,
+            "completed_at": None,
+            "error_type": None,
+            "error_message": None,
+            "error_details": None
+        })
 
     # ==================== Bulk Operation Methods ====================
 
@@ -432,7 +911,7 @@ class EtoRunsService:
                 }
             )
 
-            logger.monitor(f"Run {run_id}: Reset to not_started for reprocessing")  # type: ignore
+            logger.monitor(f"Run {run_id}: Reset to not_started for reprocessing")
 
         logger.info(f"Successfully reprocessed {len(run_ids)} ETO runs")
 
@@ -490,7 +969,7 @@ class EtoRunsService:
                 }
             )
 
-            logger.monitor(f"Run {run_id}: Marked as skipped")  # type: ignore
+            logger.monitor(f"Run {run_id}: Marked as skipped")
 
         logger.info(f"Successfully skipped {len(run_ids)} ETO runs")
 
@@ -563,599 +1042,9 @@ class EtoRunsService:
                 }
             )
 
-            logger.monitor(f"Run {run_id}: Permanently deleted")  # type: ignore
+            logger.monitor(f"Run {run_id}: Permanently deleted")
 
         logger.info(f"Successfully deleted {len(run_ids)} ETO runs")
-
-    # ==================== Processing Methods (Worker) ====================
-
-    def process_run(self, run_id: int) -> bool:
-        """
-        Execute ETO workflow for a run.
-        Called by ETO worker for runs with status = "not_started".
-
-        Workflow:
-        1. Update status to "processing"
-        2. Execute Stage 1: Template Matching
-        3. Execute Stage 2: Data Extraction
-        4. TODO: Execute Stage 3: Data Transformation (not yet implemented)
-        5. Update status to "success" or "failure"
-
-        Error Handling:
-        - Each stage wrapped in try-except to catch stage-specific errors
-        - Stage errors marked with specific error_type (TemplateMatchingError, etc.)
-        - Outer try-except catches unexpected errors (syntax, type errors, etc.)
-        - All errors update run status to "failure" with error details
-
-        Args:
-            run_id: ETO run ID to process
-
-        Returns:
-            True if successful, False if failed
-        """
-        logger.monitor(f"Starting ETO processing for run {run_id}")  # type: ignore
-
-        # Get run and validate existence
-        run = self.eto_run_repo.get_by_id(run_id)
-        if not run:
-            logger.error(f"ETO run {run_id} not found")
-            raise ObjectNotFoundError(f"ETO run {run_id} not found")
-
-        try:
-            # Update to processing status
-            started_at = datetime.now(timezone.utc)
-            self.eto_run_repo.update(
-                run_id,
-                EtoRunUpdate(
-                    status="processing",
-                    started_at=started_at
-                )
-            )
-
-            # Broadcast status change to SSE clients
-            eto_event_manager.broadcast_sync(
-                "run_updated",
-                {
-                    "id": run_id,
-                    "status": "processing",
-                    "started_at": started_at.isoformat(),
-                }
-            )
-
-            # Stage 1: Template Matching
-            try:
-                match_result = self._process_template_matching(run_id)
-                if match_result is None:
-                    # No match found - run status already updated to "needs_template"
-                    return False
-
-                template_id, version_id = match_result
-
-            except Exception as e:
-                logger.error(f"Run {run_id}: Template matching stage error: {e}", exc_info=True)
-                self._mark_run_failure(run_id, error=e, error_type="TemplateMatchingError")
-                return False
-
-            # Stage 2: Data Extraction
-            try:
-                extracted_data = self._process_data_extraction(run_id, version_id)
-                logger.debug(f"Run {run_id}: Extracted data: {extracted_data}")
-
-            except Exception as e:
-                logger.error(f"Run {run_id}: Data extraction stage error: {e}", exc_info=True)
-                self._mark_run_failure(run_id, error=e, error_type="DataExtractionError")
-                return False
-
-            # Stage 3: Pipeline Execution
-            # Execute pipeline with extracted data and persist results
-            try:
-                self._process_pipeline_execution(
-                    run_id=run_id,
-                    template_version_id=version_id,
-                    extracted_data=extracted_data
-                )
-            except Exception as e:
-                logger.error(f"Run {run_id}: Pipeline execution stage error: {e}", exc_info=True)
-                self._mark_run_failure(run_id, error=e, error_type="PipelineExecutionError")
-                return False
-
-            # All stages completed successfully
-            self._mark_run_success(run_id)
-            logger.monitor(f"Run {run_id}: All stages completed successfully")  # type: ignore
-            return True
-
-        except Exception as e:
-            # Catch unexpected errors not related to stage processing
-            # (e.g., syntax errors, type errors, database connection issues)
-            logger.error(f"Run {run_id}: Unexpected system error: {e}", exc_info=True)
-            self._mark_run_failure(run_id, error=e, error_type="UnexpectedSystemError")
-            return False
-
-    # ==================== Core Processing Methods (Mirroring Simulate Logic) ====================
-
-    def _extract_data_from_pdf(
-        self,
-        pdf_file_id: int,
-        extraction_fields: list
-    ) -> list:
-        """
-        Extract text from PDF using extraction fields with bbox metadata.
-
-        This is a thin wrapper around the shared extraction utility.
-        The actual extraction logic is in features.eto_runs.utils.extraction
-
-        Args:
-            pdf_file_id: PDF file ID to extract from
-            extraction_fields: List of ExtractionField domain objects
-
-        Returns:
-            List of extraction results with name, bbox, page, and extracted value
-        """
-        from features.eto_runs.utils.extraction import extract_data_from_pdf
-
-        return extract_data_from_pdf(
-            pdf_file_service=self.pdf_files_service,
-            pdf_file_id=pdf_file_id,
-            extraction_fields=extraction_fields
-        )
-
-    def _process_template_matching(self, run_id: int) -> tuple[int, int] | None:
-        """
-        Stage 1: Template Matching
-
-        Matches PDF to best template using signature objects.
-        Creates and updates template_matching record with results.
-
-        Args:
-            run_id: ETO run ID
-
-        Returns:
-            Tuple of (template_id, version_id) if match found, None otherwise
-
-        Raises:
-            Exception: Propagated to caller for error handling
-        """
-        logger.monitor(f"Run {run_id}: Executing template matching stage")  # type: ignore
-
-        # Step 1: Update run processing_step
-        self.eto_run_repo.update(
-            run_id,
-            EtoRunUpdate(processing_step="template_matching")
-        )
-        logger.debug(f"Run {run_id}: Updated processing_step to template_matching")
-
-        # Broadcast processing step change
-        eto_event_manager.broadcast_sync(
-            "run_updated",
-            {
-                "id": run_id,
-                "processing_step": "template_matching",
-            }
-        )
-
-        # Step 2: Create template_matching record with status="processing"
-        started_at = datetime.now(timezone.utc)
-        template_matching = self.template_matching_repo.create(
-            EtoRunTemplateMatchingCreate(eto_run_id=run_id)
-        )
-        logger.debug(f"Run {run_id}: Created template_matching record {template_matching.id}")
-
-        # Step 2b: Update with started_at timestamp
-        template_matching = self.template_matching_repo.update(
-            template_matching.id,
-            EtoRunTemplateMatchingUpdate(started_at=started_at)
-        )
-        logger.debug(f"Run {run_id}: Set template_matching started_at")
-
-        # Step 3: Get PDF file with objects AND page count
-        run = self.eto_run_repo.get_by_id(run_id)
-        if not run:
-            raise ServiceError(f"Run {run_id} not found")
-
-        pdf_file = self.pdf_files_service.get_pdf_file(run.pdf_file_id)
-        pdf_objects = pdf_file.extracted_objects
-        pdf_page_count = pdf_file.page_count
-
-        # Validate page_count exists
-        if pdf_page_count is None:
-            raise ServiceError(
-                f"PDF file {run.pdf_file_id} has no page_count. "
-                f"Cannot perform template matching without page count."
-            )
-
-        logger.debug(
-            f"Run {run_id}: Retrieved PDF {run.pdf_file_id} "
-            f"with {pdf_page_count} pages"
-        )
-
-        # Step 4: Call template matching service WITH page_count
-        match_result = self.pdf_template_service.match_template(
-            pdf_objects=pdf_objects,
-            pdf_page_count=pdf_page_count
-        )
-
-        # Step 5: Handle match result
-        if match_result is None:
-            # No template matched
-            logger.monitor(f"Run {run_id}: No template match found")  # type: ignore
-
-            # Update template_matching record to failure
-            self.template_matching_repo.update(
-                template_matching.id,
-                EtoRunTemplateMatchingUpdate(
-                    status="failure",
-                    completed_at=datetime.now(timezone.utc)
-                )
-            )
-
-            # Update run status to "needs_template"
-            completed_at = datetime.now(timezone.utc)
-            self.eto_run_repo.update(
-                run_id,
-                EtoRunUpdate(
-                    status="needs_template",
-                    completed_at=completed_at,
-                    error_type="NoTemplateMatch",
-                    error_message="No matching template found for this PDF"
-                )
-            )
-
-            # Broadcast status change
-            eto_event_manager.broadcast_sync(
-                "run_updated",
-                {
-                    "id": run_id,
-                    "status": "needs_template",
-                    "completed_at": completed_at.isoformat(),
-                    "error_type": "NoTemplateMatch",
-                    "error_message": "No matching template found for this PDF"
-                }
-            )
-
-            logger.warning(f"Run {run_id}: Set status to needs_template - no template match")
-            return None
-
-        # Match found!
-        template_id, version_id = match_result
-        logger.monitor(f"Run {run_id}: Template match found - template {template_id}, version {version_id}")  # type: ignore
-
-        # Update template_matching record to success
-        self.template_matching_repo.update(
-            template_matching.id,
-            EtoRunTemplateMatchingUpdate(
-                status="success",
-                matched_template_version_id=version_id,
-                completed_at=datetime.now(timezone.utc)
-            )
-        )
-
-        logger.monitor(f"Run {run_id}: Template matching completed successfully")  # type: ignore
-        return match_result
-
-    def _process_data_extraction(self, run_id: int, template_version_id: int) -> dict[str, str]:
-        """
-        Stage 2: Data Extraction
-
-        Extracts field values from PDF using matched template's extraction fields.
-        Uses the SAME extraction logic as simulate endpoint.
-        Creates and updates extraction record with results.
-
-        Args:
-            run_id: ETO run ID
-            template_version_id: Matched template version ID
-
-        Returns:
-            Dict of extracted data (field name -> text value) for pipeline execution
-
-        Raises:
-            Exception: Propagated to caller for error handling
-        """
-        logger.monitor(f"Run {run_id}: Executing data extraction stage")  # type: ignore
-
-        # Step 1: Update run processing_step
-        self.eto_run_repo.update(
-            run_id,
-            EtoRunUpdate(processing_step="data_extraction")
-        )
-        logger.debug(f"Run {run_id}: Updated processing_step to data_extraction")
-
-        # Broadcast processing step change
-        eto_event_manager.broadcast_sync(
-            "run_updated",
-            {
-                "id": run_id,
-                "processing_step": "data_extraction",
-            }
-        )
-
-        # Step 2: Create extraction record
-        started_at = datetime.now(timezone.utc)
-        extraction = self.extraction_repo.create(
-            EtoRunExtractionCreate(eto_run_id=run_id)
-        )
-        logger.debug(f"Run {run_id}: Created extraction record {extraction.id}")
-
-        # Step 3: Get extraction fields from matched template version
-        template_version = self.pdf_template_service.get_version_by_id(template_version_id)
-        logger.debug(f"Run {run_id}: Retrieved template version {template_version_id} with {len(template_version.extraction_fields)} fields")
-
-        # Step 4: Get PDF file ID from run
-        run = self.eto_run_repo.get_by_id(run_id)
-        if not run:
-            raise ServiceError(f"Run {run_id} not found")
-
-        # Step 5: CORE LOGIC - Extract data using same logic as simulate endpoint
-        # Returns list of dicts with name, bbox, page, description, extracted_value
-        extraction_results = self._extract_data_from_pdf(
-            pdf_file_id=run.pdf_file_id,
-            extraction_fields=template_version.extraction_fields
-        )
-
-        logger.debug(f"Run {run_id}: Extracted {len(extraction_results)} fields from PDF")
-
-        # Step 6: Update extraction record with full results (including bbox data)
-        self.extraction_repo.update(
-            extraction.id,
-            EtoRunExtractionUpdate(
-                status="success",
-                extracted_data=json.dumps(extraction_results),  # Store full extraction results
-                started_at=started_at,
-                completed_at=datetime.now(timezone.utc)
-            )
-        )
-
-        # Step 7: Convert to dict format for pipeline execution (backwards compatibility)
-        extracted_data_dict = {
-            result["name"]: result["extracted_value"]
-            for result in extraction_results
-        }
-
-        logger.monitor(f"Run {run_id}: Data extraction completed successfully")  # type: ignore
-        return extracted_data_dict
-
-    def _process_pipeline_execution(
-        self,
-        run_id: int,
-        template_version_id: int,
-        extracted_data: dict[str, str]
-    ) -> None:
-        """
-        Stage 3: Pipeline Execution
-
-        Executes the pipeline with extracted data, persisting step results and actions.
-        Uses PRODUCTION mode (execute_actions=True) - actions actually execute.
-
-        Args:
-            run_id: ETO run ID
-            template_version_id: Matched template version ID
-            extracted_data: Dict of extracted field values (field name -> text)
-
-        Raises:
-            Exception: Propagated to caller for error handling
-        """
-        logger.monitor(f"Run {run_id}: Executing pipeline execution stage")  # type: ignore
-
-        # Step 1: Update run processing_step
-        self.eto_run_repo.update(
-            run_id,
-            EtoRunUpdate(processing_step="data_transformation")
-        )
-        logger.debug(f"Run {run_id}: Updated processing_step to data_transformation")
-
-        # Broadcast processing step change
-        eto_event_manager.broadcast_sync(
-            "run_updated",
-            {
-                "id": run_id,
-                "processing_step": "data_transformation",
-            }
-        )
-
-        # Step 2: Create pipeline_execution record
-        started_at = datetime.now(timezone.utc)
-        pipeline_execution = self.pipeline_execution_repo.create(
-            EtoRunPipelineExecutionCreate(
-                eto_run_id=run_id,
-                started_at=started_at
-            )
-        )
-        logger.debug(f"Run {run_id}: Created pipeline_execution record {pipeline_execution.id}")
-
-        # Step 3: Get template version with pipeline_definition_id
-        template_version = self.pdf_template_service.get_version_by_id(template_version_id)
-        logger.debug(
-            f"Run {run_id}: Retrieved template version {template_version_id} "
-            f"with pipeline_definition_id {template_version.pipeline_definition_id}"
-        )
-
-        # Step 4: Get pipeline definition with pipeline_state
-        pipeline_definition = self.pipeline_execution_service.pipeline_repo.get_by_id(
-            template_version.pipeline_definition_id
-        )
-        if not pipeline_definition:
-            raise ServiceError(
-                f"Pipeline definition {template_version.pipeline_definition_id} not found "
-                f"for template version {template_version_id}"
-            )
-        logger.debug(
-            f"Run {run_id}: Retrieved pipeline definition {pipeline_definition.id} "
-            f"with compiled plan {pipeline_definition.compiled_plan_id}"
-        )
-
-        # Step 5: Get compiled steps
-        if not pipeline_definition.compiled_plan_id:
-            raise ServiceError(
-                f"Pipeline definition {pipeline_definition.id} is not compiled. "
-                f"Cannot execute uncompiled pipeline."
-            )
-
-        compiled_steps = self.pipeline_execution_service.step_repo.get_steps_by_plan_id(
-            pipeline_definition.compiled_plan_id
-        )
-        if not compiled_steps:
-            raise ServiceError(
-                f"No compiled steps found for pipeline {pipeline_definition.id} "
-                f"(plan {pipeline_definition.compiled_plan_id})"
-            )
-        logger.debug(
-            f"Run {run_id}: Retrieved {len(compiled_steps)} compiled steps "
-            f"from plan {pipeline_definition.compiled_plan_id}"
-        )
-
-        # Step 6: CORE LOGIC - Execute pipeline with PRODUCTION mode (execute_actions=True)
-        from shared.types.pipeline_execution import PipelineExecutionResult
-
-        execution_result: PipelineExecutionResult = self.pipeline_execution_service.execute_pipeline(
-            steps=compiled_steps,
-            entry_values_by_name=extracted_data,
-            pipeline_state=pipeline_definition.pipeline_state
-        )
-        logger.debug(
-            f"Run {run_id}: Pipeline execution completed with status={execution_result.status}, "
-            f"{len(execution_result.steps)} steps, {len(execution_result.executed_actions)} actions"
-        )
-
-        # Step 7: Persist ALL step results to database (batch after completion)
-        import json
-        from shared.types.eto_run_pipeline_execution_steps import EtoRunPipelineExecutionStepCreate
-
-        for step_result in execution_result.steps:
-            # Serialize step inputs/outputs to JSON strings
-            inputs_json = json.dumps(step_result.inputs) if step_result.inputs else None
-            outputs_json = json.dumps(step_result.outputs) if step_result.outputs else None
-
-            # Create step record
-            self.pipeline_execution_step_repo.create(
-                EtoRunPipelineExecutionStepCreate(
-                    run_id=pipeline_execution.id,  # FK to pipeline_execution record
-                    module_instance_id=step_result.module_instance_id,
-                    step_number=step_result.step_number,
-                    inputs=inputs_json,
-                    outputs=outputs_json,
-                    error=step_result.error
-                )
-            )
-
-        logger.debug(f"Run {run_id}: Persisted {len(execution_result.steps)} step results to database")
-
-        # Step 8: Store executed_actions as JSON
-        executed_actions_json = json.dumps(execution_result.executed_actions) if execution_result.executed_actions else None
-
-        # Step 9: Update pipeline_execution record with final status
-        completed_at = datetime.now(timezone.utc)
-        final_status = "success" if execution_result.status == "success" else "failure"
-
-        self.pipeline_execution_repo.update(
-            pipeline_execution.id,
-            EtoRunPipelineExecutionUpdate(
-                status=final_status,
-                executed_actions=executed_actions_json,
-                completed_at=completed_at
-            )
-        )
-        logger.debug(
-            f"Run {run_id}: Updated pipeline_execution record to status={final_status}"
-        )
-
-        # Step 10: If pipeline failed, raise error to mark run as failed
-        if execution_result.status != "success":
-            error_msg = execution_result.error or "Pipeline execution failed"
-            logger.error(f"Run {run_id}: Pipeline execution failed: {error_msg}")
-            raise ServiceError(f"Pipeline execution failed: {error_msg}")
-
-        logger.monitor(f"Run {run_id}: Pipeline execution completed successfully")  # type: ignore
-
-    # ==================== Helper Methods ====================
-
-    def _mark_run_success(self, run_id: int) -> None:
-        """
-        Mark ETO run as successfully completed.
-
-        Args:
-            run_id: ETO run ID
-        """
-        completed_at = datetime.now(timezone.utc)
-        self.eto_run_repo.update(
-            run_id,
-            EtoRunUpdate(
-                status="success",
-                completed_at=completed_at
-            )
-        )
-
-        # Broadcast success status
-        eto_event_manager.broadcast_sync(
-            "run_updated",
-            {
-                "id": run_id,
-                "status": "success",
-                "completed_at": completed_at.isoformat(),
-            }
-        )
-
-        logger.monitor(f"Run {run_id}: Marked as success")  # type: ignore
-
-    def _mark_run_failure(self, run_id: int, error: Exception, error_type: Optional[str] = None) -> None:
-        """
-        Mark ETO run as failed and record error details.
-
-        Args:
-            run_id: ETO run ID
-            error: Exception that caused failure
-            error_type: Error category (optional, inferred from exception if not provided)
-        """
-        # Infer error type if not provided
-        if error_type is None:
-            error_type = type(error).__name__
-
-        completed_at = datetime.now(timezone.utc)
-        error_message = str(error)
-
-        self.eto_run_repo.update(
-            run_id,
-            EtoRunUpdate(
-                status="failure",
-                completed_at=completed_at,
-                error_type=error_type,
-                error_message=error_message,
-                error_details=None  # TODO: Add stack trace or additional context if needed
-            )
-        )
-
-        # Broadcast failure status
-        eto_event_manager.broadcast_sync(
-            "run_updated",
-            {
-                "id": run_id,
-                "status": "failure",
-                "completed_at": completed_at.isoformat(),
-                "error_type": error_type,
-                "error_message": error_message,
-            }
-        )
-
-        logger.warning(f"Run {run_id}: Marked as failure - {error_type}: {error}")
-
-    def _reset_run_to_not_started(self, run_id: int) -> None:
-        """
-        Reset a run back to not_started status.
-        Used by worker for cleaning up stuck runs.
-
-        Args:
-            run_id: ETO run ID to reset
-        """
-        try:
-            self.eto_run_repo.update(
-                run_id,
-                EtoRunUpdate(
-                    status='not_started',
-                    processing_step=None,
-                    started_at=None
-                )
-            )
-            logger.debug(f"Reset run {run_id} to not_started")
-        except Exception as e:
-            logger.error(f"Failed to reset run {run_id}: {e}")
 
     # ==================== Background Worker Lifecycle ====================
 
