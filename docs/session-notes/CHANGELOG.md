@@ -1,5 +1,92 @@
 # CHANGELOG
 
+## [2025-11-24] — Multi-Template Sub-Run System Refactoring
+
+### Spec / Intent
+- Migrate ETO runs from single-template to multi-template sub-run architecture
+- Fix type errors throughout the codebase (Pylance/typing issues)
+- Clean up deprecated code and unused repositories
+- Implement custom logging with typed `monitor()` and `trace()` methods
+
+### Changes Made
+
+#### New Files Created:
+- `server/src/shared/logging.py` - Custom MonitorLogger class with typed `trace()` and `monitor()` methods
+- `server/src/shared/database/repositories/eto_sub_run_extraction.py` - Repository for sub-run extractions
+- `server/src/shared/database/repositories/eto_sub_run_pipeline_execution.py` - Repository for sub-run pipeline executions
+- `server/src/shared/database/repositories/eto_sub_run_pipeline_execution_step.py` - Repository for sub-run pipeline execution steps
+- `server/src/shared/types/eto_sub_run_extractions.py` - Types for sub-run extractions
+- `server/src/shared/types/eto_sub_run_pipeline_executions.py` - Types for sub-run pipeline executions
+- `server/src/shared/types/eto_sub_run_pipeline_execution_steps.py` - Types for sub-run pipeline execution steps
+
+#### Files Modified:
+- `server/src/app.py` - Updated to use `setup_logger_class()` from shared.logging
+- `server/src/features/eto_runs/service.py` - Major refactoring:
+  - Updated to use custom logger with typed `monitor()` method
+  - Rewrote `_process_sub_run_extraction` to use new sub-run tables
+  - Rewrote `_process_sub_run_pipeline` for new pipeline execution flow
+  - Fixed `_mark_sub_run_failure` (removed traceback reference, added error_type inference)
+  - Removed ~486 lines of deprecated old processing methods
+  - Removed duplicate worker lifecycle methods
+- `server/src/features/eto_runs/utils/eto_worker.py` - Changed `EtoRun` to `EtoSubRun` type
+- `server/src/features/pipeline_execution/service.py` - Removed unused old repositories
+- `server/src/features/pipelines/utils/validation.py` - Added assertion for `validate_config` return type
+- `server/src/api/routers/pipelines.py` - Added type ignore for steps parameter
+- `server/src/features/email_ingestion/integrations/imap_integration.py` - Fixed type narrowing issues, made `mark_as_read` a no-op
+
+#### Files Deleted (Old System):
+- `server/src/shared/database/repositories/eto_run_extraction.py`
+- `server/src/shared/database/repositories/eto_run_pipeline_execution.py`
+- `server/src/shared/database/repositories/eto_run_pipeline_execution_step.py`
+- `server/src/shared/database/repositories/eto_run_template_matching.py`
+- `server/src/shared/types/eto_run_extractions.py`
+- `server/src/shared/types/eto_run_pipeline_executions.py`
+- `server/src/shared/types/eto_run_pipeline_execution_steps.py`
+- `server/src/shared/types/eto_run_template_matchings.py`
+- `server/src/shared/database/models-new.py`
+
+### Key Technical Changes
+
+#### Custom Logging System:
+```python
+# server/src/shared/logging.py
+class MonitorLogger(logging.Logger):
+    def trace(self, msg: str, *args, **kwargs) -> None:  # Level 5
+    def monitor(self, msg: str, *args, **kwargs) -> None:  # Level 7
+```
+- TRACE level (5) - Very detailed tracing below DEBUG
+- MONITOR level (7) - Periodic status messages between TRACE and DEBUG
+- Eliminates need for `# type: ignore` on logger.monitor() calls
+
+#### Sub-Run Processing Flow:
+1. `process_sub_run(sub_run_id)` - Main entry point
+2. `_process_sub_run_extraction()` - Extract data using template fields
+3. `_process_sub_run_pipeline()` - Execute pipeline with extracted data
+4. `_mark_sub_run_success/failure()` - Update sub-run status
+5. `_update_parent_run_status()` - Aggregate sub-run statuses to parent
+
+#### Type Fixes:
+- `validate_config` return type: Added `assert isinstance(validation_errors, list)`
+- IMAP `msg_id_str` type narrowing: Explicit if/else with `str()` conversion
+- `email_body` assertion: `assert isinstance(email_body, bytes)`
+- Pipeline steps: Added `# type: ignore[arg-type]` for `PipelineDefinitionStepCreate`
+
+### Database Schema Changes
+- Old tables (deprecated): `eto_run_template_matchings`, `eto_run_extractions`, `eto_run_pipeline_executions`, `eto_run_pipeline_execution_steps`
+- New tables: `eto_sub_runs`, `eto_sub_run_extractions`, `eto_sub_run_pipeline_executions`, `eto_sub_run_pipeline_execution_steps`
+
+### Pending Work
+- `reprocess_runs()` and `skip_runs()` methods need updating for sub-run system
+- `delete_runs()` method needs updating for sub-run system
+- Frontend components in test feature need completion
+
+### Next Actions
+- Update bulk operations (reprocess, skip, delete) for sub-run architecture
+- Complete frontend test components for ETO run display
+- Add tests for new sub-run processing flow
+
+---
+
 ## [2025-11-18] — Page-Segment Template Matching Design & Test Dashboard Prototype
 
 ### Spec / Intent
