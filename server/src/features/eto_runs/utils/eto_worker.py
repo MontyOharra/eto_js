@@ -13,38 +13,53 @@ logger = logging.getLogger(__name__)
 
 class EtoWorker:
     """
-    Background worker for processing ETO runs.
+    Background worker for processing ETO runs with two-phase processing.
 
-    Runs async polling loop and delegates stage processing via callbacks.
-    Similar to EmailListenerThread pattern but using asyncio instead of threading.
+    Phase 1 (Template Matching):
+    - Picks up sub-runs with status="not_started" AND no template
+    - Runs template matching to identify which pages match which templates
+    - Creates new sub-runs with status="matched" (have template) or "needs_template"
+
+    Phase 2 (Extraction + Pipeline):
+    - Picks up sub-runs with status="matched" (have template assigned)
+    - Runs data extraction and pipeline execution
+    - Updates status to "success" or "failure"
 
     Features:
     - Async polling loop
+    - Two-phase processing in single loop
     - Concurrent batch processing
     - Pause/resume capability
     - Graceful shutdown
-    - Stuck run cleanup
     """
 
     def __init__(
         self,
-        process_run_callback: Callable[[int], bool],
-        get_pending_runs_callback: Callable[[int], List[EtoSubRun]],
+        # Phase 1 callbacks (Template Matching)
+        process_template_matching_callback: Callable[[int], bool],
+        get_pending_template_matching_callback: Callable[[int], List[EtoSubRun]],
+        # Phase 2 callbacks (Extraction + Pipeline)
+        process_extraction_pipeline_callback: Callable[[int], bool],
+        get_pending_extraction_pipeline_callback: Callable[[int], List[EtoSubRun]],
+        # Reset callback
         reset_run_callback: Callable[[int], None],
+        # Configuration
         enabled: bool = True,
         max_concurrent_runs: int = 10,
         polling_interval: int = 2,
         shutdown_timeout: int = 30
     ):
         """
-        Initialize ETO Worker.
+        Initialize ETO Worker with two-phase callbacks.
 
         Args:
-            process_run_callback: Callback to process a single run (service.process_run)
-            get_pending_runs_callback: Callback to get pending runs (service.list_runs)
+            process_template_matching_callback: Callback for Phase 1 (template matching)
+            get_pending_template_matching_callback: Gets sub-runs needing template matching
+            process_extraction_pipeline_callback: Callback for Phase 2 (extraction + pipeline)
+            get_pending_extraction_pipeline_callback: Gets sub-runs ready for extraction
             reset_run_callback: Callback to reset a run (service._reset_run_to_not_started)
             enabled: Whether worker is enabled
-            max_concurrent_runs: Maximum concurrent runs to process
+            max_concurrent_runs: Maximum concurrent runs to process per phase
             polling_interval: Seconds between polling cycles
             shutdown_timeout: Seconds to wait for graceful shutdown
         """
@@ -54,9 +69,15 @@ class EtoWorker:
         self.polling_interval = polling_interval
         self.shutdown_timeout = shutdown_timeout
 
-        # Callbacks to service
-        self.process_run_callback = process_run_callback
-        self.get_pending_runs_callback = get_pending_runs_callback
+        # Phase 1 callbacks (Template Matching)
+        self.process_template_matching_callback = process_template_matching_callback
+        self.get_pending_template_matching_callback = get_pending_template_matching_callback
+
+        # Phase 2 callbacks (Extraction + Pipeline)
+        self.process_extraction_pipeline_callback = process_extraction_pipeline_callback
+        self.get_pending_extraction_pipeline_callback = get_pending_extraction_pipeline_callback
+
+        # Reset callback
         self.reset_run_callback = reset_run_callback
 
         # State
@@ -66,7 +87,7 @@ class EtoWorker:
         self.currently_processing: Set[int] = set()
 
         logger.debug(
-            f"EtoWorker initialized - enabled: {enabled}, "
+            f"EtoWorker initialized (two-phase) - enabled: {enabled}, "
             f"max_concurrent: {max_concurrent_runs}, polling_interval: {polling_interval}s"
         )
 
@@ -173,13 +194,20 @@ class EtoWorker:
         Returns:
             Dictionary with worker state and statistics
         """
-        # Get pending count from service
-        pending_count = 0
+        # Get pending counts from service for both phases
+        pending_template_matching_count = 0
+        pending_extraction_count = 0
         try:
-            pending_runs = self.get_pending_runs_callback(100)  # Limit to 100 for count
-            pending_count = len(pending_runs)
+            pending_template_matching = self.get_pending_template_matching_callback(100)
+            pending_template_matching_count = len(pending_template_matching)
         except Exception as e:
-            logger.error(f"Error getting pending count: {e}")
+            logger.error(f"Error getting pending template matching count: {e}")
+
+        try:
+            pending_extraction = self.get_pending_extraction_pipeline_callback(100)
+            pending_extraction_count = len(pending_extraction)
+        except Exception as e:
+            logger.error(f"Error getting pending extraction count: {e}")
 
         return {
             "worker_enabled": self.enabled,
@@ -187,7 +215,9 @@ class EtoWorker:
             "worker_paused": self.paused,
             "max_concurrent_runs": self.max_concurrent_runs,
             "polling_interval": self.polling_interval,
-            "pending_runs_count": pending_count,
+            "pending_template_matching_count": pending_template_matching_count,
+            "pending_extraction_count": pending_extraction_count,
+            "pending_runs_count": pending_template_matching_count + pending_extraction_count,
             "currently_processing_count": len(self.currently_processing),
             "worker_task_active": self.worker_task is not None and not self.worker_task.done()
         }
@@ -226,71 +256,119 @@ class EtoWorker:
 
     async def _process_pending_runs_batch(self):
         """
-        Process a batch of pending runs concurrently.
-        Fetches up to max_concurrent_runs and processes them in parallel.
+        Process pending runs in two phases concurrently.
+
+        Phase 1: Template Matching
+        - Gets sub-runs with status="not_started" AND no template
+        - Runs template matching and creates matched/unmatched sub-runs
+
+        Phase 2: Extraction + Pipeline
+        - Gets sub-runs with status="matched" (have template)
+        - Runs extraction and pipeline execution
         """
         try:
-            # Get pending runs from service
-            pending_runs = self.get_pending_runs_callback(self.max_concurrent_runs)
+            # ===== Phase 1: Template Matching =====
+            pending_template_matching = self.get_pending_template_matching_callback(
+                self.max_concurrent_runs
+            )
 
-            if not pending_runs:
-                return  # No work to do
+            if pending_template_matching:
+                logger.info(
+                    f"Phase 1 (Template Matching): Processing batch of "
+                    f"{len(pending_template_matching)} sub-runs"
+                )
 
-            logger.info(f"Processing batch of {len(pending_runs)} ETO sub-runs concurrently")
+                tasks = [
+                    self._process_run_async(
+                        run.id,
+                        self.process_template_matching_callback,
+                        "template_matching"
+                    )
+                    for run in pending_template_matching
+                ]
 
-            # Process all runs concurrently
-            tasks = [
-                self._process_run_async(run.id)
-                for run in pending_runs
-            ]
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                self._log_batch_results(results, pending_template_matching, "Phase 1")
 
-            # Wait for all to complete
-            results = await asyncio.gather(*tasks, return_exceptions=True)
+            # ===== Phase 2: Extraction + Pipeline =====
+            pending_extraction = self.get_pending_extraction_pipeline_callback(
+                self.max_concurrent_runs
+            )
 
-            # Log batch results
-            successful = sum(1 for r in results if not isinstance(r, Exception) and r is True)
-            failed = len(results) - successful
+            if pending_extraction:
+                logger.info(
+                    f"Phase 2 (Extraction + Pipeline): Processing batch of "
+                    f"{len(pending_extraction)} sub-runs"
+                )
 
-            if failed > 0:
-                logger.warning(f"Batch completed: {successful} successful, {failed} failed")
-                # Log specific failures
-                for i, result in enumerate(results):
-                    if isinstance(result, Exception):
-                        logger.error(f"Run {pending_runs[i].id} failed: {result}")
-            else:
-                logger.info(f"Batch completed successfully: {successful} sub-runs processed")
+                tasks = [
+                    self._process_run_async(
+                        run.id,
+                        self.process_extraction_pipeline_callback,
+                        "extraction_pipeline"
+                    )
+                    for run in pending_extraction
+                ]
+
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                self._log_batch_results(results, pending_extraction, "Phase 2")
 
         except Exception as e:
             logger.error(f"Error processing pending runs batch: {e}", exc_info=True)
 
-    async def _process_run_async(self, run_id: int) -> bool:
+    def _log_batch_results(
+        self,
+        results: list,
+        runs: List[EtoSubRun],
+        phase_name: str
+    ):
+        """Log batch processing results."""
+        successful = sum(1 for r in results if not isinstance(r, Exception) and r is True)
+        failed = len(results) - successful
+
+        if failed > 0:
+            logger.warning(f"{phase_name} batch completed: {successful} successful, {failed} failed")
+            for i, result in enumerate(results):
+                if isinstance(result, Exception):
+                    logger.error(f"{phase_name} sub-run {runs[i].id} failed: {result}")
+        else:
+            logger.info(f"{phase_name} batch completed successfully: {successful} sub-runs processed")
+
+    async def _process_run_async(
+        self,
+        run_id: int,
+        process_callback: Callable[[int], bool],
+        phase_name: str
+    ) -> bool:
         """
         Async wrapper for processing a single run.
-        Runs the synchronous process_run() callback in thread pool.
+        Runs the synchronous callback in thread pool.
 
         Args:
-            run_id: ETO run ID to process
+            run_id: ETO sub-run ID to process
+            process_callback: The callback to use for processing
+            phase_name: Name of the phase for logging
 
         Returns:
             True if successful, False if failed
         """
         self.currently_processing.add(run_id)
         try:
-            logger.debug(f"Starting async processing for ETO run {run_id}")
+            logger.debug(f"Starting async {phase_name} for sub-run {run_id}")
 
             # Run synchronous processing callback in thread pool
             loop = asyncio.get_event_loop()
             success = await loop.run_in_executor(
                 None,
-                self.process_run_callback,
+                process_callback,
                 run_id
             )
 
-            logger.debug(f"Completed async processing for ETO run {run_id}: success={success}")
+            logger.debug(f"Completed async {phase_name} for sub-run {run_id}: success={success}")
             return success
 
         except Exception as e:
-            logger.error(f"Error in async processing for ETO run {run_id}: {e}", exc_info=True)
+            logger.error(f"Error in async {phase_name} for sub-run {run_id}: {e}", exc_info=True)
             return False
         finally:
             self.currently_processing.discard(run_id)

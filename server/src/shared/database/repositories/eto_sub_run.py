@@ -58,7 +58,6 @@ class EtoSubRunRepository(BaseRepository[EtoSubRunModel]):
             matched_pages=model.matched_pages,
             template_version_id=model.template_version_id,
             status=model.status,
-            is_unmatched_group=model.is_unmatched_group,
             error_type=model.error_type,
             error_message=model.error_message,
             error_details=model.error_details,
@@ -86,7 +85,6 @@ class EtoSubRunRepository(BaseRepository[EtoSubRunModel]):
                 eto_run_id=data.eto_run_id,
                 matched_pages=data.matched_pages,
                 template_version_id=data.template_version_id,
-                is_unmatched_group=data.is_unmatched_group,
                 # status defaults to "not_started" via model default
                 # timestamps auto-set by server_default
             )
@@ -227,28 +225,80 @@ class EtoSubRunRepository(BaseRepository[EtoSubRunModel]):
 
             return [self._model_to_domain(model) for model in models]
 
-    def get_unmatched_for_run(self, eto_run_id: int) -> Optional[EtoSubRun]:
+    def get_by_status_no_template(self, status: str, limit: Optional[int] = None) -> List[EtoSubRun]:
         """
-        Get the unmatched sub-run for a parent ETO run.
-        There should only be one unmatched group per run.
+        Get sub-runs by status that have no template assigned.
+        Used by worker Phase 1 to find sub-runs needing template matching.
+
+        Args:
+            status: Status to filter by (e.g., "not_started")
+            limit: Optional limit on number of results
+
+        Returns:
+            List of EtoSubRun dataclasses with template_version_id IS NULL
+        """
+        with self._get_session() as session:
+            query = (
+                session.query(self.model_class)
+                .filter(
+                    self.model_class.status == status,
+                    self.model_class.template_version_id.is_(None)
+                )
+            )
+
+            if limit:
+                query = query.limit(limit)
+
+            models = query.all()
+
+            return [self._model_to_domain(model) for model in models]
+
+    def get_by_status_with_template(self, status: str, limit: Optional[int] = None) -> List[EtoSubRun]:
+        """
+        Get sub-runs by status that have a template assigned.
+        Used by worker Phase 2 to find sub-runs ready for extraction + pipeline.
+
+        Args:
+            status: Status to filter by (e.g., "matched")
+            limit: Optional limit on number of results
+
+        Returns:
+            List of EtoSubRun dataclasses with template_version_id IS NOT NULL
+        """
+        with self._get_session() as session:
+            query = (
+                session.query(self.model_class)
+                .filter(
+                    self.model_class.status == status,
+                    self.model_class.template_version_id.isnot(None)
+                )
+            )
+
+            if limit:
+                query = query.limit(limit)
+
+            models = query.all()
+
+            return [self._model_to_domain(model) for model in models]
+
+    def get_needs_template_for_run(self, eto_run_id: int) -> List[EtoSubRun]:
+        """
+        Get sub-runs that need templates for a parent ETO run.
 
         Args:
             eto_run_id: Parent ETO run ID
 
         Returns:
-            EtoSubRun dataclass or None if no unmatched group exists
+            List of EtoSubRun dataclasses with status='needs_template'
         """
         with self._get_session() as session:
-            model = (
+            models = (
                 session.query(self.model_class)
-                .filter_by(eto_run_id=eto_run_id, is_unmatched_group=True)
-                .first()
+                .filter_by(eto_run_id=eto_run_id, status='needs_template')
+                .all()
             )
 
-            if model is None:
-                return None
-
-            return self._model_to_domain(model)
+            return [self._model_to_domain(model) for model in models]
 
     def get_detail_view(self, sub_run_id: int) -> Optional[EtoSubRunDetailView]:
         """
@@ -282,7 +332,6 @@ class EtoSubRunRepository(BaseRepository[EtoSubRunModel]):
                     EtoSubRunModel.eto_run_id,
                     EtoSubRunModel.matched_pages,
                     EtoSubRunModel.status,
-                    EtoSubRunModel.is_unmatched_group,
                     EtoSubRunModel.template_version_id,
                     EtoSubRunModel.error_type,
                     EtoSubRunModel.error_message,
@@ -335,7 +384,6 @@ class EtoSubRunRepository(BaseRepository[EtoSubRunModel]):
                 eto_run_id=row.eto_run_id,
                 matched_pages=matched_pages_list,
                 status=row.status,
-                is_unmatched_group=row.is_unmatched_group,
                 # Template info (None for unmatched)
                 template_id=row.template_id,
                 template_name=row.template_name,

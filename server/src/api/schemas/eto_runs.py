@@ -126,7 +126,6 @@ class EtoSubRunListItem(BaseModel):
     sequence: Optional[int] = None
     status: str
     matched_pages: List[int]
-    is_unmatched_group: bool
     template: Optional[EtoMatchedTemplate] = None
 
 

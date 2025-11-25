@@ -559,7 +559,11 @@ class PdfTemplateService:
             logger.error(f"Error in template matching: {e}", exc_info=True)
             return None
 
-    def match_templates_multi_page(self, pdf_file: PdfFile) -> TemplateMatchingResult:
+    def match_templates_multi_page(
+        self,
+        pdf_file: PdfFile,
+        page_numbers: Optional[list[int]] = None
+    ) -> TemplateMatchingResult:
         """
         Match templates page-by-page with multi-template support.
 
@@ -571,34 +575,55 @@ class PdfTemplateService:
 
         Args:
             pdf_file: Complete PDF file with extracted objects and page_count
+            page_numbers: Optional list of specific page numbers to process.
+                         If None, processes all pages (1 to page_count).
+                         Used by worker during reprocessing of specific page subsets.
 
         Returns:
             TemplateMatchingResult with all matches and unmatched pages
         """
         from shared.types.pdf_templates import TemplateMatch, TemplateMatchingResult
 
-        logger.info(f"Starting multi-page template matching for PDF {pdf_file.id} ({pdf_file.page_count} pages)")
+        assert pdf_file.page_count is not None
+
+        # Determine pages to process
+        if page_numbers is not None:
+            pages_to_process = sorted(page_numbers)
+            logger.info(
+                f"Starting multi-page template matching for PDF {pdf_file.id} "
+                f"(subset: {len(pages_to_process)} pages of {pdf_file.page_count} total)"
+            )
+        else:
+            pages_to_process = list(range(1, pdf_file.page_count + 1))
+            logger.info(f"Starting multi-page template matching for PDF {pdf_file.id} ({pdf_file.page_count} pages)")
 
         try:
             # Get all active templates
             active_templates = self.template_repository.list_templates(status="active")
-            assert pdf_file.page_count is not None
             if not active_templates:
                 logger.info("No active templates found for matching")
                 # All pages are unmatched
                 return TemplateMatchingResult(
                     matches=[],
-                    unmatched_pages=list(range(1, pdf_file.page_count + 1))
+                    unmatched_pages=pages_to_process
                 )
 
             matches: list[TemplateMatch] = []
             unmatched_pages: list[int] = []
 
-            current_page = 1
-            total_pages = pdf_file.page_count
+            # Track which pages we've processed
+            pages_set = set(pages_to_process)
+            processed_pages: set[int] = set()
 
-            # Process each page (or page range)
-            while current_page <= total_pages:
+            # Process pages in order
+            page_index = 0
+            while page_index < len(pages_to_process):
+                current_page = pages_to_process[page_index]
+
+                # Skip if already processed (consumed by a multi-page match)
+                if current_page in processed_pages:
+                    page_index += 1
+                    continue
                 logger.info(f"[MATCH-DEBUG] ========== Processing PDF page {current_page} ==========")
 
                 # Find all templates that could match starting at current_page
@@ -625,11 +650,12 @@ class PdfTemplateService:
                             logger.warning(f"Template {template.id} source PDF has no page_count, skipping")
                             continue
 
-                        # Check if template can fit (enough remaining pages)
-                        if current_page + template_page_count - 1 > total_pages:
+                        # Check if template can fit - all required pages must be in our subset
+                        required_pages = list(range(current_page, current_page + template_page_count))
+                        if not all(p in pages_set for p in required_pages):
                             logger.debug(
-                                f"Template {template.id}: Not enough pages left "
-                                f"(needs {template_page_count}, have {total_pages - current_page + 1})"
+                                f"Template {template.id}: Required pages {required_pages} "
+                                f"not all in subset {pages_to_process}"
                             )
                             continue
 
@@ -659,7 +685,8 @@ class PdfTemplateService:
                     # No match for this page
                     logger.info(f"[MATCH-DEBUG] Page {current_page}: No template match found")
                     unmatched_pages.append(current_page)
-                    current_page += 1
+                    processed_pages.add(current_page)
+                    page_index += 1
                     continue
 
                 # Find best match among candidates
@@ -685,7 +712,8 @@ class PdfTemplateService:
                 except ValueError as e:
                     logger.error(f"Error finding best match: {e}")
                     unmatched_pages.append(current_page)
-                    current_page += 1
+                    processed_pages.add(current_page)
+                    page_index += 1
                     continue
 
                 # Record match
@@ -696,6 +724,10 @@ class PdfTemplateService:
                     matched_pages=matched_page_range
                 ))
 
+                # Mark all matched pages as processed
+                for p in matched_page_range:
+                    processed_pages.add(p)
+
                 # Update version usage statistics
                 self.version_repository.increment_usage_count(best_version.id)
 
@@ -704,9 +736,8 @@ class PdfTemplateService:
                     f"(version {best_version.version_number}) for pages {matched_page_range}"
                 )
 
-                # Skip past matched pages (greedy consumption)
-                logger.info(f"[MATCH-DEBUG] Advancing from page {current_page} to page {current_page + best_page_count}")
-                current_page += best_page_count
+                # Move to next unprocessed page
+                page_index += 1
 
             logger.info(
                 f"Multi-page matching complete: {len(matches)} matches, "

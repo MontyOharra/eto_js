@@ -142,12 +142,18 @@ class EtoRunsService:
         polling_interval = int(os.getenv('ETO_POLLING_INTERVAL', '2'))  # seconds
         shutdown_timeout = int(os.getenv('ETO_SHUTDOWN_TIMEOUT', '30'))  # seconds
 
-        # Initialize ETO worker
-        logger.debug("Initializing ETO worker...")
+        # Initialize ETO worker with two-phase callbacks
+        logger.debug("Initializing ETO worker (two-phase processing)...")
         self.worker = EtoWorker(
-            process_run_callback=self.process_sub_run,
-            get_pending_runs_callback=lambda limit: self.sub_run_repo.get_by_status('not_started', limit=limit),
+            # Phase 1: Template Matching (not_started + no template)
+            process_template_matching_callback=self.process_sub_run_template_matching,
+            get_pending_template_matching_callback=lambda limit: self.sub_run_repo.get_by_status_no_template('not_started', limit=limit),
+            # Phase 2: Extraction + Pipeline (matched status)
+            process_extraction_pipeline_callback=self.process_sub_run_extraction_pipeline,
+            get_pending_extraction_pipeline_callback=lambda limit: self.sub_run_repo.get_by_status('matched', limit=limit),
+            # Reset callback
             reset_run_callback=self._reset_sub_run_to_not_started,
+            # Configuration
             enabled=worker_enabled,
             max_concurrent_runs=max_concurrent_runs,
             polling_interval=polling_interval,
@@ -165,8 +171,13 @@ class EtoRunsService:
 
     def create_run(self, pdf_file_id: int) -> EtoRun:
         """
-        Create ETO run and immediately perform multi-template matching.
-        Creates sub-runs that worker will pick up for processing.
+        Create ETO run with a single initial sub-run containing all pages.
+        Worker will pick up the sub-run and perform template matching.
+
+        New Architecture:
+        - Creates ONE sub-run with all pages, status="not_started", no template
+        - Worker Phase 1 handles template matching
+        - Worker Phase 2 handles extraction + pipeline
 
         Args:
             pdf_file_id: ID of PDF file to process
@@ -176,14 +187,16 @@ class EtoRunsService:
 
         Raises:
             ObjectNotFoundError: If PDF file doesn't exist
-            ServiceError: If template matching fails (critical error)
+            ServiceError: If creation fails
         """
         logger.info(f"Creating ETO run for PDF file {pdf_file_id}")
 
         try:
-            # 1. Validate PDF file exists
+            # 1. Validate PDF file exists and get page count
             pdf_file = self.pdf_files_service.get_pdf_file(pdf_file_id)
-            logger.debug(f"Validated PDF file {pdf_file_id} exists")
+            if pdf_file.page_count is None:
+                raise ServiceError(f"PDF file {pdf_file_id} has no page count")
+            logger.debug(f"Validated PDF file {pdf_file_id} exists with {pdf_file.page_count} pages")
 
             # 2. Create parent run with status="processing"
             run = self.eto_run_repo.create(EtoRunCreate(pdf_file_id=pdf_file_id))
@@ -203,53 +216,20 @@ class EtoRunsService:
                 }
             )
 
-            # 3. Run multi-template matching (FAST operation)
-            logger.debug(f"Run {run.id}: Starting multi-template matching")
-            match_result: TemplateMatchingResult = self.pdf_template_service.match_templates_multi_page(pdf_file)
-
-            logger.debug(
-                f"Run {run.id}: Template matching complete - "
-                f"{len(match_result.matches)} matches, "
-                f"{len(match_result.unmatched_pages)} unmatched pages"
-            )
-
-            # 4. Create sub-runs for matched page sets
-            for match in match_result.matches:
-                self.sub_run_repo.create(EtoSubRunCreate(
-                    eto_run_id=run.id,
-                    matched_pages=json.dumps(match.matched_pages),
-                    template_version_id=match.version_id,
-                    is_unmatched_group=False
-                    # status defaults to "not_started" - worker will pick up
-                ))
-                logger.debug(
-                    f"Run {run.id}: Created sub-run for pages {match.matched_pages} "
-                    f"with template version {match.version_id}"
-                )
-
-            # 5. Create unmatched sub-run if needed
-            if match_result.unmatched_pages:
-                unmatched_sub_run = self.sub_run_repo.create(EtoSubRunCreate(
-                    eto_run_id=run.id,
-                    matched_pages=json.dumps(match_result.unmatched_pages),
-                    template_version_id=None,
-                    is_unmatched_group=True
-                ))
-                # Update status to needs_template
-                self.sub_run_repo.update(unmatched_sub_run.id, {"status": "needs_template"})
-
-                logger.debug(
-                    f"Run {run.id}: Created unmatched sub-run for pages {match_result.unmatched_pages}"
-                )
+            # 3. Create single initial sub-run with ALL pages
+            # Worker Phase 1 will perform template matching and split into
+            # matched/unmatched sub-runs
+            all_pages = list(range(1, pdf_file.page_count + 1))
+            self.sub_run_repo.create(EtoSubRunCreate(
+                eto_run_id=run.id,
+                matched_pages=json.dumps(all_pages),
+                template_version_id=None,  # No template yet - worker will match
+                # status defaults to "not_started" - Worker Phase 1 will pick up
+            ))
 
             logger.info(
-                f"Created ETO run {run.id} with {len(match_result.matches)} matched sub-runs "
-                f"and {1 if match_result.unmatched_pages else 0} unmatched sub-run"
+                f"Created ETO run {run.id} with initial sub-run for {pdf_file.page_count} pages"
             )
-
-            # 6. Update parent run status based on sub-runs
-            # This handles cases where all pages are unmatched (no work for worker to do)
-            self._update_parent_run_status(run.id)
 
             return run
 
@@ -259,14 +239,14 @@ class EtoRunsService:
             raise
 
         except Exception as e:
-            # Critical error during template matching - mark parent run as failed
+            # Critical error during creation - mark parent run as failed if it exists
             logger.error(f"Critical error creating run for PDF {pdf_file_id}: {e}", exc_info=True)
 
             if 'run' in locals():
                 self.eto_run_repo.update(run.id, {
                     "status": "failure",
                     "completed_at": datetime.now(timezone.utc),
-                    "error_type": "TemplateMatchingSystemError",
+                    "error_type": "RunCreationError",
                     "error_message": str(e)
                 })
 
@@ -488,6 +468,137 @@ class EtoRunsService:
             self._mark_sub_run_failure(sub_run_id, error=e, error_type="UnexpectedSystemError")
             self._update_parent_run_status(sub_run.eto_run_id)
             return False
+
+    def process_sub_run_template_matching(self, sub_run_id: int) -> bool:
+        """
+        Execute template matching for a single sub-run (Worker Phase 1).
+        Called by worker for sub-runs with status="not_started" AND no template.
+
+        Workflow:
+        1. Get sub-run and its parent run's PDF file
+        2. Parse matched_pages to get page numbers
+        3. Call template matching on those pages
+        4. For each match: create new sub-run with status='matched' and template
+        5. For unmatched pages: create new sub-run with status='needs_template'
+        6. Delete the original sub-run
+        7. Update parent run status
+
+        Args:
+            sub_run_id: ETO sub-run ID to process
+
+        Returns:
+            True if successful, False if failed
+        """
+        logger.monitor(f"Starting template matching for sub-run {sub_run_id}")
+
+        # Get sub-run and validate
+        sub_run = self.sub_run_repo.get_by_id(sub_run_id)
+        if not sub_run:
+            logger.error(f"Sub-run {sub_run_id} not found")
+            raise ObjectNotFoundError(f"Sub-run {sub_run_id} not found")
+
+        try:
+            # Update to processing status
+            started_at = datetime.now(timezone.utc)
+            self.sub_run_repo.update(sub_run_id, {
+                "status": "processing",
+                "started_at": started_at
+            })
+
+            # Broadcast status change
+            eto_event_manager.broadcast_sync("sub_run_updated", {
+                "id": sub_run_id,
+                "eto_run_id": sub_run.eto_run_id,
+                "status": "processing",
+                "started_at": started_at.isoformat(),
+            })
+
+            # Get parent run for PDF file ID
+            parent_run = self.eto_run_repo.get_by_id(sub_run.eto_run_id)
+            if not parent_run:
+                raise ObjectNotFoundError(f"Parent run {sub_run.eto_run_id} not found")
+
+            # Get PDF file
+            pdf_file = self.pdf_files_service.get_pdf_file(parent_run.pdf_file_id)
+
+            # Parse matched_pages from JSON
+            matched_pages = json.loads(sub_run.matched_pages)
+            logger.debug(f"Sub-run {sub_run_id}: Template matching for pages {matched_pages}")
+
+            # Run template matching on these pages
+            match_result = self.pdf_template_service.match_templates_multi_page(
+                pdf_file,
+                page_numbers=matched_pages
+            )
+
+            logger.debug(
+                f"Sub-run {sub_run_id}: Template matching complete - "
+                f"{len(match_result.matches)} matches, "
+                f"{len(match_result.unmatched_pages)} unmatched pages"
+            )
+
+            # Create new sub-runs for matched page sets
+            for match in match_result.matches:
+                new_sub_run = self.sub_run_repo.create(EtoSubRunCreate(
+                    eto_run_id=sub_run.eto_run_id,
+                    matched_pages=json.dumps(match.matched_pages),
+                    template_version_id=match.version_id,
+                ))
+                # Update status to 'matched' - ready for extraction + pipeline
+                self.sub_run_repo.update(new_sub_run.id, {"status": "matched"})
+                logger.debug(
+                    f"Sub-run {sub_run_id}: Created matched sub-run {new_sub_run.id} "
+                    f"for pages {match.matched_pages} with template version {match.version_id}"
+                )
+
+            # Create new sub-run for unmatched pages if any
+            if match_result.unmatched_pages:
+                unmatched_sub_run = self.sub_run_repo.create(EtoSubRunCreate(
+                    eto_run_id=sub_run.eto_run_id,
+                    matched_pages=json.dumps(match_result.unmatched_pages),
+                    template_version_id=None,
+                ))
+                self.sub_run_repo.update(unmatched_sub_run.id, {"status": "needs_template"})
+                logger.debug(
+                    f"Sub-run {sub_run_id}: Created needs_template sub-run {unmatched_sub_run.id} "
+                    f"for pages {match_result.unmatched_pages}"
+                )
+
+            # Delete the original sub-run (it has been split into new sub-runs)
+            self.sub_run_repo.delete(sub_run_id)
+            logger.debug(f"Sub-run {sub_run_id}: Deleted original sub-run after splitting")
+
+            # Update parent run status
+            self._update_parent_run_status(sub_run.eto_run_id)
+
+            logger.monitor(
+                f"Sub-run {sub_run_id}: Template matching completed - "
+                f"created {len(match_result.matches)} matched + "
+                f"{1 if match_result.unmatched_pages else 0} needs_template sub-runs"
+            )
+            return True
+
+        except Exception as e:
+            logger.error(f"Sub-run {sub_run_id}: Template matching error: {e}", exc_info=True)
+            self._mark_sub_run_failure(sub_run_id, error=e, error_type="TemplateMatchingError")
+            self._update_parent_run_status(sub_run.eto_run_id)
+            return False
+
+    def process_sub_run_extraction_pipeline(self, sub_run_id: int) -> bool:
+        """
+        Execute extraction + pipeline for a single sub-run (Worker Phase 2).
+        Called by worker for sub-runs with status="matched".
+
+        This is the renamed version of process_sub_run() for clarity.
+        The implementation delegates to the existing process_sub_run() method.
+
+        Args:
+            sub_run_id: ETO sub-run ID to process
+
+        Returns:
+            True if successful, False if failed
+        """
+        return self.process_sub_run(sub_run_id)
 
     # ==================== Stage Processing Methods (Sub-Run) ====================
 
@@ -779,11 +890,14 @@ class EtoRunsService:
         Update parent run status based on all sub-run statuses.
 
         Status logic:
-        - "processing": Has any sub-runs with status "not_started" or "processing"
-        - "success": All sub-runs completed (regardless of individual success/failure)
+        - "processing": Has any sub-runs still being processed
+          (status in: not_started, matched, processing)
+        - "success": All sub-runs reached a terminal state
+          (success, failure, needs_template, skipped)
 
-        Note: Parent "failure" status is ONLY set for critical template matching errors,
-        not for individual sub-run failures.
+        Note: Parent "failure" status is ONLY set for critical system errors,
+        not for individual sub-run failures. Individual failures are tracked
+        at the sub-run level.
 
         Args:
             run_id: Parent ETO run ID
@@ -798,8 +912,12 @@ class EtoRunsService:
             logger.warning(f"Run {run_id}: No sub-runs found")
             return
 
-        # Check if any sub-runs are still active
-        active_statuses = {"not_started", "processing"}
+        # Check if any sub-runs are still active (not yet at terminal state)
+        # Active statuses: still being processed by worker
+        # - not_started: waiting for Phase 1 (template matching)
+        # - matched: waiting for Phase 2 (extraction + pipeline)
+        # - processing: currently being processed
+        active_statuses = {"not_started", "matched", "processing"}
         has_active = any(sub.status in active_statuses for sub in sub_runs)
 
         if has_active:
@@ -808,6 +926,7 @@ class EtoRunsService:
             logger.debug(f"Run {run_id}: Status remains 'processing' (has active sub-runs)")
         else:
             # All sub-runs completed - mark parent as success
+            # (individual sub-run failures are tracked at sub-run level)
             self.eto_run_repo.update(run_id, {
                 "status": "success",
                 "completed_at": datetime.now(timezone.utc)
@@ -839,37 +958,30 @@ class EtoRunsService:
 
     def reprocess_runs(self, run_ids: list[int]) -> None:
         """
-        Reprocess failed or skipped ETO runs (bulk operation).
+        Reprocess ETO runs (bulk operation at run level).
 
-        Workflow (for each run):
-        1. Verify run exists and status is "failure", "skipped", or "needs_template"
-        2. Get all sub-runs for the parent run
-        3. Delete sub-run stage records (extraction, pipeline_execution)
-        4. Reset each sub-run to "not_started" status
-        5. Reset parent run to "processing" status
-        6. Clear error fields
-        7. Worker will automatically pick up sub-runs and reprocess
+        New Architecture Workflow (for each run):
+        1. Verify run exists
+        2. Delete all existing sub-runs and their stage records
+        3. Create a single new sub-run with all pages (status=not_started, no template)
+        4. Reset parent run to "processing" status
+        5. Worker Phase 1 will re-run template matching
+
+        This is a "full reset" - starts from scratch with template matching.
 
         Args:
             run_ids: List of ETO run IDs to reprocess
 
         Raises:
             ObjectNotFoundError: If one or more runs not found
-            ValidationError: If one or more runs have invalid status
         """
         logger.info(f"Reprocessing {len(run_ids)} ETO runs: {run_ids}")
 
-        # Validate all runs exist and have valid status
+        # Validate all runs exist
         for run_id in run_ids:
             run = self.eto_run_repo.get_by_id(run_id)
             if not run:
                 raise ObjectNotFoundError(f"ETO run {run_id} not found")
-
-            if run.status not in ("failure", "skipped", "needs_template"):
-                raise ValidationError(
-                    f"Cannot reprocess run {run_id} with status '{run.status}'. "
-                    f"Only 'failure', 'skipped', and 'needs_template' runs can be reprocessed."
-                )
 
         # Reprocess each run
         for run_id in run_ids:
@@ -878,30 +990,34 @@ class EtoRunsService:
             # Get all sub-runs for this parent run
             sub_runs = self.sub_run_repo.get_by_eto_run_id(run_id)
 
-            # Delete stage records for each sub-run
+            # Get PDF file to know total page count
+            run = self.eto_run_repo.get_by_id(run_id)
+            pdf_file = self.pdf_files_service.get_pdf_file(run.pdf_file_id)  # type: ignore
+
+            # Delete all existing sub-runs (cascade deletes extraction/pipeline records)
             for sub_run in sub_runs:
                 # Delete extraction record
                 extraction = self.sub_run_extraction_repo.get_by_sub_run_id(sub_run.id)
                 if extraction:
                     self.sub_run_extraction_repo.delete(extraction.id)
-                    logger.debug(f"Deleted extraction record for sub-run {sub_run.id}")
 
                 # Delete pipeline execution record (cascade deletes steps)
                 pipeline_execution = self.sub_run_pipeline_execution_repo.get_by_sub_run_id(sub_run.id)
                 if pipeline_execution:
                     self.sub_run_pipeline_execution_repo.delete(pipeline_execution.id)
-                    logger.debug(f"Deleted pipeline_execution record for sub-run {sub_run.id}")
 
-                # Reset sub-run to not_started status
-                self.sub_run_repo.update(sub_run.id, {
-                    "status": "not_started",
-                    "error_type": None,
-                    "error_message": None,
-                    "error_details": None,
-                    "started_at": None,
-                    "completed_at": None,
-                })
-                logger.debug(f"Reset sub-run {sub_run.id} to not_started")
+                # Delete the sub-run itself
+                self.sub_run_repo.delete(sub_run.id)
+                logger.debug(f"Deleted sub-run {sub_run.id}")
+
+            # Create fresh sub-run with all pages (like create_run does)
+            all_pages = list(range(1, (pdf_file.page_count or 0) + 1))
+            self.sub_run_repo.create(EtoSubRunCreate(
+                eto_run_id=run_id,
+                matched_pages=json.dumps(all_pages),
+                template_version_id=None,  # No template - Worker Phase 1 will match
+            ))
+            logger.debug(f"Created fresh sub-run for run {run_id} with {len(all_pages)} pages")
 
             # Reset parent run to processing status
             self.eto_run_repo.update(

@@ -43,7 +43,7 @@ ETO_RUN_PROCESSING_STEP = SAEnum(
 
 # Sub-run status (business logic level)
 ETO_RUN_STATUS = SAEnum(
-    'not_started', 'processing', 'success', 'failure', 'needs_template', 'skipped',
+    'not_started', 'matched', 'processing', 'success', 'failure', 'needs_template', 'skipped',
     name='eto_run_status',
     native_enum=False,
     validate_strings=True
@@ -446,9 +446,6 @@ class EtoSubRunModel(BaseModel):
     # Ordering within parent run
     sequence: Mapped[Optional[int]] = mapped_column(Integer)
 
-    # Flag for the single unmatched group per run
-    is_unmatched_group: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-
     # Error tracking (business-level failures)
     error_type: Mapped[Optional[str]] = mapped_column(String(50))
     error_message: Mapped[Optional[str]] = mapped_column(Text)
@@ -478,7 +475,6 @@ class EtoSubRunModel(BaseModel):
         Index("idx_eto_sub_runs_status", "status"),
         Index("idx_eto_sub_runs_eto_run", "eto_run_id"),
         Index("idx_eto_sub_runs_template_version", "template_version_id"),
-        Index("idx_eto_sub_runs_unmatched", "is_unmatched_group"),
     )
 
 

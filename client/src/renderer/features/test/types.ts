@@ -15,6 +15,7 @@ export type EtoRunStatus =
 
 export type EtoSubRunStatus =
   | 'not_started'
+  | 'matched'
   | 'processing'
   | 'success'
   | 'failure'
@@ -80,7 +81,6 @@ export interface EtoSubRunListItem {
   sequence: number | null;
   status: string;
   matched_pages: number[];
-  is_unmatched_group: boolean;
   template: EtoMatchedTemplate | null;
 }
 

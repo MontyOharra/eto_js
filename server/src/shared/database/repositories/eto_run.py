@@ -349,7 +349,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                 # Aggregate sub-run counts
                 sub_run_success_count = sum(1 for sr in sub_runs if sr.status == "success")
                 sub_run_failure_count = sum(1 for sr in sub_runs if sr.status == "failure")
-                sub_run_needs_template_count = sum(1 for sr in sub_runs if sr.is_unmatched_group)
+                sub_run_needs_template_count = sum(1 for sr in sub_runs if sr.status == "needs_template")
                 sub_run_skipped_count = sum(1 for sr in sub_runs if sr.status == "skipped")
 
                 # Aggregate page arrays
@@ -364,9 +364,9 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
 
                         if sr.status == "skipped":
                             pages_skipped.extend(pages)
-                        elif sr.is_unmatched_group:
+                        elif sr.status == "needs_template":
                             pages_unmatched.extend(pages)
-                        else:  # Matched (success or failure)
+                        else:  # Has template (success, failure, matched, processing, not_started)
                             pages_matched.extend(pages)
                     except (json.JSONDecodeError, TypeError) as e:
                         logger.warning(f"Failed to parse matched_pages for sub-run {sr.id}: {e}")
