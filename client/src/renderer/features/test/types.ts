@@ -22,24 +22,25 @@ export type EtoSubRunStatus =
   | 'skipped';
 
 // =============================================================================
-// Nested Types for List View
+// Nested Types (Shared)
 // =============================================================================
 
 export interface EtoPdfInfo {
   id: number;
   original_filename: string;
   file_size: number | null;
-  page_count: number | null;
+  page_count: number; // Required for detail view
 }
 
 export interface EtoSourceManual {
   type: 'manual';
+  created_at: string; // ISO 8601
 }
 
 export interface EtoSourceEmail {
   type: 'email';
   sender_email: string;
-  received_date: string; // ISO 8601
+  received_at: string; // ISO 8601
   subject: string | null;
   folder_name: string;
 }
@@ -63,6 +64,11 @@ export interface EtoMatchedTemplate {
   template_name: string;
   version_id: number;
   version_num: number;
+}
+
+export interface EtoSubRunTemplate {
+  id: number;
+  name: string;
 }
 
 // =============================================================================
@@ -104,63 +110,29 @@ export interface EtoRunListItem {
 // ETO Run Detail Types (for GET /eto-runs/{id})
 // =============================================================================
 
-export interface EtoSubRunExtraction {
-  id: number;
-  status: 'processing' | 'success' | 'failure';
-  extraction_results: ExtractedFieldResult[] | null;
-  error_message: string | null;
-  started_at: string | null;
-  completed_at: string | null;
-}
-
-export interface ExtractedFieldResult {
-  name: string;
-  description: string | null;
-  bbox: [number, number, number, number];
-  page: number;
-  extracted_value: string;
-}
-
-export interface EtoSubRunPipelineExecutionStep {
-  id: number;
-  step_number: number;
-  module_instance_id: string;
-  inputs: Record<string, any> | null;
-  outputs: Record<string, any> | null;
-  error: string | null;
-}
-
-export interface EtoSubRunPipelineExecution {
-  id: number;
-  status: 'processing' | 'success' | 'failure';
-  executed_actions: Record<string, any>[] | null;
-  error_message: string | null;
-  started_at: string | null;
-  completed_at: string | null;
-  steps: EtoSubRunPipelineExecutionStep[] | null;
+export interface TransformResult {
+  field_name: string;
+  value: string;
 }
 
 export interface EtoSubRunDetail {
   id: number;
-  sequence: number | null;
-  status: string;
+  status: EtoSubRunStatus;
   matched_pages: number[];
-  is_unmatched_group: boolean;
-
-  // Error tracking
-  error_type: string | null;
+  template: EtoSubRunTemplate | null; // null for needs_template sub-runs
+  transform_results: TransformResult[]; // empty for now
   error_message: string | null;
+}
 
-  // Timestamps
-  started_at: string | null;
-  completed_at: string | null;
+export interface EtoRunOverview {
+  templates_matched_count: number;
+  processing_time_ms: number | null;
+}
 
-  // Template info (null for unmatched groups)
-  template: EtoMatchedTemplate | null;
-
-  // Stage data
-  extraction: EtoSubRunExtraction | null;
-  pipeline_execution: EtoSubRunPipelineExecution | null;
+export interface PageStatus {
+  page_number: number;
+  status: EtoSubRunStatus;
+  sub_run_id: number;
 }
 
 export interface EtoRunDetail {
@@ -171,7 +143,6 @@ export interface EtoRunDetail {
   completed_at: string | null;
   error_type: string | null;
   error_message: string | null;
-  error_details: string | null;
 
   // PDF file info
   pdf: EtoPdfInfo;
@@ -179,6 +150,12 @@ export interface EtoRunDetail {
   // Source (manual or email)
   source: EtoSource;
 
-  // Sub-runs with full detail
+  // Computed overview stats
+  overview: EtoRunOverview;
+
+  // Sub-runs (UI filters by status)
   sub_runs: EtoSubRunDetail[];
+
+  // Page breakdown
+  page_statuses: PageStatus[];
 }

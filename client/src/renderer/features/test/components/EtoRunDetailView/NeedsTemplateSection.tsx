@@ -1,7 +1,7 @@
-import { NeedsTemplateSubRun } from '../../types';
+import { EtoSubRunDetail } from '../../types';
 
 interface NeedsTemplateSectionProps {
-  subRuns: NeedsTemplateSubRun[];
+  subRuns: EtoSubRunDetail[];
   onBuildTemplate: (subRunId: number) => void;
   onReprocess: (subRunId: number) => void;
   onSkip: (subRunId: number) => void;
@@ -15,7 +15,7 @@ export function NeedsTemplateSection({
 }: NeedsTemplateSectionProps) {
   if (subRuns.length === 0) return null;
 
-  const totalUnmatchedPages = subRuns.reduce((acc, sr) => acc + sr.pages.length, 0);
+  const totalUnmatchedPages = subRuns.reduce((acc, sr) => acc + sr.matched_pages.length, 0);
 
   return (
     <div className="bg-gray-800 rounded-lg p-6">
@@ -39,7 +39,7 @@ export function NeedsTemplateSection({
                 </span>
                 <div>
                   <h3 className="text-white font-semibold">
-                    Pages {subRun.pages.join(', ')}
+                    Pages {subRun.matched_pages.join(', ')}
                   </h3>
                   <p className="text-yellow-400 text-sm">No matching template found</p>
                 </div>

@@ -1,7 +1,7 @@
-import { SkippedSubRun } from '../../types';
+import { EtoSubRunDetail } from '../../types';
 
 interface SkippedSubRunsSectionProps {
-  subRuns: SkippedSubRun[];
+  subRuns: EtoSubRunDetail[];
   onReprocess: (subRunId: number) => void;
 }
 
@@ -11,7 +11,7 @@ export function SkippedSubRunsSection({
 }: SkippedSubRunsSectionProps) {
   if (subRuns.length === 0) return null;
 
-  const totalSkippedPages = subRuns.reduce((acc, sr) => acc + sr.pages.length, 0);
+  const totalSkippedPages = subRuns.reduce((acc, sr) => acc + sr.matched_pages.length, 0);
 
   return (
     <div className="bg-gray-800 rounded-lg p-6">
@@ -35,9 +35,9 @@ export function SkippedSubRunsSection({
                 </span>
                 <div>
                   <h3 className="text-white font-semibold">
-                    Pages {subRun.pages.join(', ')}
+                    Pages {subRun.matched_pages.join(', ')}
                   </h3>
-                  <p className="text-gray-400 text-sm">{subRun.skippedReason}</p>
+                  <p className="text-gray-400 text-sm">Skipped by user</p>
                 </div>
               </div>
 

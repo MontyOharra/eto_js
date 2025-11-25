@@ -1,15 +1,13 @@
-import { MatchedSubRun } from '../../types';
+import { EtoSubRunDetail, EtoSubRunStatus } from '../../types';
 
 interface MatchedSubRunsSectionProps {
-  subRuns: MatchedSubRun[];
+  subRuns: EtoSubRunDetail[];
   onViewDetails: (subRunId: number) => void;
   onReprocess: (subRunId: number) => void;
   onSkip: (subRunId: number) => void;
 }
 
-type SubRunStatus = 'success' | 'failure' | 'needs_template' | 'processing' | 'skipped';
-
-function getStatusColor(status: SubRunStatus): string {
+function getStatusColor(status: EtoSubRunStatus): string {
   switch (status) {
     case 'success':
       return 'text-green-400 bg-green-400/10';
@@ -24,7 +22,7 @@ function getStatusColor(status: SubRunStatus): string {
   }
 }
 
-function getStatusIcon(status: SubRunStatus): string {
+function getStatusIcon(status: EtoSubRunStatus): string {
   switch (status) {
     case 'success':
       return '✓';
@@ -75,7 +73,7 @@ export function MatchedSubRunsSection({
                   {getStatusIcon(subRun.status)}
                 </span>
                 <h3 className="text-white font-semibold">
-                  Pages {subRun.pages.join(', ')} • {subRun.template.name}
+                  Pages {subRun.matched_pages.join(', ')} • {subRun.template?.name ?? 'Unknown Template'}
                 </h3>
               </div>
 
@@ -113,20 +111,20 @@ export function MatchedSubRunsSection({
               </div>
             </div>
 
-            {subRun.status === 'success' && subRun.extractedData && (
+            {subRun.status === 'success' && subRun.transform_results.length > 0 && (
               <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm ml-11">
-                {Object.entries(subRun.extractedData).map(([key, value]) => (
-                  <div key={key} className="flex gap-2">
-                    <span className="text-gray-500 capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}:</span>
-                    <span className="text-gray-300">{value}</span>
+                {subRun.transform_results.map((result) => (
+                  <div key={result.field_name} className="flex gap-2">
+                    <span className="text-gray-500 capitalize">{result.field_name.replace(/([A-Z])/g, ' $1').trim()}:</span>
+                    <span className="text-gray-300">{result.value}</span>
                   </div>
                 ))}
               </div>
             )}
 
-            {subRun.status === 'failure' && subRun.errorMessage && (
+            {subRun.status === 'failure' && subRun.error_message && (
               <div className="p-3 bg-red-900/20 border border-red-700/30 rounded text-sm">
-                <p className="text-red-300">{subRun.errorMessage}</p>
+                <p className="text-red-300">{subRun.error_message}</p>
               </div>
             )}
           </div>

@@ -1,15 +1,15 @@
-import { EtoRunMasterStatus } from '../../types';
+import { EtoRunStatus } from '../../types';
 
 interface EtoRunDetailOverviewProps {
   source: string;
   sourceDate: string;
-  masterStatus: EtoRunMasterStatus;
+  status: EtoRunStatus;
   totalPages: number;
   templatesMatched: number;
   processingTime?: string;
 }
 
-function getStatusColor(status: EtoRunMasterStatus): string {
+function getStatusColor(status: EtoRunStatus): string {
   switch (status) {
     case 'success':
       return 'text-green-400 bg-green-400/10';
@@ -17,8 +17,8 @@ function getStatusColor(status: EtoRunMasterStatus): string {
       return 'text-blue-400 bg-blue-400/10';
     case 'failure':
       return 'text-red-400 bg-red-400/10';
-    case 'not_started':
-      return 'text-gray-400 bg-gray-400/10';
+    case 'skipped':
+      return 'text-yellow-400 bg-yellow-400/10';
     default:
       return 'text-gray-400 bg-gray-400/10';
   }
@@ -27,7 +27,7 @@ function getStatusColor(status: EtoRunMasterStatus): string {
 export function EtoRunDetailOverview({
   source,
   sourceDate,
-  masterStatus,
+  status,
   totalPages,
   templatesMatched,
   processingTime = '-',
@@ -44,8 +44,8 @@ export function EtoRunDetailOverview({
         <div>
           <p className="text-gray-400 text-sm">Status</p>
           <div className="flex items-center gap-2 mt-1">
-            <span className={`px-3 py-1 rounded-full text-sm font-semibold ${getStatusColor(masterStatus)}`}>
-              {masterStatus}
+            <span className={`px-3 py-1 rounded-full text-sm font-semibold ${getStatusColor(status)}`}>
+              {status}
             </span>
           </div>
         </div>

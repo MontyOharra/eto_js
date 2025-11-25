@@ -5,8 +5,6 @@ Pydantic models for ETO run endpoints
 from typing import Optional, List, Dict, Any, Literal, Union
 from pydantic import BaseModel, Field, ConfigDict
 
-from .pdf_templates import ExtractedFieldResult
-
 # =============================================================================
 # Nested Models for ETO Runs
 # =============================================================================
@@ -16,19 +14,20 @@ class EtoPdfInfo(BaseModel):
     id: int
     original_filename: str
     file_size: Optional[int] = None
-    page_count: Optional[int] = None
+    page_count: int  # Required for detail view
 
 
 class EtoSourceManual(BaseModel):
     """Manual upload source"""
     type: Literal["manual"]
+    created_at: str  # ISO 8601
 
 
 class EtoSourceEmail(BaseModel):
     """Email ingestion source"""
     type: Literal["email"]
     sender_email: str
-    received_date: str  # ISO 8601
+    received_at: str  # ISO 8601
     subject: Optional[str] = None
     folder_name: str
 
@@ -38,11 +37,17 @@ EtoSource = Union[EtoSourceManual, EtoSourceEmail]
 
 
 class EtoMatchedTemplate(BaseModel):
-    """Matched template information"""
+    """Matched template information (for list view)"""
     template_id: int
     template_name: str
     version_id: int
     version_num: int
+
+
+class EtoSubRunTemplate(BaseModel):
+    """Simplified template info (for detail view)"""
+    id: int
+    name: str
 
 
 # =============================================================================
@@ -71,67 +76,41 @@ class EtoSubRunsSummary(BaseModel):
 # Sub-Run Detail Models (for detail view)
 # =============================================================================
 
-class EtoSubRunExtraction(BaseModel):
+class TransformResult(BaseModel):
     """
-    Extraction stage data for a sub-run.
+    Pipeline transform result for a sub-run.
+    Placeholder for future transform output display.
     """
-    id: int
-    status: Literal["processing", "success", "failure"]
-    extraction_results: Optional[List[ExtractedFieldResult]] = None
-    error_message: Optional[str] = None
-    started_at: Optional[str] = None  # ISO 8601
-    completed_at: Optional[str] = None  # ISO 8601
-
-
-class EtoSubRunPipelineExecutionStep(BaseModel):
-    """Individual step in pipeline execution"""
-    id: int
-    step_number: int
-    module_instance_id: str
-    inputs: Optional[Dict[str, Any]] = None
-    outputs: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
-
-
-class EtoSubRunPipelineExecution(BaseModel):
-    """
-    Pipeline execution stage data for a sub-run.
-    """
-    id: int
-    status: Literal["processing", "success", "failure"]
-    executed_actions: Optional[List[Dict[str, Any]]] = None
-    error_message: Optional[str] = None
-    started_at: Optional[str] = None  # ISO 8601
-    completed_at: Optional[str] = None  # ISO 8601
-    steps: Optional[List[EtoSubRunPipelineExecutionStep]] = None
+    field_name: str
+    value: str
 
 
 class EtoSubRunDetail(BaseModel):
     """
-    Full detail for a single sub-run.
+    Simplified detail for a single sub-run.
 
     Each sub-run represents a set of pages matched to a template (or unmatched).
+    UI will filter sub-runs by status to display in appropriate sections.
     """
     id: int
-    sequence: Optional[int] = None
     status: str
     matched_pages: List[int]  # Page numbers this sub-run covers
-    is_unmatched_group: bool
-
-    # Error tracking
-    error_type: Optional[str] = None
+    template: Optional[EtoSubRunTemplate] = None  # None for needs_template sub-runs
+    transform_results: List[TransformResult] = []  # Empty for now
     error_message: Optional[str] = None
 
-    # Timestamps
-    started_at: Optional[str] = None  # ISO 8601
-    completed_at: Optional[str] = None  # ISO 8601
 
-    # Template info (None for unmatched groups)
-    template: Optional[EtoMatchedTemplate] = None
+class EtoRunOverview(BaseModel):
+    """Computed overview stats for detail view"""
+    templates_matched_count: int
+    processing_time_ms: Optional[int] = None
 
-    # Stage data (optional - depends on sub-run progress)
-    extraction: Optional[EtoSubRunExtraction] = None
-    pipeline_execution: Optional[EtoSubRunPipelineExecution] = None
+
+class PageStatus(BaseModel):
+    """Page breakdown entry showing status per page"""
+    page_number: int
+    status: str  # Uses EtoSubRunStatus values directly
+    sub_run_id: int
 
 
 # =============================================================================
@@ -269,7 +248,6 @@ class EtoRunDetail(BaseModel):
     completed_at: Optional[str] = None  # ISO 8601
     error_type: Optional[str] = None
     error_message: Optional[str] = None
-    error_details: Optional[str] = None
 
     # PDF file info
     pdf: EtoPdfInfo
@@ -277,5 +255,11 @@ class EtoRunDetail(BaseModel):
     # Source (manual or email)
     source: EtoSource = Field(..., discriminator="type")
 
-    # Sub-runs with full detail
+    # Computed overview stats
+    overview: EtoRunOverview
+
+    # Sub-runs with detail (UI filters by status)
     sub_runs: List[EtoSubRunDetail]
+
+    # Page breakdown
+    page_statuses: List[PageStatus]

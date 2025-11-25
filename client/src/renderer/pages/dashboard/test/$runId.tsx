@@ -6,36 +6,113 @@ import {
   NeedsTemplateSection,
   SkippedSubRunsSection,
   EtoRunDetailSidebar,
-  getMockEtoRunDetailById,
+  useEtoRunDetail,
+  EtoRunDetail,
 } from '../../../features/test';
 
 export const Route = createFileRoute('/dashboard/test/$runId')({
   component: EtoRunDetailPage,
 });
 
+/**
+ * Format milliseconds to human-readable duration
+ */
+function formatDuration(ms: number): string {
+  const seconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+
+  if (hours > 0) {
+    return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
+  } else if (minutes > 0) {
+    return `${minutes}m ${seconds % 60}s`;
+  } else {
+    return `${seconds}s`;
+  }
+}
+
+/**
+ * Format file size in bytes to human-readable string
+ */
+function formatFileSize(bytes: number | null): string {
+  if (bytes === null) return '-';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
+ * Get display string for source type
+ */
+function getSourceDisplay(detail: EtoRunDetail): string {
+  if (detail.source.type === 'email') {
+    return `Email from ${detail.source.sender_email}`;
+  }
+  return 'Manual Upload';
+}
+
+/**
+ * Get timestamp for source (received_at for email, created_at for manual)
+ */
+function getSourceDate(detail: EtoRunDetail): string {
+  if (detail.source.type === 'email') {
+    return detail.source.received_at;
+  }
+  return detail.source.created_at;
+}
+
 function EtoRunDetailPage() {
   const { runId } = Route.useParams();
   const navigate = useNavigate();
 
-  // Get mock data for this run ID
-  const detail = getMockEtoRunDetailById(parseInt(runId));
+  // Fetch run detail from API
+  const { data: detail, isLoading, isError, error } = useEtoRunDetail(parseInt(runId));
 
-  if (!detail) {
+  // Loading state
+  if (isLoading) {
     return (
-      <div className="p-6">
-        <div className="text-white">Run not found</div>
+      <div className="h-full flex items-center justify-center">
+        <div className="text-gray-400">Loading run details...</div>
       </div>
     );
   }
 
-  const hasFailedRuns = detail.matchedSubRuns.some(sr => sr.status === 'failure');
-  const hasNeedsTemplate = detail.needsTemplateSubRuns.length > 0;
+  // Error state
+  if (isError || !detail) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-red-400">
+          {error?.message || 'Run not found'}
+        </div>
+      </div>
+    );
+  }
+
+  // Filter sub-runs by status for each section
+  const matchedSubRuns = detail.sub_runs.filter(
+    sr => sr.status === 'success' || sr.status === 'failure'
+  );
+  const needsTemplateSubRuns = detail.sub_runs.filter(
+    sr => sr.status === 'needs_template'
+  );
+  const skippedSubRuns = detail.sub_runs.filter(
+    sr => sr.status === 'skipped'
+  );
+
+  // Compute derived values
+  const hasFailedRuns = matchedSubRuns.some(sr => sr.status === 'failure');
+  const hasNeedsTemplate = needsTemplateSubRuns.length > 0;
+  const sourceDisplay = getSourceDisplay(detail);
+  const sourceDate = getSourceDate(detail);
+  const processingTime = detail.overview.processing_time_ms
+    ? formatDuration(detail.overview.processing_time_ms)
+    : '-';
 
   return (
     <div className="p-6">
       {/* Header with back button */}
       <EtoRunDetailHeader
-        pdfFilename={detail.pdfFilename}
+        pdfFilename={detail.pdf.original_filename}
         onBack={() => navigate({ to: '/dashboard/test' })}
       />
 
@@ -44,17 +121,17 @@ function EtoRunDetailPage() {
         <div className="col-span-3 flex flex-col gap-6">
           {/* Overview Stats */}
           <EtoRunDetailOverview
-            source={detail.source}
-            sourceDate={detail.sourceDate}
-            masterStatus={detail.masterStatus}
-            totalPages={detail.totalPages}
-            templatesMatched={detail.matchedSubRuns.length}
-            processingTime="16m 42s"
+            source={sourceDisplay}
+            sourceDate={sourceDate}
+            status={detail.status}
+            totalPages={detail.pdf.page_count}
+            templatesMatched={detail.overview.templates_matched_count}
+            processingTime={processingTime}
           />
 
           {/* Sub-runs Section - Matched Templates */}
           <MatchedSubRunsSection
-            subRuns={detail.matchedSubRuns}
+            subRuns={matchedSubRuns}
             onViewDetails={(subRunId) => {/* TODO: Implement view details */}}
             onReprocess={(subRunId) => {/* TODO: Implement reprocess */}}
             onSkip={(subRunId) => {/* TODO: Implement skip */}}
@@ -62,7 +139,7 @@ function EtoRunDetailPage() {
 
           {/* Needs Template Section */}
           <NeedsTemplateSection
-            subRuns={detail.needsTemplateSubRuns}
+            subRuns={needsTemplateSubRuns}
             onBuildTemplate={(subRunId) => {/* TODO: Implement build template */}}
             onReprocess={(subRunId) => {/* TODO: Implement reprocess */}}
             onSkip={(subRunId) => {/* TODO: Implement skip */}}
@@ -70,21 +147,18 @@ function EtoRunDetailPage() {
 
           {/* Skipped Section */}
           <SkippedSubRunsSection
-            subRuns={detail.skippedSubRuns}
+            subRuns={skippedSubRuns}
             onReprocess={(subRunId) => {/* TODO: Implement reprocess */}}
           />
         </div>
 
         {/* Sidebar - 1 column */}
         <EtoRunDetailSidebar
-          totalPages={detail.totalPages}
-          fileSize={detail.pdfFile.fileSize}
-          sourceDate={detail.sourceDate}
+          pdf={detail.pdf}
+          sourceDate={sourceDate}
+          pageStatuses={detail.page_statuses}
           hasFailedRuns={hasFailedRuns}
           hasNeedsTemplate={hasNeedsTemplate}
-          matchedSubRuns={detail.matchedSubRuns}
-          needsTemplateSubRuns={detail.needsTemplateSubRuns}
-          skippedSubRuns={detail.skippedSubRuns}
           onViewPdf={() => {/* TODO: Implement view PDF */}}
           onReprocessAll={() => {/* TODO: Implement reprocess all */}}
           onSkipAll={() => {/* TODO: Implement skip all */}}

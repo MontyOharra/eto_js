@@ -1,3 +1,2 @@
-// Mock data exports for test feature
-export { mockEtoRunsList } from './mockEtoRuns';
-export { mockEtoRunDetail, getMockEtoRunDetailById } from './mockEtoRunDetail';
+// Data exports for test feature
+// Mock data has been removed - using real API now
