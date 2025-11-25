@@ -4,11 +4,13 @@ Manages Server-Sent Events (SSE) for real-time ETO run updates
 """
 import asyncio
 import json
-import logging
+
 from typing import Dict, Any, Set, Optional
 from datetime import datetime
 
-logger = logging.getLogger(__name__)
+from shared.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class EtoEventManager:

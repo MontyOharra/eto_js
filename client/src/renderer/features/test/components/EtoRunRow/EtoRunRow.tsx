@@ -1,11 +1,11 @@
-import { EtoRunListItem, EtoRunMasterStatus } from '../../types';
+import { EtoRunListItem, EtoRunStatus } from '../../types';
 
 interface EtoRunRowProps {
   data: EtoRunListItem;
   onClick: () => void;
 }
 
-function getStatusColor(status: EtoRunMasterStatus): string {
+function getStatusColor(status: EtoRunStatus): string {
   switch (status) {
     case 'success':
       return 'text-green-400';
@@ -13,45 +13,88 @@ function getStatusColor(status: EtoRunMasterStatus): string {
       return 'text-blue-400';
     case 'failure':
       return 'text-red-400';
-    case 'not_started':
+    case 'skipped':
       return 'text-gray-400';
     default:
       return 'text-gray-400';
   }
 }
 
+// Helper to get source display text
+function getSourceDisplay(source: EtoRunListItem['source']): string {
+  if (source.type === 'email') {
+    return source.sender_email;
+  }
+  return 'Manual Upload';
+}
+
+// Helper to get source subject (email only)
+function getSourceSubject(source: EtoRunListItem['source']): string | null {
+  if (source.type === 'email') {
+    return source.subject;
+  }
+  return null;
+}
+
+// Helper to get source date
+function getSourceDate(source: EtoRunListItem['source']): string | null {
+  if (source.type === 'email') {
+    return source.received_date;
+  }
+  return null;
+}
+
+// Helper to format date for display
+function formatDate(isoDate: string | null): string {
+  if (!isoDate) return '-';
+  try {
+    const date = new Date(isoDate);
+    return date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return isoDate;
+  }
+}
+
 export function EtoRunRow({ data, onClick }: EtoRunRowProps) {
+  const { sub_runs_summary: summary } = data;
+
   const formatPageBreakdown = () => {
-    if (data.pagesMatched === 0 && data.pagesUnmatched === 0) return '-';
+    if (summary.pages_matched_count === 0 && summary.pages_unmatched_count === 0) return '-';
     const parts = [];
-    if (data.pagesMatched > 0) parts.push(`${data.pagesMatched} matched`);
-    if (data.pagesUnmatched > 0) parts.push(`${data.pagesUnmatched} unmatched`);
+    if (summary.pages_matched_count > 0) parts.push(`${summary.pages_matched_count} matched`);
+    if (summary.pages_unmatched_count > 0) parts.push(`${summary.pages_unmatched_count} unmatched`);
     return parts.join(', ');
   };
 
   // Determine which indicators to show based on sub-run statuses
-  const hasSubRuns = data.subRunStatuses.success > 0 || data.subRunStatuses.failure > 0 || data.subRunStatuses.needs_template > 0;
+  const hasSubRuns = summary.success_count > 0 || summary.failure_count > 0 || summary.needs_template_count > 0;
   const showIndicators = hasSubRuns;
 
   const indicators = [];
   if (showIndicators) {
-    if (data.subRunStatuses.success > 0) {
+    if (summary.success_count > 0) {
       indicators.push({ color: 'green', ping: 'bg-green-400', solid: 'bg-green-500' });
     }
-    if (data.subRunStatuses.needs_template > 0) {
+    if (summary.needs_template_count > 0) {
       indicators.push({ color: 'yellow', ping: 'bg-yellow-400', solid: 'bg-yellow-500' });
     }
-    if (data.subRunStatuses.failure > 0) {
+    if (summary.failure_count > 0) {
       indicators.push({ color: 'red', ping: 'bg-red-400', solid: 'bg-red-500' });
     }
   }
 
   // Determine if row should be dimmed (read items)
-  const isRead = data.isRead;
+  const isRead = data.is_read;
   const textOpacity = isRead ? 'opacity-60' : 'opacity-100';
 
   // Determine if this is a failure row (parent-level failure)
-  const isFailure = data.masterStatus === 'failure';
+  const isFailure = data.status === 'failure';
   const filenameColor = isFailure
     ? 'text-red-300'
     : (isRead ? 'text-gray-400' : 'text-gray-200');
@@ -60,12 +103,12 @@ export function EtoRunRow({ data, onClick }: EtoRunRowProps) {
   const rowBg = isFailure ? 'bg-red-900/10 border-l-2 border-red-500/50' : '';
 
   // Determine which action buttons to show
-  const isSkipped = data.masterStatus === 'skipped';
-  const hasIssues = data.subRunStatuses.failure > 0 || data.subRunStatuses.needs_template > 0;
-  const isFullySuccessful = data.masterStatus === 'success' && !hasIssues;
+  const isSkipped = data.status === 'skipped';
+  const hasIssues = summary.failure_count > 0 || summary.needs_template_count > 0;
+  const isFullySuccessful = data.status === 'success' && !hasIssues;
 
   // Skip button: Show if run has failures/needs_template (but not if already skipped)
-  const showSkipButton = !isSkipped && (data.masterStatus === 'failure' || hasIssues);
+  const showSkipButton = !isSkipped && (data.status === 'failure' || hasIssues);
 
   // Delete button: Only show for skipped runs (replaces skip button)
   const showDeleteButton = isSkipped;
@@ -73,9 +116,23 @@ export function EtoRunRow({ data, onClick }: EtoRunRowProps) {
   // Reprocess button: Show for anything except fully successful or skipped
   const showReprocessButton = !isFullySuccessful && !isSkipped;
 
+  // Derived display values
+  const sourceDisplay = getSourceDisplay(data.source);
+  const sourceSubject = getSourceSubject(data.source);
+  const sourceDate = formatDate(getSourceDate(data.source));
+  const lastUpdated = formatDate(data.updated_at);
+
   return (
-    <button
+    <div
       onClick={onClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
       className={`w-full py-2.5 hover:bg-gray-700/30 transition-colors cursor-pointer text-left group ${rowBg}`}
     >
       <div className="px-6">
@@ -98,26 +155,26 @@ export function EtoRunRow({ data, onClick }: EtoRunRowProps) {
               </>
             )}
           </div>
-          <span className={`${filenameColor} text-sm ${!isRead ? 'font-medium' : ''} break-words min-w-0`}>{data.pdfFilename}</span>
+          <span className={`${filenameColor} text-sm ${!isRead ? 'font-medium' : ''} break-words min-w-0`}>{data.pdf.original_filename}</span>
         </div>
 
         {/* Source column with subject line below */}
         <div className={`flex flex-col gap-0.5 min-w-0 self-center ${textOpacity}`}>
           <span className={`text-sm ${isFailure ? 'text-red-200/70' : 'text-gray-300'} break-words`}>
-            {data.source}
+            {sourceDisplay}
           </span>
-          {data.sourceSubject && (
+          {sourceSubject && (
             <span className={`text-xs ${isFailure ? 'text-red-200/50' : 'text-gray-500'} break-words`}>
-              {data.sourceSubject}
+              {sourceSubject}
             </span>
           )}
         </div>
-        <span className={`text-sm ${isFailure ? 'text-red-200/70' : 'text-gray-300'} break-words self-center ${textOpacity}`}>{data.sourceDate}</span>
-        <span className={`text-sm font-semibold ${getStatusColor(data.masterStatus)} break-words self-center ${textOpacity}`}>
-          {data.masterStatus.replace('_', ' ')}
+        <span className={`text-sm ${isFailure ? 'text-red-200/70' : 'text-gray-300'} break-words self-center ${textOpacity}`}>{sourceDate}</span>
+        <span className={`text-sm font-semibold ${getStatusColor(data.status)} break-words self-center ${textOpacity}`}>
+          {data.status.replace('_', ' ')}
         </span>
         <span className={`text-sm ${isFailure ? 'text-red-200/70' : 'text-gray-300'} break-words self-center ${textOpacity}`}>{formatPageBreakdown()}</span>
-        <span className={`text-sm ${isFailure ? 'text-red-200/70' : 'text-gray-300'} break-words self-center ${textOpacity}`}>{data.lastUpdated}</span>
+        <span className={`text-sm ${isFailure ? 'text-red-200/70' : 'text-gray-300'} break-words self-center ${textOpacity}`}>{lastUpdated}</span>
 
         {/* Action Buttons - Always visible, disabled when not applicable */}
         <div className="flex items-center gap-1.5 justify-end self-center">
@@ -203,6 +260,6 @@ export function EtoRunRow({ data, onClick }: EtoRunRowProps) {
         </div>
         </div>
       </div>
-    </button>
+    </div>
   );
 }

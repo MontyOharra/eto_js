@@ -43,7 +43,7 @@ async def list_eto_runs(
     ),
     limit: int = Query(50, ge=1, le=200, description="Number of runs to return"),
     offset: int = Query(0, ge=0, description="Number of runs to skip"),
-    sort_by: Literal["started_at", "completed_at", "created_at"] = Query("created_at", description="Field to sort by"),
+    sort_by: Literal["started_at", "completed_at", "created_at", "updated_at", "status"] = Query("created_at", description="Field to sort by"),
     sort_order: Literal["asc", "desc"] = Query("desc", description="Sort order"),
     service = Depends(lambda: ServiceContainer.get_eto_runs_service())
 ) -> GetEtoRunsResponse:

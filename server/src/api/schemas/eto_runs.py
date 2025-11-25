@@ -62,6 +62,10 @@ class EtoSubRunsSummary(BaseModel):
     processing_count: int
     not_started_count: int
 
+    # Page counts for display
+    pages_matched_count: int  # Total pages across matched sub-runs
+    pages_unmatched_count: int  # Total pages in unmatched groups (needs_template)
+
 
 # =============================================================================
 # Sub-Run Detail Models (for detail view)
@@ -161,8 +165,10 @@ class EtoRunListItem(BaseModel):
     id: int
     status: str
     processing_step: Optional[str] = None
+    is_read: bool
     started_at: Optional[str] = None  # ISO 8601
     completed_at: Optional[str] = None  # ISO 8601
+    updated_at: Optional[str] = None  # ISO 8601
     error_type: Optional[str] = None
     error_message: Optional[str] = None
 

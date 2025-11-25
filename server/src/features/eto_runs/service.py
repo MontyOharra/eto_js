@@ -247,6 +247,10 @@ class EtoRunsService:
                 f"and {1 if match_result.unmatched_pages else 0} unmatched sub-run"
             )
 
+            # 6. Update parent run status based on sub-runs
+            # This handles cases where all pages are unmatched (no work for worker to do)
+            self._update_parent_run_status(run.id)
+
             return run
 
         except ObjectNotFoundError:

@@ -75,6 +75,10 @@ def eto_run_list_view_to_api(run: EtoRunListView) -> EtoRunListItem:
     # For now, we estimate matched as total - needs_template
     matched_count = total_count - run.sub_run_needs_template_count
 
+    # Calculate page counts from page arrays
+    pages_matched_count = len(run.pages_matched)
+    pages_unmatched_count = len(run.pages_unmatched)
+
     sub_runs_summary = EtoSubRunsSummary(
         total_count=total_count,
         matched_count=matched_count,
@@ -83,6 +87,8 @@ def eto_run_list_view_to_api(run: EtoRunListView) -> EtoRunListItem:
         failure_count=run.sub_run_failure_count,
         processing_count=0,  # TODO: Add processing count to EtoRunListView
         not_started_count=0,  # TODO: Add not_started count to EtoRunListView
+        pages_matched_count=pages_matched_count,
+        pages_unmatched_count=pages_unmatched_count,
     )
 
     # Build the main EtoRunListItem
@@ -90,8 +96,10 @@ def eto_run_list_view_to_api(run: EtoRunListView) -> EtoRunListItem:
         id=run.id,
         status=run.status,
         processing_step=run.processing_step,
+        is_read=run.is_read,
         started_at=run.started_at.isoformat() if run.started_at else None,
         completed_at=run.completed_at.isoformat() if run.completed_at else None,
+        updated_at=run.updated_at.isoformat() if run.updated_at else None,
         error_type=run.error_type,
         error_message=run.error_message,
         pdf=pdf,
