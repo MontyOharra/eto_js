@@ -86,3 +86,15 @@ export interface UpdateEtoRunRequest {
 }
 
 // Response: 204 No Content or updated EtoRunListItem
+
+// =============================================================================
+// Sub-Run Level Operations
+// =============================================================================
+
+// POST /eto-runs/sub-runs/{sub_run_id}/reprocess
+// POST /eto-runs/sub-runs/{sub_run_id}/skip
+
+export interface SubRunOperationResponse {
+  new_sub_run_id: number;
+  eto_run_id: number;
+}

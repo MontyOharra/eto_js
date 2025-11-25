@@ -16,6 +16,7 @@ import {
   SkipRunsRequest,
   DeleteRunsRequest,
   UpdateEtoRunRequest,
+  SubRunOperationResponse,
 } from './types';
 
 const baseUrl = API_CONFIG.ENDPOINTS.ETO_RUNS;
@@ -194,6 +195,54 @@ export function useUpdateEtoRun() {
     onSuccess: (_, { runId }) => {
       queryClient.invalidateQueries({ queryKey: etoRunsQueryKeys.lists() });
       queryClient.invalidateQueries({ queryKey: etoRunsQueryKeys.detail(runId) });
+    },
+  });
+}
+
+// ============================================================================
+// Sub-Run Level Operations
+// ============================================================================
+
+/**
+ * Reprocess a single sub-run
+ * Deletes the sub-run and creates a new one with the same pages for re-processing
+ */
+export function useReprocessSubRun() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (subRunId: number): Promise<SubRunOperationResponse> => {
+      const response = await apiClient.post<SubRunOperationResponse>(
+        `${baseUrl}/sub-runs/${subRunId}/reprocess`
+      );
+      return response.data;
+    },
+    onSuccess: (data) => {
+      // Invalidate both lists and the specific run detail
+      queryClient.invalidateQueries({ queryKey: etoRunsQueryKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: etoRunsQueryKeys.detail(data.eto_run_id) });
+    },
+  });
+}
+
+/**
+ * Skip a single sub-run
+ * Deletes the sub-run and creates a new one with status='skipped'
+ */
+export function useSkipSubRun() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (subRunId: number): Promise<SubRunOperationResponse> => {
+      const response = await apiClient.post<SubRunOperationResponse>(
+        `${baseUrl}/sub-runs/${subRunId}/skip`
+      );
+      return response.data;
+    },
+    onSuccess: (data) => {
+      // Invalidate both lists and the specific run detail
+      queryClient.invalidateQueries({ queryKey: etoRunsQueryKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: etoRunsQueryKeys.detail(data.eto_run_id) });
     },
   });
 }

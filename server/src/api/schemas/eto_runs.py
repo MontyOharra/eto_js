@@ -220,6 +220,21 @@ class BulkRunIdsRequest(BaseModel):
 
 
 # =============================================================================
+# Sub-Run Level Operations
+# =============================================================================
+
+class SubRunOperationResponse(BaseModel):
+    """
+    Response for sub-run level operations (reprocess, skip).
+
+    Returns the new sub-run ID since the original sub-run is deleted
+    and a new one is created with the same pages.
+    """
+    new_sub_run_id: int = Field(..., description="ID of the newly created sub-run")
+    eto_run_id: int = Field(..., description="Parent ETO run ID")
+
+
+# =============================================================================
 # GET /eto-runs/{id} - Detailed View with Sub-Runs
 # =============================================================================
 

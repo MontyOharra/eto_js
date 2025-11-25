@@ -17,7 +17,9 @@ if TYPE_CHECKING:
     from shared.database.repositories.pipeline_compiled_plan import PipelineCompiledPlanRepository
     from shared.database.repositories.pipeline_definition_step import PipelineDefinitionStepRepository
     from shared.database.repositories.module import ModuleRepository
-    # Add other repositories as they're created
+    from shared.database.repositories.eto_sub_run import EtoSubRunRepository
+    from shared.database.repositories.eto_sub_run_extraction import EtoSubRunExtractionRepository
+    from shared.database.repositories.eto_sub_run_pipeline_execution import EtoSubRunPipelineExecutionRepository
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +59,9 @@ class UnitOfWork:
         self._pipeline_compiled_plan_repository: Optional['PipelineCompiledPlanRepository'] = None
         self._pipeline_definition_step_repository: Optional['PipelineDefinitionStepRepository'] = None
         self._module_repository: Optional['ModuleRepository'] = None
-        # Add other repositories as needed
+        self._eto_sub_run_repository: Optional['EtoSubRunRepository'] = None
+        self._eto_sub_run_extraction_repository: Optional['EtoSubRunExtractionRepository'] = None
+        self._eto_sub_run_pipeline_execution_repository: Optional['EtoSubRunPipelineExecutionRepository'] = None
 
         logger.debug("UnitOfWork initialized")
 
@@ -172,6 +176,48 @@ class UnitOfWork:
             self._module_repository = ModuleRepository(session=self.session)
             logger.debug("ModuleRepository loaded in UoW")
         return self._module_repository
+
+    @property
+    def eto_sub_runs(self) -> 'EtoSubRunRepository':
+        """
+        Access to ETO sub-run repository within this transaction.
+
+        Returns:
+            EtoSubRunRepository instance using this UoW's session
+        """
+        if not self._eto_sub_run_repository:
+            from shared.database.repositories.eto_sub_run import EtoSubRunRepository
+            self._eto_sub_run_repository = EtoSubRunRepository(session=self.session)
+            logger.debug("EtoSubRunRepository loaded in UoW")
+        return self._eto_sub_run_repository
+
+    @property
+    def eto_sub_run_extractions(self) -> 'EtoSubRunExtractionRepository':
+        """
+        Access to ETO sub-run extraction repository within this transaction.
+
+        Returns:
+            EtoSubRunExtractionRepository instance using this UoW's session
+        """
+        if not self._eto_sub_run_extraction_repository:
+            from shared.database.repositories.eto_sub_run_extraction import EtoSubRunExtractionRepository
+            self._eto_sub_run_extraction_repository = EtoSubRunExtractionRepository(session=self.session)
+            logger.debug("EtoSubRunExtractionRepository loaded in UoW")
+        return self._eto_sub_run_extraction_repository
+
+    @property
+    def eto_sub_run_pipeline_executions(self) -> 'EtoSubRunPipelineExecutionRepository':
+        """
+        Access to ETO sub-run pipeline execution repository within this transaction.
+
+        Returns:
+            EtoSubRunPipelineExecutionRepository instance using this UoW's session
+        """
+        if not self._eto_sub_run_pipeline_execution_repository:
+            from shared.database.repositories.eto_sub_run_pipeline_execution import EtoSubRunPipelineExecutionRepository
+            self._eto_sub_run_pipeline_execution_repository = EtoSubRunPipelineExecutionRepository(session=self.session)
+            logger.debug("EtoSubRunPipelineExecutionRepository loaded in UoW")
+        return self._eto_sub_run_pipeline_execution_repository
 
     # ========== Transaction Control ==========
     # Usually not needed - context manager handles commit/rollback

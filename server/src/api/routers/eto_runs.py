@@ -15,6 +15,7 @@ from api.schemas.eto_runs import (
     CreateEtoRunRequest,
     CreateEtoRunResponse,
     EtoRunDetail,
+    SubRunOperationResponse,
 )
 from api.mappers.eto_runs import (
     eto_run_list_to_api,
@@ -339,3 +340,94 @@ async def delete_eto_runs(
     logger.info(f"Deleting {len(request.run_ids)} ETO runs: {request.run_ids}")
     service.delete_runs(request.run_ids)
     return None
+
+
+# =============================================================================
+# Sub-Run Level Operations
+# =============================================================================
+
+@router.post("/sub-runs/{sub_run_id}/reprocess", response_model=SubRunOperationResponse)
+async def reprocess_sub_run(
+    sub_run_id: int,
+    service: EtoRunsService = Depends(lambda: ServiceContainer.get_eto_runs_service())
+) -> SubRunOperationResponse:
+    """
+    Reprocess a single sub-run.
+
+    Deletes the sub-run and all its stage data (extraction, pipeline execution),
+    then creates a new sub-run with the same pages for the worker to process.
+
+    Flow:
+    1. Delete extraction record (if exists)
+    2. Delete pipeline execution record (if exists)
+    3. Delete the sub-run
+    4. Create new sub-run with same pages, status='not_started', no template
+    5. Worker picks up and runs template matching (Phase 1)
+
+    Returns:
+    - new_sub_run_id: ID of the newly created sub-run
+    - eto_run_id: Parent ETO run ID
+
+    Errors:
+    - 404: Sub-run not found
+    """
+    logger.info(f"Reprocessing sub-run {sub_run_id}")
+
+    # Get parent run ID before reprocessing (sub-run will be deleted)
+    sub_run = service.sub_run_repo.get_by_id(sub_run_id)
+    if not sub_run:
+        from shared.exceptions.service import ObjectNotFoundError
+        raise ObjectNotFoundError(f"Sub-run {sub_run_id} not found")
+
+    eto_run_id = sub_run.eto_run_id
+    new_sub_run_id = service.reprocess_sub_run(sub_run_id)
+
+    return SubRunOperationResponse(
+        new_sub_run_id=new_sub_run_id,
+        eto_run_id=eto_run_id
+    )
+
+
+@router.post("/sub-runs/{sub_run_id}/skip", response_model=SubRunOperationResponse)
+async def skip_sub_run(
+    sub_run_id: int,
+    service: EtoRunsService = Depends(lambda: ServiceContainer.get_eto_runs_service())
+) -> SubRunOperationResponse:
+    """
+    Skip a single sub-run.
+
+    Deletes the sub-run and all its stage data (extraction, pipeline execution),
+    then creates a new sub-run with the same pages and status='skipped'.
+
+    Can only skip sub-runs with status 'failure' or 'needs_template'.
+
+    Flow:
+    1. Validate sub-run status
+    2. Delete extraction record (if exists)
+    3. Delete pipeline execution record (if exists)
+    4. Delete the sub-run
+    5. Create new sub-run with same pages, status='skipped'
+
+    Returns:
+    - new_sub_run_id: ID of the newly created skipped sub-run
+    - eto_run_id: Parent ETO run ID
+
+    Errors:
+    - 404: Sub-run not found
+    - 400: Sub-run has invalid status (can only skip failure/needs_template)
+    """
+    logger.info(f"Skipping sub-run {sub_run_id}")
+
+    # Get parent run ID before skipping (sub-run will be deleted)
+    sub_run = service.sub_run_repo.get_by_id(sub_run_id)
+    if not sub_run:
+        from shared.exceptions.service import ObjectNotFoundError
+        raise ObjectNotFoundError(f"Sub-run {sub_run_id} not found")
+
+    eto_run_id = sub_run.eto_run_id
+    new_sub_run_id = service.skip_sub_run(sub_run_id)
+
+    return SubRunOperationResponse(
+        new_sub_run_id=new_sub_run_id,
+        eto_run_id=eto_run_id
+    )

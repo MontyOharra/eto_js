@@ -7,6 +7,8 @@ import {
   SkippedSubRunsSection,
   EtoRunDetailSidebar,
   useEtoRunDetail,
+  useReprocessSubRun,
+  useSkipSubRun,
   EtoRunDetail,
 } from '../../../features/test';
 
@@ -67,6 +69,19 @@ function EtoRunDetailPage() {
 
   // Fetch run detail from API
   const { data: detail, isLoading, isError, error } = useEtoRunDetail(parseInt(runId));
+
+  // Sub-run mutations
+  const reprocessSubRun = useReprocessSubRun();
+  const skipSubRun = useSkipSubRun();
+
+  // Handlers for sub-run operations
+  const handleReprocessSubRun = (subRunId: number) => {
+    reprocessSubRun.mutate(subRunId);
+  };
+
+  const handleSkipSubRun = (subRunId: number) => {
+    skipSubRun.mutate(subRunId);
+  };
 
   // Loading state
   if (isLoading) {
@@ -133,22 +148,22 @@ function EtoRunDetailPage() {
           <MatchedSubRunsSection
             subRuns={matchedSubRuns}
             onViewDetails={(subRunId) => {/* TODO: Implement view details */}}
-            onReprocess={(subRunId) => {/* TODO: Implement reprocess */}}
-            onSkip={(subRunId) => {/* TODO: Implement skip */}}
+            onReprocess={handleReprocessSubRun}
+            onSkip={handleSkipSubRun}
           />
 
           {/* Needs Template Section */}
           <NeedsTemplateSection
             subRuns={needsTemplateSubRuns}
             onBuildTemplate={(subRunId) => {/* TODO: Implement build template */}}
-            onReprocess={(subRunId) => {/* TODO: Implement reprocess */}}
-            onSkip={(subRunId) => {/* TODO: Implement skip */}}
+            onReprocess={handleReprocessSubRun}
+            onSkip={handleSkipSubRun}
           />
 
           {/* Skipped Section */}
           <SkippedSubRunsSection
             subRuns={skippedSubRuns}
-            onReprocess={(subRunId) => {/* TODO: Implement reprocess */}}
+            onReprocess={handleReprocessSubRun}
           />
         </div>
 

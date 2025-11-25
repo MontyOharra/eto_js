@@ -1162,6 +1162,160 @@ class EtoRunsService:
 
         logger.info(f"Successfully deleted {len(run_ids)} ETO runs")
 
+    # ==================== Sub-Run Level Operations ====================
+
+    def reprocess_sub_run(self, sub_run_id: int) -> int:
+        """
+        Reprocess a single sub-run by deleting it and creating a new one with the same pages.
+
+        Uses Unit of Work pattern for atomic transaction:
+        1. Get sub-run to retrieve pages and parent run ID
+        2. Delete extraction record if exists
+        3. Delete pipeline execution record if exists
+        4. Delete the sub-run itself
+        5. Create new sub-run with same pages, status=not_started, no template
+        6. Update parent run status
+
+        The worker will pick up the new sub-run and run template matching (Phase 1).
+
+        Args:
+            sub_run_id: ID of sub-run to reprocess
+
+        Returns:
+            ID of the newly created sub-run
+
+        Raises:
+            ObjectNotFoundError: If sub-run not found
+        """
+        logger.info(f"Reprocessing sub-run {sub_run_id}")
+
+        # First get the sub-run outside UoW to validate it exists
+        sub_run = self.sub_run_repo.get_by_id(sub_run_id)
+        if not sub_run:
+            raise ObjectNotFoundError(f"Sub-run {sub_run_id} not found")
+
+        parent_run_id = sub_run.eto_run_id
+        matched_pages = sub_run.matched_pages  # Already JSON string
+
+        # Use Unit of Work for atomic transaction
+        with self.connection_manager.unit_of_work() as uow:
+            # Delete extraction record if exists
+            extraction = uow.eto_sub_run_extractions.get_by_sub_run_id(sub_run_id)
+            if extraction:
+                uow.eto_sub_run_extractions.delete(extraction.id)
+                logger.debug(f"Deleted extraction record for sub-run {sub_run_id}")
+
+            # Delete pipeline execution record if exists (cascade deletes steps)
+            pipeline_execution = uow.eto_sub_run_pipeline_executions.get_by_sub_run_id(sub_run_id)
+            if pipeline_execution:
+                uow.eto_sub_run_pipeline_executions.delete(pipeline_execution.id)
+                logger.debug(f"Deleted pipeline execution record for sub-run {sub_run_id}")
+
+            # Delete the sub-run
+            uow.eto_sub_runs.delete(sub_run_id)
+            logger.debug(f"Deleted sub-run {sub_run_id}")
+
+            # Create new sub-run with same pages, no template
+            new_sub_run = uow.eto_sub_runs.create(EtoSubRunCreate(
+                eto_run_id=parent_run_id,
+                matched_pages=matched_pages,
+                template_version_id=None,  # No template - Worker Phase 1 will match
+            ))
+            logger.debug(f"Created new sub-run {new_sub_run.id} with pages {matched_pages}")
+
+        # Update parent run status (outside UoW - uses separate transaction)
+        self._update_parent_run_status(parent_run_id)
+
+        # Broadcast event
+        eto_event_manager.broadcast_sync("sub_run_reprocessed", {
+            "old_sub_run_id": sub_run_id,
+            "new_sub_run_id": new_sub_run.id,
+            "eto_run_id": parent_run_id,
+        })
+
+        logger.monitor(f"Sub-run {sub_run_id}: Reprocessed as new sub-run {new_sub_run.id}")
+        return new_sub_run.id
+
+    def skip_sub_run(self, sub_run_id: int) -> int:
+        """
+        Skip a single sub-run by deleting it and creating a new one with status='skipped'.
+
+        Uses Unit of Work pattern for atomic transaction:
+        1. Get sub-run to retrieve pages and parent run ID
+        2. Delete extraction record if exists
+        3. Delete pipeline execution record if exists
+        4. Delete the sub-run itself
+        5. Create new sub-run with same pages, status='skipped'
+        6. Update parent run status
+
+        Args:
+            sub_run_id: ID of sub-run to skip
+
+        Returns:
+            ID of the newly created skipped sub-run
+
+        Raises:
+            ObjectNotFoundError: If sub-run not found
+            ValidationError: If sub-run has invalid status for skipping
+        """
+        logger.info(f"Skipping sub-run {sub_run_id}")
+
+        # First get the sub-run outside UoW to validate it exists
+        sub_run = self.sub_run_repo.get_by_id(sub_run_id)
+        if not sub_run:
+            raise ObjectNotFoundError(f"Sub-run {sub_run_id} not found")
+
+        # Validate status - can only skip failure or needs_template sub-runs
+        if sub_run.status not in ("failure", "needs_template"):
+            raise ValidationError(
+                f"Cannot skip sub-run {sub_run_id} with status '{sub_run.status}'. "
+                f"Only 'failure' and 'needs_template' sub-runs can be skipped."
+            )
+
+        parent_run_id = sub_run.eto_run_id
+        matched_pages = sub_run.matched_pages  # Already JSON string
+
+        # Use Unit of Work for atomic transaction
+        with self.connection_manager.unit_of_work() as uow:
+            # Delete extraction record if exists
+            extraction = uow.eto_sub_run_extractions.get_by_sub_run_id(sub_run_id)
+            if extraction:
+                uow.eto_sub_run_extractions.delete(extraction.id)
+                logger.debug(f"Deleted extraction record for sub-run {sub_run_id}")
+
+            # Delete pipeline execution record if exists (cascade deletes steps)
+            pipeline_execution = uow.eto_sub_run_pipeline_executions.get_by_sub_run_id(sub_run_id)
+            if pipeline_execution:
+                uow.eto_sub_run_pipeline_executions.delete(pipeline_execution.id)
+                logger.debug(f"Deleted pipeline execution record for sub-run {sub_run_id}")
+
+            # Delete the sub-run
+            uow.eto_sub_runs.delete(sub_run_id)
+            logger.debug(f"Deleted sub-run {sub_run_id}")
+
+            # Create new sub-run with same pages, status=skipped
+            new_sub_run = uow.eto_sub_runs.create(EtoSubRunCreate(
+                eto_run_id=parent_run_id,
+                matched_pages=matched_pages,
+                template_version_id=None,
+            ))
+            # Update status to skipped
+            uow.eto_sub_runs.update(new_sub_run.id, {"status": "skipped"})
+            logger.debug(f"Created new skipped sub-run {new_sub_run.id} with pages {matched_pages}")
+
+        # Update parent run status (outside UoW - uses separate transaction)
+        self._update_parent_run_status(parent_run_id)
+
+        # Broadcast event
+        eto_event_manager.broadcast_sync("sub_run_skipped", {
+            "old_sub_run_id": sub_run_id,
+            "new_sub_run_id": new_sub_run.id,
+            "eto_run_id": parent_run_id,
+        })
+
+        logger.monitor(f"Sub-run {sub_run_id}: Skipped as new sub-run {new_sub_run.id}")
+        return new_sub_run.id
+
     # ==================== Background Worker Lifecycle ====================
 
     async def startup(self) -> bool:
