@@ -2,8 +2,9 @@
 ETO Sub-Run Extraction Repository
 Repository for eto_sub_run_extractions table with CRUD operations
 """
+import json
 import logging
-from typing import Type, Optional, List
+from typing import Any, Dict, List, Type, Optional
 
 from shared.database.repositories.base import BaseRepository
 from shared.database.models import EtoSubRunExtractionModel
@@ -23,6 +24,7 @@ class EtoSubRunExtractionRepository(BaseRepository[EtoSubRunExtractionModel]):
     Handles:
     - Basic CRUD for eto_sub_run_extractions table
     - Conversion between ORM models and domain dataclasses
+    - JSON serialization/deserialization for extracted_data field
     - Query operations for finding extractions by sub-run ID and status
 
     Manages data extraction stage for individual sub-runs.
@@ -33,19 +35,33 @@ class EtoSubRunExtractionRepository(BaseRepository[EtoSubRunExtractionModel]):
         """Return the SQLAlchemy model class this repository manages"""
         return EtoSubRunExtractionModel
 
+    # ========== Serialization Methods ==========
+
+    def _deserialize_extracted_data(self, json_str: Optional[str]) -> Optional[List[Dict[str, Any]]]:
+        """Convert JSON string to list of extracted field dicts"""
+        if json_str is None:
+            return None
+        return json.loads(json_str)
+
+    def _serialize_extracted_data(self, data: Optional[List[Dict[str, Any]]]) -> Optional[str]:
+        """Convert list of extracted field dicts to JSON string"""
+        if data is None:
+            return None
+        return json.dumps(data)
+
     # ========== Conversion Methods ==========
 
     def _model_to_domain(self, model: EtoSubRunExtractionModel) -> EtoSubRunExtraction:
         """
         Convert ORM model to EtoSubRunExtraction dataclass.
 
-        Status field is plain string (no enum conversion needed).
+        Deserializes extracted_data from JSON string to list of dicts.
         """
         return EtoSubRunExtraction(
             id=model.id,
             sub_run_id=model.sub_run_id,
             status=model.status,
-            extracted_data=model.extracted_data,
+            extracted_data=self._deserialize_extracted_data(model.extracted_data),
             error_message=model.error_message,
             started_at=model.started_at,
             completed_at=model.completed_at,
@@ -106,6 +122,8 @@ class EtoSubRunExtractionRepository(BaseRepository[EtoSubRunExtractionModel]):
         - Field explicitly set to None (key present, value None) - field will be cleared in database
         - Field set to value (key present) - field will be updated to that value
 
+        Note: extracted_data is serialized to JSON before storage.
+
         Args:
             extraction_id: Extraction ID
             updates: Dict of fields to update (TypedDict with all fields optional)
@@ -126,6 +144,11 @@ class EtoSubRunExtractionRepository(BaseRepository[EtoSubRunExtractionModel]):
             for field, value in updates.items():
                 if not hasattr(model, field):
                     raise ValueError(f"Invalid field for extraction update: {field}")
+
+                # Serialize extracted_data to JSON
+                if field == "extracted_data":
+                    value = self._serialize_extracted_data(value)
+
                 setattr(model, field, value)
 
             session.flush()  # Persist changes

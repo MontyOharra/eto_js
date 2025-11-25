@@ -163,21 +163,19 @@ def eto_sub_run_detail_to_api(sub_run: EtoSubRunDetailView) -> EtoSubRunDetail:
     # Build extraction stage (optional)
     extraction: Optional[EtoSubRunExtraction] = None
     if sub_run.extraction:
-        # Convert extracted_data dict to ExtractedFieldResult list
+        # Convert extracted_data list to ExtractedFieldResult list
         extraction_results: Optional[List[ExtractedFieldResult]] = None
         if sub_run.extraction.extracted_data:
-            # extracted_data is a dict with field results
-            if isinstance(sub_run.extraction.extracted_data, list):
-                extraction_results = [
-                    ExtractedFieldResult(
-                        name=result.get("name", ""),
-                        description=result.get("description"),
-                        bbox=tuple(result.get("bbox", [0, 0, 0, 0])),  # type: ignore
-                        page=result.get("page", 0),
-                        extracted_value=result.get("extracted_value", "")
-                    )
-                    for result in sub_run.extraction.extracted_data
-                ]
+            extraction_results = [
+                ExtractedFieldResult(
+                    name=result.get("name", ""),
+                    description=result.get("description"),
+                    bbox=tuple(result.get("bbox", [0, 0, 0, 0])),  # type: ignore
+                    page=result.get("page", 0),
+                    extracted_value=result.get("extracted_value", "")
+                )
+                for result in sub_run.extraction.extracted_data
+            ]
 
         extraction = EtoSubRunExtraction(
             id=0,  # TODO: Add id to EtoRunExtractionDetailView

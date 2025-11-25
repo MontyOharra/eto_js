@@ -4,7 +4,7 @@ Dataclasses representing eto_runs table and related operations
 """
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Literal, Optional, Dict, Any, TypedDict, TYPE_CHECKING
+from typing import Literal, Optional, Dict, List, Any, TypedDict, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from shared.types.eto_sub_runs import EtoSubRunDetailView
@@ -134,17 +134,28 @@ class EtoRunListView:
 class EtoRunExtractionDetailView:
     """
     Data extraction stage with parsed extracted_data JSON.
-    Extends EtoRunExtraction by parsing JSON string to dict.
 
-    Used in EtoRunDetailView to provide extracted field values.
+    Used in EtoSubRunDetailView to provide extracted field values.
+
+    extracted_data format:
+    [
+        {
+            "name": "field_name",
+            "description": "field description",
+            "bbox": [x1, y1, x2, y2],
+            "page": 1,
+            "extracted_value": "the extracted text"
+        },
+        ...
+    ]
     """
     # From EtoRunExtraction
     status: Literal["processing", "success", "failure"]
     started_at: Optional[datetime]
     completed_at: Optional[datetime]
 
-    # Parsed from extracted_data JSON string field
-    extracted_data: Optional[Dict[str, Any]] = None
+    # Parsed from extracted_data JSON string field (repository handles deserialization)
+    extracted_data: Optional[List[Dict[str, Any]]] = None
 
 
 @dataclass

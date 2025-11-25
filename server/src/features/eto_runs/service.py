@@ -536,10 +536,10 @@ class EtoRunsService:
             EtoSubRunExtractionCreate(sub_run_id=sub_run_id)
         )
 
-        # Update with results
+        # Update with results (repository handles JSON serialization)
         self.sub_run_extraction_repo.update(extraction.id, {
             "status": "success",
-            "extracted_data": json.dumps(extracted_data),
+            "extracted_data": extracted_data,
             "started_at": datetime.now(timezone.utc),
             "completed_at": datetime.now(timezone.utc)
         })
