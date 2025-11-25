@@ -542,6 +542,10 @@ class PipelineExecutionService:
         # Step 1: Map entry points
         entry_name_to_ids = self._map_entry_names_to_pin_ids_from_state(pipeline_state)
 
+        # Debug: Log entry point mapping for diagnosis
+        logger.debug(f"Pipeline entry points (name -> pin_ids): {entry_name_to_ids}")
+        logger.debug(f"Provided entry values (from extraction): {list(entry_values_by_name.keys())}")
+
         # Step 2: Seed entry values
         producer_of_pin, missing, extras = self._seed_entry_values(
             entry_values_by_name, entry_name_to_ids
@@ -549,6 +553,8 @@ class PipelineExecutionService:
 
         if missing:
             msg = f"Missing required entry values: {', '.join(missing)}"
+            logger.error(f"Entry point name mismatch - Pipeline expects: {list(entry_name_to_ids.keys())}, "
+                        f"Extraction provided: {list(entry_values_by_name.keys())}")
             logger.error(msg)
             raise ValueError(msg)
 

@@ -102,7 +102,6 @@ class PipelineDefinitionRepository(BaseRepository[PipelineDefinitionModel]):
             id=model.id,
             pipeline_state=self._deserialize_pipeline_state(model.pipeline_state),
             visual_state=self._deserialize_visual_state(model.visual_state),
-            compiled_plan_id=model.compiled_plan_id,
             created_at=model.created_at,
             updated_at=model.updated_at
         )
@@ -111,7 +110,6 @@ class PipelineDefinitionRepository(BaseRepository[PipelineDefinitionModel]):
         """Convert ORM model to PipelineDefinitionSummary dataclass"""
         return PipelineDefinitionSummary(
             id=model.id,
-            compiled_plan_id=model.compiled_plan_id,
             created_at=model.created_at,
             updated_at=model.updated_at
         )
@@ -134,8 +132,7 @@ class PipelineDefinitionRepository(BaseRepository[PipelineDefinitionModel]):
             # Create ORM model
             pipeline_def = self.model_class(
                 pipeline_state=pipeline_state_json,
-                visual_state=visual_state_json,
-                compiled_plan_id=None  # Compilation happens separately in service layer
+                visual_state=visual_state_json
             )
 
             session.add(pipeline_def)
@@ -192,21 +189,3 @@ class PipelineDefinitionRepository(BaseRepository[PipelineDefinitionModel]):
             models = result.scalars().all()
 
             return [self._model_to_summary(model) for model in models]
-
-    def update_compiled_plan_id(self, pipeline_id: int, compiled_plan_id: int) -> None:
-        """
-        Update the compiled_plan_id for a pipeline definition.
-
-        This is the only mutable field - used by the service layer after compilation.
-
-        Args:
-            pipeline_id: Pipeline definition ID
-            compiled_plan_id: Compiled plan ID to link to
-        """
-        with self._get_session() as session:
-            pipeline_def = session.get(self.model_class, pipeline_id)
-            if pipeline_def is None:
-                raise ValueError(f"Pipeline definition {pipeline_id} not found")
-
-            pipeline_def.compiled_plan_id = compiled_plan_id
-            session.commit()

@@ -26,8 +26,7 @@ class PipelineDefinitionStepRepository(BaseRepository[PipelineDefinitionStepMode
     - Standalone: Pass connection_manager, auto-commits
     - UoW: Pass session, caller controls transaction
 
-    This table is append-only (no updates or deletes) - steps are immutable
-    once created as part of a compiled plan.
+    Steps are owned by a pipeline definition and created during compilation.
     """
 
     @property
@@ -76,7 +75,7 @@ class PipelineDefinitionStepRepository(BaseRepository[PipelineDefinitionStepMode
         """Convert ORM model to PipelineDefinitionStep dataclass"""
         return PipelineDefinitionStep(
             id=model.id,
-            pipeline_compiled_plan_id=model.pipeline_compiled_plan_id,
+            pipeline_definition_id=model.pipeline_definition_id,
             module_instance_id=model.module_instance_id,
             module_ref=model.module_ref,
             module_config=json.loads(model.module_config),
@@ -93,10 +92,10 @@ class PipelineDefinitionStepRepository(BaseRepository[PipelineDefinitionStepMode
         Bulk create pipeline definition steps.
 
         This is the primary method for creating steps - they're always created
-        in bulk as part of a compiled plan.
+        in bulk as part of pipeline compilation.
 
         Args:
-            steps: List of step creation data (all for same compiled plan)
+            steps: List of step creation data (all for same pipeline definition)
 
         Returns:
             List of created steps with full details
@@ -106,7 +105,7 @@ class PipelineDefinitionStepRepository(BaseRepository[PipelineDefinitionStepMode
             step_models = []
             for step_data in steps:
                 step_model = self.model_class(
-                    pipeline_compiled_plan_id=step_data.pipeline_compiled_plan_id,
+                    pipeline_definition_id=step_data.pipeline_definition_id,
                     module_instance_id=step_data.module_instance_id,
                     module_ref=step_data.module_ref,
                     module_config=json.dumps(step_data.module_config),
@@ -126,24 +125,24 @@ class PipelineDefinitionStepRepository(BaseRepository[PipelineDefinitionStepMode
 
             return [self._model_to_full(model) for model in step_models]
 
-    def get_steps_by_plan_id(
+    def get_steps_by_definition_id(
         self,
-        compiled_plan_id: int
+        pipeline_definition_id: int
     ) -> List[PipelineDefinitionStep]:
         """
-        Get all steps for a compiled plan, ordered by step_number.
+        Get all steps for a pipeline definition, ordered by step_number.
 
         This retrieves the execution plan in the correct topological order.
 
         Args:
-            compiled_plan_id: Compiled plan ID
+            pipeline_definition_id: Pipeline definition ID
 
         Returns:
             List of steps ordered by step_number (execution order)
         """
         with self._get_session() as session:
             stmt = select(self.model_class).where(
-                self.model_class.pipeline_compiled_plan_id == compiled_plan_id
+                self.model_class.pipeline_definition_id == pipeline_definition_id
             ).order_by(self.model_class.step_number)
 
             result = session.execute(stmt)

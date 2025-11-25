@@ -72,3 +72,8 @@ def get_logger(name: str) -> MonitorLogger:
         MonitorLogger instance
     """
     return logging.getLogger(name)  # type: ignore[return-value]
+
+
+# Auto-initialize on module import to ensure MonitorLogger is set as the default
+# logger class before any other modules create loggers.
+setup_logger_class()

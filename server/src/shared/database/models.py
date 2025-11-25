@@ -277,33 +277,6 @@ class ModuleModel(BaseModel):
 
 
 # =========================
-# pipeline_compiled_plans
-# =========================
-
-class PipelineCompiledPlanModel(BaseModel):
-    __tablename__ = "pipeline_compiled_plans"
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    plan_checksum: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
-    compiled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
-    )
-
-    # Relationships
-    definitions: Mapped[List["PipelineDefinitionModel"]] = relationship(
-        back_populates="compiled_plan", cascade="all, delete-orphan"
-    )
-    steps: Mapped[List["PipelineDefinitionStepModel"]] = relationship(
-        back_populates="compiled_plan", cascade="all, delete-orphan"
-    )
-
-
-# =========================
 # pipeline_definitions
 # =========================
 
@@ -313,7 +286,6 @@ class PipelineDefinitionModel(BaseModel):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     pipeline_state: Mapped[str] = mapped_column(Text, nullable=False)
     visual_state: Mapped[str] = mapped_column(Text, nullable=False)
-    compiled_plan_id: Mapped[Optional[int]] = mapped_column(ForeignKey("pipeline_compiled_plans.id"), index=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
@@ -323,7 +295,9 @@ class PipelineDefinitionModel(BaseModel):
     )
 
     # Relationships
-    compiled_plan: Mapped[Optional["PipelineCompiledPlanModel"]] = relationship(back_populates="definitions")
+    steps: Mapped[List["PipelineDefinitionStepModel"]] = relationship(
+        back_populates="pipeline_definition", cascade="all, delete-orphan"
+    )
     template_versions: Mapped[List["PdfTemplateVersionModel"]] = relationship(back_populates="pipeline_definition")
 
 
@@ -335,8 +309,8 @@ class PipelineDefinitionStepModel(BaseModel):
     __tablename__ = "pipeline_definition_steps"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    pipeline_compiled_plan_id: Mapped[int] = mapped_column(
-        ForeignKey("pipeline_compiled_plans.id"), nullable=False, index=True
+    pipeline_definition_id: Mapped[int] = mapped_column(
+        ForeignKey("pipeline_definitions.id"), nullable=False, index=True
     )
 
     module_instance_id: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -355,11 +329,11 @@ class PipelineDefinitionStepModel(BaseModel):
     )
 
     # Relationships
-    compiled_plan: Mapped["PipelineCompiledPlanModel"] = relationship(back_populates="steps")
+    pipeline_definition: Mapped["PipelineDefinitionModel"] = relationship(back_populates="steps")
     module: Mapped["ModuleModel"] = relationship(back_populates="steps")
 
     __table_args__ = (
-        Index("idx_pipeline_compiled_plan_id", "pipeline_compiled_plan_id"),
+        Index("idx_pipeline_definition_id", "pipeline_definition_id"),
         Index("idx_pipeline_step_number", "step_number", "id"),
     )
 

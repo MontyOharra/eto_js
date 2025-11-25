@@ -13,15 +13,14 @@ class PipelineDefinitionStep:
     """
     Complete pipeline step record from database.
 
-    Represents a single execution step in a compiled pipeline plan.
+    Represents a single execution step in a compiled pipeline.
     Steps are ordered by step_number (topological layers) and contain
     all the metadata needed to execute a module instance.
 
-    Multiple compiled plans can have similar steps, but each step belongs
-    to exactly one compiled plan via pipeline_compiled_plan_id.
+    Each step belongs to exactly one pipeline definition via pipeline_definition_id.
     """
     id: int
-    pipeline_compiled_plan_id: int
+    pipeline_definition_id: int
     module_instance_id: str
     module_ref: str  # e.g., "text_cleaner:1.0.0"
     module_config: dict[str, Any]  # Module-specific configuration
@@ -38,13 +37,12 @@ class PipelineDefinitionStepCreate:
     Created during pipeline compilation after:
     1. Validation succeeds
     2. Graph pruning completes
-    3. Checksum calculation completes
-    4. Topological sorting determines execution order
-    5. Compiler generates step metadata
+    3. Topological sorting determines execution order
+    4. Compiler generates step metadata
 
     The repository layer handles JSON serialization of dict fields.
     """
-    pipeline_compiled_plan_id: int
+    pipeline_definition_id: int
     module_instance_id: str
     module_ref: str
     module_config: dict[str, Any]

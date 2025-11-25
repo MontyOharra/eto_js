@@ -14,13 +14,12 @@ class PipelineDefinition:
     Complete pipeline definition from database.
 
     Represents the user-facing pipeline with both execution logic (pipeline_state)
-    and visual layout (visual_state). Multiple definitions can share the same
-    compiled plan via compiled_plan_id.
+    and visual layout (visual_state). Each definition owns its compiled steps
+    directly via the pipeline_definition_steps table.
     """
     id: int
     pipeline_state: PipelineState
     visual_state: VisualState
-    compiled_plan_id: int | None
     created_at: datetime
     updated_at: datetime
 
@@ -29,11 +28,8 @@ class PipelineDefinition:
 class PipelineDefinitionSummary:
     """
     Lightweight summary for list views.
-
-    No computed fields - kept minimal since this will be removed later.
     """
     id: int
-    compiled_plan_id: int | None
     created_at: datetime
     updated_at: datetime
 
@@ -46,8 +42,7 @@ class PipelineDefinitionCreate:
     The service layer will handle:
     - Validation of pipeline_state
     - Pruning dead branches
-    - Checksum calculation
-    - Compilation (or reuse of existing compiled plan)
+    - Compilation to execution steps
     """
     pipeline_state: PipelineState
     visual_state: VisualState

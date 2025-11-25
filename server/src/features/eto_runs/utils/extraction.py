@@ -147,33 +147,71 @@ def extract_data_from_pdf_pages(
     page_numbers: list[int]
 ) -> list[ExtractedFieldData]:
     """
-    Extract text from PDF using extraction fields, filtered to specific pages only.
+    Extract text from PDF using extraction fields, remapped to matched pages.
 
-    Used by multi-template sub-runs where only a subset of pages should be extracted.
-    Calls the standard extraction function and filters results to specified pages.
+    Used by multi-template sub-runs where extraction fields need to be remapped
+    from template-relative pages to the actual matched pages in the target PDF.
+
+    Template extraction fields store page numbers relative to when the template
+    was created (e.g., page 1). When the template matches on a different page
+    in the target PDF (e.g., page 5), we need to remap the extraction to that page.
 
     Args:
         pdf_file_service: PDF files service for accessing PDF objects
         pdf_file_id: PDF file ID to extract from
-        extraction_fields: List of ExtractionField domain objects
-        page_numbers: List of page numbers to include (1-indexed)
+        extraction_fields: List of ExtractionField domain objects (with template-relative pages)
+        page_numbers: List of matched page numbers in target PDF (1-indexed)
 
     Returns:
-        List of ExtractedFieldData for specified pages only
+        List of ExtractedFieldData for matched pages
     """
-    logger.debug(f"Extracting data from PDF file {pdf_file_id} for pages {page_numbers}")
+    logger.debug(f"Extracting data from PDF file {pdf_file_id} for matched pages {page_numbers}")
 
-    # Filter extraction fields to only those on specified pages
-    filtered_fields = [
-        field for field in extraction_fields
-        if field.page in page_numbers
-    ]
+    if not extraction_fields:
+        logger.debug("No extraction fields provided")
+        return []
 
-    logger.debug(f"Filtered {len(extraction_fields)} fields to {len(filtered_fields)} fields for specified pages")
+    # Remap extraction field pages to matched pages
+    # Template fields are defined relative to template (e.g., page 1)
+    # But we need to extract from the actual matched pages in target PDF
+    if len(page_numbers) == 1:
+        # Single-page template: remap all fields to the matched page
+        matched_page = page_numbers[0]
+        remapped_fields = [
+            ExtractionField(
+                name=field.name,
+                description=field.description,
+                bbox=field.bbox,
+                page=matched_page
+            )
+            for field in extraction_fields
+        ]
+        logger.debug(f"Single-page remap: {len(extraction_fields)} fields remapped to page {matched_page}")
+    else:
+        # Multi-page template: calculate offset from template base page
+        # Assumes template pages are contiguous starting from base and matched pages are contiguous
+        template_base_page = min(field.page for field in extraction_fields)
+        matched_base_page = min(page_numbers)
+        offset = matched_base_page - template_base_page
 
-    # Use standard extraction function with filtered fields
+        remapped_fields = [
+            ExtractionField(
+                name=field.name,
+                description=field.description,
+                bbox=field.bbox,
+                page=field.page + offset
+            )
+            for field in extraction_fields
+            if (field.page + offset) in page_numbers
+        ]
+        logger.debug(
+            f"Multi-page remap: offset={offset} (template base={template_base_page}, "
+            f"matched base={matched_base_page}), {len(remapped_fields)} fields remapped"
+        )
+
+    # Use standard extraction function with remapped fields
     return extract_data_from_pdf(
         pdf_file_service=pdf_file_service,
         pdf_file_id=pdf_file_id,
-        extraction_fields=filtered_fields
+        extraction_fields=remapped_fields
     )

@@ -14,7 +14,6 @@ if TYPE_CHECKING:
     from shared.database.repositories.pdf_template import PdfTemplateRepository
     from shared.database.repositories.pdf_template_version import PdfTemplateVersionRepository
     from shared.database.repositories.pipeline_definition import PipelineDefinitionRepository
-    from shared.database.repositories.pipeline_compiled_plan import PipelineCompiledPlanRepository
     from shared.database.repositories.pipeline_definition_step import PipelineDefinitionStepRepository
     from shared.database.repositories.module import ModuleRepository
     from shared.database.repositories.eto_sub_run import EtoSubRunRepository
@@ -56,7 +55,6 @@ class UnitOfWork:
         self._pdf_template_repository: Optional['PdfTemplateRepository'] = None
         self._pdf_template_version_repository: Optional['PdfTemplateVersionRepository'] = None
         self._pipeline_definition_repository: Optional['PipelineDefinitionRepository'] = None
-        self._pipeline_compiled_plan_repository: Optional['PipelineCompiledPlanRepository'] = None
         self._pipeline_definition_step_repository: Optional['PipelineDefinitionStepRepository'] = None
         self._module_repository: Optional['ModuleRepository'] = None
         self._eto_sub_run_repository: Optional['EtoSubRunRepository'] = None
@@ -134,20 +132,6 @@ class UnitOfWork:
             self._pipeline_definition_repository = PipelineDefinitionRepository(session=self.session)
             logger.debug("PipelineDefinitionRepository loaded in UoW")
         return self._pipeline_definition_repository
-
-    @property
-    def pipeline_compiled_plans(self) -> 'PipelineCompiledPlanRepository':
-        """
-        Access to pipeline compiled plan repository within this transaction.
-
-        Returns:
-            PipelineCompiledPlanRepository instance using this UoW's session
-        """
-        if not self._pipeline_compiled_plan_repository:
-            from shared.database.repositories.pipeline_compiled_plan import PipelineCompiledPlanRepository
-            self._pipeline_compiled_plan_repository = PipelineCompiledPlanRepository(session=self.session)
-            logger.debug("PipelineCompiledPlanRepository loaded in UoW")
-        return self._pipeline_compiled_plan_repository
 
     @property
     def pipeline_definition_steps(self) -> 'PipelineDefinitionStepRepository':
