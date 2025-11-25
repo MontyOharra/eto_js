@@ -2,9 +2,11 @@
 ETO Runs Mappers
 Convert between domain dataclasses and API Pydantic models
 """
+import json
 from typing import List, Optional
 
 from shared.types.eto_runs import EtoRunListView, EtoRun, EtoRunDetailView
+from shared.types.eto_sub_runs import EtoSubRunDetailView
 from api.schemas.eto_runs import (
     EtoRunListItem,
     EtoPdfInfo,
@@ -12,11 +14,14 @@ from api.schemas.eto_runs import (
     EtoSourceEmail,
     EtoSource,
     EtoMatchedTemplate,
+    EtoSubRunsSummary,
+    EtoSubRunListItem,
+    EtoSubRunDetail,
+    EtoSubRunExtraction,
+    EtoSubRunPipelineExecution,
+    EtoSubRunPipelineExecutionStep,
     CreateEtoRunResponse,
     EtoRunDetail,
-    EtoStageTemplateMatching,
-    EtoStageDataExtraction,
-    EtoStagePipelineExecution,
 )
 from api.schemas.pdf_templates import ExtractedFieldResult
 
@@ -27,7 +32,7 @@ def eto_run_list_view_to_api(run: EtoRunListView) -> EtoRunListItem:
 
     Handles:
     - Datetime to ISO 8601 string conversion
-    - Nested model construction (PDF, source, template)
+    - Nested model construction (PDF, source, sub-runs summary)
     - Discriminated union for source (manual vs email)
 
     Args:
@@ -49,24 +54,36 @@ def eto_run_list_view_to_api(run: EtoRunListView) -> EtoRunListItem:
         # Email source
         source: EtoSource = EtoSourceEmail(
             type="email",
-            sender_email=run.email_sender_email or "",  # Shouldn't be None if email_id exists
+            sender_email=run.email_sender_email or "",
             received_date=run.email_received_date.isoformat() if run.email_received_date else "",
             subject=run.email_subject,
-            folder_name=run.email_folder_name or "",  # Shouldn't be None if email_id exists
+            folder_name=run.email_folder_name or "",
         )
     else:
         # Manual upload source
         source = EtoSourceManual(type="manual")
 
-    # Build matched template (optional)
-    matched_template: EtoMatchedTemplate | None = None
-    if run.template_id is not None:
-        matched_template = EtoMatchedTemplate(
-            template_id=run.template_id,
-            template_name=run.template_name or "",  # Shouldn't be None if template_id exists
-            version_id=run.template_version_id or 0,  # Shouldn't be None if template_id exists
-            version_num=run.template_version_num or 0,  # Shouldn't be None if template_id exists
-        )
+    # Calculate sub-runs summary from counts
+    total_count = (
+        run.sub_run_success_count +
+        run.sub_run_failure_count +
+        run.sub_run_needs_template_count +
+        run.sub_run_skipped_count
+    )
+
+    # Matched = has template (success + failure + processing)
+    # For now, we estimate matched as total - needs_template
+    matched_count = total_count - run.sub_run_needs_template_count
+
+    sub_runs_summary = EtoSubRunsSummary(
+        total_count=total_count,
+        matched_count=matched_count,
+        needs_template_count=run.sub_run_needs_template_count,
+        success_count=run.sub_run_success_count,
+        failure_count=run.sub_run_failure_count,
+        processing_count=0,  # TODO: Add processing count to EtoRunListView
+        not_started_count=0,  # TODO: Add not_started count to EtoRunListView
+    )
 
     # Build the main EtoRunListItem
     return EtoRunListItem(
@@ -79,7 +96,8 @@ def eto_run_list_view_to_api(run: EtoRunListView) -> EtoRunListItem:
         error_message=run.error_message,
         pdf=pdf,
         source=source,
-        matched_template=matched_template,
+        sub_runs_summary=sub_runs_summary,
+        sub_runs=None,  # Not included in list view by default
     )
 
 
@@ -117,6 +135,111 @@ def eto_run_to_create_response(run: EtoRun) -> CreateEtoRunResponse:
     )
 
 
+def eto_sub_run_detail_to_api(sub_run: EtoSubRunDetailView) -> EtoSubRunDetail:
+    """
+    Convert domain EtoSubRunDetailView to API EtoSubRunDetail schema.
+
+    Handles:
+    - Template info construction
+    - Extraction stage conversion
+    - Pipeline execution stage conversion with steps
+
+    Args:
+        sub_run: EtoSubRunDetailView domain dataclass
+
+    Returns:
+        EtoSubRunDetail Pydantic model for API response
+    """
+    # Build template info (None for unmatched groups)
+    template: Optional[EtoMatchedTemplate] = None
+    if sub_run.template_id is not None:
+        template = EtoMatchedTemplate(
+            template_id=sub_run.template_id,
+            template_name=sub_run.template_name or "",
+            version_id=sub_run.template_version_id or 0,
+            version_num=sub_run.template_version_num or 0,
+        )
+
+    # Build extraction stage (optional)
+    extraction: Optional[EtoSubRunExtraction] = None
+    if sub_run.extraction:
+        # Convert extracted_data dict to ExtractedFieldResult list
+        extraction_results: Optional[List[ExtractedFieldResult]] = None
+        if sub_run.extraction.extracted_data:
+            # extracted_data is a dict with field results
+            if isinstance(sub_run.extraction.extracted_data, list):
+                extraction_results = [
+                    ExtractedFieldResult(
+                        name=result.get("name", ""),
+                        description=result.get("description"),
+                        bbox=tuple(result.get("bbox", [0, 0, 0, 0])),  # type: ignore
+                        page=result.get("page", 0),
+                        extracted_value=result.get("extracted_value", "")
+                    )
+                    for result in sub_run.extraction.extracted_data
+                ]
+
+        extraction = EtoSubRunExtraction(
+            id=0,  # TODO: Add id to EtoRunExtractionDetailView
+            status=sub_run.extraction.status,
+            extraction_results=extraction_results,
+            error_message=None,  # TODO: Add error_message to EtoRunExtractionDetailView
+            started_at=sub_run.extraction.started_at.isoformat() if sub_run.extraction.started_at else None,
+            completed_at=sub_run.extraction.completed_at.isoformat() if sub_run.extraction.completed_at else None,
+        )
+
+    # Build pipeline execution stage (optional)
+    pipeline_execution: Optional[EtoSubRunPipelineExecution] = None
+    if sub_run.pipeline_execution:
+        # Convert steps to API format
+        steps_list: Optional[List[EtoSubRunPipelineExecutionStep]] = None
+        if sub_run.pipeline_execution.steps:
+            steps_list = [
+                EtoSubRunPipelineExecutionStep(
+                    id=step.id,
+                    step_number=step.step_number,
+                    module_instance_id=step.module_instance_id,
+                    inputs=step.inputs,
+                    outputs=step.outputs,
+                    error=json.dumps(step.error) if step.error else None,
+                )
+                for step in sub_run.pipeline_execution.steps
+            ]
+
+        # executed_actions is already a dict, convert to list if needed
+        executed_actions = None
+        if sub_run.pipeline_execution.executed_actions:
+            if isinstance(sub_run.pipeline_execution.executed_actions, list):
+                executed_actions = sub_run.pipeline_execution.executed_actions
+            elif isinstance(sub_run.pipeline_execution.executed_actions, dict):
+                executed_actions = [sub_run.pipeline_execution.executed_actions]
+
+        pipeline_execution = EtoSubRunPipelineExecution(
+            id=0,  # TODO: Add id to EtoRunPipelineExecutionDetailView
+            status=sub_run.pipeline_execution.status,
+            executed_actions=executed_actions,
+            error_message=None,  # TODO: Add error_message to EtoRunPipelineExecutionDetailView
+            started_at=sub_run.pipeline_execution.started_at.isoformat() if sub_run.pipeline_execution.started_at else None,
+            completed_at=sub_run.pipeline_execution.completed_at.isoformat() if sub_run.pipeline_execution.completed_at else None,
+            steps=steps_list,
+        )
+
+    return EtoSubRunDetail(
+        id=sub_run.id,
+        sequence=None,  # TODO: Add sequence to EtoSubRunDetailView if needed
+        status=sub_run.status,
+        matched_pages=sub_run.matched_pages,
+        is_unmatched_group=sub_run.is_unmatched_group,
+        error_type=sub_run.error_type,
+        error_message=sub_run.error_message,
+        started_at=sub_run.started_at.isoformat() if sub_run.started_at else None,
+        completed_at=sub_run.completed_at.isoformat() if sub_run.completed_at else None,
+        template=template,
+        extraction=extraction,
+        pipeline_execution=pipeline_execution,
+    )
+
+
 def eto_run_detail_to_api(detail: EtoRunDetailView) -> EtoRunDetail:
     """
     Convert domain EtoRunDetailView to EtoRunDetail API schema.
@@ -125,11 +248,8 @@ def eto_run_detail_to_api(detail: EtoRunDetailView) -> EtoRunDetail:
 
     Handles:
     - Datetime to ISO 8601 string conversion
-    - Nested model construction (PDF, source, stages)
-    - Discriminated union for source (manual vs email)
-
-    Note: JSON data (extracted_data, executed_actions) is already parsed
-    in the DetailView types - no parsing needed here.
+    - Nested model construction (PDF, source)
+    - Sub-run list conversion with full stage details
 
     Args:
         detail: EtoRunDetailView domain dataclass with all related data
@@ -159,76 +279,11 @@ def eto_run_detail_to_api(detail: EtoRunDetailView) -> EtoRunDetail:
         # Manual upload source
         source = EtoSourceManual(type="manual")
 
-    # Build stage data (optional - depends on run progress)
-    stage_template_matching: Optional[EtoStageTemplateMatching] = None
-    stage_data_extraction: Optional[EtoStageDataExtraction] = None
-    stage_pipeline_execution: Optional[EtoStagePipelineExecution] = None
-
-    # Stage 1: Template matching
-    if detail.template_matching:
-        stage_template_matching = EtoStageTemplateMatching(
-            status=detail.template_matching.status,
-            matched_template_version_id=detail.template_matching.matched_template_version_id,
-            matched_template_name=detail.matched_template_name,
-            matched_version_number=detail.matched_template_version_num,
-            started_at=detail.template_matching.started_at.isoformat() if detail.template_matching.started_at else None,
-            completed_at=detail.template_matching.completed_at.isoformat() if detail.template_matching.completed_at else None,
-        )
-
-    # Stage 2: Data extraction
-    if detail.extraction:
-        # Convert extracted_data list to ExtractedFieldResult objects
-        extraction_results: Optional[List[ExtractedFieldResult]] = None
-        if detail.extraction.extracted_data:
-            extraction_results = [
-                ExtractedFieldResult(
-                    name=result["name"],
-                    description=result.get("description"),
-                    bbox=tuple(result["bbox"]),  # type: ignore
-                    page=result["page"],
-                    extracted_value=result["extracted_value"]
-                )
-                for result in detail.extraction.extracted_data
-            ]
-
-        stage_data_extraction = EtoStageDataExtraction(
-            status=detail.extraction.status,
-            extraction_results=extraction_results,
-            started_at=detail.extraction.started_at.isoformat() if detail.extraction.started_at else None,
-            completed_at=detail.extraction.completed_at.isoformat() if detail.extraction.completed_at else None,
-        )
-
-    # Stage 3: Pipeline execution
-    if detail.pipeline_execution:
-        # Convert execution steps to API format
-        from api.schemas.eto_runs import EtoPipelineExecutionStep
-        steps_list = None
-        if detail.pipeline_execution.steps:
-            steps_list = [
-                EtoPipelineExecutionStep(
-                    id=step.id,
-                    step_number=step.step_number,
-                    module_instance_id=step.module_instance_id,
-                    inputs=step.inputs,
-                    outputs=step.outputs,
-                    error=step.error,
-                )
-                for step in detail.pipeline_execution.steps
-            ]
-
-        # Data is already parsed in EtoRunPipelineExecutionDetailView (Dict[str, Any])
-        stage_pipeline_execution = EtoStagePipelineExecution(
-            status=detail.pipeline_execution.status,
-            executed_actions=detail.pipeline_execution.executed_actions,  # Already parsed dict
-            started_at=detail.pipeline_execution.started_at.isoformat() if detail.pipeline_execution.started_at else None,
-            completed_at=detail.pipeline_execution.completed_at.isoformat() if detail.pipeline_execution.completed_at else None,
-            pipeline_definition_id=detail.pipeline_execution.pipeline_definition_id,
-            steps=steps_list,
-        )
+    # Convert all sub-runs to API format
+    sub_runs = [eto_sub_run_detail_to_api(sub_run) for sub_run in detail.sub_runs]
 
     # Build the main EtoRunDetail
     return EtoRunDetail(
-        # Core run data (all fields are at root level in EtoRunDetailView)
         id=detail.id,
         status=detail.status,
         processing_step=detail.processing_step,
@@ -237,11 +292,7 @@ def eto_run_detail_to_api(detail: EtoRunDetailView) -> EtoRunDetail:
         error_type=detail.error_type,
         error_message=detail.error_message,
         error_details=detail.error_details,
-        # PDF and source
         pdf=pdf,
         source=source,
-        # Stage data
-        stage_template_matching=stage_template_matching,
-        stage_data_extraction=stage_data_extraction,
-        stage_pipeline_execution=stage_pipeline_execution,
+        sub_runs=sub_runs,
     )

@@ -179,21 +179,20 @@ async def get_eto_run(
     service = Depends(lambda: ServiceContainer.get_eto_runs_service())
 ) -> EtoRunDetail:
     """
-    Get full ETO run details including all stage information.
+    Get full ETO run details including all sub-run information.
 
     Returns:
     - Core run data (status, timestamps, errors)
     - PDF file info and source (manual or email)
-    - Stage 1: Template matching (status, matched template)
-    - Stage 2: Data extraction (status, extracted data as JSON)
-    - Stage 3: Pipeline execution (status, executed actions as JSON)
+    - List of sub-runs, each with:
+      - Template info (if matched)
+      - Extraction stage data (status, extracted fields)
+      - Pipeline execution stage data (status, executed actions, steps)
 
-    Different data shown based on run status:
-    - success: All stages with full data
-    - failure: Partial stages, error details, which stage failed
-    - needs_template: Template matching results only
-    - processing: Stages up to current processing_step
-    - not_started: No stage data yet
+    Sub-runs represent page sets matched to templates:
+    - Matched sub-runs: Pages that matched a template, processed through extraction and pipeline
+    - Unmatched groups: Pages that didn't match any template (needs_template status)
+    - Skipped sub-runs: Pages manually skipped by user
     """
     logger.info(f"Get ETO run detail: id={id}")
 
@@ -253,10 +252,12 @@ async def reprocess_eto_runs(
 
     Flow (for each run):
     1. Verify run status is "failure", "skipped", or "needs_template"
-    2. Delete all stage records (template_matching, extraction, pipeline_execution + steps)
-    3. Reset status to "not_started"
-    4. Clear error fields
-    5. Worker picks up and reprocesses from beginning
+    2. Get all sub-runs for the parent run
+    3. Delete sub-run stage records (extraction, pipeline_execution)
+    4. Reset each sub-run to "not_started" status
+    5. Reset parent run to "processing" status
+    6. Clear error fields
+    7. Worker picks up sub-runs and reprocesses
 
     Response: 204 No Content
 
@@ -316,9 +317,14 @@ async def delete_eto_runs(
 
     Flow (for each run):
     1. Verify run status is "skipped"
-    2. Cascade delete all stage records
-    3. Delete run record
-    4. Note: PDF file is NOT deleted (may be referenced elsewhere)
+    2. Delete run record (cascade deletes all sub-runs and their stage records)
+    3. Note: PDF file is NOT deleted (may be referenced elsewhere)
+
+    Database cascade chain:
+    - eto_runs → eto_sub_runs
+    - eto_sub_runs → eto_sub_run_extractions
+    - eto_sub_runs → eto_sub_run_pipeline_executions
+    - eto_sub_run_pipeline_executions → eto_sub_run_pipeline_execution_steps
 
     Restrictions:
     - Can only delete runs with status="skipped"
