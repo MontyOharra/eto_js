@@ -125,7 +125,7 @@ export function EtoRunRow({ data, onClick, onSkip, onReprocess, onDelete, onView
   const sourceDisplay = getSourceDisplay(data.source);
   const sourceSubject = getSourceSubject(data.source);
   const sourceDate = formatDate(getSourceDate(data.source));
-  const lastUpdated = formatDate(data.updated_at);
+  const lastUpdated = formatDate(data.last_processed_at);
 
   return (
     <div

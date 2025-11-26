@@ -122,6 +122,7 @@ class EtoRunListView:
     # Timestamps
     created_at: datetime
     updated_at: datetime
+    last_processed_at: Optional[datetime]  # Max of sub-run completed_at/updated_at timestamps
 
 
 # =========================

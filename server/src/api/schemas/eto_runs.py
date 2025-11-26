@@ -222,6 +222,7 @@ class EtoRunListItem(BaseModel):
     started_at: Optional[str] = None  # ISO 8601
     completed_at: Optional[str] = None  # ISO 8601
     updated_at: Optional[str] = None  # ISO 8601
+    last_processed_at: Optional[str] = None  # ISO 8601 - Max sub-run timestamp
     error_type: Optional[str] = None
     error_message: Optional[str] = None
 

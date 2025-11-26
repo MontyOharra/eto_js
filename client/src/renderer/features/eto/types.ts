@@ -92,6 +92,7 @@ export interface EtoRunListItem {
   started_at: string | null; // ISO 8601
   completed_at: string | null; // ISO 8601
   updated_at: string | null; // ISO 8601
+  last_processed_at: string | null; // ISO 8601 - Max sub-run timestamp
   error_type: string | null;
   error_message: string | null;
 

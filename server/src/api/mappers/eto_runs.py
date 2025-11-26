@@ -107,6 +107,7 @@ def eto_run_list_view_to_api(run: EtoRunListView) -> EtoRunListItem:
         started_at=run.started_at.isoformat() if run.started_at else None,
         completed_at=run.completed_at.isoformat() if run.completed_at else None,
         updated_at=run.updated_at.isoformat() if run.updated_at else None,
+        last_processed_at=run.last_processed_at.isoformat() if run.last_processed_at else None,
         error_type=run.error_type,
         error_message=run.error_message,
         pdf=pdf,

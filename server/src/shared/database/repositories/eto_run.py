@@ -357,6 +357,8 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                 pages_unmatched = []
                 pages_skipped = []
 
+                # Compute last_processed_at as max of sub-run timestamps
+                last_processed_at = None
                 for sr in sub_runs:
                     # Parse matched_pages JSON string
                     try:
@@ -370,6 +372,12 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                             pages_matched.extend(pages)
                     except (json.JSONDecodeError, TypeError) as e:
                         logger.warning(f"Failed to parse matched_pages for sub-run {sr.id}: {e}")
+
+                    # Track max timestamp (prefer completed_at, fall back to updated_at)
+                    sr_timestamp = sr.completed_at or sr.updated_at
+                    if sr_timestamp:
+                        if last_processed_at is None or sr_timestamp > last_processed_at:
+                            last_processed_at = sr_timestamp
 
                 result.append(EtoRunListView(
                     # Core ETO run fields
@@ -404,6 +412,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                     # Timestamps
                     created_at=row.created_at,
                     updated_at=row.updated_at,
+                    last_processed_at=last_processed_at,
                 ))
 
             return result
