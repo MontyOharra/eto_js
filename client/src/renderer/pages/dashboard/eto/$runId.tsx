@@ -19,7 +19,7 @@ import {
   EtoRunDetail,
 } from '../../../features/eto';
 import { TemplateBuilder, TemplateBuilderData } from '../../../features/templates/components/TemplateBuilder';
-import { useCreateTemplate, CreateTemplateRequest } from '../../../features/templates';
+import { useCreateTemplate, useActivateTemplate, CreateTemplateRequest } from '../../../features/templates';
 import { createSubsetPdf, useUploadPdf, getPdfDownloadUrl, PdfViewerModal } from '../../../features/pdf';
 
 export const Route = createFileRoute('/dashboard/eto/$runId')({
@@ -98,6 +98,7 @@ function EtoRunDetailPage() {
   // Template builder mutations
   const { mutateAsync: uploadPdf } = useUploadPdf();
   const createTemplate = useCreateTemplate();
+  const activateTemplate = useActivateTemplate();
 
   // Update run mutation (for marking as read)
   const updateRun = useUpdateEtoRun();
@@ -234,7 +235,10 @@ function EtoRunDetailPage() {
         visual_state: templateData.visual_state,
       };
 
-      await createTemplate.mutateAsync(createRequest);
+      const createdTemplate = await createTemplate.mutateAsync(createRequest);
+
+      // Immediately activate the template so it's used for matching
+      await activateTemplate.mutateAsync(createdTemplate.id);
 
       // Close modal on success
       handleCloseBuilder();
