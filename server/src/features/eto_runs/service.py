@@ -35,7 +35,9 @@ from shared.types.eto_sub_runs import (
     EtoSubRun,
     EtoSubRunCreate,
     EtoSubRunUpdate,
+    EtoSubRunDetailView,
 )
+from shared.types.eto_runs import EtoRunExtractionDetailView, EtoRunPipelineExecutionDetailView
 from shared.types.eto_sub_run_extractions import (
     EtoSubRunExtraction,
     EtoSubRunExtractionCreate,
@@ -360,6 +362,30 @@ class EtoRunsService:
         logger.debug(f"Retrieved ETO run {run_id}: status={run.status}, processing_step={run.processing_step}")
         return run
 
+    def update_run(self, run_id: int, updates: EtoRunUpdate) -> EtoRun:
+        """
+        Update an ETO run.
+
+        Currently supports updating:
+        - is_read: Mark run as read/unread
+
+        Args:
+            run_id: ETO run ID
+            updates: Dict of fields to update
+
+        Returns:
+            Updated EtoRun dataclass
+
+        Raises:
+            ObjectNotFoundError: If run not found
+        """
+        logger.debug(f"Updating ETO run {run_id}: {updates}")
+
+        run = self.eto_run_repo.update(run_id, updates)
+
+        logger.info(f"Updated ETO run {run_id}")
+        return run
+
     def get_run_detail(self, run_id: int) -> EtoRunDetailView:
         """
         Get complete ETO run detail with all stage data.
@@ -390,6 +416,153 @@ class EtoRunsService:
             f"sub_runs={len(detail.sub_runs)}"
         )
         return detail
+
+    def get_sub_run_detail(self, sub_run_id: int) -> EtoSubRunDetailView:
+        """
+        Get complete sub-run detail with all stage data.
+
+        Fetches sub-run with template, PDF (via parent run), extraction stage,
+        and pipeline execution stage data.
+
+        Args:
+            sub_run_id: ETO sub-run ID
+
+        Returns:
+            EtoSubRunDetailView dataclass with all stage data
+
+        Raises:
+            ObjectNotFoundError: If sub-run not found
+        """
+        logger.debug(f"Getting sub-run detail for sub-run {sub_run_id}")
+
+        # Get sub-run
+        sub_run = self.sub_run_repo.get_by_id(sub_run_id)
+        if not sub_run:
+            raise ObjectNotFoundError(f"Sub-run {sub_run_id} not found")
+
+        # Get parent run to get PDF info
+        run = self.eto_run_repo.get_by_id(sub_run.eto_run_id)
+        if not run:
+            raise ObjectNotFoundError(f"Parent run {sub_run.eto_run_id} not found")
+
+        # Get PDF file info
+        pdf_file = self.pdf_files_service.get_pdf_file(run.pdf_file_id)
+
+        # Get template info if available
+        template_id = None
+        template_name = None
+        template_version_num = None
+        template_version = None
+        if sub_run.template_version_id:
+            # Get template version and template info from pdf_template_service
+            try:
+                template_version = self.pdf_template_service.get_version_by_id(sub_run.template_version_id)
+                template = self.pdf_template_service.get_template(template_version.template_id)
+                template_id = template.id
+                template_name = template.name
+                template_version_num = template_version.version_number
+            except Exception as e:
+                logger.warning(f"Failed to get template info for sub-run {sub_run_id}: {e}")
+
+        # Parse matched pages from JSON string
+        matched_pages = []
+        try:
+            matched_pages = json.loads(sub_run.matched_pages)
+        except (json.JSONDecodeError, TypeError) as e:
+            logger.warning(f"Failed to parse matched_pages for sub-run {sub_run_id}: {e}")
+
+        # Get extraction stage data (if exists)
+        extraction_detail: Optional[EtoRunExtractionDetailView] = None
+        extraction = self.sub_run_extraction_repo.get_by_sub_run_id(sub_run_id)
+        if extraction:
+            extraction_detail = EtoRunExtractionDetailView(
+                status=extraction.status,
+                started_at=extraction.started_at,
+                completed_at=extraction.completed_at,
+                extracted_data=extraction.extracted_data,
+            )
+
+        # Get pipeline execution stage data (if exists)
+        pipeline_detail: Optional[EtoRunPipelineExecutionDetailView] = None
+        pipeline_exec = self.sub_run_pipeline_execution_repo.get_by_sub_run_id(sub_run_id)
+        if pipeline_exec:
+            # Parse executed_actions JSON
+            executed_actions = None
+            if pipeline_exec.executed_actions:
+                try:
+                    executed_actions = json.loads(pipeline_exec.executed_actions)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+            # Get pipeline definition ID from template version (already fetched above)
+            pipeline_def_id = template_version.pipeline_definition_id if template_version else None
+
+            # Fetch execution steps
+            steps_data = self.sub_run_pipeline_execution_step_repo.get_by_pipeline_execution_id(pipeline_exec.id)
+            steps = []
+            for step in steps_data:
+                # Parse JSON fields
+                inputs = None
+                outputs = None
+                error = None
+                if step.inputs:
+                    try:
+                        inputs = json.loads(step.inputs)
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                if step.outputs:
+                    try:
+                        outputs = json.loads(step.outputs)
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                if step.error:
+                    try:
+                        error = json.loads(step.error)
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+
+                steps.append({
+                    "id": step.id,
+                    "step_number": step.step_number,
+                    "module_instance_id": step.module_instance_id,
+                    "inputs": inputs,
+                    "outputs": outputs,
+                    "error": error,
+                })
+
+            pipeline_detail = EtoRunPipelineExecutionDetailView(
+                status=pipeline_exec.status,
+                started_at=pipeline_exec.started_at,
+                completed_at=pipeline_exec.completed_at,
+                executed_actions=executed_actions,
+                pipeline_definition_id=pipeline_def_id,
+                steps=steps,
+            )
+
+        # Build and return detail view
+        return EtoSubRunDetailView(
+            id=sub_run.id,
+            eto_run_id=sub_run.eto_run_id,
+            matched_pages=matched_pages,
+            status=sub_run.status,
+            template_id=template_id,
+            template_name=template_name,
+            template_version_id=sub_run.template_version_id,
+            template_version_num=template_version_num,
+            pdf_file_id=pdf_file.id,
+            pdf_original_filename=pdf_file.original_filename,
+            pdf_file_size=pdf_file.file_size_bytes,
+            pdf_page_count=pdf_file.page_count,
+            extraction=extraction_detail,
+            pipeline_execution=pipeline_detail,
+            error_type=sub_run.error_type,
+            error_message=sub_run.error_message,
+            error_details=sub_run.error_details,
+            started_at=sub_run.started_at,
+            completed_at=sub_run.completed_at,
+            created_at=sub_run.created_at,
+            updated_at=sub_run.updated_at,
+        )
 
     # ==================== Worker Processing Methods ====================
 
@@ -714,28 +887,20 @@ class EtoRunsService:
                 f"for template version {sub_run.template_version_id}"
             )
         logger.debug(
-            f"Sub-run {sub_run_id}: Retrieved pipeline definition {pipeline_definition.id} "
-            f"with compiled plan {pipeline_definition.compiled_plan_id}"
+            f"Sub-run {sub_run_id}: Retrieved pipeline definition {pipeline_definition.id}"
         )
 
         # Step 5: Get compiled steps
-        if not pipeline_definition.compiled_plan_id:
-            raise ServiceError(
-                f"Pipeline definition {pipeline_definition.id} is not compiled. "
-                f"Cannot execute uncompiled pipeline."
-            )
-
-        compiled_steps = self.pipeline_execution_service.step_repo.get_steps_by_plan_id(
-            pipeline_definition.compiled_plan_id
+        compiled_steps = self.pipeline_execution_service.step_repo.get_steps_by_definition_id(
+            pipeline_definition.id
         )
         if not compiled_steps:
             raise ServiceError(
-                f"No compiled steps found for pipeline {pipeline_definition.id} "
-                f"(plan {pipeline_definition.compiled_plan_id})"
+                f"No compiled steps found for pipeline {pipeline_definition.id}"
             )
         logger.debug(
             f"Sub-run {sub_run_id}: Retrieved {len(compiled_steps)} compiled steps "
-            f"from plan {pipeline_definition.compiled_plan_id}"
+            f"for pipeline {pipeline_definition.id}"
         )
 
         # Step 6: Convert extracted_data list to dict format for pipeline execution
@@ -847,10 +1012,21 @@ class EtoRunsService:
         """
         logger.info(f"Sub-run {sub_run_id}: Marking as success")
 
+        completed_at = datetime.now(timezone.utc)
         self.sub_run_repo.update(sub_run_id, {
             "status": "success",
-            "completed_at": datetime.now(timezone.utc)
+            "completed_at": completed_at
         })
+
+        # Get parent run ID for broadcast
+        sub_run = self.sub_run_repo.get_by_id(sub_run_id)
+        if sub_run:
+            eto_event_manager.broadcast_sync("sub_run_updated", {
+                "id": sub_run_id,
+                "eto_run_id": sub_run.eto_run_id,
+                "status": "success",
+                "completed_at": completed_at.isoformat(),
+            })
 
     def _mark_sub_run_failure(
         self,
@@ -885,6 +1061,18 @@ class EtoRunsService:
             "completed_at": completed_at
         })
 
+        # Get parent run ID for broadcast
+        sub_run = self.sub_run_repo.get_by_id(sub_run_id)
+        if sub_run:
+            eto_event_manager.broadcast_sync("sub_run_updated", {
+                "id": sub_run_id,
+                "eto_run_id": sub_run.eto_run_id,
+                "status": "failure",
+                "error_type": error_type,
+                "error_message": error_message,
+                "completed_at": completed_at.isoformat(),
+            })
+
     def _update_parent_run_status(self, run_id: int) -> None:
         """
         Update parent run status based on all sub-run statuses.
@@ -904,6 +1092,13 @@ class EtoRunsService:
         """
         logger.debug(f"Run {run_id}: Updating parent status based on sub-runs")
 
+        # Get current run status for comparison
+        current_run = self.eto_run_repo.get_by_id(run_id)
+        if not current_run:
+            logger.warning(f"Run {run_id}: Run not found")
+            return
+        old_status = current_run.status
+
         # Get all sub-runs for parent
         sub_runs = self.sub_run_repo.get_by_eto_run_id(run_id)
 
@@ -920,18 +1115,36 @@ class EtoRunsService:
         active_statuses = {"not_started", "matched", "processing"}
         has_active = any(sub.status in active_statuses for sub in sub_runs)
 
+        # Determine new status
         if has_active:
-            # Keep parent in "processing" status
-            self.eto_run_repo.update(run_id, {"status": "processing"})
-            logger.debug(f"Run {run_id}: Status remains 'processing' (has active sub-runs)")
+            new_status = "processing"
+            completed_at = None
         else:
-            # All sub-runs completed - mark parent as success
-            # (individual sub-run failures are tracked at sub-run level)
-            self.eto_run_repo.update(run_id, {
-                "status": "success",
-                "completed_at": datetime.now(timezone.utc)
-            })
-            logger.info(f"Run {run_id}: All sub-runs completed - marked as success")
+            new_status = "success"
+            completed_at = datetime.now(timezone.utc)
+
+        # Only update and broadcast if status changed
+        if new_status != old_status:
+            update_data = {"status": new_status}
+            if completed_at:
+                update_data["completed_at"] = completed_at
+
+            self.eto_run_repo.update(run_id, update_data)
+
+            # Broadcast run status change
+            event_data = {
+                "id": run_id,
+                "status": new_status,
+            }
+            if completed_at:
+                event_data["completed_at"] = completed_at.isoformat()
+
+            eto_event_manager.broadcast_sync("run_updated", event_data)
+
+            if new_status == "success":
+                logger.info(f"Run {run_id}: All sub-runs completed - marked as success")
+            else:
+                logger.debug(f"Run {run_id}: Status changed to '{new_status}'")
 
     def _reset_sub_run_to_not_started(self, sub_run_id: int) -> None:
         """
@@ -1161,6 +1374,198 @@ class EtoRunsService:
             logger.monitor(f"Run {run_id}: Permanently deleted")
 
         logger.info(f"Successfully deleted {len(run_ids)} ETO runs")
+
+    # ==================== Run-Level Aggregated Operations ====================
+
+    def reprocess_run(self, run_id: int) -> Optional[int]:
+        """
+        Reprocess all failed/needs_template sub-runs for a run by aggregating them into one new sub-run.
+
+        Workflow:
+        1. Get all sub-runs with status 'failure' or 'needs_template'
+        2. Collect all their pages into a single list
+        3. Delete those sub-runs (with their child extraction/pipeline records)
+        4. Create one new sub-run with all pages, status=not_started, no template
+        5. Update parent run status to 'processing'
+
+        The worker will pick up the new sub-run and run template matching (Phase 1).
+
+        Args:
+            run_id: ID of the ETO run to reprocess
+
+        Returns:
+            ID of the newly created sub-run, or None if no eligible sub-runs found
+
+        Raises:
+            ObjectNotFoundError: If run not found
+        """
+        logger.info(f"Reprocessing run {run_id} (aggregating failed/needs_template sub-runs)")
+
+        # Validate run exists
+        run = self.eto_run_repo.get_by_id(run_id)
+        if not run:
+            raise ObjectNotFoundError(f"ETO run {run_id} not found")
+
+        # Get all sub-runs for this run
+        all_sub_runs = self.sub_run_repo.get_by_eto_run_id(run_id)
+
+        # Filter to only failure or needs_template sub-runs
+        eligible_sub_runs = [
+            sr for sr in all_sub_runs
+            if sr.status in ("failure", "needs_template")
+        ]
+
+        if not eligible_sub_runs:
+            logger.info(f"Run {run_id}: No eligible sub-runs to reprocess")
+            return None
+
+        # Collect all pages from eligible sub-runs
+        all_pages: List[int] = []
+        for sub_run in eligible_sub_runs:
+            pages = json.loads(sub_run.matched_pages)
+            all_pages.extend(pages)
+
+        # Sort and dedupe pages
+        all_pages = sorted(set(all_pages))
+        logger.debug(f"Run {run_id}: Collected {len(all_pages)} pages from {len(eligible_sub_runs)} sub-runs")
+
+        # Use Unit of Work for atomic transaction
+        with self.connection_manager.unit_of_work() as uow:
+            # Delete all eligible sub-runs and their child records
+            for sub_run in eligible_sub_runs:
+                # Delete extraction record if exists
+                extraction = uow.eto_sub_run_extractions.get_by_sub_run_id(sub_run.id)
+                if extraction:
+                    uow.eto_sub_run_extractions.delete(extraction.id)
+
+                # Delete pipeline execution record if exists (cascade deletes steps)
+                pipeline_execution = uow.eto_sub_run_pipeline_executions.get_by_sub_run_id(sub_run.id)
+                if pipeline_execution:
+                    uow.eto_sub_run_pipeline_executions.delete(pipeline_execution.id)
+
+                # Delete the sub-run
+                uow.eto_sub_runs.delete(sub_run.id)
+                logger.debug(f"Deleted sub-run {sub_run.id}")
+
+            # Create new sub-run with all collected pages, no template
+            new_sub_run = uow.eto_sub_runs.create(EtoSubRunCreate(
+                eto_run_id=run_id,
+                matched_pages=json.dumps(all_pages),
+                template_version_id=None,  # No template - Worker Phase 1 will match
+            ))
+            logger.debug(f"Created new sub-run {new_sub_run.id} with {len(all_pages)} pages")
+
+        # Update parent run status
+        self._update_parent_run_status(run_id)
+
+        # Broadcast event
+        eto_event_manager.broadcast_sync("run_reprocessed", {
+            "run_id": run_id,
+            "new_sub_run_id": new_sub_run.id,
+            "pages_count": len(all_pages),
+            "deleted_sub_run_count": len(eligible_sub_runs),
+        })
+
+        logger.monitor(
+            f"Run {run_id}: Reprocessed {len(eligible_sub_runs)} sub-runs into new sub-run {new_sub_run.id} "
+            f"with {len(all_pages)} pages"
+        )
+        return new_sub_run.id
+
+    def skip_run(self, run_id: int) -> Optional[int]:
+        """
+        Skip all failed/needs_template sub-runs for a run by aggregating them into one skipped sub-run.
+
+        Workflow:
+        1. Get all sub-runs with status 'failure' or 'needs_template'
+        2. Collect all their pages into a single list
+        3. Delete those sub-runs (with their child extraction/pipeline records)
+        4. Create one new sub-run with all pages, status='skipped'
+        5. Update parent run status
+
+        Args:
+            run_id: ID of the ETO run to skip
+
+        Returns:
+            ID of the newly created skipped sub-run, or None if no eligible sub-runs found
+
+        Raises:
+            ObjectNotFoundError: If run not found
+        """
+        logger.info(f"Skipping run {run_id} (aggregating failed/needs_template sub-runs)")
+
+        # Validate run exists
+        run = self.eto_run_repo.get_by_id(run_id)
+        if not run:
+            raise ObjectNotFoundError(f"ETO run {run_id} not found")
+
+        # Get all sub-runs for this run
+        all_sub_runs = self.sub_run_repo.get_by_eto_run_id(run_id)
+
+        # Filter to only failure or needs_template sub-runs
+        eligible_sub_runs = [
+            sr for sr in all_sub_runs
+            if sr.status in ("failure", "needs_template")
+        ]
+
+        if not eligible_sub_runs:
+            logger.info(f"Run {run_id}: No eligible sub-runs to skip")
+            return None
+
+        # Collect all pages from eligible sub-runs
+        all_pages: List[int] = []
+        for sub_run in eligible_sub_runs:
+            pages = json.loads(sub_run.matched_pages)
+            all_pages.extend(pages)
+
+        # Sort and dedupe pages
+        all_pages = sorted(set(all_pages))
+        logger.debug(f"Run {run_id}: Collected {len(all_pages)} pages from {len(eligible_sub_runs)} sub-runs")
+
+        # Use Unit of Work for atomic transaction
+        with self.connection_manager.unit_of_work() as uow:
+            # Delete all eligible sub-runs and their child records
+            for sub_run in eligible_sub_runs:
+                # Delete extraction record if exists
+                extraction = uow.eto_sub_run_extractions.get_by_sub_run_id(sub_run.id)
+                if extraction:
+                    uow.eto_sub_run_extractions.delete(extraction.id)
+
+                # Delete pipeline execution record if exists (cascade deletes steps)
+                pipeline_execution = uow.eto_sub_run_pipeline_executions.get_by_sub_run_id(sub_run.id)
+                if pipeline_execution:
+                    uow.eto_sub_run_pipeline_executions.delete(pipeline_execution.id)
+
+                # Delete the sub-run
+                uow.eto_sub_runs.delete(sub_run.id)
+                logger.debug(f"Deleted sub-run {sub_run.id}")
+
+            # Create new sub-run with all collected pages, status=skipped
+            new_sub_run = uow.eto_sub_runs.create(EtoSubRunCreate(
+                eto_run_id=run_id,
+                matched_pages=json.dumps(all_pages),
+                template_version_id=None,
+            ))
+            # Update status to skipped
+            uow.eto_sub_runs.update(new_sub_run.id, {"status": "skipped"})
+            logger.debug(f"Created new skipped sub-run {new_sub_run.id} with {len(all_pages)} pages")
+
+        # Update parent run status
+        self._update_parent_run_status(run_id)
+
+        # Broadcast event
+        eto_event_manager.broadcast_sync("run_skipped", {
+            "run_id": run_id,
+            "new_sub_run_id": new_sub_run.id,
+            "pages_count": len(all_pages),
+            "deleted_sub_run_count": len(eligible_sub_runs),
+        })
+
+        logger.monitor(
+            f"Run {run_id}: Skipped {len(eligible_sub_runs)} sub-runs into new sub-run {new_sub_run.id} "
+            f"with {len(all_pages)} pages"
+        )
+        return new_sub_run.id
 
     # ==================== Sub-Run Level Operations ====================
 

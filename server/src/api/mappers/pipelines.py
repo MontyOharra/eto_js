@@ -93,8 +93,7 @@ def convert_visual_state(visual_state: VisualStateDomain) -> VisualState:
 def convert_pipeline_summary(summary: PipelineDefinitionSummary) -> PipelineSummary:
     """Convert domain PipelineDefinitionSummary to API PipelineSummary"""
     return PipelineSummary(
-        id=summary.id,
-        compiled_plan_id=summary.compiled_plan_id
+        id=summary.id
     )
 
 
@@ -107,7 +106,6 @@ def convert_pipeline_detail(pipeline: PipelineDefinition) -> PipelineDetail:
     """Convert domain PipelineDefinition to API PipelineDetail"""
     return PipelineDetail(
         id=pipeline.id,
-        compiled_plan_id=pipeline.compiled_plan_id,
         pipeline_state=convert_pipeline_state(pipeline.pipeline_state),
         visual_state=convert_visual_state(pipeline.visual_state)
     )

@@ -683,24 +683,16 @@ class PipelineExecutionService:
         if pipeline is None:
             raise ValueError(f"Pipeline definition {pipeline_definition_id} not found")
 
-        if pipeline.compiled_plan_id is None:
-            raise RuntimeError(
-                f"Pipeline definition {pipeline_definition_id} is not compiled. "
-                "Cannot execute uncompiled pipeline."
-            )
-
-        logger.debug(
-            f"Loaded pipeline {pipeline_definition_id} with compiled plan {pipeline.compiled_plan_id}"
-        )
+        logger.debug(f"Loaded pipeline {pipeline_definition_id}")
 
         return pipeline
 
-    def _require_compiled_steps(self, compiled_plan_id: int) -> List[PipelineDefinitionStep]:
+    def _require_compiled_steps(self, pipeline_definition_id: int) -> List[PipelineDefinitionStep]:
         """
         Load compiled steps ordered by step_number.
 
         Args:
-            compiled_plan_id: Compiled plan ID
+            pipeline_definition_id: Pipeline definition ID
 
         Returns:
             List of steps in execution order
@@ -708,12 +700,12 @@ class PipelineExecutionService:
         Raises:
             ValueError: If no steps found
         """
-        steps = self.step_repo.get_steps_by_plan_id(compiled_plan_id)
+        steps = self.step_repo.get_steps_by_definition_id(pipeline_definition_id)
 
         if not steps:
-            raise ValueError(f"No compiled steps found for plan {compiled_plan_id}")
+            raise ValueError(f"No compiled steps found for pipeline {pipeline_definition_id}")
 
-        logger.debug(f"Loaded {len(steps)} compiled steps for plan {compiled_plan_id}")
+        logger.debug(f"Loaded {len(steps)} compiled steps for pipeline {pipeline_definition_id}")
 
         return steps
 

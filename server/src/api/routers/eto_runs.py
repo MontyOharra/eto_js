@@ -14,13 +14,17 @@ from api.schemas.eto_runs import (
     BulkRunIdsRequest,
     CreateEtoRunRequest,
     CreateEtoRunResponse,
+    UpdateEtoRunRequest,
     EtoRunDetail,
     SubRunOperationResponse,
+    RunOperationResponse,
+    EtoSubRunFullDetail,
 )
 from api.mappers.eto_runs import (
     eto_run_list_to_api,
     eto_run_to_create_response,
     eto_run_detail_to_api,
+    eto_sub_run_full_detail_to_api,
 )
 
 from shared.services.service_container import ServiceContainer
@@ -204,6 +208,39 @@ async def get_eto_run(
     return eto_run_detail_to_api(detail_view)
 
 
+@router.patch("/{id}", status_code=status.HTTP_204_NO_CONTENT)
+async def update_eto_run(
+    id: int,
+    request: UpdateEtoRunRequest,
+    service = Depends(lambda: ServiceContainer.get_eto_runs_service())
+) -> None:
+    """
+    Update an ETO run.
+
+    Currently supports:
+    - is_read: Mark run as read (True) or unread (False)
+
+    Request body example:
+    { "is_read": true }
+
+    Response: 204 No Content
+
+    Errors:
+    - 404: Run not found
+    """
+    logger.info(f"Updating ETO run {id}: {request.model_dump(exclude_none=True)}")
+
+    # Build updates dict from request, excluding None values
+    updates = {}
+    if request.is_read is not None:
+        updates["is_read"] = request.is_read
+
+    if updates:
+        service.update_run(id, updates)
+
+    return None
+
+
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=CreateEtoRunResponse)
 async def create_eto_run(
     request: CreateEtoRunRequest,
@@ -346,6 +383,33 @@ async def delete_eto_runs(
 # Sub-Run Level Operations
 # =============================================================================
 
+@router.get("/sub-runs/{sub_run_id}", response_model=EtoSubRunFullDetail)
+async def get_sub_run_detail(
+    sub_run_id: int,
+    service: EtoRunsService = Depends(lambda: ServiceContainer.get_eto_runs_service())
+) -> EtoSubRunFullDetail:
+    """
+    Get full sub-run details including extraction and pipeline execution data.
+
+    Returns:
+    - Core sub-run data (status, matched_pages, template info)
+    - PDF file info (from parent run)
+    - Extraction stage data (status, extracted fields with bounding boxes)
+    - Pipeline execution stage data (status, executed actions)
+    - Error information (if failed)
+
+    Used by the sub-run detail modal to display extracted fields overlaid on
+    the PDF viewer and show pipeline execution results.
+    """
+    logger.info(f"Get sub-run detail: sub_run_id={sub_run_id}")
+
+    # Get detailed view from service
+    detail_view = service.get_sub_run_detail(sub_run_id)
+
+    # Convert to API schema
+    return eto_sub_run_full_detail_to_api(detail_view)
+
+
 @router.post("/sub-runs/{sub_run_id}/reprocess", response_model=SubRunOperationResponse)
 async def reprocess_sub_run(
     sub_run_id: int,
@@ -430,4 +494,97 @@ async def skip_sub_run(
     return SubRunOperationResponse(
         new_sub_run_id=new_sub_run_id,
         eto_run_id=eto_run_id
+    )
+
+
+# =============================================================================
+# Run-Level Aggregated Operations
+# =============================================================================
+
+@router.post("/{run_id}/reprocess", response_model=RunOperationResponse)
+async def reprocess_run(
+    run_id: int,
+    service: EtoRunsService = Depends(lambda: ServiceContainer.get_eto_runs_service())
+) -> RunOperationResponse:
+    """
+    Reprocess all failed/needs_template sub-runs for a run.
+
+    Aggregates all sub-runs with status 'failure' or 'needs_template' into a single
+    new sub-run with status 'not_started'. The worker will pick this up and run
+    template matching (Phase 1).
+
+    Flow:
+    1. Get all sub-runs with status 'failure' or 'needs_template'
+    2. Collect all their pages
+    3. Delete those sub-runs (with child extraction/pipeline records)
+    4. Create one new sub-run with all pages, status='not_started', no template
+    5. Update parent run status
+
+    Returns:
+    - run_id: The ETO run ID
+    - new_sub_run_id: ID of the newly created sub-run (None if no eligible sub-runs)
+    - message: Description of what was done
+
+    Errors:
+    - 404: Run not found
+    """
+    logger.info(f"Reprocessing run {run_id}")
+
+    new_sub_run_id = service.reprocess_run(run_id)
+
+    if new_sub_run_id is None:
+        return RunOperationResponse(
+            run_id=run_id,
+            new_sub_run_id=None,
+            message="No eligible sub-runs to reprocess (no failure or needs_template sub-runs found)"
+        )
+
+    return RunOperationResponse(
+        run_id=run_id,
+        new_sub_run_id=new_sub_run_id,
+        message="Successfully aggregated failed/needs_template sub-runs into new sub-run for reprocessing"
+    )
+
+
+@router.post("/{run_id}/skip", response_model=RunOperationResponse)
+async def skip_run(
+    run_id: int,
+    service: EtoRunsService = Depends(lambda: ServiceContainer.get_eto_runs_service())
+) -> RunOperationResponse:
+    """
+    Skip all failed/needs_template sub-runs for a run.
+
+    Aggregates all sub-runs with status 'failure' or 'needs_template' into a single
+    new sub-run with status 'skipped'.
+
+    Flow:
+    1. Get all sub-runs with status 'failure' or 'needs_template'
+    2. Collect all their pages
+    3. Delete those sub-runs (with child extraction/pipeline records)
+    4. Create one new sub-run with all pages, status='skipped'
+    5. Update parent run status
+
+    Returns:
+    - run_id: The ETO run ID
+    - new_sub_run_id: ID of the newly created skipped sub-run (None if no eligible sub-runs)
+    - message: Description of what was done
+
+    Errors:
+    - 404: Run not found
+    """
+    logger.info(f"Skipping run {run_id}")
+
+    new_sub_run_id = service.skip_run(run_id)
+
+    if new_sub_run_id is None:
+        return RunOperationResponse(
+            run_id=run_id,
+            new_sub_run_id=None,
+            message="No eligible sub-runs to skip (no failure or needs_template sub-runs found)"
+        )
+
+    return RunOperationResponse(
+        run_id=run_id,
+        new_sub_run_id=new_sub_run_id,
+        message="Successfully aggregated failed/needs_template sub-runs into skipped sub-run"
     )

@@ -1,232 +1,107 @@
-import { createFileRoute } from '@tanstack/react-router';
-import { useMemo, useState, useCallback } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { useState } from 'react';
 import {
+  Table,
+  EtoRunRow,
+  EtoPageHeader,
   useEtoRuns,
-  useCreateEtoRun,
-  useReprocessRuns,
-  useSkipRuns,
+  useUploadAndCreateEtoRun,
+  useReprocessRun,
+  useSkipRun,
   useDeleteRuns,
+  useUpdateEtoRun,
   useEtoEvents,
-  EtoRunTable,
-  EtoRunDetailViewer,
-  type EtoRunListItem,
-  type EtoRunStatus,
+  EtoRunStatus,
 } from '../../../features/eto';
-import { TemplateBuilder, type TemplateBuilderData } from '../../../features/templates/components';
-import { useCreateTemplate, useActivateTemplate } from '../../../features/templates';
-import type { CreateTemplateRequest } from '../../../features/templates/api/types';
-import { usePdfMetadata, useUploadPdf } from '../../../features/pdf';
+import { PdfViewerModal } from '../../../features/pdf';
 
 export const Route = createFileRoute('/dashboard/eto/')({
   component: EtoPage,
 });
 
 function EtoPage() {
-  // TanStack Query client for cache invalidation
-  const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
-  // TanStack Query hooks
-  const { data: etoRunsData, isLoading, error } = useEtoRuns();
-  const createEtoRun = useCreateEtoRun();
-  const reprocessMutation = useReprocessRuns();
-  const skipMutation = useSkipRuns();
-  const deleteMutation = useDeleteRuns();
-  const createTemplate = useCreateTemplate();
-  const activateTemplate = useActivateTemplate();
-  const { mutateAsync: uploadPdf } = useUploadPdf();
-
-  // State for run detail modal
-  const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
-
-  // State for template builder modal
-  const [templateBuilderPdfId, setTemplateBuilderPdfId] = useState<number | null>(null);
-  const [templateBuilderRunId, setTemplateBuilderRunId] = useState<number | null>(null);
-
-  // Fetch PDF metadata for template builder
-  const { data: pdfMetadata } = usePdfMetadata(templateBuilderPdfId);
-
-  // SSE connection status
+  // SSE connection for real-time updates
   const [isLiveConnected, setIsLiveConnected] = useState(false);
-
-  // Derive grouped runs from query data
-  const runsByStatus = useMemo(() => {
-    const grouped: Record<EtoRunStatus, EtoRunListItem[]> = {
-      not_started: [],
-      processing: [],
-      success: [],
-      failure: [],
-      needs_template: [],
-      skipped: [],
-    };
-
-    if (etoRunsData?.items) {
-      etoRunsData.items.forEach((run) => {
-        grouped[run.status].push(run);
-      });
-    }
-
-    return grouped;
-  }, [etoRunsData]);
-
-  // ==========================================================================
-  // Real-time Event Handlers (SSE)
-  // ==========================================================================
-  // SSE events from background worker require manual query invalidation to trigger refetch.
-  // Unlike mutations (which auto-invalidate), SSE events come from external processing,
-  // so we must explicitly tell TanStack Query to refetch the updated data.
-
-  const handleRunCreated = useCallback((data: any) => {
-    console.log('[ETO] New run created via SSE:', data.id);
-    // Invalidate queries to trigger refetch with new run
-    queryClient.invalidateQueries({ queryKey: ['eto-runs'] });
-  }, [queryClient]);
-
-  const handleRunUpdated = useCallback((data: any) => {
-    console.log('[ETO] Run updated via SSE:', data);
-    // Invalidate queries to trigger refetch with updated status
-    queryClient.invalidateQueries({ queryKey: ['eto-runs'] });
-    if (data.id) {
-      queryClient.invalidateQueries({ queryKey: ['eto-run', data.id] });
-    }
-  }, [queryClient]);
-
-  const handleRunDeleted = useCallback((runId: number) => {
-    console.log('[ETO] Run deleted via SSE:', runId);
-    // Invalidate queries to trigger refetch without deleted run
-    queryClient.invalidateQueries({ queryKey: ['eto-runs'] });
-  }, [queryClient]);
-
-  // Connect to SSE stream for real-time updates
   useEtoEvents({
-    onRunCreated: handleRunCreated,
-    onRunUpdated: handleRunUpdated,
-    onRunDeleted: handleRunDeleted,
     onConnected: () => setIsLiveConnected(true),
     onDisconnected: () => setIsLiveConnected(false),
   });
 
-  // ==========================================================================
-  // Button Handlers
-  // ==========================================================================
+  // Filter state
+  const [searchScope, setSearchScope] = useState('filename');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | EtoRunStatus>('all');
+  const [readFilter, setReadFilter] = useState<'all' | 'read' | 'unread'>('all');
 
-  const handleView = (runId: number) => {
-    setSelectedRunId(runId);
+  // PDF Viewer modal state
+  const [viewingPdfId, setViewingPdfId] = useState<number | null>(null);
+  const [viewingPdfFilename, setViewingPdfFilename] = useState<string | undefined>(undefined);
+
+  // Build query params from filter state
+  const queryParams = {
+    status: statusFilter !== 'all' ? statusFilter : undefined,
+    is_read: readFilter === 'read' ? true : readFilter === 'unread' ? false : undefined,
+    sort_by: 'updated_at' as const,
+    sort_order: 'desc' as const,
+    limit: 50,
+    offset: 0,
   };
 
-  const handleSkip = async (runId: number) => {
-    try {
-      await skipMutation.mutateAsync({ run_ids: [runId] });
-      // TanStack Query auto-invalidates and refetches on success
-    } catch (err) {
-      console.error('Failed to skip run:', err);
+  // Fetch ETO runs from API
+  const { data, isLoading, isError, error } = useEtoRuns(queryParams);
+
+  // Mutation for uploading PDF and creating ETO run
+  const uploadAndCreateRun = useUploadAndCreateEtoRun();
+
+  // Run-level mutations
+  const reprocessRun = useReprocessRun();
+  const skipRun = useSkipRun();
+  const deleteRuns = useDeleteRuns();
+  const updateRun = useUpdateEtoRun();
+
+  // Row action handlers
+  const handleReprocess = (runId: number) => {
+    reprocessRun.mutate(runId);
+  };
+
+  const handleSkip = (runId: number) => {
+    skipRun.mutate(runId);
+  };
+
+  const handleDelete = (runId: number) => {
+    if (confirm('Are you sure you want to delete this run? This action cannot be undone.')) {
+      deleteRuns.mutate({ run_ids: [runId] });
     }
   };
 
-  const handleBuildTemplate = (runId: number) => {
-    // Find the run and get its PDF ID
-    const run = Object.values(runsByStatus)
-      .flat()
-      .find((r) => r.id === runId);
-
-    if (run) {
-      setTemplateBuilderPdfId(run.pdf.id);
-      setTemplateBuilderRunId(runId); // Track run ID for reprocessing after save
-    } else {
-      console.error('Run not found:', runId);
-    }
+  const handleViewPdf = (pdfId: number, filename?: string) => {
+    setViewingPdfId(pdfId);
+    setViewingPdfFilename(filename);
   };
 
-  const handleReprocess = async (runId: number) => {
-    try {
-      await reprocessMutation.mutateAsync({ run_ids: [runId] });
-      // TanStack Query auto-invalidates and refetches on success
-    } catch (err) {
-      console.error('Failed to reprocess run:', err);
-    }
+  const handleClosePdfViewer = () => {
+    setViewingPdfId(null);
+    setViewingPdfFilename(undefined);
   };
 
-  const handleDelete = async (runId: number) => {
-    try {
-      await deleteMutation.mutateAsync({ run_ids: [runId] });
-      // TanStack Query auto-invalidates and refetches on success
-    } catch (err) {
-      console.error('Failed to delete run:', err);
-    }
+  const handleToggleRead = (runId: number, isRead: boolean) => {
+    updateRun.mutate({ runId, updates: { is_read: isRead } });
   };
 
-  const handleSaveTemplate = async (templateData: TemplateBuilderData) => {
-    console.log('[ETO handleSaveTemplate] Called with:', {
-      pdf_file: templateData.pdf_file?.name,
-      templateBuilderPdfId,
-      templateBuilderRunId,
-    });
-
-    try {
-      let pdfId: number | undefined;
-
-      // Step 1: Upload subset PDF if provided, otherwise use existing PDF ID
-      if (templateData.pdf_file) {
-        console.log('[ETO handleSaveTemplate] Uploading subset PDF:', templateData.pdf_file.name, 'size:', templateData.pdf_file.size);
-        const uploadedPdf = await uploadPdf(templateData.pdf_file);
-        pdfId = uploadedPdf.id;
-        console.log('[ETO handleSaveTemplate] PDF uploaded successfully, ID:', pdfId);
-
-        if (!pdfId) {
-          throw new Error('PDF upload succeeded but returned no ID');
-        }
-      } else if (templateBuilderPdfId != null) {
-        // Fallback: use existing PDF from ETO run (shouldn't happen with new subset PDF flow)
-        pdfId = templateBuilderPdfId;
-        console.log('[ETO handleSaveTemplate] Using existing PDF ID from ETO run:', pdfId);
-      } else {
-        throw new Error('No PDF file or ID available - cannot create template without a PDF');
-      }
-
-      // Final validation
-      if (!pdfId) {
-        throw new Error('Internal error: PDF ID not set');
-      }
-
-      // Step 2: Create template with uploaded PDF ID
-      console.log('[ETO handleSaveTemplate] Creating template with PDF ID:', pdfId);
-      const createRequest: CreateTemplateRequest = {
-        name: templateData.name,
-        description: templateData.description || '',
-        source_pdf_id: pdfId,
-        signature_objects: templateData.signature_objects,
-        extraction_fields: templateData.extraction_fields,
-        pipeline_state: templateData.pipeline_state,
-        visual_state: templateData.visual_state,
-      };
-
-      const createdTemplate = await createTemplate.mutateAsync(createRequest);
-      console.log('[ETO handleSaveTemplate] Template created successfully:', createdTemplate.id);
-
-      // Step 3: Automatically activate the template
-      await activateTemplate.mutateAsync(createdTemplate.id);
-      console.log('[ETO handleSaveTemplate] Template activated successfully');
-
-      // Step 4: Reprocess the ETO run if it was built from a run
-      if (templateBuilderRunId) {
-        console.log('[ETO handleSaveTemplate] Reprocessing ETO run:', templateBuilderRunId);
-        await reprocessMutation.mutateAsync({ run_ids: [templateBuilderRunId] });
-        console.log('[ETO handleSaveTemplate] ETO run reprocessed successfully');
-      }
-
-      // Close modal
-      setTemplateBuilderPdfId(null);
-      setTemplateBuilderRunId(null);
-
-      // TanStack Query will auto-refetch when mutations complete
-    } catch (err) {
-      console.error('[ETO handleSaveTemplate] Failed to create/activate template:', err);
-      // Re-throw to let modal handle error display
-      throw err;
-    }
+  const handleRowClick = (runId: number) => {
+    navigate({ to: '/dashboard/eto/$runId', params: { runId: runId.toString() } });
   };
 
-  const handleManualUpload = () => {
+  const handleClearFilters = () => {
+    setSearchScope('filename');
+    setSearchQuery('');
+    setStatusFilter('all');
+    setReadFilter('all');
+  };
+
+  const handleUploadPdf = () => {
     // Create a hidden file input element
     const input = document.createElement('input');
     input.type = 'file';
@@ -245,8 +120,7 @@ function EtoPage() {
 
         try {
           // Upload PDF and create ETO run
-          await createEtoRun.mutateAsync(file);
-          // TanStack Query auto-invalidates and refetches on success
+          await uploadAndCreateRun.mutateAsync(file);
         } catch (err) {
           console.error('Failed to upload PDF:', err);
           alert('Failed to upload PDF. Please try again.');
@@ -258,163 +132,112 @@ function EtoPage() {
     input.click();
   };
 
-  // ==========================================================================
-  // Render
-  // ==========================================================================
-
-  if (error) {
+  // Loading state
+  if (isLoading) {
     return (
-      <div className="p-6">
-        <div className="bg-red-900 border border-red-700 rounded-lg p-4">
-          <h2 className="text-xl font-bold text-red-300 mb-2">Error</h2>
-          <p className="text-red-200">
-            {error instanceof Error ? error.message : 'Failed to load ETO runs'}
-          </p>
-          <button
-            onClick={() => window.location.reload()}
-            className="mt-4 px-4 py-2 bg-red-700 hover:bg-red-600 text-white rounded transition-colors"
-          >
-            Retry
-          </button>
-        </div>
+      <div className="h-full flex items-center justify-center">
+        <div className="text-gray-400">Loading ETO runs...</div>
       </div>
     );
   }
 
+  // Error state
+  if (isError) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-red-400">Error loading ETO runs: {error?.message || 'Unknown error'}</div>
+      </div>
+    );
+  }
+
+  const items = data?.items || [];
+
   return (
-    <div className="p-6">
-      {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-bold text-white">ETO Runs</h1>
-            {/* Real-time connection status */}
-            <div className="flex items-center gap-2 text-sm">
-              {isLiveConnected ? (
-                <>
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-green-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                  </span>
-                  <span className="text-green-400 font-medium">Live</span>
-                </>
-              ) : (
-                <>
-                  <span className="inline-flex h-2 w-2 rounded-full bg-yellow-500"></span>
-                  <span className="text-yellow-400 font-medium">Connecting...</span>
-                </>
-              )}
-            </div>
-          </div>
-          <p className="text-gray-400 mt-2">
-            Monitor and manage extraction, transformation, and orchestration runs
-          </p>
+    <div className="h-full flex flex-col overflow-hidden">
+      {/* Header Section */}
+      <EtoPageHeader
+        title="ETO Runs"
+        subtitle="Email-to-Output Processing Dashboard"
+        searchScope={searchScope}
+        onSearchScopeChange={setSearchScope}
+        searchQuery={searchQuery}
+        onSearchQueryChange={setSearchQuery}
+        statusFilter={statusFilter}
+        onStatusFilterChange={setStatusFilter}
+        readFilter={readFilter}
+        onReadFilterChange={setReadFilter}
+        onDateRangeClick={() => {/* TODO: Implement date range picker */}}
+        onClearFilters={handleClearFilters}
+      />
+
+      {/* Action Bar */}
+      <div className="px-6 pb-4 flex items-center justify-between flex-shrink-0">
+        <div className="text-sm text-gray-400">
+          {data?.total ?? 0} total runs
         </div>
         <button
+          onClick={handleUploadPdf}
+          disabled={uploadAndCreateRun.isPending}
           className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-          onClick={handleManualUpload}
-          disabled={isLoading || createEtoRun.isPending}
         >
-          {createEtoRun.isPending ? 'Uploading...' : '+ Upload PDF'}
+          {uploadAndCreateRun.isPending ? 'Uploading...' : '+ Upload PDF'}
         </button>
       </div>
 
-      {/* Loading State */}
-      {isLoading && (
-        <div className="mb-6 bg-blue-900 border border-blue-700 rounded-lg p-4">
-          <p className="text-blue-200">Loading ETO runs...</p>
-        </div>
-      )}
+      {/* Scrollable Table Container */}
+      <div className="flex-1 min-h-0 px-6 pb-6">
+        <Table>
+          <Table.Header>
+            <div className="px-6">
+              <div className="grid gap-4" style={{ gridTemplateColumns: '2fr 2fr 1fr 100px 1fr auto 400px' }}>
+                {/* PDF Filename header - needs to account for 32px indicator space + 8px gap */}
+                <div className="flex items-center gap-2">
+                  <div className="w-8 flex-shrink-0"></div>
+                  <span className="text-gray-400 font-semibold text-sm uppercase break-words">PDF Filename</span>
+                </div>
+                <span className="text-gray-400 font-semibold text-sm uppercase break-words">Source</span>
+                <span className="text-gray-400 font-semibold text-sm uppercase break-words">Received</span>
+                <span className="text-gray-400 font-semibold text-sm uppercase break-words">Status</span>
+                <span className="text-gray-400 font-semibold text-sm uppercase break-words">Pages</span>
+                <span className="text-gray-400 font-semibold text-sm uppercase break-words">Last Updated</span>
+                <span className="text-gray-400 font-semibold text-sm uppercase break-words text-right">Actions</span>
+              </div>
+            </div>
+          </Table.Header>
 
-
-      {/* Tables - One for each status */}
-      <div className="space-y-4">
-  
-        {/* Success Runs */}
-        <EtoRunTable
-          title="Successful"
-          status="success"
-          runs={runsByStatus.success}
-          onView={handleView}
-        />
-
-        {/* Failed Runs */}
-        <EtoRunTable
-          title="Failed"
-          status="failure"
-          runs={runsByStatus.failure}
-          onView={handleView}
-          onReprocess={handleReprocess}
-          onSkip={handleSkip}
-          onBulkSkip={async (runIds) => {
-            await skipMutation.mutateAsync({ run_ids: runIds });
-          }}
-          onBulkReprocess={async (runIds) => {
-            await reprocessMutation.mutateAsync({ run_ids: runIds });
-          }}
-        />
-
-        {/* Needs Template Runs */}
-        <EtoRunTable
-          title="Needs Template"
-          status="needs_template"
-          runs={runsByStatus.needs_template}
-          onBuildTemplate={handleBuildTemplate}
-          onReprocess={handleReprocess}
-          onSkip={handleSkip}
-          onBulkSkip={async (runIds) => {
-            await skipMutation.mutateAsync({ run_ids: runIds });
-          }}
-          onBulkReprocess={async (runIds) => {
-            await reprocessMutation.mutateAsync({ run_ids: runIds });
-          }}
-        />
-        {/* Processing Runs */}
-        <EtoRunTable
-          title="Processing"
-          status="processing"
-          runs={runsByStatus.processing}
-        />
-        {/* Skipped Runs */}
-        <EtoRunTable
-          title="Skipped"
-          status="skipped"
-          runs={runsByStatus.skipped}
-          onReprocess={handleReprocess}
-          onDelete={handleDelete}
-          onBulkReprocess={async (runIds) => {
-            await reprocessMutation.mutateAsync({ run_ids: runIds });
-          }}
-          onBulkDelete={async (runIds) => {
-            await deleteMutation.mutateAsync({ run_ids: runIds });
-          }}
-        />
-        {/* Not Started Runs */}
-        <EtoRunTable
-          title="Not Started"
-          status="not_started"
-          runs={runsByStatus.not_started}
-        />
+          <Table.Body>
+            {items.length === 0 ? (
+              <div className="px-6 py-8 text-center text-gray-400">
+                No ETO runs found
+              </div>
+            ) : (
+              items.map((item, index) => (
+                <div key={item.id}>
+                  <EtoRunRow
+                    data={item}
+                    onClick={() => handleRowClick(item.id)}
+                    onReprocess={handleReprocess}
+                    onSkip={handleSkip}
+                    onDelete={handleDelete}
+                    onViewPdf={(pdfId) => handleViewPdf(pdfId, item.pdf.original_filename)}
+                    onToggleRead={handleToggleRead}
+                  />
+                  {index < items.length - 1 && (
+                    <div className="mx-6 border-b border-gray-700" />
+                  )}
+                </div>
+              ))
+            )}
+          </Table.Body>
+        </Table>
       </div>
 
-      {/* Run Detail Modal */}
-      <EtoRunDetailViewer
-        isOpen={selectedRunId !== null}
-        runId={selectedRunId}
-        onClose={() => setSelectedRunId(null)}
-      />
-
-      {/* Template Builder Modal */}
-      <TemplateBuilder
-        isOpen={templateBuilderPdfId !== null}
-        pdfFile={null}
-        pdfFileId={templateBuilderPdfId}
-        pdfMetadata={pdfMetadata || null}
-        onClose={() => {
-          setTemplateBuilderPdfId(null);
-          setTemplateBuilderRunId(null);
-        }}
-        onSave={handleSaveTemplate}
+      {/* PDF Viewer Modal */}
+      <PdfViewerModal
+        isOpen={viewingPdfId !== null}
+        pdfId={viewingPdfId}
+        filename={viewingPdfFilename}
+        onClose={handleClosePdfViewer}
       />
     </div>
   );

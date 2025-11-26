@@ -23,16 +23,6 @@ export function PipelineCard({
         </div>
       </div>
 
-      {/* Pipeline Info */}
-      <div className="space-y-2 mb-4">
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-gray-400">Compiled Plan:</span>
-          <span className="text-gray-200 font-mono">
-            {pipeline.compiled_plan_id !== null ? `#${pipeline.compiled_plan_id}` : 'Not compiled'}
-          </span>
-        </div>
-      </div>
-
       {/* Action Buttons */}
       <div className="flex flex-wrap gap-2 pt-3 border-t border-gray-700">
         {onView && (

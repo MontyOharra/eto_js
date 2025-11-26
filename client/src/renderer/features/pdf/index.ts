@@ -36,6 +36,7 @@ export type {
 
 // Components
 export { PdfViewer } from './components';
+export { PdfViewerModal } from './components';
 export { usePdfViewer } from './components/PdfViewer/PdfViewerContext';
 
 // Hooks

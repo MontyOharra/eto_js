@@ -21,6 +21,12 @@ from api.schemas.eto_runs import (
     PageStatus,
     CreateEtoRunResponse,
     EtoRunDetail,
+    EtoSubRunFullDetail,
+    EtoSubRunExtractionDetail,
+    EtoSubRunPipelineExecutionDetail,
+    ExtractionResult,
+    PipelineExecutionStep,
+    PipelineExecutionStepError,
 )
 
 
@@ -259,4 +265,106 @@ def eto_run_detail_to_api(detail: EtoRunDetailView) -> EtoRunDetail:
         overview=overview,
         sub_runs=sub_runs,
         page_statuses=page_statuses,
+    )
+
+
+def eto_sub_run_full_detail_to_api(sub_run: EtoSubRunDetailView) -> EtoSubRunFullDetail:
+    """
+    Convert domain EtoSubRunDetailView to API EtoSubRunFullDetail schema.
+
+    Used for GET /eto-runs/sub-runs/{id} endpoint response.
+    This is the full detail view including extraction and pipeline execution data.
+
+    Args:
+        sub_run: EtoSubRunDetailView domain dataclass with all stage data
+
+    Returns:
+        EtoSubRunFullDetail Pydantic model for API response
+    """
+    # Build PDF info
+    pdf = EtoPdfInfo(
+        id=sub_run.pdf_file_id,
+        original_filename=sub_run.pdf_original_filename,
+        file_size=sub_run.pdf_file_size,
+        page_count=sub_run.pdf_page_count or 0,
+    )
+
+    # Build template info (None for needs_template sub-runs)
+    template: Optional[EtoSubRunTemplate] = None
+    if sub_run.template_id is not None:
+        template = EtoSubRunTemplate(
+            id=sub_run.template_id,
+            name=sub_run.template_name or "",
+        )
+
+    # Build extraction stage detail (if exists)
+    extraction_detail: Optional[EtoSubRunExtractionDetail] = None
+    if sub_run.extraction:
+        # Convert extracted_data to ExtractionResult list
+        extraction_results: List[ExtractionResult] = []
+        if sub_run.extraction.extracted_data:
+            for field_data in sub_run.extraction.extracted_data:
+                extraction_results.append(ExtractionResult(
+                    name=field_data.get("name", ""),
+                    description=field_data.get("description"),
+                    bbox=field_data.get("bbox", [0, 0, 0, 0]),
+                    page=field_data.get("page", 1),
+                    extracted_value=field_data.get("extracted_value", ""),
+                ))
+
+        extraction_detail = EtoSubRunExtractionDetail(
+            status=sub_run.extraction.status,
+            started_at=sub_run.extraction.started_at.isoformat() if sub_run.extraction.started_at else None,
+            completed_at=sub_run.extraction.completed_at.isoformat() if sub_run.extraction.completed_at else None,
+            extraction_results=extraction_results,
+        )
+
+    # Build pipeline execution stage detail (if exists)
+    pipeline_detail: Optional[EtoSubRunPipelineExecutionDetail] = None
+    if sub_run.pipeline_execution:
+        # Convert steps to API format
+        steps = []
+        if sub_run.pipeline_execution.steps:
+            for step in sub_run.pipeline_execution.steps:
+                error_data = None
+                if step.get("error"):
+                    error_data = PipelineExecutionStepError(
+                        type=step["error"].get("type", ""),
+                        message=step["error"].get("message", ""),
+                        details=step["error"].get("details"),
+                    )
+                steps.append(PipelineExecutionStep(
+                    id=step["id"],
+                    step_number=step["step_number"],
+                    module_instance_id=step["module_instance_id"],
+                    inputs=step.get("inputs"),
+                    outputs=step.get("outputs"),
+                    error=error_data,
+                ))
+
+        pipeline_detail = EtoSubRunPipelineExecutionDetail(
+            status=sub_run.pipeline_execution.status,
+            started_at=sub_run.pipeline_execution.started_at.isoformat() if sub_run.pipeline_execution.started_at else None,
+            completed_at=sub_run.pipeline_execution.completed_at.isoformat() if sub_run.pipeline_execution.completed_at else None,
+            executed_actions=sub_run.pipeline_execution.executed_actions,
+            pipeline_definition_id=sub_run.pipeline_execution.pipeline_definition_id,
+            steps=steps,
+        )
+
+    # Build the main EtoSubRunFullDetail
+    return EtoSubRunFullDetail(
+        id=sub_run.id,
+        eto_run_id=sub_run.eto_run_id,
+        status=sub_run.status,
+        matched_pages=sub_run.matched_pages,
+        template=template,
+        template_version_id=sub_run.template_version_id,
+        error_type=sub_run.error_type,
+        error_message=sub_run.error_message,
+        error_details=sub_run.error_details,
+        started_at=sub_run.started_at.isoformat() if sub_run.started_at else None,
+        completed_at=sub_run.completed_at.isoformat() if sub_run.completed_at else None,
+        pdf=pdf,
+        stage_data_extraction=extraction_detail,
+        stage_pipeline_execution=pipeline_detail,
     )

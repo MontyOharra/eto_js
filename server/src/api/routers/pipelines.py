@@ -134,8 +134,7 @@ async def create_pipeline(
     pipeline = pipeline_service.create_pipeline_definition(pipeline_create)
 
     return CreatePipelineResponse(
-        id=pipeline.id,
-        compiled_plan_id=pipeline.compiled_plan_id
+        id=pipeline.id
     )
 
 
@@ -226,23 +225,17 @@ async def execute_pipeline(
     # Load pipeline definition
     pipeline = pipeline_service.get_pipeline_definition(id)
 
-    if pipeline.compiled_plan_id is None:
-        from shared.exceptions import ServiceError
-        raise ServiceError(
-            f"Pipeline {id} is not compiled. Cannot execute uncompiled pipeline."
-        )
-
     # Load compiled steps
     from shared.database.repositories import PipelineDefinitionStepRepository
     step_repo = PipelineDefinitionStepRepository(
         connection_manager=ServiceContainer.get_connection_manager()
     )
-    steps = step_repo.get_steps_by_plan_id(pipeline.compiled_plan_id)
+    steps = step_repo.get_steps_by_definition_id(id)
 
     if not steps:
         from shared.exceptions import ServiceError
         raise ServiceError(
-            f"No compiled steps found for pipeline {id} (plan {pipeline.compiled_plan_id})"
+            f"No compiled steps found for pipeline {id}"
         )
 
     logger.info(f"Simulating pipeline {id} with {len(steps)} steps")

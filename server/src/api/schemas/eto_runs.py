@@ -100,6 +100,81 @@ class EtoSubRunDetail(BaseModel):
     error_message: Optional[str] = None
 
 
+# =============================================================================
+# Sub-Run Full Detail (for GET /eto-runs/sub-runs/{id})
+# =============================================================================
+
+class ExtractionResult(BaseModel):
+    """Single extraction result from a template field"""
+    name: str
+    description: Optional[str] = None
+    bbox: List[float]  # [x0, y0, x1, y1]
+    page: int
+    extracted_value: str
+
+
+class EtoSubRunExtractionDetail(BaseModel):
+    """Extraction stage detail for a sub-run"""
+    status: str  # 'processing' | 'success' | 'failure'
+    started_at: Optional[str] = None  # ISO 8601
+    completed_at: Optional[str] = None  # ISO 8601
+    extraction_results: List[ExtractionResult] = []
+
+
+class PipelineExecutionStepError(BaseModel):
+    """Error info for a failed pipeline step"""
+    type: str
+    message: str
+    details: Optional[Any] = None
+
+
+class PipelineExecutionStep(BaseModel):
+    """Individual step execution result"""
+    id: int
+    step_number: int
+    module_instance_id: str
+    inputs: Optional[Dict[str, Any]] = None
+    outputs: Optional[Dict[str, Any]] = None
+    error: Optional[PipelineExecutionStepError] = None
+
+
+class EtoSubRunPipelineExecutionDetail(BaseModel):
+    """Pipeline execution stage detail for a sub-run"""
+    status: str  # 'processing' | 'success' | 'failure'
+    started_at: Optional[str] = None  # ISO 8601
+    completed_at: Optional[str] = None  # ISO 8601
+    executed_actions: Optional[Dict[str, Any]] = None
+    pipeline_definition_id: Optional[int] = None
+    steps: List[PipelineExecutionStep] = []
+
+
+class EtoSubRunFullDetail(BaseModel):
+    """
+    Full detail for a single sub-run including extraction and pipeline data.
+
+    Used by GET /eto-runs/sub-runs/{id} for the sub-run detail modal.
+    Mirrors the old EtoRunDetail structure but at the sub-run level.
+    """
+    id: int
+    eto_run_id: int
+    status: str
+    matched_pages: List[int]
+    template: Optional[EtoSubRunTemplate] = None
+    template_version_id: Optional[int] = None
+    error_type: Optional[str] = None
+    error_message: Optional[str] = None
+    error_details: Optional[str] = None
+    started_at: Optional[str] = None
+    completed_at: Optional[str] = None
+
+    # PDF info (from parent run)
+    pdf: EtoPdfInfo
+
+    # Stage details (optional, only present if processing reached that stage)
+    stage_data_extraction: Optional[EtoSubRunExtractionDetail] = None
+    stage_pipeline_execution: Optional[EtoSubRunPipelineExecutionDetail] = None
+
+
 class EtoRunOverview(BaseModel):
     """Computed overview stats for detail view"""
     templates_matched_count: int
@@ -204,6 +279,20 @@ class CreateEtoRunResponse(BaseModel):
 
 
 # =============================================================================
+# PATCH /eto-runs/{id} - Update ETO Run
+# =============================================================================
+
+class UpdateEtoRunRequest(BaseModel):
+    """
+    Request body for updating an ETO run.
+
+    Currently only supports marking runs as read/unread.
+    All fields are optional - only provided fields will be updated.
+    """
+    is_read: Optional[bool] = Field(None, description="Mark run as read (True) or unread (False)")
+
+
+# =============================================================================
 # Bulk Operation Request Bodies
 # =============================================================================
 
@@ -232,6 +321,18 @@ class SubRunOperationResponse(BaseModel):
     """
     new_sub_run_id: int = Field(..., description="ID of the newly created sub-run")
     eto_run_id: int = Field(..., description="Parent ETO run ID")
+
+
+class RunOperationResponse(BaseModel):
+    """
+    Response for run-level aggregated operations (reprocess_run, skip_run).
+
+    These operations aggregate all failed/needs_template sub-runs into a single
+    new sub-run. Returns None for new_sub_run_id if no eligible sub-runs found.
+    """
+    run_id: int = Field(..., description="ETO run ID that was operated on")
+    new_sub_run_id: Optional[int] = Field(None, description="ID of the newly created sub-run (None if no eligible sub-runs)")
+    message: str = Field(..., description="Description of what was done")
 
 
 # =============================================================================

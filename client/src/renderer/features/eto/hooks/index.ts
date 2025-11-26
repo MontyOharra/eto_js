@@ -1,1 +1,5 @@
-export { useEtoEvents } from './useEtoEvents';
+/**
+ * Test feature hooks
+ */
+
+export * from './useEtoEvents';

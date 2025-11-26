@@ -13,7 +13,6 @@ from .models import (
     # Module catalog
     ModuleModel,
     # Pipeline models
-    PipelineCompiledPlanModel,
     PipelineDefinitionModel,
     PipelineDefinitionStepModel,
     # ETO run models
@@ -41,7 +40,6 @@ __all__ = [
     # Module catalog
     'ModuleModel',
     # Pipeline models
-    'PipelineCompiledPlanModel',
     'PipelineDefinitionModel',
     'PipelineDefinitionStepModel',
     # ETO run models

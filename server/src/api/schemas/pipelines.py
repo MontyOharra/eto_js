@@ -70,7 +70,6 @@ VisualState: TypeAlias = Dict[str, Position]
 class PipelineSummary(BaseModel):
     """Lightweight pipeline summary for list views (GET /pipelines)"""
     id: int
-    compiled_plan_id: Optional[int] = None  # null if not yet compiled
 
 
 class PipelinesListResponse(BaseModel):
@@ -84,7 +83,6 @@ class PipelinesListResponse(BaseModel):
 class PipelineDetail(BaseModel):
     """Full pipeline definition details (GET /pipelines/{id})"""
     id: int
-    compiled_plan_id: Optional[int] = None
     pipeline_state: PipelineState
     visual_state: VisualState
 
@@ -102,7 +100,6 @@ class CreatePipelineRequest(BaseModel):
 class CreatePipelineResponse(BaseModel):
     """Response for POST /pipelines"""
     id: int  # Created pipeline ID
-    compiled_plan_id: Optional[int] = None  # null initially, set on first compilation
 
 
 # ============================================================================

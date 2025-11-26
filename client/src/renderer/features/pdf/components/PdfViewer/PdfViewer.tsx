@@ -77,6 +77,12 @@ export interface PdfViewerProps {
   maxScale?: number;
   scaleStep?: number;
   /**
+   * If provided, only show these specific PDF pages.
+   * Display page 1 will render allowedPages[0], page 2 renders allowedPages[1], etc.
+   * Page numbers should be 1-indexed (matching PDF page numbers).
+   */
+  allowedPages?: number[];
+  /**
    * Children should include PdfViewer.Canvas with any overlays as children of Canvas.
    * See component documentation above for proper overlay scaling/positioning.
    */
@@ -94,6 +100,7 @@ export function PdfViewer({
   minScale = 0.5,
   maxScale = 3.0,
   scaleStep = 0.25,
+  allowedPages,
   children,
   onScaleChange,
   onPageChange,
@@ -101,11 +108,19 @@ export function PdfViewer({
   // State
   const [scale, setScaleState] = useState(initialScale);
   const [currentPage, setCurrentPageState] = useState(initialPage);
-  const [numPages, setNumPages] = useState<number | null>(null);
+  const [totalPdfPages, setTotalPdfPages] = useState<number | null>(null);
   const [pdfDimensions, setPdfDimensions] = useState<PdfDimensions | null>(null);
 
   // Fixed high-quality render scale (matches PdfCanvas)
   const RENDER_SCALE = 3.0;
+
+  // Compute effective page count and actual page number based on allowedPages
+  const sortedAllowedPages = allowedPages ? [...allowedPages].sort((a, b) => a - b) : null;
+  const numPages = sortedAllowedPages ? sortedAllowedPages.length : totalPdfPages;
+  // Map display page (1-indexed) to actual PDF page number
+  const actualPageNumber = sortedAllowedPages
+    ? sortedAllowedPages[currentPage - 1] || sortedAllowedPages[0] || 1
+    : currentPage;
 
   // Sync with external state (controlled component)
   useEffect(() => {
@@ -193,7 +208,7 @@ export function PdfViewer({
 
   // Callbacks for Canvas component
   const onDocumentLoadSuccess = useCallback((loadedNumPages: number) => {
-    setNumPages(loadedNumPages);
+    setTotalPdfPages(loadedNumPages);
     // Don't reset to first page - preserve user's current page
   }, []);
 
@@ -206,8 +221,10 @@ export function PdfViewer({
     scale,
     renderScale: RENDER_SCALE, // Fixed render scale for overlay calculations
     currentPage,
+    actualPageNumber,
     numPages,
     pdfDimensions,
+    allowedPages: sortedAllowedPages,
     setScale,
     setCurrentPage,
     goToNextPage,

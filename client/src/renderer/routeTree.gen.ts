@@ -13,12 +13,12 @@ import { Route as LoginRouteImport } from './pages/login'
 import { Route as DashboardRouteRouteImport } from './pages/dashboard/route'
 import { Route as IndexRouteImport } from './pages/index'
 import { Route as DashboardIndexRouteImport } from './pages/dashboard/index'
-import { Route as DashboardTestIndexRouteImport } from './pages/dashboard/test/index'
 import { Route as DashboardPipelinesIndexRouteImport } from './pages/dashboard/pipelines/index'
 import { Route as DashboardPdfTemplatesIndexRouteImport } from './pages/dashboard/pdf-templates/index'
 import { Route as DashboardEtoIndexRouteImport } from './pages/dashboard/eto/index'
+import { Route as DashboardEtoOldIndexRouteImport } from './pages/dashboard/eto-old/index'
 import { Route as DashboardConfigsIndexRouteImport } from './pages/dashboard/configs/index'
-import { Route as DashboardTestRunIdRouteImport } from './pages/dashboard/test/$runId'
+import { Route as DashboardEtoRunIdRouteImport } from './pages/dashboard/eto/$runId'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -40,11 +40,6 @@ const DashboardIndexRoute = DashboardIndexRouteImport.update({
   path: '/',
   getParentRoute: () => DashboardRouteRoute,
 } as any)
-const DashboardTestIndexRoute = DashboardTestIndexRouteImport.update({
-  id: '/test/',
-  path: '/test/',
-  getParentRoute: () => DashboardRouteRoute,
-} as any)
 const DashboardPipelinesIndexRoute = DashboardPipelinesIndexRouteImport.update({
   id: '/pipelines/',
   path: '/pipelines/',
@@ -61,14 +56,19 @@ const DashboardEtoIndexRoute = DashboardEtoIndexRouteImport.update({
   path: '/eto/',
   getParentRoute: () => DashboardRouteRoute,
 } as any)
+const DashboardEtoOldIndexRoute = DashboardEtoOldIndexRouteImport.update({
+  id: '/eto-old/',
+  path: '/eto-old/',
+  getParentRoute: () => DashboardRouteRoute,
+} as any)
 const DashboardConfigsIndexRoute = DashboardConfigsIndexRouteImport.update({
   id: '/configs/',
   path: '/configs/',
   getParentRoute: () => DashboardRouteRoute,
 } as any)
-const DashboardTestRunIdRoute = DashboardTestRunIdRouteImport.update({
-  id: '/test/$runId',
-  path: '/test/$runId',
+const DashboardEtoRunIdRoute = DashboardEtoRunIdRouteImport.update({
+  id: '/eto/$runId',
+  path: '/eto/$runId',
   getParentRoute: () => DashboardRouteRoute,
 } as any)
 
@@ -77,23 +77,23 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardRouteRouteWithChildren
   '/login': typeof LoginRoute
   '/dashboard/': typeof DashboardIndexRoute
-  '/dashboard/test/$runId': typeof DashboardTestRunIdRoute
+  '/dashboard/eto/$runId': typeof DashboardEtoRunIdRoute
   '/dashboard/configs': typeof DashboardConfigsIndexRoute
+  '/dashboard/eto-old': typeof DashboardEtoOldIndexRoute
   '/dashboard/eto': typeof DashboardEtoIndexRoute
   '/dashboard/pdf-templates': typeof DashboardPdfTemplatesIndexRoute
   '/dashboard/pipelines': typeof DashboardPipelinesIndexRoute
-  '/dashboard/test': typeof DashboardTestIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/dashboard': typeof DashboardIndexRoute
-  '/dashboard/test/$runId': typeof DashboardTestRunIdRoute
+  '/dashboard/eto/$runId': typeof DashboardEtoRunIdRoute
   '/dashboard/configs': typeof DashboardConfigsIndexRoute
+  '/dashboard/eto-old': typeof DashboardEtoOldIndexRoute
   '/dashboard/eto': typeof DashboardEtoIndexRoute
   '/dashboard/pdf-templates': typeof DashboardPdfTemplatesIndexRoute
   '/dashboard/pipelines': typeof DashboardPipelinesIndexRoute
-  '/dashboard/test': typeof DashboardTestIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -101,12 +101,12 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRouteRouteWithChildren
   '/login': typeof LoginRoute
   '/dashboard/': typeof DashboardIndexRoute
-  '/dashboard/test/$runId': typeof DashboardTestRunIdRoute
+  '/dashboard/eto/$runId': typeof DashboardEtoRunIdRoute
   '/dashboard/configs/': typeof DashboardConfigsIndexRoute
+  '/dashboard/eto-old/': typeof DashboardEtoOldIndexRoute
   '/dashboard/eto/': typeof DashboardEtoIndexRoute
   '/dashboard/pdf-templates/': typeof DashboardPdfTemplatesIndexRoute
   '/dashboard/pipelines/': typeof DashboardPipelinesIndexRoute
-  '/dashboard/test/': typeof DashboardTestIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -115,35 +115,35 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/login'
     | '/dashboard/'
-    | '/dashboard/test/$runId'
+    | '/dashboard/eto/$runId'
     | '/dashboard/configs'
+    | '/dashboard/eto-old'
     | '/dashboard/eto'
     | '/dashboard/pdf-templates'
     | '/dashboard/pipelines'
-    | '/dashboard/test'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/login'
     | '/dashboard'
-    | '/dashboard/test/$runId'
+    | '/dashboard/eto/$runId'
     | '/dashboard/configs'
+    | '/dashboard/eto-old'
     | '/dashboard/eto'
     | '/dashboard/pdf-templates'
     | '/dashboard/pipelines'
-    | '/dashboard/test'
   id:
     | '__root__'
     | '/'
     | '/dashboard'
     | '/login'
     | '/dashboard/'
-    | '/dashboard/test/$runId'
+    | '/dashboard/eto/$runId'
     | '/dashboard/configs/'
+    | '/dashboard/eto-old/'
     | '/dashboard/eto/'
     | '/dashboard/pdf-templates/'
     | '/dashboard/pipelines/'
-    | '/dashboard/test/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -182,13 +182,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardIndexRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
-    '/dashboard/test/': {
-      id: '/dashboard/test/'
-      path: '/test'
-      fullPath: '/dashboard/test'
-      preLoaderRoute: typeof DashboardTestIndexRouteImport
-      parentRoute: typeof DashboardRouteRoute
-    }
     '/dashboard/pipelines/': {
       id: '/dashboard/pipelines/'
       path: '/pipelines'
@@ -210,6 +203,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardEtoIndexRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
+    '/dashboard/eto-old/': {
+      id: '/dashboard/eto-old/'
+      path: '/eto-old'
+      fullPath: '/dashboard/eto-old'
+      preLoaderRoute: typeof DashboardEtoOldIndexRouteImport
+      parentRoute: typeof DashboardRouteRoute
+    }
     '/dashboard/configs/': {
       id: '/dashboard/configs/'
       path: '/configs'
@@ -217,11 +217,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardConfigsIndexRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
-    '/dashboard/test/$runId': {
-      id: '/dashboard/test/$runId'
-      path: '/test/$runId'
-      fullPath: '/dashboard/test/$runId'
-      preLoaderRoute: typeof DashboardTestRunIdRouteImport
+    '/dashboard/eto/$runId': {
+      id: '/dashboard/eto/$runId'
+      path: '/eto/$runId'
+      fullPath: '/dashboard/eto/$runId'
+      preLoaderRoute: typeof DashboardEtoRunIdRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
   }
@@ -229,22 +229,22 @@ declare module '@tanstack/react-router' {
 
 interface DashboardRouteRouteChildren {
   DashboardIndexRoute: typeof DashboardIndexRoute
-  DashboardTestRunIdRoute: typeof DashboardTestRunIdRoute
+  DashboardEtoRunIdRoute: typeof DashboardEtoRunIdRoute
   DashboardConfigsIndexRoute: typeof DashboardConfigsIndexRoute
+  DashboardEtoOldIndexRoute: typeof DashboardEtoOldIndexRoute
   DashboardEtoIndexRoute: typeof DashboardEtoIndexRoute
   DashboardPdfTemplatesIndexRoute: typeof DashboardPdfTemplatesIndexRoute
   DashboardPipelinesIndexRoute: typeof DashboardPipelinesIndexRoute
-  DashboardTestIndexRoute: typeof DashboardTestIndexRoute
 }
 
 const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
   DashboardIndexRoute: DashboardIndexRoute,
-  DashboardTestRunIdRoute: DashboardTestRunIdRoute,
+  DashboardEtoRunIdRoute: DashboardEtoRunIdRoute,
   DashboardConfigsIndexRoute: DashboardConfigsIndexRoute,
+  DashboardEtoOldIndexRoute: DashboardEtoOldIndexRoute,
   DashboardEtoIndexRoute: DashboardEtoIndexRoute,
   DashboardPdfTemplatesIndexRoute: DashboardPdfTemplatesIndexRoute,
   DashboardPipelinesIndexRoute: DashboardPipelinesIndexRoute,
-  DashboardTestIndexRoute: DashboardTestIndexRoute,
 }
 
 const DashboardRouteRouteWithChildren = DashboardRouteRoute._addFileChildren(

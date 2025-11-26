@@ -20,9 +20,11 @@ export interface PdfViewerContextValue {
   // State
   scale: number; // User's zoom level (0.5 - 3.0)
   renderScale: number; // Fixed scale PDF is rendered at (for overlay calculations)
-  currentPage: number; // Current page number (1-indexed)
-  numPages: number | null; // Total page count
+  currentPage: number; // Current display page number (1-indexed)
+  actualPageNumber: number; // Actual PDF page number to render (maps through allowedPages)
+  numPages: number | null; // Total page count (filtered if allowedPages provided)
   pdfDimensions: PdfDimensions | null;
+  allowedPages: number[] | null; // If set, only these PDF pages are shown
 
   // Actions
   setScale: (scale: number) => void;

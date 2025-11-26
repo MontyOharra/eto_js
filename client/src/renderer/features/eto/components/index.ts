@@ -1,9 +1,21 @@
-// UI components
-export * from "./EtoRunRow";
-
 // Base components
-export * from "./EtoRunDetail";
+export { Table } from './Table';
 
-// Row components
-export * from "./EtoRunTable";
+// List page components
+export { EtoRunRow } from './EtoRunRow';
+export { EtoPageHeader } from './EtoPageHeader';
 
+// Detail page components
+export {
+  EtoRunDetailHeader,
+  EtoRunDetailOverview,
+  MatchedSubRunsSection,
+  NeedsTemplateSection,
+  SkippedSubRunsSection,
+  EtoRunDetailSidebar,
+} from './EtoRunDetailView';
+
+// Modal components
+export { EtoSubRunDetailViewer } from './EtoSubRunDetail/EtoSubRunDetailViewer';
+// Alias for backwards compatibility
+export { EtoSubRunDetailViewer as EtoSubRunDetailModal } from './EtoSubRunDetail/EtoSubRunDetailViewer';

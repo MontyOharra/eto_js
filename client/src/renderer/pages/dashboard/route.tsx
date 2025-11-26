@@ -9,11 +9,10 @@ function DashboardLayout() {
   const location = useLocation();
 
   const tabs = [
-    { name: "ETO Information", href: "/dashboard/eto" },
+    { name: "ETO", href: "/dashboard/eto" },
     { name: "Templates", href: "/dashboard/pdf-templates" },
     { name: "Transformation Pipeline", href: "/dashboard/pipelines" },
     { name: "Configurations", href: "/dashboard/configs" },
-    { name: "Test", href: "/dashboard/test" },
   ];
 
   return (

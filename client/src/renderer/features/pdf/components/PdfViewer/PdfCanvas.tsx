@@ -21,7 +21,8 @@ export interface PdfCanvasProps {
 export function PdfCanvas({ pdfUrl, onError, children, onMouseDown, onMouseMove, onMouseUp, onClick }: PdfCanvasProps) {
   const {
     scale, // User's zoom level
-    currentPage, // Current PDF page to render
+    currentPage, // Current display page (1-indexed)
+    actualPageNumber, // Actual PDF page to render (maps through allowedPages)
     pdfDimensions,
     setScale,
     onDocumentLoadSuccess,
@@ -136,7 +137,7 @@ export function PdfCanvas({ pdfUrl, onError, children, onMouseDown, onMouseMove,
                   }}
                 >
                   <Page
-                    pageNumber={currentPage}
+                    pageNumber={actualPageNumber}
                     scale={RENDER_SCALE}
                     renderTextLayer={false}
                     renderAnnotationLayer={false}

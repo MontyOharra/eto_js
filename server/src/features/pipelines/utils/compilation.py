@@ -179,7 +179,7 @@ class PipelineCompiler:
 
                 # Create step
                 step = PipelineDefinitionStepCreate(
-                    pipeline_compiled_plan_id=0,  # Will be set by service layer
+                    pipeline_definition_id=0,  # Will be set by service layer
                     module_instance_id=module.module_instance_id,
                     module_ref=module_id,  # Just the module ID (not "id:version")
                     module_config=module.config,

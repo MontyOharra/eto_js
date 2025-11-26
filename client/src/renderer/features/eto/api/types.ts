@@ -1,14 +1,9 @@
 /**
  * API Types (Request/Response DTOs)
  * These types represent the exact shape of data sent to/from the API endpoints.
- * They import and use domain types from '../types.ts'
  */
 
-import {
-  EtoRunStatus,
-  EtoRunListItem,
-  EtoRunDetail,
-} from '../types';
+import { EtoRunListItem, EtoRunDetail, EtoRunStatus } from '../types';
 
 // =============================================================================
 // GET /eto-runs - List runs with pagination
@@ -16,7 +11,8 @@ import {
 
 export interface GetEtoRunsQueryParams {
   status?: EtoRunStatus;
-  sort_by?: 'created_at' | 'started_at' | 'completed_at' | 'status';
+  is_read?: boolean;
+  sort_by?: 'created_at' | 'updated_at' | 'started_at' | 'completed_at' | 'status';
   sort_order?: 'asc' | 'desc';
   limit?: number; // default: 50, max: 200
   offset?: number; // default: 0
@@ -33,28 +29,29 @@ export interface GetEtoRunsResponse {
 // GET /eto-runs/{id} - Get full run details
 // =============================================================================
 
-// Response type is EtoRunDetail from domain types
 export type GetEtoRunDetailResponse = EtoRunDetail;
 
 // =============================================================================
 // POST /eto-runs - Create run from uploaded PDF
 // =============================================================================
 
-// Request: { pdf_file_id: number }
-
-export interface PostEtoRunUploadResponse {
-  id: number;
+export interface CreateEtoRunRequest {
   pdf_file_id: number;
-  status: 'not_started';
-  started_at: string | null;  // ISO 8601, null for not_started runs
-  created_at: string;  // ISO 8601
+}
+
+export interface CreateEtoRunResponse {
+  id: number;
+  status: string;
+  pdf_file_id: number;
+  started_at: string | null;
+  created_at: string;
 }
 
 // =============================================================================
 // POST /eto-runs/reprocess - Reprocess runs (bulk)
 // =============================================================================
 
-export interface PostEtoRunsReprocessRequest {
+export interface ReprocessRunsRequest {
   run_ids: number[];
 }
 
@@ -64,7 +61,7 @@ export interface PostEtoRunsReprocessRequest {
 // POST /eto-runs/skip - Skip runs (bulk)
 // =============================================================================
 
-export interface PostEtoRunsSkipRequest {
+export interface SkipRunsRequest {
   run_ids: number[];
 }
 
@@ -74,8 +71,43 @@ export interface PostEtoRunsSkipRequest {
 // DELETE /eto-runs - Delete runs (bulk)
 // =============================================================================
 
-export interface DeleteEtoRunsRequest {
+export interface DeleteRunsRequest {
   run_ids: number[];
 }
 
-// 0077860
+// Response: 204 No Content
+
+// =============================================================================
+// PATCH /eto-runs/{id} - Update run (e.g., mark as read)
+// =============================================================================
+
+export interface UpdateEtoRunRequest {
+  is_read?: boolean;
+}
+
+// Response: 204 No Content or updated EtoRunListItem
+
+// =============================================================================
+// Sub-Run Level Operations
+// =============================================================================
+
+// POST /eto-runs/sub-runs/{sub_run_id}/reprocess
+// POST /eto-runs/sub-runs/{sub_run_id}/skip
+
+export interface SubRunOperationResponse {
+  new_sub_run_id: number;
+  eto_run_id: number;
+}
+
+// =============================================================================
+// Run-Level Aggregated Operations
+// =============================================================================
+
+// POST /eto-runs/{run_id}/reprocess - Reprocess all failed/needs_template sub-runs
+// POST /eto-runs/{run_id}/skip - Skip all failed/needs_template sub-runs
+
+export interface RunOperationResponse {
+  run_id: number;
+  new_sub_run_id: number | null;
+  message: string;
+}

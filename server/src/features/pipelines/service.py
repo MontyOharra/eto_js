@@ -3,16 +3,13 @@ Pipeline Service
 Handles pipeline definition, compilation, validation, and lifecycle management
 """
 import logging
-import hashlib
 import json
 from typing import List, Dict, Set, Optional, Any, TYPE_CHECKING
-from datetime import datetime, timezone
-from dataclasses import asdict, replace
+from dataclasses import replace
 
 from shared.database import DatabaseConnectionManager
 from shared.database.repositories import (
     PipelineDefinitionRepository,
-    PipelineCompiledPlanRepository,
     PipelineDefinitionStepRepository,
     ModuleRepository,
 )
@@ -30,7 +27,6 @@ from shared.types.pipeline_definition import (
     PipelineDefinitionSummary,
     PipelineDefinitionCreate,
 )
-from shared.types.pipeline_compiled_plan import PipelineCompiledPlanCreate
 from shared.types.pipeline_definition_step import PipelineDefinitionStepCreate
 from shared.types.pipeline_execution import PipelineExecutionResult
 from shared.exceptions import ServiceError, ValidationError, ObjectNotFoundError, PipelineValidationError
@@ -48,20 +44,16 @@ class PipelineService:
     Pipeline management service.
 
     Handles pipeline definition CRUD, compilation, and validation.
-    Implements checksum-based deduplication to avoid redundant compilation.
 
     Compilation Flow:
     1. Validate pipeline structure (module refs, connections, types)
     2. Prune dead branches (unreachable nodes)
-    3. Calculate checksum of pruned pipeline
-    4. Check for existing compiled plan with same checksum (dedup)
-    5. If not exists: Compile (topological sort) and persist
-    6. Link pipeline definition to compiled plan
+    3. Compile (topological sort) to execution steps
+    4. Persist pipeline definition and steps together
     """
 
     connection_manager: DatabaseConnectionManager
     definition_repository: PipelineDefinitionRepository
-    compiled_plan_repository: PipelineCompiledPlanRepository
     step_repository: PipelineDefinitionStepRepository
     module_catalog_repository: ModuleRepository
     pipeline_execution_service: 'PipelineExecutionService'
@@ -83,7 +75,6 @@ class PipelineService:
         self.modules_service = modules_service
         self.services = services
         self.definition_repository = PipelineDefinitionRepository(connection_manager=connection_manager)
-        self.compiled_plan_repository = PipelineCompiledPlanRepository(connection_manager=connection_manager)
         self.step_repository = PipelineDefinitionStepRepository(connection_manager=connection_manager)
         self.module_catalog_repository = ModuleRepository(connection_manager=connection_manager)
 
@@ -362,181 +353,6 @@ class PipelineService:
             connections=pruned_connections,
         )
 
-    def _calculate_checksum(self, pruned_pipeline: PipelineState) -> str:
-        """
-        Calculate SHA-256 checksum of pruned pipeline for deduplication.
-
-        The checksum is calculated from a canonical representation using
-        topology-based ordering (BFS from entry points). This ensures identical
-        graph structures always produce the same checksum regardless of IDs,
-        visual state, or initial ordering.
-
-        Args:
-            pruned_pipeline: Pruned pipeline state
-
-        Returns:
-            SHA-256 hex digest
-        """
-        from collections import deque
-
-        # Step 1: Create canonical entry points (count only, names don't matter for logic)
-        # Sort entry points by their first downstream connection for deterministic ordering
-        def ep_sort_key(ep):
-            # Find what this entry point connects to (check all output pins)
-            downstream_nodes = []
-            for output_pin in ep.outputs:
-                for conn in pruned_pipeline.connections:
-                    if conn.from_node_id == output_pin.node_id:
-                        downstream_nodes.append(conn.to_node_id)
-            # Sort by downstream connections (deterministic even if names change)
-            return tuple(sorted(downstream_nodes))
-
-        sorted_eps = sorted(pruned_pipeline.entry_points, key=ep_sort_key)
-
-        # Just include the count of entry points, not their names
-        canonical_entry_points = [{"index": idx} for idx in range(len(sorted_eps))]
-
-        # Map entry point output node_ids to canonical IDs
-        entry_point_id_map = {}
-        for idx, ep in enumerate(sorted_eps):
-            for output_pin in ep.outputs:
-                entry_point_id_map[output_pin.node_id] = f"EP_{idx}"
-
-        # Step 2: Topology-based module ordering (BFS from entry points)
-        visited_modules = set()
-        module_order = []  # List of module_instance_ids in canonical order
-
-        # BFS queue: Find modules that consume entry points
-        queue = deque()
-        for ep in sorted_eps:
-            # Find connections where this entry point's outputs are the source
-            for output_pin in ep.outputs:
-                for conn in pruned_pipeline.connections:
-                    if conn.from_node_id == output_pin.node_id:
-                        # Find which module this connection goes to
-                        for module in pruned_pipeline.modules:
-                            if any(inp.node_id == conn.to_node_id for inp in module.inputs):
-                                if module.module_instance_id not in visited_modules:
-                                    visited_modules.add(module.module_instance_id)
-                                    queue.append(module.module_instance_id)
-                                break
-
-        # BFS traversal
-        while queue:
-            # Process all modules at current level
-            level = []
-            level_size = len(queue)
-            for _ in range(level_size):
-                module_id = queue.popleft()
-                level.append(module_id)
-
-            # Sort modules at this level by semantic properties for determinism
-            def level_sort_key(mid):
-                module = next(m for m in pruned_pipeline.modules if m.module_instance_id == mid)
-                config_str = json.dumps(module.config, sort_keys=True)
-                inputs_str = json.dumps(
-                    [(p.name, p.type, p.group_index, p.position_index)
-                     for p in sorted(module.inputs, key=lambda p: (p.group_index, p.position_index))],
-                    sort_keys=True
-                )
-                outputs_str = json.dumps(
-                    [(p.name, p.type, p.group_index, p.position_index)
-                     for p in sorted(module.outputs, key=lambda p: (p.group_index, p.position_index))],
-                    sort_keys=True
-                )
-                return (module.module_ref, config_str, inputs_str, outputs_str)
-
-            level.sort(key=level_sort_key)
-            module_order.extend(level)
-
-            # Discover next level (downstream modules)
-            for module_id in level:
-                module = next(m for m in pruned_pipeline.modules if m.module_instance_id == module_id)
-                # Find all output nodes from this module
-                for out_pin in module.outputs:
-                    # Find connections from this output
-                    for conn in pruned_pipeline.connections:
-                        if conn.from_node_id == out_pin.node_id:
-                            # Find target module
-                            for target_module in pruned_pipeline.modules:
-                                if any(inp.node_id == conn.to_node_id for inp in target_module.inputs):
-                                    if target_module.module_instance_id not in visited_modules:
-                                        visited_modules.add(target_module.module_instance_id)
-                                        queue.append(target_module.module_instance_id)
-                                    break
-
-        # Step 3: Build canonical modules in topological order
-        node_id_map = dict(entry_point_id_map)
-        canonical_modules = []
-
-        for mod_idx, module_instance_id in enumerate(module_order):
-            module = next(m for m in pruned_pipeline.modules if m.module_instance_id == module_instance_id)
-            canonical_mod_id = f"M_{mod_idx}"
-
-            # Create canonical pin representations
-            canonical_inputs = []
-            for pin in sorted(module.inputs, key=lambda p: (p.group_index, p.position_index)):
-                canonical_inputs.append({
-                    "name": pin.name,
-                    "type": pin.type,
-                    "group_index": pin.group_index,
-                    "position_index": pin.position_index
-                })
-                node_id_map[pin.node_id] = f"{canonical_mod_id}.in.{pin.group_index}.{pin.position_index}"
-
-            canonical_outputs = []
-            for pin in sorted(module.outputs, key=lambda p: (p.group_index, p.position_index)):
-                canonical_outputs.append({
-                    "name": pin.name,
-                    "type": pin.type,
-                    "group_index": pin.group_index,
-                    "position_index": pin.position_index
-                })
-                node_id_map[pin.node_id] = f"{canonical_mod_id}.out.{pin.group_index}.{pin.position_index}"
-
-            canonical_modules.append({
-                "module_ref": module.module_ref,
-                "config": module.config,
-                "inputs": canonical_inputs,
-                "outputs": canonical_outputs
-            })
-
-        # Step 4: Create canonical connections
-        canonical_connections = []
-        for conn in pruned_pipeline.connections:
-            from_canonical = node_id_map.get(conn.from_node_id)
-            to_canonical = node_id_map.get(conn.to_node_id)
-
-            if not from_canonical or not to_canonical:
-                logger.warning(
-                    f"Skipping connection with unmapped node IDs: "
-                    f"{conn.from_node_id} -> {conn.to_node_id}"
-                )
-                continue
-
-            canonical_connections.append({
-                "from": from_canonical,
-                "to": to_canonical
-            })
-
-        # Sort connections for deterministic ordering
-        canonical_connections.sort(key=lambda c: (c["from"], c["to"]))
-
-        # Step 5: Build final canonical representation
-        canonical_pipeline = {
-            "entry_points": canonical_entry_points,
-            "modules": canonical_modules,
-            "connections": canonical_connections
-        }
-
-        # Step 6: Create deterministic JSON and calculate SHA-256
-        json_str = json.dumps(canonical_pipeline, sort_keys=True, separators=(',', ':'))
-        checksum = hashlib.sha256(json_str.encode('utf-8')).hexdigest()
-
-        logger.info(f"Canonical pipeline JSON: {json_str[:500]}...")
-        logger.info(f"Pipeline checksum: {checksum}")
-        return checksum
-
     def _compile_pipeline(self, pruned_pipeline: PipelineState) -> List[PipelineDefinitionStepCreate]:
         """
         Compile pipeline into ordered execution steps via layer-based topological sort.
@@ -607,17 +423,11 @@ class PipelineService:
         """
         Create new pipeline definition with compilation.
 
-        Flow (ATOMIC):
-        1. Validate pipeline structure (outside transaction)
-        2. Prune dead branches (outside transaction)
-        3. Calculate checksum (outside transaction)
-        4. Compile to steps (outside transaction)
-        5. ATOMIC TRANSACTION:
-           a. Check for existing compiled plan (dedup)
-           b. If not exists: Create compiled plan + steps
-           c. Create pipeline definition
-           d. Link pipeline definition to compiled plan
-        6. All database operations succeed or fail together
+        Flow:
+        1. Validate pipeline structure
+        2. Prune dead branches
+        3. Compile to execution steps
+        4. ATOMIC: Create pipeline definition and steps together
 
         Args:
             create_data: Pipeline definition creation data
@@ -630,7 +440,7 @@ class PipelineService:
             ServiceError: If compilation or persistence fails
         """
         try:
-            # Steps 1-3: Validation, pruning, checksum (read-only, outside transaction)
+            # Step 1: Validation (outside transaction)
             logger.info("Validating pipeline structure")
 
             # DEBUG: Log original pipeline_state before any processing
@@ -642,57 +452,29 @@ class PipelineService:
 
             self._validate_pipeline(create_data.pipeline_state)
 
+            # Step 2: Prune dead branches
             logger.info("Pruning dead branches")
             pruned_pipeline = self._prune_dead_branches(create_data.pipeline_state)
 
-            checksum = self._calculate_checksum(pruned_pipeline)
-            logger.info(f"Pipeline checksum: {checksum}")
-
-            # Step 4: Compile to steps (computation, outside transaction)
+            # Step 3: Compile to steps (computation, outside transaction)
             logger.info("Compiling pipeline to execution steps")
             steps = self._compile_pipeline(pruned_pipeline)
 
-            # Step 5: ATOMIC TRANSACTION - All database operations together
+            # Step 4: ATOMIC TRANSACTION - Create definition and steps together
             with self.connection_manager.unit_of_work() as uow:
-                # Check for existing compiled plan (deduplication)
-                existing_plan = self.compiled_plan_repository.get_by_checksum(checksum)
-
-                compiled_plan_id: int
-
-                if existing_plan:
-                    logger.info(f"Found existing compiled plan {existing_plan.id} with matching checksum")
-                    compiled_plan_id = existing_plan.id
-                else:
-                    # Create new compiled plan
-                    compiled_plan = uow.pipeline_compiled_plans.create(
-                        PipelineCompiledPlanCreate(
-                            plan_checksum=checksum,
-                            compiled_at=datetime.now(timezone.utc)
-                        )
-                    )
-                    compiled_plan_id = compiled_plan.id
-                    logger.info(f"Created compiled plan {compiled_plan_id}")
-
-                    # Update step records with compiled_plan_id
-                    steps_with_plan_id = [
-                        replace(step, pipeline_compiled_plan_id=compiled_plan_id)
-                        for step in steps
-                    ]
-
-                    # Bulk create steps
-                    uow.pipeline_definition_steps.create_steps(steps_with_plan_id)
-                    logger.info(f"Created {len(steps_with_plan_id)} execution steps")
-
-                # Create pipeline definition
+                # Create pipeline definition first to get its ID
                 pipeline_def = uow.pipeline_definitions.create(create_data)
                 logger.info(f"Created pipeline definition {pipeline_def.id}")
 
-                # Link pipeline definition to compiled plan
-                uow.pipeline_definitions.update_compiled_plan_id(
-                    pipeline_def.id,
-                    compiled_plan_id
-                )
-                logger.info(f"Linked pipeline {pipeline_def.id} to compiled plan {compiled_plan_id}")
+                # Update step records with pipeline_definition_id
+                steps_with_def_id = [
+                    replace(step, pipeline_definition_id=pipeline_def.id)
+                    for step in steps
+                ]
+
+                # Bulk create steps
+                uow.pipeline_definition_steps.create_steps(steps_with_def_id)
+                logger.info(f"Created {len(steps_with_def_id)} execution steps for pipeline {pipeline_def.id}")
 
                 # Transaction commits here (all or nothing)
 
@@ -703,7 +485,6 @@ class PipelineService:
 
             logger.info(
                 f"Pipeline creation complete: definition {result.id}, "
-                f"compiled plan {compiled_plan_id}, "
                 f"{len(steps)} steps"
             )
             return result
@@ -747,20 +528,16 @@ class PipelineService:
 
         Raises:
             ObjectNotFoundError: Pipeline not found
-            ServiceError: Pipeline not compiled or no steps found
+            ServiceError: No steps found
         """
-        pipeline = self.get_pipeline_definition(pipeline_id)
+        # Verify pipeline exists
+        self.get_pipeline_definition(pipeline_id)
 
-        if pipeline.compiled_plan_id is None:
-            raise ServiceError(
-                f"Pipeline {pipeline_id} is not compiled. Cannot get steps for uncompiled pipeline."
-            )
-
-        steps = self.step_repository.get_steps_by_plan_id(pipeline.compiled_plan_id)
+        steps = self.step_repository.get_steps_by_definition_id(pipeline_id)
 
         if not steps:
             raise ServiceError(
-                f"No compiled steps found for pipeline {pipeline_id} (plan {pipeline.compiled_plan_id})"
+                f"No compiled steps found for pipeline {pipeline_id}"
             )
 
         return steps

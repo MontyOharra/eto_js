@@ -16,7 +16,6 @@ import type { PipelineState, VisualState } from '../types';
  */
 export interface PipelineSummary {
   id: number;
-  compiled_plan_id: number | null;
 }
 
 /**
@@ -40,7 +39,6 @@ export interface PipelinesListResponse {
  */
 export interface PipelineDetail {
   id: number;
-  compiled_plan_id: number | null;
   pipeline_state: PipelineState;
   visual_state: VisualState;
 }
@@ -60,11 +58,10 @@ export interface CreatePipelineRequest {
 
 /**
  * Response for POST /pipelines
- * Returns created pipeline ID and compilation status
+ * Returns created pipeline ID
  */
 export interface CreatePipelineResponse {
   id: number;
-  compiled_plan_id: number | null;
 }
 
 // ============================================================================
