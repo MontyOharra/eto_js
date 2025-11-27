@@ -8,7 +8,7 @@ import ssl
 import email
 from email.header import decode_header
 from typing import Optional
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import re
 
 from shared.types.email_integrations import (
@@ -407,8 +407,16 @@ class ImapIntegration(BaseEmailIntegration):
             if since_datetime:
                 # IMAP SINCE only supports date filtering (no time component)
                 # Format: DD-MMM-YYYY (e.g., "04-Nov-2025")
-                # Note: We filter by exact time later in the fetch loop
-                date_str = since_datetime.strftime('%d-%b-%Y')
+                #
+                # We subtract 1 day as a buffer because:
+                # 1. IMAP SINCE compares against INTERNALDATE's date portion only
+                # 2. INTERNALDATE timezone varies by provider (Gmail uses account creation TZ)
+                # 3. This mismatch can cause emails to be missed at day boundaries
+                #
+                # The exact time filtering in the fetch loop (below) ensures we don't
+                # process duplicate emails - this just ensures we don't miss any.
+                safe_date = since_datetime - timedelta(days=1)
+                date_str = safe_date.strftime('%d-%b-%Y')
                 search_criteria.append(f'SINCE {date_str}')
 
             # Search for messages
