@@ -3,7 +3,7 @@
  * TanStack Query hooks for ETO run operations
  */
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { apiClient } from '../../../shared/api/client';
 import { API_CONFIG } from '../../../shared/api/config';
 import { useUploadPdf } from '../../pdf';
@@ -64,6 +64,8 @@ export function useEtoRuns(params?: GetEtoRunsQueryParams) {
       });
       return response.data;
     },
+    // Keep previous data visible while fetching new data (prevents flash)
+    placeholderData: keepPreviousData,
     staleTime: 30 * 1000, // Consider data stale after 30 seconds
     gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
   });
