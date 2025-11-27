@@ -3,19 +3,33 @@
  * These types represent the exact shape of data sent to/from the API endpoints.
  */
 
-import { EtoRunListItem, EtoRunDetail, EtoRunStatus } from '../types';
+import { EtoRunListItem, EtoRunDetail, EtoSubRunStatus } from '../types';
 
 // =============================================================================
 // GET /eto-runs - List runs with pagination
 // =============================================================================
 
+export type EtoRunSortField = 'last_processed_at' | 'created_at' | 'started_at' | 'completed_at';
+
 export interface GetEtoRunsQueryParams {
-  status?: EtoRunStatus;
+  /** Filter by read status (true=read, false=unread) */
   is_read?: boolean;
-  sort_by?: 'created_at' | 'updated_at' | 'started_at' | 'completed_at' | 'status';
+  /** Filter runs that have at least one sub-run with this status */
+  has_sub_run_status?: EtoSubRunStatus;
+  /** Search in PDF filename, email sender, and subject */
+  search?: string;
+  /** Filter runs created on or after this date (ISO 8601) */
+  date_from?: string;
+  /** Filter runs created on or before this date (ISO 8601) */
+  date_to?: string;
+  /** Field to sort by (default: last_processed_at) */
+  sort_by?: EtoRunSortField;
+  /** Sort order (default: desc) */
   sort_order?: 'asc' | 'desc';
-  limit?: number; // default: 50, max: 200
-  offset?: number; // default: 0
+  /** Number of runs to return (default: 50, max: 200) */
+  limit?: number;
+  /** Number of runs to skip (default: 0) */
+  offset?: number;
 }
 
 export interface GetEtoRunsResponse {

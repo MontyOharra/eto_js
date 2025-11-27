@@ -43,7 +43,7 @@ export const etoRunsQueryKeys = {
 // ============================================================================
 
 /**
- * Fetch list of ETO runs with filtering and pagination
+ * Fetch list of ETO runs with filtering, search, and pagination
  */
 export function useEtoRuns(params?: GetEtoRunsQueryParams) {
   return useQuery({
@@ -51,9 +51,12 @@ export function useEtoRuns(params?: GetEtoRunsQueryParams) {
     queryFn: async (): Promise<GetEtoRunsResponse> => {
       const response = await apiClient.get<GetEtoRunsResponse>(baseUrl, {
         params: {
-          status: params?.status,
           is_read: params?.is_read,
-          sort_by: params?.sort_by || 'updated_at',
+          has_sub_run_status: params?.has_sub_run_status,
+          search: params?.search,
+          date_from: params?.date_from,
+          date_to: params?.date_to,
+          sort_by: params?.sort_by || 'last_processed_at',
           sort_order: params?.sort_order || 'desc',
           limit: params?.limit || 50,
           offset: params?.offset || 0,

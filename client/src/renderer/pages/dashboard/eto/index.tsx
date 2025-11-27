@@ -11,7 +11,7 @@ import {
   useDeleteRuns,
   useUpdateEtoRun,
   useEtoEvents,
-  EtoRunStatus,
+  EtoSubRunStatus,
 } from '../../../features/eto';
 import { PdfViewerModal } from '../../../features/pdf';
 
@@ -30,9 +30,8 @@ function EtoPage() {
   });
 
   // Filter state
-  const [searchScope, setSearchScope] = useState('filename');
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | EtoRunStatus>('all');
+  const [subRunStatusFilter, setSubRunStatusFilter] = useState<EtoSubRunStatus | 'all'>('all');
   const [readFilter, setReadFilter] = useState<'all' | 'read' | 'unread'>('all');
 
   // PDF Viewer modal state
@@ -41,9 +40,10 @@ function EtoPage() {
 
   // Build query params from filter state
   const queryParams = {
-    status: statusFilter !== 'all' ? statusFilter : undefined,
+    search: searchQuery || undefined,
+    has_sub_run_status: subRunStatusFilter !== 'all' ? subRunStatusFilter : undefined,
     is_read: readFilter === 'read' ? true : readFilter === 'unread' ? false : undefined,
-    sort_by: 'updated_at' as const,
+    sort_by: 'last_processed_at' as const,
     sort_order: 'desc' as const,
     limit: 50,
     offset: 0,
@@ -95,9 +95,8 @@ function EtoPage() {
   };
 
   const handleClearFilters = () => {
-    setSearchScope('filename');
     setSearchQuery('');
-    setStatusFilter('all');
+    setSubRunStatusFilter('all');
     setReadFilter('all');
   };
 
@@ -158,15 +157,12 @@ function EtoPage() {
       <EtoPageHeader
         title="ETO Runs"
         subtitle="Email-to-Output Processing Dashboard"
-        searchScope={searchScope}
-        onSearchScopeChange={setSearchScope}
         searchQuery={searchQuery}
         onSearchQueryChange={setSearchQuery}
-        statusFilter={statusFilter}
-        onStatusFilterChange={setStatusFilter}
+        subRunStatusFilter={subRunStatusFilter}
+        onSubRunStatusFilterChange={setSubRunStatusFilter}
         readFilter={readFilter}
         onReadFilterChange={setReadFilter}
-        onDateRangeClick={() => {/* TODO: Implement date range picker */}}
         onClearFilters={handleClearFilters}
       />
 

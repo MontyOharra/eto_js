@@ -295,10 +295,14 @@ class EtoRunsService:
 
     def list_runs_with_relations(
         self,
-        status: Optional[str] = None,
+        is_read: Optional[bool] = None,
+        has_sub_run_status: Optional[str] = None,
+        search_query: Optional[str] = None,
+        date_from: Optional[datetime] = None,
+        date_to: Optional[datetime] = None,
         limit: Optional[int] = None,
         offset: Optional[int] = None,
-        order_by: str = "created_at",
+        order_by: str = "last_processed_at",
         desc: bool = True
     ) -> List[EtoRunListView]:
         """
@@ -308,21 +312,29 @@ class EtoRunsService:
         (PDF files, emails, template matchings, templates) in a single query.
 
         Args:
-            status: Filter by status (optional)
+            is_read: Filter by read status (optional)
+            has_sub_run_status: Filter runs with sub-runs having this status (optional)
+            search_query: Search in filename, email sender, subject (optional)
+            date_from: Filter runs created on or after this date (optional)
+            date_to: Filter runs created on or before this date (optional)
             limit: Maximum number of results (optional)
             offset: Number of results to skip (optional)
-            order_by: Field to order by (default: created_at)
+            order_by: Field to order by (default: last_processed_at)
             desc: Sort descending if True (default: True)
 
         Returns:
             List of EtoRunListView dataclasses with all joined data flattened
         """
-        logger.debug(f"Listing ETO runs with relations: status={status}, limit={limit}, offset={offset}")
+        logger.debug(f"Listing ETO runs with relations: is_read={is_read}, has_sub_run_status={has_sub_run_status}, search={search_query}, limit={limit}, offset={offset}")
 
         try:
             # Repository method performs all joins in a single SQL query
             runs = self.eto_run_repo.get_all_with_relations(
-                status=status,
+                is_read=is_read,
+                has_sub_run_status=has_sub_run_status,
+                search_query=search_query,
+                date_from=date_from,
+                date_to=date_to,
                 limit=limit,
                 offset=offset,
                 order_by=order_by,

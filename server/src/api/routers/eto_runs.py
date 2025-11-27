@@ -5,6 +5,7 @@ REST endpoints for ETO processing control and monitoring
 import asyncio
 import json
 import logging
+from datetime import datetime
 from typing import Optional, Literal, Any
 from fastapi import APIRouter, Query, status, Depends, File, UploadFile, Request
 from fastapi.responses import StreamingResponse
@@ -42,32 +43,60 @@ router = APIRouter(
 
 @router.get("", response_model=GetEtoRunsResponse)
 async def list_eto_runs(
-    status_filter: Optional[Literal["not_started", "processing", "success", "failure", "needs_template", "skipped"]] = Query(
+    is_read: Optional[bool] = Query(
         None,
-        description="Filter by run status"
+        description="Filter by read status (true=read, false=unread)"
+    ),
+    has_sub_run_status: Optional[Literal["needs_template", "failure", "success", "skipped", "processing"]] = Query(
+        None,
+        description="Filter runs that have at least one sub-run with this status"
+    ),
+    search: Optional[str] = Query(
+        None,
+        description="Search in PDF filename, email sender, and subject"
+    ),
+    date_from: Optional[datetime] = Query(
+        None,
+        description="Filter runs created on or after this date (ISO 8601)"
+    ),
+    date_to: Optional[datetime] = Query(
+        None,
+        description="Filter runs created on or before this date (ISO 8601)"
     ),
     limit: int = Query(50, ge=1, le=200, description="Number of runs to return"),
     offset: int = Query(0, ge=0, description="Number of runs to skip"),
-    sort_by: Literal["started_at", "completed_at", "created_at", "updated_at", "status"] = Query("created_at", description="Field to sort by"),
+    sort_by: Literal["last_processed_at", "created_at", "started_at", "completed_at"] = Query(
+        "last_processed_at",
+        description="Field to sort by"
+    ),
     sort_order: Literal["asc", "desc"] = Query("desc", description="Sort order"),
     service = Depends(lambda: ServiceContainer.get_eto_runs_service())
 ) -> GetEtoRunsResponse:
     """
-    List ETO runs with filtering by status and pagination.
+    List ETO runs with filtering, search, and pagination.
 
-    Status filter creates 6 separate views (one per status) for frontend tables:
-    - not_started: Queued for processing
-    - processing: Currently executing
-    - success: Completed successfully
-    - failure: Failed during processing
-    - needs_template: No matching template found
-    - skipped: Manually skipped by user
+    Filters:
+    - is_read: Filter by read/unread status
+    - has_sub_run_status: Filter runs containing sub-runs with specific status
+      (e.g., "needs_template" to find runs needing user attention)
+    - search: Text search across PDF filename, email sender, and subject
+    - date_from/date_to: Date range filter on created_at
+
+    Sorting:
+    - last_processed_at: Most recently processed (default)
+    - created_at: When the run was created
+    - started_at: When processing started
+    - completed_at: When processing completed
     """
-    logger.info(f"List ETO runs: status={status_filter}, limit={limit}, offset={offset}")
+    logger.info(f"List ETO runs: is_read={is_read}, has_sub_run_status={has_sub_run_status}, search={search}, limit={limit}, offset={offset}")
 
     # Get runs with all related data using efficient SQL joins
     runs = service.list_runs_with_relations(
-        status=status_filter,
+        is_read=is_read,
+        has_sub_run_status=has_sub_run_status,
+        search_query=search,
+        date_from=date_from,
+        date_to=date_to,
         limit=limit,
         offset=offset,
         order_by=sort_by,
@@ -75,8 +104,13 @@ async def list_eto_runs(
     )
 
     # Get total count for pagination (using same filters but no limit/offset)
-    all_runs = service.list_runs(
-        status=status_filter,
+    # TODO: Optimize this with a COUNT query instead of fetching all
+    all_runs = service.list_runs_with_relations(
+        is_read=is_read,
+        has_sub_run_status=has_sub_run_status,
+        search_query=search,
+        date_from=date_from,
+        date_to=date_to,
         limit=None,
         offset=None
     )

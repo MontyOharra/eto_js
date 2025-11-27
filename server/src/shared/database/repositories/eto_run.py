@@ -255,10 +255,14 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
 
     def get_all_with_relations(
         self,
-        status: Optional[str] = None,
+        is_read: Optional[bool] = None,
+        has_sub_run_status: Optional[str] = None,
+        search_query: Optional[str] = None,
+        date_from: Optional[datetime] = None,
+        date_to: Optional[datetime] = None,
         limit: Optional[int] = None,
         offset: Optional[int] = None,
-        order_by: str = "created_at",
+        order_by: str = "last_processed_at",
         desc: bool = True
     ) -> List[EtoRunListView]:
         """
@@ -270,18 +274,33 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
         - eto_sub_runs (aggregated counts and page arrays)
 
         Args:
-            status: Filter by status (optional)
+            is_read: Filter by read status (optional)
+            has_sub_run_status: Filter runs that have at least one sub-run with this status
+                               (e.g., "needs_template", "failure")
+            search_query: Search in filename, email sender, and subject (optional)
+            date_from: Filter runs created on or after this date (optional)
+            date_to: Filter runs created on or before this date (optional)
             limit: Maximum number of results (optional)
             offset: Number of results to skip (optional)
-            order_by: Field to order by (default: created_at)
+            order_by: Field to order by (default: last_processed_at)
+                      Special value "last_processed_at" sorts by max sub-run timestamp
             desc: Sort descending if True (default: True - newest first)
 
         Returns:
             List of EtoRunListView dataclasses with aggregated sub-run data
         """
-        from sqlalchemy import func, case
+        from sqlalchemy import func, case, exists, and_, or_, select
 
         with self._get_session() as session:
+            # Subquery for last_processed_at (max of sub-run completed_at or updated_at)
+            last_processed_subquery = (
+                select(func.max(func.coalesce(EtoSubRunModel.completed_at, EtoSubRunModel.updated_at)))
+                .where(EtoSubRunModel.eto_run_id == EtoRunModel.id)
+                .correlate(EtoRunModel)
+                .scalar_subquery()
+                .label("last_processed_at_computed")
+            )
+
             # First, get base run data with PDF and email info
             base_query = (
                 session.query(
@@ -307,25 +326,60 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                     EmailModel.received_date,
                     EmailModel.subject,
                     EmailModel.folder_name,
+                    # Computed field for sorting
+                    last_processed_subquery,
                 )
                 .join(PdfFileModel, EtoRunModel.pdf_file_id == PdfFileModel.id)
                 .outerjoin(EmailModel, PdfFileModel.email_id == EmailModel.id)
             )
 
-            # Apply status filter if provided
-            if status is not None:
-                base_query = base_query.filter(EtoRunModel.status == status)
+            # Apply is_read filter
+            if is_read is not None:
+                base_query = base_query.filter(EtoRunModel.is_read == is_read)
+
+            # Apply sub-run status filter (runs that have at least one sub-run with this status)
+            if has_sub_run_status is not None:
+                exists_subquery = exists().where(
+                    and_(
+                        EtoSubRunModel.eto_run_id == EtoRunModel.id,
+                        EtoSubRunModel.status == has_sub_run_status
+                    )
+                )
+                base_query = base_query.filter(exists_subquery)
+
+            # Apply search filter
+            if search_query:
+                search_pattern = f"%{search_query}%"
+                base_query = base_query.filter(
+                    or_(
+                        PdfFileModel.original_filename.ilike(search_pattern),
+                        EmailModel.sender_email.ilike(search_pattern),
+                        EmailModel.subject.ilike(search_pattern),
+                    )
+                )
+
+            # Apply date range filters (on created_at)
+            if date_from is not None:
+                base_query = base_query.filter(EtoRunModel.created_at >= date_from)
+            if date_to is not None:
+                base_query = base_query.filter(EtoRunModel.created_at <= date_to)
 
             # Apply ordering
-            if hasattr(EtoRunModel, order_by):
+            if order_by == "last_processed_at":
+                # Sort by the computed subquery
+                if desc:
+                    base_query = base_query.order_by(last_processed_subquery.desc().nullslast())
+                else:
+                    base_query = base_query.order_by(last_processed_subquery.asc().nullsfirst())
+            elif hasattr(EtoRunModel, order_by):
                 order_column = getattr(EtoRunModel, order_by)
                 if desc:
                     base_query = base_query.order_by(order_column.desc())
                 else:
                     base_query = base_query.order_by(order_column)
             else:
-                logger.warning(f"Field '{order_by}' does not exist on EtoRunModel, using created_at")
-                base_query = base_query.order_by(EtoRunModel.created_at.desc())
+                logger.warning(f"Field '{order_by}' does not exist on EtoRunModel, using last_processed_at")
+                base_query = base_query.order_by(last_processed_subquery.desc().nullslast())
 
             # Apply pagination
             if offset is not None:
@@ -357,8 +411,6 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                 pages_unmatched = []
                 pages_skipped = []
 
-                # Compute last_processed_at as max of sub-run timestamps
-                last_processed_at = None
                 for sr in sub_runs:
                     # Parse matched_pages JSON string
                     try:
@@ -373,11 +425,8 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                     except (json.JSONDecodeError, TypeError) as e:
                         logger.warning(f"Failed to parse matched_pages for sub-run {sr.id}: {e}")
 
-                    # Track max timestamp (prefer completed_at, fall back to updated_at)
-                    sr_timestamp = sr.completed_at or sr.updated_at
-                    if sr_timestamp:
-                        if last_processed_at is None or sr_timestamp > last_processed_at:
-                            last_processed_at = sr_timestamp
+                # Use SQL-computed last_processed_at from the query
+                last_processed_at = row.last_processed_at_computed
 
                 result.append(EtoRunListView(
                     # Core ETO run fields
