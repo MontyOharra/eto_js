@@ -365,12 +365,14 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                 base_query = base_query.filter(EtoRunModel.created_at <= date_to)
 
             # Apply ordering
+            # Note: SQL Server sorts NULLs as lowest values by default
+            # (first in ASC, last in DESC), which is the desired behavior
             if order_by == "last_processed_at":
                 # Sort by the computed subquery
                 if desc:
-                    base_query = base_query.order_by(last_processed_subquery.desc().nullslast())
+                    base_query = base_query.order_by(last_processed_subquery.desc())
                 else:
-                    base_query = base_query.order_by(last_processed_subquery.asc().nullsfirst())
+                    base_query = base_query.order_by(last_processed_subquery.asc())
             elif hasattr(EtoRunModel, order_by):
                 order_column = getattr(EtoRunModel, order_by)
                 if desc:
@@ -379,7 +381,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                     base_query = base_query.order_by(order_column)
             else:
                 logger.warning(f"Field '{order_by}' does not exist on EtoRunModel, using last_processed_at")
-                base_query = base_query.order_by(last_processed_subquery.desc().nullslast())
+                base_query = base_query.order_by(last_processed_subquery.desc())
 
             # Apply pagination
             if offset is not None:
