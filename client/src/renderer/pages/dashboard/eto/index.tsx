@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Table,
   EtoRunRow,
@@ -19,6 +19,25 @@ export const Route = createFileRoute('/dashboard/eto/')({
   component: EtoPage,
 });
 
+/**
+ * Custom hook for debouncing a value
+ */
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
 function EtoPage() {
   const navigate = useNavigate();
 
@@ -29,18 +48,21 @@ function EtoPage() {
     onDisconnected: () => setIsLiveConnected(false),
   });
 
-  // Filter state
+  // Filter state - immediate values for controlled inputs
   const [searchQuery, setSearchQuery] = useState('');
   const [subRunStatusFilter, setSubRunStatusFilter] = useState<EtoSubRunStatus | 'all'>('all');
   const [readFilter, setReadFilter] = useState<'all' | 'read' | 'unread'>('all');
+
+  // Debounce search query to avoid excessive API calls while typing
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   // PDF Viewer modal state
   const [viewingPdfId, setViewingPdfId] = useState<number | null>(null);
   const [viewingPdfFilename, setViewingPdfFilename] = useState<string | undefined>(undefined);
 
-  // Build query params from filter state
+  // Build query params from filter state (use debounced search)
   const queryParams = {
-    search: searchQuery || undefined,
+    search: debouncedSearchQuery || undefined,
     has_sub_run_status: subRunStatusFilter !== 'all' ? subRunStatusFilter : undefined,
     is_read: readFilter === 'read' ? true : readFilter === 'unread' ? false : undefined,
     sort_by: 'last_processed_at' as const,
@@ -50,7 +72,9 @@ function EtoPage() {
   };
 
   // Fetch ETO runs from API
-  const { data, isLoading, isError, error } = useEtoRuns(queryParams);
+  // isLoading = true only on first load (no cached data)
+  // isFetching = true during any fetch (including refetches)
+  const { data, isLoading, isFetching, isError, error } = useEtoRuns(queryParams);
 
   // Mutation for uploading PDF and creating ETO run
   const uploadAndCreateRun = useUploadAndCreateEtoRun();
@@ -131,8 +155,8 @@ function EtoPage() {
     input.click();
   };
 
-  // Loading state
-  if (isLoading) {
+  // Only show full-page loading on initial load (no cached data yet)
+  if (isLoading && !data) {
     return (
       <div className="h-full flex items-center justify-center">
         <div className="text-gray-400">Loading ETO runs...</div>
@@ -140,8 +164,8 @@ function EtoPage() {
     );
   }
 
-  // Error state
-  if (isError) {
+  // Error state - only show if we have no data to display
+  if (isError && !data) {
     return (
       <div className="h-full flex items-center justify-center">
         <div className="text-red-400">Error loading ETO runs: {error?.message || 'Unknown error'}</div>
@@ -168,8 +192,12 @@ function EtoPage() {
 
       {/* Action Bar */}
       <div className="px-6 pb-4 flex items-center justify-between flex-shrink-0">
-        <div className="text-sm text-gray-400">
+        <div className="text-sm text-gray-400 flex items-center gap-2">
           {data?.total ?? 0} total runs
+          {/* Subtle loading indicator during refetches */}
+          {isFetching && (
+            <span className="inline-block w-4 h-4 border-2 border-gray-600 border-t-blue-500 rounded-full animate-spin" />
+          )}
         </div>
         <button
           onClick={handleUploadPdf}
