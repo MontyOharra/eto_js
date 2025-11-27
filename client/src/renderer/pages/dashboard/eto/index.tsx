@@ -1,9 +1,8 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useState, useEffect } from 'react';
 import {
-  Table,
-  EtoRunRow,
   EtoPageHeader,
+  EtoRunsTable,
   useEtoRuns,
   useUploadAndCreateEtoRun,
   useReprocessRun,
@@ -210,50 +209,15 @@ function EtoPage() {
 
       {/* Scrollable Table Container */}
       <div className="flex-1 min-h-0 px-6 pb-6">
-        <Table>
-          <Table.Header>
-            <div className="px-6">
-              <div className="grid gap-4" style={{ gridTemplateColumns: '2fr 2fr 1fr 100px 1fr auto 400px' }}>
-                {/* PDF Filename header - needs to account for 32px indicator space + 8px gap */}
-                <div className="flex items-center gap-2">
-                  <div className="w-8 flex-shrink-0"></div>
-                  <span className="text-gray-400 font-semibold text-sm uppercase break-words">PDF Filename</span>
-                </div>
-                <span className="text-gray-400 font-semibold text-sm uppercase break-words">Source</span>
-                <span className="text-gray-400 font-semibold text-sm uppercase break-words">Received</span>
-                <span className="text-gray-400 font-semibold text-sm uppercase break-words">Status</span>
-                <span className="text-gray-400 font-semibold text-sm uppercase break-words">Pages</span>
-                <span className="text-gray-400 font-semibold text-sm uppercase break-words">Last Updated</span>
-                <span className="text-gray-400 font-semibold text-sm uppercase break-words text-right">Actions</span>
-              </div>
-            </div>
-          </Table.Header>
-
-          <Table.Body>
-            {items.length === 0 ? (
-              <div className="px-6 py-8 text-center text-gray-400">
-                No ETO runs found
-              </div>
-            ) : (
-              items.map((item, index) => (
-                <div key={item.id}>
-                  <EtoRunRow
-                    data={item}
-                    onClick={() => handleRowClick(item.id)}
-                    onReprocess={handleReprocess}
-                    onSkip={handleSkip}
-                    onDelete={handleDelete}
-                    onViewPdf={(pdfId) => handleViewPdf(pdfId, item.pdf.original_filename)}
-                    onToggleRead={handleToggleRead}
-                  />
-                  {index < items.length - 1 && (
-                    <div className="mx-6 border-b border-gray-700" />
-                  )}
-                </div>
-              ))
-            )}
-          </Table.Body>
-        </Table>
+        <EtoRunsTable
+          data={items}
+          onRowClick={handleRowClick}
+          onReprocess={handleReprocess}
+          onSkip={handleSkip}
+          onDelete={handleDelete}
+          onViewPdf={handleViewPdf}
+          onToggleRead={handleToggleRead}
+        />
       </div>
 
       {/* PDF Viewer Modal */}

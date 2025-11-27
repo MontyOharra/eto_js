@@ -4,6 +4,7 @@ export { Table } from './Table';
 // List page components
 export { EtoRunRow } from './EtoRunRow';
 export { EtoPageHeader } from './EtoPageHeader';
+export { EtoRunsTable } from './EtoRunsTable';
 
 // Detail page components
 export {

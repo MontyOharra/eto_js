@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@tanstack/react-router-devtools": "^1.124.0",
+    "@tanstack/react-table": "^8.21.3",
     "@xyflow/react": "^12.8.6",
     "axios": "^1.7.2",
     "dagre": "^0.8.5",
