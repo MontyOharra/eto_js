@@ -320,8 +320,7 @@ class PdfFilesService:
     def store_pdf(
         self,
         file_bytes: bytes,
-        filename: str,
-        email_id: int | None = None
+        filename: str
     ) -> PdfFile:
         """
         Store PDF file with hash-based deduplication and extract objects.
@@ -340,10 +339,13 @@ class PdfFilesService:
         Args:
             file_bytes: Raw PDF file bytes
             filename: Original filename
-            email_id: Optional email_id (source tracking)
 
         Returns:
             PdfFile dataclass with complete file data
+
+        Note:
+            Source tracking (email/manual) is now handled at the eto_runs level,
+            not at the PDF file level. PDFs are deduplicated storage entities only.
 
         Raises:
             ValidationError: If PDF is invalid (400)
@@ -414,7 +416,6 @@ class PdfFilesService:
                 file_hash=file_hash,
                 file_size_bytes=len(file_bytes),
                 file_path=str(relative_path),
-                email_id=email_id,
                 stored_at=now,
                 extracted_objects=extracted_objects,
                 page_count=page_count if page_count > 0 else None

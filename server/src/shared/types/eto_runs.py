@@ -22,8 +22,13 @@ class EtoRunCreate:
     """
     Data required to create a new ETO run.
     All other fields are set to defaults by the database.
+
+    source_type: 'email' for email ingestion, 'manual' for manual uploads
+    source_email_id: Required if source_type='email', None if source_type='manual'
     """
     pdf_file_id: int
+    source_type: Literal['email', 'manual']
+    source_email_id: Optional[int] = None
 
 
 class EtoRunUpdate(TypedDict, total=False):
@@ -59,6 +64,8 @@ class EtoRun:
     """
     id: int
     pdf_file_id: int
+    source_type: str
+    source_email_id: Optional[int]
     status: str
     processing_step: Optional[str]
     is_read: bool
@@ -77,7 +84,7 @@ class EtoRunListView:
     ETO run with all joined data for API list view.
 
     This is a flattened view combining data from:
-    - eto_runs table (core fields)
+    - eto_runs table (core fields + source tracking)
     - pdf_files table (PDF info)
     - emails table (source info, if email-sourced)
     - eto_sub_runs table (aggregated sub-run data)
@@ -87,6 +94,8 @@ class EtoRunListView:
     """
     # Core ETO run fields
     id: int
+    source_type: str
+    source_email_id: Optional[int]
     status: str
     processing_step: Optional[str]
     is_read: bool
@@ -198,7 +207,7 @@ class EtoRunDetailView:
     Complete detailed view for a single ETO run with all sub-run data.
 
     Used by GET /eto-runs/{id} endpoint to return full run details including:
-    - Core run data
+    - Core run data (with source tracking)
     - PDF file info
     - Email source info (if applicable)
     - List of all sub-runs (each with their template, extraction, and pipeline data)
@@ -208,6 +217,8 @@ class EtoRunDetailView:
     """
     # Core run data
     id: int
+    source_type: str
+    source_email_id: Optional[int]
     status: str
     processing_step: Optional[str]
     is_read: bool

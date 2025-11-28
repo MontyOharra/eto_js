@@ -1,4 +1,7 @@
 import { EtoSubRunStatus } from '../../types';
+import { EtoRunSortField } from '../../api/types';
+
+export type SortOption = `${EtoRunSortField}-${'asc' | 'desc'}`;
 
 interface EtoPageHeaderProps {
   title: string;
@@ -9,6 +12,8 @@ interface EtoPageHeaderProps {
   onSubRunStatusFilterChange: (status: EtoSubRunStatus | 'all') => void;
   readFilter: 'all' | 'read' | 'unread';
   onReadFilterChange: (filter: 'all' | 'read' | 'unread') => void;
+  sortOption: SortOption;
+  onSortOptionChange: (option: SortOption) => void;
   onClearFilters: () => void;
 }
 
@@ -21,6 +26,8 @@ export function EtoPageHeader({
   onSubRunStatusFilterChange,
   readFilter,
   onReadFilterChange,
+  sortOption,
+  onSortOptionChange,
   onClearFilters,
 }: EtoPageHeaderProps) {
   return (
@@ -74,6 +81,22 @@ export function EtoPageHeader({
           <option value="all">All</option>
           <option value="unread">Unread</option>
           <option value="read">Read</option>
+        </select>
+
+        {/* Sort Dropdown */}
+        <select
+          className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          value={sortOption}
+          onChange={(e) => onSortOptionChange(e.target.value as SortOption)}
+        >
+          <option value="last_processed_at-desc">Last Updated (Newest)</option>
+          <option value="last_processed_at-asc">Last Updated (Oldest)</option>
+          {/* TODO: Add backend support for pdf_filename sorting */}
+          {/* <option value="pdf_filename-asc">Filename (A-Z)</option> */}
+          {/* <option value="pdf_filename-desc">Filename (Z-A)</option> */}
+          {/* TODO #3: Fix received_at field, then add sorting */}
+          {/* <option value="received_at-desc">Time Received (Newest)</option> */}
+          {/* <option value="received_at-asc">Time Received (Oldest)</option> */}
         </select>
 
         {/* Clear Filters Button */}

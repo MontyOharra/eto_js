@@ -62,6 +62,8 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
         return EtoRun(
             id=model.id,
             pdf_file_id=model.pdf_file_id,
+            source_type=model.source_type,
+            source_email_id=model.source_email_id,
             status=model.status,
             processing_step=model.processing_step,
             is_read=model.is_read,
@@ -81,7 +83,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
         Create new ETO run with status = "not_started".
 
         Args:
-            data: EtoRunCreate with pdf_file_id
+            data: EtoRunCreate with pdf_file_id, source_type, and source_email_id
 
         Returns:
             Created EtoRun dataclass
@@ -90,6 +92,8 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
             # Create model with defaults
             model = self.model_class(
                 pdf_file_id=data.pdf_file_id,
+                source_type=data.source_type,
+                source_email_id=data.source_email_id,
                 # status defaults to NOT_STARTED via model default
                 # processing_step defaults to None
                 # timestamps auto-set by server_default
@@ -306,6 +310,8 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                 session.query(
                     # ETO run fields
                     EtoRunModel.id,
+                    EtoRunModel.source_type,
+                    EtoRunModel.source_email_id,
                     EtoRunModel.status,
                     EtoRunModel.processing_step,
                     EtoRunModel.is_read,
@@ -320,7 +326,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                     PdfFileModel.original_filename,
                     PdfFileModel.file_size,
                     PdfFileModel.page_count,
-                    # Email fields (optional)
+                    # Email fields (optional) - now joined via eto_runs.source_email_id
                     EmailModel.id.label("email_id"),
                     EmailModel.sender_email,
                     EmailModel.received_date,
@@ -330,7 +336,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                     last_processed_subquery,
                 )
                 .join(PdfFileModel, EtoRunModel.pdf_file_id == PdfFileModel.id)
-                .outerjoin(EmailModel, PdfFileModel.email_id == EmailModel.id)
+                .outerjoin(EmailModel, EtoRunModel.source_email_id == EmailModel.id)
             )
 
             # Apply is_read filter
@@ -433,6 +439,8 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                 result.append(EtoRunListView(
                     # Core ETO run fields
                     id=row.id,
+                    source_type=row.source_type,
+                    source_email_id=row.source_email_id,
                     status=row.status,
                     processing_step=row.processing_step,
                     is_read=row.is_read,
@@ -490,6 +498,8 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                 session.query(
                     # ETO run fields
                     EtoRunModel.id,
+                    EtoRunModel.source_type,
+                    EtoRunModel.source_email_id,
                     EtoRunModel.status,
                     EtoRunModel.processing_step,
                     EtoRunModel.is_read,
@@ -505,7 +515,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                     PdfFileModel.original_filename,
                     PdfFileModel.file_size,
                     PdfFileModel.page_count,
-                    # Email fields (optional)
+                    # Email fields (optional) - now joined via eto_runs.source_email_id
                     EmailModel.id.label("email_id"),
                     EmailModel.sender_email,
                     EmailModel.received_date,
@@ -513,7 +523,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                     EmailModel.folder_name,
                 )
                 .join(PdfFileModel, EtoRunModel.pdf_file_id == PdfFileModel.id)
-                .outerjoin(EmailModel, PdfFileModel.email_id == EmailModel.id)
+                .outerjoin(EmailModel, EtoRunModel.source_email_id == EmailModel.id)
                 .filter(EtoRunModel.id == run_id)
                 .first()
             )
@@ -555,6 +565,8 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
             return EtoRunDetailView(
                 # Core run data
                 id=row.id,
+                source_type=row.source_type,
+                source_email_id=row.source_email_id,
                 status=row.status,
                 processing_step=row.processing_step,
                 is_read=row.is_read,

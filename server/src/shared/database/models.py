@@ -130,7 +130,7 @@ class EmailModel(BaseModel):
 
     # Relationships
     config: Mapped["EmailConfigModel"] = relationship(back_populates="emails")
-    pdf_files: Mapped[List["PdfFileModel"]] = relationship(back_populates="email")
+    # Note: PDF files no longer track email_id - use eto_runs.source_email_id instead
 
     __table_args__ = (
         UniqueConstraint("config_id", "message_id", name="uix_config_message"),
@@ -148,7 +148,6 @@ class PdfFileModel(BaseModel):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
-    email_id: Mapped[Optional[int]] = mapped_column(ForeignKey("emails.id"), index=True)
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
     relative_path: Mapped[str] = mapped_column(String(512), nullable=False)
@@ -167,7 +166,7 @@ class PdfFileModel(BaseModel):
     )
 
     # Relationships
-    email: Mapped[Optional["EmailModel"]] = relationship(back_populates="pdf_files")
+    # Note: Source tracking moved to eto_runs table
     eto_runs: Mapped[List["EtoRunModel"]] = relationship(back_populates="pdf_file", cascade="all, delete-orphan")
     source_for_templates: Mapped[List["PdfTemplateModel"]] = relationship(
         back_populates="source_pdf", cascade="all, delete-orphan", foreign_keys="PdfTemplateModel.source_pdf_id"
@@ -338,6 +337,15 @@ class PipelineDefinitionStepModel(BaseModel):
     )
 
 
+# Source type enum for ETO runs
+ETO_SOURCE_TYPE = SAEnum(
+    'email', 'manual',
+    name='eto_source_type',
+    native_enum=False,
+    validate_strings=True
+)
+
+
 # =========================
 # eto_runs (NEW: parent orchestration level)
 # =========================
@@ -347,6 +355,17 @@ class EtoRunModel(BaseModel):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     pdf_file_id: Mapped[int] = mapped_column(ForeignKey("pdf_files.id"), nullable=False, index=True)
+
+    # Source tracking (where this run came from)
+    source_type: Mapped[str] = mapped_column(
+        ETO_SOURCE_TYPE,
+        nullable=False,
+    )
+    source_email_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("emails.id"),
+        nullable=True,
+        index=True
+    )
 
     # Parent orchestration status
     status: Mapped[str] = mapped_column(
@@ -381,6 +400,7 @@ class EtoRunModel(BaseModel):
 
     # Relationships
     pdf_file: Mapped["PdfFileModel"] = relationship(back_populates="eto_runs")
+    source_email: Mapped[Optional["EmailModel"]] = relationship(foreign_keys=[source_email_id])
     sub_runs: Mapped[List["EtoSubRunModel"]] = relationship(
         back_populates="eto_run", cascade="all, delete-orphan"
     )
@@ -389,6 +409,7 @@ class EtoRunModel(BaseModel):
         Index("idx_eto_runs_status", "status"),
         Index("idx_eto_runs_processing_step", "processing_step"),
         Index("idx_eto_runs_pdf_file", "pdf_file_id"),
+        Index("idx_eto_runs_source_email", "source_email_id"),
     )
 
 

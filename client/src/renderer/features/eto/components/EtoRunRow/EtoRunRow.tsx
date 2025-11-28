@@ -42,11 +42,11 @@ function getSourceSubject(source: EtoRunListItem['source']): string | null {
 }
 
 // Helper to get source date
-function getSourceDate(source: EtoRunListItem['source']): string | null {
+function getSourceDate(source: EtoRunListItem['source']): string {
   if (source.type === 'email') {
-    return source.received_date;
+    return source.received_at;
   }
-  return null;
+  return source.created_at;
 }
 
 // Helper to format date for display

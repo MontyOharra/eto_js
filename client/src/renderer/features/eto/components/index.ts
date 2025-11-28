@@ -3,7 +3,7 @@ export { Table } from './Table';
 
 // List page components
 export { EtoRunRow } from './EtoRunRow';
-export { EtoPageHeader } from './EtoPageHeader';
+export { EtoPageHeader, type SortOption } from './EtoPageHeader';
 export { EtoRunsTable } from './EtoRunsTable';
 
 // Detail page components
@@ -14,6 +14,7 @@ export {
   NeedsTemplateSection,
   SkippedSubRunsSection,
   EtoRunDetailSidebar,
+  EtoRunDetailViewWrapper,
 } from './EtoRunDetailView';
 
 // Modal components

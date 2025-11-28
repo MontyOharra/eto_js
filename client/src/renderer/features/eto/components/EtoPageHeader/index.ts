@@ -1,1 +1,1 @@
-export { EtoPageHeader } from './EtoPageHeader';
+export { EtoPageHeader, type SortOption } from './EtoPageHeader';

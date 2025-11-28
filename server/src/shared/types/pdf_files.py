@@ -80,9 +80,11 @@ class PdfFile:
     Used by services and repositories for PDF file data.
 
     The extracted_objects field contains strongly-typed PDF objects grouped by type.
+
+    Note: Source tracking (email/manual) is now handled at the eto_runs level,
+    not at the PDF file level. PDFs are just storage entities.
     """
     id: int
-    email_id: int | None
     original_filename: str
     file_hash: str
     file_size_bytes: int
@@ -101,12 +103,13 @@ class PdfFileCreate:
     Used by store_pdf service method.
 
     The extracted_objects field contains strongly-typed PDF objects grouped by type.
+
+    Note: email_id removed - source tracking now handled at eto_runs level.
     """
     original_filename: str
     file_hash: str
     file_size_bytes: int
     file_path: str
-    email_id: int | None
     stored_at: datetime
     extracted_objects: PdfObjects
     page_count: int | None = None

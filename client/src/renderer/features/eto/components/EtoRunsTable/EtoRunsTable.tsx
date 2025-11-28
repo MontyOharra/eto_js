@@ -55,11 +55,11 @@ function getSourceSubject(source: EtoRunListItem['source']): string | null {
   return null;
 }
 
-function getSourceDate(source: EtoRunListItem['source']): string | null {
+function getSourceDate(source: EtoRunListItem['source']): string {
   if (source.type === 'email') {
-    return source.received_date;
+    return source.received_at;
   }
-  return null;
+  return source.created_at;
 }
 
 function formatDate(isoDate: string | null): string {
@@ -136,7 +136,7 @@ function FilenameCell({ row }: CellContext<EtoRunListItem, unknown>) {
           </>
         )}
       </div>
-      <span className={`${filenameColor} text-sm ${!isRead ? 'font-medium' : ''} truncate`}>
+      <span className={`${filenameColor} text-sm ${!isRead ? 'font-medium' : ''} line-clamp-5 break-words`}>
         {data.pdf.original_filename}
       </span>
     </div>
@@ -155,11 +155,11 @@ function SourceCell({ row }: CellContext<EtoRunListItem, unknown>) {
 
   return (
     <div className={`flex flex-col gap-0.5 min-w-0 ${textOpacity}`}>
-      <span className={`text-sm ${isFailure ? 'text-red-200/70' : 'text-gray-300'} truncate`}>
+      <span className={`text-sm ${isFailure ? 'text-red-200/70' : 'text-gray-300'} line-clamp-3 break-words`}>
         {sourceDisplay}
       </span>
       {sourceSubject && (
-        <span className={`text-xs ${isFailure ? 'text-red-200/50' : 'text-gray-500'} truncate`}>
+        <span className={`text-xs ${isFailure ? 'text-red-200/50' : 'text-gray-500'} line-clamp-2 break-words`}>
           {sourceSubject}
         </span>
       )}
@@ -194,7 +194,7 @@ function ActionsCell({
   const showReprocessButton = !isFullySuccessful && !isSkipped;
 
   return (
-    <div className="flex items-center gap-1.5 justify-end">
+    <div className="flex items-center gap-1.5 justify-end flex-shrink-0 flex-wrap">
       {/* Skip/Delete button */}
       <button
         onClick={(e) => {
@@ -206,7 +206,7 @@ function ActionsCell({
           }
         }}
         disabled={!showSkipButton && !showDeleteButton}
-        className={`w-16 px-2 py-1 text-xs font-medium rounded transition-colors ${
+        className={`flex items-center gap-1 px-2 py-1 rounded transition-colors text-xs font-medium ${
           showDeleteButton
             ? 'bg-red-900/30 hover:bg-red-700/50 text-red-400 hover:text-red-300'
             : showSkipButton
@@ -215,7 +215,21 @@ function ActionsCell({
         }`}
         title={showDeleteButton ? 'Delete this run' : showSkipButton ? 'Skip this run' : 'No action needed'}
       >
-        {showDeleteButton ? 'Delete' : 'Skip'}
+        {showDeleteButton ? (
+          <>
+            <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            <span className="hidden 2xl:inline whitespace-nowrap">Delete</span>
+          </>
+        ) : (
+          <>
+            <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+            </svg>
+            <span className="hidden 2xl:inline whitespace-nowrap">Skip</span>
+          </>
+        )}
       </button>
 
       {/* Reprocess button */}
@@ -227,14 +241,17 @@ function ActionsCell({
           }
         }}
         disabled={!showReprocessButton}
-        className={`w-20 px-2 py-1 text-xs font-medium rounded transition-colors ${
+        className={`flex items-center gap-1 px-2 py-1 rounded transition-colors text-xs font-medium ${
           showReprocessButton
             ? 'bg-green-900/30 hover:bg-green-700/50 text-green-400 hover:text-green-300'
             : 'bg-gray-800 text-gray-600 cursor-not-allowed'
         }`}
         title={showReprocessButton ? 'Reprocess failed items' : 'No reprocessing needed'}
       >
-        Reprocess
+        <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        <span className="hidden 2xl:inline whitespace-nowrap">Reprocess</span>
       </button>
 
       {/* View PDF button */}
@@ -243,10 +260,13 @@ function ActionsCell({
           e.stopPropagation();
           onViewPdf(data.pdf.id, data.pdf.original_filename);
         }}
-        className="w-20 px-2 py-1 text-xs font-medium bg-blue-900/30 hover:bg-blue-700/50 text-blue-400 hover:text-blue-300 rounded transition-colors whitespace-nowrap"
+        className="flex items-center gap-1 px-2 py-1 bg-blue-900/30 hover:bg-blue-700/50 text-blue-400 hover:text-blue-300 rounded transition-colors text-xs font-medium"
         title="View PDF"
       >
-        View PDF
+        <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+        </svg>
+        <span className="hidden 2xl:inline whitespace-nowrap">View PDF</span>
       </button>
 
       {/* Mark Read/Unread button */}
@@ -255,7 +275,7 @@ function ActionsCell({
           e.stopPropagation();
           onToggleRead(data.id, !data.is_read);
         }}
-        className="p-1.5 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-white"
+        className="p-1.5 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-white flex-shrink-0"
         title={isRead ? 'Mark as unread' : 'Mark as read'}
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -293,15 +313,15 @@ export function EtoRunsTable({
         </div>
       ),
       cell: FilenameCell,
-      size: 250,
-      minSize: 150,
+      size: 320,
+      minSize: 200,
     }),
     columnHelper.display({
       id: 'source',
       header: 'Source',
       cell: SourceCell,
-      size: 200,
-      minSize: 120,
+      size: 250,
+      minSize: 150,
     }),
     columnHelper.accessor((row) => getSourceDate(row.source), {
       id: 'received',
@@ -311,13 +331,13 @@ export function EtoRunsTable({
         const isFailure = row.original.status === 'failure';
         const textOpacity = isRead ? 'opacity-60' : 'opacity-100';
         return (
-          <span className={`text-sm ${isFailure ? 'text-red-200/70' : 'text-gray-300'} ${textOpacity}`}>
+          <span className={`text-sm ${isFailure ? 'text-red-200/70' : 'text-gray-300'} ${textOpacity} break-words`}>
             {formatDate(getValue())}
           </span>
         );
       },
-      size: 100,
-      minSize: 80,
+      size: 130,
+      minSize: 100,
     }),
     columnHelper.accessor('status', {
       header: 'Status',
@@ -331,8 +351,8 @@ export function EtoRunsTable({
           </span>
         );
       },
-      size: 100,
-      minSize: 80,
+      size: 70,
+      minSize: 70,
     }),
     columnHelper.accessor('sub_runs_summary', {
       id: 'pages',
@@ -343,12 +363,12 @@ export function EtoRunsTable({
         const isFailure = row.original.status === 'failure';
         const textOpacity = isRead ? 'opacity-60' : 'opacity-100';
         return (
-          <span className={`text-sm ${isFailure ? 'text-red-200/70' : 'text-gray-300'} ${textOpacity}`}>
+          <span className={`text-sm ${isFailure ? 'text-red-200/70' : 'text-gray-300'} ${textOpacity} break-words`}>
             {formatPageBreakdown(summary)}
           </span>
         );
       },
-      size: 140,
+      size: 130,
       minSize: 100,
     }),
     columnHelper.accessor('last_processed_at', {
@@ -358,13 +378,13 @@ export function EtoRunsTable({
         const isFailure = row.original.status === 'failure';
         const textOpacity = isRead ? 'opacity-60' : 'opacity-100';
         return (
-          <span className={`text-sm ${isFailure ? 'text-red-200/70' : 'text-gray-300'} ${textOpacity}`}>
+          <span className={`text-sm ${isFailure ? 'text-red-200/70' : 'text-gray-300'} ${textOpacity} break-words`}>
             {formatDate(getValue())}
           </span>
         );
       },
-      size: 160,
-      minSize: 120,
+      size: 120,
+      minSize: 110,
     }),
     columnHelper.display({
       id: 'actions',
@@ -380,7 +400,7 @@ export function EtoRunsTable({
         />
       ),
       size: 280,
-      minSize: 280,
+      minSize: 140,
     }),
   ], [onReprocess, onSkip, onDelete, onViewPdf, onToggleRead]);
 
@@ -394,10 +414,16 @@ export function EtoRunsTable({
   // Generate CSS variable styles for column widths
   const columnSizeVars = useMemo(() => {
     const headers = table.getFlatHeaders();
-    const colSizes: Record<string, number> = {};
+    const colSizes: Record<string, string> = {};
+
+    // Calculate total width
+    const totalSize = headers.reduce((sum, header) => sum + header.getSize(), 0);
+
+    // Convert to percentages
     for (const header of headers) {
-      colSizes[`--header-${header.id}-size`] = header.getSize();
-      colSizes[`--col-${header.column.id}-size`] = header.column.getSize();
+      const percentage = (header.getSize() / totalSize) * 100;
+      colSizes[`--header-${header.id}-size`] = `${percentage}%`;
+      colSizes[`--col-${header.column.id}-size`] = `${percentage}%`;
     }
     return colSizes;
   }, [table.getState().columnSizing]);
@@ -410,7 +436,19 @@ export function EtoRunsTable({
         style={columnSizeVars as React.CSSProperties}
       >
         {/* Header */}
-        <div className="py-4 bg-gray-750 border-b-2 border-gray-600 flex-shrink-0 overflow-hidden">
+        <div className="py-4 bg-gray-750 border-b-2 border-gray-600 flex-shrink-0 overflow-y-scroll header-scrollbar-spacer">
+          <style>{`
+            /* Hide scrollbar in header but maintain width */
+            .header-scrollbar-spacer::-webkit-scrollbar {
+              width: 12px;
+            }
+            .header-scrollbar-spacer::-webkit-scrollbar-track {
+              background: transparent;
+            }
+            .header-scrollbar-spacer::-webkit-scrollbar-thumb {
+              background: transparent;
+            }
+          `}</style>
           <table className="w-full table-fixed">
             <thead>
               {table.getHeaderGroups().map((headerGroup) => (
@@ -418,8 +456,8 @@ export function EtoRunsTable({
                   {headerGroup.headers.map((header) => (
                     <th
                       key={header.id}
-                      className="px-3 py-1 text-left text-gray-400 font-semibold text-sm uppercase first:pl-6 last:pr-6"
-                      style={{ width: `var(--header-${header.id}-size)px` }}
+                      className="px-3 py-1 text-left text-gray-400 font-semibold text-sm uppercase first:pl-6 last:pr-6 overflow-hidden"
+                      style={{ width: `var(--header-${header.id}-size)` }}
                     >
                       {header.isPlaceholder
                         ? null
@@ -463,8 +501,16 @@ export function EtoRunsTable({
             <table className="w-full table-fixed">
               <tbody>
                 {table.getRowModel().rows.map((row, index) => {
+                  const isRead = row.original.is_read;
                   const isFailure = row.original.status === 'failure';
-                  const rowBg = isFailure ? 'bg-red-900/10 border-l-2 border-red-500/50' : '';
+
+                  // Background styling
+                  let rowBg = '';
+                  if (isFailure) {
+                    rowBg = 'bg-red-900/10 border-l-2 border-red-500/50';
+                  } else if (!isRead) {
+                    rowBg = 'bg-blue-900/10';
+                  }
 
                   return (
                     <tr
@@ -477,8 +523,8 @@ export function EtoRunsTable({
                       {row.getVisibleCells().map((cell) => (
                         <td
                           key={cell.id}
-                          className="px-3 py-2.5 first:pl-6 last:pr-6"
-                          style={{ width: `var(--col-${cell.column.id}-size)px` }}
+                          className={`px-3 py-2.5 first:pl-6 last:pr-6 ${cell.column.id === 'actions' ? '' : 'overflow-hidden'}`}
+                          style={{ width: `var(--col-${cell.column.id}-size)` }}
                         >
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
                         </td>

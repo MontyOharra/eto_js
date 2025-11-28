@@ -157,7 +157,6 @@ class PdfFileRepository(BaseRepository[PdfFileModel]):
 
         return PdfFile(
             id=model.id,
-            email_id=model.email_id,
             original_filename=model.original_filename,
             file_hash=model.file_hash or "",
             file_size_bytes=model.file_size or 0,
@@ -245,7 +244,6 @@ class PdfFileRepository(BaseRepository[PdfFileModel]):
 
             # Create ORM model
             model = self.model_class(
-                email_id=pdf_data.email_id,
                 filename=pdf_data.original_filename,  # Store in both filename and original_filename
                 original_filename=pdf_data.original_filename,
                 file_hash=pdf_data.file_hash,

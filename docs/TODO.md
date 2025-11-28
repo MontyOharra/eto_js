@@ -16,13 +16,9 @@
 | 5 | Stabilize Row Position During Processing | Backend | 3 | 3 |
 | 9 | Fix Pagination/Offset Controls | Frontend | 3 | 2 |
 | 11 | Preserve List View State When Navigating | Frontend | 3 | 4 |
-| 2 | Table Header/Column Misalignment | Frontend | 2 | 1 |
 | 6 | Add Table Sorting Controls | Frontend | 2 | 2 |
 | 8 | Clean Up Backend Logging | Backend | 2 | 2 |
-| 10 | Support Multiple PDF Uploads | Frontend | 2 | 2 |
 | 12 | Rethink List View Column Content | Both | 2 | 3 |
-| 13 | Improve Read vs Unread Row Styling | Frontend | 2 | 1 |
-| 14 | Fix Long PDF Filename Overflow | Frontend | 2 | 1 |
 
 **Priority:** 5 = Critical functionality broken, 1 = Nice-to-have polish
 **Difficulty:** 5 = Major restructuring/DB changes, 1 = Simple CSS/config fix
@@ -51,20 +47,46 @@
 
 ---
 
-### 2. Table Header/Column Misalignment
+### 14. Fix Long PDF Filename Overflow ✅
 
 | Layer | Priority | Difficulty |
 |-------|----------|------------|
 | Frontend | 2 | 1 |
 
-**Problem:** The header columns in the ETO runs list view are visually misaligned with the data columns below them.
+**Problem:** In the detail page, long PDF filenames pushed all other components to the right instead of wrapping or truncating, breaking the layout.
 
-**Requirements:**
-- Fix the grid/column alignment so headers match their corresponding data cells
+**Solution Implemented:**
+- ✅ Added `break-words` to filename heading to allow wrapping
+- ✅ Added `min-w-0 flex-1` to container for proper flexbox overflow handling
+- ✅ Added `flex-shrink-0` to back button to prevent shrinking
+- ✅ Added `title` attribute for full filename tooltip on hover
 
-**Why this rating:**
-- Priority 2: Visual polish, doesn't affect functionality
-- Difficulty 1: Simple CSS/grid adjustment
+**Changes:**
+- `client/src/renderer/features/eto/components/EtoRunDetailView/EtoRunDetailHeader.tsx` - Fixed filename overflow with proper CSS
+
+**Completed:** 2025-11-27
+
+---
+
+### 13. Improve Read vs Unread Row Styling ✅
+
+| Layer | Priority | Difficulty |
+|-------|----------|------------|
+| Frontend | 2 | 1 |
+
+**Problem:** The visual distinction between read and unread rows was too subtle (just slightly grayed-out text).
+
+**Solution Implemented:**
+- ✅ Added background color distinction:
+  - **Unread rows:** `bg-blue-900/10` (subtle blue tint)
+  - **Read rows:** Default/transparent background
+  - **Failure rows:** `bg-red-900/10` with red border (takes priority)
+- ✅ Clear visual hierarchy matching email client patterns (Gmail, etc.)
+
+**Changes:**
+- `client/src/renderer/features/eto/components/EtoRunsTable/EtoRunsTable.tsx` - Added conditional background color based on read status
+
+**Completed:** 2025-11-27
 
 ---
 
@@ -203,25 +225,6 @@
 
 ---
 
-### 10. Support Multiple PDF Uploads
-
-| Layer | Priority | Difficulty |
-|-------|----------|------------|
-| Frontend | 2 | 2 |
-
-**Problem:** The "Upload PDF" button currently only allows uploading one file at a time.
-
-**Requirements:**
-- Enable multiple file selection in the file picker (`multiple` attribute)
-- Process each selected PDF and create an ETO run for each
-- Show progress/status for batch uploads
-
-**Why this rating:**
-- Priority 2: Convenience feature, single upload works
-- Difficulty 2: Add multiple attribute, loop through files with progress tracking
-
----
-
 ### 11. Preserve List View State When Navigating to/from Detail Page
 
 | Layer | Priority | Difficulty |
@@ -270,48 +273,6 @@
 
 ---
 
-### 13. Improve Read vs Unread Row Styling
-
-| Layer | Priority | Difficulty |
-|-------|----------|------------|
-| Frontend | 2 | 1 |
-
-**Problem:** The visual distinction between read and unread rows is too subtle. Currently, read rows just have slightly grayed-out text, which is hard to notice especially when looking at the action buttons.
-
-**Requirements:**
-- Make read/unread status more visually distinct
-- Options:
-  - Background color difference (e.g., unread rows have subtle highlight)
-  - Bold text for unread rows
-  - Unread indicator dot/icon
-  - Different opacity for entire row (not just text)
-- Ensure buttons and other elements also reflect the read state
-
-**Why this rating:**
-- Priority 2: Visual improvement
-- Difficulty 1: CSS changes only
-
----
-
-### 14. Fix Long PDF Filename Overflow in Detail Page
-
-| Layer | Priority | Difficulty |
-|-------|----------|------------|
-| Frontend | 2 | 1 |
-
-**Problem:** In the detail page, long PDF filenames push all other components to the right instead of wrapping or truncating. This breaks the layout.
-
-**Requirements:**
-- PDF filename should wrap to multiple lines or truncate with ellipsis
-- Layout should remain static regardless of filename length
-- Consider showing full filename on hover (tooltip) if truncated
-
-**Why this rating:**
-- Priority 2: Layout issue, doesn't break functionality
-- Difficulty 1: CSS overflow/text-wrap fix
-
----
-
 ### 15. Sub-Runs Not Displaying on Some Detail Pages
 
 | Layer | Priority | Difficulty |
@@ -334,4 +295,45 @@
 
 ## Completed Items
 
-<!-- Move items here once resolved -->
+### 10. Support Multiple PDF Uploads ✅
+
+| Layer | Priority | Difficulty |
+|-------|----------|------------|
+| Frontend | 2 | 2 |
+
+**Problem:** The "Upload PDF" button currently only allows uploading one file at a time.
+
+**Solution Implemented:**
+- ✅ Added `multiple` attribute to file input
+- ✅ Sequential upload loop with progress tracking
+- ✅ Per-file error handling (failures don't stop the batch)
+- ✅ Progress displayed in button: "Uploading 2/5..."
+- ✅ Summary report if any files fail
+
+**Changes:**
+- `client/src/renderer/pages/dashboard/eto/index.tsx` - Updated `handleUploadPdf` function and upload button
+
+**Completed:** 2025-11-27
+
+---
+
+### 2. Table Header/Column Misalignment ✅
+
+| Layer | Priority | Difficulty |
+|-------|----------|------------|
+| Frontend | 2 | 1 |
+
+**Problem:** The header columns in the ETO runs list view were visually misaligned with the data columns below them.
+
+**Solution Implemented:**
+- ✅ Fixed percentage-based column widths using TanStack Table
+- ✅ Added invisible scrollbar to header (12px) to match body scrollbar width
+- ✅ Converted pixel widths to percentages for proper `table-fixed` layout
+- ✅ Adjusted column proportions: PDF Filename (24.6%), Source (19.2%), Received (10%), Status (5.4%), Pages (10%), Last Updated (9.2%), Actions (21.5%)
+- ✅ Implemented responsive action buttons (icon+text on wide screens, icon-only on narrow)
+- ✅ Added text wrapping with line-clamp (up to 5 lines before ellipsis)
+
+**Changes:**
+- `client/src/renderer/features/eto/components/EtoRunsTable/EtoRunsTable.tsx` - Complete table rewrite with proper column sizing, scrollbar compensation, and responsive buttons
+
+**Completed:** 2025-11-27
