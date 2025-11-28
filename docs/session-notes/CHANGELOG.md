@@ -1,5 +1,144 @@
 # CHANGELOG
 
+## [2025-11-28] — PDF Source Tracking Refactor & List View State Preservation
+
+### Spec / Intent
+- Move PDF source tracking from `pdf_files` table to `eto_runs` table
+- Enable multiple ETO runs for the same PDF with different sources
+- Make PDFs pure storage entities (hash-based deduplication)
+- Fix list view state preservation when navigating to/from detail page
+- Fix "Received" column showing hyphens for manual uploads
+
+### Changes Made
+
+#### Files Created:
+- `client/src/renderer/features/eto/components/EtoRunDetailView/EtoRunDetailViewWrapper.tsx` - Extracted detail view logic to enable state preservation
+
+#### Files Modified:
+
+**Database Layer:**
+- `server/src/shared/database/models.py`:
+  - Added `ETO_SOURCE_TYPE` enum ('email', 'manual')
+  - Added `source_type` and `source_email_id` to `EtoRunModel`
+  - Added `source_email` relationship to `EtoRunModel`
+  - Removed `email_id` field from `PdfFileModel`
+  - Removed `email` relationship from `PdfFileModel`
+  - Removed `pdf_files` relationship from `EmailModel`
+
+**Domain Types:**
+- `server/src/shared/types/eto_runs.py`:
+  - Added `source_type` and `source_email_id` to `EtoRunCreate`, `EtoRun`, `EtoRunListView`, `EtoRunDetailView`
+- `server/src/shared/types/pdf_files.py`:
+  - Removed `email_id` from `PdfFile` and `PdfFileCreate` dataclasses
+  - Updated docstrings to note source tracking moved to ETO runs
+
+**Repositories:**
+- `server/src/shared/database/repositories/eto_run.py`:
+  - Updated `_model_to_domain` to map new source fields
+  - Updated `create` to accept `source_type` and `source_email_id`
+  - Changed JOIN in `get_all_with_relations` from `PdfFileModel.email_id` to `EtoRunModel.source_email_id`
+  - Updated row mapping to include source fields
+  - Same changes for `get_detail_with_stages`
+- `server/src/shared/database/repositories/pdf_file.py`:
+  - Removed `email_id` from `_model_to_dataclass` and `create` methods
+
+**Service Layer:**
+- `server/src/features/pdf_files/service.py`:
+  - Removed `email_id` parameter from `store_pdf` method
+  - Updated docstring to note source tracking moved to ETO runs level
+
+**API Layer:**
+- `server/src/api/schemas/pdf_files.py`:
+  - Removed `email_id` field from `PdfFile` Pydantic model
+  - Updated docstring to note source tracking moved to eto_runs
+- `server/src/api/mappers/pdf_files.py`:
+  - Removed `email_id` mapping from `pdf_file_to_api` function
+  - Updated docstring
+
+**Frontend:**
+- `client/src/renderer/pages/dashboard/eto/index.tsx`:
+  - Added `selectedRunId` state for list/detail toggle
+  - Removed `useNavigate` hook
+  - Implemented conditional rendering (detail view vs list view)
+  - Fixed import paths for templates
+- `client/src/renderer/features/eto/components/EtoRunsTable/EtoRunsTable.tsx`:
+  - Fixed `getSourceDate()` to use `source.received_at` instead of `source.received_date`
+  - Return `source.created_at` for manual uploads instead of `null`
+- `client/src/renderer/features/eto/components/EtoRunRow/EtoRunRow.tsx`:
+  - Same `getSourceDate()` fix as EtoRunsTable
+- `client/src/renderer/features/eto/components/EtoPageHeader/EtoPageHeader.tsx`:
+  - Cleaned up sort dropdown options
+  - Added TODO comments for PDF filename and received_at sorting
+
+### Key Technical Changes
+
+#### PDF Source Tracking Architecture:
+**Before:**
+- `pdf_files.email_id` tracked source
+- Hash deduplication returned existing record with old `email_id`
+- New email ingestion lost source information on duplicate PDFs
+
+**After:**
+- PDFs are pure storage entities (no `email_id`)
+- Each `eto_run` has its own `source_type` ('email'|'manual') and `source_email_id`
+- Hash deduplication returns existing PDF, but new ETO run gets correct source
+- Same PDF can have multiple ETO runs with different sources
+
+#### List View State Preservation:
+**Approach:** Toggle visibility instead of routing
+- Created `EtoRunDetailViewWrapper` that accepts `runId` prop and `onBack` callback
+- List page maintains `selectedRunId` state
+- Conditional rendering: show detail when `selectedRunId` is set, otherwise show list
+- List component never unmounts, preserving filters, scroll position, and pagination
+
+### Database Schema Impact
+
+**`eto_runs` table - Added:**
+- `source_type` VARCHAR (enum: 'email', 'manual') - NOT NULL
+- `source_email_id` INTEGER - NULLABLE, FK to emails.id
+- `source_email` relationship (ORM)
+
+**`pdf_files` table - Removed:**
+- `email_id` INTEGER field
+- `email` relationship (ORM)
+
+**`emails` table - Removed:**
+- `pdf_files` relationship (ORM)
+
+### Pending Work
+
+**Next Steps to Complete Refactor:**
+1. Update email ingestion service to pass `source_type='email'` and `source_email_id` when creating ETO runs
+2. Update API endpoint for manual uploads to pass `source_type='manual'` and `source_email_id=None`
+3. Update ETO runs API mapper to use `source_type` instead of checking `email_id` for discriminated union
+4. Test the complete flow:
+   - Manual PDF upload creates run with correct source
+   - Email PDF (new) creates run with email source
+   - Email PDF (duplicate hash) creates NEW run with correct email source
+5. Add PDF filename sorting (backend + frontend)
+6. Test list view state preservation with filters and pagination
+
+### Migration Notes
+- No data migration required (dev/test environment)
+- Breaking change: Existing code that creates ETO runs needs updating
+- API responses for PDF files no longer include `email_id`
+
+### Next Actions
+- Update `features/email_ingestion/service.py` to pass source fields when creating ETO runs
+- Update `api/routers/eto_runs.py` manual upload endpoint to pass source fields
+- Update `api/mappers/eto_runs.py` to use new source fields
+- Test complete ingestion flow (manual + email, duplicate PDFs)
+- Implement PDF filename sorting
+- Test list view state preservation
+
+### Notes
+- This refactor enables the same PDF to be processed multiple times with different sources
+- PDFs are now truly deduplicated storage entities
+- Source tracking is now correctly scoped to each ETO run
+- List view state preservation provides better UX for reviewing runs
+
+---
+
 ## [2025-11-24] — Multi-Template Sub-Run System Refactoring
 
 ### Spec / Intent

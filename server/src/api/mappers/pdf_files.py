@@ -19,10 +19,13 @@ from api.schemas.pdf_files import (
 # ========== Domain → API (Response) Conversions ==========
 
 def pdf_file_to_api(pdf: PdfFile) -> PdfFilePydantic:
-    """Convert domain PdfFile to API PdfFile schema"""
+    """
+    Convert domain PdfFile to API PdfFile schema.
+
+    Note: email_id removed - source tracking now at eto_runs level.
+    """
     return PdfFilePydantic(
         id=pdf.id,
-        email_id=pdf.email_id,
         original_filename=pdf.original_filename,
         file_hash=pdf.file_hash,
         file_size_bytes=pdf.file_size_bytes,

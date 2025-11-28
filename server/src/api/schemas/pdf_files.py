@@ -64,10 +64,11 @@ class PdfFile(BaseModel):
     Complete PDF File API schema (matches domain PdfFile).
     Used for GET /pdf-files/{id} endpoint response.
 
-    Note: created_at/updated_at are audit fields and not included in API responses.
+    Note:
+    - created_at/updated_at are audit fields and not included in API responses
+    - Source tracking (email/manual) moved to eto_runs table
     """
     id: int
-    email_id: Optional[int] = None
     original_filename: str
     file_hash: str
     file_size_bytes: int
