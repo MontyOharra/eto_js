@@ -48,18 +48,18 @@
 |-------|----------|------------|
 | Frontend | 2 | 1 |
 
-**Problem:** In the detail page, long PDF filenames pushed all other components to the right instead of wrapping or truncating, breaking the layout.
+**Problem:** In the detail page, long PDF filenames (especially those without spaces) pushed all other components to the right instead of wrapping, breaking the layout.
 
 **Solution Implemented:**
-- ✅ Added `break-words` to filename heading to allow wrapping
-- ✅ Added `min-w-0 flex-1` to container for proper flexbox overflow handling
-- ✅ Added `flex-shrink-0` to back button to prevent shrinking
+- ✅ Changed `break-words` to `break-all` (forces breaks at any character, not just word boundaries)
+- ✅ Added `overflow-hidden` to parent containers to prevent overflow
+- ✅ Changed `items-center` to `items-start` so back button aligns to top when title wraps
 - ✅ Added `title` attribute for full filename tooltip on hover
 
 **Changes:**
-- `client/src/renderer/features/eto/components/EtoRunDetailView/EtoRunDetailHeader.tsx` - Fixed filename overflow with proper CSS
+- `client/src/renderer/features/eto/components/EtoRunDetailView/EtoRunDetailHeader.tsx` - Fixed filename overflow with `break-all` CSS
 
-**Completed:** 2025-11-27
+**Completed:** 2025-11-29 (re-fixed)
 
 ---
 
