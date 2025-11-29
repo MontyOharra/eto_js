@@ -11,7 +11,6 @@
 | 1 | Skipped ETO Run Status and Deletion | Both | 4 | 3 | Pending (needs backend) |
 | 4 | Reset Read Status When Run is Updated | Backend | 3 | 2 | Pending |
 | 5 | Stabilize Row Position During Processing | Backend | 3 | 3 | Pending |
-| 11 | Preserve List View Scroll Position | Frontend | 3 | 2 | Partial (filters work, scroll doesn't) |
 | 6 | Add More Table Sorting Fields | Frontend | 2 | 2 | Partial (basic sorting works) |
 | 8 | Clean Up Backend Logging | Backend | 2 | 2 | Pending |
 | 12 | Rethink List View Column Content | Both | 2 | 3 | Pending |
@@ -167,31 +166,6 @@
 ---
 
 
-### 11. Preserve List View State When Navigating to/from Detail Page
-
-| Layer | Priority | Difficulty |
-|-------|----------|------------|
-| Frontend | 3 | 4 |
-
-**Problem:** When navigating back from the ETO run detail page to the list view, the entire view resets:
-- Filter selections (search query, status filter, read filter) are reset to defaults
-- Scroll position is lost
-
-**Requirements:**
-- Preserve the entire list view state when navigating to detail page and back
-- This includes: filters, scroll position, pagination offset
-- Navigating back should feel like nothing changed in the list view
-- **Recommended approach:** Keep the list view mounted in the DOM but hidden when viewing detail page (don't unmount it)
-- Alternative options:
-  - Store state in URL query parameters
-  - Use state management solution (context, zustand, etc.)
-  - Use browser history state with scroll restoration
-
-**Why this rating:**
-- Priority 3: Important UX improvement, currently frustrating
-- Difficulty 4: May require routing/architecture changes to keep component mounted
-
----
 
 ### 12. Rethink List View Column Content
 
@@ -212,6 +186,30 @@
 **Why this rating:**
 - Priority 2: UX improvement, current display works
 - Difficulty 3: Need to design new columns, possibly add backend aggregation
+
+---
+
+### 11. Preserve List View Scroll Position ✅
+
+| Layer | Priority | Difficulty |
+|-------|----------|------------|
+| Frontend | 3 | 2 |
+
+**Problem:** When navigating back from the detail view to the list view, the scroll position was reset even though filters were preserved.
+
+**Root Cause:**
+The list view was conditionally rendered (`{selectedRunId ? <Detail> : <List>}`), which unmounted the list component when viewing details, losing scroll position.
+
+**Solution Implemented:**
+- ✅ Changed from conditional rendering to show/hide approach
+- ✅ List view is always mounted in the DOM
+- ✅ Uses `hidden` CSS class to hide list when detail view is open
+- ✅ Scroll position and all state preserved when returning from detail view
+
+**Changes:**
+- `client/src/renderer/pages/dashboard/eto/index.tsx` - Keep list mounted, use CSS to show/hide
+
+**Completed:** 2025-11-29
 
 ---
 

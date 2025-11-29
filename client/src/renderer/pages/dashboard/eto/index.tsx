@@ -232,17 +232,18 @@ function EtoPage() {
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      {selectedRunId ? (
-        // Detail view - shown when a run is selected
+      {/* Detail view - shown when a run is selected */}
+      {selectedRunId && (
         <EtoRunDetailViewWrapper
           runId={selectedRunId}
           onBack={handleBackToList}
         />
-      ) : (
-        // List view - shown by default
-        <>
-          {/* Header Section */}
-          <EtoPageHeader
+      )}
+
+      {/* List view - kept mounted but hidden when detail view is open to preserve scroll position */}
+      <div className={`h-full flex flex-col overflow-hidden ${selectedRunId ? 'hidden' : ''}`}>
+        {/* Header Section */}
+        <EtoPageHeader
             title="ETO Runs"
             subtitle="Email-to-Output Processing Dashboard"
             searchQuery={searchQuery}
@@ -317,8 +318,7 @@ function EtoPage() {
               onToggleRead={handleToggleRead}
             />
           </div>
-        </>
-      )}
+        </div>
 
       {/* PDF Viewer Modal - shown in both views */}
       <PdfViewerModal
