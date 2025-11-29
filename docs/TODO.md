@@ -9,7 +9,6 @@
 | # | Item | Layer | Priority | Difficulty | Status |
 |---|------|-------|----------|------------|--------|
 | 1 | Skipped ETO Run Status and Deletion | Both | 4 | 3 | Pending (needs backend) |
-| 7 | Add Fallback Polling for SSE Reliability | Frontend | 4 | 2 | Pending |
 | 4 | Reset Read Status When Run is Updated | Backend | 3 | 2 | Pending |
 | 5 | Stabilize Row Position During Processing | Backend | 3 | 3 | Pending |
 | 11 | Preserve List View Scroll Position | Frontend | 3 | 2 | Partial (filters work, scroll doesn't) |
@@ -146,24 +145,6 @@
 
 ---
 
-### 7. Add Fallback Polling for SSE Reliability
-
-| Layer | Priority | Difficulty |
-|-------|----------|------------|
-| Frontend | 4 | 2 |
-
-**Problem:** Sometimes SSE (Server-Sent Events) doesn't work properly, causing rows to get stuck in "processing" status in the frontend until the user manually refreshes the page.
-
-**Requirements:**
-- Add a background polling mechanism as a fallback/supplement to SSE
-- Periodically refresh the table data via the API (e.g., every 30-60 seconds)
-- This ensures the UI eventually syncs even if SSE events are missed
-
-**Why this rating:**
-- Priority 4: Reliability issue that causes stale/incorrect UI state
-- Difficulty 2: Add interval-based query invalidation/refetch
-
----
 
 ### 8. Clean Up Backend Logging
 
@@ -231,6 +212,27 @@
 **Why this rating:**
 - Priority 2: UX improvement, current display works
 - Difficulty 3: Need to design new columns, possibly add backend aggregation
+
+---
+
+### 7. Add Fallback Polling for SSE Reliability ✅
+
+| Layer | Priority | Difficulty |
+|-------|----------|------------|
+| Frontend | 4 | 2 |
+
+**Problem:** Sometimes SSE (Server-Sent Events) doesn't work properly, causing rows to get stuck in "processing" status in the frontend until the user manually refreshes the page.
+
+**Solution Implemented:**
+- ✅ Added `fallbackPollingInterval` option to `useEtoEvents` hook (default: 10 seconds)
+- ✅ Periodically invalidates ETO runs list queries as backup
+- ✅ Can be disabled by setting `fallbackPollingInterval: 0`
+- ✅ Only logs in development mode to avoid console spam
+
+**Changes:**
+- `client/src/renderer/features/eto/hooks/useEtoEvents.ts` - Added fallback polling interval
+
+**Completed:** 2025-11-29
 
 ---
 

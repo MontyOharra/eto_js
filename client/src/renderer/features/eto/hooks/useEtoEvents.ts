@@ -44,6 +44,12 @@ interface UseEtoEventsOptions {
   onDisconnected?: () => void;
   /** Called on any event (for custom handling) */
   onEvent?: (event: EtoEvent) => void;
+  /**
+   * Fallback polling interval in milliseconds.
+   * Periodically invalidates queries as backup in case SSE events are missed.
+   * Set to 0 to disable. Default: 30000 (30 seconds)
+   */
+  fallbackPollingInterval?: number;
 }
 
 /**
@@ -52,11 +58,20 @@ interface UseEtoEventsOptions {
  * Automatically invalidates TanStack Query caches when events are received,
  * causing affected queries to refetch with updated data.
  */
+// Default fallback polling interval: 30 seconds
+const DEFAULT_FALLBACK_POLLING_INTERVAL = 10000;
+
 export function useEtoEvents(options: UseEtoEventsOptions = {}) {
-  const { onConnected, onDisconnected, onEvent } = options;
+  const {
+    onConnected,
+    onDisconnected,
+    onEvent,
+    fallbackPollingInterval = DEFAULT_FALLBACK_POLLING_INTERVAL
+  } = options;
   const queryClient = useQueryClient();
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isConnectedRef = useRef(false);
 
   const handleEvent = useCallback((event: EtoEvent) => {
@@ -179,6 +194,31 @@ export function useEtoEvents(options: UseEtoEventsOptions = {}) {
       isConnectedRef.current = false;
     };
   }, [connect]);
+
+  // Fallback polling - periodically invalidate queries in case SSE events are missed
+  useEffect(() => {
+    if (fallbackPollingInterval <= 0) {
+      return; // Polling disabled
+    }
+
+    const poll = () => {
+      // Only log in development to avoid console spam
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[SSE Fallback] Polling - invalidating ETO queries');
+      }
+      queryClient.invalidateQueries({ queryKey: etoRunsQueryKeys.lists() });
+    };
+
+    // Start polling interval
+    pollingIntervalRef.current = setInterval(poll, fallbackPollingInterval);
+
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+    };
+  }, [fallbackPollingInterval, queryClient]);
 
   return {
     isConnected: isConnectedRef.current,
