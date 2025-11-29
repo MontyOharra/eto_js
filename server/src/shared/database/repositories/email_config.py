@@ -266,7 +266,7 @@ class EmailConfigRepository(BaseRepository[EmailConfigModel]):
 
             session.flush()
 
-            logger.info(f"Updated email config {config_id}")
+            logger.debug(f"Updated email config {config_id}")
 
             return self._model_to_dataclass(model)
 

@@ -12,7 +12,6 @@
 | 4 | Reset Read Status When Run is Updated | Backend | 3 | 2 | Pending |
 | 5 | Stabilize Row Position During Processing | Backend | 3 | 3 | Pending |
 | 6 | Add More Table Sorting Fields | Frontend | 2 | 2 | Partial (basic sorting works) |
-| 8 | Clean Up Backend Logging | Backend | 2 | 2 | Pending |
 | 12 | Rethink List View Column Content | Both | 2 | 3 | Pending |
 
 **Priority:** 5 = Critical functionality broken, 1 = Nice-to-have polish
@@ -145,25 +144,6 @@
 ---
 
 
-### 8. Clean Up Backend Logging
-
-| Layer | Priority | Difficulty |
-|-------|----------|------------|
-| Backend | 2 | 2 |
-
-**Problem:** There are excessive debugging artifacts and verbose log statements throughout the backend, making it difficult to see actual meaningful logs.
-
-**Requirements:**
-- Audit and clean up logging across the backend codebase
-- Remove or reduce verbosity of debug-level log statements
-- Ensure appropriate log levels are used (DEBUG vs INFO vs WARNING)
-- Keep logs focused on meaningful events and errors
-
-**Why this rating:**
-- Priority 2: Developer experience, not user-facing
-- Difficulty 2: Tedious audit but not complex
-
----
 
 
 
@@ -258,6 +238,38 @@ This incorrectly joined `eto_run_id` (the parent ETO run ID) directly to `PdfFil
 
 **Changes:**
 - `server/src/shared/database/repositories/eto_sub_run.py` - Fixed SQL join in `get_detail_view()` method
+
+**Completed:** 2025-11-29
+
+---
+
+### 8. Clean Up Backend Logging ✅
+
+| Layer | Priority | Difficulty |
+|-------|----------|------------|
+| Backend | 2 | 1 |
+
+**Problem:** Too many verbose logs at INFO level were cluttering the console during normal operation, including:
+- Template matching details
+- SSE connection/disconnection events
+- Worker batch processing status
+- Email polling when no emails found
+
+**Solution Implemented:**
+- ✅ Moved SSE connection/disconnection logs from INFO to DEBUG
+- ✅ Moved "List ETO runs" query logs to DEBUG
+- ✅ Moved template matching process logs to DEBUG
+- ✅ Moved worker batch processing logs to DEBUG
+- ✅ Moved "Updated email config" to DEBUG
+- ✅ Made "Found N emails" conditional: DEBUG when 0, INFO when > 0
+- ✅ Moved email attachment caching logs to DEBUG
+
+**Changes:**
+- `server/src/api/routers/eto_runs.py` - SSE and list query logs → DEBUG
+- `server/src/features/pdf_templates/service.py` - Template matching logs → DEBUG
+- `server/src/features/eto_runs/utils/eto_worker.py` - Batch processing logs → DEBUG
+- `server/src/shared/database/repositories/email_config.py` - Update log → DEBUG
+- `server/src/features/email_ingestion/utils/email_listener_thread.py` - Email polling logs → conditional/DEBUG
 
 **Completed:** 2025-11-29
 

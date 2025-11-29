@@ -273,7 +273,7 @@ class EtoWorker:
             )
 
             if pending_template_matching:
-                logger.info(
+                logger.debug(
                     f"Phase 1 (Template Matching): Processing batch of "
                     f"{len(pending_template_matching)} sub-runs"
                 )
@@ -296,7 +296,7 @@ class EtoWorker:
             )
 
             if pending_extraction:
-                logger.info(
+                logger.debug(
                     f"Phase 2 (Extraction + Pipeline): Processing batch of "
                     f"{len(pending_extraction)} sub-runs"
                 )
@@ -332,7 +332,7 @@ class EtoWorker:
                 if isinstance(result, Exception):
                     logger.error(f"{phase_name} sub-run {runs[i].id} failed: {result}")
         else:
-            logger.info(f"{phase_name} batch completed successfully: {successful} sub-runs processed")
+            logger.debug(f"{phase_name} batch completed successfully: {successful} sub-runs processed")
 
     async def _process_run_async(
         self,

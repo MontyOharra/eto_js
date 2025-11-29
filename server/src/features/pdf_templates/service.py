@@ -470,14 +470,14 @@ class PdfTemplateService:
         Returns:
             Tuple of (template_id, version_id) if match found, None otherwise
         """
-        logger.info(f"Starting template matching for PDF with {pdf_page_count} pages")
+        logger.debug(f"Starting template matching for PDF with {pdf_page_count} pages")
 
         try:
             # Get all active templates
             active_templates = self.template_repository.list_templates(status="active")
 
             if not active_templates:
-                logger.info("No active templates found for matching")
+                logger.debug("No active templates found for matching")
                 return None
 
             matching_templates: list[tuple[PdfTemplateListView, PdfTemplateVersion, int]] = []
@@ -589,19 +589,19 @@ class PdfTemplateService:
         # Determine pages to process
         if page_numbers is not None:
             pages_to_process = sorted(page_numbers)
-            logger.info(
+            logger.debug(
                 f"Starting multi-page template matching for PDF {pdf_file.id} "
                 f"(subset: {len(pages_to_process)} pages of {pdf_file.page_count} total)"
             )
         else:
             pages_to_process = list(range(1, pdf_file.page_count + 1))
-            logger.info(f"Starting multi-page template matching for PDF {pdf_file.id} ({pdf_file.page_count} pages)")
+            logger.debug(f"Starting multi-page template matching for PDF {pdf_file.id} ({pdf_file.page_count} pages)")
 
         try:
             # Get all active templates
             active_templates = self.template_repository.list_templates(status="active")
             if not active_templates:
-                logger.info("No active templates found for matching")
+                logger.debug("No active templates found for matching")
                 # All pages are unmatched
                 return TemplateMatchingResult(
                     matches=[],

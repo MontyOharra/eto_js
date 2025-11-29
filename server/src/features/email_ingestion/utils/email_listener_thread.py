@@ -313,7 +313,11 @@ class EmailListenerThread(threading.Thread):
                 include_read=True  # Process all emails, let service handle duplicates
             )
 
-            logger.info(f"Found {len(emails)} emails for config {self.config_id}")
+            # Only log at INFO when there are emails to process
+            if len(emails) > 0:
+                logger.info(f"Found {len(emails)} emails for config {self.config_id}")
+            else:
+                logger.debug(f"Found 0 emails for config {self.config_id}")
 
             # Apply filter rules
             filtered_emails = self._apply_filter_rules(emails)
@@ -329,11 +333,11 @@ class EmailListenerThread(threading.Thread):
 
                     # Use cached attachments for better performance
                     attachments = email_msg.cached_attachments
-                    logger.info(f"Using {len(attachments)} pre-cached attachments")
+                    logger.debug(f"Using {len(attachments)} pre-cached attachments")
 
                     # Call back to service for processing
                     callback_start_time = time.time()
-                    logger.info(f"Starting email processing callback for {email_msg.message_id[:20]}...")
+                    logger.debug(f"Starting email processing callback for {email_msg.message_id[:20]}...")
 
                     self.process_callback(self.config_id, email_msg, attachments)
 

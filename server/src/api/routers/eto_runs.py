@@ -88,7 +88,7 @@ async def list_eto_runs(
     - started_at: When processing started
     - completed_at: When processing completed
     """
-    logger.info(f"List ETO runs: is_read={is_read}, has_sub_run_status={has_sub_run_status}, search={search}, limit={limit}, offset={offset}")
+    logger.debug(f"List ETO runs: is_read={is_read}, has_sub_run_status={has_sub_run_status}, search={search}, limit={limit}, offset={offset}")
 
     # Get runs with all related data using efficient SQL joins
     runs = service.list_runs_with_relations(
@@ -155,7 +155,7 @@ async def eto_run_events_stream(request: Request):
     async def event_generator():
         # Register this client with the global event manager
         eto_event_manager.register_client(client_queue)
-        logger.info(f"SSE client connected - total: {eto_event_manager.get_client_count()}")
+        logger.debug(f"SSE client connected - total: {eto_event_manager.get_client_count()}")
 
         try:
             # Send initial connection event to establish the stream
@@ -166,7 +166,7 @@ async def eto_run_events_stream(request: Request):
                     # Check if client disconnected
                     try:
                         if await asyncio.wait_for(request.is_disconnected(), timeout=0.1):
-                            logger.info("SSE client disconnected")
+                            logger.debug("SSE client disconnected")
                             break
                     except asyncio.TimeoutError:
                         pass  # Client still connected
@@ -182,7 +182,7 @@ async def eto_run_events_stream(request: Request):
 
                     # If this was a shutdown event, exit gracefully
                     if event.get("type") == "server_shutdown":
-                        logger.info("SSE shutdown event received")
+                        logger.debug("SSE shutdown event received")
                         break
 
                 except asyncio.TimeoutError:
@@ -199,7 +199,7 @@ async def eto_run_events_stream(request: Request):
         finally:
             # Always cleanup when connection closes
             eto_event_manager.unregister_client(client_queue)
-            logger.info(f"SSE client disconnected - remaining: {eto_event_manager.get_client_count()}")
+            logger.debug(f"SSE client disconnected - remaining: {eto_event_manager.get_client_count()}")
 
     return StreamingResponse(
         event_generator(),
