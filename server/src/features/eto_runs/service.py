@@ -5,7 +5,7 @@ Business logic for ETO run lifecycle and orchestration
 import asyncio
 import json
 import os
-from typing import Optional, List, Dict, Any, Set
+from typing import Optional, List, Dict, Any, Set, Literal
 from datetime import datetime, timezone
 
 from shared.logging import get_logger
@@ -171,7 +171,12 @@ class EtoRunsService:
 
     # ==================== Public API Methods ====================
 
-    def create_run(self, pdf_file_id: int) -> EtoRun:
+    def create_run(
+        self,
+        pdf_file_id: int,
+        source_type: Literal['email', 'manual'] = 'manual',
+        source_email_id: Optional[int] = None
+    ) -> EtoRun:
         """
         Create ETO run with a single initial sub-run containing all pages.
         Worker will pick up the sub-run and perform template matching.
@@ -183,6 +188,8 @@ class EtoRunsService:
 
         Args:
             pdf_file_id: ID of PDF file to process
+            source_type: 'email' for email ingestion, 'manual' for manual uploads
+            source_email_id: Email ID if source_type='email', None otherwise
 
         Returns:
             Created EtoRun with status="processing"
@@ -201,7 +208,11 @@ class EtoRunsService:
             logger.debug(f"Validated PDF file {pdf_file_id} exists with {pdf_file.page_count} pages")
 
             # 2. Create parent run with status="processing"
-            run = self.eto_run_repo.create(EtoRunCreate(pdf_file_id=pdf_file_id))
+            run = self.eto_run_repo.create(EtoRunCreate(
+                pdf_file_id=pdf_file_id,
+                source_type=source_type,
+                source_email_id=source_email_id
+            ))
             self.eto_run_repo.update(run.id, {
                 "status": "processing",
                 "started_at": datetime.now(timezone.utc)

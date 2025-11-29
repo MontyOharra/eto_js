@@ -811,10 +811,10 @@ class EmailIngestionService:
                         # 3. Save file to disk (date-based path: YYYY/MM/DD/hash.pdf)
                         # 4. Extract objects using pdfplumber
                         # 5. Create database record with extracted_objects
+                        # Note: Source tracking is now on eto_runs, not pdf_files
                         pdf_record = self.pdf_service.store_pdf(
                             file_bytes=attachment.content,
-                            filename=attachment.filename,
-                            email_id=email_record.id
+                            filename=attachment.filename
                         )
 
                         logger.info(
@@ -825,12 +825,16 @@ class EmailIngestionService:
 
                         pdf_count += 1
 
-                        # Create ETO run for this PDF
+                        # Create ETO run for this PDF with email source tracking
                         try:
-                            eto_run = self.eto_service.create_run(pdf_record.id)
+                            eto_run = self.eto_service.create_run(
+                                pdf_file_id=pdf_record.id,
+                                source_type='email',
+                                source_email_id=email_record.id
+                            )
                             logger.info(
                                 f"Created ETO run {eto_run.id} for PDF {pdf_record.id} "
-                                f"(status: {eto_run.status})"
+                                f"(status: {eto_run.status}, source: email {email_record.id})"
                             )
                         except Exception as eto_error:
                             # Log ETO creation error but don't fail the entire email processing

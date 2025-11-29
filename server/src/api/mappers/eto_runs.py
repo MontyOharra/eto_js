@@ -54,7 +54,8 @@ def eto_run_list_view_to_api(run: EtoRunListView) -> EtoRunListItem:
     )
 
     # Build source (discriminated union: manual or email)
-    if run.email_id is not None:
+    # Use source_type field instead of checking email_id
+    if run.source_type == 'email':
         # Email source
         source: EtoSource = EtoSourceEmail(
             type="email",
@@ -207,7 +208,8 @@ def eto_run_detail_to_api(detail: EtoRunDetailView) -> EtoRunDetail:
     )
 
     # Build source (discriminated union: manual or email)
-    if detail.email_id is not None:
+    # Use source_type field instead of checking email_id
+    if detail.source_type == 'email':
         # Email source
         source: EtoSource = EtoSourceEmail(
             type="email",

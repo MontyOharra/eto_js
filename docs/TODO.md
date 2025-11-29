@@ -6,19 +6,16 @@
 
 ## Summary Table
 
-| # | Item | Layer | Priority | Difficulty |
-|---|------|-------|----------|------------|
-| 15 | Sub-Runs Not Displaying on Some Detail Pages | TBD | 5 | 3 |
-| 1 | Skipped ETO Run Status and Deletion | Both | 4 | 3 |
-| 7 | Add Fallback Polling for SSE Reliability | Frontend | 4 | 2 |
-| 3 | "Received" Column Shows Hyphen | Both | 3 | 2 |
-| 4 | Reset Read Status When Run is Updated | Backend | 3 | 2 |
-| 5 | Stabilize Row Position During Processing | Backend | 3 | 3 |
-| 9 | Fix Pagination/Offset Controls | Frontend | 3 | 2 |
-| 11 | Preserve List View State When Navigating | Frontend | 3 | 4 |
-| 6 | Add Table Sorting Controls | Frontend | 2 | 2 |
-| 8 | Clean Up Backend Logging | Backend | 2 | 2 |
-| 12 | Rethink List View Column Content | Both | 2 | 3 |
+| # | Item | Layer | Priority | Difficulty | Status |
+|---|------|-------|----------|------------|--------|
+| 1 | Skipped ETO Run Status and Deletion | Both | 4 | 3 | Pending (needs backend) |
+| 7 | Add Fallback Polling for SSE Reliability | Frontend | 4 | 2 | Pending |
+| 4 | Reset Read Status When Run is Updated | Backend | 3 | 2 | Pending |
+| 5 | Stabilize Row Position During Processing | Backend | 3 | 3 | Pending |
+| 11 | Preserve List View Scroll Position | Frontend | 3 | 2 | Partial (filters work, scroll doesn't) |
+| 6 | Add More Table Sorting Fields | Frontend | 2 | 2 | Partial (basic sorting works) |
+| 8 | Clean Up Backend Logging | Backend | 2 | 2 | Pending |
+| 12 | Rethink List View Column Content | Both | 2 | 3 | Pending |
 
 **Priority:** 5 = Critical functionality broken, 1 = Nice-to-have polish
 **Difficulty:** 5 = Major restructuring/DB changes, 1 = Simple CSS/config fix
@@ -90,23 +87,6 @@
 
 ---
 
-### 3. "Received" Column Shows Hyphen on All Rows
-
-| Layer | Priority | Difficulty |
-|-------|----------|------------|
-| Both | 3 | 2 |
-
-**Problem:** The "Received" column in the ETO runs list view displays a hyphen (-) on all rows instead of the actual received date/time.
-
-**Requirements:**
-- Investigate why the received date is not being displayed
-- Fix the data binding or API response to show the correct received timestamp
-
-**Why this rating:**
-- Priority 3: Missing useful information, but not blocking core functionality
-- Difficulty 2: Need to trace data flow - could be missing from API response or frontend binding issue
-
----
 
 ### 4. Reset Read Status When Run is Updated
 
@@ -205,25 +185,6 @@
 
 ---
 
-### 9. Fix Pagination/Offset Controls
-
-| Layer | Priority | Difficulty |
-|-------|----------|------------|
-| Frontend | 3 | 2 |
-
-**Problem:** The pagination offset is not currently working. Previously, the table had pagination controls (similar to Gmail's style) that allowed users to navigate through pages of results.
-
-**Requirements:**
-- Restore pagination controls to the table header
-- Display current range (e.g., "1-50 of 127")
-- Add previous/next buttons to navigate pages
-- Wire up to the `offset` and `limit` query parameters
-
-**Why this rating:**
-- Priority 3: Important for navigating large datasets
-- Difficulty 2: Restore/add UI components, backend already supports it
-
----
 
 ### 11. Preserve List View State When Navigating to/from Detail Page
 
@@ -273,27 +234,83 @@
 
 ---
 
-### 15. Sub-Runs Not Displaying on Some Detail Pages
+### 15. Sub-Runs Not Displaying on Some Detail Pages ✅
 
 | Layer | Priority | Difficulty |
 |-------|----------|------------|
-| TBD (needs investigation) | 5 | 3 |
+| Backend | 5 | 3 |
 
-**Problem:** Some ETO runs are not showing their sub-runs properly on the detail page, even though the list view displays them correctly. Cause unknown.
+**Problem:** Some ETO runs were not showing their sub-runs on the detail page, even though the list view displayed them correctly.
 
-**Requirements:**
-- Investigate why sub-runs are missing on certain detail pages
-- Compare the list view API response vs detail view API response
-- Check if it's a frontend rendering issue or backend data issue
-- Fix the root cause so all sub-runs display consistently
+**Root Cause:**
+Bug in `server/src/shared/database/repositories/eto_sub_run.py` line 364. The SQL join was:
+```python
+.join(PdfFileModel, EtoSubRunModel.eto_run_id == PdfFileModel.id)  # WRONG!
+```
+This incorrectly joined `eto_run_id` (the parent ETO run ID) directly to `PdfFileModel.id`. This only worked when the ETO run ID coincidentally matched a PDF file ID.
 
-**Why this rating:**
-- Priority 5: Critical bug - core functionality broken for affected runs
-- Difficulty 3: Unknown cause, needs investigation first
+**Solution Implemented:**
+- ✅ Fixed the join to properly traverse: SubRun → EtoRun → PdfFile
+- ✅ Added `EtoRunModel` to imports
+- ✅ Changed join to:
+  1. First join `EtoSubRunModel.eto_run_id → EtoRunModel.id`
+  2. Then join `EtoRunModel.pdf_file_id → PdfFileModel.id`
+
+**Changes:**
+- `server/src/shared/database/repositories/eto_sub_run.py` - Fixed SQL join in `get_detail_view()` method
+
+**Completed:** 2025-11-29
 
 ---
 
 ## Completed Items
+
+### 3. "Received" Column Shows Hyphen ✅
+
+| Layer | Priority | Difficulty |
+|-------|----------|------------|
+| Both | 3 | 2 |
+
+**Problem:** The "Received" column in the ETO runs list view displayed a hyphen (-) on all rows instead of the actual received date/time.
+
+**Solution Implemented:**
+- ✅ Fixed `getSourceDate()` in EtoRunsTable to use `source.received_at` for emails
+- ✅ Return `source.created_at` for manual uploads instead of null
+- ✅ Moved source tracking from `pdf_files.email_id` to `eto_runs.source_type` + `source_email_id`
+- ✅ Updated API mapper to use `source_type` field for discriminated union
+
+**Changes:**
+- `client/src/renderer/features/eto/components/EtoRunsTable/EtoRunsTable.tsx` - Fixed `getSourceDate()` function
+- `server/src/api/mappers/eto_runs.py` - Use `source_type` instead of checking `email_id`
+- Multiple backend files for source tracking refactor
+
+**Completed:** 2025-11-29
+
+---
+
+### 9. Fix Pagination/Offset Controls ✅
+
+| Layer | Priority | Difficulty |
+|-------|----------|------------|
+| Frontend | 3 | 2 |
+
+**Problem:** The pagination offset was not working. Table needed pagination controls similar to Gmail's style.
+
+**Solution Implemented:**
+- ✅ Added `currentPage` state with 20 items per page
+- ✅ Gmail-style display showing "1-20 of 127"
+- ✅ Previous/next buttons with disabled states
+- ✅ Wired up to `offset` and `limit` query parameters
+- ✅ Page resets to 1 when filters change
+
+**Changes:**
+- `client/src/renderer/pages/dashboard/eto/index.tsx` - Added pagination state and UI
+
+**Note:** May need UX refinement (e.g., reset page when sort changes). Defer testing until other items complete.
+
+**Completed:** 2025-11-29
+
+---
 
 ### 10. Support Multiple PDF Uploads ✅
 

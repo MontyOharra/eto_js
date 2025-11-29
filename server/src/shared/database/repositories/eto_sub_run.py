@@ -12,6 +12,7 @@ from datetime import datetime
 from shared.database.repositories.base import BaseRepository
 from shared.database.models import (
     EtoSubRunModel,
+    EtoRunModel,
     PdfFileModel,
     PdfTemplateModel,
     PdfTemplateVersionModel,
@@ -358,10 +359,14 @@ class EtoSubRunRepository(BaseRepository[EtoSubRunModel]):
                     PdfTemplateModel,
                     PdfTemplateVersionModel.pdf_template_id == PdfTemplateModel.id
                 )
+                # Join to parent EtoRun first, then to PdfFile
+                .join(
+                    EtoRunModel,
+                    EtoSubRunModel.eto_run_id == EtoRunModel.id
+                )
                 .join(
                     PdfFileModel,
-                    # Join through parent run
-                    EtoSubRunModel.eto_run_id == PdfFileModel.id  # TODO: Fix this - need EtoRunModel join
+                    EtoRunModel.pdf_file_id == PdfFileModel.id
                 )
                 .filter(EtoSubRunModel.id == sub_run_id)
                 .first()

@@ -55,10 +55,10 @@ async def upload_pdf_file(
     pdf_bytes = await pdf_file.read()
 
     # Store PDF (service handles validation, extraction, deduplication)
+    # Note: Source tracking (manual vs email) is now on eto_runs, not pdf_files
     pdf = pdf_service.store_pdf(
         file_bytes=pdf_bytes,
-        filename=pdf_file.filename,
-        email_id=None  # Manual uploads have no email association
+        filename=pdf_file.filename
     )
 
     return pdf_file_to_api(pdf)

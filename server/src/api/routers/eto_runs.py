@@ -301,7 +301,12 @@ async def create_eto_run(
     logger.info(f"Creating ETO run for PDF file {request.pdf_file_id}")
 
     # Create the run using the service
-    run = service.create_run(request.pdf_file_id)
+    # Manual uploads have source_type='manual' and no email association
+    run = service.create_run(
+        pdf_file_id=request.pdf_file_id,
+        source_type='manual',
+        source_email_id=None
+    )
 
     # Convert to API response
     response = eto_run_to_create_response(run)
