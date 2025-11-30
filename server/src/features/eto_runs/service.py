@@ -1160,6 +1160,9 @@ class EtoRunsService:
             update_data: EtoRunUpdate = {"status": new_status}
             if completed_at:
                 update_data["completed_at"] = completed_at
+                # Set last_processed_at for stable list sorting (Item #5)
+                # Only updated when run reaches terminal state, not during processing
+                update_data["last_processed_at"] = completed_at
 
             # Reset is_read to False when status changes (Item #4)
             # This ensures users are notified of changes to runs they've reviewed

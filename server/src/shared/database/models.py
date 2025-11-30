@@ -391,6 +391,8 @@ class EtoRunModel(BaseModel):
     # Timestamps
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    # Stable timestamp for list sorting - only updated when run reaches terminal state
+    last_processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
     )

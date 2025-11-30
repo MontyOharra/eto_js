@@ -54,6 +54,7 @@ class EtoRunUpdate(TypedDict, total=False):
     error_details: str | None
     started_at: datetime | None
     completed_at: datetime | None
+    last_processed_at: datetime | None
 
 
 @dataclass
@@ -74,6 +75,7 @@ class EtoRun:
     error_details: Optional[str]
     started_at: Optional[datetime]
     completed_at: Optional[datetime]
+    last_processed_at: Optional[datetime]
     created_at: datetime
     updated_at: datetime
 
@@ -131,7 +133,7 @@ class EtoRunListView:
     # Timestamps
     created_at: datetime
     updated_at: datetime
-    last_processed_at: Optional[datetime]  # Max of sub-run completed_at/updated_at timestamps
+    last_processed_at: Optional[datetime]  # Stable timestamp for sorting - only updated on terminal state
 
 
 # =========================

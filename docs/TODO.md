@@ -9,7 +9,6 @@
 | # | Item | Layer | Priority | Difficulty | Status |
 |---|------|-------|----------|------------|--------|
 | 16 | Email Ingestion IMAP Connection Resilience | Backend | 4 | 4 | Pending |
-| 5 | Stabilize Row Position During Processing | Backend | 3 | 3 | Pending |
 | 6 | Add More Table Sorting Fields | Frontend | 2 | 2 | Partial (basic sorting works) |
 | 12 | Rethink List View Column Content | Both | 2 | 3 | Pending |
 
@@ -161,7 +160,7 @@
 
 ---
 
-### 5. Stabilize Row Position During Processing
+### 5. Stabilize Row Position During Processing ✅
 
 | Layer | Priority | Difficulty |
 |-------|----------|------------|
@@ -169,14 +168,19 @@
 
 **Problem:** When an ETO run is being processed, the `last_updated` timestamp changes frequently, causing the row to jump around in the sorted list view. This is disorienting for users.
 
-**Requirements:**
-- The `last_updated` (or `last_processed_at`) time should only update when processing is complete (not during intermediate states)
-- While a run has sub-runs in "processing" status, it should maintain its current position in the list
-- This prevents rows from constantly reordering while work is in progress
+**Solution Implemented:**
+- ✅ Added explicit `last_processed_at` column to `eto_runs` table
+- ✅ Column is only updated when run reaches terminal state (success/skipped/failure)
+- ✅ Removed computed subquery that was calculating `MAX(sub_run.updated_at)`
+- ✅ Repository now uses the stable column for sorting instead of live computation
 
-**Why this rating:**
-- Priority 3: UX issue that can be disorienting but not breaking
-- Difficulty 3: Need to rethink when `last_processed_at` is set, may affect multiple code paths
+**Changes:**
+- `server/src/shared/database/models.py` - Added `last_processed_at` column to `EtoRunModel`
+- `server/src/shared/types/eto_runs.py` - Added field to `EtoRun`, `EtoRunUpdate`, updated `EtoRunListView`
+- `server/src/shared/database/repositories/eto_run.py` - Removed computed subquery, use column directly
+- `server/src/features/eto_runs/service.py` - Set `last_processed_at` in `_update_parent_run_status()`
+
+**Completed:** 2025-11-29
 
 ---
 

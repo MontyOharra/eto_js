@@ -72,6 +72,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
             error_details=model.error_details,
             started_at=model.started_at,
             completed_at=model.completed_at,
+            last_processed_at=model.last_processed_at,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
@@ -287,7 +288,6 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
             limit: Maximum number of results (optional)
             offset: Number of results to skip (optional)
             order_by: Field to order by (default: last_processed_at)
-                      Special value "last_processed_at" sorts by max sub-run timestamp
             desc: Sort descending if True (default: True - newest first)
 
         Returns:
@@ -296,15 +296,6 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
         from sqlalchemy import func, case, exists, and_, or_, select
 
         with self._get_session() as session:
-            # Subquery for last_processed_at (max of sub-run completed_at or updated_at)
-            last_processed_subquery = (
-                select(func.max(func.coalesce(EtoSubRunModel.completed_at, EtoSubRunModel.updated_at)))
-                .where(EtoSubRunModel.eto_run_id == EtoRunModel.id)
-                .correlate(EtoRunModel)
-                .scalar_subquery()
-                .label("last_processed_at_computed")
-            )
-
             # First, get base run data with PDF and email info
             base_query = (
                 session.query(
@@ -317,6 +308,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                     EtoRunModel.is_read,
                     EtoRunModel.started_at,
                     EtoRunModel.completed_at,
+                    EtoRunModel.last_processed_at,
                     EtoRunModel.error_type,
                     EtoRunModel.error_message,
                     EtoRunModel.created_at,
@@ -332,8 +324,6 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                     EmailModel.received_date,
                     EmailModel.subject,
                     EmailModel.folder_name,
-                    # Computed field for sorting
-                    last_processed_subquery,
                 )
                 .join(PdfFileModel, EtoRunModel.pdf_file_id == PdfFileModel.id)
                 .outerjoin(EmailModel, EtoRunModel.source_email_id == EmailModel.id)
@@ -373,13 +363,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
             # Apply ordering
             # Note: SQL Server sorts NULLs as lowest values by default
             # (first in ASC, last in DESC), which is the desired behavior
-            if order_by == "last_processed_at":
-                # Sort by the computed subquery
-                if desc:
-                    base_query = base_query.order_by(last_processed_subquery.desc())
-                else:
-                    base_query = base_query.order_by(last_processed_subquery.asc())
-            elif hasattr(EtoRunModel, order_by):
+            if hasattr(EtoRunModel, order_by):
                 order_column = getattr(EtoRunModel, order_by)
                 if desc:
                     base_query = base_query.order_by(order_column.desc())
@@ -387,7 +371,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                     base_query = base_query.order_by(order_column)
             else:
                 logger.warning(f"Field '{order_by}' does not exist on EtoRunModel, using last_processed_at")
-                base_query = base_query.order_by(last_processed_subquery.desc())
+                base_query = base_query.order_by(EtoRunModel.last_processed_at.desc())
 
             # Apply pagination
             if offset is not None:
@@ -433,9 +417,6 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                     except (json.JSONDecodeError, TypeError) as e:
                         logger.warning(f"Failed to parse matched_pages for sub-run {sr.id}: {e}")
 
-                # Use SQL-computed last_processed_at from the query
-                last_processed_at = row.last_processed_at_computed
-
                 result.append(EtoRunListView(
                     # Core ETO run fields
                     id=row.id,
@@ -471,7 +452,7 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
                     # Timestamps
                     created_at=row.created_at,
                     updated_at=row.updated_at,
-                    last_processed_at=last_processed_at,
+                    last_processed_at=row.last_processed_at,
                 ))
 
             return result
