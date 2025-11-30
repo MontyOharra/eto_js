@@ -161,11 +161,14 @@ export function EtoRunDetailViewWrapper({ runId, onBack }: EtoRunDetailViewWrapp
   };
 
   // Template builder handlers
-  const handleBuildTemplate = async (pageIndexes: number[]) => {
+  const handleBuildTemplate = async (pageNumbers: number[]) => {
     if (!detail) return;
 
     setIsPreparingPdf(true);
     try {
+      // Convert 1-indexed page numbers to 0-indexed indices for pdf-lib
+      const pageIndices = pageNumbers.map(pageNum => pageNum - 1);
+
       // Download the original PDF
       const pdfUrl = getPdfDownloadUrl(detail.pdf.id);
       const response = await fetch(pdfUrl);
@@ -175,10 +178,10 @@ export function EtoRunDetailViewWrapper({ runId, onBack }: EtoRunDetailViewWrapp
       const pdfBlob = await response.blob();
 
       // Create a subset PDF with the selected pages
-      const subsetBlob = await createSubsetPdf(pdfBlob, pageIndexes);
+      const subsetBlob = await createSubsetPdf(pdfBlob, pageIndices);
 
       // Convert to File object
-      const pdfFile = new File([subsetBlob], `template_pages_${pageIndexes.join('_')}.pdf`, {
+      const pdfFile = new File([subsetBlob], `template_pages_${pageNumbers.join('_')}.pdf`, {
         type: 'application/pdf',
       });
 

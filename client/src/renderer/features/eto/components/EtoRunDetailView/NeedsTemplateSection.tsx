@@ -2,7 +2,7 @@ import { EtoSubRunSummary } from '../../types';
 
 interface NeedsTemplateSectionProps {
   subRuns: EtoSubRunSummary[];
-  onBuildTemplate: (subRunId: number) => void;
+  onBuildTemplate: (pageNumbers: number[]) => void;
   onReprocess: (subRunId: number) => void;
   onSkip: (subRunId: number) => void;
 }
@@ -47,7 +47,7 @@ export function NeedsTemplateSection({
 
               <div className="flex gap-2">
                 <button
-                  onClick={() => onBuildTemplate(subRun.id)}
+                  onClick={() => onBuildTemplate(subRun.matched_pages)}
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium transition-colors whitespace-nowrap"
                 >
                   Build Template

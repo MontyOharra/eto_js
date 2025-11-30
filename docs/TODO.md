@@ -20,6 +20,33 @@
 
 ## Pending Items
 
+### 17. Template Builder PDF Subset Creation Fails ✅
+
+| Layer | Priority | Difficulty |
+|-------|----------|------------|
+| Both | 5 | 2 |
+
+**Problem:** When trying to build a template from a sub-run that needs a template, the following error appears:
+
+> "Failed to prepare PDF for template builder. Failed to create PDF subset: 'indices' must be of type 'Array', but was actually of type 'number'."
+
+**Root Cause:**
+- `NeedsTemplateSection.tsx` was passing `subRun.id` (a number) instead of `subRun.matched_pages` (an array)
+- Type mismatch between child component (`onBuildTemplate: (subRunId: number)`) and parent handler (`handleBuildTemplate(pageIndexes: number[])`)
+
+**Solution Implemented:**
+- ✅ Fixed `NeedsTemplateSection.tsx` to pass `subRun.matched_pages` instead of `subRun.id`
+- ✅ Updated type signature to `onBuildTemplate: (pageNumbers: number[]) => void`
+- ✅ Added conversion from 1-indexed page numbers to 0-indexed indices in `handleBuildTemplate`
+
+**Changes:**
+- `client/src/renderer/features/eto/components/EtoRunDetailView/NeedsTemplateSection.tsx` - Pass `matched_pages` array, update type
+- `client/src/renderer/features/eto/components/EtoRunDetailView/EtoRunDetailViewWrapper.tsx` - Convert page numbers to indices
+
+**Completed:** 2025-11-29
+
+---
+
 ### 1. Skipped ETO Run Status and Deletion ✅
 
 | Layer | Priority | Difficulty |
