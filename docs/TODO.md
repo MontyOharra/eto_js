@@ -8,6 +8,7 @@
 
 | # | Item | Layer | Priority | Difficulty | Status |
 |---|------|-------|----------|------------|--------|
+| 16 | Email Ingestion IMAP Connection Resilience | Backend | 4 | 4 | Pending |
 | 5 | Stabilize Row Position During Processing | Backend | 3 | 3 | Pending |
 | 6 | Add More Table Sorting Fields | Frontend | 2 | 2 | Partial (basic sorting works) |
 | 12 | Rethink List View Column Content | Both | 2 | 3 | Pending |
@@ -104,6 +105,32 @@
 - `server/src/features/eto_runs/service.py` - Added `is_read` reset in `_update_parent_run_status()` when status changes
 
 **Completed:** 2025-11-29
+
+---
+
+### 16. Email Ingestion IMAP Connection Resilience
+
+| Layer | Priority | Difficulty |
+|-------|----------|------------|
+| Backend | 4 | 4 |
+
+**Problem:** The email ingestion system sometimes stops working and cannot connect to the IMAP configuration. When this happens, the entire server shuts down, which is a critical failure mode.
+
+**Requirements:**
+- On IMAP connection failure, the email config listener should attempt to reconnect with exponential backoff
+- Connection failures should NOT cause the entire server to crash
+- Graceful degradation: if one email config fails, others should continue working
+- Clear error logging and status reporting for failed connections
+- Consider adding health check endpoint or status indicator for email configs
+
+**Technical Notes:**
+- Current implementation: `EmailListenerThread` in `server/src/features/email_ingestion/utils/email_listener_thread.py`
+- Has `max_errors` (5) and `critical_failure_callback` but may not be handling all failure modes
+- Need to investigate what causes server shutdown - likely unhandled exception bubbling up
+
+**Why this rating:**
+- Priority 4: Server crashes are critical, but workaround exists (restart server)
+- Difficulty 4: Need to understand current failure modes, add robust error handling, possibly restructure connection management
 
 ---
 
