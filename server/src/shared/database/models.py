@@ -27,7 +27,7 @@ class BaseModel(DeclarativeBase):
 
 # Parent orchestration status
 ETO_MASTER_STATUS = SAEnum(
-    'not_started', 'processing', 'success', 'failure',
+    'not_started', 'processing', 'success', 'failure', 'skipped',
     name='eto_master_status',
     native_enum=False,
     validate_strings=True

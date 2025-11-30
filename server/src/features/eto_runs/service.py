@@ -1103,12 +1103,16 @@ class EtoRunsService:
         Status logic:
         - "processing": Has any sub-runs still being processed
           (status in: not_started, matched, processing)
+        - "skipped": All sub-runs are in "skipped" status
         - "success": All sub-runs reached a terminal state
-          (success, failure, needs_template, skipped)
+          (success, failure, needs_template, skipped) but not all skipped
 
         Note: Parent "failure" status is ONLY set for critical system errors,
         not for individual sub-run failures. Individual failures are tracked
         at the sub-run level.
+
+        Side effect: When status changes, is_read is reset to False so users
+        are notified of changes to runs they've already reviewed.
 
         Args:
             run_id: Parent ETO run ID
@@ -1143,14 +1147,25 @@ class EtoRunsService:
             new_status = "processing"
             completed_at = None
         else:
-            new_status = "success"
+            # All sub-runs at terminal state - check if ALL are skipped
+            all_skipped = all(sub.status == "skipped" for sub in sub_runs)
+            if all_skipped:
+                new_status = "skipped"
+            else:
+                new_status = "success"
             completed_at = datetime.now(timezone.utc)
 
         # Only update and broadcast if status changed
         if new_status != old_status:
-            update_data = {"status": new_status}
+            update_data: EtoRunUpdate = {"status": new_status}
             if completed_at:
                 update_data["completed_at"] = completed_at
+
+            # Reset is_read to False when status changes (Item #4)
+            # This ensures users are notified of changes to runs they've reviewed
+            if current_run.is_read:
+                update_data["is_read"] = False
+                logger.debug(f"Run {run_id}: Resetting is_read to False due to status change")
 
             self.eto_run_repo.update(run_id, update_data)
 
@@ -1164,7 +1179,9 @@ class EtoRunsService:
 
             eto_event_manager.broadcast_sync("run_updated", event_data)
 
-            if new_status == "success":
+            if new_status == "skipped":
+                logger.info(f"Run {run_id}: All sub-runs skipped - marked as skipped")
+            elif new_status == "success":
                 logger.info(f"Run {run_id}: All sub-runs completed - marked as success")
             else:
                 logger.debug(f"Run {run_id}: Status changed to '{new_status}'")

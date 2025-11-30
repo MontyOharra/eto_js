@@ -8,8 +8,6 @@
 
 | # | Item | Layer | Priority | Difficulty | Status |
 |---|------|-------|----------|------------|--------|
-| 1 | Skipped ETO Run Status and Deletion | Both | 4 | 3 | Pending (needs backend) |
-| 4 | Reset Read Status When Run is Updated | Backend | 3 | 2 | Pending |
 | 5 | Stabilize Row Position During Processing | Backend | 3 | 3 | Pending |
 | 6 | Add More Table Sorting Fields | Frontend | 2 | 2 | Partial (basic sorting works) |
 | 12 | Rethink List View Column Content | Both | 2 | 3 | Pending |
@@ -21,7 +19,7 @@
 
 ## Pending Items
 
-### 1. Skipped ETO Run Status and Deletion
+### 1. Skipped ETO Run Status and Deletion ✅
 
 | Layer | Priority | Difficulty |
 |-------|----------|------------|
@@ -29,15 +27,19 @@
 
 **Problem:** When all sub-runs of an ETO run are in "skipped" status, the overall run status should reflect this, and the run should become deletable.
 
-**Requirements:**
-- When all pages/sub-runs are skipped, the overall ETO run status should be "skipped"
-- When overall status is "skipped", the run should be deletable:
-  - **List view:** The "Skip" button should change to "Delete", with its callback triggering deletion of the ETO run
-  - **Detail view:** The "Delete" button should be activated/enabled in the actions panel
+**Solution Implemented:**
+- ✅ Added "skipped" to `ETO_MASTER_STATUS` enum (parent run status)
+- ✅ Updated `_update_parent_run_status()` to detect when ALL sub-runs are skipped
+- ✅ When all sub-runs are skipped, parent run status is set to "skipped"
+- ✅ The existing `delete_runs()` method already checks for "skipped" status, so deletion now works
 
-**Why this rating:**
-- Priority 4: Affects core workflow - users can't properly manage/delete completed runs
-- Difficulty 3: Backend needs status aggregation logic, frontend needs conditional button rendering
+**Changes:**
+- `server/src/shared/database/models.py` - Added 'skipped' to ETO_MASTER_STATUS enum
+- `server/src/features/eto_runs/service.py` - Updated `_update_parent_run_status()` logic
+
+**Note:** Frontend already has conditional button rendering logic. Once parent status is "skipped", the delete functionality will be available.
+
+**Completed:** 2025-11-29
 
 ---
 
@@ -85,7 +87,7 @@
 ---
 
 
-### 4. Reset Read Status When Run is Updated
+### 4. Reset Read Status When Run is Updated ✅
 
 | Layer | Priority | Difficulty |
 |-------|----------|------------|
@@ -93,13 +95,15 @@
 
 **Problem:** When an ETO run is updated (its sub-runs are altered in some manner), the run should be reset to "unread" if it is currently marked as "read".
 
-**Requirements:**
-- When sub-runs are reprocessed, skipped, or otherwise modified, reset the parent run's `is_read` to `false`
-- This ensures users are notified of changes to runs they've already reviewed
+**Solution Implemented:**
+- ✅ When `_update_parent_run_status()` changes the run's status, it now also resets `is_read` to `False`
+- ✅ This is triggered whenever sub-runs complete processing, are skipped, or are reprocessed
+- ✅ Users will see the run appear as "unread" again after any status change
 
-**Why this rating:**
-- Priority 3: Important for notification workflow but not breaking
-- Difficulty 2: Add logic in service layer when sub-runs are modified
+**Changes:**
+- `server/src/features/eto_runs/service.py` - Added `is_read` reset in `_update_parent_run_status()` when status changes
+
+**Completed:** 2025-11-29
 
 ---
 
