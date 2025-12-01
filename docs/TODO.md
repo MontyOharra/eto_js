@@ -9,7 +9,6 @@
 | # | Item | Layer | Priority | Difficulty | Status |
 |---|------|-------|----------|------------|--------|
 | 16 | Email Ingestion IMAP Connection Resilience | Backend | 4 | 4 | Pending |
-| 6 | Add More Table Sorting Fields | Frontend | 2 | 2 | Partial (basic sorting works) |
 
 **Priority:** 5 = Critical functionality broken, 1 = Nice-to-have polish
 **Difficulty:** 5 = Major restructuring/DB changes, 1 = Simple CSS/config fix
@@ -182,8 +181,7 @@
 **Completed:** 2025-11-29
 
 ---
-
-### 6. Add Table Sorting Controls
+### 6. Add Table Sorting Controls ✅
 
 | Layer | Priority | Difficulty |
 |-------|----------|------------|
@@ -191,16 +189,17 @@
 
 **Problem:** There is no way for users to sort the ETO runs table by different columns.
 
-**Requirements:**
-- Add sorting functionality to the frontend table
-- Options:
-  - Clickable column headers with sort indicators (asc/desc arrows)
-  - OR a dedicated sorting dropdown/button in the page header
-- Backend already supports `sort_by` and `sort_order` parameters
+**Solution:**
+- Added `pdf_filename` and `received_at` sort options to backend API
+- Backend repository handles sorting by joined table fields (COALESCE for received_at)
+- Enabled sort dropdown in page header with 6 options:
+  - Last Updated (Newest/Oldest)
+  - Received (Newest/Oldest) - uses email received_date or created_at for manual uploads
+  - Filename (A-Z/Z-A)
 
-**Why this rating:**
-- Priority 2: Nice-to-have feature, default sorting works
-- Difficulty 2: Add UI controls and wire to existing backend params
+**Completed:** 2025-12-01
+
+---
 
 ---
 
