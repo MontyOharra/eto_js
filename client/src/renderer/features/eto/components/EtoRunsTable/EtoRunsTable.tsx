@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
 import {
   useReactTable,
   getCoreRowModel,
@@ -98,6 +98,14 @@ function StatusCell({ row }: CellContext<EtoRunListItem, unknown>) {
     );
   }
 
+  if (data.status === 'skipped') {
+    return (
+      <div className={`flex items-center gap-2 ${textOpacity}`}>
+        <span className="text-gray-400 text-sm font-medium">Skipped</span>
+      </div>
+    );
+  }
+
   // Calculate page counts by status from sub_runs array
   let successPages = 0;
   let needsTemplatePages = 0;
@@ -167,7 +175,9 @@ function StatusCell({ row }: CellContext<EtoRunListItem, unknown>) {
         <div key={indicator.key} className="flex items-center gap-1.5">
           <span className="relative flex h-2.5 w-2.5">
             {!isRead && (
-              <span className={`sync-ping absolute inset-0 rounded-full ${indicator.pingColor}`}></span>
+              <span
+                className={`sync-ping absolute inset-0 rounded-full ${indicator.pingColor}`}
+              ></span>
             )}
             <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${indicator.dotColor} ${isRead ? 'opacity-50' : ''}`}></span>
           </span>
@@ -455,23 +465,43 @@ export function EtoRunsTable({
     return colSizes;
   }, [table.getState().columnSizing]);
 
+  // Synchronize all ping animations using the Web Animations API
+  // When any syncPing animation starts, set its startTime to 0 so all animations are in phase
+  useEffect(() => {
+    const syncAnimations = (e: AnimationEvent) => {
+      if (e.animationName === 'syncPing') {
+        const target = e.target as Element;
+        const anims = target.getAnimations();
+        for (const anim of anims) {
+          // Type guard for CSSAnimation which has animationName property
+          if ('animationName' in anim && (anim as CSSAnimation).animationName === 'syncPing') {
+            anim.startTime = 0;
+          }
+        }
+      }
+    };
+
+    window.addEventListener('animationstart', syncAnimations as EventListener, true);
+    return () => window.removeEventListener('animationstart', syncAnimations as EventListener, true);
+  }, []);
+
   return (
     <div className="bg-gray-800 rounded-lg overflow-hidden flex flex-col h-full">
       {/* Global styles for synchronized animations */}
       <style>{`
         /* Synchronized ping animation - all indicators blink together */
         @keyframes syncPing {
-          0%, 100% {
+          0% {
             transform: scale(1);
             opacity: 0.75;
           }
-          50% {
-            transform: scale(2);
+          100% {
+            transform: scale(2.5);
             opacity: 0;
           }
         }
         .sync-ping {
-          animation: syncPing 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+          animation: syncPing 1500ms cubic-bezier(0, 0, 0.2, 1) infinite;
         }
       `}</style>
 

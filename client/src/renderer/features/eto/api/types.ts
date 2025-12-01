@@ -9,7 +9,7 @@ import { EtoRunListItem, EtoRunDetail, EtoSubRunStatus } from '../types';
 // GET /eto-runs - List runs with pagination
 // =============================================================================
 
-export type EtoRunSortField = 'last_processed_at' | 'created_at' | 'started_at' | 'completed_at';
+export type EtoRunSortField = 'last_processed_at' | 'created_at' | 'started_at' | 'completed_at' | 'pdf_filename' | 'received_at';  
 
 export interface GetEtoRunsQueryParams {
   /** Filter by read status (true=read, false=unread) */

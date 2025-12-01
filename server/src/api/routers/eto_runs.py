@@ -65,7 +65,7 @@ async def list_eto_runs(
     ),
     limit: int = Query(50, ge=1, le=200, description="Number of runs to return"),
     offset: int = Query(0, ge=0, description="Number of runs to skip"),
-    sort_by: Literal["last_processed_at", "created_at", "started_at", "completed_at"] = Query(
+    sort_by: Literal["last_processed_at", "created_at", "started_at", "completed_at", "pdf_filename", "received_at"] = Query(
         "last_processed_at",
         description="Field to sort by"
     ),
@@ -87,6 +87,8 @@ async def list_eto_runs(
     - created_at: When the run was created
     - started_at: When processing started
     - completed_at: When processing completed
+    - pdf_filename: Sort by PDF filename alphabetically
+    - received_at: Sort by email received date (or created_at for manual uploads)
     """
     logger.debug(f"List ETO runs: is_read={is_read}, has_sub_run_status={has_sub_run_status}, search={search}, limit={limit}, offset={offset}")
 

@@ -83,7 +83,6 @@ export function EtoPageHeader({
           <option value="read">Read</option>
         </select>
 
-        {/* Sort Dropdown */}
         <select
           className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           value={sortOption}
@@ -91,12 +90,10 @@ export function EtoPageHeader({
         >
           <option value="last_processed_at-desc">Last Updated (Newest)</option>
           <option value="last_processed_at-asc">Last Updated (Oldest)</option>
-          {/* TODO: Add backend support for pdf_filename sorting */}
-          {/* <option value="pdf_filename-asc">Filename (A-Z)</option> */}
-          {/* <option value="pdf_filename-desc">Filename (Z-A)</option> */}
-          {/* TODO #3: Fix received_at field, then add sorting */}
-          {/* <option value="received_at-desc">Time Received (Newest)</option> */}
-          {/* <option value="received_at-asc">Time Received (Oldest)</option> */}
+          <option value="received_at-desc">Received (Newest)</option>
+          <option value="received_at-asc">Received (Oldest)</option>
+          <option value="pdf_filename-asc">Filename (A-Z)</option>
+          <option value="pdf_filename-desc">Filename (Z-A)</option>
         </select>
 
         {/* Clear Filters Button */}

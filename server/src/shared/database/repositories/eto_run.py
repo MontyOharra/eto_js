@@ -360,18 +360,22 @@ class EtoRunRepository(BaseRepository[EtoRunModel]):
             if date_to is not None:
                 base_query = base_query.filter(EtoRunModel.created_at <= date_to)
 
-            # Apply ordering
-            # Note: SQL Server sorts NULLs as lowest values by default
-            # (first in ASC, last in DESC), which is the desired behavior
-            if hasattr(EtoRunModel, order_by):
+            # Apply ordering - handle special sort fields from joined tables
+            if order_by == "pdf_filename":
+                order_column = PdfFileModel.original_filename
+            elif order_by == "received_at":
+                # Use email received_date if available, otherwise fall back to created_at
+                order_column = func.coalesce(EmailModel.received_date, EtoRunModel.created_at)
+            elif hasattr(EtoRunModel, order_by):
                 order_column = getattr(EtoRunModel, order_by)
-                if desc:
-                    base_query = base_query.order_by(order_column.desc())
-                else:
-                    base_query = base_query.order_by(order_column)
             else:
                 logger.warning(f"Field '{order_by}' does not exist on EtoRunModel, using last_processed_at")
-                base_query = base_query.order_by(EtoRunModel.last_processed_at.desc())
+                order_column = EtoRunModel.last_processed_at
+
+            if desc:
+                base_query = base_query.order_by(order_column.desc())
+            else:
+                base_query = base_query.order_by(order_column)
 
             # Apply pagination
             if offset is not None:
