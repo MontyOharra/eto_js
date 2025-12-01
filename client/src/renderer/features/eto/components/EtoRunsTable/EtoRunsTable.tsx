@@ -6,7 +6,7 @@ import {
   createColumnHelper,
   CellContext,
 } from '@tanstack/react-table';
-import { EtoRunListItem, EtoRunStatus } from '../../types';
+import { EtoRunListItem } from '../../types';
 
 // ============================================================================
 // Types
@@ -25,21 +25,6 @@ interface EtoRunsTableProps {
 // ============================================================================
 // Helpers
 // ============================================================================
-
-function getStatusColor(status: EtoRunStatus): string {
-  switch (status) {
-    case 'success':
-      return 'text-green-400';
-    case 'processing':
-      return 'text-blue-400';
-    case 'failure':
-      return 'text-red-400';
-    case 'skipped':
-      return 'text-gray-400';
-    default:
-      return 'text-gray-400';
-  }
-}
 
 function getSourceDisplay(source: EtoRunListItem['source']): string {
   if (source.type === 'email') {
@@ -78,42 +63,128 @@ function formatDate(isoDate: string | null): string {
   }
 }
 
-function formatPageBreakdown(summary: EtoRunListItem['sub_runs_summary']): string {
-  if (summary.pages_matched_count === 0 && summary.pages_unmatched_count === 0) return '-';
-  const parts = [];
-  if (summary.pages_matched_count > 0) parts.push(`${summary.pages_matched_count} matched`);
-  if (summary.pages_unmatched_count > 0) parts.push(`${summary.pages_unmatched_count} unmatched`);
-  return parts.join(', ');
-}
-
 // ============================================================================
 // Cell Components
 // ============================================================================
 
 const columnHelper = createColumnHelper<EtoRunListItem>();
 
-// Filename cell with indicators
-function FilenameCell({ row }: CellContext<EtoRunListItem, unknown>) {
+// Combined status cell showing processing state or page counts by status
+function StatusCell({ row }: CellContext<EtoRunListItem, unknown>) {
   const data = row.original;
-  const { sub_runs_summary: summary } = data;
+  const { sub_runs_summary: summary, sub_runs } = data;
   const isRead = data.is_read;
-  const isFailure = data.status === 'failure';
+  const textOpacity = isRead ? 'opacity-60' : 'opacity-100';
 
-  const hasSubRuns = summary.success_count > 0 || summary.failure_count > 0 || summary.needs_template_count > 0;
-  const showIndicators = hasSubRuns;
+  // Processing state - show spinner
+  if (data.status === 'processing' || data.status === 'not_started') {
+    return (
+      <div className={`flex items-center gap-2 ${textOpacity}`}>
+        <svg className="animate-spin h-4 w-4 text-blue-400" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <span className="text-blue-400 text-sm font-medium">Processing</span>
+      </div>
+    );
+  }
 
-  const indicators = [];
-  if (showIndicators) {
-    if (summary.success_count > 0) {
-      indicators.push({ key: 'success', ping: 'bg-green-400', solid: 'bg-green-500' });
+  // Critical failure state
+  if (data.status === 'failure') {
+    return (
+      <div className={`flex items-center gap-2 ${textOpacity}`}>
+        <span className="text-red-400 text-sm font-semibold">Failed</span>
+      </div>
+    );
+  }
+
+  // Calculate page counts by status from sub_runs array
+  let successPages = 0;
+  let needsTemplatePages = 0;
+  let failurePages = 0;
+
+  if (sub_runs && sub_runs.length > 0) {
+    for (const subRun of sub_runs) {
+      const pageCount = subRun.matched_pages?.length ?? 0;
+      if (subRun.status === 'success') {
+        successPages += pageCount;
+      } else if (subRun.status === 'needs_template') {
+        needsTemplatePages += pageCount;
+      } else if (subRun.status === 'failure') {
+        failurePages += pageCount;
+      }
     }
-    if (summary.needs_template_count > 0) {
-      indicators.push({ key: 'needs_template', ping: 'bg-yellow-400', solid: 'bg-yellow-500' });
-    }
-    if (summary.failure_count > 0) {
-      indicators.push({ key: 'failure', ping: 'bg-red-400', solid: 'bg-red-500' });
+  } else {
+    // Fallback to summary counts if sub_runs not available
+    // Use pages_unmatched_count for needs_template (accurate)
+    // For success/failure, we can only approximate with sub-run counts
+    needsTemplatePages = summary.pages_unmatched_count;
+    // These are sub-run counts, not page counts - but better than nothing
+    if (summary.success_count > 0 && summary.failure_count === 0) {
+      successPages = summary.pages_matched_count;
     }
   }
+
+  // Build indicators for non-zero counts
+  const indicators = [];
+
+  if (successPages > 0) {
+    indicators.push({
+      key: 'success',
+      count: successPages,
+      dotColor: 'bg-green-500',
+      textColor: 'text-green-400',
+      pingColor: 'bg-green-400',
+    });
+  }
+  if (needsTemplatePages > 0) {
+    indicators.push({
+      key: 'needs_template',
+      count: needsTemplatePages,
+      dotColor: 'bg-yellow-500',
+      textColor: 'text-yellow-400',
+      pingColor: 'bg-yellow-400',
+    });
+  }
+  if (failurePages > 0) {
+    indicators.push({
+      key: 'failure',
+      count: failurePages,
+      dotColor: 'bg-red-500',
+      textColor: 'text-red-400',
+      pingColor: 'bg-red-400',
+    });
+  }
+
+  if (indicators.length === 0) {
+    // No sub-runs yet or all skipped
+    return <span className={`text-gray-500 text-sm ${textOpacity}`}>-</span>;
+  }
+
+  return (
+    <div className={`flex items-center gap-3 ${textOpacity}`}>
+      {indicators.map((indicator) => (
+        <div key={indicator.key} className="flex items-center gap-1.5">
+          <span className="relative flex h-2.5 w-2.5">
+            {!isRead && (
+              <span className={`animate-ping absolute inset-0 rounded-full ${indicator.pingColor} opacity-75`}></span>
+            )}
+            <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${indicator.dotColor} ${isRead ? 'opacity-50' : ''}`}></span>
+          </span>
+          <span className={`text-sm font-medium ${indicator.textColor} ${isRead ? 'opacity-70' : ''}`}>
+            {indicator.count}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Filename cell (simplified - indicators moved to StatusCell)
+function FilenameCell({ row }: CellContext<EtoRunListItem, unknown>) {
+  const data = row.original;
+  const isRead = data.is_read;
+  const isFailure = data.status === 'failure';
 
   const textOpacity = isRead ? 'opacity-60' : 'opacity-100';
   const filenameColor = isFailure
@@ -121,21 +192,7 @@ function FilenameCell({ row }: CellContext<EtoRunListItem, unknown>) {
     : (isRead ? 'text-gray-400' : 'text-gray-200');
 
   return (
-    <div className={`flex items-center gap-2 min-w-0 ${textOpacity}`}>
-      <div className="w-8 flex items-center gap-1 flex-shrink-0">
-        {showIndicators && indicators.length > 0 && (
-          <>
-            {indicators.map((indicator) => (
-              <span key={indicator.key} className="relative flex h-2 w-2">
-                {!isRead && (
-                  <span className={`animate-ping absolute inset-0 rounded-full ${indicator.ping} opacity-75`}></span>
-                )}
-                <span className={`relative inline-flex rounded-full h-2 w-2 ${indicator.solid} ${isRead ? 'opacity-40' : ''}`}></span>
-              </span>
-            ))}
-          </>
-        )}
-      </div>
+    <div className={`min-w-0 ${textOpacity}`}>
       <span className={`${filenameColor} text-sm ${!isRead ? 'font-medium' : ''} line-clamp-5 break-words`}>
         {data.pdf.original_filename}
       </span>
@@ -306,22 +363,24 @@ export function EtoRunsTable({
   const columns = useMemo(() => [
     columnHelper.display({
       id: 'filename',
-      header: () => (
-        <div className="flex items-center gap-2">
-          <div className="w-8 flex-shrink-0"></div>
-          <span>PDF Filename</span>
-        </div>
-      ),
+      header: 'PDF Filename',
       cell: FilenameCell,
-      size: 320,
-      minSize: 200,
+      size: 300,
+      minSize: 180,
+    }),
+    columnHelper.display({
+      id: 'status',
+      header: 'Status',
+      cell: StatusCell,
+      size: 140,
+      minSize: 100,
     }),
     columnHelper.display({
       id: 'source',
       header: 'Source',
       cell: SourceCell,
-      size: 250,
-      minSize: 150,
+      size: 220,
+      minSize: 140,
     }),
     columnHelper.accessor((row) => getSourceDate(row.source), {
       id: 'received',
@@ -333,38 +392,6 @@ export function EtoRunsTable({
         return (
           <span className={`text-sm ${isFailure ? 'text-red-200/70' : 'text-gray-300'} ${textOpacity} break-words`}>
             {formatDate(getValue())}
-          </span>
-        );
-      },
-      size: 130,
-      minSize: 100,
-    }),
-    columnHelper.accessor('status', {
-      header: 'Status',
-      cell: ({ getValue, row }) => {
-        const status = getValue();
-        const isRead = row.original.is_read;
-        const textOpacity = isRead ? 'opacity-60' : 'opacity-100';
-        return (
-          <span className={`text-sm font-semibold ${getStatusColor(status)} ${textOpacity}`}>
-            {status.replace('_', ' ')}
-          </span>
-        );
-      },
-      size: 70,
-      minSize: 70,
-    }),
-    columnHelper.accessor('sub_runs_summary', {
-      id: 'pages',
-      header: 'Pages',
-      cell: ({ getValue, row }) => {
-        const summary = getValue();
-        const isRead = row.original.is_read;
-        const isFailure = row.original.status === 'failure';
-        const textOpacity = isRead ? 'opacity-60' : 'opacity-100';
-        return (
-          <span className={`text-sm ${isFailure ? 'text-red-200/70' : 'text-gray-300'} ${textOpacity} break-words`}>
-            {formatPageBreakdown(summary)}
           </span>
         );
       },
@@ -383,7 +410,7 @@ export function EtoRunsTable({
           </span>
         );
       },
-      size: 120,
+      size: 130,
       minSize: 110,
     }),
     columnHelper.display({

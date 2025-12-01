@@ -10,7 +10,6 @@
 |---|------|-------|----------|------------|--------|
 | 16 | Email Ingestion IMAP Connection Resilience | Backend | 4 | 4 | Pending |
 | 6 | Add More Table Sorting Fields | Frontend | 2 | 2 | Partial (basic sorting works) |
-| 12 | Rethink List View Column Content | Both | 2 | 3 | Pending |
 
 **Priority:** 5 = Critical functionality broken, 1 = Nice-to-have polish
 **Difficulty:** 5 = Major restructuring/DB changes, 1 = Simple CSS/config fix
@@ -209,7 +208,7 @@
 
 
 
-### 12. Rethink List View Column Content
+### 12. Rethink List View Column Content ✅
 
 | Layer | Priority | Difficulty |
 |-------|----------|------------|
@@ -219,15 +218,22 @@
 - **Pages section:** Current display may not be helpful
 - **Status section:** Basically only ever shows "processing" or "success", not very informative
 
-**Requirements:**
-- Evaluate what information is most useful to show at a glance
-- Consider alternatives for the pages column (e.g., page count, sub-run breakdown)
-- Consider alternatives for status (e.g., sub-run status summary like "2 success, 1 failed")
-- Design should help users quickly identify runs that need attention
+**Solution Implemented:**
+- ✅ Removed old "Status" column (was just showing "success" for 99% of rows)
+- ✅ Removed old "Pages" column (matched/unmatched count wasn't useful)
+- ✅ Created new combined "Status" column with smart display:
+  - **Processing**: Spinner + "Processing" text
+  - **Failure**: "Failed" text in red
+  - **Complete**: Page counts with colored dots (🟢 success pages, 🟡 needs_template pages, 🔴 failure pages)
+  - Only shows non-zero counts (no wasted space)
+  - Calculates actual page counts from sub_runs array
+- ✅ Animated ping effect on dots for unread rows
+- ✅ Simplified filename cell (removed redundant indicators)
 
-**Why this rating:**
-- Priority 2: UX improvement, current display works
-- Difficulty 3: Need to design new columns, possibly add backend aggregation
+**Changes:**
+- `client/src/renderer/features/eto/components/EtoRunsTable/EtoRunsTable.tsx` - Complete column restructure
+
+**Completed:** 2025-12-01
 
 ---
 
