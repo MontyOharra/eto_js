@@ -167,7 +167,7 @@ function StatusCell({ row }: CellContext<EtoRunListItem, unknown>) {
         <div key={indicator.key} className="flex items-center gap-1.5">
           <span className="relative flex h-2.5 w-2.5">
             {!isRead && (
-              <span className={`animate-ping absolute inset-0 rounded-full ${indicator.pingColor} opacity-75`}></span>
+              <span className={`sync-ping absolute inset-0 rounded-full ${indicator.pingColor}`}></span>
             )}
             <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${indicator.dotColor} ${isRead ? 'opacity-50' : ''}`}></span>
           </span>
@@ -362,18 +362,18 @@ export function EtoRunsTable({
 }: EtoRunsTableProps) {
   const columns = useMemo(() => [
     columnHelper.display({
-      id: 'filename',
-      header: 'PDF Filename',
-      cell: FilenameCell,
-      size: 300,
-      minSize: 180,
-    }),
-    columnHelper.display({
       id: 'status',
       header: 'Status',
       cell: StatusCell,
       size: 140,
       minSize: 100,
+    }),
+    columnHelper.display({
+      id: 'filename',
+      header: 'PDF Filename',
+      cell: FilenameCell,
+      size: 300,
+      minSize: 180,
     }),
     columnHelper.display({
       id: 'source',
@@ -457,6 +457,24 @@ export function EtoRunsTable({
 
   return (
     <div className="bg-gray-800 rounded-lg overflow-hidden flex flex-col h-full">
+      {/* Global styles for synchronized animations */}
+      <style>{`
+        /* Synchronized ping animation - all indicators blink together */
+        @keyframes syncPing {
+          0%, 100% {
+            transform: scale(1);
+            opacity: 0.75;
+          }
+          50% {
+            transform: scale(2);
+            opacity: 0;
+          }
+        }
+        .sync-ping {
+          animation: syncPing 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+        }
+      `}</style>
+
       {/* Table container with CSS variables for column sizes */}
       <div
         className="flex flex-col h-full"
