@@ -64,6 +64,73 @@ class BasicOrderOutput(OutputModule):
     ConfigModel = BasicOrderOutputConfig
 
     @classmethod
+    def validate_config(
+        cls,
+        cfg: BasicOrderOutputConfig,
+        inputs: list[Any],
+        outputs: list[Any],
+        services: Any = None
+    ) -> list[str]:
+        """
+        Validate BasicOrderOutput configuration.
+
+        Checks XOR constraint on address fields:
+        - Exactly one of pickup_address_id or pickup_address_text must be connected
+        - Exactly one of delivery_address_id or delivery_address_text must be connected
+
+        Args:
+            cfg: Validated config instance
+            inputs: List of input pins for this module instance
+            outputs: List of output pins for this module instance
+            services: Optional services container
+
+        Returns:
+            List of error messages (empty if valid)
+        """
+        errors = []
+
+        # Get the io_shape to map group_index -> label
+        io_shape = cls.meta().io_shape
+        group_labels = [group.label for group in io_shape.inputs.nodes]
+
+        # Build a set of connected input labels based on group_index
+        # A pin exists in inputs list = that group has a pin connected
+        connected_labels = set()
+        for pin in inputs:
+            if pin.group_index < len(group_labels):
+                connected_labels.add(group_labels[pin.group_index])
+
+        # Check pickup address XOR constraint
+        has_pickup_id = "pickup_address_id" in connected_labels
+        has_pickup_text = "pickup_address_text" in connected_labels
+
+        if has_pickup_id and has_pickup_text:
+            errors.append(
+                "Invalid pickup address configuration: both 'pickup_address_id' and 'pickup_address_text' are connected. "
+                "Please connect only one - either use an existing address ID or provide address text, not both."
+            )
+        elif not has_pickup_id and not has_pickup_text:
+            errors.append(
+                "Missing pickup address: either 'pickup_address_id' or 'pickup_address_text' must be connected."
+            )
+
+        # Check delivery address XOR constraint
+        has_delivery_id = "delivery_address_id" in connected_labels
+        has_delivery_text = "delivery_address_text" in connected_labels
+
+        if has_delivery_id and has_delivery_text:
+            errors.append(
+                "Invalid delivery address configuration: both 'delivery_address_id' and 'delivery_address_text' are connected. "
+                "Please connect only one - either use an existing address ID or provide address text, not both."
+            )
+        elif not has_delivery_id and not has_delivery_text:
+            errors.append(
+                "Missing delivery address: either 'delivery_address_id' or 'delivery_address_text' must be connected."
+            )
+
+        return errors
+
+    @classmethod
     def meta(cls) -> ModuleMeta:
         return ModuleMeta(
             io_shape=IOShape(
@@ -93,22 +160,16 @@ class BasicOrderOutput(OutputModule):
                     # ==========================================
 
                     NodeGroup(
-                        label="pickup_date",
-                        min_count=1,
-                        max_count=1,
-                        typing=NodeTypeRule(allowed_types=["date"])
-                    ),
-                    NodeGroup(
                         label="pickup_time_start",
                         min_count=1,
                         max_count=1,
-                        typing=NodeTypeRule(allowed_types=["time"])
+                        typing=NodeTypeRule(allowed_types=["datetime"])
                     ),
                     NodeGroup(
                         label="pickup_time_end",
                         min_count=1,
                         max_count=1,
-                        typing=NodeTypeRule(allowed_types=["time"])
+                        typing=NodeTypeRule(allowed_types=["datetime"])
                     ),
 
                     # Pickup address - Option 1: Existing address ID
@@ -131,22 +192,16 @@ class BasicOrderOutput(OutputModule):
                     # ==========================================
 
                     NodeGroup(
-                        label="delivery_date",
-                        min_count=1,
-                        max_count=1,
-                        typing=NodeTypeRule(allowed_types=["date"])
-                    ),
-                    NodeGroup(
                         label="delivery_time_start",
                         min_count=1,
                         max_count=1,
-                        typing=NodeTypeRule(allowed_types=["time"])
+                        typing=NodeTypeRule(allowed_types=["datetime"])
                     ),
                     NodeGroup(
                         label="delivery_time_end",
                         min_count=1,
                         max_count=1,
-                        typing=NodeTypeRule(allowed_types=["time"])
+                        typing=NodeTypeRule(allowed_types=["datetime"])
                     ),
 
                     # Delivery address - Option 1: Existing address ID

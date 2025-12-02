@@ -264,7 +264,7 @@ class PipelineValidator:
         - Group cardinality constraints (min_count, max_count)
         - Type variable unification (all uses of "T" have same type)
         - Config has required fields
-        - At least one action module present
+        - At least one output module present
 
         Args:
             pipeline_state: Pipeline to validate
@@ -277,7 +277,7 @@ class PipelineValidator:
         logger.info(f"[VALIDATION DEBUG] module_catalog_repo is None: {self.module_catalog_repo is None}")
 
         # Check 1: At least one action module must be present
-        self._check_action_modules(pipeline_state)
+        self._check_output_modules(pipeline_state)
 
         # Skip module catalog validation if no repository provided
         if not self.module_catalog_repo:
@@ -317,35 +317,35 @@ class PipelineValidator:
             logger.info(f"[VALIDATION DEBUG] Checking config...")
             self._check_config(module, template)
 
-    def _check_action_modules(self, pipeline_state: PipelineState) -> None:
+    def _check_output_modules(self, pipeline_state: PipelineState) -> None:
         """
-        Check that pipeline contains at least one action module.
-        Action modules are what actually DO something (send emails, etc).
-        Fails fast if no action modules present.
+        Check that pipeline contains at least one output module.
+        Output modules are what actually DO something (send emails, etc).
+        Fails fast if no output modules present.
 
         Args:
             pipeline_state: Pipeline to validate
 
         Raises:
-            ModuleValidationError: If no action modules found
+            ModuleValidationError: If no output modules found
         """
         # Skip if no catalog repo (can't determine module kinds)
         if not self.module_catalog_repo:
             return
 
-        # Count action modules
-        action_count = 0
+        # Count output modules
+        output_count = 0
         for module in pipeline_state.modules:
             module_id, version = self._parse_module_ref(module.module_ref)
             template = self.module_catalog_repo.get_by_module_ref(module_id, version)
 
-            if template and template.module_kind.value == "action":
-                action_count += 1
+            if template and template.module_kind.value == "output":
+                output_count += 1
 
-        if action_count == 0:
+        if output_count == 0:
             raise ModuleValidationError(
-                message="Pipeline must contain at least one action module",
-                code="no_action_modules",
+                message="Pipeline must contain at least one output module",
+                code="no_output_modules",
                 where={"module_count": len(pipeline_state.modules)}
             )
 

@@ -66,7 +66,7 @@ export function NodeGroupSection({
 
   const nodeGroup = ioShape?.nodes[groupIndex];
 
-  const minCount = nodeGroup?.min_count || 1;
+  const minCount = nodeGroup?.min_count || 0;
   const maxCount = nodeGroup?.max_count;
  
   const canAdd = maxCount == null || nodes.length < maxCount;

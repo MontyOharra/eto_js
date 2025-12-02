@@ -48,7 +48,7 @@ class ModuleValidationError(PipelineValidationError):
     - Group cardinality violations
     - Type variable unification errors
     - Invalid config
-    - No action modules present
+    - No output modules present
     """
     pass
 
