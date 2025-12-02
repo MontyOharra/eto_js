@@ -19,6 +19,7 @@ class ModuleKind(str, Enum):
     LOGIC = "logic"
     COMPARATOR = "comparator"
     MISC = "misc"
+    OUTPUT = "output"
 
 
 @dataclass(frozen=True)
@@ -206,6 +207,33 @@ class MiscModule(BaseModule):
     Base class for Misc modules - modules that don't fit into any other category
     """
     kind = ModuleKind.MISC
+    
+    
+class OutputModule(BaseModule):
+    """
+    Base class for Output modules - pipeline exit points that collect data for order processing.
+
+    Output modules do NOT execute side effects directly. Instead, they:
+    1. Define the inputs they need (via meta())
+    2. Act as terminal nodes in the pipeline (no outputs)
+    3. Have their input data collected by pipeline execution
+    4. Pass that data to OutputExecutionService for actual processing
+
+    The OutputExecutionService handles:
+    - Creating or updating orders
+    - Resolving addresses
+    - Transferring PDF attachments
+    - Sending emails
+    - Other side effects that need full system context
+    """
+    kind = ModuleKind.OUTPUT
+
+    def run(self, inputs: Dict[str, Any], cfg: Any, context: Optional[Any], services: Optional[Any] = None) -> Dict[str, Any]:
+        """
+        Output modules don't execute side effects directly.
+        Returns empty dict - output modules have no pipeline outputs.
+        """
+        return {}
 
 
 @dataclass(frozen=True)
