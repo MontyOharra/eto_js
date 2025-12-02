@@ -553,8 +553,7 @@ class EmailIngestionService:
                         EmailConfigUpdate(
                             activated_at=activation_time,
                             last_check_time=resume_from_time,
-                            last_error_message=None,
-                            last_error_at=None
+                            clear_errors=True
                         )
                     )
                 else:
@@ -571,8 +570,7 @@ class EmailIngestionService:
                         config.id,
                         EmailConfigUpdate(
                             activated_at=activation_time,
-                            last_error_message=None,
-                            last_error_at=None
+                            clear_errors=True
                         )
                     )
 

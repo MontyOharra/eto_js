@@ -499,7 +499,7 @@ class EtoRunsService:
         extraction = self.sub_run_extraction_repo.get_by_sub_run_id(sub_run_id)
         if extraction:
             extraction_detail = EtoRunExtractionDetailView(
-                status=extraction.status,
+                status=extraction.status, #type: ignore
                 started_at=extraction.started_at,
                 completed_at=extraction.completed_at,
                 extracted_data=extraction.extracted_data,
@@ -554,7 +554,7 @@ class EtoRunsService:
                 })
 
             pipeline_detail = EtoRunPipelineExecutionDetailView(
-                status=pipeline_exec.status,
+                status=pipeline_exec.status, #type: ignore
                 started_at=pipeline_exec.started_at,
                 completed_at=pipeline_exec.completed_at,
                 executed_actions=executed_actions,

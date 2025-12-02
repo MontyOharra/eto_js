@@ -330,18 +330,19 @@ def eto_sub_run_full_detail_to_api(sub_run: EtoSubRunDetailView) -> EtoSubRunFul
         if sub_run.pipeline_execution.steps:
             for step in sub_run.pipeline_execution.steps:
                 error_data = None
-                if step.get("error"):
+                error = step.error
+                if error:
                     error_data = PipelineExecutionStepError(
-                        type=step["error"].get("type", ""),
-                        message=step["error"].get("message", ""),
-                        details=step["error"].get("details"),
+                        type=error.get("type", ""),
+                        message=error.get("message", ""),
+                        details=error.get("details"),
                     )
                 steps.append(PipelineExecutionStep(
-                    id=step["id"],
-                    step_number=step["step_number"],
-                    module_instance_id=step["module_instance_id"],
-                    inputs=step.get("inputs"),
-                    outputs=step.get("outputs"),
+                    id=step.id,
+                    step_number=step.step_number,
+                    module_instance_id=step.module_instance_id,
+                    inputs=step.inputs,
+                    outputs=step.outputs,
                     error=error_data,
                 ))
 

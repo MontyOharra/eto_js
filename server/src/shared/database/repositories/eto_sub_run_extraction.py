@@ -147,6 +147,7 @@ class EtoSubRunExtractionRepository(BaseRepository[EtoSubRunExtractionModel]):
 
                 # Serialize extracted_data to JSON
                 if field == "extracted_data":
+                    assert type(value) == List[Dict[str, Any]] | None
                     value = self._serialize_extracted_data(value)
 
                 setattr(model, field, value)

@@ -86,3 +86,4 @@ class EmailConfigUpdate:
     last_check_time: datetime | None = None
     last_error_message: str | None = None
     last_error_at: datetime | None = None
+    clear_errors: bool = False  # When True, sets error fields to NULL

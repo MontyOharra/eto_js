@@ -258,11 +258,17 @@ class EmailConfigRepository(BaseRepository[EmailConfigModel]):
             if config_update.last_check_time is not None:
                 model.last_check_time = config_update.last_check_time
 
-            if config_update.last_error_message is not None:
-                model.last_error_message = config_update.last_error_message
+            if config_update.clear_errors:
+                # Explicitly clear error fields (set to NULL)
+                model.last_error_message = None
+                model.last_error_at = None
+            else:
+                # Only update if a new error value is provided
+                if config_update.last_error_message is not None:
+                    model.last_error_message = config_update.last_error_message
 
-            if config_update.last_error_at is not None:
-                model.last_error_at = config_update.last_error_at
+                if config_update.last_error_at is not None:
+                    model.last_error_at = config_update.last_error_at
 
             session.flush()
 

@@ -110,7 +110,7 @@ class EtoRunListView:
     pdf_file_id: int
     pdf_original_filename: str
     pdf_file_size: Optional[int]
-    pdf_page_count: Optional[int]
+    pdf_page_count: int
 
     # Source info (email fields - all None if manual upload)
     email_id: Optional[int]
