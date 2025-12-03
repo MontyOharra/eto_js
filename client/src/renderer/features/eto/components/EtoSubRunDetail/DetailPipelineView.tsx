@@ -108,20 +108,7 @@ export function DetailPipelineView({
   if (!pipelineDefinition) {
     return (
       <div className="flex items-center justify-center h-full">
-        <p className="text-gray-400 text-sm">
-          {runDetail?.stage_pipeline_execution?.executed_actions ? (
-            <>
-              <span className="block mb-2">
-                Detailed pipeline visualization not available
-              </span>
-              <span className="block text-xs text-gray-500">
-                See Summary view for executed actions
-              </span>
-            </>
-          ) : (
-            "No pipeline data available"
-          )}
-        </p>
+        <p className="text-gray-400 text-sm">No pipeline data available</p>
       </div>
     );
   }

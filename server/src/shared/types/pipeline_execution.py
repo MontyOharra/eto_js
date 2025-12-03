@@ -8,38 +8,6 @@ from typing import Any
 
 
 @dataclass(frozen=True)
-class PipelineExecutionRun:
-    """
-    Complete pipeline execution run from database.
-
-    Represents a single execution of a compiled pipeline with entry point values.
-    Tracks overall status and timing. Individual module executions are in
-    PipelineExecutionStep records.
-    """
-    id: int
-    eto_run_id: int
-    status: str
-    executed_actions: str | None
-    started_at: datetime | None
-    completed_at: datetime | None
-    created_at: datetime
-    updated_at: datetime
-
-
-@dataclass(frozen=True)
-class PipelineExecutionRunCreate:
-    """
-    Data needed to create new pipeline execution run.
-
-    Created at the start of pipeline execution with status=PROCESSING.
-    Updated to SUCCESS/FAILURE when execution completes.
-    """
-    eto_run_id: int
-    status: str = 'processing'
-    executed_actions: str | None = None
-    started_at: datetime | None = None
-
-@dataclass(frozen=True)
 class PipelinExecutionStepIOData:
     name: str
     value: str
@@ -105,29 +73,6 @@ class PipelineExecutionStepResult:
     inputs: dict[str, dict[str, Any]]  # {node_id: {name, value, type}}
     outputs: dict[str, dict[str, Any]]  # {node_id: {name, value, type}}
     error: str | None = None
-
-
-@dataclass(frozen=True)
-class ActionExecutionData:
-    """
-    Data about an action module execution.
-
-    Tracks whether the action was actually executed or just simulated.
-
-    - In simulation mode: executed=False, outputs=None (just shows what would happen)
-    - In production mode: executed=True, outputs contains actual results (side effects occurred)
-
-    Format for executed_actions field:
-        {"module_title": {"upstream_pin_name": "value", ...}, ...}
-    """
-    module_instance_id: str
-    module_title: str  # e.g., "Print to Server Log" - for display
-    action_module_id: str  # e.g., "print_action" - for handler lookup
-    inputs: dict[str, Any]  # {upstream_pin_name: value} - using connected output pin names
-    config: dict[str, Any]  # Module configuration
-    executed: bool  # True if actually executed, False if simulation only
-    outputs: dict[str, Any] | None = None  # Outputs if executed, None if simulation
-    error: str | None = None  # Error message if execution failed
 
 
 @dataclass(frozen=True)

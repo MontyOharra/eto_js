@@ -208,7 +208,6 @@ export interface EtoSubRunPipelineExecutionDetail {
   status: 'processing' | 'success' | 'failure';
   started_at: string | null;
   completed_at: string | null;
-  executed_actions: Record<string, unknown> | null;
   pipeline_definition_id: number | null;
   steps: PipelineExecutionStep[];
 }

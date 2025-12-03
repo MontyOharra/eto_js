@@ -313,7 +313,8 @@ def convert_simulate_result_to_api(result: Any):
         extraction_results=extraction_results,
         pipeline_status=result.execution_result.status,
         pipeline_steps=pipeline_steps,
-        pipeline_actions=result.execution_result.executed_actions,
+        output_module_id=result.execution_result.output_module_id,
+        output_module_inputs=result.execution_result.output_module_inputs,
         pipeline_error=result.execution_result.error
     )
 

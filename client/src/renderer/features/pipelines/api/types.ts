@@ -121,12 +121,13 @@ export interface ExecutionStepResult {
 
 /**
  * Response for POST /pipelines/{id}/execute
- * Contains execution status, step results, and action data
+ * Contains execution status, step results, and output module data
  */
 export interface ExecutePipelineResponse {
   status: string;
   steps: ExecutionStepResult[];
-  executed_actions: Record<string, Record<string, any>>;
+  output_module_id: string | null;  // ID of the output module (if configured)
+  output_module_inputs: Record<string, unknown>;  // Inputs collected for the output module
   error: string | null;
 }
 

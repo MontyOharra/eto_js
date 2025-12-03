@@ -14,6 +14,10 @@ from .pipeline_validation import (
     GraphValidationError,
 )
 
+from .output_execution import (
+    OutputExecutionError,
+)
+
 __all__ = [
     # Service exceptions
     'ServiceError',
@@ -26,4 +30,7 @@ __all__ = [
     'ModuleValidationError',
     'EdgeValidationError',
     'GraphValidationError',
+
+    # Output execution exceptions
+    'OutputExecutionError',
 ]

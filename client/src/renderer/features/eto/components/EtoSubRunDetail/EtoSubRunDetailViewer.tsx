@@ -99,7 +99,7 @@ export function EtoSubRunDetailViewer({
                     <h3 className="text-lg font-semibold text-white mb-3">
                       {viewMode === "summary"
                         ? runDetail.status === "success"
-                          ? "Actions Executed"
+                          ? "Result"
                           : "Error Details"
                         : "Transformation Pipeline"}
                     </h3>
@@ -107,12 +107,7 @@ export function EtoSubRunDetailViewer({
                     <div className="flex-1 overflow-auto bg-gray-900 rounded p-3 relative">
                       {viewMode === "summary" ? (
                         runDetail.status === "success" ? (
-                          <SummarySuccessView
-                            executedActions={
-                              runDetail.stage_pipeline_execution
-                                ?.executed_actions || null
-                            }
-                          />
+                          <SummarySuccessView />
                         ) : runDetail.status === "failure" ? (
                           <SummaryErrorView
                             errorType={runDetail.error_type}

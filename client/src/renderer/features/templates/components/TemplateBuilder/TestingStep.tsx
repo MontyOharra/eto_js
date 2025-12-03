@@ -317,20 +317,24 @@ export function TestingStep({
                   <h3 className="text-lg font-semibold text-white mb-3">
                     {viewMode === 'summary'
                       ? result.pipeline_status === 'success'
-                        ? 'Actions to Execute'
+                        ? 'Output Module'
                         : 'Pipeline Error'
                       : 'Pipeline Execution Graph'}
                   </h3>
 
                   <div className="flex-1 overflow-auto bg-gray-900 rounded p-3 relative">
                     {viewMode === 'summary' ? (
-                      // Summary View - Actions/Errors
+                      // Summary View - Output Module/Errors
                       <div className="font-mono text-xs">
-                        {result.pipeline_status === 'success' &&
-                        Object.keys(result.pipeline_actions).length > 0 ? (
-                          <pre className="text-gray-300 whitespace-pre-wrap break-words">
-                            {JSON.stringify(result.pipeline_actions, null, 2)}
-                          </pre>
+                        {result.pipeline_status === 'success' && result.output_module_id ? (
+                          <div>
+                            <p className="text-blue-400 font-bold mb-2">
+                              Output Module: {result.output_module_id}
+                            </p>
+                            <pre className="text-gray-300 whitespace-pre-wrap break-words">
+                              {JSON.stringify(result.output_module_inputs, null, 2)}
+                            </pre>
+                          </div>
                         ) : result.pipeline_status === 'failed' ? (
                           <div className="text-red-300">
                             <p className="font-bold mb-2">Pipeline Execution Failed</p>
@@ -339,7 +343,7 @@ export function TestingStep({
                             </p>
                           </div>
                         ) : (
-                          <p className="text-gray-400">No actions to execute</p>
+                          <p className="text-gray-400">No output module configured</p>
                         )}
                       </div>
                     ) : (

@@ -350,7 +350,6 @@ def eto_sub_run_full_detail_to_api(sub_run: EtoSubRunDetailView) -> EtoSubRunFul
             status=sub_run.pipeline_execution.status,
             started_at=sub_run.pipeline_execution.started_at.isoformat() if sub_run.pipeline_execution.started_at else None,
             completed_at=sub_run.pipeline_execution.completed_at.isoformat() if sub_run.pipeline_execution.completed_at else None,
-            executed_actions=sub_run.pipeline_execution.executed_actions,
             pipeline_definition_id=sub_run.pipeline_execution.pipeline_definition_id,
             steps=steps,
         )

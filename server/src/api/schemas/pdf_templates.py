@@ -113,7 +113,8 @@ class SimulateTemplateResponse(BaseModel):
     extraction_results: List[ExtractedFieldResult]  # Fields with extracted values and bbox info
     pipeline_status: str  # "success" | "failed"
     pipeline_steps: List[ExecutionStepResult]  # Reuse from pipelines
-    pipeline_actions: Dict[str, Dict[str, Any]]  # {module_instance_id: inputs}
+    output_module_id: Optional[str] = None  # Output module to execute (if any)
+    output_module_inputs: Dict[str, Any] = {}  # {input_name: value} collected for output module
     pipeline_error: Optional[str] = None
 
 

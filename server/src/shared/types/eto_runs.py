@@ -184,7 +184,7 @@ class EtoRunPipelineExecutionStepDetailView:
 @dataclass
 class EtoRunPipelineExecutionDetailView:
     """
-    Pipeline execution stage with parsed executed_actions JSON and execution steps.
+    Pipeline execution stage with execution steps.
 
     Used in EtoRunDetailView to provide pipeline execution results and visualization data.
     """
@@ -192,9 +192,6 @@ class EtoRunPipelineExecutionDetailView:
     status: Literal["processing", "success", "failure"]
     started_at: Optional[datetime]
     completed_at: Optional[datetime]
-
-    # Parsed from executed_actions JSON string field
-    executed_actions: Optional[Dict[str, Any]] = None
 
     # Pipeline definition ID from matched template version
     pipeline_definition_id: Optional[int] = None

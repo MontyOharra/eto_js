@@ -509,14 +509,6 @@ class EtoRunsService:
         pipeline_detail: Optional[EtoRunPipelineExecutionDetailView] = None
         pipeline_exec = self.sub_run_pipeline_execution_repo.get_by_sub_run_id(sub_run_id)
         if pipeline_exec:
-            # Parse executed_actions JSON
-            executed_actions = None
-            if pipeline_exec.executed_actions:
-                try:
-                    executed_actions = json.loads(pipeline_exec.executed_actions)
-                except (json.JSONDecodeError, TypeError):
-                    pass
-
             # Get pipeline definition ID from template version (already fetched above)
             pipeline_def_id = template_version.pipeline_definition_id if template_version else None
 
@@ -557,7 +549,6 @@ class EtoRunsService:
                 status=pipeline_exec.status, #type: ignore
                 started_at=pipeline_exec.started_at,
                 completed_at=pipeline_exec.completed_at,
-                executed_actions=executed_actions,
                 pipeline_definition_id=pipeline_def_id,
                 steps=steps,
             )
@@ -943,7 +934,7 @@ class EtoRunsService:
         )
         logger.debug(
             f"Sub-run {sub_run_id}: Pipeline execution completed with status={execution_result.status}, "
-            f"{len(execution_result.steps)} steps, {len(execution_result.executed_actions)} actions"
+            f"{len(execution_result.steps)} steps"
         )
 
         # Step 8: Persist ALL step results to database (batch after completion)
@@ -966,10 +957,7 @@ class EtoRunsService:
 
         logger.debug(f"Sub-run {sub_run_id}: Persisted {len(execution_result.steps)} step results to database")
 
-        # Step 9: Store executed_actions as JSON
-        executed_actions_json = json.dumps(execution_result.executed_actions) if execution_result.executed_actions else None
-
-        # Step 10: Update pipeline_execution record with final status
+        # Step 9: Update pipeline_execution record with final status
         completed_at = datetime.now(timezone.utc)
         final_status = "success" if execution_result.status == "success" else "failure"
 
@@ -977,7 +965,6 @@ class EtoRunsService:
             pipeline_execution.id,
             {
                 "status": final_status,
-                "executed_actions": executed_actions_json,
                 "completed_at": completed_at
             }
         )
@@ -985,13 +972,23 @@ class EtoRunsService:
             f"Sub-run {sub_run_id}: Updated pipeline_execution record to status={final_status}"
         )
 
-        # Step 11: If pipeline failed, raise error to mark sub-run as failed
+        # Step 10: If pipeline failed, raise error to mark sub-run as failed
         if execution_result.status != "success":
             error_msg = execution_result.error or "Pipeline execution failed"
             logger.error(f"Sub-run {sub_run_id}: Pipeline execution failed: {error_msg}")
             raise ServiceError(f"Pipeline execution failed: {error_msg}")
 
         logger.monitor(f"Sub-run {sub_run_id}: Pipeline execution completed successfully")
+
+        # Step 11: Log output module data for testing (temporary - will be replaced with PipelineResultService call)
+        if execution_result.output_module_id:
+            logger.monitor(
+                f"Sub-run {sub_run_id}: OUTPUT MODULE DATA\n"
+                f"  Module ID: {execution_result.output_module_id}\n"
+                f"  Inputs: {json.dumps(execution_result.output_module_inputs, indent=2, default=str)}"
+            )
+        else:
+            logger.debug(f"Sub-run {sub_run_id}: No output module in pipeline")
 
     def _extract_data_from_pdf_pages(
         self,

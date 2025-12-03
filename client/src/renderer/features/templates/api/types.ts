@@ -108,6 +108,7 @@ export interface SimulateTemplateResponse {
   extraction_results: ExtractedFieldResult[];  // Fields with extracted values and bbox info
   pipeline_status: string;  // "success" | "failed"
   pipeline_steps: ExecutionStepResult[];
-  pipeline_actions: Record<string, Record<string, unknown>>;  // {module_instance_id: inputs}
+  output_module_id: string | null;  // ID of the output module (if configured)
+  output_module_inputs: Record<string, unknown>;  // Inputs collected for the output module
   pipeline_error: string | null;
 }

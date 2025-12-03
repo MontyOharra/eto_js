@@ -55,14 +55,18 @@ class EtoSubRunOutputExecutionRepository(BaseRepository[EtoSubRunOutputExecution
         """
         Convert ORM model to EtoSubRunOutputExecution dataclass.
 
-        Deserializes input_data and result from JSON strings to dicts.
+        Deserializes input_data, result, and existing_order_data from JSON strings to dicts.
         """
         return EtoSubRunOutputExecution(
             id=model.id,
             sub_run_id=model.sub_run_id,
             module_id=model.module_id,
             input_data=self._deserialize_json_dict(model.input_data_json),
+            hawb=model.hawb,
             status=model.status,
+            action_type=model.action_type,
+            existing_order_number=model.existing_order_number,
+            existing_order_data=self._deserialize_json_dict(model.existing_order_data_json),
             result=self._deserialize_json_dict(model.result_json),
             error_message=model.error_message,
             error_type=model.error_type,
@@ -79,7 +83,7 @@ class EtoSubRunOutputExecutionRepository(BaseRepository[EtoSubRunOutputExecution
         Create new sub-run output execution with status = "pending".
 
         Args:
-            data: EtoSubRunOutputExecutionCreate with sub_run_id, module_id, and input_data
+            data: EtoSubRunOutputExecutionCreate with sub_run_id, module_id, input_data, and hawb
 
         Returns:
             Created EtoSubRunOutputExecution dataclass
@@ -90,7 +94,9 @@ class EtoSubRunOutputExecutionRepository(BaseRepository[EtoSubRunOutputExecution
                 sub_run_id=data.sub_run_id,
                 module_id=data.module_id,
                 input_data_json=self._serialize_json_dict(data.input_data),
+                hawb=data.hawb,
                 # status defaults to "pending" via model default
+                # action_type, existing_order_number, existing_order_data start as None
                 # result, error fields start as None
                 # timestamps auto-set by server_default
             )
@@ -127,7 +133,7 @@ class EtoSubRunOutputExecutionRepository(BaseRepository[EtoSubRunOutputExecution
         - Field explicitly set to None (key present, value None) - field will be cleared in database
         - Field set to value (key present) - field will be updated to that value
 
-        Note: input_data and result are serialized to JSON before storage.
+        Note: input_data, result, and existing_order_data are serialized to JSON before storage.
 
         Args:
             output_execution_id: Output execution ID
@@ -147,13 +153,16 @@ class EtoSubRunOutputExecutionRepository(BaseRepository[EtoSubRunOutputExecution
 
             # Update only provided fields (iterate over dict keys)
             for field, value in updates.items():
-                # Map domain field names to model field names
+                # Map domain field names to model field names and serialize JSON fields
                 model_field = field
                 if field == "input_data":
                     model_field = "input_data_json"
                     value = self._serialize_json_dict(value)
                 elif field == "result":
                     model_field = "result_json"
+                    value = self._serialize_json_dict(value)
+                elif field == "existing_order_data":
+                    model_field = "existing_order_data_json"
                     value = self._serialize_json_dict(value)
 
                 if not hasattr(model, model_field):
@@ -220,6 +229,32 @@ class EtoSubRunOutputExecutionRepository(BaseRepository[EtoSubRunOutputExecution
             List of EtoSubRunOutputExecution dataclasses with status="pending"
         """
         return self.get_by_status("pending", limit=limit)
+
+    def get_awaiting_approval(self, limit: Optional[int] = None, offset: int = 0) -> List[EtoSubRunOutputExecution]:
+        """
+        Get output executions awaiting user approval for order updates.
+
+        Used by frontend to display approval queue.
+
+        Args:
+            limit: Optional limit on number of results
+            offset: Number of records to skip (for pagination)
+
+        Returns:
+            List of EtoSubRunOutputExecution dataclasses with status="awaiting_approval"
+        """
+        with self._get_session() as session:
+            query = session.query(self.model_class).filter_by(status="awaiting_approval")
+            query = query.order_by(self.model_class.created_at.desc())
+
+            if offset:
+                query = query.offset(offset)
+            if limit:
+                query = query.limit(limit)
+
+            models = query.all()
+
+            return [self._model_to_domain(model) for model in models]
 
     def delete(self, output_execution_id: int) -> bool:
         """

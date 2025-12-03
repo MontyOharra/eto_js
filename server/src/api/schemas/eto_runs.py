@@ -143,7 +143,6 @@ class EtoSubRunPipelineExecutionDetail(BaseModel):
     status: str  # 'processing' | 'success' | 'failure'
     started_at: Optional[str] = None  # ISO 8601
     completed_at: Optional[str] = None  # ISO 8601
-    executed_actions: Optional[Dict[str, Any]] = None
     pipeline_definition_id: Optional[int] = None
     steps: List[PipelineExecutionStep] = []
 

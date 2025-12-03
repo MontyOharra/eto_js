@@ -57,10 +57,18 @@ ETO_STEP_STATUS = SAEnum(
     validate_strings=True
 )
 
-# Output execution status (includes pending state)
+# Output execution status (includes pending state and approval flow)
 ETO_OUTPUT_STATUS = SAEnum(
-    'pending', 'processing', 'success', 'failure',
+    'pending', 'processing', 'awaiting_approval', 'success', 'rejected', 'error',
     name='eto_output_status',
+    native_enum=False,
+    validate_strings=True
+)
+
+# Output execution action type (create vs update)
+ETO_OUTPUT_ACTION_TYPE = SAEnum(
+    'create', 'update',
+    name='eto_output_action_type',
     native_enum=False,
     validate_strings=True
 )
@@ -607,6 +615,11 @@ class EtoSubRunOutputExecutionModel(BaseModel):
 
     Decoupled from pipeline execution - orchestrator passes data in-memory.
     One-to-one with sub_run (one output execution per sub-run).
+
+    Supports create/update flow with user approval for updates:
+    - HAWB not found → auto-create order
+    - HAWB found once → queue for user approval before updating
+    - HAWB found multiple times → error state
     """
     __tablename__ = "eto_sub_run_output_executions"
 
@@ -628,12 +641,25 @@ class EtoSubRunOutputExecutionModel(BaseModel):
     # Input data for the output module (from pipeline return value)
     input_data_json: Mapped[str] = mapped_column(Text, nullable=False)
 
+    # HAWB extracted from input_data for easy querying
+    hawb: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+
     # Execution status tracking
+    # States: pending -> processing -> success/error/awaiting_approval -> rejected
     status: Mapped[str] = mapped_column(
         ETO_OUTPUT_STATUS,
         nullable=False,
         server_default="pending",
     )
+
+    # Action type: 'create' or 'update' (NULL before HAWB check completes)
+    action_type: Mapped[Optional[str]] = mapped_column(ETO_OUTPUT_ACTION_TYPE, nullable=True)
+
+    # For updates: the existing order being updated
+    existing_order_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+    # For updates: snapshot of current order data for comparison UI
+    existing_order_data_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
@@ -659,4 +685,6 @@ class EtoSubRunOutputExecutionModel(BaseModel):
         Index("idx_eto_sub_run_output_exec_sub_run", "sub_run_id"),
         Index("idx_eto_sub_run_output_exec_status", "status"),
         Index("idx_eto_sub_run_output_exec_module", "module_id"),
+        Index("idx_eto_sub_run_output_exec_hawb", "hawb"),
+        Index("idx_eto_sub_run_output_exec_awaiting", "status", postgresql_where="status = 'awaiting_approval'"),
     )

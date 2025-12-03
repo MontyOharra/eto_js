@@ -51,13 +51,10 @@ from shared.types.modules import (
 
 # Pipeline execution types
 from shared.types.pipeline_execution import (
-    PipelineExecutionRun,
-    PipelineExecutionRunCreate,
     PipelineExecutionStep,
     PipelineExecutionStepCreate,
     # Simulation types
     PipelineExecutionStepResult,
-    ActionExecutionData,
     PipelineExecutionResult,
 )
 
@@ -97,12 +94,9 @@ __all__ = [
     "ModuleCreate",
     "ModuleUpdate",
     # Pipeline execution
-    "PipelineExecutionRun",
-    "PipelineExecutionRunCreate",
     "PipelineExecutionStep",
     "PipelineExecutionStepCreate",
     # Simulation
     "PipelineExecutionStepResult",
-    "ActionExecutionData",
     "PipelineExecutionResult",
 ]
