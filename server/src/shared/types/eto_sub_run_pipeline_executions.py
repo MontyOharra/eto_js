@@ -31,7 +31,6 @@ class EtoSubRunPipelineExecutionUpdate(TypedDict, total=False):
     - Field set to value (key present, value set) - field will be updated to that value
     """
     status: str
-    executed_actions: str | None
     error_message: str | None
     started_at: datetime | None
     completed_at: datetime | None
@@ -46,7 +45,6 @@ class EtoSubRunPipelineExecution:
     id: int
     sub_run_id: int
     status: str
-    executed_actions: Optional[str]
     error_message: Optional[str]
     started_at: Optional[datetime]
     completed_at: Optional[datetime]

@@ -45,7 +45,6 @@ class EtoSubRunPipelineExecutionRepository(BaseRepository[EtoSubRunPipelineExecu
             id=model.id,
             sub_run_id=model.sub_run_id,
             status=model.status,
-            executed_actions=model.executed_actions,
             error_message=model.error_message,
             started_at=model.started_at,
             completed_at=model.completed_at,

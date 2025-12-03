@@ -216,7 +216,7 @@ async def execute_pipeline(
     ```
     """
     # Get execution service
-    from features.pipeline_execution.service import PipelineExecutionService
+    from src.features.pipeline_execution.service import PipelineExecutionService
     execution_service = PipelineExecutionService(
         connection_manager=ServiceContainer.get_connection_manager(),
         services=ServiceContainer
@@ -242,7 +242,7 @@ async def execute_pipeline(
 
     # Simulate pipeline (testing endpoint - no action execution)
     # Steps from DB have `id` field but execution service is DB-agnostic and doesn't use it
-    result = execution_service.simulate_pipeline(
+    result = execution_service.execute_pipeline(
         steps=steps,  # type: ignore[arg-type]
         entry_values_by_name=request.entry_values,
         pipeline_state=pipeline.pipeline_state
@@ -263,6 +263,7 @@ async def execute_pipeline(
     return ExecutePipelineResponse(
         status=result.status,
         steps=step_dtos,
-        executed_actions=result.executed_actions,
+        output_module_id=result.output_module_id,
+        output_module_inputs=result.output_module_inputs,
         error=result.error
     )

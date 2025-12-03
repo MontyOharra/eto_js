@@ -34,7 +34,7 @@ from .utils.validation import PipelineValidator
 from .utils.compilation import PipelineCompiler
 
 if TYPE_CHECKING:
-    from features.pipeline_execution.service import PipelineExecutionService
+    from src.features.pipeline_execution.service import PipelineExecutionService
 
 logger = logging.getLogger(__name__)
 
@@ -151,7 +151,7 @@ class PipelineService:
         Uses PipelineValidator to perform comprehensive validation:
         1. Schema validation (node IDs, types, format)
         2. Index building (preprocessing)
-        3. Module validation (catalog, groups, type vars, config, actions)
+        3. Module validation (catalog, groups, type vars, config, outputs)
         4. Edge validation (connections, types, cardinality)
         5. Graph validation (cycles, DAG)
 
@@ -229,27 +229,27 @@ class PipelineService:
         """
         Remove unreachable modules from the pipeline (dead branch pruning).
 
-        A module is reachable if it's an action module OR it has a path to an action module.
-        Dead branches are modules that don't contribute to any action execution.
+        A module is reachable if it's an output module module OR it has a path to an output module module.
+        Dead branches are modules that don't contribute to any output module execution.
 
         Algorithm:
-        1. Find all action modules (using module catalog)
-        2. Work backwards from action inputs to find all upstream modules (BFS)
+        1. Find all output module modules (using module catalog)
+        2. Work backwards from output module inputs to find all upstream modules (BFS)
         3. Filter pipeline to only include reachable modules and their connections
 
         Args:
             pipeline_state: Original validated pipeline
 
         Returns:
-            New PipelineState with only action-reachable modules
+            New PipelineState with only output module-reachable modules
 
         Note:
             Original pipeline_state is not modified (returns new instance)
         """
         indices = self._build_indices(pipeline_state)
 
-        # Step 1: Find all action modules using module catalog
-        action_modules: Set[str] = set()
+        # Step 1: Find all output module modules using module catalog
+        output_modules: Set[str] = set()
         for module in pipeline_state.modules:
             # Parse module_ref to get module_id and version
             if ":" not in module.module_ref:
@@ -259,18 +259,18 @@ class PipelineService:
 
             # Look up module in catalog
             template = self.module_catalog_repository.get_by_module_ref(module_id, version)
-            if template and template.module_kind.value == "action":
-                action_modules.add(module.module_instance_id)
+            if template and template.module_kind.value == "output":
+                output_modules.add(module.module_instance_id)
 
-        logger.debug(f"Found {len(action_modules)} action module(s)")
+        logger.debug(f"Found {len(output_modules)} output module module(s)")
 
-        # Step 2: BFS backwards from action inputs to find all upstream modules
-        reachable_modules: Set[str] = set(action_modules)  # Actions are always reachable
+        # Step 2: BFS backwards from output module inputs to find all upstream modules
+        reachable_modules: Set[str] = set(output_modules)  # output modules are always reachable
         queue: List[str] = []
 
-        # Start BFS from all action input pins
+        # Start BFS from all output module input pins
         for module in pipeline_state.modules:
-            if module.module_instance_id in action_modules:
+            if module.module_instance_id in output_modules:
                 # Add all input pins to queue
                 for input_pin in module.inputs:
                     queue.append(input_pin.node_id)
@@ -440,7 +440,7 @@ class PipelineService:
             ServiceError: If compilation or persistence fails
         """
         try:
-            # Step 1: Validation (outside transaction)
+            # Step 1: Validation (outside transoutput module)
             logger.info("Validating pipeline structure")
 
             # DEBUG: Log original pipeline_state before any processing
@@ -456,11 +456,11 @@ class PipelineService:
             logger.info("Pruning dead branches")
             pruned_pipeline = self._prune_dead_branches(create_data.pipeline_state)
 
-            # Step 3: Compile to steps (computation, outside transaction)
+            # Step 3: Compile to steps (computation, outside transoutput module)
             logger.info("Compiling pipeline to execution steps")
             steps = self._compile_pipeline(pruned_pipeline)
 
-            # Step 4: ATOMIC TRANSACTION - Create definition and steps together
+            # Step 4: ATOMIC TRANSoutput module - Create definition and steps together
             with self.connection_manager.unit_of_work() as uow:
                 # Create pipeline definition first to get its ID
                 pipeline_def = uow.pipeline_definitions.create(create_data)
@@ -476,7 +476,7 @@ class PipelineService:
                 uow.pipeline_definition_steps.create_steps(steps_with_def_id)
                 logger.info(f"Created {len(steps_with_def_id)} execution steps for pipeline {pipeline_def.id}")
 
-                # Transaction commits here (all or nothing)
+                # Transoutput module commits here (all or nothing)
 
             # Fetch and return complete pipeline definition
             result = self.definition_repository.get_by_id(pipeline_def.id)
@@ -610,7 +610,7 @@ class PipelineService:
             entry_values: Entry point values (field name -> extracted text)
 
         Returns:
-            PipelineExecutionResult with status, steps, actions, and error (if any)
+            PipelineExecutionResult with status, steps, output modules, and error (if any)
 
         Raises:
             PipelineValidationError: If pipeline validation fails
@@ -626,7 +626,7 @@ class PipelineService:
         compiled_steps = self._compile_pipeline(pruned_pipeline)
 
         # Simulate pipeline (compile_and_execute is for testing/simulation)
-        execution_result = self.pipeline_execution_service.simulate_pipeline(
+        execution_result = self.pipeline_execution_service.execute_pipeline(
             steps=compiled_steps, #type: ignore
             entry_values_by_name=entry_values,
             pipeline_state=pruned_pipeline

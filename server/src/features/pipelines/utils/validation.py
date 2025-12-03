@@ -28,7 +28,7 @@ class PipelineValidator:
     Validates pipelines through 5 stages:
     1. Schema validation (node IDs, types, format)
     2. Index building (preprocessing)
-    3. Module validation (catalog, groups, type vars, config, actions)
+    3. Module validation (catalog, groups, type vars, config, outputs)
     4. Edge validation (connections, types, cardinality)
     5. Graph validation (cycles, DAG)
 
@@ -257,7 +257,7 @@ class PipelineValidator:
 
     def _validate_modules(self, pipeline_state: PipelineState, indices: PipelineIndices) -> None:
         """
-        Stage 3: Validate modules (catalog, groups, type vars, config, actions)
+        Stage 3: Validate modules (catalog, groups, type vars, config, outputs)
 
         Checks:
         - Module exists in catalog
@@ -276,7 +276,7 @@ class PipelineValidator:
         logger.info(f"[VALIDATION DEBUG] _validate_modules called with {len(pipeline_state.modules)} modules")
         logger.info(f"[VALIDATION DEBUG] module_catalog_repo is None: {self.module_catalog_repo is None}")
 
-        # Check 1: At least one action module must be present
+        # Check 1: Only one output module must be present
         self._check_output_modules(pipeline_state)
 
         # Skip module catalog validation if no repository provided
@@ -342,9 +342,9 @@ class PipelineValidator:
             if template and template.module_kind.value == "output":
                 output_count += 1
 
-        if output_count == 0:
+        if output_count != 1:
             raise ModuleValidationError(
-                message="Pipeline must contain at least one output module",
+                message="Pipeline must contain only one output module",
                 code="no_output_modules",
                 where={"module_count": len(pipeline_state.modules)}
             )

@@ -67,7 +67,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from features.pdf_templates.service import PdfTemplateService
     from features.pdf_files.service import PdfFilesService
-    from features.pipeline_execution.service import PipelineExecutionService
+    from src.features.pipeline_execution.service import PipelineExecutionService
 
 logger = get_logger(__name__)
 

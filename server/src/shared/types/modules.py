@@ -15,7 +15,6 @@ AllowedNodeType = Literal["str", "float", "datetime", "date", "time", "bool", "i
 class ModuleKind(str, Enum):
     """Module kind"""
     TRANSFORM = "transform"
-    ACTION = "action"
     LOGIC = "logic"
     COMPARATOR = "comparator"
     MISC = "misc"
@@ -61,7 +60,7 @@ class ModuleMeta:
 class BaseModule(ABC):
     """
     Shared core functionality for all module types
-    Contains common fields and methods used across Transform/Action/Logic/Comparator modules
+    Contains common fields and methods used across Transform/Logic/Comparator/Output modules
     """
 
     # Class-level metadata (must be defined in subclasses)
@@ -181,12 +180,6 @@ class TransformModule(BaseModule):
     """
     kind = ModuleKind.TRANSFORM
 
-class ActionModule(BaseModule):
-    """
-    Base class for Action modules - modules that perform side effects
-    Action modules may modify external state and require special handling
-    """
-    kind = ModuleKind.ACTION
 
 class LogicModule(BaseModule):
     """

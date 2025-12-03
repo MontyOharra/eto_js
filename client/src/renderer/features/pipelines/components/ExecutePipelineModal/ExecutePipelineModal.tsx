@@ -25,7 +25,8 @@ interface ExecutionResult {
     outputs: Record<string, { name: string; value: any; type: string }>;
     error: string | null;
   }>;
-  executed_actions: Record<string, Record<string, any>>;
+  output_module_id: string | null;
+  output_module_inputs: Record<string, any>;
   error: string | null;
 }
 
@@ -248,15 +249,23 @@ export function ExecutePipelineModal({
                     </div>
                   ) : (
                     <>
-                      {/* Summary View - Actions/Errors */}
+                      {/* Summary View - Output Module Data/Errors */}
                       <div
                         className={`font-mono text-xs ${viewMode === "summary" ? "" : "hidden"}`}
                       >
-                        {result.status === "success" &&
-                        Object.keys(result.executed_actions).length > 0 ? (
-                          <pre className="text-gray-300 whitespace-pre-wrap break-words">
-                            {JSON.stringify(result.executed_actions, null, 2)}
-                          </pre>
+                        {result.status === "success" && result.output_module_id ? (
+                          <div className="text-gray-300 space-y-2">
+                            <div>
+                              <p className="font-bold mb-1">Output Module:</p>
+                              <p className="text-blue-300">{result.output_module_id}</p>
+                            </div>
+                            <div>
+                              <p className="font-bold mb-1">Output Data:</p>
+                              <pre className="whitespace-pre-wrap break-words">
+                                {JSON.stringify(result.output_module_inputs, null, 2)}
+                              </pre>
+                            </div>
+                          </div>
                         ) : result.status === "failed" ? (
                           <div className="text-red-300">
                             <p className="font-bold mb-2">Execution Failed</p>
@@ -265,7 +274,7 @@ export function ExecutePipelineModal({
                             </p>
                           </div>
                         ) : (
-                          <p className="text-gray-400">No actions executed</p>
+                          <p className="text-gray-400">No output module data</p>
                         )}
                       </div>
 

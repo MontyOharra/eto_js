@@ -141,7 +141,8 @@ class PipelineExecutionResult:
     Used by simulate endpoint to show users what would happen if
     the pipeline were executed in production.
     """
-    status: str  # "success" or "failed"
-    steps: list  # List[PipelineExecutionStepResult]
-    executed_actions: dict[str, dict[str, Any]]  # {module_id: {field: value}}
-    error: str | None = None
+    status: str
+    steps: list[PipelineExecutionStepResult]
+    output_module_id: str | None
+    output_module_inputs: dict[str, Any]
+    error: str | None

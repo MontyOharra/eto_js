@@ -57,6 +57,14 @@ ETO_STEP_STATUS = SAEnum(
     validate_strings=True
 )
 
+# Output execution status (includes pending state)
+ETO_OUTPUT_STATUS = SAEnum(
+    'pending', 'processing', 'success', 'failure',
+    name='eto_output_status',
+    native_enum=False,
+    validate_strings=True
+)
+
 
 # =========================
 # email_configs
@@ -467,6 +475,9 @@ class EtoSubRunModel(BaseModel):
     pipeline_executions: Mapped[List["EtoSubRunPipelineExecutionModel"]] = relationship(
         back_populates="sub_run", cascade="all, delete-orphan"
     )
+    output_execution: Mapped[Optional["EtoSubRunOutputExecutionModel"]] = relationship(
+        back_populates="sub_run", cascade="all, delete-orphan", uselist=False
+    )
 
     __table_args__ = (
         Index("idx_eto_sub_runs_status", "status"),
@@ -527,8 +538,6 @@ class EtoSubRunPipelineExecutionModel(BaseModel):
         nullable=False,
         server_default="processing",
     )
-
-    executed_actions: Mapped[Optional[str]] = mapped_column(Text)
     error_message: Mapped[Optional[str]] = mapped_column(Text)
 
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
@@ -584,4 +593,70 @@ class EtoSubRunPipelineExecutionStepModel(BaseModel):
     __table_args__ = (
         Index("idx_eto_sub_run_pipeline_step_exec", "pipeline_execution_id"),
         Index("idx_eto_sub_run_pipeline_step_number", "step_number"),
+    )
+
+
+# =========================
+# eto_sub_run_output_executions (NEW: output execution stage per sub-run)
+# =========================
+
+class EtoSubRunOutputExecutionModel(BaseModel):
+    """
+    Tracks the execution of output operations (order creation, email sending, etc.)
+    after pipeline completes successfully.
+
+    Decoupled from pipeline execution - orchestrator passes data in-memory.
+    One-to-one with sub_run (one output execution per sub-run).
+    """
+    __tablename__ = "eto_sub_run_output_executions"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    sub_run_id: Mapped[int] = mapped_column(
+        ForeignKey("eto_sub_runs.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True
+    )
+
+    # Which output module to execute (from pipeline return value)
+    module_id: Mapped[str] = mapped_column(
+        ForeignKey("modules.id"),
+        nullable=False,
+        index=True
+    )
+
+    # Input data for the output module (from pipeline return value)
+    input_data_json: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # Execution status tracking
+    status: Mapped[str] = mapped_column(
+        ETO_OUTPUT_STATUS,
+        nullable=False,
+        server_default="pending",
+    )
+
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
+    # Results from execution
+    result_json: Mapped[Optional[str]] = mapped_column(Text)
+    error_message: Mapped[Optional[str]] = mapped_column(Text)
+    error_type: Mapped[Optional[str]] = mapped_column(String(100))
+
+    # Audit timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+    )
+
+    # Relationships
+    sub_run: Mapped["EtoSubRunModel"] = relationship(back_populates="output_execution", uselist=False)
+    module: Mapped["ModuleModel"] = relationship()
+
+    __table_args__ = (
+        Index("idx_eto_sub_run_output_exec_sub_run", "sub_run_id"),
+        Index("idx_eto_sub_run_output_exec_status", "status"),
+        Index("idx_eto_sub_run_output_exec_module", "module_id"),
     )

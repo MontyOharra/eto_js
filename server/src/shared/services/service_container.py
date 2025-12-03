@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from features.pdf_files.service import PdfFilesService
     from features.pdf_templates.service import PdfTemplateService
     from features.pipelines.service import PipelineService
-    from features.pipeline_execution.service import PipelineExecutionService
+    from src.features.pipeline_execution.service import PipelineExecutionService
     from features.eto_runs.service import EtoRunsService
     from shared.database.connection import DatabaseConnectionManager
 

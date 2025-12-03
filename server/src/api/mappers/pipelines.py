@@ -279,6 +279,7 @@ def convert_execution_result(result):
     return ExecutePipelineResponse(
         status=result.status,
         steps=steps,
-        executed_actions=result.executed_actions,
+        output_module_id=result.output_module_id,
+        output_module_inputs=result.output_module_inputs,
         error=result.error
     )
