@@ -2,11 +2,14 @@
 Output Definition Base Class
 
 Abstract base class that all output module definitions must implement.
-Defines the contract for order creation/update and email templates.
+Defines the contract for order creation/update.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict
+from typing import Any, Dict, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from features.pipeline_results.helpers.orders import OrderHelpers
 
 
 class OutputDefinitionBase(ABC):
@@ -17,38 +20,29 @@ class OutputDefinitionBase(ABC):
     that implements the actual order creation/update logic.
 
     Implementations must:
-    1. Define email templates for create and update confirmations
-    2. Implement create_order() for new orders
-    3. Implement update_order() for existing orders
+    1. Implement create_order() for new orders
+    2. Implement update_order() for existing orders
     """
-
-    # Email templates - subclasses must define these
-    # Templates use {placeholder} format for string interpolation
-    # Available placeholders: all input_data fields + order_number, hawb, etc.
-    email_subject_create: str
-    email_subject_update: str
-    email_body_create: str
-    email_body_update: str
 
     @abstractmethod
     def create_order(
         self,
         input_data: Dict[str, Any],
-        helpers: Any
+        helpers: "OrderHelpers"
     ) -> Dict[str, Any]:
         """
         Create a new order from the pipeline output data.
 
         Args:
             input_data: Data collected from pipeline execution (e.g., hawb, customer_id, times, addresses)
-            helpers: Helper utilities for order operations, address resolution, etc.
+            helpers: OrderHelpers instance for database operations (e.g., generate_next_order_number)
 
         Returns:
             Dict containing at minimum:
             {
-                "order_number": int,
+                "order_number": float,
                 "hawb": str,
-                ... additional fields for result storage and email templates
+                ... additional fields for result storage
             }
 
         Raises:
@@ -61,7 +55,7 @@ class OutputDefinitionBase(ABC):
         self,
         input_data: Dict[str, Any],
         existing_order_number: int,
-        helpers: Any
+        helpers: "OrderHelpers"
     ) -> Dict[str, Any]:
         """
         Update an existing order with new data from pipeline output.
@@ -69,15 +63,15 @@ class OutputDefinitionBase(ABC):
         Args:
             input_data: Data collected from pipeline execution
             existing_order_number: The order number to update
-            helpers: Helper utilities for order operations, address resolution, etc.
+            helpers: OrderHelpers instance for database operations
 
         Returns:
             Dict containing at minimum:
             {
-                "order_number": int,
+                "order_number": float,
                 "hawb": str,
                 "fields_updated": list[str],  # Which fields were changed
-                ... additional fields for result storage and email templates
+                ... additional fields for result storage
             }
 
         Raises:

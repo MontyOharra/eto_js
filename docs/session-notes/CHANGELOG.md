@@ -1,5 +1,67 @@
 # CHANGELOG
 
+## [2025-12-03] — Frontend Fixes & Thread-Safe Output Execution
+
+### Spec / Intent
+- Fix scrolling issues on ETO run detail page
+- Fix status display in ETO list view (showing "-" instead of sub-run counts)
+- Add thread safety to Access database operations for concurrent worker threads
+
+### Changes Made
+
+#### Frontend Fixes:
+
+**Scrolling Fix:**
+- `client/src/renderer/features/eto/components/EtoRunDetailView/EtoRunDetailViewWrapper.tsx`
+  - Added `h-full overflow-auto` to container div
+- `client/src/renderer/pages/dashboard/eto/$runId.tsx`
+  - Added `overflow-auto` to container div
+
+**Status Display Fix:**
+- `client/src/renderer/features/eto/types.ts`
+  - Changed `EtoSubRunsSummary` from multiple count fields to `status_counts: Record<string, number>`
+- `client/src/renderer/features/eto/components/EtoRunsTable/EtoRunsTable.tsx`
+  - Updated `StatusCell` to read from `summary.status_counts.success`, `.failure`, `.needs_template`
+  - Updated `ActionsCell` to use new `statusCounts` structure
+
+#### Backend Fixes:
+
+**API Simplification:**
+- `server/src/api/schemas/eto_runs.py`
+  - Simplified `EtoSubRunsSummary` to single `status_counts: Dict[str, int]` field
+- `server/src/api/mappers/eto_runs.py`
+  - Updated mapper to populate `status_counts` dict
+
+**Thread Safety:**
+- `server/src/features/pipeline_results/helpers/orders.py`
+  - Added `import threading`
+  - Added class-level `_order_number_lock = threading.Lock()`
+  - Wrapped `generate_next_order_number()` body with `with self._order_number_lock:`
+
+### Key Technical Details
+
+#### Thread Safety Issue:
+- **Error:** `pyodbc.Error: ('HY010', '[HY010] [Microsoft][ODBC Driver Manager] Function sequence error')`
+- **Cause:** pyodbc has threadsafety=1 (threads cannot share connections)
+- **Solution:** Class-level lock serializes all order number generation across threads
+- **Trade-off:** Slight reduction in parallelism, but order numbers must be unique anyway
+
+#### Status Display Issue:
+- **Problem:** Frontend tried to calculate page counts from `sub_runs` array (which was null)
+- **Fallback logic bug:** Only worked when `failure_count === 0`
+- **Solution:** API now returns simple `status_counts` dict, frontend reads directly
+
+### Database Impact
+- No schema changes
+- Access database operations now serialized via threading lock
+
+### Next Actions
+- Implement real order output module (beyond test module)
+- Add output execution details to sub-run detail view
+- Monitor lock contention under load
+
+---
+
 ## [2025-11-28] — PDF Source Tracking Refactor & List View State Preservation
 
 ### Spec / Intent

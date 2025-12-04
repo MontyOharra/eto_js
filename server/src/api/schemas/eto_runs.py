@@ -58,18 +58,11 @@ class EtoSubRunsSummary(BaseModel):
     """
     Summary of sub-runs for list view.
     Provides counts by status for quick overview without full sub-run details.
-    """
-    total_count: int
-    matched_count: int  # Sub-runs with a matched template
-    needs_template_count: int  # Sub-runs without template match (unmatched group)
-    success_count: int
-    failure_count: int
-    processing_count: int
-    not_started_count: int
 
-    # Page counts for display
-    pages_matched_count: int  # Total pages across matched sub-runs
-    pages_unmatched_count: int  # Total pages in unmatched groups (needs_template)
+    status_counts is a dict mapping status string to count, e.g.:
+    {"success": 2, "failure": 1, "needs_template": 3, "skipped": 0}
+    """
+    status_counts: Dict[str, int]
 
 
 # =============================================================================

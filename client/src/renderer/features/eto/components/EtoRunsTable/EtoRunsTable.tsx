@@ -69,15 +69,16 @@ function formatDate(isoDate: string | null): string {
 
 const columnHelper = createColumnHelper<EtoRunListItem>();
 
-// Combined status cell showing processing state or page counts by status
+// Combined status cell showing processing state or sub-run counts by status
 function StatusCell({ row }: CellContext<EtoRunListItem, unknown>) {
   const data = row.original;
-  const { sub_runs_summary: summary, sub_runs } = data;
+  const { sub_runs_summary: summary } = data;
+  const statusCounts = summary.status_counts;
   const isRead = data.is_read;
   const textOpacity = isRead ? 'opacity-60' : 'opacity-100';
 
   // Processing state - show spinner
-  if (data.status === 'processing' || data.status === 'not_started') {
+  if (data.status === 'processing') {
     return (
       <div className={`flex items-center gap-2 ${textOpacity}`}>
         <svg className="animate-spin h-4 w-4 text-blue-400" fill="none" viewBox="0 0 24 24">
@@ -89,7 +90,7 @@ function StatusCell({ row }: CellContext<EtoRunListItem, unknown>) {
     );
   }
 
-  // Critical failure state
+  // Critical failure state (run-level failure, not sub-run)
   if (data.status === 'failure') {
     return (
       <div className={`flex items-center gap-2 ${textOpacity}`}>
@@ -98,6 +99,7 @@ function StatusCell({ row }: CellContext<EtoRunListItem, unknown>) {
     );
   }
 
+  // Run skipped
   if (data.status === 'skipped') {
     return (
       <div className={`flex items-center gap-2 ${textOpacity}`}>
@@ -106,58 +108,41 @@ function StatusCell({ row }: CellContext<EtoRunListItem, unknown>) {
     );
   }
 
-  // Calculate page counts by status from sub_runs array
-  let successPages = 0;
-  let needsTemplatePages = 0;
-  let failurePages = 0;
+  // Build indicators for non-zero sub-run counts
+  const indicators: Array<{
+    key: string;
+    count: number;
+    dotColor: string;
+    textColor: string;
+    pingColor: string;
+  }> = [];
 
-  if (sub_runs && sub_runs.length > 0) {
-    for (const subRun of sub_runs) {
-      const pageCount = subRun.matched_pages?.length ?? 0;
-      if (subRun.status === 'success') {
-        successPages += pageCount;
-      } else if (subRun.status === 'needs_template') {
-        needsTemplatePages += pageCount;
-      } else if (subRun.status === 'failure') {
-        failurePages += pageCount;
-      }
-    }
-  } else {
-    // Fallback to summary counts if sub_runs not available
-    // Use pages_unmatched_count for needs_template (accurate)
-    // For success/failure, we can only approximate with sub-run counts
-    needsTemplatePages = summary.pages_unmatched_count;
-    // These are sub-run counts, not page counts - but better than nothing
-    if (summary.success_count > 0 && summary.failure_count === 0) {
-      successPages = summary.pages_matched_count;
-    }
-  }
+  const successCount = statusCounts.success || 0;
+  const needsTemplateCount = statusCounts.needs_template || 0;
+  const failureCount = statusCounts.failure || 0;
 
-  // Build indicators for non-zero counts
-  const indicators = [];
-
-  if (successPages > 0) {
+  if (successCount > 0) {
     indicators.push({
       key: 'success',
-      count: successPages,
+      count: successCount,
       dotColor: 'bg-green-500',
       textColor: 'text-green-400',
       pingColor: 'bg-green-400',
     });
   }
-  if (needsTemplatePages > 0) {
+  if (needsTemplateCount > 0) {
     indicators.push({
       key: 'needs_template',
-      count: needsTemplatePages,
+      count: needsTemplateCount,
       dotColor: 'bg-yellow-500',
       textColor: 'text-yellow-400',
       pingColor: 'bg-yellow-400',
     });
   }
-  if (failurePages > 0) {
+  if (failureCount > 0) {
     indicators.push({
       key: 'failure',
-      count: failurePages,
+      count: failureCount,
       dotColor: 'bg-red-500',
       textColor: 'text-red-400',
       pingColor: 'bg-red-400',
@@ -251,9 +236,10 @@ function ActionsCell({
 }) {
   const data = row.original;
   const { sub_runs_summary: summary } = data;
+  const statusCounts = summary.status_counts;
   const isRead = data.is_read;
   const isSkipped = data.status === 'skipped';
-  const hasIssues = summary.failure_count > 0 || summary.needs_template_count > 0;
+  const hasIssues = (statusCounts.failure || 0) > 0 || (statusCounts.needs_template || 0) > 0;
   const isFullySuccessful = data.status === 'success' && !hasIssues;
 
   const showSkipButton = !isSkipped && (data.status === 'failure' || hasIssues);

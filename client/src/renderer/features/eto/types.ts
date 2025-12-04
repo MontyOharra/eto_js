@@ -49,15 +49,11 @@ export interface EtoSourceEmail {
 export type EtoSource = EtoSourceManual | EtoSourceEmail;
 
 export interface EtoSubRunsSummary {
-  total_count: number;
-  matched_count: number;
-  needs_template_count: number;
-  success_count: number;
-  failure_count: number;
-  processing_count: number;
-  not_started_count: number;
-  pages_matched_count: number;
-  pages_unmatched_count: number;
+  /**
+   * Count of sub-runs by status.
+   * Keys are status strings: "success", "failure", "needs_template", "skipped"
+   */
+  status_counts: Record<string, number>;
 }
 
 export interface EtoMatchedTemplate {

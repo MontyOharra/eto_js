@@ -3,7 +3,7 @@
  * Header section with title, status badge, view mode toggle, metadata, and close button
  */
 
-import { StatusBadge } from "../EtoRunRow/StatusBadge";
+import { EtoSubRunStatusBadge } from "./EtoSubRunStatusBadge";
 import { formatDuration } from "../../../../shared/utils/formatUtils";
 import type { EtoSubRunFullDetail } from "../../types";
 
@@ -27,7 +27,7 @@ export function EtoSubRunDetailHeader({
       <div className="flex items-center space-x-4">
         <div className="flex items-center space-x-3">
           <h2 className="text-xl font-semibold text-white">ETO Run Details</h2>
-          {runDetail && <StatusBadge status={runDetail.status} />}
+          {runDetail && <EtoSubRunStatusBadge status={runDetail.status} />}
         </div>
 
         {/* View Mode Toggle */}

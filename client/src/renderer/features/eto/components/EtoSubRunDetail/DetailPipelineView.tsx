@@ -49,7 +49,6 @@ export function DetailPipelineView({
     if (!runDetail?.stage_pipeline_execution?.steps) {
       return [];
     }
-
     return runDetail.stage_pipeline_execution.steps.map((step) => ({
       module_instance_id: step.module_instance_id,
       step_number: step.step_number,

@@ -8,7 +8,6 @@ export type {
   BBox,
   PdfObjects,
   TextWordObject,
-  TextLineObject,
   GraphicRectObject,
   GraphicLineObject,
   GraphicCurveObject,

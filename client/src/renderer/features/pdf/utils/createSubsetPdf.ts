@@ -51,7 +51,7 @@ export async function createSubsetPdf(
     const timestamp = Date.now();
     const subsetFileName = `template_${timestamp}_${randomId}.pdf`;
 
-    const subsetFile = new File([newPdfBytes], subsetFileName, {
+    const subsetFile = new File([new Uint8Array(newPdfBytes)], subsetFileName, {
       type: 'application/pdf',
       lastModified: Date.now(),
     });

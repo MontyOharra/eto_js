@@ -19,7 +19,6 @@ import {
   useSkipRun,
   useDeleteRuns,
   useUpdateEtoRun,
-  useEtoEvents,
   EtoRunDetail,
 } from '../../index';
 
@@ -66,8 +65,8 @@ function getSourceDate(detail: EtoRunDetail): string {
 }
 
 export function EtoRunDetailViewWrapper({ runId, onBack }: EtoRunDetailViewWrapperProps) {
-  // SSE connection for real-time updates
-  useEtoEvents();
+  // Note: SSE connection is established at page level (eto/index.tsx)
+  // No need for duplicate connection here
 
   // Modal state
   const [selectedSubRunId, setSelectedSubRunId] = useState<number | null>(null);
@@ -280,7 +279,7 @@ export function EtoRunDetailViewWrapper({ runId, onBack }: EtoRunDetailViewWrapp
     : '-';
 
   return (
-    <div className="p-6">
+    <div className="p-6 h-full overflow-auto">
       {/* Header with back button */}
       <EtoRunDetailHeader
         pdfFilename={detail.pdf.original_filename}

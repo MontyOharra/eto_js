@@ -16,6 +16,7 @@ from shared.database.repositories.eto_sub_run import EtoSubRunRepository
 from shared.database.repositories.eto_sub_run_extraction import EtoSubRunExtractionRepository
 from shared.database.repositories.eto_sub_run_pipeline_execution import EtoSubRunPipelineExecutionRepository
 from shared.database.repositories.eto_sub_run_pipeline_execution_step import EtoSubRunPipelineExecutionStepRepository
+from shared.database.repositories.eto_sub_run_output_execution import EtoSubRunOutputExecutionRepository
 
 from shared.events.eto_events import eto_event_manager
 
@@ -37,7 +38,7 @@ from shared.types.eto_sub_runs import (
     EtoSubRunUpdate,
     EtoSubRunDetailView,
 )
-from shared.types.eto_runs import EtoRunExtractionDetailView, EtoRunPipelineExecutionDetailView
+from shared.types.eto_runs import EtoRunExtractionDetailView, EtoRunPipelineExecutionDetailView, EtoRunPipelineExecutionStepDetailView
 from shared.types.eto_sub_run_extractions import (
     EtoSubRunExtraction,
     EtoSubRunExtractionCreate,
@@ -52,6 +53,11 @@ from shared.types.eto_sub_run_pipeline_execution_steps import (
     EtoSubRunPipelineExecutionStep,
     EtoSubRunPipelineExecutionStepCreate,
     EtoSubRunPipelineExecutionStepUpdate,
+)
+from shared.types.eto_sub_run_output_executions import (
+    EtoSubRunOutputExecution,
+    EtoSubRunOutputExecutionCreate,
+    EtoSubRunOutputExecutionUpdate,
 )
 from shared.types.pdf_templates import TemplateMatchingResult
 
@@ -68,6 +74,7 @@ if TYPE_CHECKING:
     from features.pdf_templates.service import PdfTemplateService
     from features.pdf_files.service import PdfFilesService
     from src.features.pipeline_execution.service import PipelineExecutionService
+    from features.pipeline_results.service import PipelineResultService
 
 logger = get_logger(__name__)
 
@@ -98,6 +105,7 @@ class EtoRunsService:
     pdf_template_service: 'PdfTemplateService'
     pdf_files_service: 'PdfFilesService'
     pipeline_execution_service: 'PipelineExecutionService'
+    pipeline_result_service: 'PipelineResultService'
 
     # ==================== Repositories ====================
 
@@ -106,13 +114,15 @@ class EtoRunsService:
     sub_run_extraction_repo: EtoSubRunExtractionRepository
     sub_run_pipeline_execution_repo: EtoSubRunPipelineExecutionRepository
     sub_run_pipeline_execution_step_repo: EtoSubRunPipelineExecutionStepRepository
+    sub_run_output_execution_repo: EtoSubRunOutputExecutionRepository
 
     def __init__(
         self,
         connection_manager: DatabaseConnectionManager,
         pdf_template_service: 'PdfTemplateService',
         pdf_files_service: 'PdfFilesService',
-        pipeline_execution_service: 'PipelineExecutionService'
+        pipeline_execution_service: 'PipelineExecutionService',
+        pipeline_result_service: 'PipelineResultService'
     ) -> None:
         """
         Initialize ETO Runs Service.
@@ -122,6 +132,7 @@ class EtoRunsService:
             pdf_template_service: Service for template matching
             pdf_files_service: Service for PDF file access
             pipeline_execution_service: Service for pipeline execution
+            pipeline_result_service: Service for output module execution
         """
         logger.debug("Initializing EtoRunsService...")
 
@@ -130,6 +141,7 @@ class EtoRunsService:
         self.pdf_template_service: 'PdfTemplateService' = pdf_template_service
         self.pdf_files_service: 'PdfFilesService' = pdf_files_service
         self.pipeline_execution_service: 'PipelineExecutionService' = pipeline_execution_service
+        self.pipeline_result_service: 'PipelineResultService' = pipeline_result_service
 
         # Initialize repositories
         self.eto_run_repo: EtoRunRepository = EtoRunRepository(connection_manager=connection_manager)
@@ -137,6 +149,7 @@ class EtoRunsService:
         self.sub_run_extraction_repo: EtoSubRunExtractionRepository = EtoSubRunExtractionRepository(connection_manager=connection_manager)
         self.sub_run_pipeline_execution_repo: EtoSubRunPipelineExecutionRepository = EtoSubRunPipelineExecutionRepository(connection_manager=connection_manager)
         self.sub_run_pipeline_execution_step_repo: EtoSubRunPipelineExecutionStepRepository = EtoSubRunPipelineExecutionStepRepository(connection_manager=connection_manager)
+        self.sub_run_output_execution_repo: EtoSubRunOutputExecutionRepository = EtoSubRunOutputExecutionRepository(connection_manager=connection_manager)
 
         # Worker configuration from environment
         worker_enabled = os.getenv('ETO_WORKER_ENABLED', 'true').lower() == 'true'
@@ -536,14 +549,14 @@ class EtoRunsService:
                     except (json.JSONDecodeError, TypeError):
                         pass
 
-                steps.append({
-                    "id": step.id,
-                    "step_number": step.step_number,
-                    "module_instance_id": step.module_instance_id,
-                    "inputs": inputs,
-                    "outputs": outputs,
-                    "error": error,
-                })
+                steps.append(EtoRunPipelineExecutionStepDetailView(
+                    id=step.id,
+                    step_number=step.step_number,
+                    module_instance_id=step.module_instance_id,
+                    inputs=inputs,
+                    outputs=outputs,
+                    error=error,
+                ))
 
             pipeline_detail = EtoRunPipelineExecutionDetailView(
                 status=pipeline_exec.status, #type: ignore
@@ -635,13 +648,30 @@ class EtoRunsService:
 
             # Stage 2: Pipeline Execution
             try:
-                self._process_sub_run_pipeline(sub_run_id, extracted_data)
+                pipeline_result = self._process_sub_run_pipeline(sub_run_id, extracted_data)
 
             except Exception as e:
                 logger.error(f"Sub-run {sub_run_id}: Pipeline error: {e}", exc_info=True)
                 self._mark_sub_run_failure(sub_run_id, error=e, error_type="PipelineExecutionError")
                 self._update_parent_run_status(sub_run.eto_run_id)
                 return False
+
+            # Stage 3: Output Execution (if pipeline has an output module)
+            if pipeline_result.output_module_id:
+                try:
+                    self._process_sub_run_output_execution(
+                        sub_run_id=sub_run_id,
+                        output_module_id=pipeline_result.output_module_id,
+                        output_module_inputs=pipeline_result.output_module_inputs or {}
+                    )
+
+                except Exception as e:
+                    logger.error(f"Sub-run {sub_run_id}: Output execution error: {e}", exc_info=True)
+                    self._mark_sub_run_failure(sub_run_id, error=e, error_type="OutputExecutionError")
+                    self._update_parent_run_status(sub_run.eto_run_id)
+                    return False
+            else:
+                logger.debug(f"Sub-run {sub_run_id}: No output module in pipeline, skipping output execution")
 
             # All stages completed successfully
             self._mark_sub_run_success(sub_run_id)
@@ -850,7 +880,7 @@ class EtoRunsService:
 
         return extracted_data
 
-    def _process_sub_run_pipeline(self, sub_run_id: int, extracted_data: list) -> None:
+    def _process_sub_run_pipeline(self, sub_run_id: int, extracted_data: list) -> "PipelineExecutionResult":
         """
         Execute pipeline execution stage for a single sub-run.
 
@@ -861,9 +891,13 @@ class EtoRunsService:
             sub_run_id: Sub-run ID
             extracted_data: Extracted data from previous stage (list of field dicts)
 
+        Returns:
+            PipelineExecutionResult containing output module data if present
+
         Raises:
             Exception: If pipeline execution fails
         """
+        from shared.types.pipeline_execution import PipelineExecutionResult
         logger.monitor(f"Sub-run {sub_run_id}: Executing pipeline execution stage")
 
         # Step 1: Get sub-run with template info
@@ -925,8 +959,6 @@ class EtoRunsService:
         }
 
         # Step 7: Execute pipeline with PRODUCTION mode (execute_actions=True)
-        from shared.types.pipeline_execution import PipelineExecutionResult
-
         execution_result: PipelineExecutionResult = self.pipeline_execution_service.execute_pipeline(
             steps=compiled_steps,  # type: ignore[arg-type]
             entry_values_by_name=extracted_data_dict,
@@ -980,15 +1012,8 @@ class EtoRunsService:
 
         logger.monitor(f"Sub-run {sub_run_id}: Pipeline execution completed successfully")
 
-        # Step 11: Log output module data for testing (temporary - will be replaced with PipelineResultService call)
-        if execution_result.output_module_id:
-            logger.monitor(
-                f"Sub-run {sub_run_id}: OUTPUT MODULE DATA\n"
-                f"  Module ID: {execution_result.output_module_id}\n"
-                f"  Inputs: {json.dumps(execution_result.output_module_inputs, indent=2, default=str)}"
-            )
-        else:
-            logger.debug(f"Sub-run {sub_run_id}: No output module in pipeline")
+        # Return execution result for output module processing
+        return execution_result
 
     def _extract_data_from_pdf_pages(
         self,
@@ -1018,6 +1043,86 @@ class EtoRunsService:
             extraction_fields=extraction_fields,
             page_numbers=page_numbers
         )
+
+    def _process_sub_run_output_execution(
+        self,
+        sub_run_id: int,
+        output_module_id: str,
+        output_module_inputs: Dict[str, Any]
+    ) -> None:
+        """
+        Execute output module processing stage for a single sub-run.
+
+        Creates an output execution record and calls the PipelineResultService
+        to execute the output module (e.g., create order).
+
+        For now, this only handles the "create" flow - HAWB checking and
+        update approval flow will be added later.
+
+        Args:
+            sub_run_id: Sub-run ID
+            output_module_id: ID of the output module (e.g., "test_output")
+            output_module_inputs: Input data collected by the output module
+
+        Raises:
+            Exception: If output execution fails
+        """
+        logger.monitor(f"Sub-run {sub_run_id}: Executing output module stage")
+
+        # Step 1: Extract HAWB from inputs (for test_output, it's "test_value")
+        # Different output modules may have different field names for HAWB
+        hawb = output_module_inputs.get("hawb") or output_module_inputs.get("test_value") or ""
+
+        # Step 2: Create output execution record with status="pending"
+        started_at = datetime.now(timezone.utc)
+        output_execution = self.sub_run_output_execution_repo.create(
+            EtoSubRunOutputExecutionCreate(
+                sub_run_id=sub_run_id,
+                module_id=output_module_id,
+                input_data=output_module_inputs,
+                hawb=str(hawb)
+            )
+        )
+        logger.debug(f"Sub-run {sub_run_id}: Created output_execution record {output_execution.id}")
+
+        # Step 3: Update status to "processing"
+        self.sub_run_output_execution_repo.update(output_execution.id, {
+            "status": "processing",
+            "action_type": "create",  # For now, always create (HAWB check comes later)
+            "started_at": started_at
+        })
+
+        # Step 4: Execute order creation via PipelineResultService
+        try:
+            result = self.pipeline_result_service.create_order(
+                module_id=output_module_id,
+                input_data=output_module_inputs
+            )
+
+            # Step 5: Update output execution record with success
+            completed_at = datetime.now(timezone.utc)
+            self.sub_run_output_execution_repo.update(output_execution.id, {
+                "status": "success",
+                "result": result,
+                "completed_at": completed_at
+            })
+
+            logger.monitor(
+                f"Sub-run {sub_run_id}: Output execution completed successfully - "
+                f"order_number={result.get('order_number')}"
+            )
+
+        except Exception as e:
+            # Step 5 (error): Update output execution record with failure
+            completed_at = datetime.now(timezone.utc)
+            self.sub_run_output_execution_repo.update(output_execution.id, {
+                "status": "error",
+                "error_message": str(e),
+                "error_type": type(e).__name__,
+                "completed_at": completed_at
+            })
+            logger.error(f"Sub-run {sub_run_id}: Output execution failed: {e}")
+            raise
 
     # ==================== Helper Methods (Sub-Run) ====================
 

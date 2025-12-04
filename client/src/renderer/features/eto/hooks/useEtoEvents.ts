@@ -175,6 +175,8 @@ export function useEtoEvents(options: UseEtoEventsOptions = {}) {
   }, [handleEvent, onConnected, onDisconnected]);
 
   // Connect on mount, disconnect on unmount
+  // Note: Empty dependency array - we only want to connect once on mount
+  // The connect function uses refs for callbacks so it always has the latest values
   useEffect(() => {
     connect();
 
@@ -193,7 +195,8 @@ export function useEtoEvents(options: UseEtoEventsOptions = {}) {
 
       isConnectedRef.current = false;
     };
-  }, [connect]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Fallback polling - periodically invalidate queries in case SSE events are missed
   useEffect(() => {

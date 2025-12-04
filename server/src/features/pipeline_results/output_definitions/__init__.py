@@ -6,7 +6,9 @@ Each definition handles order creation/update logic for a specific output module
 """
 
 from features.pipeline_results.output_definitions.base import OutputDefinitionBase
+from features.pipeline_results.output_definitions.test_output import TestOutputDefinition
 
 __all__ = [
     "OutputDefinitionBase",
+    "TestOutputDefinition",
 ]

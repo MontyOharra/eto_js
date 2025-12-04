@@ -153,7 +153,7 @@ def configure_logging():
     root_logger.addHandler(console_handler)
 
     # File handler (always without colors, but with tracebacks)
-    log_file = os.path.join(logs_dir, 'transformation_pipeline.log')
+    log_file = os.path.join(logs_dir, 'app.log')
     file_handler = logging.FileHandler(log_file, encoding='utf-8')
     file_handler.setLevel(log_level)
     file_formatter = ColoredFormatter(

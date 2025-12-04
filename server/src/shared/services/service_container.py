@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from features.pdf_templates.service import PdfTemplateService
     from features.pipelines.service import PipelineService
     from src.features.pipeline_execution.service import PipelineExecutionService
+    from features.pipeline_results.service import PipelineResultService
     from features.eto_runs.service import EtoRunsService
     from shared.database.connection import DatabaseConnectionManager
 
@@ -110,6 +111,10 @@ class ServiceContainer:
         cls._initialized = True
         logger.info("ServiceContainer initialized successfully")
 
+        # Eagerly create services that would otherwise be lazily resolved in worker threads
+        # This prevents race conditions with the _resolving list
+        cls._eager_load_services()
+
     @classmethod
     def _register_service_definitions(cls) -> None:
         """
@@ -152,6 +157,12 @@ class ServiceContainer:
                 'singleton': True,
                 'description': 'Pipeline execution service for running compiled pipelines'
             },
+            'pipeline_results': {
+                'class': 'features.pipeline_results.service.PipelineResultService',
+                'args': [cls._data_database_manager],
+                'singleton': True,
+                'description': 'Pipeline result service for executing output modules and order operations'
+            },
             'pipelines': {
                 'class': 'features.pipelines.service.PipelineService',
                 'args': [cls._connection_manager, '_service:pipeline_execution', '_service:modules', cls._data_database_manager],
@@ -166,13 +177,33 @@ class ServiceContainer:
             },
             'eto_runs': {
                 'class': 'features.eto_runs.service.EtoRunsService',
-                'args': [cls._connection_manager, '_service:pdf_templates', '_service:pdf_files', '_service:pipeline_execution'],
+                'args': [cls._connection_manager, '_service:pdf_templates', '_service:pdf_files', '_service:pipeline_execution', '_service:pipeline_results'],
                 'singleton': True,
                 'description': 'ETO runs service for processing lifecycle management'
             },
         }
 
         logger.debug(f"Registered {len(cls._service_definitions)} service definitions")
+
+    @classmethod
+    def _eager_load_services(cls) -> None:
+        """
+        Eagerly load services that need to be resolved before worker threads start.
+
+        This prevents race conditions where multiple threads try to resolve
+        the same ServiceProxy simultaneously, causing false circular dependency errors.
+        """
+        eager_services = [
+            'pipeline_results',  # Used by eto_runs worker, resolved lazily via ServiceProxy
+        ]
+
+        for service_name in eager_services:
+            try:
+                cls.get(service_name)
+                logger.debug(f"Eagerly loaded service: {service_name}")
+            except Exception as e:
+                logger.error(f"Failed to eagerly load service '{service_name}': {e}")
+                raise
 
     @classmethod
     def get(cls, service_name: str) -> Any:
@@ -374,6 +405,11 @@ class ServiceContainer:
     def get_pipeline_execution_service(cls) -> 'PipelineExecutionService':
         """Get the pipeline execution service"""
         return cls.get('pipeline_execution')
+
+    @classmethod
+    def get_pipeline_result_service(cls) -> 'PipelineResultService':
+        """Get the pipeline result service"""
+        return cls.get('pipeline_results')
 
     @classmethod
     def get_eto_runs_service(cls) -> 'EtoRunsService':

@@ -15,7 +15,6 @@ import {
   useSkipRun,
   useDeleteRuns,
   useUpdateEtoRun,
-  useEtoEvents,
   EtoRunDetail,
 } from '../../../features/eto';
 import { TemplateBuilder, TemplateBuilderData } from '../../../features/templates/components/TemplateBuilder';
@@ -77,8 +76,8 @@ function EtoRunDetailPage() {
   const { runId } = Route.useParams();
   const navigate = useNavigate();
 
-  // SSE connection for real-time updates
-  useEtoEvents();
+  // Note: SSE connection is established in parent EtoPage (eto/index.tsx)
+  // No need for duplicate connection here
 
   // Modal state
   const [selectedSubRunId, setSelectedSubRunId] = useState<number | null>(null);
@@ -289,7 +288,7 @@ function EtoRunDetailPage() {
     : '-';
 
   return (
-    <div className="p-6">
+    <div className="p-6 min-h-full overflow-auto">
       {/* Header with back button */}
       <EtoRunDetailHeader
         pdfFilename={detail.pdf.original_filename}
