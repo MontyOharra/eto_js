@@ -75,27 +75,42 @@ ETO_OUTPUT_ACTION_TYPE = SAEnum(
 
 
 # =========================
-# email_configs
+# email_accounts (credentials storage)
 # =========================
 
-class EmailConfigModel(BaseModel):
-    __tablename__ = "email_configs"
+class EmailAccountModel(BaseModel):
+    """
+    Stores email account credentials and connection settings.
+    Decoupled from ingestion configs - one account can be used by multiple listeners.
+    Future: Also used for email sending configurations.
+    """
+    __tablename__ = "email_accounts"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Display info
+    name: Mapped[str] = mapped_column(String(255), nullable=False)  # "Work Gmail", "Dispatch Inbox"
     description: Mapped[Optional[str]] = mapped_column(Text)
 
-    provider_type: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Provider info
+    provider_type: Mapped[str] = mapped_column(String(50), nullable=False)  # "imap", "gmail_api", "outlook_com"
+    email_address: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+
+    # Connection settings (JSON) - host, port, use_ssl, etc. (excludes credentials)
     provider_settings: Mapped[str] = mapped_column(Text, nullable=False)
-    folder_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    filter_rules: Mapped[Optional[str]] = mapped_column(Text)
 
-    poll_interval_seconds: Mapped[int] = mapped_column(Integer, default=5)
+    # Credentials (JSON) - password, oauth_token, refresh_token, etc.
+    # TODO: Encrypt this field in future
+    credentials: Mapped[str] = mapped_column(Text, nullable=False)
 
-    is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    activated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
-    last_check_time: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    # Validation status
+    is_validated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    validated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
+    # Discovered capabilities (JSON array) - ["IDLE", "UIDPLUS"]
+    capabilities: Mapped[Optional[str]] = mapped_column(Text)
+
+    # Error tracking
     last_error_message: Mapped[Optional[str]] = mapped_column(Text)
     last_error_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
@@ -107,10 +122,71 @@ class EmailConfigModel(BaseModel):
     )
 
     # Relationships
-    emails: Mapped[List["EmailModel"]] = relationship(back_populates="config")
+    ingestion_configs: Mapped[List["EmailIngestionConfigModel"]] = relationship(
+        back_populates="account", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
-        Index("idx_email_config_active", "is_active"),
+        Index("idx_email_accounts_email", "email_address"),
+        Index("idx_email_accounts_validated", "is_validated"),
+    )
+
+
+# =========================
+# email_ingestion_configs (listener settings)
+# =========================
+
+class EmailIngestionConfigModel(BaseModel):
+    """
+    Stores email ingestion listener configuration.
+    References an email_account for credentials.
+    One account can have multiple ingestion configs (different folders, filters).
+    """
+    __tablename__ = "email_ingestion_configs"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    # Display info
+    name: Mapped[str] = mapped_column(String(255), nullable=False)  # "SOS Auto Orders"
+    description: Mapped[Optional[str]] = mapped_column(Text)
+
+    # Reference to account (credentials stored there)
+    account_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("email_accounts.id"), nullable=False, index=True
+    )
+
+    # Ingestion-specific settings
+    folder_name: Mapped[str] = mapped_column(String(255), nullable=False)  # "INBOX.SOS Auto Order"
+    filter_rules: Mapped[Optional[str]] = mapped_column(Text)  # JSON array of filter rules
+
+    # Polling settings
+    poll_interval_seconds: Mapped[int] = mapped_column(Integer, default=60)
+    use_idle: Mapped[bool] = mapped_column(Boolean, default=True)  # Prefer IDLE if available
+
+    # State tracking
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    activated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    last_check_time: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    last_processed_uid: Mapped[Optional[int]] = mapped_column(BigInteger)  # For UID-based tracking
+
+    # Error tracking (listener-specific errors)
+    last_error_message: Mapped[Optional[str]] = mapped_column(Text)
+    last_error_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+    )
+
+    # Relationships
+    account: Mapped["EmailAccountModel"] = relationship(back_populates="ingestion_configs")
+    emails: Mapped[List["EmailModel"]] = relationship(back_populates="ingestion_config")
+
+    __table_args__ = (
+        Index("idx_email_ingestion_config_active", "is_active"),
+        Index("idx_email_ingestion_config_account", "account_id"),
     )
 
 
@@ -123,7 +199,10 @@ class EmailModel(BaseModel):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
-    config_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("email_configs.id"), nullable=True)
+    # Reference to ingestion config (renamed from config_id)
+    ingestion_config_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("email_ingestion_configs.id"), nullable=True
+    )
     message_id: Mapped[str] = mapped_column(String(500), nullable=False)
     subject: Mapped[Optional[str]] = mapped_column(String(500))
     sender_email: Mapped[Optional[str]] = mapped_column(String(255))
@@ -145,12 +224,12 @@ class EmailModel(BaseModel):
     )
 
     # Relationships
-    config: Mapped["EmailConfigModel"] = relationship(back_populates="emails")
+    ingestion_config: Mapped[Optional["EmailIngestionConfigModel"]] = relationship(back_populates="emails")
     # Note: PDF files no longer track email_id - use eto_runs.source_email_id instead
 
     __table_args__ = (
-        UniqueConstraint("config_id", "message_id", name="uix_config_message"),
-        Index("ix_email_config_id", "config_id"),
+        UniqueConstraint("ingestion_config_id", "message_id", name="uix_ingestion_config_message"),
+        Index("ix_email_ingestion_config_id", "ingestion_config_id"),
         Index("ix_email_received_date", "received_date"),
     )
 

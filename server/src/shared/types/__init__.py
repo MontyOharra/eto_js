@@ -1,12 +1,27 @@
 """Shared domain types (dataclasses) for internal service/repository layer"""
 
-# Email configuration types
-from shared.types.email_configs import (
+# Email account types
+from shared.types.email_accounts import (
+    ImapProviderSettings,
+    ProviderSettings,
+    PasswordCredentials,
+    OAuthCredentials,
+    Credentials,
+    EmailAccount,
+    EmailAccountSummary,
+    EmailAccountCreate,
+    EmailAccountUpdate,
+    EmailAccountValidationResult,
+)
+
+# Email ingestion configuration types
+from shared.types.email_ingestion_configs import (
     FilterRule,
-    EmailConfig,
-    EmailConfigSummary,
-    EmailConfigCreate,
-    EmailConfigUpdate,
+    EmailIngestionConfig,
+    EmailIngestionConfigSummary,
+    EmailIngestionConfigWithAccount,
+    EmailIngestionConfigCreate,
+    EmailIngestionConfigUpdate,
 )
 
 # Email types
@@ -17,7 +32,7 @@ from shared.types.email import (
 
 # Email integration types (transient dataclasses from integrations)
 from shared.types.email_integrations import (
-    EmailAccount,
+    EmailAccountInfo,
     EmailFolder,
     EmailMessage,
     ConnectionTestResult,
@@ -59,17 +74,29 @@ from shared.types.pipeline_execution import (
 )
 
 __all__ = [
-    # Email configuration
+    # Email accounts
+    "ImapProviderSettings",
+    "ProviderSettings",
+    "PasswordCredentials",
+    "OAuthCredentials",
+    "Credentials",
+    "EmailAccount",
+    "EmailAccountSummary",
+    "EmailAccountCreate",
+    "EmailAccountUpdate",
+    "EmailAccountValidationResult",
+    # Email ingestion configs
     "FilterRule",
-    "EmailConfig",
-    "EmailConfigSummary",
-    "EmailConfigCreate",
-    "EmailConfigUpdate",
+    "EmailIngestionConfig",
+    "EmailIngestionConfigSummary",
+    "EmailIngestionConfigWithAccount",
+    "EmailIngestionConfigCreate",
+    "EmailIngestionConfigUpdate",
     # Email
     "Email",
     "EmailCreate",
-    # Email integrations
-    "EmailAccount",
+    # Email integrations (transient)
+    "EmailAccountInfo",
     "EmailFolder",
     "EmailMessage",
     "ConnectionTestResult",

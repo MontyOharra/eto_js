@@ -39,6 +39,7 @@ def main():
 
         if debug:
             print("Running in DEBUG mode - not suitable for production!")
+            print(f"Reload mode is set to {reload}.")
 
         if workers > 1 and reload:
             print("Running with multiple workers and reload enabled - disabling reload")

@@ -1,6 +1,8 @@
 """
 Email domain types
-Dataclasses for email records stored in database
+Dataclasses for email records stored in database.
+
+References email_ingestion_configs for the listener that ingested the email.
 """
 from dataclasses import dataclass
 from datetime import datetime
@@ -15,7 +17,7 @@ class Email:
     Used by services and repositories for complete email data.
     """
     id: int
-    config_id: Optional[int]
+    ingestion_config_id: Optional[int]  # FK to email_ingestion_configs
     message_id: str
     sender_email: str
     subject: str
@@ -31,7 +33,7 @@ class EmailCreate:
     Data for creating a new email record.
     Used by EmailIngestionService._process_email when storing emails.
     """
-    config_id: int
+    ingestion_config_id: int  # FK to email_ingestion_configs
     message_id: str
     sender_email: str
     subject: str

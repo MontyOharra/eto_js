@@ -11,13 +11,16 @@ export type FilterRuleField =
   | 'sender_email'
   | 'subject'
   | 'has_attachments'
-  | 'attachment_types';
+  | 'received_date';
 
 export type FilterRuleOperation =
   | 'contains'
   | 'equals'
   | 'starts_with'
-  | 'ends_with';
+  | 'ends_with'
+  | 'before'
+  | 'after'
+  | 'is';
 
 export interface FilterRule {
   field: FilterRuleField;
@@ -27,65 +30,60 @@ export interface FilterRule {
 }
 
 // ============================================================================
-// Email Configuration Entities
+// Email Ingestion Configuration Entities
 // ============================================================================
 
 /**
- * Email configuration list item
- * Used in config listings/tables
+ * Ingestion config list item with account info
+ * Used in config listings/tables - matches IngestionConfigWithAccountResponse
  */
-export interface EmailConfigListItem {
-  id: number;
-  name: string;
-  is_active: boolean;
-  last_check_time: string | null; // ISO 8601
-}
-
-/**
- * Detailed email configuration
- * Full configuration with all fields
- */
-export interface EmailConfigDetail {
+export interface IngestionConfigListItem {
   id: number;
   name: string;
   description: string | null;
-  email_address: string;
+  account_id: number;
+  account_name: string;
+  account_email: string;
   folder_name: string;
-  filter_rules: FilterRule[];
-  poll_interval_seconds: number;
   is_active: boolean;
-  activated_at: string | null; // ISO 8601
-  last_check_time: string | null; // ISO 8601
+  last_check_time: string | null;
   last_error_message: string | null;
-  last_error_at: string | null; // ISO 8601
 }
 
 /**
- * Email folder entity
- * Represents a folder in an email account
+ * Full ingestion config response
+ * Matches IngestionConfigResponse from backend
  */
+export interface IngestionConfigDetail {
+  id: number;
+  name: string;
+  description: string | null;
+  account_id: number;
+  folder_name: string;
+  filter_rules: FilterRule[];
+  poll_interval_seconds: number;
+  use_idle: boolean;
+  is_active: boolean;
+  activated_at: string | null;
+  last_check_time: string | null;
+  last_processed_uid: number | null;
+  last_error_message: string | null;
+  last_error_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ============================================================================
+// Legacy types (for backwards compatibility during migration)
+// ============================================================================
+
+/** @deprecated Use IngestionConfigListItem instead */
+export type EmailConfigListItem = IngestionConfigListItem;
+
+/** @deprecated Use IngestionConfigDetail instead */
+export type EmailConfigDetail = IngestionConfigDetail;
+
 export interface EmailFolder {
   folder_name: string;
-  folder_path: string; // full path
+  folder_path: string;
 }
-
-// ============================================================================
-// Provider Settings
-// ============================================================================
-
-export interface ImapProviderSettings {
-  host: string;
-  port: number;
-  email_address: string;
-  password: string;
-  use_ssl: boolean;
-}
-
-export interface GraphApiProviderSettings {
-  tenant_id: string;
-  client_id: string;
-  client_secret: string;
-  email_address: string;
-}
-
-export type ProviderSettings = ImapProviderSettings | GraphApiProviderSettings;

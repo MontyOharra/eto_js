@@ -1,6 +1,6 @@
 /**
  * Email Configurations Feature
- * Public API for email config management
+ * Public API for email ingestion config management
  */
 
 // ============================================================================
@@ -13,15 +13,14 @@ export type {
   FilterRuleOperation,
   FilterRule,
 
-  // Entities
+  // New Entities
+  IngestionConfigListItem,
+  IngestionConfigDetail,
+
+  // Legacy aliases (deprecated)
   EmailConfigListItem,
   EmailConfigDetail,
   EmailFolder,
-
-  // Provider Settings
-  ImapProviderSettings,
-  GraphApiProviderSettings,
-  ProviderSettings,
 } from './types';
 
 // ============================================================================
@@ -31,9 +30,6 @@ export type {
 export type {
   CreateEmailConfigRequest,
   UpdateEmailConfigRequest,
-  ValidateEmailConfigRequest,
-  ValidateEmailConfigResponse,
-  DiscoverFoldersRequest,
   EmailConfigsListQueryParams,
 } from './api/types';
 

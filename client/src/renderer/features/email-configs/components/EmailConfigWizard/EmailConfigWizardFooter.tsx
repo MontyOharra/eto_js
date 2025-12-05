@@ -3,7 +3,7 @@
  * Navigation and action buttons for the wizard
  */
 
-type WizardStep = 'provider' | 'credentials' | 'folder' | 'configuration';
+type WizardStep = 'account' | 'folder' | 'configuration';
 
 interface EmailConfigWizardFooterProps {
   currentStep: WizardStep;
@@ -49,7 +49,7 @@ export function EmailConfigWizardFooter({
         )}
 
         {/* Back button (hide on first step) */}
-        {currentStep !== 'provider' && (
+        {currentStep !== 'account' && (
           <button
             onClick={onBack}
             className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors"

@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 # Import repository classes (will be created)
 # Using TYPE_CHECKING to avoid circular imports
 if TYPE_CHECKING:
-    from shared.database.repositories.email_config import EmailConfigRepository
+    from shared.database.repositories.email_account import EmailAccountRepository
+    from shared.database.repositories.email_ingestion_config import EmailIngestionConfigRepository
     from shared.database.repositories.email import EmailRepository
     from shared.database.repositories.pdf_template import PdfTemplateRepository
     from shared.database.repositories.pdf_template_version import PdfTemplateVersionRepository
@@ -50,7 +51,8 @@ class UnitOfWork:
 
         # Lazy-loaded repository instances
         # These are created on first access via properties
-        self._email_config_repository: Optional['EmailConfigRepository'] = None
+        self._email_account_repository: Optional['EmailAccountRepository'] = None
+        self._email_ingestion_config_repository: Optional['EmailIngestionConfigRepository'] = None
         self._email_repository: Optional['EmailRepository'] = None
         self._pdf_template_repository: Optional['PdfTemplateRepository'] = None
         self._pdf_template_version_repository: Optional['PdfTemplateVersionRepository'] = None
@@ -64,18 +66,32 @@ class UnitOfWork:
         logger.debug("UnitOfWork initialized")
 
     @property
-    def email_configs(self) -> 'EmailConfigRepository':
+    def email_accounts(self) -> 'EmailAccountRepository':
         """
-        Access to email config repository within this transaction.
+        Access to email account repository within this transaction.
 
         Returns:
-            EmailConfigRepository instance using this UoW's session
+            EmailAccountRepository instance using this UoW's session
         """
-        if not self._email_config_repository:
-            from shared.database.repositories.email_config import EmailConfigRepository
-            self._email_config_repository = EmailConfigRepository(session=self.session)
-            logger.debug("EmailConfigRepository loaded in UoW")
-        return self._email_config_repository
+        if not self._email_account_repository:
+            from shared.database.repositories.email_account import EmailAccountRepository
+            self._email_account_repository = EmailAccountRepository(session=self.session)
+            logger.debug("EmailAccountRepository loaded in UoW")
+        return self._email_account_repository
+
+    @property
+    def email_ingestion_configs(self) -> 'EmailIngestionConfigRepository':
+        """
+        Access to email ingestion config repository within this transaction.
+
+        Returns:
+            EmailIngestionConfigRepository instance using this UoW's session
+        """
+        if not self._email_ingestion_config_repository:
+            from shared.database.repositories.email_ingestion_config import EmailIngestionConfigRepository
+            self._email_ingestion_config_repository = EmailIngestionConfigRepository(session=self.session)
+            logger.debug("EmailIngestionConfigRepository loaded in UoW")
+        return self._email_ingestion_config_repository
 
     @property
     def emails(self) -> 'EmailRepository':

@@ -1,20 +1,22 @@
 /**
- * Email Configs API Hooks
- * API implementation for email-configs endpoints
+ * Email Ingestion Configs API Hooks
+ * API implementation for email-ingestion-configs endpoints
  */
 
 import { useState, useCallback } from 'react';
 import { apiClient } from '../../../shared/api/client';
 import { API_CONFIG } from '../../../shared/api/config';
-import type { EmailConfigListItem, EmailConfigDetail, EmailFolder } from '../types';
+import type { IngestionConfigListItem, IngestionConfigDetail } from '../types';
 import type {
   CreateEmailConfigRequest,
   UpdateEmailConfigRequest,
-  ValidateEmailConfigRequest,
-  ValidateEmailConfigResponse,
   EmailConfigsListQueryParams,
-  DiscoverFoldersRequest,
 } from './types';
+
+interface IngestionConfigListResponse {
+  configs: IngestionConfigListItem[];
+  total: number;
+}
 
 interface UseEmailConfigsApiResult {
   // State
@@ -22,30 +24,20 @@ interface UseEmailConfigsApiResult {
   error: string | null;
 
   // List operations
-  getEmailConfigs: (params?: EmailConfigsListQueryParams) => Promise<EmailConfigListItem[]>;
-  getEmailConfigDetail: (id: number) => Promise<EmailConfigDetail>;
+  getEmailConfigs: (params?: EmailConfigsListQueryParams) => Promise<IngestionConfigListItem[]>;
+  getEmailConfigDetail: (id: number) => Promise<IngestionConfigDetail>;
 
   // CRUD operations
-  createEmailConfig: (data: CreateEmailConfigRequest) => Promise<EmailConfigDetail>;
-  updateEmailConfig: (id: number, data: UpdateEmailConfigRequest) => Promise<EmailConfigDetail>;
-  deleteEmailConfig: (id: number) => Promise<void>;
-
-  // Activation operations
-  activateEmailConfig: (id: number) => Promise<EmailConfigDetail>;
-  deactivateEmailConfig: (id: number) => Promise<EmailConfigDetail>;
-
-  // Discovery operations
-  discoverFolders: (data: DiscoverFoldersRequest) => Promise<EmailFolder[]>;
-
-  // Validation operations
-  testConnection: (data: ValidateEmailConfigRequest) => Promise<{ success: boolean; message: string }>;
+  createEmailConfig: (data: CreateEmailConfigRequest) => Promise<IngestionConfigDetail>;
+  updateEmailConfig: (id: number, data: UpdateEmailConfigRequest) => Promise<IngestionConfigDetail>;
+  deleteEmailConfig: (id: number) => Promise<IngestionConfigDetail>;
 }
 
 export function useEmailConfigsApi(): UseEmailConfigsApiResult {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const baseUrl = `${API_CONFIG.ENDPOINTS.EMAIL_CONFIGS}`;
+  const baseUrl = API_CONFIG.ENDPOINTS.EMAIL_INGESTION_CONFIGS;
 
   /**
    * Helper to handle API calls with loading and error states
@@ -69,27 +61,27 @@ export function useEmailConfigsApi(): UseEmailConfigsApiResult {
   );
 
   /**
-   * GET /api/email-configs
-   * List all email configurations with optional filtering and sorting
+   * GET /api/email-ingestion-configs
+   * List all ingestion configs with account information
    */
   const getEmailConfigs = useCallback(
-    async (params?: EmailConfigsListQueryParams): Promise<EmailConfigListItem[]> => {
+    async (params?: EmailConfigsListQueryParams): Promise<IngestionConfigListItem[]> => {
       return withLoadingAndError(async () => {
-        const response = await apiClient.get<EmailConfigListItem[]>(baseUrl, { params });
-        return response.data;
+        const response = await apiClient.get<IngestionConfigListResponse>(baseUrl, { params });
+        return response.data.configs;
       });
     },
     [baseUrl, withLoadingAndError]
   );
 
   /**
-   * GET /api/email-configs/{id}
-   * Get detailed information about a specific email configuration
+   * GET /api/email-ingestion-configs/{id}
+   * Get detailed information about a specific ingestion config
    */
   const getEmailConfigDetail = useCallback(
-    async (id: number): Promise<EmailConfigDetail> => {
+    async (id: number): Promise<IngestionConfigDetail> => {
       return withLoadingAndError(async () => {
-        const response = await apiClient.get<EmailConfigDetail>(`${baseUrl}/${id}`);
+        const response = await apiClient.get<IngestionConfigDetail>(`${baseUrl}/${id}`);
         return response.data;
       });
     },
@@ -97,13 +89,13 @@ export function useEmailConfigsApi(): UseEmailConfigsApiResult {
   );
 
   /**
-   * POST /api/email-configs
-   * Create a new email configuration
+   * POST /api/email-ingestion-configs
+   * Create a new ingestion config
    */
   const createEmailConfig = useCallback(
-    async (data: CreateEmailConfigRequest): Promise<EmailConfigDetail> => {
+    async (data: CreateEmailConfigRequest): Promise<IngestionConfigDetail> => {
       return withLoadingAndError(async () => {
-        const response = await apiClient.post<EmailConfigDetail>(baseUrl, data);
+        const response = await apiClient.post<IngestionConfigDetail>(baseUrl, data);
         return response.data;
       });
     },
@@ -111,13 +103,13 @@ export function useEmailConfigsApi(): UseEmailConfigsApiResult {
   );
 
   /**
-   * PUT /api/email-configs/{id}
-   * Update an existing email configuration
+   * PATCH /api/email-ingestion-configs/{id}
+   * Update an existing ingestion config
    */
   const updateEmailConfig = useCallback(
-    async (id: number, data: UpdateEmailConfigRequest): Promise<EmailConfigDetail> => {
+    async (id: number, data: UpdateEmailConfigRequest): Promise<IngestionConfigDetail> => {
       return withLoadingAndError(async () => {
-        const response = await apiClient.put<EmailConfigDetail>(`${baseUrl}/${id}`, data);
+        const response = await apiClient.patch<IngestionConfigDetail>(`${baseUrl}/${id}`, data);
         return response.data;
       });
     },
@@ -125,82 +117,14 @@ export function useEmailConfigsApi(): UseEmailConfigsApiResult {
   );
 
   /**
-   * DELETE /api/email-configs/{id}
-   * Delete an email configuration
+   * DELETE /api/email-ingestion-configs/{id}
+   * Delete an ingestion config
    */
   const deleteEmailConfig = useCallback(
-    async (id: number): Promise<void> => {
+    async (id: number): Promise<IngestionConfigDetail> => {
       return withLoadingAndError(async () => {
-        await apiClient.delete(`${baseUrl}/${id}`);
-      });
-    },
-    [baseUrl, withLoadingAndError]
-  );
-
-  /**
-   * POST /api/email-configs/{id}/activate
-   * Activate an email configuration to start monitoring
-   */
-  const activateEmailConfig = useCallback(
-    async (id: number): Promise<EmailConfigDetail> => {
-      return withLoadingAndError(async () => {
-        const response = await apiClient.post<EmailConfigDetail>(`${baseUrl}/${id}/activate`);
+        const response = await apiClient.delete<IngestionConfigDetail>(`${baseUrl}/${id}`);
         return response.data;
-      });
-    },
-    [baseUrl, withLoadingAndError]
-  );
-
-  /**
-   * POST /api/email-configs/{id}/deactivate
-   * Deactivate an email configuration to stop monitoring
-   */
-  const deactivateEmailConfig = useCallback(
-    async (id: number): Promise<EmailConfigDetail> => {
-      return withLoadingAndError(async () => {
-        const response = await apiClient.post<EmailConfigDetail>(`${baseUrl}/${id}/deactivate`);
-        return response.data;
-      });
-    },
-    [baseUrl, withLoadingAndError]
-  );
-
-  /**
-   * POST /api/email-configs/discovery/folders
-   * Get list of available folders using provider credentials
-   */
-  const discoverFolders = useCallback(
-    async (data: DiscoverFoldersRequest): Promise<EmailFolder[]> => {
-      return withLoadingAndError(async () => {
-        const response = await apiClient.post<EmailFolder[]>(`${baseUrl}/discovery/folders`, data);
-        return response.data;
-      });
-    },
-    [baseUrl, withLoadingAndError]
-  );
-
-  /**
-   * POST /api/email-configs/validate
-   * Test connection to email server with provider credentials
-   */
-  const testConnection = useCallback(
-    async (data: ValidateEmailConfigRequest): Promise<{ success: boolean; message: string }> => {
-      return withLoadingAndError(async () => {
-        try {
-          const response = await apiClient.post<ValidateEmailConfigResponse>(
-            `${baseUrl}/validate`,
-            data
-          );
-          return {
-            success: true,
-            message: response.data.message,
-          };
-        } catch (err) {
-          return {
-            success: false,
-            message: err instanceof Error ? err.message : 'Connection test failed',
-          };
-        }
       });
     },
     [baseUrl, withLoadingAndError]
@@ -214,9 +138,5 @@ export function useEmailConfigsApi(): UseEmailConfigsApiResult {
     createEmailConfig,
     updateEmailConfig,
     deleteEmailConfig,
-    activateEmailConfig,
-    deactivateEmailConfig,
-    discoverFolders,
-    testConnection,
   };
 }

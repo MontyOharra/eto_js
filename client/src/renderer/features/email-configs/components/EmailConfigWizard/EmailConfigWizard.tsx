@@ -1,52 +1,45 @@
 /**
  * Email Configuration Wizard
- * 4-step wizard for creating email ingestion configurations with multi-provider support
+ * 3-step wizard for creating email ingestion configurations
+ * Step 1: Select email account
+ * Step 2: Select folder
+ * Step 3: Configure settings
  */
 
 import { useState, useEffect } from 'react';
-import type { EmailFolder, FilterRule } from '../../types';
+import type { FilterRule } from '../../types';
 import type { CreateEmailConfigRequest } from '../../api/types';
-import { ProviderSelectionStep, CredentialsStep, FolderSelectionStep, ConfigurationStep } from './steps';
+import { AccountSelectionStep, FolderSelectionStep, ConfigurationStep } from './steps';
 import { EmailConfigWizardHeader } from './EmailConfigWizardHeader';
 import { EmailConfigWizardFooter } from './EmailConfigWizardFooter';
+import { useEmailAccountsApi, type EmailAccountSummary } from '../../../email-accounts';
 
 interface EmailConfigWizardProps {
   onClose: () => void;
   onSave: (data: CreateEmailConfigRequest) => Promise<void>;
-  onLoadFolders: (providerType: string, providerSettings: Record<string, any>) => Promise<EmailFolder[]>;
-  onTestConnection: (providerType: string, providerSettings: Record<string, any>, folderName: string) => Promise<{ success: boolean; message: string }>;
 }
 
-type WizardStep = 'provider' | 'credentials' | 'folder' | 'configuration';
-
-interface ImapCredentials {
-  host: string;
-  port: number;
-  email_address: string;
-  password: string;
-  use_ssl: boolean;
-}
+type WizardStep = 'account' | 'folder' | 'configuration';
 
 export function EmailConfigWizard({
   onClose,
   onSave,
-  onLoadFolders,
-  onTestConnection,
 }: EmailConfigWizardProps) {
-  const [currentStep, setCurrentStep] = useState<WizardStep>('provider');
+  const { getEmailAccounts, getAccountFolders } = useEmailAccountsApi();
+
+  const [currentStep, setCurrentStep] = useState<WizardStep>('account');
   const [isSaving, setIsSaving] = useState(false);
 
-  // Provider selection
-  const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
-
-  // Provider credentials
-  const [credentials, setCredentials] = useState<ImapCredentials | null>(null);
-  const [isTestingConnection, setIsTestingConnection] = useState(false);
-  const [connectionTestResult, setConnectionTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  // Account selection
+  const [accounts, setAccounts] = useState<EmailAccountSummary[]>([]);
+  const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
+  const [accountsError, setAccountsError] = useState<string | null>(null);
+  const [selectedAccount, setSelectedAccount] = useState<EmailAccountSummary | null>(null);
 
   // Folder discovery
-  const [folders, setFolders] = useState<EmailFolder[]>([]);
+  const [folders, setFolders] = useState<string[]>([]);
   const [isLoadingFolders, setIsLoadingFolders] = useState(false);
+  const [foldersError, setFoldersError] = useState<string | null>(null);
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
 
   // Form data
@@ -55,45 +48,34 @@ export function EmailConfigWizard({
   const [pollInterval, setPollInterval] = useState(60);
   const [filterRules, setFilterRules] = useState<FilterRule[]>([]);
 
-  const handleSelectProvider = (provider: string) => {
-    setSelectedProvider(provider);
-  };
+  // Load accounts on mount
+  useEffect(() => {
+    loadAccounts();
+  }, []);
 
-  const handleCredentialsChange = (newCredentials: ImapCredentials) => {
-    setCredentials(newCredentials);
-    // Reset connection test result when credentials change
-    setConnectionTestResult(null);
-  };
-
-  const handleTestConnection = async () => {
-    if (!credentials || !selectedProvider) return;
-
-    setIsTestingConnection(true);
-    setConnectionTestResult(null);
-
+  const loadAccounts = async () => {
+    setIsLoadingAccounts(true);
+    setAccountsError(null);
     try {
-      const result = await onTestConnection(selectedProvider, credentials, 'INBOX');
-      setConnectionTestResult(result);
+      const accountsList = await getEmailAccounts({ validated_only: true });
+      setAccounts(accountsList);
     } catch (err) {
-      console.error('Connection test failed:', err);
-      setConnectionTestResult({
-        success: false,
-        message: 'Connection test failed: ' + (err as Error).message,
-      });
+      setAccountsError(err instanceof Error ? err.message : 'Failed to load accounts');
     } finally {
-      setIsTestingConnection(false);
+      setIsLoadingAccounts(false);
     }
   };
 
   const loadFolders = async () => {
-    if (!credentials || !selectedProvider) return;
+    if (!selectedAccount) return;
 
     setIsLoadingFolders(true);
+    setFoldersError(null);
     try {
-      const data = await onLoadFolders(selectedProvider, credentials);
-      setFolders(data);
+      const foldersList = await getAccountFolders(selectedAccount.id);
+      setFolders(foldersList);
     } catch (err) {
-      console.error('Failed to load folders:', err);
+      setFoldersError(err instanceof Error ? err.message : 'Failed to load folders');
     } finally {
       setIsLoadingFolders(false);
     }
@@ -101,13 +83,20 @@ export function EmailConfigWizard({
 
   // Auto-load folders when entering the folder selection step
   useEffect(() => {
-    if (currentStep === 'folder' && folders.length === 0 && !isLoadingFolders && credentials && selectedProvider) {
+    if (currentStep === 'folder' && folders.length === 0 && !isLoadingFolders && selectedAccount) {
       loadFolders();
     }
-  }, [currentStep]);
+  }, [currentStep, selectedAccount]);
 
-  const handleSelectFolder = (folder: EmailFolder) => {
-    setSelectedFolder(folder.folder_name);
+  const handleSelectAccount = (account: EmailAccountSummary) => {
+    setSelectedAccount(account);
+    // Reset folder selection when account changes
+    setSelectedFolder(null);
+    setFolders([]);
+  };
+
+  const handleSelectFolder = (folder: string) => {
+    setSelectedFolder(folder);
   };
 
   const handleAddFilterRule = () => {
@@ -133,9 +122,7 @@ export function EmailConfigWizard({
   };
 
   const handleNext = () => {
-    if (currentStep === 'provider' && selectedProvider) {
-      setCurrentStep('credentials');
-    } else if (currentStep === 'credentials' && credentials && connectionTestResult?.success) {
+    if (currentStep === 'account' && selectedAccount) {
       setCurrentStep('folder');
     } else if (currentStep === 'folder' && selectedFolder) {
       setCurrentStep('configuration');
@@ -143,23 +130,20 @@ export function EmailConfigWizard({
   };
 
   const handleBack = () => {
-    if (currentStep === 'credentials') {
-      setCurrentStep('provider');
-    } else if (currentStep === 'folder') {
-      setCurrentStep('credentials');
+    if (currentStep === 'folder') {
+      setCurrentStep('account');
     } else if (currentStep === 'configuration') {
       setCurrentStep('folder');
     }
   };
 
   const handleSave = async () => {
-    if (!selectedProvider || !credentials || !selectedFolder) return;
+    if (!selectedAccount || !selectedFolder) return;
 
     setIsSaving(true);
     try {
       await onSave({
-        provider_type: selectedProvider,
-        provider_settings: credentials,
+        account_id: selectedAccount.id,
         name,
         description,
         folder_name: selectedFolder,
@@ -177,13 +161,9 @@ export function EmailConfigWizard({
   };
 
   const stepConfig = {
-    provider: {
-      title: 'Choose Provider',
-      canProceed: !!selectedProvider,
-    },
-    credentials: {
-      title: 'Enter Credentials',
-      canProceed: !!credentials && !!connectionTestResult?.success,
+    account: {
+      title: 'Select Account',
+      canProceed: !!selectedAccount,
     },
     folder: {
       title: 'Choose Folder',
@@ -204,29 +184,21 @@ export function EmailConfigWizard({
         <EmailConfigWizardHeader
           currentStep={currentStep}
           stepTitle={currentConfig.title}
-          isProviderComplete={!!selectedProvider}
-          isCredentialsComplete={!!credentials && !!connectionTestResult?.success}
+          isAccountComplete={!!selectedAccount}
           isFolderComplete={!!selectedFolder}
           onClose={onClose}
         />
 
         {/* Main Content */}
         <div className="flex-1 overflow-y-auto p-6">
-          {currentStep === 'provider' && (
-            <ProviderSelectionStep
-              selectedProvider={selectedProvider}
-              onSelectProvider={handleSelectProvider}
-            />
-          )}
-
-          {currentStep === 'credentials' && selectedProvider && (
-            <CredentialsStep
-              providerType={selectedProvider}
-              credentials={credentials}
-              onCredentialsChange={handleCredentialsChange}
-              onTestConnection={handleTestConnection}
-              isTestingConnection={isTestingConnection}
-              connectionTestResult={connectionTestResult}
+          {currentStep === 'account' && (
+            <AccountSelectionStep
+              accounts={accounts}
+              selectedAccountId={selectedAccount?.id ?? null}
+              isLoading={isLoadingAccounts}
+              error={accountsError}
+              onSelectAccount={handleSelectAccount}
+              onRetry={loadAccounts}
             />
           )}
 
@@ -234,8 +206,9 @@ export function EmailConfigWizard({
             <FolderSelectionStep
               folders={folders}
               selectedFolder={selectedFolder}
-              emailAccount={credentials?.email_address || ''}
+              emailAccount={selectedAccount?.email_address || ''}
               isLoading={isLoadingFolders}
+              error={foldersError}
               onSelectFolder={handleSelectFolder}
               onRetry={loadFolders}
             />
@@ -247,7 +220,7 @@ export function EmailConfigWizard({
               description={description}
               pollInterval={pollInterval}
               filterRules={filterRules}
-              emailAccount={credentials?.email_address || ''}
+              emailAccount={selectedAccount?.email_address || ''}
               folderName={selectedFolder || ''}
               onNameChange={setName}
               onDescriptionChange={setDescription}
@@ -264,7 +237,7 @@ export function EmailConfigWizard({
           currentStep={currentStep}
           canProceed={currentConfig.canProceed}
           isSaving={isSaving}
-          showLoadFolders={currentStep === 'folder' && folders.length === 0 && !isLoadingFolders}
+          showLoadFolders={currentStep === 'folder' && folders.length === 0 && !isLoadingFolders && !foldersError}
           onClose={onClose}
           onBack={handleBack}
           onNext={handleNext}

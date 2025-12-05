@@ -3,13 +3,12 @@
  * Title, close button, and progress indicator for the wizard
  */
 
-type WizardStep = 'provider' | 'credentials' | 'folder' | 'configuration';
+type WizardStep = 'account' | 'folder' | 'configuration';
 
 interface EmailConfigWizardHeaderProps {
   currentStep: WizardStep;
   stepTitle: string;
-  isProviderComplete: boolean;
-  isCredentialsComplete: boolean;
+  isAccountComplete: boolean;
   isFolderComplete: boolean;
   onClose: () => void;
 }
@@ -17,8 +16,7 @@ interface EmailConfigWizardHeaderProps {
 export function EmailConfigWizardHeader({
   currentStep,
   stepTitle,
-  isProviderComplete,
-  isCredentialsComplete,
+  isAccountComplete,
   isFolderComplete,
   onClose,
 }: EmailConfigWizardHeaderProps) {
@@ -48,55 +46,31 @@ export function EmailConfigWizardHeader({
       {/* Progress Steps */}
       <div className="px-4 py-3 border-b border-gray-700 bg-gray-800/50">
         <div className="flex items-center justify-center space-x-2">
-          {/* Step 1 - Provider */}
+          {/* Step 1 - Account */}
           <div className="flex items-center">
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                currentStep === 'provider'
+                currentStep === 'account'
                   ? 'bg-blue-600 text-white'
-                  : isProviderComplete
+                  : isAccountComplete
                   ? 'bg-green-600 text-white'
                   : 'bg-gray-700 text-gray-400'
               }`}
             >
-              {isProviderComplete && currentStep !== 'provider' ? '✓' : '1'}
+              {isAccountComplete && currentStep !== 'account' ? '✓' : '1'}
             </div>
             <span
               className={`ml-2 text-sm font-medium ${
-                currentStep === 'provider' ? 'text-white' : 'text-gray-400'
+                currentStep === 'account' ? 'text-white' : 'text-gray-400'
               }`}
             >
-              Provider
+              Account
             </span>
           </div>
 
           <div className="w-8 h-0.5 bg-gray-700"></div>
 
-          {/* Step 2 - Credentials */}
-          <div className="flex items-center">
-            <div
-              className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                currentStep === 'credentials'
-                  ? 'bg-blue-600 text-white'
-                  : isCredentialsComplete
-                  ? 'bg-green-600 text-white'
-                  : 'bg-gray-700 text-gray-400'
-              }`}
-            >
-              {isCredentialsComplete && currentStep !== 'credentials' ? '✓' : '2'}
-            </div>
-            <span
-              className={`ml-2 text-sm font-medium ${
-                currentStep === 'credentials' ? 'text-white' : 'text-gray-400'
-              }`}
-            >
-              Credentials
-            </span>
-          </div>
-
-          <div className="w-8 h-0.5 bg-gray-700"></div>
-
-          {/* Step 3 - Folder */}
+          {/* Step 2 - Folder */}
           <div className="flex items-center">
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
@@ -107,7 +81,7 @@ export function EmailConfigWizardHeader({
                   : 'bg-gray-700 text-gray-400'
               }`}
             >
-              {isFolderComplete && currentStep !== 'folder' ? '✓' : '3'}
+              {isFolderComplete && currentStep !== 'folder' ? '✓' : '2'}
             </div>
             <span
               className={`ml-2 text-sm font-medium ${
@@ -120,7 +94,7 @@ export function EmailConfigWizardHeader({
 
           <div className="w-8 h-0.5 bg-gray-700"></div>
 
-          {/* Step 4 - Configuration */}
+          {/* Step 3 - Configuration */}
           <div className="flex items-center">
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
@@ -129,7 +103,7 @@ export function EmailConfigWizardHeader({
                   : 'bg-gray-700 text-gray-400'
               }`}
             >
-              4
+              3
             </div>
             <span
               className={`ml-2 text-sm font-medium ${

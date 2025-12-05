@@ -3,8 +3,6 @@ Database initialization and connection management
 """
 from .models import (
     BaseModel,
-    # Email models
-    EmailConfigModel,
     EmailModel,
     # PDF models
     PdfFileModel,
@@ -30,8 +28,6 @@ from .unit_of_work import UnitOfWork
 __all__ = [
     # Base
     'BaseModel',
-    # Email models
-    'EmailConfigModel',
     'EmailModel',
     # PDF models
     'PdfFileModel',

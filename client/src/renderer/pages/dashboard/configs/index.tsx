@@ -5,7 +5,8 @@ import {
   EmailConfigCard,
   EmailConfigWizard,
   EditConfigModal,
-  type EmailConfigDetail,
+  type IngestionConfigListItem,
+  type IngestionConfigDetail,
   type CreateEmailConfigRequest,
 } from '../../../features/email-configs';
 
@@ -20,17 +21,13 @@ function ConfigurationsPage() {
     createEmailConfig,
     updateEmailConfig,
     deleteEmailConfig,
-    activateEmailConfig,
-    deactivateEmailConfig,
-    discoverFolders,
-    testConnection,
     isLoading,
     error,
   } = useEmailConfigsApi();
 
-  const [configs, setConfigs] = useState<EmailConfigDetail[]>([]);
+  const [configs, setConfigs] = useState<IngestionConfigListItem[]>([]);
   const [showCreateWizard, setShowCreateWizard] = useState(false);
-  const [editingConfig, setEditingConfig] = useState<EmailConfigDetail | null>(null);
+  const [editingConfig, setEditingConfig] = useState<IngestionConfigDetail | null>(null);
 
   // Fetch configurations on mount
   useEffect(() => {
@@ -39,12 +36,8 @@ function ConfigurationsPage() {
 
   const loadConfigs = async () => {
     try {
-      const summaries = await getEmailConfigs();
-      // Fetch full details for each config
-      const details = await Promise.all(
-        summaries.map((summary) => getEmailConfigDetail(summary.id))
-      );
-      setConfigs(details);
+      const configList = await getEmailConfigs();
+      setConfigs(configList);
     } catch (err) {
       console.error('Failed to load configurations:', err);
     }
@@ -56,21 +49,25 @@ function ConfigurationsPage() {
       await loadConfigs();
     } catch (err) {
       console.error('Failed to create configuration:', err);
-      throw err; // Re-throw to let wizard handle error
+      throw err;
     }
   };
 
-  const handleEditConfig = (id: number) => {
-    const config = configs.find((c) => c.id === id);
-    if (config) {
-      setEditingConfig(config);
+  const handleEditConfig = async (id: number) => {
+    try {
+      const detail = await getEmailConfigDetail(id);
+      setEditingConfig(detail);
+    } catch (err) {
+      console.error('Failed to load configuration details:', err);
     }
   };
 
   const handleUpdateConfig = async (
     id: number,
     data: {
+      name?: string;
       description?: string | null;
+      folder_name?: string;
       filter_rules?: any[];
       poll_interval_seconds?: number;
     }
@@ -81,24 +78,6 @@ function ConfigurationsPage() {
     } catch (err) {
       console.error('Failed to update configuration:', err);
       throw err;
-    }
-  };
-
-  const handleActivate = async (id: number) => {
-    try {
-      await activateEmailConfig(id);
-      await loadConfigs();
-    } catch (err) {
-      console.error('Failed to activate configuration:', err);
-    }
-  };
-
-  const handleDeactivate = async (id: number) => {
-    try {
-      await deactivateEmailConfig(id);
-      await loadConfigs();
-    } catch (err) {
-      console.error('Failed to deactivate configuration:', err);
     }
   };
 
@@ -117,22 +96,6 @@ function ConfigurationsPage() {
     } catch (err) {
       console.error('Failed to delete configuration:', err);
     }
-  };
-
-  const handleLoadFolders = async (providerType: string, providerSettings: Record<string, any>) => {
-    return discoverFolders({ provider_type: providerType, provider_settings: providerSettings });
-  };
-
-  const handleTestConnection = async (
-    providerType: string,
-    providerSettings: Record<string, any>,
-    folderName: string
-  ) => {
-    return testConnection({
-      provider_type: providerType,
-      provider_settings: providerSettings,
-      folder_name: folderName,
-    });
   };
 
   return (
@@ -175,9 +138,7 @@ function ConfigurationsPage() {
               <EmailConfigCard
                 key={config.id}
                 config={config}
-                onEdit={handleEditConfig}
-                onActivate={config.is_active ? undefined : handleActivate}
-                onDeactivate={config.is_active ? handleDeactivate : undefined}
+                onEdit={!config.is_active ? handleEditConfig : undefined}
                 onDelete={!config.is_active ? handleDelete : undefined}
               />
             ))}
@@ -221,8 +182,6 @@ function ConfigurationsPage() {
         <EmailConfigWizard
           onClose={() => setShowCreateWizard(false)}
           onSave={handleCreateConfig}
-          onLoadFolders={handleLoadFolders}
-          onTestConnection={handleTestConnection}
         />
       )}
 
@@ -236,4 +195,3 @@ function ConfigurationsPage() {
     </>
   );
 }
-

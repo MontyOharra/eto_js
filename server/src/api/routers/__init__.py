@@ -1,6 +1,7 @@
 """API routers for Transformation Pipeline Server"""
 
-from .email_configs import router as email_configs_router
+from .email_accounts import router as email_accounts_router
+from .email_ingestion_configs import router as email_ingestion_configs_router
 from .pdf_files import router as pdf_files_router
 from .pdf_templates import router as pdf_templates_router
 from .pipelines import router as pipelines_router
@@ -9,7 +10,8 @@ from .admin import router as admin_router
 from .eto_runs import router as eto_runs_router
 
 __all__ = [
-    'email_configs_router',
+    'email_accounts_router',
+    'email_ingestion_configs_router',
     'pdf_files_router',
     'pdf_templates_router',
     'pipelines_router',

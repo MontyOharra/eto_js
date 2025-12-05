@@ -16,7 +16,6 @@ from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError, HTTPException as FastAPIHTTPException
-import uvicorn
 
 from shared.database import init_database_connection
 from shared.database.connection import DatabaseConnectionManager
@@ -304,16 +303,10 @@ async def initialize_services() -> None:
 
         # 3. Initialize ingestion services
         try:
-            email_ingestion_service = ServiceContainer.get_email_ingestion_service()
+            email_service = ServiceContainer.get_email_service()
             logger.info("Email ingestion service initialized")
         except Exception as e:
             logger.warning(f"Failed to initialize email ingestion service: {e}")
-
-        try:
-            email_config_service = ServiceContainer.get_email_config_service()
-            logger.info("Email config service initialized")
-        except Exception as e:
-            logger.warning(f"Failed to initialize email config service: {e}")
 
         # 4. Initialize ETO processing services
         try:
@@ -323,14 +316,6 @@ async def initialize_services() -> None:
             logger.warning(f"Failed to initialize ETO runs service: {e}")
 
         logger.info("All services initialized successfully")
-
-        # Start email ingestion service (background workers)
-        try:
-            email_ingestion_service = ServiceContainer.get_email_ingestion_service()
-            email_ingestion_service.startup()
-            logger.info("Email ingestion service started successfully")
-        except Exception as service_error:
-            logger.warning(f"Email ingestion service startup failed: {service_error}")
 
         # Start ETO processing worker (background polling)
         try:
@@ -364,15 +349,6 @@ async def cleanup_services() -> None:
             logger.warning(f"Failed to close SSE connections: {e}")
 
         if ServiceContainer.is_initialized():
-            # Stop email ingestion service if running
-            try:
-                email_ingestion_service = ServiceContainer.get_email_ingestion_service()
-                if hasattr(email_ingestion_service, 'shutdown'):
-                    email_ingestion_service.shutdown()
-                    logger.info("Email ingestion service stopped")
-            except Exception as e:
-                logger.warning(f"Failed to stop email ingestion service: {e}")
-
             # Stop ETO processing worker if running
             try:
                 eto_runs_service = ServiceContainer.get_eto_runs_service()
@@ -561,7 +537,8 @@ def register_routers(app: FastAPI) -> None:
     """Register FastAPI routers"""
     try:
         from .api.routers import (
-            email_configs_router,
+            email_accounts_router,
+            email_ingestion_configs_router,
             pdf_files_router,
             pdf_templates_router,
             pipelines_router,
@@ -571,8 +548,11 @@ def register_routers(app: FastAPI) -> None:
         )
 
         # Register all routers
-        app.include_router(email_configs_router, prefix="/api")
-        logger.info("Registered email configs router at /api/email-configs")
+        app.include_router(email_accounts_router, prefix="/api")
+        logger.info("Registered email accounts router at /api/email-accounts")
+
+        app.include_router(email_ingestion_configs_router, prefix="/api")
+        logger.info("Registered email ingestion configs router at /api/email-ingestion-configs")
 
         app.include_router(pdf_files_router, prefix="/api")
         logger.info("Registered pdf files router at /api/pdf-files")
@@ -614,7 +594,8 @@ def register_info_endpoint(app: FastAPI) -> None:
             "framework": "FastAPI",
             "api_prefix": "/api",
             "endpoints": {
-                "email_configs": "/api/email-configs",
+                "email_accounts": "/api/email-accounts",
+                "email_ingestion_configs": "/api/email-ingestion-configs",
                 "pdf_files": "/api/pdf-files",
                 "pdf_templates": "/api/pdf-templates",
                 "pipelines": "/api/pipelines",
@@ -623,7 +604,8 @@ def register_info_endpoint(app: FastAPI) -> None:
                 "eto_runs": "/api/eto-runs"
             },
             "documentation": {
-                "email_configs": "Email ingestion configuration management (CRUD, activation, discovery)",
+                "email_accounts": "Email account management (credentials, validation, CRUD)",
+                "email_ingestion_configs": "Email ingestion config management (folders, filters, polling)",
                 "pdf_files": "PDF file storage, extraction, and object retrieval",
                 "pdf_templates": "PDF template creation, versioning, and activation",
                 "pipelines": "Pipeline definition management (dev/testing - CRUD, compilation)",

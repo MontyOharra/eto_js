@@ -26,11 +26,15 @@ class EmailMessage:
     Standardized email message representation for all providers.
     Lightweight dataclass optimized for service layer usage.
     """
-    message_id: str
+    message_id: str  # Email Message-ID header (globally unique)
     subject: str
     sender_email: str
     received_date: datetime
     folder_name: str
+
+    # UID for tracking (IMAP UID, Graph API id, etc.)
+    # Used for incremental fetching: "get all emails with uid > last_processed_uid"
+    uid: int | None = None
 
     # Optional fields
     sender_name: str | None = None
@@ -69,8 +73,8 @@ class EmailFolder:
 
 
 @dataclass(frozen=True)
-class EmailAccount:
-    """Email account information from provider"""
+class EmailAccountInfo:
+    """Email account information returned from provider (transient)"""
     email_address: str
     display_name: str
     account_type: str  # Exchange, IMAP, etc.
@@ -112,6 +116,8 @@ class ConnectionTestResult:
     message: str | None = None
     error: str | None = None
     details: dict | None = None
+    capabilities: list[str] = field(default_factory=list)  # Server capabilities (IDLE, UIDPLUS, etc.)
+    folder_count: int | None = None  # Number of folders discovered
 
 
 # ========== Provider Configuration Types ==========

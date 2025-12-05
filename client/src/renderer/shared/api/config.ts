@@ -12,7 +12,8 @@ export const API_CONFIG = {
 
   // API endpoints (all backend routes are prefixed with /api)
   ENDPOINTS: {
-    EMAIL_CONFIGS: '/api/email-configs',
+    EMAIL_INGESTION_CONFIGS: '/api/email-ingestion-configs',
+    EMAIL_ACCOUNTS: '/api/email-accounts',
     TEMPLATES: '/api/pdf-templates',
     PIPELINES: '/api/pipelines',
     PDF_FILES: '/api/pdf-files',

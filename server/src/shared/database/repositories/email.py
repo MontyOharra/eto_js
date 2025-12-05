@@ -33,7 +33,7 @@ class EmailRepository(BaseRepository[EmailModel]):
         """Convert ORM model to Email dataclass"""
         return Email(
             id=model.id,
-            config_id=model.config_id,
+            ingestion_config_id=model.ingestion_config_id,
             message_id=model.message_id,
             sender_email=model.sender_email or "",  # Ensure not None
             subject=model.subject or "",  # Ensure not None
@@ -83,7 +83,7 @@ class EmailRepository(BaseRepository[EmailModel]):
             now = datetime.now(timezone.utc)
 
             model = self.model_class(
-                config_id=email_data.config_id,
+                ingestion_config_id=email_data.ingestion_config_id,
                 message_id=email_data.message_id,
                 sender_email=email_data.sender_email,
                 subject=email_data.subject,
@@ -100,7 +100,7 @@ class EmailRepository(BaseRepository[EmailModel]):
             session.flush()  # Get ID assigned
 
             logger.info(
-                f"Created email record {model.id} for config {email_data.config_id}: "
+                f"Created email record {model.id} for ingestion config {email_data.ingestion_config_id}: "
                 f"{email_data.message_id}"
             )
 

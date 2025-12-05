@@ -1,7 +1,6 @@
 """Database repositories"""
 
 from .base import BaseRepository
-from .email_config import EmailConfigRepository
 from .email import EmailRepository
 from .eto_run import EtoRunRepository
 from .eto_sub_run import EtoSubRunRepository
@@ -17,7 +16,6 @@ from .module import ModuleRepository
 
 __all__ = [
     'BaseRepository',
-    'EmailConfigRepository',
     'EmailRepository',
     'EtoSubRunRepository',
     'EtoSubRunExtractionRepository',

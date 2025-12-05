@@ -7,8 +7,7 @@ from typing import Dict, Any, Optional, List, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from features.modules.service import ModulesService
-    from features.email_configs.service import EmailConfigService
-    from features.email_ingestion.service import EmailIngestionService
+    from features.email.service import EmailService
     from features.pdf_files.service import PdfFilesService
     from features.pdf_templates.service import PdfTemplateService
     from features.pipelines.service import PipelineService
@@ -133,23 +132,17 @@ class ServiceContainer:
                 'singleton': True,
                 'description': 'Module catalog and auto-discovery service'
             },
+            'email': {
+                'class': 'features.email.service.EmailService',
+                'args': [cls._connection_manager],
+                'singleton': True,
+                'description': 'Email service for account management and operations'
+            },
             'pdf_files': {
                 'class': 'features.pdf_files.service.PdfFilesService',
                 'args': [cls._connection_manager, '_service:storage_config'],
                 'singleton': True,
                 'description': 'PDF files service with extraction and storage'
-            },
-            'email_ingestion': {
-                'class': 'features.email_ingestion.service.EmailIngestionService',
-                'args': [cls._connection_manager, '_service:pdf_files', '_service:eto_runs'],
-                'singleton': True,
-                'description': 'Email ingestion service with PDF processing and ETO integration'
-            },
-            'email_configs': {
-                'class': 'features.email_configs.service.EmailConfigService',
-                'args': [cls._connection_manager, '_service:email_ingestion'],
-                'singleton': True,
-                'description': 'Email configuration management service'
             },
             'pipeline_execution': {
                 'class': 'features.pipeline_execution.service.PipelineExecutionService',
@@ -377,15 +370,10 @@ class ServiceContainer:
         return cls.get('modules')
 
     @classmethod
-    def get_email_config_service(cls) -> 'EmailConfigService':
-        """Get the email config service"""
-        return cls.get('email_configs')
-
-    @classmethod
-    def get_email_ingestion_service(cls) -> 'EmailIngestionService':
-        """Get the email ingestion service"""
-        return cls.get('email_ingestion')
-
+    def get_email_service(cls) -> 'EmailService':
+        """Get the email service"""
+        return cls.get('email')
+    
     @classmethod
     def get_pdf_files_service(cls) -> 'PdfFilesService':
         """Get the PDF processing service"""

@@ -50,7 +50,7 @@ modules-sync: $(CONDA_ENV_DIR) ## Sync all registered modules to database catalo
 
 dev: $(CONDA_ENV_DIR) ## Start FastAPI development server (setup only if needed)
 	@echo "Starting Transformation Pipeline Server..."
-	@bash -c "eval \"\$$(conda shell.bash hook)\" && conda activate ./$(CONDA_ENV_DIR) && DEBUG=true RELOAD=true PYTHONUNBUFFERED=1 python main.py"
+	@bash -c "eval \"\$$(conda shell.bash hook)\" && conda activate ./$(CONDA_ENV_DIR) && PYTHONUNBUFFERED=1 python main.py"
 
 # Testing Commands
 test: ## Run specific test file (usage: make test TEST=tests/test_modules/...)

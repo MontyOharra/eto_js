@@ -1,25 +1,21 @@
 /**
  * Email Config Card Component
- * Displays individual email configuration with actions
+ * Displays individual email ingestion configuration with actions
  */
 
-import type { EmailConfigDetail } from "../../types";
+import type { IngestionConfigListItem } from "../../types";
 import { StatusBadge } from "./StatusBadge";
 import { formatUtcToLocal } from "../../../../shared/utils/dateUtils";
 
 interface EmailConfigCardProps {
-  config: EmailConfigDetail;
+  config: IngestionConfigListItem;
   onEdit?: (id: number) => void;
-  onActivate?: (id: number) => void;
-  onDeactivate?: (id: number) => void;
   onDelete?: (id: number) => void;
 }
 
 export function EmailConfigCard({
   config,
   onEdit,
-  onActivate,
-  onDeactivate,
   onDelete,
 }: EmailConfigCardProps) {
   return (
@@ -49,8 +45,8 @@ export function EmailConfigCard({
       <div className="space-y-2 mb-4">
         <div className="flex items-center justify-between text-sm">
           <span className="text-gray-400">Email Account:</span>
-          <span className="text-gray-200 font-medium">
-            {config.email_address}
+          <span className="text-gray-200 font-medium truncate ml-2 max-w-[60%]" title={config.account_email}>
+            {config.account_email}
           </span>
         </div>
         <div className="flex items-center justify-between text-sm">
@@ -58,23 +54,11 @@ export function EmailConfigCard({
           <span className="text-gray-200">{config.folder_name}</span>
         </div>
         <div className="flex items-center justify-between text-sm">
-          <span className="text-gray-400">Poll Interval:</span>
-          <span className="text-gray-200">{config.poll_interval_seconds}s</span>
-        </div>
-        <div className="flex items-center justify-between text-sm">
           <span className="text-gray-400">Last Check:</span>
           <span className="text-gray-200">
             {formatUtcToLocal(config.last_check_time)}
           </span>
         </div>
-        {config.filter_rules.length > 0 && (
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-gray-400">Filter Rules:</span>
-            <span className="text-gray-200">
-              {config.filter_rules.length} rules
-            </span>
-          </div>
-        )}
       </div>
 
       {/* Error Message */}
@@ -98,11 +82,6 @@ export function EmailConfigCard({
               <p className="text-xs text-red-300 line-clamp-2">
                 {config.last_error_message}
               </p>
-              {config.last_error_at && (
-                <p className="text-xs text-red-400 mt-1">
-                  {formatUtcToLocal(config.last_error_at)}
-                </p>
-              )}
             </div>
           </div>
         </div>
@@ -120,24 +99,6 @@ export function EmailConfigCard({
             }
           >
             Edit
-          </button>
-        )}
-
-        {config.is_active && onDeactivate && (
-          <button
-            onClick={() => onDeactivate(config.id)}
-            className="px-3 py-1.5 text-sm bg-yellow-600 hover:bg-yellow-700 text-white rounded transition-colors"
-          >
-            Deactivate
-          </button>
-        )}
-
-        {!config.is_active && onActivate && (
-          <button
-            onClick={() => onActivate(config.id)}
-            className="px-3 py-1.5 text-sm bg-green-600 hover:bg-green-700 text-white rounded transition-colors"
-          >
-            Activate
           </button>
         )}
 
