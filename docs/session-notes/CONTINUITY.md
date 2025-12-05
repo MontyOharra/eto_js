@@ -1,207 +1,211 @@
 # Session Continuity Document
 
-## Current Status (2025-12-03)
+## Current Status (2025-12-05)
 
 ### Session Summary
 
-This session focused on two main areas:
-1. **Frontend fixes** - Scrolling issues and status display in ETO list view
-2. **Backend fixes** - Thread safety for Access database operations in output execution
+This session focused on building out the **Email Account and Ingestion Config API layer**:
+1. **Email Ingestion Configs API** - Full CRUD endpoints for managing email folder monitoring configs
+2. **Email Account Folders API** - New endpoint to list IMAP folders from connected accounts
+3. **IMAP Integration Enhancements** - Added folder listing and email fetching capabilities
 
 ---
 
 ## Recently Completed
 
-### 1. ETO Run Detail Page Scrolling Fix
+### 1. Email Ingestion Configs API Layer
 
-**Problem:** When viewing an ETO run detail page with many matched templates, users couldn't scroll down to see items at the bottom.
+Created full API layer for managing email ingestion configurations:
 
-**Root Cause:** The `EtoRunDetailViewWrapper` component had `<div className="p-6">` without scroll handling, and was rendered inside a parent container with `overflow-hidden`.
+**Files Created:**
+- `server/src/api/schemas/email_ingestion_configs.py` - Pydantic models for API requests/responses
+- `server/src/api/mappers/email_ingestion_configs.py` - Domain-to-API conversion functions
+- `server/src/api/routers/email_ingestion_configs.py` - REST endpoints
 
-**Fix:** Added `h-full overflow-auto` to both:
-- `client/src/renderer/features/eto/components/EtoRunDetailView/EtoRunDetailViewWrapper.tsx` (line 282)
-- `client/src/renderer/pages/dashboard/eto/$runId.tsx` (line 291)
+**Endpoints Available:**
+- `POST /api/email-ingestion-configs/validate` - Validate config before creation
+- `GET /api/email-ingestion-configs` - List all configs with account info
+- `GET /api/email-ingestion-configs/{id}` - Get single config
+- `POST /api/email-ingestion-configs` - Create new config
+- `PATCH /api/email-ingestion-configs/{id}` - Update config
+- `DELETE /api/email-ingestion-configs/{id}` - Delete config
 
-### 2. ETO List View Status Display Fix
+**Key Schema Types:**
+- `FilterRuleSchema` - Email filter rules (sender, subject, date, attachments)
+- `CreateIngestionConfigRequest` - name, account_id, folder_name, filter_rules, poll settings
+- `IngestionConfigResponse` - Full config with all fields including timestamps
 
-**Problem:** When runs had failed sub-runs, the status column showed a gray "-" instead of colored circles with counts.
+### 2. Email Account Folders Endpoint
 
-**Root Cause:** The API returned `sub_runs: null` in the list view. The frontend fallback logic had a bug that only calculated page counts when there were NO failures.
+Added ability to list available folders from a connected email account:
 
-**Solution:** Simplified the API to return sub-run counts by status instead of page counts.
+**Files Modified:**
+- `server/src/api/schemas/email_accounts.py` - Added `FolderListResponse` schema
+- `server/src/api/routers/email_accounts.py` - Added `GET /{account_id}/folders` endpoint
+- `server/src/features/email/service.py` - Added `list_account_folders()` method
 
-**Backend Changes:**
-- `server/src/api/schemas/eto_runs.py` - Simplified `EtoSubRunsSummary` to:
-  ```python
-  class EtoSubRunsSummary(BaseModel):
-      status_counts: Dict[str, int]  # {"success": 2, "failure": 1, ...}
-  ```
-- `server/src/api/mappers/eto_runs.py` - Updated mapper to populate `status_counts`
+**Endpoint:**
+- `GET /api/email-accounts/{account_id}/folders`
+- Returns: `{ "account_id": 1, "folders": ["INBOX", "INBOX.Sent", ...] }`
 
-**Frontend Changes:**
-- `client/src/renderer/features/eto/types.ts` - Updated `EtoSubRunsSummary` interface
-- `client/src/renderer/features/eto/components/EtoRunsTable/EtoRunsTable.tsx`:
-  - Updated `StatusCell` to use `summary.status_counts` directly
-  - Updated `ActionsCell` to use `statusCounts.failure` and `statusCounts.needs_template`
+### 3. IMAP Integration Enhancements
 
-### 3. Thread Safety for Order Number Generation
+Enhanced the IMAP integration with folder listing and email fetching:
 
-**Problem:** When multiple worker threads processed sub-runs simultaneously, some failed with:
-```
-pyodbc.Error: ('HY010', '[HY010] [Microsoft][ODBC Driver Manager] Function sequence error (0) (SQLFetch)')
-```
+**`list_folders()` Method:**
+- Properly parses IMAP LIST response format
+- Handles both quoted and unquoted folder names
+- Skips empty folder names (root namespace)
+- Returns alphabetically sorted folder list (case-insensitive)
 
-**Root Cause:**
-- pyodbc has thread safety level 1 (threads cannot share connections)
-- All worker threads were sharing the same Access database connection
-- Concurrent cursor operations caused ODBC function sequence errors
+**Email Fetching Methods (added in parallel session):**
+- `get_emails_since_uid(folder, since_uid, limit)` - UID-based email retrieval
+- `get_highest_uid(folder)` - Get highest UID in folder
+- `_fetch_email_by_uid(uid, folder)` - Fetch single email
+- `_parse_email_message(msg, uid, folder)` - Parse to EmailMessage dataclass
+- `_decode_header_value(value)` - RFC 2047 header decoding
 
-**Solution:** Added a class-level threading lock to `OrderHelpers`:
+**EmailMessage Dataclass** (in base_integration.py):
+- uid, message_id, subject, sender_email, sender_name
+- received_date, folder_name, body_text, body_html
+- has_attachments, attachment_count, attachment_filenames
 
+### 4. Type Narrowing Fix
+
+Fixed Pylance type error for `get_capabilities()` call:
+
+**Problem:** After `isinstance(integration, ImapIntegration)` check, Pylance still thought `integration` was `BaseEmailIntegration`.
+
+**Solution:** Assign to typed local variable after isinstance check:
 ```python
-# server/src/features/pipeline_results/helpers/orders.py
-import threading
-
-class OrderHelpers:
-    _order_number_lock = threading.Lock()
-
-    def generate_next_order_number(self) -> float:
-        with self._order_number_lock:
-            # ... database operations now serialized
+if isinstance(integration, ImapIntegration):
+    imap_integration: ImapIntegration = integration
+    capabilities = imap_integration.get_capabilities()
 ```
-
-**Why this approach:**
-- Order number generation must be atomic anyway (read-increment-write)
-- Access has practical limit of ~10-20 concurrent connections for writes
-- Simple solution with minimal code changes
-- Lock is class-level so all threads share the same lock
 
 ---
 
 ## Architecture Notes
 
-### Output Execution Flow
+### Email System Architecture
 
-The current ETO processing pipeline has three stages:
+The email system has been restructured to separate concerns:
 
 ```
-Stage 1: Data Extraction
-  └─ Extract fields from PDF using template bbox coordinates
-  └─ Store in eto_sub_run_extractions table
+EmailAccount (credentials)
+  └─ Stores: host, port, email_address, password, capabilities
+  └─ Validation: test connection before saving
+  └─ One account can have multiple ingestion configs
 
-Stage 2: Pipeline Execution
-  └─ Execute transformation pipeline (modules)
-  └─ Store steps in eto_sub_run_pipeline_execution_steps table
-  └─ Returns PipelineExecutionResult with output_module_id and inputs
-
-Stage 3: Output Execution (NEW)
-  └─ If pipeline has output module, call PipelineResultService
-  └─ OrderHelpers.generate_next_order_number() (thread-safe)
-  └─ Store results in eto_sub_run_output_executions table
+EmailIngestionConfig (monitoring settings)
+  └─ References: account_id (FK to email_accounts)
+  └─ Stores: folder_name, filter_rules, poll_interval, use_idle
+  └─ Activation: is_active flag, activated_at timestamp
+  └─ State: last_check_time, last_processed_uid, last_error
 ```
 
-### Key Services
+### IMAP Folder Hierarchy
 
-- **PipelineResultService** (`features/pipeline_results/service.py`)
-  - Singleton registered in ServiceContainer
-  - Manages output definitions (e.g., TestOutputDefinition)
-  - Provides OrderHelpers to output definitions
+IMAP uses a delimiter character (usually `.` or `/`) for folder hierarchy:
+- `INBOX` - Root inbox
+- `INBOX.Sent` - Subfolder under INBOX
+- `INBOX.SOS GLOBAL` - Another subfolder
 
-- **OrderHelpers** (`features/pipeline_results/helpers/orders.py`)
-  - Wraps Access database operations for order management
-  - `generate_next_order_number()` - Thread-safe order number generation
-  - Uses class-level `_order_number_lock` for serialization
+The API returns full folder paths. Frontend can split on delimiter for tree display.
 
-- **ServiceContainer Eager Loading**
-  - `pipeline_results` service is eagerly loaded at startup
-  - Prevents race condition where multiple threads try to resolve ServiceProxy simultaneously
+### UID-Based Polling
+
+Email ingestion uses UID-based polling for efficiency:
+1. Store `last_processed_uid` per config
+2. Query: `SEARCH UID {last_uid+1}:*`
+3. Server returns only new emails (no date comparison needed)
+4. UIDs are unique and monotonically increasing per folder
 
 ---
 
 ## Important Files Reference
 
-### Backend - Output Execution
-- `server/src/features/pipeline_results/service.py` - PipelineResultService
-- `server/src/features/pipeline_results/helpers/orders.py` - OrderHelpers with thread-safe lock
-- `server/src/features/pipeline_results/output_definitions/base.py` - OutputDefinitionBase
-- `server/src/features/pipeline_results/output_definitions/test_output.py` - Test output module
-- `server/src/features/eto_runs/service.py` - EtoRunsService with Stage 3 integration
+### Email Service Layer
+- `server/src/features/email/service.py` - EmailService with account + ingestion config methods
+- `server/src/features/email/integrations/imap_integration.py` - IMAP implementation
+- `server/src/features/email/integrations/base_integration.py` - Abstract base class
 
-### Backend - API Changes
-- `server/src/api/schemas/eto_runs.py` - Simplified EtoSubRunsSummary
-- `server/src/api/mappers/eto_runs.py` - status_counts mapping
+### Email API Layer
+- `server/src/api/routers/email_accounts.py` - Account endpoints including folders
+- `server/src/api/routers/email_ingestion_configs.py` - Ingestion config endpoints
+- `server/src/api/schemas/email_accounts.py` - Account schemas
+- `server/src/api/schemas/email_ingestion_configs.py` - Ingestion config schemas
+- `server/src/api/mappers/email_accounts.py` - Account mappers
+- `server/src/api/mappers/email_ingestion_configs.py` - Ingestion config mappers
 
-### Frontend - ETO List/Detail
-- `client/src/renderer/features/eto/types.ts` - Updated EtoSubRunsSummary type
-- `client/src/renderer/features/eto/components/EtoRunsTable/EtoRunsTable.tsx` - StatusCell, ActionsCell
-- `client/src/renderer/features/eto/components/EtoRunDetailView/EtoRunDetailViewWrapper.tsx` - Scroll fix
-- `client/src/renderer/pages/dashboard/eto/$runId.tsx` - Scroll fix
+### Database Layer
+- `server/src/shared/database/models.py` - EmailAccountModel, EmailIngestionConfigModel
+- `server/src/shared/database/repositories/email_account.py` - Account repository
+- `server/src/shared/database/repositories/email_ingestion_config.py` - Config repository
 
----
-
-## Known Issues & Considerations
-
-### Access Database Limits
-- Theoretical limit: 255 concurrent connections
-- Practical limit: 10-20 simultaneous active users for writes
-- Current mitigation: Thread lock serializes order number generation
-
-### SSE Connection Management
-- Single SSE connection established at page level (`eto/index.tsx`)
-- Fallback polling every 10 seconds
-- Fixed earlier issue with duplicate connections from nested components
+### Type Definitions
+- `server/src/shared/types/email_accounts.py` - Account domain types
+- `server/src/shared/types/email_ingestion_configs.py` - Config domain types
 
 ---
 
 ## Next Session Priorities
 
 ### High Priority
-1. **Real Output Module Implementation**
-   - Create actual order output module (not just test)
-   - Implement order creation in Access tables
-   - Map pipeline outputs to order fields
+1. **Email Ingestion Runtime**
+   - Build polling service that uses ingestion configs
+   - Process emails matching filter rules
+   - Track UIDs and update last_processed_uid
 
-2. **Output Execution Persistence**
-   - Verify eto_sub_run_output_executions table is being populated
-   - Add output execution details to sub-run detail view
+2. **Activate/Deactivate Config Endpoints**
+   - `POST /api/email-ingestion-configs/{id}/activate`
+   - `POST /api/email-ingestion-configs/{id}/deactivate`
+   - Start/stop monitoring for specific configs
 
 ### Medium Priority
-3. **Error Handling Improvements**
-   - Better error messages for output execution failures
-   - Retry logic for transient database errors
+3. **Frontend for Email Configuration**
+   - Account management UI (add/edit/delete accounts)
+   - Ingestion config UI (folder selection, filter rules)
+   - Config activation controls
 
-4. **Performance Monitoring**
-   - Track order number generation times
-   - Monitor lock contention under load
+4. **Filter Rule Implementation**
+   - Apply filter rules to fetched emails
+   - Filter by sender, subject, attachments, date
 
 ### Low Priority
-5. **Testing**
-   - Unit tests for OrderHelpers
-   - Integration tests for output execution flow
+5. **Email Attachment Handling**
+   - Extract PDF attachments from emails
+   - Store and process through ETO pipeline
 
 ---
 
 ## Testing Commands
 
 ```bash
-# Run server (from server directory)
-make dev
+# Test folder listing
+curl http://localhost:8000/api/email-accounts/1/folders
 
-# The server will process ETO runs with output execution
-# Check logs for "[TEST OUTPUT]" messages
+# List ingestion configs
+curl http://localhost:8000/api/email-ingestion-configs
 
-# Access database order numbers are in:
-# - HTC300_G040_T000 Last OrderNo Assigned (LON table)
-# - HTC300_G040_T005 Orders In Work (OIW table)
+# Create ingestion config
+curl -X POST http://localhost:8000/api/email-ingestion-configs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "SOS Orders",
+    "account_id": 1,
+    "folder_name": "INBOX.SOS GLOBAL",
+    "poll_interval_seconds": 60
+  }'
 ```
 
 ---
 
-**Last Updated:** 2025-12-03 Evening
-**Next Session:** Continue with real order output module implementation
+**Last Updated:** 2025-12-05
+**Next Session:** Build email polling runtime and activation endpoints
 
 **Session Notes:**
-- Thread safety issue resolved with class-level lock
-- Frontend status display now shows sub-run counts correctly
-- Scrolling issues fixed on detail pages
-- Output execution pipeline is functional with test module
+- Email account/ingestion config separation is complete
+- Folder listing works with proper IMAP parsing and sorting
+- UID-based email fetching infrastructure ready
+- Full CRUD API available for ingestion configs
