@@ -16,6 +16,7 @@ import { Route as DashboardIndexRouteImport } from './pages/dashboard/index'
 import { Route as DashboardSettingsIndexRouteImport } from './pages/dashboard/settings/index'
 import { Route as DashboardPipelinesIndexRouteImport } from './pages/dashboard/pipelines/index'
 import { Route as DashboardPdfTemplatesIndexRouteImport } from './pages/dashboard/pdf-templates/index'
+import { Route as DashboardOrdersIndexRouteImport } from './pages/dashboard/orders/index'
 import { Route as DashboardEtoIndexRouteImport } from './pages/dashboard/eto/index'
 import { Route as DashboardEtoOldIndexRouteImport } from './pages/dashboard/eto-old/index'
 import { Route as DashboardConfigsIndexRouteImport } from './pages/dashboard/configs/index'
@@ -57,6 +58,11 @@ const DashboardPdfTemplatesIndexRoute =
     path: '/pdf-templates/',
     getParentRoute: () => DashboardRouteRoute,
   } as any)
+const DashboardOrdersIndexRoute = DashboardOrdersIndexRouteImport.update({
+  id: '/orders/',
+  path: '/orders/',
+  getParentRoute: () => DashboardRouteRoute,
+} as any)
 const DashboardEtoIndexRoute = DashboardEtoIndexRouteImport.update({
   id: '/eto/',
   path: '/eto/',
@@ -87,6 +93,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/configs': typeof DashboardConfigsIndexRoute
   '/dashboard/eto-old': typeof DashboardEtoOldIndexRoute
   '/dashboard/eto': typeof DashboardEtoIndexRoute
+  '/dashboard/orders': typeof DashboardOrdersIndexRoute
   '/dashboard/pdf-templates': typeof DashboardPdfTemplatesIndexRoute
   '/dashboard/pipelines': typeof DashboardPipelinesIndexRoute
   '/dashboard/settings': typeof DashboardSettingsIndexRoute
@@ -99,6 +106,7 @@ export interface FileRoutesByTo {
   '/dashboard/configs': typeof DashboardConfigsIndexRoute
   '/dashboard/eto-old': typeof DashboardEtoOldIndexRoute
   '/dashboard/eto': typeof DashboardEtoIndexRoute
+  '/dashboard/orders': typeof DashboardOrdersIndexRoute
   '/dashboard/pdf-templates': typeof DashboardPdfTemplatesIndexRoute
   '/dashboard/pipelines': typeof DashboardPipelinesIndexRoute
   '/dashboard/settings': typeof DashboardSettingsIndexRoute
@@ -113,6 +121,7 @@ export interface FileRoutesById {
   '/dashboard/configs/': typeof DashboardConfigsIndexRoute
   '/dashboard/eto-old/': typeof DashboardEtoOldIndexRoute
   '/dashboard/eto/': typeof DashboardEtoIndexRoute
+  '/dashboard/orders/': typeof DashboardOrdersIndexRoute
   '/dashboard/pdf-templates/': typeof DashboardPdfTemplatesIndexRoute
   '/dashboard/pipelines/': typeof DashboardPipelinesIndexRoute
   '/dashboard/settings/': typeof DashboardSettingsIndexRoute
@@ -128,6 +137,7 @@ export interface FileRouteTypes {
     | '/dashboard/configs'
     | '/dashboard/eto-old'
     | '/dashboard/eto'
+    | '/dashboard/orders'
     | '/dashboard/pdf-templates'
     | '/dashboard/pipelines'
     | '/dashboard/settings'
@@ -140,6 +150,7 @@ export interface FileRouteTypes {
     | '/dashboard/configs'
     | '/dashboard/eto-old'
     | '/dashboard/eto'
+    | '/dashboard/orders'
     | '/dashboard/pdf-templates'
     | '/dashboard/pipelines'
     | '/dashboard/settings'
@@ -153,6 +164,7 @@ export interface FileRouteTypes {
     | '/dashboard/configs/'
     | '/dashboard/eto-old/'
     | '/dashboard/eto/'
+    | '/dashboard/orders/'
     | '/dashboard/pdf-templates/'
     | '/dashboard/pipelines/'
     | '/dashboard/settings/'
@@ -215,6 +227,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardPdfTemplatesIndexRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
+    '/dashboard/orders/': {
+      id: '/dashboard/orders/'
+      path: '/orders'
+      fullPath: '/dashboard/orders'
+      preLoaderRoute: typeof DashboardOrdersIndexRouteImport
+      parentRoute: typeof DashboardRouteRoute
+    }
     '/dashboard/eto/': {
       id: '/dashboard/eto/'
       path: '/eto'
@@ -252,6 +271,7 @@ interface DashboardRouteRouteChildren {
   DashboardConfigsIndexRoute: typeof DashboardConfigsIndexRoute
   DashboardEtoOldIndexRoute: typeof DashboardEtoOldIndexRoute
   DashboardEtoIndexRoute: typeof DashboardEtoIndexRoute
+  DashboardOrdersIndexRoute: typeof DashboardOrdersIndexRoute
   DashboardPdfTemplatesIndexRoute: typeof DashboardPdfTemplatesIndexRoute
   DashboardPipelinesIndexRoute: typeof DashboardPipelinesIndexRoute
   DashboardSettingsIndexRoute: typeof DashboardSettingsIndexRoute
@@ -263,6 +283,7 @@ const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
   DashboardConfigsIndexRoute: DashboardConfigsIndexRoute,
   DashboardEtoOldIndexRoute: DashboardEtoOldIndexRoute,
   DashboardEtoIndexRoute: DashboardEtoIndexRoute,
+  DashboardOrdersIndexRoute: DashboardOrdersIndexRoute,
   DashboardPdfTemplatesIndexRoute: DashboardPdfTemplatesIndexRoute,
   DashboardPipelinesIndexRoute: DashboardPipelinesIndexRoute,
   DashboardSettingsIndexRoute: DashboardSettingsIndexRoute,

@@ -2,7 +2,8 @@
 Email domain types
 Dataclasses for email records stored in database.
 
-References email_ingestion_configs for the listener that ingested the email.
+Deduplication is per-account (not per-config) so emails moved between
+folders on the same account are not re-processed.
 """
 from dataclasses import dataclass
 from datetime import datetime
@@ -17,13 +18,17 @@ class Email:
     Used by services and repositories for complete email data.
     """
     id: int
-    ingestion_config_id: Optional[int]  # FK to email_ingestion_configs
+    account_id: int  # FK to email_accounts (for deduplication)
+    ingestion_config_id: Optional[int]  # FK to email_ingestion_configs (which config first ingested)
     message_id: str
     sender_email: str
     subject: str
     received_date: datetime
     folder_name: str
-    processed_at: datetime
+    has_pdf_attachments: bool
+    attachment_count: int
+    pdf_count: int
+    processed_at: Optional[datetime]
     created_at: datetime
 
 
@@ -31,11 +36,16 @@ class Email:
 class EmailCreate:
     """
     Data for creating a new email record.
-    Used by EmailIngestionService._process_email when storing emails.
+    Used when storing processed emails for deduplication tracking.
     """
-    ingestion_config_id: int  # FK to email_ingestion_configs
+    account_id: int  # FK to email_accounts (required for deduplication)
+    ingestion_config_id: int  # FK to email_ingestion_configs (which config ingested)
     message_id: str
     sender_email: str
+    sender_name: Optional[str]
     subject: str
     received_date: datetime
     folder_name: str
+    has_pdf_attachments: bool = False
+    attachment_count: int = 0
+    pdf_count: int = 0

@@ -11,12 +11,20 @@ interface EmailConfigCardProps {
   config: IngestionConfigListItem;
   onEdit?: (id: number) => void;
   onDelete?: (id: number) => void;
+  onActivate?: (id: number) => void;
+  onDeactivate?: (id: number) => void;
+  isActivating?: boolean;
+  isDeactivating?: boolean;
 }
 
 export function EmailConfigCard({
   config,
   onEdit,
   onDelete,
+  onActivate,
+  onDeactivate,
+  isActivating = false,
+  isDeactivating = false,
 }: EmailConfigCardProps) {
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-lg p-5 hover:border-gray-600 transition-colors">
@@ -89,6 +97,28 @@ export function EmailConfigCard({
 
       {/* Action Buttons */}
       <div className="flex flex-wrap gap-2 pt-3 border-t border-gray-700">
+        {/* Activate button - shown when inactive */}
+        {!config.is_active && onActivate && (
+          <button
+            onClick={() => onActivate(config.id)}
+            disabled={isActivating}
+            className="px-3 py-1.5 text-sm bg-green-600 hover:bg-green-700 disabled:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded transition-colors"
+          >
+            {isActivating ? "Activating..." : "Activate"}
+          </button>
+        )}
+
+        {/* Deactivate button - shown when active */}
+        {config.is_active && onDeactivate && (
+          <button
+            onClick={() => onDeactivate(config.id)}
+            disabled={isDeactivating}
+            className="px-3 py-1.5 text-sm bg-yellow-600 hover:bg-yellow-700 disabled:bg-yellow-800 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded transition-colors"
+          >
+            {isDeactivating ? "Deactivating..." : "Deactivate"}
+          </button>
+        )}
+
         {onEdit && (
           <button
             onClick={() => onEdit(config.id)}

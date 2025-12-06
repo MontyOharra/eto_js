@@ -195,14 +195,26 @@ class EmailIngestionConfigModel(BaseModel):
 # =========================
 
 class EmailModel(BaseModel):
+    """
+    Tracks processed emails for deduplication.
+
+    Deduplication is per-account (not per-config) so that emails moved
+    between folders on the same account are not re-processed.
+    """
     __tablename__ = "emails"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
-    # Reference to ingestion config (renamed from config_id)
-    ingestion_config_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("email_ingestion_configs.id"), nullable=True
+    # Account this email belongs to (for deduplication)
+    account_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("email_accounts.id"), nullable=False, index=True
     )
+
+    # Config that first ingested this email (for audit/debugging, nullable if config deleted)
+    ingestion_config_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("email_ingestion_configs.id", ondelete="SET NULL"), nullable=True
+    )
+
     message_id: Mapped[str] = mapped_column(String(500), nullable=False)
     subject: Mapped[Optional[str]] = mapped_column(String(500))
     sender_email: Mapped[Optional[str]] = mapped_column(String(255))
@@ -224,11 +236,14 @@ class EmailModel(BaseModel):
     )
 
     # Relationships
+    account: Mapped["EmailAccountModel"] = relationship()
     ingestion_config: Mapped[Optional["EmailIngestionConfigModel"]] = relationship(back_populates="emails")
     # Note: PDF files no longer track email_id - use eto_runs.source_email_id instead
 
     __table_args__ = (
-        UniqueConstraint("ingestion_config_id", "message_id", name="uix_ingestion_config_message"),
+        # Deduplication: same Message-ID on same account = same email
+        UniqueConstraint("account_id", "message_id", name="uix_account_message"),
+        Index("ix_email_account_id", "account_id"),
         Index("ix_email_ingestion_config_id", "ingestion_config_id"),
         Index("ix_email_received_date", "received_date"),
     )

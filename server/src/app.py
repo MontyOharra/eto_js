@@ -301,12 +301,15 @@ async def initialize_services() -> None:
         except Exception as e:
             logger.warning(f"Failed to initialize PDF template service: {e}")
 
-        # 3. Initialize ingestion services
+        # 3. Initialize ingestion services and start email polling
         try:
             email_service = ServiceContainer.get_email_service()
-            logger.info("Email ingestion service initialized")
+            logger.info("Email service initialized")
+            # Start polling for active email configs
+            email_service.startup()
+            logger.info("Email service startup complete (pollers started for active configs)")
         except Exception as e:
-            logger.warning(f"Failed to initialize email ingestion service: {e}")
+            logger.warning(f"Failed to initialize/start email service: {e}")
 
         # 4. Initialize ETO processing services
         try:
@@ -349,6 +352,14 @@ async def cleanup_services() -> None:
             logger.warning(f"Failed to close SSE connections: {e}")
 
         if ServiceContainer.is_initialized():
+            # Stop email service pollers
+            try:
+                email_service = ServiceContainer.get_email_service()
+                email_service.shutdown()
+                logger.info("Email service shutdown complete (pollers stopped)")
+            except Exception as e:
+                logger.warning(f"Failed to stop email service: {e}")
+
             # Stop ETO processing worker if running
             try:
                 eto_runs_service = ServiceContainer.get_eto_runs_service()

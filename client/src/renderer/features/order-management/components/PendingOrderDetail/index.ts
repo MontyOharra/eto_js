@@ -1,0 +1,1 @@
+export { PendingOrderDetail } from './PendingOrderDetail';

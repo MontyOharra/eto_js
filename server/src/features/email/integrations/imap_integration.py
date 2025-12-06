@@ -7,12 +7,13 @@ from email.header import decode_header
 from email.utils import parseaddr, parsedate_to_datetime
 import imaplib
 import logging
-import re
 import ssl
+import threading
+import time
 from datetime import datetime, timezone
 from typing import Optional
 
-from .base_integration import BaseEmailIntegration, EmailMessage
+from .base_integration import BaseEmailIntegration, EmailMessage, EmailAttachment, ValidationResult
 from .registry import IntegrationRegistry
 
 logger = logging.getLogger(__name__)
@@ -27,8 +28,13 @@ logger = logging.getLogger(__name__)
 class ImapIntegration(BaseEmailIntegration):
     """
     IMAP integration for platform-independent email access.
-    Self-registers with IntegrationRegistry for automatic discovery.
+
+    Manages persistent connection with automatic keepalive and reconnection.
+    Thread-safe for concurrent folder operations via internal lock.
     """
+
+    # Keepalive interval in seconds (send NOOP to prevent server timeout)
+    KEEPALIVE_INTERVAL = 300  # 5 minutes
 
     def __init__(
         self,
@@ -58,6 +64,11 @@ class ImapIntegration(BaseEmailIntegration):
 
         # Connection state
         self._imap: Optional[imaplib.IMAP4_SSL | imaplib.IMAP4] = None
+        self._lock = threading.Lock()
+
+        # Keepalive thread
+        self._keepalive_thread: Optional[threading.Thread] = None
+        self._keepalive_stop = threading.Event()
 
         self.logger.debug(f"Initialized ImapIntegration for {email_address}@{host}:{port}")
 
@@ -66,9 +77,114 @@ class ImapIntegration(BaseEmailIntegration):
         """Check if currently connected."""
         return self._imap is not None
 
-    def connect(self) -> bool:
+    # ========== Lifecycle Methods ==========
+
+    def startup(self) -> None:
         """
-        Establish connection to IMAP server.
+        Establish persistent connection and start keepalive.
+
+        Called when first config for this account is activated.
+        """
+        self.logger.info(f"[IMAP] STARTUP for {self.email_address}")
+        self.logger.info(f"[IMAP]   Server: {self.host}:{self.port} (SSL: {self.use_ssl})")
+
+        with self._lock:
+            if not self._connect():
+                raise RuntimeError(f"Failed to connect to IMAP server {self.host}")
+
+            self._start_keepalive()
+
+        self.logger.info(f"[IMAP] STARTUP COMPLETE - Connection established for {self.email_address}")
+
+    def shutdown(self) -> None:
+        """
+        Stop keepalive and close connection.
+
+        Called when last config for this account is deactivated or on server shutdown.
+        """
+        self.logger.info(f"[IMAP] SHUTDOWN for {self.email_address}")
+
+        self._stop_keepalive()
+
+        with self._lock:
+            self._disconnect()
+
+        self.logger.info(f"[IMAP] SHUTDOWN COMPLETE - Connection closed for {self.email_address}")
+
+    def validate_credentials(self) -> ValidationResult:
+        """
+        Validate credentials by connecting, getting capabilities, and disconnecting.
+
+        This is a transient operation - does not use/affect persistent connection.
+        """
+        self.logger.info(f"Validating credentials for {self.email_address}")
+
+        try:
+            # Create temporary connection for validation
+            if self.use_ssl:
+                context = ssl.create_default_context()
+                temp_imap = imaplib.IMAP4_SSL(
+                    host=self.host,
+                    port=self.port,
+                    ssl_context=context,
+                )
+            else:
+                temp_imap = imaplib.IMAP4(
+                    host=self.host,
+                    port=self.port,
+                )
+
+            # Authenticate
+            temp_imap.login(self.email_address, self.password)
+
+            # Get capabilities
+            capabilities: list[str] = []
+            if hasattr(temp_imap, 'capabilities') and temp_imap.capabilities:
+                for cap in temp_imap.capabilities:
+                    if isinstance(cap, bytes):
+                        capabilities.append(cap.decode('utf-8'))
+                    else:
+                        capabilities.append(str(cap))
+
+            # Get folder count
+            status, folder_data = temp_imap.list()
+            folder_count = 0
+            if status == "OK" and folder_data:
+                folder_count = len([f for f in folder_data if f])
+
+            # Disconnect
+            try:
+                temp_imap.logout()
+            except Exception:
+                pass
+
+            self.logger.info(f"Credentials validated for {self.email_address}")
+
+            return ValidationResult(
+                success=True,
+                message="Connection successful",
+                capabilities=capabilities,
+                folder_count=folder_count,
+            )
+
+        except imaplib.IMAP4.error as e:
+            self.logger.warning(f"IMAP authentication failed for {self.email_address}: {e}")
+            return ValidationResult(
+                success=False,
+                message=f"Authentication failed: {e}",
+            )
+        except Exception as e:
+            self.logger.error(f"Connection failed for {self.email_address}: {e}")
+            return ValidationResult(
+                success=False,
+                message=f"Connection failed: {e}",
+            )
+
+    # ========== Internal Connection Management ==========
+
+    def _connect(self) -> bool:
+        """
+        Establish connection to IMAP server (internal, not locked).
 
         Returns:
             True if connection successful, False otherwise.
@@ -76,7 +192,6 @@ class ImapIntegration(BaseEmailIntegration):
         try:
             self.logger.debug(f"Connecting to IMAP server {self.host}:{self.port} (SSL: {self.use_ssl})")
 
-            # Create connection
             if self.use_ssl:
                 context = ssl.create_default_context()
                 self._imap = imaplib.IMAP4_SSL(
@@ -90,7 +205,6 @@ class ImapIntegration(BaseEmailIntegration):
                     port=self.port,
                 )
 
-            # Authenticate
             self.logger.debug(f"Authenticating as {self.email_address}")
             self._imap.login(self.email_address, self.password)
 
@@ -107,8 +221,8 @@ class ImapIntegration(BaseEmailIntegration):
             self._imap = None
             return False
 
-    def disconnect(self) -> None:
-        """Close connection to IMAP server."""
+    def _disconnect(self) -> None:
+        """Close connection to IMAP server (internal, not locked)."""
         if self._imap is None:
             return
 
@@ -127,107 +241,117 @@ class ImapIntegration(BaseEmailIntegration):
         finally:
             self._imap = None
 
-    def get_capabilities(self) -> list[str]:
-        """
-        Get server capabilities (IMAP-specific).
-
-        Must be connected before calling.
-
-        Returns:
-            List of capability strings (e.g., ["IMAP4rev1", "IDLE", "UIDPLUS"])
-        """
+    def _ensure_connected(self) -> None:
+        """Ensure connection is active, reconnect if needed (must hold lock)."""
         if self._imap is None:
-            raise RuntimeError("Not connected. Call connect() first.")
+            self.logger.warning(f"[IMAP] Connection lost for {self.email_address}, RECONNECTING...")
+            if not self._connect():
+                raise RuntimeError(f"Failed to reconnect to IMAP server {self.host}")
+            self.logger.info(f"[IMAP] RECONNECTED successfully for {self.email_address}")
 
-        capabilities = []
-        if hasattr(self._imap, 'capabilities') and self._imap.capabilities:
-            for cap in self._imap.capabilities:
-                if isinstance(cap, bytes):
-                    capabilities.append(cap.decode('utf-8'))
-                else:
-                    capabilities.append(str(cap))
+    def _start_keepalive(self) -> None:
+        """Start keepalive background thread."""
+        if self._keepalive_thread is not None:
+            return
 
-        return capabilities
+        self._keepalive_stop.clear()
+        self._keepalive_thread = threading.Thread(
+            target=self._keepalive_loop,
+            daemon=True,
+            name=f"imap-keepalive-{self.email_address}",
+        )
+        self._keepalive_thread.start()
+        self.logger.debug("Keepalive thread started")
+
+    def _stop_keepalive(self) -> None:
+        """Stop keepalive background thread."""
+        if self._keepalive_thread is None:
+            return
+
+        self._keepalive_stop.set()
+        self._keepalive_thread.join(timeout=5)
+        self._keepalive_thread = None
+        self.logger.debug("Keepalive thread stopped")
+
+    def _keepalive_loop(self) -> None:
+        """Background thread that sends periodic NOOP to keep connection alive."""
+        while not self._keepalive_stop.wait(timeout=self.KEEPALIVE_INTERVAL):
+            try:
+                with self._lock:
+                    if self._imap is not None:
+                        self._imap.noop()
+                        self.logger.debug(f"[IMAP] Keepalive NOOP sent for {self.email_address}")
+            except Exception as e:
+                self.logger.warning(f"[IMAP] Keepalive NOOP failed for {self.email_address}: {e}")
+                # Connection may be dead, will reconnect on next operation
+
+    # ========== Folder Operations ==========
 
     def list_folders(self) -> list[str]:
         """
         List all folders/mailboxes on the server.
 
-        Must be connected before calling.
-
         Returns:
-            List of folder paths (e.g., ["INBOX", "INBOX.Sent", "INBOX.Drafts"])
-            The delimiter is included in the path (e.g., "." or "/")
+            List of folder paths sorted alphabetically
         """
-        if self._imap is None:
-            raise RuntimeError("Not connected. Call connect() first.")
+        with self._lock:
+            self._ensure_connected()
 
-        folders: list[str] = []
+            if self._imap is None:
+                raise RuntimeError("Not connected")
 
-        # LIST command returns all mailboxes
-        # Pattern "" "*" means: reference "" (root), pattern "*" (all folders)
-        status, folder_data = self._imap.list()
+            folders: list[str] = []
 
-        if status != "OK":
-            self.logger.warning(f"Failed to list folders: {status}")
+            status, folder_data = self._imap.list()
+
+            if status != "OK":
+                self.logger.warning(f"Failed to list folders: {status}")
+                return folders
+
+            for item in folder_data:
+                if item is None:
+                    continue
+
+                if isinstance(item, bytes):
+                    item_str = item.decode('utf-8')
+                else:
+                    item_str = str(item)
+
+                try:
+                    paren_end = item_str.find(')')
+                    if paren_end == -1:
+                        continue
+
+                    rest = item_str[paren_end + 1:].strip()
+
+                    if not rest.startswith('"'):
+                        continue
+                    delim_end = rest.find('"', 1)
+                    if delim_end == -1:
+                        continue
+
+                    folder_part = rest[delim_end + 1:].strip()
+
+                    if folder_part.startswith('"') and folder_part.endswith('"'):
+                        folder_name = folder_part[1:-1]
+                    else:
+                        folder_name = folder_part
+
+                    if not folder_name:
+                        continue
+
+                    folders.append(folder_name)
+
+                except Exception as e:
+                    self.logger.debug(f"Could not parse folder from: {item_str} - {e}")
+                    continue
+
+            folders.sort(key=str.casefold)
+
+            self.logger.debug(f"Found {len(folders)} folders")
             return folders
 
-        for item in folder_data:
-            if item is None:
-                continue
-
-            # Each item is bytes like:
-            #   b'(\\HasNoChildren) "." "INBOX.Subfolder"'
-            #   b'(\\HasNoChildren) "." INBOX'
-            #   b'(\\Noselect) "/" ""'  <- root, skip this
-            if isinstance(item, bytes):
-                item_str = item.decode('utf-8')
-            else:
-                item_str = str(item)
-
-            # Parse the IMAP LIST response
-            # Format: (flags) "delimiter" folder_name
-            # folder_name may be quoted or unquoted
-            try:
-                # Find the closing paren of flags
-                paren_end = item_str.find(')')
-                if paren_end == -1:
-                    continue
-
-                # Rest is: "delimiter" folder_name
-                rest = item_str[paren_end + 1:].strip()
-
-                # Extract delimiter (quoted)
-                if not rest.startswith('"'):
-                    continue
-                delim_end = rest.find('"', 1)
-                if delim_end == -1:
-                    continue
-
-                # Get folder name (everything after delimiter, stripped)
-                folder_part = rest[delim_end + 1:].strip()
-
-                # Folder name may be quoted or unquoted
-                if folder_part.startswith('"') and folder_part.endswith('"'):
-                    folder_name = folder_part[1:-1]
-                else:
-                    folder_name = folder_part
-
-                # Skip empty folder names (root namespace)
-                if not folder_name:
-                    continue
-
-                folders.append(folder_name)
-
-            except Exception as e:
-                self.logger.debug(f"Could not parse folder from: {item_str} - {e}")
-                continue
-
-        # Sort alphabetically (case-insensitive)
-        folders.sort(key=str.casefold)
-
-        self.logger.debug(f"Found {len(folders)} folders")
-        return folders
+    # ========== Email Operations ==========
 
     def get_emails_since_uid(
         self,
@@ -238,128 +362,256 @@ class ImapIntegration(BaseEmailIntegration):
         """
         Get emails with UID greater than since_uid.
 
-        Uses IMAP UID SEARCH and UID FETCH commands for efficient retrieval.
-
-        Args:
-            folder_name: Folder to retrieve emails from
-            since_uid: Only get emails with UID > this value
-            limit: Maximum number of emails to retrieve
-
-        Returns:
-            List of EmailMessage dataclasses ordered by UID ascending
+        Thread-safe - uses internal lock.
         """
-        if self._imap is None:
-            raise RuntimeError("Not connected. Call connect() first.")
+        with self._lock:
+            self._ensure_connected()
 
-        # Select the folder
-        status, data = self._imap.select(folder_name, readonly=True)
-        if status != "OK":
-            raise RuntimeError(f"Failed to select folder '{folder_name}': {data}")
+            if self._imap is None:
+                raise RuntimeError("Not connected")
 
-        # Build UID search range: UID greater than since_uid
-        # IMAP UID ranges: "UID start:*" means from start to highest
-        search_range = f"{since_uid + 1}:*"
+            # Select the folder
+            self.logger.debug(f"[IMAP] Selecting folder '{folder_name}' for {self.email_address}")
+            status, data = self._imap.select(folder_name, readonly=True)
+            if status != "OK":
+                raise RuntimeError(f"Failed to select folder '{folder_name}': {data}")
 
-        self.logger.debug(f"Searching for UIDs in range {search_range}")
+            search_range = f"{since_uid + 1}:*"
 
-        # UID SEARCH to find matching messages
-        status, data = self._imap.uid("SEARCH", None, f"UID {search_range}")
-        if status != "OK":
-            self.logger.warning(f"UID SEARCH failed: {data}")
-            return []
+            self.logger.debug(f"Searching for UIDs in range {search_range}")
 
-        # Parse UIDs from response
-        uid_list_str = data[0].decode("utf-8") if data[0] else ""
-        if not uid_list_str.strip():
-            self.logger.debug("No new emails found")
-            return []
+            status, data = self._imap.uid("SEARCH", None, f"UID {search_range}")
+            if status != "OK":
+                self.logger.warning(f"UID SEARCH failed: {data}")
+                return []
 
-        uid_list = [int(uid) for uid in uid_list_str.split()]
+            uid_list_str = data[0].decode("utf-8") if data[0] else ""
+            if not uid_list_str.strip():
+                self.logger.debug("No new emails found")
+                return []
 
-        # Filter out UIDs <= since_uid (IMAP range is inclusive)
-        uid_list = [uid for uid in uid_list if uid > since_uid]
+            uid_list = [int(uid) for uid in uid_list_str.split()]
+            uid_list = [uid for uid in uid_list if uid > since_uid]
+            uid_list.sort()
+            uid_list = uid_list[:limit]
 
-        # Sort ascending (oldest first) and apply limit
-        uid_list.sort()
-        uid_list = uid_list[:limit]
+            if not uid_list:
+                self.logger.debug("No new emails after filtering")
+                return []
 
-        if not uid_list:
-            self.logger.debug("No new emails after filtering")
-            return []
+            self.logger.debug(f"Found {len(uid_list)} new emails: UIDs {uid_list[0]}-{uid_list[-1]}")
 
-        self.logger.debug(f"Found {len(uid_list)} new emails: UIDs {uid_list[0]}-{uid_list[-1]}")
+            messages: list[EmailMessage] = []
+            for uid in uid_list:
+                try:
+                    msg = self._fetch_email_by_uid(uid, folder_name)
+                    if msg:
+                        messages.append(msg)
+                except Exception as e:
+                    self.logger.warning(f"Failed to fetch email UID {uid}: {e}")
+                    continue
 
-        # Fetch each email
-        messages: list[EmailMessage] = []
-        for uid in uid_list:
-            try:
-                msg = self._fetch_email_by_uid(uid, folder_name)
-                if msg:
-                    messages.append(msg)
-            except Exception as e:
-                self.logger.warning(f"Failed to fetch email UID {uid}: {e}")
-                continue
-
-        return messages
+            return messages
 
     def get_highest_uid(self, folder_name: str) -> int | None:
         """
         Get the highest UID in the folder.
 
+        Thread-safe - uses internal lock.
+        """
+        with self._lock:
+            self._ensure_connected()
+
+            if self._imap is None:
+                raise RuntimeError("Not connected")
+
+            status, data = self._imap.select(folder_name, readonly=True)
+            if status != "OK":
+                raise RuntimeError(f"Failed to select folder '{folder_name}': {data}")
+
+            status, data = self._imap.uid("SEARCH", None, "ALL")
+            if status != "OK":
+                self.logger.warning(f"UID SEARCH ALL failed: {data}")
+                return None
+
+            uid_list_str = data[0].decode("utf-8") if data[0] else ""
+            if not uid_list_str.strip():
+                return None
+
+            uid_list = [int(uid) for uid in uid_list_str.split()]
+            if not uid_list:
+                return None
+
+            highest = max(uid_list)
+            self.logger.debug(f"Highest UID in {folder_name}: {highest}")
+            return highest
+
+    def get_attachments(
+        self,
+        folder_name: str,
+        uid: int,
+        file_extensions: list[str] | None = None,
+    ) -> list[EmailAttachment]:
+        """
+        Download attachments for a specific email by UID.
+
+        Thread-safe - uses internal lock.
+
         Args:
-            folder_name: Folder to check
+            folder_name: Folder containing the email
+            uid: UID of the email
+            file_extensions: Optional list of extensions to filter by (e.g., [".pdf"]).
+                            Case-insensitive. If None, returns all attachments.
 
         Returns:
-            Highest UID in folder, or None if folder is empty
+            List of EmailAttachment dataclasses with filename, content_type, and data
         """
-        if self._imap is None:
-            raise RuntimeError("Not connected. Call connect() first.")
+        with self._lock:
+            self._ensure_connected()
 
-        # Select the folder
-        status, data = self._imap.select(folder_name, readonly=True)
-        if status != "OK":
-            raise RuntimeError(f"Failed to select folder '{folder_name}': {data}")
+            if self._imap is None:
+                raise RuntimeError("Not connected")
 
-        # Search for all messages
-        status, data = self._imap.uid("SEARCH", None, "ALL")
-        if status != "OK":
-            self.logger.warning(f"UID SEARCH ALL failed: {data}")
-            return None
+            # Select folder
+            status, _ = self._imap.select(folder_name, readonly=True)
+            if status != "OK":
+                self.logger.error(f"Failed to select folder {folder_name}")
+                return []
 
-        uid_list_str = data[0].decode("utf-8") if data[0] else ""
-        if not uid_list_str.strip():
-            return None
+            # Fetch the email
+            status, data = self._imap.uid("FETCH", str(uid), "(BODY.PEEK[])")
+            if status != "OK":
+                self.logger.warning(f"Failed to fetch UID {uid} for attachments: {data}")
+                return []
 
-        uid_list = [int(uid) for uid in uid_list_str.split()]
-        if not uid_list:
-            return None
+            raw_email = None
+            for item in data:
+                if isinstance(item, tuple) and len(item) >= 2:
+                    raw_email = item[1]
+                    break
 
-        highest = max(uid_list)
-        self.logger.debug(f"Highest UID in {folder_name}: {highest}")
-        return highest
+            if not raw_email:
+                self.logger.warning(f"No email data for UID {uid}")
+                return []
+
+            try:
+                msg = email.message_from_bytes(raw_email)
+                return self._extract_attachments(msg, file_extensions)
+            except Exception as e:
+                self.logger.error(f"Failed to parse email UID {uid} for attachments: {e}")
+                return []
+
+    def _extract_attachments(
+        self,
+        msg: email.message.Message,
+        file_extensions: list[str] | None = None,
+    ) -> list[EmailAttachment]:
+        """
+        Extract attachments from a parsed email message.
+
+        Args:
+            msg: Parsed email message
+            file_extensions: Optional list of extensions to filter by (e.g., [".pdf"])
+
+        Returns:
+            List of EmailAttachment dataclasses
+        """
+        attachments: list[EmailAttachment] = []
+
+        # Normalize extensions for case-insensitive comparison
+        normalized_extensions: set[str] | None = None
+        if file_extensions:
+            normalized_extensions = {ext.lower().lstrip('.') for ext in file_extensions}
+
+        if not msg.is_multipart():
+            return attachments
+
+        for part in msg.walk():
+            content_disposition = str(part.get("Content-Disposition", ""))
+
+            # Skip non-attachment parts
+            if "attachment" not in content_disposition:
+                continue
+
+            filename = part.get_filename()
+            if not filename:
+                continue
+
+            # Decode filename if needed
+            filename = self._decode_header_value(filename)
+
+            # Check extension filter
+            if normalized_extensions:
+                # Get file extension (without the dot)
+                ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+                if ext not in normalized_extensions:
+                    self.logger.debug(f"Skipping attachment '{filename}' - extension '.{ext}' not in filter")
+                    continue
+
+            # Get attachment content
+            try:
+                payload = part.get_payload(decode=True)
+                if payload is None:
+                    self.logger.warning(f"Empty payload for attachment '{filename}'")
+                    continue
+
+                content_type = part.get_content_type() or "application/octet-stream"
+
+                attachments.append(EmailAttachment(
+                    filename=filename,
+                    content_type=content_type,
+                    data=payload,
+                ))
+
+                self.logger.debug(
+                    f"Extracted attachment: '{filename}' ({content_type}, {len(payload)} bytes)"
+                )
+
+            except Exception as e:
+                self.logger.error(f"Failed to extract attachment '{filename}': {e}")
+                continue
+
+        self.logger.info(f"Extracted {len(attachments)} attachment(s)" +
+                        (f" matching extensions {file_extensions}" if file_extensions else ""))
+
+        return attachments
+
+    # ========== IMAP-Specific Methods ==========
+
+    def get_capabilities(self) -> list[str]:
+        """
+        Get server capabilities (IMAP-specific).
+
+        Thread-safe - uses internal lock.
+        """
+        with self._lock:
+            self._ensure_connected()
+
+            if self._imap is None:
+                raise RuntimeError("Not connected")
+
+            capabilities = []
+            if hasattr(self._imap, 'capabilities') and self._imap.capabilities:
+                for cap in self._imap.capabilities:
+                    if isinstance(cap, bytes):
+                        capabilities.append(cap.decode('utf-8'))
+                    else:
+                        capabilities.append(str(cap))
+
+            return capabilities
+
+    # ========== Internal Email Parsing ==========
 
     def _fetch_email_by_uid(self, uid: int, folder_name: str) -> EmailMessage | None:
-        """
-        Fetch a single email by UID.
-
-        Args:
-            uid: Email UID
-            folder_name: Folder containing the email
-
-        Returns:
-            EmailMessage dataclass or None if fetch fails
-        """
+        """Fetch a single email by UID (must hold lock)."""
         if self._imap is None:
-            raise RuntimeError("Not connected. Call connect() first.")
+            raise RuntimeError("Not connected")
 
-        # Fetch the email headers and body structure
-        # BODY.PEEK[] fetches entire message without marking as read
         status, data = self._imap.uid("FETCH", str(uid), "(BODY.PEEK[])")
         if status != "OK":
             self.logger.warning(f"Failed to fetch UID {uid}: {data}")
             return None
 
-        # Parse the response - data is a list of tuples
         raw_email = None
         for item in data:
             if isinstance(item, tuple) and len(item) >= 2:
@@ -370,7 +622,6 @@ class ImapIntegration(BaseEmailIntegration):
             self.logger.warning(f"No email data for UID {uid}")
             return None
 
-        # Parse the email message
         try:
             msg = email.message_from_bytes(raw_email)
             return self._parse_email_message(msg, uid, folder_name)
@@ -384,45 +635,28 @@ class ImapIntegration(BaseEmailIntegration):
         uid: int,
         folder_name: str,
     ) -> EmailMessage:
-        """
-        Parse an email.message.Message into our EmailMessage dataclass.
-
-        Args:
-            msg: Parsed email message
-            uid: Email UID
-            folder_name: Folder name
-
-        Returns:
-            EmailMessage dataclass
-        """
-        # Extract Message-ID
+        """Parse an email.message.Message into our EmailMessage dataclass."""
         message_id = msg.get("Message-ID", "")
         if message_id:
-            # Clean up Message-ID (remove < > brackets if present)
             message_id = message_id.strip().strip("<>")
 
-        # Extract subject
         subject = self._decode_header_value(msg.get("Subject", ""))
 
-        # Extract sender
         from_header = msg.get("From", "")
         sender_name, sender_email = parseaddr(from_header)
         sender_name = self._decode_header_value(sender_name) if sender_name else None
         sender_email = sender_email or ""
 
-        # Extract date
         date_header = msg.get("Date")
-        received_date = datetime.now(timezone.utc)  # fallback
+        received_date = datetime.now(timezone.utc)
         if date_header:
             try:
                 received_date = parsedate_to_datetime(date_header)
-                # Ensure timezone aware
                 if received_date.tzinfo is None:
                     received_date = received_date.replace(tzinfo=timezone.utc)
             except Exception:
-                pass  # Use fallback
+                pass
 
-        # Extract body
         body_text = None
         body_html = None
 
@@ -431,7 +665,6 @@ class ImapIntegration(BaseEmailIntegration):
                 content_type = part.get_content_type()
                 content_disposition = str(part.get("Content-Disposition", ""))
 
-                # Skip attachments
                 if "attachment" in content_disposition:
                     continue
 
@@ -466,7 +699,6 @@ class ImapIntegration(BaseEmailIntegration):
             except Exception:
                 pass
 
-        # Count attachments
         attachment_count = 0
         attachment_filenames: list[str] = []
 
@@ -496,15 +728,7 @@ class ImapIntegration(BaseEmailIntegration):
         )
 
     def _decode_header_value(self, value: str) -> str:
-        """
-        Decode an email header value that may be encoded (RFC 2047).
-
-        Args:
-            value: Raw header value
-
-        Returns:
-            Decoded string
-        """
+        """Decode an email header value that may be encoded (RFC 2047)."""
         if not value:
             return ""
 

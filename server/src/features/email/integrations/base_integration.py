@@ -3,7 +3,7 @@ Base Email Integration
 Abstract base class for email provider integrations.
 """
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import logging
 
 logger = logging.getLogger(__name__)
@@ -15,7 +15,8 @@ class EmailMessage:
     Email message returned from integration.
 
     Lightweight structure for email ingestion - contains only what we need
-    for processing and tracking.
+    for processing and tracking. Does NOT include attachment content
+    to keep polling efficient.
     """
     uid: int  # IMAP UID or equivalent (required for tracking)
     message_id: str  # Email Message-ID header
@@ -31,44 +32,102 @@ class EmailMessage:
     attachment_filenames: list[str] | None = None
 
 
+@dataclass(frozen=True)
+class EmailAttachment:
+    """
+    Email attachment with content.
+
+    Used when downloading attachments after filter rules have been applied.
+    """
+    filename: str
+    content_type: str
+    data: bytes  # Raw attachment content
+
+
+@dataclass(frozen=True)
+class ValidationResult:
+    """
+    Result of credential validation.
+
+    Returned by validate_credentials() - contains success status,
+    message, and any discovered capabilities.
+    """
+    success: bool
+    message: str
+    capabilities: list[str] = field(default_factory=list)
+    folder_count: int | None = None
+
+
 class BaseEmailIntegration(ABC):
     """
     Abstract base class for email integrations.
 
     Each provider (IMAP, Gmail API, etc.) implements this interface.
-    Designed for persistent connections - connect once, perform many operations,
-    disconnect when done.
+    The integration manages its own connection semantics internally:
 
-    For IMAP: connect() opens a socket, disconnect() closes it.
-    For REST APIs: connect() validates credentials, disconnect() is a no-op.
+    - For IMAP: Maintains persistent connection, handles reconnection
+    - For REST APIs: Stateless, each method call is independent
+
+    The service layer treats all integrations uniformly through this interface.
     """
 
     def __init__(self):
         """Initialize integration."""
         self.logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
-    @abstractmethod
-    def connect(self) -> bool:
-        """
-        Establish connection to email provider.
+    # ========== Lifecycle Methods ==========
 
-        For socket-based protocols (IMAP): Opens connection and authenticates.
-        For REST APIs: Validates that credentials/tokens are working.
+    @abstractmethod
+    def startup(self) -> None:
+        """
+        Initialize the integration for persistent use.
+
+        Called when the first ingestion config for this account is activated.
+
+        For IMAP: Establishes connection, starts keepalive thread.
+        For REST APIs: May validate tokens, or no-op if stateless.
+        """
+        pass
+
+    @abstractmethod
+    def shutdown(self) -> None:
+        """
+        Cleanup and close the integration.
+
+        Called when the last ingestion config for this account is deactivated,
+        or on server shutdown.
+
+        For IMAP: Stops keepalive, closes connection.
+        For REST APIs: No-op if stateless.
+        """
+        pass
+
+    @abstractmethod
+    def validate_credentials(self) -> ValidationResult:
+        """
+        Validate credentials without establishing persistent connection.
+
+        Used during account creation to verify credentials work.
+        Should connect, verify, and disconnect (transient).
 
         Returns:
-            True if connection/validation successful, False otherwise.
+            ValidationResult with success status, message, and capabilities
         """
         pass
+
+    # ========== Folder Operations ==========
 
     @abstractmethod
-    def disconnect(self) -> None:
+    def list_folders(self) -> list[str]:
         """
-        Close connection and cleanup resources.
+        List all available folders/mailboxes.
 
-        For socket-based protocols (IMAP): Closes the socket.
-        For REST APIs: No-op (stateless).
+        Returns:
+            List of folder names/paths (e.g., ["INBOX", "INBOX.Sent", "INBOX.Drafts"])
         """
         pass
+
+    # ========== Email Operations ==========
 
     @abstractmethod
     def get_emails_since_uid(
@@ -108,5 +167,29 @@ class BaseEmailIntegration(ABC):
 
         Returns:
             Highest UID in folder, or None if folder is empty
+        """
+        pass
+
+    @abstractmethod
+    def get_attachments(
+        self,
+        folder_name: str,
+        uid: int,
+        file_extensions: list[str] | None = None,
+    ) -> list[EmailAttachment]:
+        """
+        Download attachments for a specific email by UID.
+
+        Called after filter rules have been applied, to fetch only
+        attachments from emails that passed filtering.
+
+        Args:
+            folder_name: Folder containing the email
+            uid: UID of the email
+            file_extensions: Optional list of extensions to filter by (e.g., [".pdf"]).
+                            Case-insensitive. If None, returns all attachments.
+
+        Returns:
+            List of EmailAttachment dataclasses with filename, content_type, and data
         """
         pass

@@ -21,6 +21,8 @@ function ConfigurationsPage() {
     createEmailConfig,
     updateEmailConfig,
     deleteEmailConfig,
+    activateEmailConfig,
+    deactivateEmailConfig,
     isLoading,
     error,
   } = useEmailConfigsApi();
@@ -28,6 +30,8 @@ function ConfigurationsPage() {
   const [configs, setConfigs] = useState<IngestionConfigListItem[]>([]);
   const [showCreateWizard, setShowCreateWizard] = useState(false);
   const [editingConfig, setEditingConfig] = useState<IngestionConfigDetail | null>(null);
+  const [activatingId, setActivatingId] = useState<number | null>(null);
+  const [deactivatingId, setDeactivatingId] = useState<number | null>(null);
 
   // Fetch configurations on mount
   useEffect(() => {
@@ -98,6 +102,30 @@ function ConfigurationsPage() {
     }
   };
 
+  const handleActivate = async (id: number) => {
+    setActivatingId(id);
+    try {
+      await activateEmailConfig(id);
+      await loadConfigs();
+    } catch (err) {
+      console.error('Failed to activate configuration:', err);
+    } finally {
+      setActivatingId(null);
+    }
+  };
+
+  const handleDeactivate = async (id: number) => {
+    setDeactivatingId(id);
+    try {
+      await deactivateEmailConfig(id);
+      await loadConfigs();
+    } catch (err) {
+      console.error('Failed to deactivate configuration:', err);
+    } finally {
+      setDeactivatingId(null);
+    }
+  };
+
   return (
     <>
       <div className="p-6">
@@ -138,8 +166,12 @@ function ConfigurationsPage() {
               <EmailConfigCard
                 key={config.id}
                 config={config}
-                onEdit={!config.is_active ? handleEditConfig : undefined}
-                onDelete={!config.is_active ? handleDelete : undefined}
+                onEdit={handleEditConfig}
+                onDelete={handleDelete}
+                onActivate={handleActivate}
+                onDeactivate={handleDeactivate}
+                isActivating={activatingId === config.id}
+                isDeactivating={deactivatingId === config.id}
               />
             ))}
           </div>

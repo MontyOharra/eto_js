@@ -1,0 +1,83 @@
+{
+  "table": {
+    "name": "HTC300_G040_T005 Orders In Work",
+    "column_count": 5
+  },
+  "columns": [
+    {
+      "name": "OIW_CoID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 1
+    },
+    {
+      "name": "OIW_BrID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 2
+    },
+    {
+      "name": "OIW_OrderNo",
+      "type": "DOUBLE",
+      "size": 53,
+      "nullable": true,
+      "position": 3
+    },
+    {
+      "name": "OIW_When",
+      "type": "DATETIME",
+      "size": 19,
+      "nullable": true,
+      "position": 4
+    },
+    {
+      "name": "OIW_User",
+      "type": "VARCHAR",
+      "size": 75,
+      "nullable": true,
+      "position": 5
+    }
+  ],
+  "indexes": [
+    {
+      "name": "PrimaryKey",
+      "unique": true,
+      "columns": [
+        {
+          "name": "OIW_CoID",
+          "position": 1
+        },
+        {
+          "name": "OIW_BrID",
+          "position": 2
+        },
+        {
+          "name": "OIW_OrderNo",
+          "position": 3
+        }
+      ]
+    },
+    {
+      "name": "OIW_BrID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "OIW_BrID",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "OIW_CoID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "OIW_CoID",
+          "position": 1
+        }
+      ]
+    }
+  ]
+}

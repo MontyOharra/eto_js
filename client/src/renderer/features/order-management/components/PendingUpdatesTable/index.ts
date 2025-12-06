@@ -1,0 +1,1 @@
+export { PendingUpdatesTable } from './PendingUpdatesTable';

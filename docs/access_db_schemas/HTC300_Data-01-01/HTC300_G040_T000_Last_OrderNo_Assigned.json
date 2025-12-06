@@ -1,0 +1,65 @@
+{
+  "table": {
+    "name": "HTC300_G040_T000 Last OrderNo Assigned",
+    "column_count": 3
+  },
+  "columns": [
+    {
+      "name": "LON_CoID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 1
+    },
+    {
+      "name": "LON_BrID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 2
+    },
+    {
+      "name": "LON_OrderNo",
+      "type": "DOUBLE",
+      "size": 53,
+      "nullable": true,
+      "position": 3
+    }
+  ],
+  "indexes": [
+    {
+      "name": "PrimaryKey",
+      "unique": true,
+      "columns": [
+        {
+          "name": "LON_CoID",
+          "position": 1
+        },
+        {
+          "name": "LON_BrID",
+          "position": 2
+        }
+      ]
+    },
+    {
+      "name": "LON_BrID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "LON_BrID",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "LON_CoID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "LON_CoID",
+          "position": 1
+        }
+      ]
+    }
+  ]
+}

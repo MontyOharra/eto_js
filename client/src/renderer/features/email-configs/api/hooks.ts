@@ -31,6 +31,10 @@ interface UseEmailConfigsApiResult {
   createEmailConfig: (data: CreateEmailConfigRequest) => Promise<IngestionConfigDetail>;
   updateEmailConfig: (id: number, data: UpdateEmailConfigRequest) => Promise<IngestionConfigDetail>;
   deleteEmailConfig: (id: number) => Promise<IngestionConfigDetail>;
+
+  // Activation operations
+  activateEmailConfig: (id: number) => Promise<IngestionConfigDetail>;
+  deactivateEmailConfig: (id: number) => Promise<IngestionConfigDetail>;
 }
 
 export function useEmailConfigsApi(): UseEmailConfigsApiResult {
@@ -130,6 +134,34 @@ export function useEmailConfigsApi(): UseEmailConfigsApiResult {
     [baseUrl, withLoadingAndError]
   );
 
+  /**
+   * POST /api/email-ingestion-configs/{id}/activate
+   * Activate an ingestion config and start polling
+   */
+  const activateEmailConfig = useCallback(
+    async (id: number): Promise<IngestionConfigDetail> => {
+      return withLoadingAndError(async () => {
+        const response = await apiClient.post<IngestionConfigDetail>(`${baseUrl}/${id}/activate`);
+        return response.data;
+      });
+    },
+    [baseUrl, withLoadingAndError]
+  );
+
+  /**
+   * POST /api/email-ingestion-configs/{id}/deactivate
+   * Deactivate an ingestion config and stop polling
+   */
+  const deactivateEmailConfig = useCallback(
+    async (id: number): Promise<IngestionConfigDetail> => {
+      return withLoadingAndError(async () => {
+        const response = await apiClient.post<IngestionConfigDetail>(`${baseUrl}/${id}/deactivate`);
+        return response.data;
+      });
+    },
+    [baseUrl, withLoadingAndError]
+  );
+
   return {
     isLoading,
     error,
@@ -138,5 +170,7 @@ export function useEmailConfigsApi(): UseEmailConfigsApiResult {
     createEmailConfig,
     updateEmailConfig,
     deleteEmailConfig,
+    activateEmailConfig,
+    deactivateEmailConfig,
   };
 }

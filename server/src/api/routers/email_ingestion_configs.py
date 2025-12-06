@@ -166,3 +166,45 @@ async def delete_config(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ConflictError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+
+
+@router.post(
+    "/{config_id}/activate",
+    response_model=IngestionConfigResponse,
+    summary="Activate ingestion config",
+    description="Activate an ingestion config and start polling for new emails. "
+                "This will establish a connection to the email server and begin monitoring.",
+)
+async def activate_config(
+    config_id: int,
+    service: EmailService = Depends(lambda: ServiceContainer.get_email_service()),
+) -> IngestionConfigResponse:
+    """Activate an ingestion config and start polling."""
+    try:
+        config = service.activate_config(config_id)
+        return ingestion_config_to_api(config)
+    except ObjectNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.post(
+    "/{config_id}/deactivate",
+    response_model=IngestionConfigResponse,
+    summary="Deactivate ingestion config",
+    description="Deactivate an ingestion config and stop polling. "
+                "The connection will be closed if no other configs are using it.",
+)
+async def deactivate_config(
+    config_id: int,
+    service: EmailService = Depends(lambda: ServiceContainer.get_email_service()),
+) -> IngestionConfigResponse:
+    """Deactivate an ingestion config and stop polling."""
+    try:
+        config = service.deactivate_config(config_id)
+        return ingestion_config_to_api(config)
+    except ObjectNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

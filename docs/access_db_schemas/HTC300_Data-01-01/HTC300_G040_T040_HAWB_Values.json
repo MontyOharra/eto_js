@@ -1,0 +1,85 @@
+{
+  "table": {
+    "name": "HTC300_G040_T040 HAWB Values",
+    "column_count": 5
+  },
+  "columns": [
+    {
+      "name": "ExistingHAWBValues",
+      "type": "VARCHAR",
+      "size": 25,
+      "nullable": true,
+      "position": 1
+    },
+    {
+      "name": "HAWBCoID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 2
+    },
+    {
+      "name": "HAWBBrID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 3
+    },
+    {
+      "name": "HAWBCustomerID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 4
+    },
+    {
+      "name": "HAWBOrder",
+      "type": "DOUBLE",
+      "size": 53,
+      "nullable": true,
+      "position": 5
+    }
+  ],
+  "indexes": [
+    {
+      "name": "PrimaryKey",
+      "unique": true,
+      "columns": [
+        {
+          "name": "ExistingHAWBValues",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "HAWBBrID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "HAWBBrID",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "HAWBCoID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "HAWBCoID",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "HAWBCustomerID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "HAWBCustomerID",
+          "position": 1
+        }
+      ]
+    }
+  ]
+}

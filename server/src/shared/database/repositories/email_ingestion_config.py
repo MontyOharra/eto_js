@@ -341,7 +341,9 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
             if config_update.last_check_time is not None:
                 model.last_check_time = config_update.last_check_time
 
-            if config_update.last_processed_uid is not None:
+            if config_update.reset_last_processed_uid:
+                model.last_processed_uid = None
+            elif config_update.last_processed_uid is not None:
                 model.last_processed_uid = config_update.last_processed_uid
 
             if config_update.clear_errors:

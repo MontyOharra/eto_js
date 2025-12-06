@@ -134,9 +134,9 @@ class ServiceContainer:
             },
             'email': {
                 'class': 'features.email.service.EmailService',
-                'args': [cls._connection_manager],
+                'args': [cls._connection_manager, '_service:pdf_files', '_service:eto_runs'],
                 'singleton': True,
-                'description': 'Email service for account management and operations'
+                'description': 'Email service for account management, operations, and PDF processing'
             },
             'pdf_files': {
                 'class': 'features.pdf_files.service.PdfFilesService',

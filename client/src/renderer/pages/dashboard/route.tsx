@@ -10,9 +10,10 @@ function DashboardLayout() {
 
   const tabs = [
     { name: "ETO", href: "/dashboard/eto" },
+    { name: "Orders", href: "/dashboard/orders" },
     { name: "Templates", href: "/dashboard/pdf-templates" },
-    { name: "Transformation Pipeline", href: "/dashboard/pipelines" },
-    { name: "Configurations", href: "/dashboard/configs" },
+    { name: "Pipelines", href: "/dashboard/pipelines" },
+    { name: "Configs", href: "/dashboard/configs" },
   ];
 
   return (

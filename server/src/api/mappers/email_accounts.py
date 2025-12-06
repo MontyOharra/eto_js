@@ -9,13 +9,13 @@ from shared.types.email_accounts import (
     EmailAccountSummary,
     EmailAccountCreate,
     EmailAccountUpdate,
-    EmailAccountValidationResult,
     ImapProviderSettings,
     ProviderSettings,
     PasswordCredentials,
     OAuthCredentials,
     Credentials,
 )
+from features.email.integrations.base_integration import ValidationResult
 from api.schemas.email_accounts import (
     EmailAccountResponse,
     EmailAccountSummaryResponse,
@@ -113,7 +113,7 @@ def email_account_list_to_api(summaries: list[EmailAccountSummary]) -> EmailAcco
     )
 
 
-def validation_result_to_api(result: EmailAccountValidationResult) -> ValidationResultResponse:
+def validation_result_to_api(result: ValidationResult) -> ValidationResultResponse:
     """Convert domain ValidationResult to API response"""
     return ValidationResultResponse(
         success=result.success,

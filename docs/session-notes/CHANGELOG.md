@@ -1,5 +1,86 @@
 # CHANGELOG
 
+## [2025-12-06] — Pending Orders System Design & Frontend Scaffolding
+
+### Spec / Intent
+- Design a system for compiling order data from multiple ETO runs
+- Handle the case where order information arrives across multiple forms/PDFs
+- Ensure collision-free order number generation with existing VBA/Access system
+- Build frontend infrastructure for order management
+
+### Changes Made
+
+#### Design Work:
+- Created comprehensive design document: `docs/designs/pending-orders-system.md`
+- Analyzed VBA order creation code (`NextOrderNo`, `PosttoLON`, `RemoveOIW`)
+- Extracted Access database schemas for LON, OIW, and HAWB Values tables
+- Designed collision-free order reservation using OIW unique constraint
+
+#### Frontend Structure Created:
+- `client/src/renderer/features/order-management/` - New feature module
+  - `types.ts` - Domain types (PendingOrder, PendingUpdate, OrderHistory, etc.)
+  - `api/hooks.ts` - TanStack Query hooks for all endpoints
+  - `api/types.ts` - API request/response types
+  - Components: PendingOrdersTable, PendingOrdersHeader, PendingOrderDetail,
+    PendingUpdatesTable, PendingUpdatesHeader, OrderHistoryTimeline,
+    OrderStatusBadge, FieldStatusBadge
+
+- `client/src/renderer/pages/dashboard/orders/index.tsx` - Orders page with:
+  - Toggle between Pending Orders and Pending Updates views
+  - Detail views for order inspection and history timeline
+
+- Modified `client/src/renderer/pages/dashboard/route.tsx`:
+  - Added "Orders" tab between ETO and Templates
+  - Shortened tab names for space (Pipelines, Configs)
+
+### Key Design Decisions
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Order identifier | HAWB | Unique per shipment |
+| Auto-create trigger | All required fields present | Simple, predictable |
+| Update handling | Queue for user approval | Prevents outdated overwrites |
+| Pre-creation conflicts | Last write wins + history | Don't block workflow |
+| Output approach | Channels per field | Avoids module explosion |
+
+### Architecture Overview
+
+```
+PDF → ETO Run → Pipeline → Output Channels
+                                ↓
+                    ┌───────────────────────┐
+                    │ Order exists in HTC?  │
+                    └───────────┬───────────┘
+                         YES    │    NO
+                          ↓     │     ↓
+                    Queue for   │  Merge into
+                    review      │  pending order
+                                │     ↓
+                                │  Complete?
+                                │  YES → Create in HTC
+                                │  NO  → Wait for more data
+```
+
+### Pending Work
+- [ ] Add mock data to visualize components
+- [ ] Rethink design (don't just copy ETO patterns)
+- [ ] Backend database models
+- [ ] API endpoints implementation
+- [ ] Output channel modules
+- [ ] Output execution service refactor
+
+### Session Continuity
+- Created: `docs/session-notes/continuity-2025-12-06-pending-orders.md`
+- Contains guiding questions, next steps, and technical context
+
+### Notes
+- User noted that blindly copying ETO table design was wrong approach
+- Need to think about what makes sense specifically for order management
+- Mock data essential before further design decisions
+- Backend implementation waiting on frontend design validation
+
+---
+
 ## [2025-12-03] — Frontend Fixes & Thread-Safe Output Execution
 
 ### Spec / Intent

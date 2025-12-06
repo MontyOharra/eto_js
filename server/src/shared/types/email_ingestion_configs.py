@@ -118,3 +118,4 @@ class EmailIngestionConfigUpdate:
     last_error_message: str | None = None
     last_error_at: datetime | None = None
     clear_errors: bool = False  # When True, sets error fields to NULL
+    reset_last_processed_uid: bool = False  # When True, sets last_processed_uid to NULL
