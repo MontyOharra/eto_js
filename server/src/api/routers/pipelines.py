@@ -263,7 +263,6 @@ async def execute_pipeline(
     return ExecutePipelineResponse(
         status=result.status,
         steps=step_dtos,
-        output_module_id=result.output_module_id,
-        output_module_inputs=result.output_module_inputs,
+        output_channel_values=result.output_channel_values,
         error=result.error
     )

@@ -29,6 +29,7 @@ class TemplateListItem(BaseModel):
     id: int
     name: str
     description: Optional[str] = None
+    customer_id: Optional[int] = None  # References external Access DB
     status: str
     source_pdf_id: int
     current_version: TemplateVersionSummary
@@ -48,6 +49,7 @@ class PdfTemplate(BaseModel):
     id: int
     name: str
     description: Optional[str] = None
+    customer_id: Optional[int] = None  # References external Access DB
     status: str
     source_pdf_id: int
     current_version_id: Optional[int] = None
@@ -58,6 +60,7 @@ class PdfTemplate(BaseModel):
 class CreatePdfTemplateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = Field(None, max_length=1000)
+    customer_id: Optional[int] = None  # References external Access DB
     source_pdf_id: int  # Required - PDF must be uploaded first via POST /pdf-files
     signature_objects: PdfObjects
     extraction_fields: List[ExtractionField] = Field(..., min_length=1)
@@ -69,6 +72,7 @@ class CreatePdfTemplateRequest(BaseModel):
 class UpdatePdfTemplateRequest(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = Field(None, max_length=1000)
+    customer_id: Optional[int] = None  # References external Access DB
     signature_objects: Optional[PdfObjects] = None
     extraction_fields: Optional[List[ExtractionField]] = None
     pipeline_state: Optional[PipelineState] = None
@@ -113,8 +117,7 @@ class SimulateTemplateResponse(BaseModel):
     extraction_results: List[ExtractedFieldResult]  # Fields with extracted values and bbox info
     pipeline_status: str  # "success" | "failed"
     pipeline_steps: List[ExecutionStepResult]  # Reuse from pipelines
-    output_module_id: Optional[str] = None  # Output module to execute (if any)
-    output_module_inputs: Dict[str, Any] = {}  # {input_name: value} collected for output module
+    output_channel_values: Dict[str, Any] = {}  # {channel_type: value} collected from output channels
     pipeline_error: Optional[str] = None
 
 

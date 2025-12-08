@@ -18,8 +18,9 @@ import "@xyflow/react/dist/style.css";
 import dagre from "dagre";
 import { ExecutedModule } from "./ExecutedModule";
 import { ExecutedEntryPoint } from "./ExecutedEntryPoint";
+import { ExecutedOutputChannel } from "./ExecutedOutputChannel";
 import { ExecutionEdge } from "./ExecutionEdge";
-import { useModules } from "../../../modules";
+import { useModules, useOutputChannels } from "../../../modules";
 import type { PipelineState } from "../../types";
 import type { ExecutionStepResult } from "../../api/types";
 
@@ -28,12 +29,14 @@ interface ExecutedPipelineGraphProps {
   pipelineState?: PipelineState;
   executionSteps?: ExecutionStepResult[];
   entryValues?: Record<string, { name: string; value: any; type: string }>;
+  outputChannelValues?: Record<string, any>; // { channel_type: collected_value }
   centerTrigger?: number | string; // Optional trigger to recenter view (e.g., timestamp when modal opens)
 }
 
 const nodeTypes = {
   executedModule: ExecutedModule,
   executedEntryPoint: ExecutedEntryPoint,
+  executedOutputChannel: ExecutedOutputChannel,
 };
 
 const edgeTypes = {
@@ -200,12 +203,14 @@ function ExecutedPipelineGraphInner({
   pipelineState,
   executionSteps,
   entryValues,
+  outputChannelValues,
   centerTrigger,
 }: ExecutedPipelineGraphProps) {
   const { fitView } = useReactFlow();
 
-  // Fetch modules using TanStack Query
+  // Fetch modules and output channels using TanStack Query
   const { data: modules = [], isLoading: modulesLoading } = useModules();
+  const { data: outputChannelTypes = [], isLoading: channelsLoading } = useOutputChannels();
 
   // Convert pipeline state modules and entry points to React Flow nodes
   const rawNodes: Node[] = useMemo(() => {
@@ -313,8 +318,65 @@ function ExecutedPipelineGraphInner({
       });
     });
 
+    // Create a map of channel_type to channel definition for quick lookup
+    const channelTypeMap = new Map(
+      outputChannelTypes.map((channel) => [channel.name, channel])
+    );
+
+    // Create output channel nodes
+    pipelineState.output_channels?.forEach((outputChannel) => {
+      const channelDef = channelTypeMap.get(outputChannel.channel_type);
+      const channelLabel = channelDef?.label || outputChannel.channel_type;
+
+      // Check for execution step by module_instance_id (same as regular modules)
+      const executionStep = executionSteps?.find(
+        (step) => step.module_instance_id === outputChannel.output_channel_instance_id
+      );
+
+      // Get collected value from outputChannelValues (for simulation mode) or execution step inputs
+      const collectedValue = outputChannelValues?.[outputChannel.channel_type]
+        ?? (executionStep?.inputs ? Object.values(executionStep.inputs)[0]?.value : undefined);
+
+      // Build inputs from pipeline state, overlay with execution data if available
+      const inputs: Record<string, { name: string; value: string; type: string }> = {};
+      outputChannel.inputs.forEach((input) => {
+        const executionData = executionStep?.inputs?.[input.node_id];
+        inputs[input.node_id] = {
+          name: executionData?.name ?? input.name,
+          value: executionData?.value ?? "",
+          type: executionData?.type ?? input.type,
+        };
+      });
+
+      // Determine status: check execution step first (ETO runs), then outputChannelValues (simulation)
+      let status: "executed" | "failed" | "not_executed";
+      if (executionStep) {
+        // Has execution step - check for error
+        status = executionStep.error ? "failed" : "executed";
+      } else if (collectedValue !== undefined) {
+        // No step but has collected value (simulation mode)
+        status = "executed";
+      } else {
+        status = "not_executed";
+      }
+
+      nodes.push({
+        id: outputChannel.output_channel_instance_id,
+        type: "executedOutputChannel",
+        position: { x: 0, y: 0 }, // Will be positioned by dagre
+        data: {
+          outputChannelId: outputChannel.output_channel_instance_id,
+          channelType: outputChannel.channel_type,
+          channelLabel,
+          inputs,
+          collectedValue,
+          status,
+        },
+      });
+    });
+
     return nodes;
-  }, [pipelineState, modules, executionSteps]);
+  }, [pipelineState, modules, executionSteps, outputChannelTypes, outputChannelValues]);
 
   // Convert pipeline state connections to React Flow edges
   const rawEdges: Edge[] = useMemo(() => {
@@ -339,6 +401,13 @@ function ExecutedPipelineGraphInner({
       if (ep.outputs[0]) {
         nodeIdToModuleId.set(ep.outputs[0].node_id, ep.entry_point_id);
       }
+    });
+
+    // Map output channels - use output_channel_instance_id as the node ID
+    pipelineState.output_channels?.forEach((oc) => {
+      oc.inputs.forEach((input) => {
+        nodeIdToModuleId.set(input.node_id, oc.output_channel_instance_id);
+      });
     });
 
     // Convert connections to edges
@@ -463,11 +532,11 @@ function ExecutedPipelineGraphInner({
     }
   }, [nodes.length, fitView, centerTrigger]);
 
-  // Show loading state while modules are loading
-  if (modulesLoading) {
+  // Show loading state while modules or channels are loading
+  if (modulesLoading || channelsLoading) {
     return (
       <div className="w-full h-full bg-gray-900 flex items-center justify-center">
-        <div className="text-gray-400">Loading modules...</div>
+        <div className="text-gray-400">Loading...</div>
       </div>
     );
   }

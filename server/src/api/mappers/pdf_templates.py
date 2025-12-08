@@ -171,6 +171,7 @@ def convert_pdf_template(
         id=template.id,
         name=template.name,
         description=template.description,
+        customer_id=template.customer_id,
         status=template.status,
         source_pdf_id=template.source_pdf_id,
         current_version_id=template.current_version_id,
@@ -192,6 +193,7 @@ def convert_template_summary(summary: PdfTemplateListView) -> TemplateListItem:
         id=summary.id,
         name=summary.name,
         description=summary.description,
+        customer_id=summary.customer_id,
         status=summary.status,
         source_pdf_id=summary.source_pdf_id,
         current_version=TemplateVersionSummary(
@@ -240,6 +242,7 @@ def convert_create_template_request(request: CreatePdfTemplateRequest) -> PdfTem
     return PdfTemplateCreate(
         name=request.name,
         description=request.description,
+        customer_id=request.customer_id,
         signature_objects=convert_pdf_objects_to_domain(request.signature_objects),
         extraction_fields=convert_extraction_fields_to_domain(request.extraction_fields),
         pipeline_state=request.pipeline_state.model_dump(),
@@ -258,6 +261,7 @@ def convert_update_template_request(request: UpdatePdfTemplateRequest) -> PdfTem
     return PdfTemplateUpdate(
         name=request.name,
         description=request.description,
+        customer_id=request.customer_id,
         signature_objects=convert_pdf_objects_to_domain(request.signature_objects) if request.signature_objects else None,
         extraction_fields=convert_extraction_fields_to_domain(request.extraction_fields) if request.extraction_fields else None,
         pipeline_state=request.pipeline_state.model_dump() if request.pipeline_state else None,
@@ -313,8 +317,7 @@ def convert_simulate_result_to_api(result: Any):
         extraction_results=extraction_results,
         pipeline_status=result.execution_result.status,
         pipeline_steps=pipeline_steps,
-        output_module_id=result.execution_result.output_module_id,
-        output_module_inputs=result.execution_result.output_module_inputs,
+        output_channel_values=result.execution_result.output_channel_values,
         pipeline_error=result.execution_result.error
     )
 

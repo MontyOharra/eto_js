@@ -293,6 +293,7 @@ class PdfTemplateModel(BaseModel):
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text)
+    customer_id: Mapped[Optional[int]] = mapped_column(Integer, index=True)  # References external Access DB
     source_pdf_id: Mapped[int] = mapped_column(ForeignKey("pdf_files.id"), nullable=False, index=True)
 
     status: Mapped[str] = mapped_column(
@@ -643,6 +644,10 @@ class EtoSubRunPipelineExecutionModel(BaseModel):
         server_default="processing",
     )
     error_message: Mapped[Optional[str]] = mapped_column(Text)
+
+    # JSON object with output channel names as keys and their collected values
+    # e.g., {"hawb": "ABC123", "pickup_time_start": "2024-01-15T09:00:00"}
+    transformed_data: Mapped[Optional[str]] = mapped_column(Text)
 
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))

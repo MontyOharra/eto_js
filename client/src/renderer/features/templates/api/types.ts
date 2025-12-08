@@ -29,6 +29,7 @@ export interface GetTemplatesQueryParams {
 export interface CreateTemplateRequest {
   name: string; // required, 1-255 chars
   description?: string; // optional, max 1000 chars
+  customer_id?: number; // optional - references external Access DB
   source_pdf_id: number; // required - PDF must be uploaded first via POST /pdf-files
 
   // Step 1: Signature objects (PdfObjects format)
@@ -50,6 +51,7 @@ export interface UpdateTemplateRequest {
   // Optional: Update template metadata
   name?: string; // optional, 1-255 chars
   description?: string; // optional, max 1000 chars
+  customer_id?: number; // optional - references external Access DB
 
   // Optional: New version data (wizard steps)
   signature_objects?: PdfObjects;

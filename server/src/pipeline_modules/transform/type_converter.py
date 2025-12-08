@@ -27,7 +27,7 @@ class TypeConverter(TransformModule):
     title = "Type Converter"
     description = "Convert data from one type to another"
     category = "Flow Control"
-    color = "#FFFFFF"  # White
+    color = "#6B7280"  # Gray
 
     # Configuration model
     ConfigModel = TypeConverterConfig

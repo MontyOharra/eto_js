@@ -25,8 +25,7 @@ interface ExecutionResult {
     outputs: Record<string, { name: string; value: any; type: string }>;
     error: string | null;
   }>;
-  output_module_id: string | null;
-  output_module_inputs: Record<string, any>;
+  output_channel_values: Record<string, any>;
   error: string | null;
 }
 
@@ -249,20 +248,16 @@ export function ExecutePipelineModal({
                     </div>
                   ) : (
                     <>
-                      {/* Summary View - Output Module Data/Errors */}
+                      {/* Summary View - Output Channel Values/Errors */}
                       <div
                         className={`font-mono text-xs ${viewMode === "summary" ? "" : "hidden"}`}
                       >
-                        {result.status === "success" && result.output_module_id ? (
+                        {result.status === "success" && Object.keys(result.output_channel_values || {}).length > 0 ? (
                           <div className="text-gray-300 space-y-2">
                             <div>
-                              <p className="font-bold mb-1">Output Module:</p>
-                              <p className="text-blue-300">{result.output_module_id}</p>
-                            </div>
-                            <div>
-                              <p className="font-bold mb-1">Output Data:</p>
+                              <p className="font-bold mb-1">Output Channel Values:</p>
                               <pre className="whitespace-pre-wrap break-words">
-                                {JSON.stringify(result.output_module_inputs, null, 2)}
+                                {JSON.stringify(result.output_channel_values, null, 2)}
                               </pre>
                             </div>
                           </div>
@@ -274,7 +269,7 @@ export function ExecutePipelineModal({
                             </p>
                           </div>
                         ) : (
-                          <p className="text-gray-400">No output module data</p>
+                          <p className="text-gray-400">No output channel data</p>
                         )}
                       </div>
 
@@ -287,6 +282,7 @@ export function ExecutePipelineModal({
                             pipelineId={pipelineId}
                             pipelineState={pipelineState}
                             executionSteps={result.steps}
+                            outputChannelValues={result.output_channel_values}
                             centerTrigger={centerTrigger}
                             entryValues={(() => {
                               // Build entry values map: { node_id: { name, value, type } }

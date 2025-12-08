@@ -19,6 +19,9 @@ export interface OutputChannelProps {
     // Edit callbacks
     onDeleteOutputChannel?: (outputChannelId: string) => void;
 
+    // Connected output name for inputs
+    getConnectedOutputName?: (inputNodeId: string) => string | undefined;
+
     // Interaction callbacks (optional)
     onModuleMouseEnter?: (moduleId: string) => void;
     onModuleMouseLeave?: () => void;
@@ -35,6 +38,7 @@ export function OutputChannel({ data }: OutputChannelProps) {
     channelDefinition,
     onHandleClick,
     onDeleteOutputChannel,
+    getConnectedOutputName,
     onModuleMouseEnter,
     onModuleMouseLeave,
   } = data;
@@ -69,6 +73,8 @@ export function OutputChannel({ data }: OutputChannelProps) {
         onDeleteModule: onDeleteOutputChannel
           ? () => onDeleteOutputChannel(outputChannel.output_channel_instance_id)
           : undefined,
+        // Connected output name for inputs
+        getConnectedOutputName,
         // No add/remove nodes or config for output channels
       }}
     />

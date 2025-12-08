@@ -40,7 +40,7 @@ export function ExecutedModuleRow({
       {/* Node Content - Centered layout */}
       <div className="flex items-center w-full">
         <div className="flex-1 min-w-0 nodrag flex items-center">
-          <div className="text-sm text-gray-300 px-1.5 py-0.5 w-full min-h-[24px] flex items-center justify-center">
+          <div className="text-sm text-gray-300 px-1.5 py-0.5 w-full min-h-[24px] text-center break-words">
             {name}
           </div>
         </div>

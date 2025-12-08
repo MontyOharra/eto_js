@@ -93,6 +93,7 @@ class PdfTemplate:
     id: int
     name: str
     description: str | None
+    customer_id: int | None  # References external Access DB
     status: str
     source_pdf_id: int
     current_version_id: int | None
@@ -105,6 +106,7 @@ class PdfTemplateListView:
     id: int
     name: str
     description: str | None
+    customer_id: int | None  # References external Access DB
     status: str
     source_pdf_id: int
     current_version_id: int | None
@@ -132,6 +134,7 @@ class PdfTemplateCreate:
     """
     name: str
     description: str | None
+    customer_id: int | None  # References external Access DB
     signature_objects: PdfObjects  # Subset of extracted PDF objects
     extraction_fields: list[ExtractionField]
     pipeline_state: dict[str, Any]  # Pipeline graph structure from wizard
@@ -145,7 +148,7 @@ class PdfTemplateUpdate:
     Unified update data for templates - all possible fields in one place.
 
     SMART UPDATE LOGIC:
-    - If ONLY name/description change: Update template metadata only (no new version)
+    - If ONLY name/description/customer_id change: Update template metadata only (no new version)
     - If signature_objects, extraction_fields, OR pipeline fields change: Create new version
     - If pipeline fields specifically included: Run full validation/compilation/creation
 
@@ -155,6 +158,7 @@ class PdfTemplateUpdate:
     # Template metadata fields (can update without version)
     name: str | None = None
     description: str | None = None
+    customer_id: int | None = None  # References external Access DB
 
     # Wizard data fields (trigger version creation)
     signature_objects: PdfObjects | None = None

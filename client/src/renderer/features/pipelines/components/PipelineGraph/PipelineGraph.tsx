@@ -293,6 +293,7 @@ function PipelineGraphInner({
 
         // If this is a name change on an output pin, propagate to connected input pins
         let finalModules = updatedModules;
+        let finalOutputChannels = pipelineState.output_channels || [];
         if (updates.name !== undefined) {
           const pin = [...module.inputs, ...module.outputs].find(p => p.node_id === nodeId);
           if (pin && pin.direction === 'out') {
@@ -301,7 +302,7 @@ function PipelineGraphInner({
               conn => conn.from_node_id === nodeId
             );
 
-            // Update each connected input pin's name
+            // Update each connected input pin's name (modules)
             finalModules = finalModules.map(mod => {
               let updatedMod = mod;
               connectionsFromThisPin.forEach(conn => {
@@ -312,12 +313,32 @@ function PipelineGraphInner({
               });
               return updatedMod;
             });
+
+            // Update each connected input pin's name (output channels)
+            finalOutputChannels = finalOutputChannels.map(oc => {
+              let updatedOc = oc;
+              connectionsFromThisPin.forEach(conn => {
+                const inputPin = oc.inputs.find(p => p.node_id === conn.to_node_id);
+                if (inputPin) {
+                  updatedOc = {
+                    ...updatedOc,
+                    inputs: updatedOc.inputs.map(input =>
+                      input.node_id === conn.to_node_id
+                        ? { ...input, name: updates.name }
+                        : input
+                    )
+                  };
+                }
+              });
+              return updatedOc;
+            });
           }
         }
 
         onPipelineStateChange({
           ...pipelineState,
           modules: finalModules,
+          output_channels: finalOutputChannels,
         });
       }
     },
@@ -577,6 +598,8 @@ function PipelineGraphInner({
           channelDefinition: channelDef,
           // Edit callbacks
           onDeleteOutputChannel: mode === 'edit' ? handleDeleteOutputChannel : undefined,
+          // Connected output name for inputs
+          getConnectedOutputName: getConnectedOutputName,
         },
         draggable: mode === 'edit',
       });
@@ -852,16 +875,49 @@ function PipelineGraphInner({
 
       if (sourcePin && sourcePin.name) {
         console.log('[NAME PROPAGATION] Applying name from source pin:', sourcePin.name, 'to target handle:', targetHandle);
-        // Update the target input pin's name to match
-        finalPipelineState = {
-          ...finalPipelineState,
-          modules: finalPipelineState.modules.map(mod => {
-            if (mod.module_instance_id === connection.target) {
-              return updatePinInModule(mod, targetHandle, { name: sourcePin.name });
-            }
-            return mod;
-          })
-        };
+
+        // Check if target is a module
+        const targetModule = finalPipelineState.modules.find(
+          m => m.module_instance_id === connection.target
+        );
+
+        if (targetModule) {
+          // Update module input pin
+          finalPipelineState = {
+            ...finalPipelineState,
+            modules: finalPipelineState.modules.map(mod => {
+              if (mod.module_instance_id === connection.target) {
+                return updatePinInModule(mod, targetHandle, { name: sourcePin.name });
+              }
+              return mod;
+            })
+          };
+        } else {
+          // Check if target is an output channel
+          const targetOutputChannel = (finalPipelineState.output_channels || []).find(
+            oc => oc.output_channel_instance_id === connection.target
+          );
+
+          if (targetOutputChannel) {
+            // Update output channel input pin
+            finalPipelineState = {
+              ...finalPipelineState,
+              output_channels: (finalPipelineState.output_channels || []).map(oc => {
+                if (oc.output_channel_instance_id === connection.target) {
+                  return {
+                    ...oc,
+                    inputs: oc.inputs.map(input =>
+                      input.node_id === targetHandle
+                        ? { ...input, name: sourcePin.name }
+                        : input
+                    )
+                  };
+                }
+                return oc;
+              })
+            };
+          }
+        }
       } else {
         console.log('[NAME PROPAGATION] No source pin found or source pin has no name. sourcePin:', sourcePin);
       }
@@ -975,7 +1031,67 @@ function PipelineGraphInner({
       );
 
       // Apply type updates to create final pipeline state
-      const finalPipelineState = applyTypeUpdates(tempPipelineState, allUpdates);
+      let finalPipelineState = applyTypeUpdates(tempPipelineState, allUpdates);
+
+      // Propagate name from source pin to target input pin
+      let sourcePin = null;
+
+      // Check if source is a module
+      const sourceModule = finalPipelineState.modules.find(m => m.module_instance_id === newConnection.source);
+      if (sourceModule) {
+        sourcePin = sourceModule.outputs.find(p => p.node_id === newSourceHandle);
+      } else {
+        // Check if source is an entry point (use effectiveEntryPoints since they may come from separate prop)
+        const sourceEntryPoint = effectiveEntryPoints.find(ep => ep.entry_point_id === newConnection.source);
+        if (sourceEntryPoint) {
+          sourcePin = sourceEntryPoint.outputs.find(p => p.node_id === newSourceHandle);
+        }
+      }
+
+      if (sourcePin && sourcePin.name) {
+        // Check if target is a module
+        const targetModule = finalPipelineState.modules.find(
+          m => m.module_instance_id === newConnection.target
+        );
+
+        if (targetModule) {
+          // Update module input pin
+          finalPipelineState = {
+            ...finalPipelineState,
+            modules: finalPipelineState.modules.map(mod => {
+              if (mod.module_instance_id === newConnection.target) {
+                return updatePinInModule(mod, newTargetHandle, { name: sourcePin.name });
+              }
+              return mod;
+            })
+          };
+        } else {
+          // Check if target is an output channel
+          const targetOutputChannel = (finalPipelineState.output_channels || []).find(
+            oc => oc.output_channel_instance_id === newConnection.target
+          );
+
+          if (targetOutputChannel) {
+            // Update output channel input pin
+            finalPipelineState = {
+              ...finalPipelineState,
+              output_channels: (finalPipelineState.output_channels || []).map(oc => {
+                if (oc.output_channel_instance_id === newConnection.target) {
+                  return {
+                    ...oc,
+                    inputs: oc.inputs.map(input =>
+                      input.node_id === newTargetHandle
+                        ? { ...input, name: sourcePin.name }
+                        : input
+                    )
+                  };
+                }
+                return oc;
+              })
+            };
+          }
+        }
+      }
 
       // Single state update with connections and type changes
       onPipelineStateChange(finalPipelineState);

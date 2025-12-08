@@ -40,6 +40,7 @@ class PdfTemplateRepository(BaseRepository[PdfTemplateModel]):
             id=model.id,
             name=model.name,
             description=model.description,
+            customer_id=model.customer_id,
             status=model.status,  # Convert enum to string
             source_pdf_id=model.source_pdf_id,
             current_version_id=model.current_version_id,
@@ -131,6 +132,7 @@ class PdfTemplateRepository(BaseRepository[PdfTemplateModel]):
                     id=template.id,
                     name=template.name,
                     description=template.description,
+                    customer_id=template.customer_id,
                     status=template.status,  # Convert enum to string
                     source_pdf_id=template.source_pdf_id,
                     current_version_id=template.current_version_id,
@@ -168,6 +170,7 @@ class PdfTemplateRepository(BaseRepository[PdfTemplateModel]):
         self,
         name: str,
         description: str | None,
+        customer_id: int | None,
         source_pdf_id: int,
         status: str = "inactive"
     ) -> PdfTemplate:
@@ -177,6 +180,7 @@ class PdfTemplateRepository(BaseRepository[PdfTemplateModel]):
         Args:
             name: Template name
             description: Template description (optional)
+            customer_id: Customer ID from external Access DB (optional)
             source_pdf_id: Source PDF file ID
             status: Template status (default: "inactive")
 
@@ -188,6 +192,7 @@ class PdfTemplateRepository(BaseRepository[PdfTemplateModel]):
             template = self.model_class(
                 name=name,
                 description=description,
+                customer_id=customer_id,
                 source_pdf_id=source_pdf_id,
                 status=status,
                 current_version_id=None  # Will be set after version is created

@@ -32,6 +32,7 @@ class EtoSubRunPipelineExecutionUpdate(TypedDict, total=False):
     """
     status: str
     error_message: str | None
+    transformed_data: str | None  # JSON string of output channel values
     started_at: datetime | None
     completed_at: datetime | None
 
@@ -46,6 +47,7 @@ class EtoSubRunPipelineExecution:
     sub_run_id: int
     status: str
     error_message: Optional[str]
+    transformed_data: Optional[str]  # JSON string of output channel values
     started_at: Optional[datetime]
     completed_at: Optional[datetime]
     created_at: datetime

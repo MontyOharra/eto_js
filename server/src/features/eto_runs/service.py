@@ -989,19 +989,70 @@ class EtoRunsService:
 
         logger.debug(f"Sub-run {sub_run_id}: Persisted {len(execution_result.steps)} step results to database")
 
-        # Step 9: Update pipeline_execution record with final status
+        # Step 8b: Record output channel steps (pseudo-modules for visualization)
+        # These indicate that data flowed out of the pipeline through these channels
+        output_channel_values = execution_result.output_channel_values or {}
+        if pipeline_definition.pipeline_state.output_channels and output_channel_values:
+            # Calculate next step number after all module steps
+            max_step_number = max((s.step_number for s in execution_result.steps), default=-1)
+            output_channel_step_number = max_step_number + 1
+
+            for output_channel in pipeline_definition.pipeline_state.output_channels:
+                channel_type = output_channel.channel_type
+                if channel_type in output_channel_values:
+                    # Build input data for this output channel
+                    collected_value = output_channel_values[channel_type]
+                    input_pin = output_channel.inputs[0] if output_channel.inputs else None
+
+                    # Serialize the collected value, handling datetime objects
+                    inputs_data = {
+                        input_pin.node_id if input_pin else "value": {
+                            "name": input_pin.name if input_pin else "value",
+                            "value": collected_value.isoformat() if hasattr(collected_value, 'isoformat') else collected_value,
+                            "type": input_pin.type if input_pin else "str"
+                        }
+                    }
+
+                    self.sub_run_pipeline_execution_step_repo.create(
+                        EtoSubRunPipelineExecutionStepCreate(
+                            pipeline_execution_id=pipeline_execution.id,
+                            module_instance_id=output_channel.output_channel_instance_id,
+                            step_number=output_channel_step_number,
+                            inputs=json.dumps(inputs_data),
+                            outputs=None,  # Output channels have no outputs
+                            error=None
+                        )
+                    )
+
+            logger.debug(f"Sub-run {sub_run_id}: Recorded {len(output_channel_values)} output channel steps")
+
+        # Step 9: Update pipeline_execution record with final status and transformed_data
         completed_at = datetime.now(timezone.utc)
         final_status = "success" if execution_result.status == "success" else "failure"
+
+        # Serialize output_channel_values as transformed_data JSON
+        # Handle datetime objects by converting to ISO format strings
+        def serialize_value(v):
+            if hasattr(v, 'isoformat'):
+                return v.isoformat()
+            return v
+
+        transformed_data_json = None
+        if output_channel_values:
+            transformed_data_dict = {k: serialize_value(v) for k, v in output_channel_values.items()}
+            transformed_data_json = json.dumps(transformed_data_dict)
 
         self.sub_run_pipeline_execution_repo.update(
             pipeline_execution.id,
             {
                 "status": final_status,
-                "completed_at": completed_at
+                "completed_at": completed_at,
+                "transformed_data": transformed_data_json
             }
         )
         logger.debug(
-            f"Sub-run {sub_run_id}: Updated pipeline_execution record to status={final_status}"
+            f"Sub-run {sub_run_id}: Updated pipeline_execution record to status={final_status}, "
+            f"transformed_data keys: {list(output_channel_values.keys()) if output_channel_values else []}"
         )
 
         # Step 10: If pipeline failed, raise error to mark sub-run as failed

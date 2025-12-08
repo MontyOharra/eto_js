@@ -184,7 +184,10 @@ export function ModuleSelectorPane({
       <div className="p-3 border-b border-gray-600">
         <div className="flex bg-gray-700 rounded-lg p-1">
           <button
-            onClick={() => setPaneMode("modules")}
+            onClick={() => {
+              setPaneMode("modules");
+              setSearchTerm("");
+            }}
             className={`flex-1 py-1.5 px-3 text-sm font-medium rounded-md transition-colors ${
               paneMode === "modules"
                 ? "bg-blue-600 text-white"
@@ -194,7 +197,10 @@ export function ModuleSelectorPane({
             Modules
           </button>
           <button
-            onClick={() => setPaneMode("outputs")}
+            onClick={() => {
+              setPaneMode("outputs");
+              setSearchTerm("");
+            }}
             className={`flex-1 py-1.5 px-3 text-sm font-medium rounded-md transition-colors ${
               paneMode === "outputs"
                 ? "bg-blue-600 text-white"
@@ -227,8 +233,29 @@ export function ModuleSelectorPane({
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder={paneMode === "modules" ? "Search modules..." : "Search output channels..."}
-            className="w-full pl-10 pr-3 py-2 bg-gray-700 text-white text-sm rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full pl-10 pr-9 py-2 bg-gray-700 text-white text-sm rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm("")}
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+              title="Clear search"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+          )}
         </div>
       </div>
 

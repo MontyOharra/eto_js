@@ -27,7 +27,7 @@ class DataDuplicator(TransformModule):
     title = "Data Duplicator"
     description = "Duplicate input data to multiple outputs"
     category = "Flow Control"
-    color = "#FFFFFF"  # White
+    color = "#6B7280"  # Gray
 
     # Configuration model
     ConfigModel = DataDuplicatorConfig

@@ -45,7 +45,7 @@ class IfBranch(LogicModule):
     title = "If Branch"
     description = "Route value to one of two paths based on boolean condition"
     category = "Flow Control"
-    color = "#FFFFFF"  # White
+    color = "#6B7280"  # Gray
 
     # Configuration model
     ConfigModel = IfBranchConfig

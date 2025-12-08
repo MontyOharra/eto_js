@@ -41,11 +41,16 @@ function useDebounce<T>(value: T, delay: number): T {
 
 function EtoPage() {
 
+  // Detail view state - when set, shows detail view instead of list
+  const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
+
   // SSE connection for real-time updates
+  // Disable fallback polling when viewing detail view (list is hidden anyway)
   const [isLiveConnected, setIsLiveConnected] = useState(false);
   useEtoEvents({
     onConnected: () => setIsLiveConnected(true),
     onDisconnected: () => setIsLiveConnected(false),
+    fallbackPollingInterval: selectedRunId !== null ? 0 : undefined,
   });
 
   // Filter state - immediate values for controlled inputs
@@ -68,9 +73,6 @@ function EtoPage() {
   useEffect(() => {
     setCurrentPage(1);
   }, [debouncedSearchQuery, subRunStatusFilter, readFilter, sortOption]);
-
-  // Detail view state - when set, shows detail view instead of list
-  const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
 
   // PDF Viewer modal state
   const [viewingPdfId, setViewingPdfId] = useState<number | null>(null);

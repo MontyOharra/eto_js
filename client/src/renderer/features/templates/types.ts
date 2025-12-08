@@ -87,6 +87,7 @@ export interface TemplateListItem {
   id: number;
   name: string;
   description: string | null;
+  customer_id: number | null; // References external Access DB
   status: TemplateStatus;
   source_pdf_id: number;
   current_version: TemplateVersionSummary;
@@ -101,6 +102,7 @@ export interface TemplateDetail {
   id: number;
   name: string;
   description: string | null;
+  customer_id: number | null; // References external Access DB
   status: TemplateStatus;
   source_pdf_id: number;
   current_version_id: number | null;

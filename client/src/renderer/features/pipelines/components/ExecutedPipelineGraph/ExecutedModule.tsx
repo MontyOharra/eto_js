@@ -57,8 +57,8 @@ export function ExecutedModule({ data }: ExecutedModuleProps) {
   return (
     <div
       className={`bg-gray-800 rounded-lg border-2 ${getBorderColor()} ${
-        hasInputs && hasOutputs ? "min-w-[400px]" : "min-w-[200px]"
-      } w-min ${status === "not_executed" ? "opacity-50" : ""}`}
+        hasInputs && hasOutputs ? "min-w-[400px] max-w-[500px]" : "min-w-[200px] max-w-[300px]"
+      } ${status === "not_executed" ? "opacity-50" : ""}`}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       style={{ pointerEvents: "auto" }}

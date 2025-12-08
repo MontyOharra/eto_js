@@ -5,6 +5,7 @@ Uses OpenAI API to extract date and time information from varied text formats
 import logging
 import os
 import json
+from datetime import datetime
 from typing import Dict, Any
 from pydantic import BaseModel
 
@@ -26,10 +27,9 @@ class DateTimeExtractor(TransformModule):
     DateTime Extractor transform module
     Uses OpenAI API to extract date and time information from varied text formats
 
-    Always extracts:
-    - date: The date in ISO 8601 format (YYYY-MM-DD)
-    - start_time: Start time in ISO 8601 format (HH:MM:SS)
-    - end_time: End time in ISO 8601 format (HH:MM:SS)
+    Outputs full datetime objects:
+    - pickup_time_start: Combined date + start time as datetime
+    - pickup_time_end: Combined date + end time as datetime
 
     Handles various customer formats and edge cases:
     - Single time values (infers if it's start or end based on context)
@@ -42,7 +42,7 @@ class DateTimeExtractor(TransformModule):
     id = "datetime_extractor"
     version = "1.0.0"
     title = "DateTime Extractor"
-    description = "Extract date and time from varied text formats using AI"
+    description = "Extract pickup time start/end as full datetime objects using AI"
     category = "LLM"
     color = "#F97316"  # Orange
 
@@ -67,20 +67,14 @@ class DateTimeExtractor(TransformModule):
                 outputs=IOSideShape(
                     nodes=[
                         NodeGroup(
-                            label="date",
-                            typing=NodeTypeRule(allowed_types=["str"]),
+                            label="pickup_time_start",
+                            typing=NodeTypeRule(allowed_types=["datetime"]),
                             min_count=1,
                             max_count=1
                         ),
                         NodeGroup(
-                            label="start_time",
-                            typing=NodeTypeRule(allowed_types=["str"]),
-                            min_count=1,
-                            max_count=1
-                        ),
-                        NodeGroup(
-                            label="end_time",
-                            typing=NodeTypeRule(allowed_types=["str"]),
+                            label="pickup_time_end",
+                            typing=NodeTypeRule(allowed_types=["datetime"]),
                             min_count=1,
                             max_count=1
                         )
@@ -100,7 +94,7 @@ class DateTimeExtractor(TransformModule):
             services: Not used for this module
 
         Returns:
-            Dictionary with date, start_time, and end_time outputs
+            Dictionary with pickup_time_start and pickup_time_end as datetime objects
         """
         # Import OpenAI here to avoid import errors if not installed
         try:
@@ -127,9 +121,8 @@ class DateTimeExtractor(TransformModule):
         if not input_text:
             logger.warning("Empty text provided to datetime extractor")
             return {
-                context.outputs[0].node_id: None,  # date
-                context.outputs[1].node_id: None,  # start_time
-                context.outputs[2].node_id: None   # end_time
+                context.outputs[0].node_id: None,  # pickup_time_start
+                context.outputs[1].node_id: None   # pickup_time_end
             }
 
         logger.info(f"Extracting date/time from text: '{input_text}'")
@@ -161,16 +154,36 @@ class DateTimeExtractor(TransformModule):
             logger.error(f"DateTime extraction failed: {e}")
             raise ValueError(f"DateTime extraction failed: {e}")
 
-        # Extract values
+        # Extract values from LLM response
         date_value = extracted_data.get("date")
         start_time_value = extracted_data.get("start_time")
         end_time_value = extracted_data.get("end_time")
 
+        # Combine date and times into full datetime objects
+        pickup_time_start = None
+        pickup_time_end = None
+
+        if date_value:
+            if start_time_value:
+                try:
+                    pickup_time_start = datetime.strptime(
+                        f"{date_value} {start_time_value}", "%Y-%m-%d %H:%M"
+                    )
+                except ValueError:
+                    logger.warning(f"Failed to parse start datetime: {date_value} {start_time_value}")
+
+            if end_time_value:
+                try:
+                    pickup_time_end = datetime.strptime(
+                        f"{date_value} {end_time_value}", "%Y-%m-%d %H:%M"
+                    )
+                except ValueError:
+                    logger.warning(f"Failed to parse end datetime: {date_value} {end_time_value}")
+
         # Return mapped to output nodes
         return {
-            context.outputs[0].node_id: date_value,       # date
-            context.outputs[1].node_id: start_time_value, # start_time
-            context.outputs[2].node_id: end_time_value    # end_time
+            context.outputs[0].node_id: pickup_time_start,  # pickup_time_start
+            context.outputs[1].node_id: pickup_time_end     # pickup_time_end
         }
 
     def _build_system_prompt(self) -> str:

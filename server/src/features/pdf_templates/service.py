@@ -357,6 +357,7 @@ class PdfTemplateService:
                 template = uow.pdf_templates.create(
                     name=template_data.name,
                     description=template_data.description,
+                    customer_id=template_data.customer_id,
                     source_pdf_id=template_data.source_pdf_id,
                     status="inactive"
                 )

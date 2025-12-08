@@ -157,9 +157,8 @@ class ExecutePipelineResponse(BaseModel):
     """Response for POST /pipelines/{id}/execute"""
     status: str  # "success" | "failed" | "partial"
     steps: List[ExecutionStepResult]
-    output_module_id: Optional[str] = None  # ✅ NEW - e.g., "basic_order_output"
-    output_module_inputs: Dict[str, Any] = Field(  # ✅ NEW
+    output_channel_values: Dict[str, Any] = Field(
         default_factory=dict,
-        description="Input data collected for output module execution"
+        description="Collected output channel values {channel_type: value}"
     )
     error: Optional[str] = None
