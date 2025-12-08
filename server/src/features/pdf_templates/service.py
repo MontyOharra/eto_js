@@ -59,7 +59,8 @@ class PdfTemplateService:
         connection_manager: DatabaseConnectionManager,
         pipeline_service: 'PipelineService',
         pdf_files_service: 'PdfFilesService',
-        pipeline_execution_service: PipelineExecutionService
+        pipeline_execution_service: PipelineExecutionService,
+        data_database_manager: Any = None
     ) -> None:
         """
         Initialize PDF template service
@@ -69,8 +70,10 @@ class PdfTemplateService:
             pipeline_service: Pipeline service for pipeline operations
             pdf_files_service: PDF files service for text extraction
             pipeline_execution_service: Pipeline execution service for running pipelines
+            data_database_manager: DataDatabaseManager for business databases (Access DB)
         """
         self.connection_manager = connection_manager
+        self.data_db_manager = data_database_manager
         self.template_repository = PdfTemplateRepository(connection_manager=connection_manager)
         self.version_repository = PdfTemplateVersionRepository(connection_manager=connection_manager)
         self.pipeline_repository = PipelineDefinitionRepository(connection_manager=connection_manager)
@@ -1326,3 +1329,148 @@ class PdfTemplateService:
             result["name"]: result["extracted_value"]
             for result in extraction_results
         }
+
+    # ========== Customer Methods ==========
+
+    def list_customers(self) -> list[dict]:
+        """
+        Get all active customers from Access DB for dropdown selection.
+
+        Queries the HTC300_G030_T010 Customers table for active customers.
+
+        Returns:
+            List of dicts with 'id' and 'name' keys
+
+        Raises:
+            ServiceError: If database connection is not available or query fails
+        """
+        if self.data_db_manager is None:
+            logger.warning("DataDatabaseManager not available - returning empty customer list")
+            return []
+
+        try:
+            connection = self.data_db_manager.get_connection("htc_300_db")
+
+            sql = """
+            SELECT CustomerID, Customer
+            FROM [HTC300_G030_T010 Customers]
+            WHERE Cus_Status = True
+            ORDER BY Customer
+            """
+
+            with connection.cursor() as cursor:
+                cursor.execute(sql)
+                rows = cursor.fetchall()
+
+            customers = [
+                {"id": row[0], "name": row[1]}
+                for row in rows
+                if row[1]  # Filter out customers with empty names
+            ]
+
+            logger.info(f"Retrieved {len(customers)} active customers from database")
+            return customers
+
+        except Exception as e:
+            logger.error(f"Failed to fetch customers from database: {e}")
+            raise ServiceError(f"Failed to fetch customers: {e}")
+
+    def get_customer(self, customer_id: int) -> dict | None:
+        """
+        Get a single customer by ID from Access DB.
+
+        Args:
+            customer_id: Customer ID to lookup
+
+        Returns:
+            Dict with 'id' and 'name' keys, or None if not found
+
+        Raises:
+            ServiceError: If database connection fails
+        """
+        if self.data_db_manager is None:
+            logger.warning("DataDatabaseManager not available - cannot get customer")
+            return None
+
+        try:
+            connection = self.data_db_manager.get_connection("htc_300_db")
+
+            sql = """
+            SELECT CustomerID, Customer
+            FROM [HTC300_G030_T010 Customers]
+            WHERE CustomerID = ?
+            """
+
+            with connection.cursor() as cursor:
+                cursor.execute(sql, (customer_id,))
+                row = cursor.fetchone()
+
+            if row and row[1]:  # Check if row exists and has a name
+                return {"id": row[0], "name": row[1]}
+
+            return None
+
+        except Exception as e:
+            logger.error(f"Failed to fetch customer {customer_id} from database: {e}")
+            raise ServiceError(f"Failed to fetch customer: {e}")
+
+    def _get_customer_name(self, customer_id: int | None) -> str | None:
+        """
+        Helper to get customer name for a single customer_id.
+
+        Args:
+            customer_id: Customer ID or None
+
+        Returns:
+            Customer name or None if not found/unavailable
+        """
+        if customer_id is None:
+            return None
+
+        try:
+            customer = self.get_customer(customer_id)
+            return customer["name"] if customer else None
+        except Exception as e:
+            logger.warning(f"Failed to get customer name for {customer_id}: {e}")
+            return None
+
+    def _get_customer_names(self, customer_ids: list[int]) -> dict[int, str]:
+        """
+        Batch fetch customer names for multiple customer_ids.
+
+        Args:
+            customer_ids: List of customer IDs to lookup
+
+        Returns:
+            Dictionary mapping customer_id -> customer_name
+        """
+        if not customer_ids or self.data_db_manager is None:
+            return {}
+
+        try:
+            connection = self.data_db_manager.get_connection("htc_300_db")
+
+            # Build IN clause with placeholders
+            placeholders = ",".join("?" * len(customer_ids))
+            sql = f"""
+            SELECT CustomerID, Customer
+            FROM [HTC300_G030_T010 Customers]
+            WHERE CustomerID IN ({placeholders})
+            """
+
+            with connection.cursor() as cursor:
+                cursor.execute(sql, customer_ids)
+                rows = cursor.fetchall()
+
+            result = {
+                row[0]: row[1]
+                for row in rows
+                if row[1]  # Filter out empty names
+            }
+
+            logger.debug(f"Fetched {len(result)} customer names for {len(customer_ids)} IDs")
+            return result
+
+        except Exception as e:
+            logger.warning(f"Failed to batch fetch customer names: {e}")
+            return {}

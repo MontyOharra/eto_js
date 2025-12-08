@@ -140,6 +140,8 @@ export function TemplateDetailModal({
         {/* Header */}
         <TemplateDetailHeader
           templateName={templateDetail?.name || 'Loading...'}
+          customerName={templateDetail?.customer_name || null}
+          customerId={templateDetail?.customer_id || null}
           versions={sortedVersions}
           selectedVersionId={versionIdToFetch}
           currentVersionId={templateDetail?.current_version_id || null}

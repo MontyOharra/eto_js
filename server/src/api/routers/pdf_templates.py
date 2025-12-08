@@ -19,6 +19,8 @@ from api.schemas.pdf_templates import (
     ExtractedFieldResult,
     TestMultiTemplateMatchingResponse,
     TemplateMatchResult,
+    GetCustomersResponse,
+    Customer,
 )
 from api.mappers.pdf_templates import (
     convert_template_summary_list,
@@ -57,7 +59,32 @@ async def list_pdf_templates(
         sort_by=sort_by,
         sort_order=sort_order
     )
-    return convert_template_summary_list(summaries)
+
+    # Batch fetch customer names for all templates with customer_id
+    customer_ids = [s.customer_id for s in summaries if s.customer_id is not None]
+    customer_names = service._get_customer_names(customer_ids) if customer_ids else {}
+
+    return convert_template_summary_list(summaries, customer_names)
+
+
+@router.get("/customers", response_model=GetCustomersResponse)
+async def get_customers(
+    service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service())
+) -> GetCustomersResponse:
+    """
+    Get list of customers for template dropdown.
+
+    Fetches active customers from the Access database (HTC300_G030_T010 Customers table).
+    Returns customers sorted by name.
+    """
+    customers_data = service.list_customers()
+
+    customers = [
+        Customer(id=c["id"], name=c["name"])
+        for c in customers_data
+    ]
+
+    return GetCustomersResponse(customers=customers)
 
 
 @router.get("/{id}", response_model=PdfTemplate)
@@ -73,7 +100,8 @@ async def get_pdf_template(
     """
     template = service.get_template(id)
     version_list = service.get_version_list(id)
-    return convert_pdf_template(template, version_list)
+    customer_name = service._get_customer_name(template.customer_id)
+    return convert_pdf_template(template, version_list, customer_name)
 
 
 @router.post("", response_model=PdfTemplate, status_code=status.HTTP_201_CREATED)
@@ -108,7 +136,8 @@ async def create_pdf_template(
 
     # Fetch version list and convert to API response
     version_list = template_service.get_version_list(template.id)
-    return convert_pdf_template(template, version_list)
+    customer_name = template_service._get_customer_name(template.customer_id)
+    return convert_pdf_template(template, version_list, customer_name)
 
 
 @router.put("/{id}", response_model=PdfTemplate, status_code=status.HTTP_200_OK)
@@ -137,7 +166,8 @@ async def update_pdf_template(
 
     # Fetch version list for response
     version_list = service.get_version_list(id)
-    return convert_pdf_template(template, version_list)
+    customer_name = service._get_customer_name(template.customer_id)
+    return convert_pdf_template(template, version_list, customer_name)
 
 
 @router.post("/{id}/activate", response_model=PdfTemplate)
@@ -150,7 +180,8 @@ async def activate_pdf_template(
 
     # Fetch version list for response
     version_list = service.get_version_list(id)
-    return convert_pdf_template(template, version_list)
+    customer_name = service._get_customer_name(template.customer_id)
+    return convert_pdf_template(template, version_list, customer_name)
 
 
 @router.post("/{id}/deactivate", response_model=PdfTemplate)
@@ -163,7 +194,8 @@ async def deactivate_pdf_template(
 
     # Fetch version list for response
     version_list = service.get_version_list(id)
-    return convert_pdf_template(template, version_list)
+    customer_name = service._get_customer_name(template.customer_id)
+    return convert_pdf_template(template, version_list, customer_name)
 
 
 @router.get("/versions/{version_id}", response_model=GetTemplateVersionResponse)

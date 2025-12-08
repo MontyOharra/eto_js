@@ -36,6 +36,13 @@ export function TemplateCard({
 
       {/* Template Info */}
       <div className="space-y-2 mb-4">
+        {/* Customer Name */}
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-gray-400">Customer:</span>
+          <span className="text-gray-200 font-medium">
+            {template.customer_name || (template.customer_id ? `Customer #${template.customer_id}` : 'Not set')}
+          </span>
+        </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-gray-400">Current Version:</span>
           <span className="text-gray-200 font-medium">

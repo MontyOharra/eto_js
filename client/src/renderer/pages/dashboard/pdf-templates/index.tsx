@@ -162,6 +162,7 @@ function TemplatesPage() {
       const initialData: Partial<TemplateBuilderData> = {
         name: templateDetail.name,
         description: templateDetail.description || '',
+        customer_id: templateDetail.customer_id,
         signature_objects: versionDetail.signature_objects,
         extraction_fields: versionDetail.extraction_fields,
         pipeline_state: pipelineData.pipeline_state,
@@ -292,6 +293,7 @@ function TemplatesPage() {
           request: {
             name: templateData.name,
             description: templateData.description,
+            customer_id: templateData.customer_id ?? undefined,
             signature_objects: templateData.signature_objects,
             extraction_fields: templateData.extraction_fields,
             pipeline_state: templateData.pipeline_state,
@@ -307,6 +309,7 @@ function TemplatesPage() {
         const createRequest: CreateTemplateRequest = {
           name: templateData.name,
           description: templateData.description || '',
+          customer_id: templateData.customer_id ?? undefined,
           source_pdf_id: pdfId,
           signature_objects: templateData.signature_objects,
           extraction_fields: templateData.extraction_fields,

@@ -111,6 +111,9 @@ class EtoSubRunDetailView:
     pdf_file_size: Optional[int]
     pdf_page_count: Optional[int]
 
+    # Optional fields with defaults (must come after required fields)
+    template_customer_id: Optional[int] = None  # Customer ID from pdf_templates (for Access DB lookup)
+
     # Stage data (optional - depends on sub-run progress)
     # Reuses existing stage detail view types from eto_runs
     extraction: Optional[EtoRunExtractionDetailView] = None

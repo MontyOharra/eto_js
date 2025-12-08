@@ -17,12 +17,15 @@ interface ExtractionFieldsStepProps {
   pdfUrl: string;                     // PDF URL (either blob URL or backend URL)
   templateName: string;
   templateDescription: string;
+  customerId: number | null;
+  disableCustomerChange?: boolean;
   extractionFields: ExtractionField[];
   selectedSignatureObjects: PdfObjects;
   pipelineState: PipelineState;
   visualState: VisualState;
   onTemplateNameChange: (name: string) => void;
   onTemplateDescriptionChange: (description: string) => void;
+  onCustomerIdChange: (customerId: number | null) => void;
   onExtractionFieldsChange: (fields: ExtractionField[]) => void;
   onPipelineStateChange: (state: PipelineState) => void;
   onVisualStateChange: (state: VisualState) => void;
@@ -39,12 +42,15 @@ export function ExtractionFieldsStep({
   pdfUrl,
   templateName,
   templateDescription,
+  customerId,
+  disableCustomerChange = false,
   extractionFields,
   selectedSignatureObjects,
   pipelineState,
   visualState,
   onTemplateNameChange,
   onTemplateDescriptionChange,
+  onCustomerIdChange,
   onExtractionFieldsChange,
   onPipelineStateChange,
   onVisualStateChange,
@@ -374,6 +380,8 @@ export function ExtractionFieldsStep({
       <ExtractionFieldsSidebar
         templateName={templateName}
         templateDescription={templateDescription}
+        customerId={customerId}
+        disableCustomerChange={disableCustomerChange}
         extractionFields={extractionFields}
         mode={sidebarMode}
         selectedFieldId={stagedFieldId}
@@ -384,6 +392,7 @@ export function ExtractionFieldsStep({
         tempFieldData={tempFieldData}
         onTemplateNameChange={onTemplateNameChange}
         onTemplateDescriptionChange={onTemplateDescriptionChange}
+        onCustomerIdChange={onCustomerIdChange}
         onShowSignatureObjectsChange={setShowSignatureObjects}
         onFieldNameChange={handleFieldNameChange}
         onFieldDescriptionChange={setFieldDescription}

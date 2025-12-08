@@ -30,6 +30,7 @@ class TemplateListItem(BaseModel):
     name: str
     description: Optional[str] = None
     customer_id: Optional[int] = None  # References external Access DB
+    customer_name: Optional[str] = None  # Customer name from Access DB (if available)
     status: str
     source_pdf_id: int
     current_version: TemplateVersionSummary
@@ -50,6 +51,7 @@ class PdfTemplate(BaseModel):
     name: str
     description: Optional[str] = None
     customer_id: Optional[int] = None  # References external Access DB
+    customer_name: Optional[str] = None  # Customer name from Access DB (if available)
     status: str
     source_pdf_id: int
     current_version_id: Optional[int] = None
@@ -142,3 +144,16 @@ class TestMultiTemplateMatchingResponse(BaseModel):
     total_pages: int
     matches: List[TemplateMatchResult]
     unmatched_pages: List[int]  # Can be non-consecutive, 1-indexed
+
+
+# ========== Customer Schemas ==========
+
+class Customer(BaseModel):
+    """Single customer entry for dropdown lists"""
+    id: int
+    name: str
+
+
+class GetCustomersResponse(BaseModel):
+    """Response for GET /pdf-templates/customers"""
+    customers: List[Customer]

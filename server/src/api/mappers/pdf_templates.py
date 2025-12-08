@@ -164,7 +164,8 @@ def convert_extraction_fields_to_domain(fields: list[ExtractionFieldPydantic]) -
 
 def convert_pdf_template(
     template: PdfTemplate,
-    version_list: list[tuple[int, int]]
+    version_list: list[tuple[int, int]],
+    customer_name: str | None = None
 ) -> PdfTemplatePydantic:
     """Convert domain PdfTemplate to API PdfTemplate with version navigation (excludes audit timestamps)"""
     return PdfTemplatePydantic(
@@ -172,6 +173,7 @@ def convert_pdf_template(
         name=template.name,
         description=template.description,
         customer_id=template.customer_id,
+        customer_name=customer_name,
         status=template.status,
         source_pdf_id=template.source_pdf_id,
         current_version_id=template.current_version_id,
@@ -187,13 +189,17 @@ def convert_version_list(version_list: list[tuple[int, int]]) -> list[VersionLis
     ]
 
 
-def convert_template_summary(summary: PdfTemplateListView) -> TemplateListItem:
+def convert_template_summary(
+    summary: PdfTemplateListView,
+    customer_name: str | None = None
+) -> TemplateListItem:
     """Convert domain PdfTemplateSummary to API TemplateListItem"""
     return TemplateListItem(
         id=summary.id,
         name=summary.name,
         description=summary.description,
         customer_id=summary.customer_id,
+        customer_name=customer_name,
         status=summary.status,
         source_pdf_id=summary.source_pdf_id,
         current_version=TemplateVersionSummary(
@@ -210,10 +216,15 @@ def convert_template_summary(summary: PdfTemplateListView) -> TemplateListItem:
 
 
 def convert_template_summary_list(
-    summaries: list[PdfTemplateListView]
+    summaries: list[PdfTemplateListView],
+    customer_names: dict[int, str] | None = None
 ) -> list[TemplateListItem]:
-    """Convert list of domain summaries to API list"""
-    return [convert_template_summary(s) for s in summaries]
+    """Convert list of domain summaries to API list with customer names"""
+    customer_names = customer_names or {}
+    return [
+        convert_template_summary(s, customer_names.get(s.customer_id) if s.customer_id else None)
+        for s in summaries
+    ]
 
 
 

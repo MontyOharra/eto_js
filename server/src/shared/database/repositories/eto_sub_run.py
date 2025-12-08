@@ -344,6 +344,7 @@ class EtoSubRunRepository(BaseRepository[EtoSubRunModel]):
                     # Template info (optional)
                     PdfTemplateModel.id.label("template_id"),
                     PdfTemplateModel.name.label("template_name"),
+                    PdfTemplateModel.customer_id.label("template_customer_id"),
                     PdfTemplateVersionModel.version_num.label("template_version_num"),
                     # PDF file info
                     PdfFileModel.id.label("pdf_file_id"),
@@ -394,6 +395,7 @@ class EtoSubRunRepository(BaseRepository[EtoSubRunModel]):
                 template_name=row.template_name,
                 template_version_id=row.template_version_id,
                 template_version_num=row.template_version_num,
+                template_customer_id=row.template_customer_id,
                 # PDF info
                 pdf_file_id=row.pdf_file_id,
                 pdf_original_filename=row.original_filename,

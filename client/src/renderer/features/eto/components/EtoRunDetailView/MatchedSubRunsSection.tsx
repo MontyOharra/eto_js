@@ -74,6 +74,9 @@ export function MatchedSubRunsSection({
                 </span>
                 <h3 className="text-white font-semibold">
                   Pages {subRun.matched_pages.join(', ')} • {subRun.template?.name ?? 'Unknown Template'}
+                  {subRun.template?.customer_name && (
+                    <span className="text-gray-400 font-normal"> · {subRun.template.customer_name}</span>
+                  )}
                 </h3>
               </div>
 

@@ -16,9 +16,12 @@ interface SignatureObjectsStepProps {
   pdfObjects: PdfObjects;        // PDF objects (fetched by parent)
   templateName: string;
   templateDescription: string;
+  customerId: number | null;
+  disableCustomerChange?: boolean;
   selectedSignatureObjects: PdfObjects;
   onTemplateNameChange: (name: string) => void;
   onTemplateDescriptionChange: (description: string) => void;
+  onCustomerIdChange: (customerId: number | null) => void;
   onSignatureObjectsChange: (objects: PdfObjects) => void;
 }
 
@@ -27,9 +30,12 @@ export function SignatureObjectsStep({
   pdfObjects,
   templateName,
   templateDescription,
+  customerId,
+  disableCustomerChange = false,
   selectedSignatureObjects,
   onTemplateNameChange,
   onTemplateDescriptionChange,
+  onCustomerIdChange,
   onSignatureObjectsChange,
 }: SignatureObjectsStepProps) {
 
@@ -254,8 +260,11 @@ export function SignatureObjectsStep({
       <ObjectTypesSidebar
         templateName={templateName}
         templateDescription={templateDescription}
+        customerId={customerId}
+        disableCustomerChange={disableCustomerChange}
         onTemplateNameChange={onTemplateNameChange}
         onTemplateDescriptionChange={onTemplateDescriptionChange}
+        onCustomerIdChange={onCustomerIdChange}
         typeCounts={typeCounts}
         selectedTypeCounts={selectedTypeCounts}
         objectsByType={objectsByType}

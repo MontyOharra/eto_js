@@ -40,6 +40,7 @@ class EtoMatchedTemplate(BaseModel):
     """Matched template information (for list view)"""
     template_id: int
     template_name: str
+    customer_name: Optional[str] = None  # Customer name from Access DB (if available)
     version_id: int
     version_num: int
 
@@ -48,6 +49,7 @@ class EtoSubRunTemplate(BaseModel):
     """Simplified template info (for detail view)"""
     id: int
     name: str
+    customer_name: Optional[str] = None  # Customer name from Access DB (if available)
 
 
 # =============================================================================

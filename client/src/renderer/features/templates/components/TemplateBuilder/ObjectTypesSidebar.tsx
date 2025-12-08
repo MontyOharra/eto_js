@@ -4,6 +4,7 @@
  */
 
 import { ObjectTypeAccordion } from './ObjectTypeAccordion';
+import { CustomerSelect } from './CustomerSelect';
 import { OBJECT_TYPE_NAMES, OBJECT_TYPE_COLORS } from '../../constants';
 
 interface ObjectItem {
@@ -18,8 +19,11 @@ interface ObjectItem {
 interface ObjectTypesSidebarProps {
   templateName: string;
   templateDescription: string;
+  customerId: number | null;
+  disableCustomerChange?: boolean;
   onTemplateNameChange: (name: string) => void;
   onTemplateDescriptionChange: (description: string) => void;
+  onCustomerIdChange: (customerId: number | null) => void;
   typeCounts: Record<string, number>;
   selectedTypeCounts: Record<string, number>;
   objectsByType: Record<string, ObjectItem[]>;
@@ -34,8 +38,11 @@ interface ObjectTypesSidebarProps {
 export function ObjectTypesSidebar({
   templateName,
   templateDescription,
+  customerId,
+  disableCustomerChange = false,
   onTemplateNameChange,
   onTemplateDescriptionChange,
+  onCustomerIdChange,
   typeCounts,
   selectedTypeCounts,
   objectsByType,
@@ -67,6 +74,11 @@ export function ObjectTypesSidebar({
               className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             />
           </div>
+          <CustomerSelect
+            value={customerId}
+            onChange={onCustomerIdChange}
+            disabled={disableCustomerChange}
+          />
           <div>
             <label htmlFor="template-description" className="block text-xs font-medium text-gray-300 mb-1.5">
               Description

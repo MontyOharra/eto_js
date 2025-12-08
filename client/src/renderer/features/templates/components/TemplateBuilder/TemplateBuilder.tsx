@@ -39,6 +39,7 @@ interface TemplateBuilderProps {
 export interface TemplateBuilderData {
   name: string;
   description: string;
+  customer_id: number | null;
   source_pdf_id?: number; // Optional: Set by parent after uploading PDF
   signature_objects: PdfObjects;
   extraction_fields: ExtractionField[];
@@ -65,6 +66,10 @@ export function TemplateBuilder({
   // Template metadata
   const [templateName, setTemplateName] = useState(initialData?.name || '');
   const [templateDescription, setTemplateDescription] = useState(initialData?.description || '');
+  const [customerId, setCustomerId] = useState<number | null>(initialData?.customer_id ?? null);
+
+  // Determine if customer selection should be disabled (edit mode with existing customer)
+  const disableCustomerChange = initialData?.customer_id != null;
 
   // Selected pages state (for create mode only)
   const [selectedPages, setSelectedPages] = useState<number[]>([]);
@@ -658,6 +663,7 @@ export function TemplateBuilder({
       const data: TemplateBuilderData = {
         name: templateName,
         description: templateDescription,
+        customer_id: customerId,
         signature_objects: selectedSignatureObjects,
         extraction_fields: extractionFields,
         pipeline_state: pipelineState,
@@ -683,6 +689,7 @@ export function TemplateBuilder({
     templateId,
     templateName,
     templateDescription,
+    customerId,
     pdfFile,
     pdfFileId,
     subsetPdfFile,
@@ -761,10 +768,12 @@ export function TemplateBuilder({
                   pdfObjects={activePdfData.objects}
                   templateName={templateName}
                   templateDescription={templateDescription}
+                  customerId={customerId}
+                  disableCustomerChange={disableCustomerChange}
                   selectedSignatureObjects={selectedSignatureObjects}
-                  selectedPages={!templateId ? selectedPages : undefined}
                   onTemplateNameChange={setTemplateName}
                   onTemplateDescriptionChange={setTemplateDescription}
+                  onCustomerIdChange={setCustomerId}
                   onSignatureObjectsChange={setSelectedSignatureObjects}
                 />
               )}
@@ -772,18 +781,17 @@ export function TemplateBuilder({
               {currentStep === 'extraction-fields' && activePdfData.objects && (
                 <ExtractionFieldsStep
                   pdfUrl={activePdfData.url}
-                  pdfObjects={activePdfData.objects}
-                  pdfFile={pdfFile}
-                  pdfFileId={pdfFileId}
                   templateName={templateName}
                   templateDescription={templateDescription}
+                  customerId={customerId}
+                  disableCustomerChange={disableCustomerChange}
                   extractionFields={extractionFields}
                   selectedSignatureObjects={selectedSignatureObjects}
-                  selectedPages={!templateId ? selectedPages : undefined}
                   pipelineState={pipelineState}
                   visualState={visualState}
                   onTemplateNameChange={setTemplateName}
                   onTemplateDescriptionChange={setTemplateDescription}
+                  onCustomerIdChange={setCustomerId}
                   onExtractionFieldsChange={setExtractionFields}
                   onPipelineStateChange={setPipelineState}
                   onVisualStateChange={setVisualState}

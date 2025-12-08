@@ -59,6 +59,7 @@ export interface EtoSubRunsSummary {
 export interface EtoMatchedTemplate {
   template_id: number;
   template_name: string;
+  customer_name: string | null; // Customer name from Access DB (if available)
   version_id: number;
   version_num: number;
 }
@@ -66,6 +67,7 @@ export interface EtoMatchedTemplate {
 export interface EtoSubRunTemplate {
   id: number;
   name: string;
+  customer_name: string | null; // Customer name from Access DB (if available)
 }
 
 // =============================================================================

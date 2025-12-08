@@ -67,6 +67,9 @@ export function EtoSubRunDetailHeader({
               <div className="text-sm text-gray-300 border-l border-gray-600 pl-4">
                 <span className="text-gray-400">Template:</span>{" "}
                 {runDetail.template.name}
+                {runDetail.template.customer_name && (
+                  <span className="text-gray-400 ml-1">({runDetail.template.customer_name})</span>
+                )}
               </div>
             )}
 

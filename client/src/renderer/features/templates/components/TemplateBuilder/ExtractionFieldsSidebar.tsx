@@ -8,12 +8,15 @@
 
 import { useRef, useEffect, useState } from 'react';
 import type { ExtractionField } from '../../types';
+import { CustomerSelect } from './CustomerSelect';
 
 export type SidebarMode = 'list' | 'create' | 'detail';
 
 interface ExtractionFieldsSidebarProps {
   templateName: string;
   templateDescription: string;
+  customerId: number | null;
+  disableCustomerChange?: boolean;
   extractionFields: ExtractionField[];
   mode: SidebarMode;
   selectedFieldId: string | null;
@@ -31,6 +34,7 @@ interface ExtractionFieldsSidebarProps {
   // Callbacks
   onTemplateNameChange: (name: string) => void;
   onTemplateDescriptionChange: (description: string) => void;
+  onCustomerIdChange: (customerId: number | null) => void;
   onShowSignatureObjectsChange: (show: boolean) => void;
   onFieldNameChange: (name: string) => void;
   onFieldDescriptionChange: (description: string) => void;
@@ -45,6 +49,8 @@ interface ExtractionFieldsSidebarProps {
 export function ExtractionFieldsSidebar({
   templateName,
   templateDescription,
+  customerId,
+  disableCustomerChange = false,
   extractionFields,
   mode,
   selectedFieldId,
@@ -55,6 +61,7 @@ export function ExtractionFieldsSidebar({
   tempFieldData,
   onTemplateNameChange,
   onTemplateDescriptionChange,
+  onCustomerIdChange,
   onShowSignatureObjectsChange,
   onFieldNameChange,
   onFieldDescriptionChange,
@@ -116,6 +123,11 @@ export function ExtractionFieldsSidebar({
               className="w-full px-3 py-2 text-sm bg-gray-800 border border-gray-600 rounded text-white focus:border-blue-500 focus:outline-none"
             />
           </div>
+          <CustomerSelect
+            value={customerId}
+            onChange={onCustomerIdChange}
+            disabled={disableCustomerChange}
+          />
           <div>
             <label className="block text-xs font-medium text-gray-300 mb-1">
               Description

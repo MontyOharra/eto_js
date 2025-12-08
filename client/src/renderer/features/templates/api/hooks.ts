@@ -89,6 +89,24 @@ export function useTemplateVersionDetail(versionId: number | null) {
   });
 }
 
+/**
+ * Fetch list of customers for dropdown selection
+ * Returns customers from the Access database
+ */
+export function useCustomers() {
+  return useQuery({
+    queryKey: ['customers'],
+    queryFn: async (): Promise<{ id: number; name: string }[]> => {
+      const response = await apiClient.get<{ customers: { id: number; name: string }[] }>(
+        `${baseUrl}/customers`
+      );
+      return response.data.customers;
+    },
+    staleTime: 5 * 60 * 1000, // Consider data stale after 5 minutes
+    gcTime: 30 * 60 * 1000, // Keep in cache for 30 minutes (customers don't change often)
+  });
+}
+
 // ============================================================================
 // Mutation Hooks (POST/PUT/DELETE operations)
 // ============================================================================

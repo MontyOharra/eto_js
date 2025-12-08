@@ -227,6 +227,7 @@ function EtoRunDetailPage() {
       const createRequest: CreateTemplateRequest = {
         name: templateData.name,
         description: templateData.description || '',
+        customer_id: templateData.customer_id ?? undefined,
         source_pdf_id: uploadedPdf.id,
         signature_objects: templateData.signature_objects,
         extraction_fields: templateData.extraction_fields,

@@ -217,7 +217,8 @@ async def eto_run_events_stream(request: Request):
 @router.get("/{id}", response_model=EtoRunDetail)
 async def get_eto_run(
     id: int,
-    service = Depends(lambda: ServiceContainer.get_eto_runs_service())
+    service = Depends(lambda: ServiceContainer.get_eto_runs_service()),
+    template_service = Depends(lambda: ServiceContainer.get_pdf_template_service())
 ) -> EtoRunDetail:
     """
     Get full ETO run details including all sub-run information.
@@ -240,8 +241,15 @@ async def get_eto_run(
     # Get detailed view from service
     detail_view = service.get_run_detail(id)
 
+    # Batch fetch customer names for all sub-runs with templates
+    customer_ids = [
+        sr.template_customer_id for sr in detail_view.sub_runs
+        if sr.template_customer_id is not None
+    ]
+    customer_names = template_service._get_customer_names(customer_ids) if customer_ids else {}
+
     # Convert to API schema
-    return eto_run_detail_to_api(detail_view)
+    return eto_run_detail_to_api(detail_view, customer_names)
 
 
 @router.patch("/{id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -427,7 +435,8 @@ async def delete_eto_runs(
 @router.get("/sub-runs/{sub_run_id}", response_model=EtoSubRunFullDetail)
 async def get_sub_run_detail(
     sub_run_id: int,
-    service: EtoRunsService = Depends(lambda: ServiceContainer.get_eto_runs_service())
+    service: EtoRunsService = Depends(lambda: ServiceContainer.get_eto_runs_service()),
+    template_service = Depends(lambda: ServiceContainer.get_pdf_template_service())
 ) -> EtoSubRunFullDetail:
     """
     Get full sub-run details including extraction and pipeline execution data.
@@ -447,8 +456,13 @@ async def get_sub_run_detail(
     # Get detailed view from service
     detail_view = service.get_sub_run_detail(sub_run_id)
 
+    # Fetch customer name if template has a customer
+    customer_name = None
+    if detail_view.template_customer_id is not None:
+        customer_name = template_service._get_customer_name(detail_view.template_customer_id)
+
     # Convert to API schema
-    return eto_sub_run_full_detail_to_api(detail_view)
+    return eto_sub_run_full_detail_to_api(detail_view, customer_name)
 
 
 @router.post("/sub-runs/{sub_run_id}/reprocess", response_model=SubRunOperationResponse)

@@ -134,7 +134,10 @@ def eto_run_to_create_response(run: EtoRun) -> CreateEtoRunResponse:
     )
 
 
-def eto_sub_run_detail_to_api(sub_run: EtoSubRunDetailView) -> EtoSubRunDetail:
+def eto_sub_run_detail_to_api(
+    sub_run: EtoSubRunDetailView,
+    customer_name: Optional[str] = None
+) -> EtoSubRunDetail:
     """
     Convert domain EtoSubRunDetailView to API EtoSubRunDetail schema.
 
@@ -142,6 +145,7 @@ def eto_sub_run_detail_to_api(sub_run: EtoSubRunDetailView) -> EtoSubRunDetail:
 
     Args:
         sub_run: EtoSubRunDetailView domain dataclass
+        customer_name: Customer name from Access DB (optional)
 
     Returns:
         EtoSubRunDetail Pydantic model for API response
@@ -152,6 +156,7 @@ def eto_sub_run_detail_to_api(sub_run: EtoSubRunDetailView) -> EtoSubRunDetail:
         template = EtoSubRunTemplate(
             id=sub_run.template_id,
             name=sub_run.template_name or "",
+            customer_name=customer_name,
         )
 
     return EtoSubRunDetail(
@@ -164,7 +169,10 @@ def eto_sub_run_detail_to_api(sub_run: EtoSubRunDetailView) -> EtoSubRunDetail:
     )
 
 
-def eto_run_detail_to_api(detail: EtoRunDetailView) -> EtoRunDetail:
+def eto_run_detail_to_api(
+    detail: EtoRunDetailView,
+    customer_names: Optional[dict] = None
+) -> EtoRunDetail:
     """
     Convert domain EtoRunDetailView to EtoRunDetail API schema.
 
@@ -177,10 +185,13 @@ def eto_run_detail_to_api(detail: EtoRunDetailView) -> EtoRunDetail:
 
     Args:
         detail: EtoRunDetailView domain dataclass with all related data
+        customer_names: Dict mapping customer_id to customer_name (from Access DB)
 
     Returns:
         EtoRunDetail Pydantic model for API response
     """
+    customer_names = customer_names or {}
+
     # Build PDF info
     pdf = EtoPdfInfo(
         id=detail.pdf_file_id,
@@ -207,8 +218,14 @@ def eto_run_detail_to_api(detail: EtoRunDetailView) -> EtoRunDetail:
             created_at=detail.created_at.isoformat(),
         )
 
-    # Convert all sub-runs to API format
-    sub_runs = [eto_sub_run_detail_to_api(sub_run) for sub_run in detail.sub_runs]
+    # Convert all sub-runs to API format with customer names
+    sub_runs = [
+        eto_sub_run_detail_to_api(
+            sub_run,
+            customer_names.get(sub_run.template_customer_id) if sub_run.template_customer_id else None
+        )
+        for sub_run in detail.sub_runs
+    ]
 
     # Compute overview stats
     unique_template_ids = set(
@@ -253,7 +270,10 @@ def eto_run_detail_to_api(detail: EtoRunDetailView) -> EtoRunDetail:
     )
 
 
-def eto_sub_run_full_detail_to_api(sub_run: EtoSubRunDetailView) -> EtoSubRunFullDetail:
+def eto_sub_run_full_detail_to_api(
+    sub_run: EtoSubRunDetailView,
+    customer_name: Optional[str] = None
+) -> EtoSubRunFullDetail:
     """
     Convert domain EtoSubRunDetailView to API EtoSubRunFullDetail schema.
 
@@ -262,6 +282,7 @@ def eto_sub_run_full_detail_to_api(sub_run: EtoSubRunDetailView) -> EtoSubRunFul
 
     Args:
         sub_run: EtoSubRunDetailView domain dataclass with all stage data
+        customer_name: Customer name from Access DB (optional)
 
     Returns:
         EtoSubRunFullDetail Pydantic model for API response
@@ -280,6 +301,7 @@ def eto_sub_run_full_detail_to_api(sub_run: EtoSubRunDetailView) -> EtoSubRunFul
         template = EtoSubRunTemplate(
             id=sub_run.template_id,
             name=sub_run.template_name or "",
+            customer_name=customer_name,
         )
 
     # Build extraction stage detail (if exists)

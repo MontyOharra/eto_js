@@ -7,6 +7,8 @@ import type { VersionListItem } from '../../types';
 
 interface TemplateDetailHeaderProps {
   templateName: string;
+  customerName: string | null;
+  customerId: number | null;
   versions: VersionListItem[];
   selectedVersionId: number | null;
   currentVersionId: number | null;
@@ -16,6 +18,8 @@ interface TemplateDetailHeaderProps {
 
 export function TemplateDetailHeader({
   templateName,
+  customerName,
+  customerId,
   versions,
   selectedVersionId,
   currentVersionId,
@@ -25,7 +29,14 @@ export function TemplateDetailHeader({
   return (
     <div className="flex items-center justify-between p-4 border-b border-gray-700 flex-shrink-0">
       <div className="flex items-center space-x-4">
-        <h2 className="text-xl font-semibold text-white">{templateName}</h2>
+        <div className="flex items-center space-x-2">
+          <h2 className="text-xl font-semibold text-white">{templateName}</h2>
+          {(customerName || customerId) && (
+            <span className="text-sm text-gray-400">
+              ({customerName || `Customer #${customerId}`})
+            </span>
+          )}
+        </div>
 
         {/* Version selector */}
         {versions.length > 0 && (
