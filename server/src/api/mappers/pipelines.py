@@ -7,6 +7,7 @@ from shared.types.pipelines import (
     EntryPoint as EntryPointDomain,
     ModuleInstance as ModuleInstanceDomain,
     NodeConnection as NodeConnectionDomain,
+    OutputChannelInstance as OutputChannelInstanceDomain,
     PipelineState as PipelineStateDomain,
     VisualState as VisualStateDomain,
     Position as PositionDomain,
@@ -21,6 +22,7 @@ from api.schemas.pipelines import (
     EntryPoint,
     ModuleInstance,
     NodeConnection,
+    OutputChannelInstance,
     PipelineState,
     VisualState,
     Position,
@@ -72,12 +74,22 @@ def convert_connection(connection: NodeConnectionDomain) -> NodeConnection:
     )
 
 
+def convert_output_channel_instance(oc: OutputChannelInstanceDomain) -> OutputChannelInstance:
+    """Convert domain OutputChannelInstance to API OutputChannelInstance"""
+    return OutputChannelInstance(
+        output_channel_instance_id=oc.output_channel_instance_id,
+        channel_type=oc.channel_type,
+        inputs=[convert_node(node) for node in oc.inputs]
+    )
+
+
 def convert_pipeline_state(pipeline_state: PipelineStateDomain) -> PipelineState:
     """Convert domain PipelineState to API PipelineState"""
     return PipelineState(
         entry_points=[convert_entry_point(ep) for ep in pipeline_state.entry_points],
         modules=[convert_module_instance(mod) for mod in pipeline_state.modules],
-        connections=[convert_connection(conn) for conn in pipeline_state.connections]
+        connections=[convert_connection(conn) for conn in pipeline_state.connections],
+        output_channels=[convert_output_channel_instance(oc) for oc in pipeline_state.output_channels]
     )
 
 
@@ -196,6 +208,25 @@ def convert_connection_to_domain(connection: NodeConnection | dict) -> NodeConne
     )
 
 
+def convert_output_channel_instance_to_domain(oc: OutputChannelInstance | dict) -> OutputChannelInstanceDomain:
+    """
+    Convert API OutputChannelInstance to domain OutputChannelInstance.
+    Handles both Pydantic models and dictionaries.
+    """
+    if isinstance(oc, dict):
+        return OutputChannelInstanceDomain(
+            output_channel_instance_id=oc['output_channel_instance_id'],
+            channel_type=oc['channel_type'],
+            inputs=[convert_node_to_domain(node) for node in oc.get('inputs', [])]
+        )
+
+    return OutputChannelInstanceDomain(
+        output_channel_instance_id=oc.output_channel_instance_id,
+        channel_type=oc.channel_type,
+        inputs=[convert_node_to_domain(node) for node in oc.inputs]
+    )
+
+
 def convert_pipeline_state_to_domain(pipeline_state: PipelineState | dict) -> PipelineStateDomain:
     """
     Convert API PipelineState to domain PipelineState.
@@ -215,13 +246,18 @@ def convert_pipeline_state_to_domain(pipeline_state: PipelineState | dict) -> Pi
             connections=[
                 convert_connection_to_domain(conn)
                 for conn in pipeline_state.get('connections', [])
+            ],
+            output_channels=[
+                convert_output_channel_instance_to_domain(oc)
+                for oc in pipeline_state.get('output_channels', [])
             ]
         )
 
     return PipelineStateDomain(
         entry_points=[convert_entry_point_to_domain(ep) for ep in pipeline_state.entry_points],
         modules=[convert_module_instance_to_domain(mod) for mod in pipeline_state.modules],
-        connections=[convert_connection_to_domain(conn) for conn in pipeline_state.connections]
+        connections=[convert_connection_to_domain(conn) for conn in pipeline_state.connections],
+        output_channels=[convert_output_channel_instance_to_domain(oc) for oc in pipeline_state.output_channels]
     )
 
 

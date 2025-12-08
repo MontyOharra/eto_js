@@ -423,7 +423,9 @@ class PipelineDefinitionStepModel(BaseModel):
     )
 
     module_instance_id: Mapped[str] = mapped_column(String(100), nullable=False)
-    module_ref: Mapped[str] = mapped_column(ForeignKey("modules.id", ondelete="CASCADE"), nullable=False, index=True)
+    # module_ref is nullable to support output channel steps (which are not real modules)
+    # NULL module_ref indicates an output channel step; channel_type is stored in module_config
+    module_ref: Mapped[Optional[str]] = mapped_column(ForeignKey("modules.id", ondelete="CASCADE"), nullable=True, index=True)
 
     module_config: Mapped[str] = mapped_column(Text, nullable=False)
     input_field_mappings: Mapped[str] = mapped_column(Text, nullable=False)
@@ -439,7 +441,7 @@ class PipelineDefinitionStepModel(BaseModel):
 
     # Relationships
     pipeline_definition: Mapped["PipelineDefinitionModel"] = relationship(back_populates="steps")
-    module: Mapped["ModuleModel"] = relationship(back_populates="steps")
+    module: Mapped[Optional["ModuleModel"]] = relationship(back_populates="steps")  # Optional for output channel steps
 
     __table_args__ = (
         Index("idx_pipeline_definition_id", "pipeline_definition_id"),
@@ -781,4 +783,47 @@ class EtoSubRunOutputExecutionModel(BaseModel):
         Index("idx_eto_sub_run_output_exec_module", "module_id"),
         Index("idx_eto_sub_run_output_exec_hawb", "hawb"),
         Index("idx_eto_sub_run_output_exec_awaiting", "status", postgresql_where="status = 'awaiting_approval'"),
+    )
+
+
+# =========================
+# output_channel_types (catalog of allowed output channels)
+# =========================
+
+class OutputChannelTypeModel(BaseModel):
+    """
+    Catalog of allowed output channel types for pipeline outputs.
+
+    Unlike modules, output channels are simple data definitions with no handlers.
+    They define the allowed fields that can flow out of a pipeline into the
+    pending orders system.
+    """
+    __tablename__ = "output_channel_types"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    # Identity
+    name: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)  # e.g., "hawb", "pickup_address"
+    label: Mapped[str] = mapped_column(String(100), nullable=False)  # e.g., "HAWB", "Pickup Address"
+
+    # Data type constraint
+    data_type: Mapped[str] = mapped_column(String(20), nullable=False)  # e.g., "str", "datetime", "int", "float"
+
+    # Metadata
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    is_required: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)  # Required for order creation?
+    category: Mapped[Optional[str]] = mapped_column(String(50))  # e.g., "identification", "pickup", "delivery", "cargo"
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+    )
+
+    __table_args__ = (
+        Index("idx_output_channel_types_name", "name"),
+        Index("idx_output_channel_types_category", "category"),
+        Index("idx_output_channel_types_required", "is_required"),
     )

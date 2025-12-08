@@ -73,11 +73,19 @@ export interface EntryPoint {
   outputs: NodePin[];      // Array with single output pin containing the type
 }
 
+// Output channel instance - structured like a module with inputs only
+export interface OutputChannelInstance {
+  output_channel_instance_id: string;  // Format: OC01, OC02, etc.
+  channel_type: string;                // e.g., "hawb", "pickup_address"
+  inputs: NodePin[];                   // Single input pin
+}
+
 // Pipeline state (execution data)
 export interface PipelineState {
   entry_points: EntryPoint[];
   modules: ModuleInstance[];
   connections: NodeConnection[];
+  output_channels: OutputChannelInstance[];
 }
 
 // Visual state (UI positioning) - flat structure with all node positions

@@ -43,16 +43,8 @@ export function usePipelineValidation(
       return;
     }
 
-    // Empty pipelines (only entry points, no modules) are invalid
-    if (pipelineState.modules.length === 0) {
-      console.log('[usePipelineValidation] Empty pipeline - setting invalid');
-      setIsValid(false);
-      setError({
-        code: 'empty_pipeline',
-        message: 'Pipeline must contain at least one module'
-      });
-      return;
-    }
+    // Note: Modules are no longer required - only the required output channel (hawb) is mandatory
+    // The backend validation will check for the required output channel
 
     console.log('[usePipelineValidation] State changed, starting debounce timer', {
       pipelineState,

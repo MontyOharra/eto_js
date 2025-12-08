@@ -221,7 +221,7 @@ function OrdersPage() {
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* View Mode Toggle */}
-      <div className="px-6 pt-4 flex-shrink-0">
+      <div className="px-6 pt-4 flex-shrink-0 flex items-center justify-between">
         <div className="inline-flex bg-gray-800 rounded-lg p-1">
           <button
             onClick={() => setViewMode('pending-orders')}
@@ -254,6 +254,7 @@ function OrdersPage() {
             )}
           </button>
         </div>
+
       </div>
 
       {/* Pending Orders View */}

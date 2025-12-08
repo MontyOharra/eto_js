@@ -9,7 +9,7 @@ import { PipelineGraph } from "../PipelineGraph/PipelineGraph";
 import { ExecutePipelineModal } from "../ExecutePipelineModal";
 import { PipelineBuilderModal } from "../PipelineBuilderModal";
 import { usePipelinesApi, PipelineDetail } from "../../";
-import { useModules } from "../../../modules";
+import { useModules, useOutputChannels } from "../../../modules";
 
 interface PipelineViewerModalProps {
   isOpen: boolean;
@@ -24,8 +24,9 @@ export function PipelineViewerModal({
 }: PipelineViewerModalProps) {
   const { getPipeline, createPipeline } = usePipelinesApi();
 
-  // Fetch modules using TanStack Query
+  // Fetch modules and output channels using TanStack Query
   const { data: modules = [] } = useModules();
+  const { data: outputChannels = [] } = useOutputChannels();
 
   const [pipeline, setPipeline] = useState<PipelineDetail | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -165,6 +166,7 @@ export function PipelineViewerModal({
               visualState={pipeline.visual_state}
               mode="view"
               modules={modules}
+              outputChannels={outputChannels}
             />
           )}
         </div>

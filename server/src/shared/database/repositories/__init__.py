@@ -13,6 +13,7 @@ from .pdf_template_version import PdfTemplateVersionRepository
 from .pipeline_definition import PipelineDefinitionRepository
 from .pipeline_definition_step import PipelineDefinitionStepRepository
 from .module import ModuleRepository
+from .output_channel_type import OutputChannelTypeRepository
 
 __all__ = [
     'BaseRepository',
@@ -28,4 +29,5 @@ __all__ = [
     'PipelineDefinitionRepository',
     'PipelineDefinitionStepRepository',
     'ModuleRepository',
+    'OutputChannelTypeRepository',
 ]

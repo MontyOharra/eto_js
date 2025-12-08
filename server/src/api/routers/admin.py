@@ -7,9 +7,11 @@ import sys
 from fastapi import APIRouter, Depends, status
 
 from api.schemas.modules import SyncModulesResponse, ModuleSyncResult
+from api.schemas.output_channels import SyncOutputChannelsResponse
 
 from shared.services.service_container import ServiceContainer
 from features.modules.service import ModulesService
+from features.pipeline_results.service import PipelineResultService
 
 logger = logging.getLogger(__name__)
 
@@ -127,4 +129,43 @@ async def sync_modules(
             modules_failed=error_count,
             results=results,
             message=f"Fatal error: {str(e)}"
+        )
+
+
+@router.post("/sync-output-channels", response_model=SyncOutputChannelsResponse, status_code=status.HTTP_200_OK)
+async def sync_output_channels(
+    pipeline_result_service: PipelineResultService = Depends(lambda: ServiceContainer.get_pipeline_result_service())
+) -> SyncOutputChannelsResponse:
+    """
+    Sync output channel type definitions from code to database catalog.
+
+    This endpoint reads the static OUTPUT_CHANNEL_DEFINITIONS and syncs them
+    to the output_channel_types table.
+
+    Returns:
+        SyncOutputChannelsResponse with sync results
+    """
+    try:
+        logger.info("Starting output channel types sync via API...")
+
+        result = pipeline_result_service.sync_output_channel_types()
+
+        return SyncOutputChannelsResponse(
+            success=True,
+            total=result["total"],
+            created=result["created"],
+            updated=result["updated"],
+            channel_names=result["channel_names"],
+            message=f"Successfully synced {result['total']} output channel types ({result['created']} created, {result['updated']} updated)"
+        )
+
+    except Exception as e:
+        logger.error(f"Error during output channel sync: {e}", exc_info=True)
+        return SyncOutputChannelsResponse(
+            success=False,
+            total=0,
+            created=0,
+            updated=0,
+            channel_names=[],
+            message=f"Error: {str(e)}"
         )

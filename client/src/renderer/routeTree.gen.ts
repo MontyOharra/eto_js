@@ -20,6 +20,7 @@ import { Route as DashboardOrdersIndexRouteImport } from './pages/dashboard/orde
 import { Route as DashboardEtoIndexRouteImport } from './pages/dashboard/eto/index'
 import { Route as DashboardEtoOldIndexRouteImport } from './pages/dashboard/eto-old/index'
 import { Route as DashboardConfigsIndexRouteImport } from './pages/dashboard/configs/index'
+import { Route as DashboardOrdersLayoutARouteImport } from './pages/dashboard/orders/layout-a'
 import { Route as DashboardEtoRunIdRouteImport } from './pages/dashboard/eto/$runId'
 
 const LoginRoute = LoginRouteImport.update({
@@ -78,6 +79,11 @@ const DashboardConfigsIndexRoute = DashboardConfigsIndexRouteImport.update({
   path: '/configs/',
   getParentRoute: () => DashboardRouteRoute,
 } as any)
+const DashboardOrdersLayoutARoute = DashboardOrdersLayoutARouteImport.update({
+  id: '/orders/layout-a',
+  path: '/orders/layout-a',
+  getParentRoute: () => DashboardRouteRoute,
+} as any)
 const DashboardEtoRunIdRoute = DashboardEtoRunIdRouteImport.update({
   id: '/eto/$runId',
   path: '/eto/$runId',
@@ -90,6 +96,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/dashboard/eto/$runId': typeof DashboardEtoRunIdRoute
+  '/dashboard/orders/layout-a': typeof DashboardOrdersLayoutARoute
   '/dashboard/configs': typeof DashboardConfigsIndexRoute
   '/dashboard/eto-old': typeof DashboardEtoOldIndexRoute
   '/dashboard/eto': typeof DashboardEtoIndexRoute
@@ -103,6 +110,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/dashboard': typeof DashboardIndexRoute
   '/dashboard/eto/$runId': typeof DashboardEtoRunIdRoute
+  '/dashboard/orders/layout-a': typeof DashboardOrdersLayoutARoute
   '/dashboard/configs': typeof DashboardConfigsIndexRoute
   '/dashboard/eto-old': typeof DashboardEtoOldIndexRoute
   '/dashboard/eto': typeof DashboardEtoIndexRoute
@@ -118,6 +126,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/dashboard/eto/$runId': typeof DashboardEtoRunIdRoute
+  '/dashboard/orders/layout-a': typeof DashboardOrdersLayoutARoute
   '/dashboard/configs/': typeof DashboardConfigsIndexRoute
   '/dashboard/eto-old/': typeof DashboardEtoOldIndexRoute
   '/dashboard/eto/': typeof DashboardEtoIndexRoute
@@ -134,6 +143,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/dashboard/'
     | '/dashboard/eto/$runId'
+    | '/dashboard/orders/layout-a'
     | '/dashboard/configs'
     | '/dashboard/eto-old'
     | '/dashboard/eto'
@@ -147,6 +157,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/dashboard'
     | '/dashboard/eto/$runId'
+    | '/dashboard/orders/layout-a'
     | '/dashboard/configs'
     | '/dashboard/eto-old'
     | '/dashboard/eto'
@@ -161,6 +172,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/dashboard/'
     | '/dashboard/eto/$runId'
+    | '/dashboard/orders/layout-a'
     | '/dashboard/configs/'
     | '/dashboard/eto-old/'
     | '/dashboard/eto/'
@@ -255,6 +267,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardConfigsIndexRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
+    '/dashboard/orders/layout-a': {
+      id: '/dashboard/orders/layout-a'
+      path: '/orders/layout-a'
+      fullPath: '/dashboard/orders/layout-a'
+      preLoaderRoute: typeof DashboardOrdersLayoutARouteImport
+      parentRoute: typeof DashboardRouteRoute
+    }
     '/dashboard/eto/$runId': {
       id: '/dashboard/eto/$runId'
       path: '/eto/$runId'
@@ -268,6 +287,7 @@ declare module '@tanstack/react-router' {
 interface DashboardRouteRouteChildren {
   DashboardIndexRoute: typeof DashboardIndexRoute
   DashboardEtoRunIdRoute: typeof DashboardEtoRunIdRoute
+  DashboardOrdersLayoutARoute: typeof DashboardOrdersLayoutARoute
   DashboardConfigsIndexRoute: typeof DashboardConfigsIndexRoute
   DashboardEtoOldIndexRoute: typeof DashboardEtoOldIndexRoute
   DashboardEtoIndexRoute: typeof DashboardEtoIndexRoute
@@ -280,6 +300,7 @@ interface DashboardRouteRouteChildren {
 const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
   DashboardIndexRoute: DashboardIndexRoute,
   DashboardEtoRunIdRoute: DashboardEtoRunIdRoute,
+  DashboardOrdersLayoutARoute: DashboardOrdersLayoutARoute,
   DashboardConfigsIndexRoute: DashboardConfigsIndexRoute,
   DashboardEtoOldIndexRoute: DashboardEtoOldIndexRoute,
   DashboardEtoIndexRoute: DashboardEtoIndexRoute,

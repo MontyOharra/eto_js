@@ -3,17 +3,24 @@ Pipeline Result Service
 
 Service for executing output modules after pipeline execution completes.
 Handles order creation/updates via output definitions.
+Also manages output channel type catalog sync.
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, TYPE_CHECKING
 
 from shared.logging import get_logger
 from shared.exceptions import OutputExecutionError
 from shared.database.data_database_manager import DataDatabaseManager
+from shared.database.repositories import OutputChannelTypeRepository
+from shared.types.output_channels import OutputChannelTypeCreate
 
 from features.pipeline_results.helpers.orders import OrderHelpers
 from features.pipeline_results.output_definitions.base import OutputDefinitionBase
 from features.pipeline_results.output_definitions.test_output import TestOutputDefinition
+from features.pipeline_results.output_channels import OUTPUT_CHANNEL_DEFINITIONS
+
+if TYPE_CHECKING:
+    from shared.database.connection import DatabaseConnectionManager
 
 logger = get_logger(__name__)
 
@@ -33,6 +40,7 @@ class PipelineResultService:
 
     # ==================== Dependencies ====================
 
+    _connection_manager: 'DatabaseConnectionManager'
     _data_database_manager: DataDatabaseManager
     _database_name: str
     _order_helpers: OrderHelpers
@@ -41,6 +49,7 @@ class PipelineResultService:
 
     def __init__(
         self,
+        connection_manager: 'DatabaseConnectionManager',
         data_database_manager: DataDatabaseManager,
         database_name: str = "htc_300_db"
     ) -> None:
@@ -48,11 +57,13 @@ class PipelineResultService:
         Initialize the service.
 
         Args:
+            connection_manager: DatabaseConnectionManager for ETO database access
             data_database_manager: DataDatabaseManager for business database access
             database_name: Name of the database containing order tables
         """
         logger.debug("Initializing PipelineResultService...")
 
+        self._connection_manager = connection_manager
         self._data_database_manager = data_database_manager
         self._database_name = database_name
 
@@ -158,3 +169,60 @@ class PipelineResultService:
         if not definition:
             raise OutputExecutionError(f"No output definition registered for module: {module_id}")
         return definition
+
+    # ==================== Output Channel Sync ====================
+
+    def sync_output_channel_types(self) -> Dict[str, Any]:
+        """
+        Sync output channel type definitions to the database.
+
+        Reads static definitions from OUTPUT_CHANNEL_DEFINITIONS and
+        upserts each into the output_channel_types table.
+
+        Returns:
+            Dict with sync statistics:
+                - total: number of definitions processed
+                - created: number of new records created
+                - updated: number of existing records updated
+                - channel_names: list of all channel names synced
+        """
+        logger.info("Starting output channel types sync...")
+
+        repo = OutputChannelTypeRepository(connection_manager=self._connection_manager)
+
+        created = 0
+        updated = 0
+        channel_names = []
+
+        for definition in OUTPUT_CHANNEL_DEFINITIONS:
+            # Convert definition to create dataclass
+            channel_create = OutputChannelTypeCreate(
+                name=definition.name,
+                label=definition.label,
+                data_type=definition.data_type,
+                is_required=definition.is_required,
+                category=definition.category,
+                description=definition.description,
+            )
+
+            # Check if exists to track created vs updated
+            existing = repo.get_by_name(definition.name)
+
+            # Upsert the channel type
+            repo.upsert(channel_create)
+
+            if existing:
+                updated += 1
+            else:
+                created += 1
+
+            channel_names.append(definition.name)
+
+        logger.info(f"Output channel types sync complete: {created} created, {updated} updated")
+
+        return {
+            "total": len(OUTPUT_CHANNEL_DEFINITIONS),
+            "created": created,
+            "updated": updated,
+            "channel_names": channel_names,
+        }

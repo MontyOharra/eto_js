@@ -3,7 +3,7 @@ Pipeline Definition Step Types
 Domain types for pipeline_definition_steps table
 """
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Optional
 
 from .pipelines import NodeInstance
 
@@ -22,8 +22,8 @@ class PipelineDefinitionStep:
     id: int
     pipeline_definition_id: int
     module_instance_id: str
-    module_ref: str  # e.g., "text_cleaner:1.0.0"
-    module_config: dict[str, Any]  # Module-specific configuration
+    module_ref: Optional[str]  # e.g., "text_cleaner:1.0.0", None for output channel steps
+    module_config: dict[str, Any]  # Module-specific configuration; contains channel_type for output channels
     input_field_mappings: dict[str, str]  # Maps input pin IDs to source node IDs
     node_metadata: dict[str, list[NodeInstance]]  # Maps "inputs"/"outputs" to pin metadata
     step_number: int  # Execution order (topological layer)
@@ -44,8 +44,8 @@ class PipelineDefinitionStepCreate:
     """
     pipeline_definition_id: int
     module_instance_id: str
-    module_ref: str
-    module_config: dict[str, Any]
+    module_ref: Optional[str]  # None for output channel steps
+    module_config: dict[str, Any]  # Contains channel_type for output channel steps
     input_field_mappings: dict[str, str]
     node_metadata: dict[str, list[NodeInstance]]
     step_number: int

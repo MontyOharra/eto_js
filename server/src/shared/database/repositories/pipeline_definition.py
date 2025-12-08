@@ -47,7 +47,7 @@ class PipelineDefinitionRepository(BaseRepository[PipelineDefinitionModel]):
 
     def _deserialize_pipeline_state(self, json_str: str) -> PipelineState:
         """Convert JSON string to PipelineState dataclass"""
-        from shared.types.pipelines import EntryPoint, ModuleInstance, NodeInstance, NodeConnection
+        from shared.types.pipelines import EntryPoint, ModuleInstance, NodeInstance, NodeConnection, OutputChannelInstance
         data = json.loads(json_str)
 
         # Reconstruct nested dataclasses
@@ -74,10 +74,20 @@ class PipelineDefinitionRepository(BaseRepository[PipelineDefinitionModel]):
 
         connections = [NodeConnection(**conn) for conn in data.get("connections", [])]
 
+        output_channels = []
+        for oc in data.get("output_channels", []):
+            inputs = [NodeInstance(**ni) for ni in oc.get("inputs", [])]
+            output_channels.append(OutputChannelInstance(
+                output_channel_instance_id=oc["output_channel_instance_id"],
+                channel_type=oc["channel_type"],
+                inputs=inputs
+            ))
+
         return PipelineState(
             entry_points=entry_points,
             modules=modules,
-            connections=connections
+            connections=connections,
+            output_channels=output_channels
         )
 
     def _deserialize_visual_state(self, json_str: str) -> VisualState:

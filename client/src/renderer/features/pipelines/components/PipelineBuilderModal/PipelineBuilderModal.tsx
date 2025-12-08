@@ -49,6 +49,7 @@ export function PipelineBuilderModal({
     entry_points: [], // Will be populated on save
     modules: initialData?.pipeline_state.modules || [],
     connections: initialData?.pipeline_state.connections || [],
+    output_channels: initialData?.pipeline_state.output_channels || [],
   });
 
   // Visual state - node positions
@@ -147,6 +148,7 @@ export function PipelineBuilderModal({
         entry_points: [],
         modules: [],
         connections: [],
+        output_channels: [],
       });
       setVisualState({});
     } catch (error) {
@@ -164,6 +166,7 @@ export function PipelineBuilderModal({
       entry_points: [],
       modules: [],
       connections: [],
+      output_channels: [],
     });
     setVisualState({});
     setCurrentStep("entry-points");

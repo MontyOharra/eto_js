@@ -17,6 +17,9 @@ export type {
 
   // Module Template
   ModuleTemplate,
+
+  // Output Channel Types
+  OutputChannelType,
 } from './types';
 
 // ============================================================================
@@ -32,7 +35,7 @@ export type {
 // API Hooks
 // ============================================================================
 
-export { useModules, useModule } from './api/hooks';
+export { useModules, useModule, useOutputChannels } from './api/hooks';
 
 // ============================================================================
 // Components

@@ -1,15 +1,16 @@
 """
 Modules API Router
-Endpoints for module catalog access
+Endpoints for module catalog and output channel access
 """
 import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, Query
 
-from api.schemas.modules import Module
+from api.schemas.modules import Module, OutputChannel
 from api.mappers.modules import module_to_api
 
 from shared.services.service_container import ServiceContainer
+from shared.database.repositories import OutputChannelTypeRepository
 from features.modules.service import ModulesService
 
 logger = logging.getLogger(__name__)
@@ -38,3 +39,37 @@ async def list_modules(
 
     # List comprehension inline - no separate list conversion function
     return [module_to_api(m) for m in modules]
+
+
+@router.get("/output-channels", response_model=list[OutputChannel])
+async def list_output_channels() -> list[OutputChannel]:
+    """
+    Get all output channel type definitions from the database.
+
+    Returns the catalog of available output channel types that can be
+    placed in pipelines to collect data for the pending orders system.
+
+    Note: Output channels must be synced via POST /admin/sync-output-channels first.
+    """
+    # Get repository with connection manager
+    repo = OutputChannelTypeRepository(
+        connection_manager=ServiceContainer.get_connection_manager()
+    )
+
+    # Fetch from database
+    channels = repo.get_all()
+
+    logger.info(f"Retrieved {len(channels)} output channel types from database")
+
+    # Convert domain objects to API schema
+    return [
+        OutputChannel(
+            name=ch.name,
+            label=ch.label,
+            data_type=ch.data_type,
+            category=ch.category,
+            description=ch.description,
+            is_required=ch.is_required,
+        )
+        for ch in channels
+    ]

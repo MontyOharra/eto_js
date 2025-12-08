@@ -19,6 +19,7 @@ from shared.types.pipelines import (
     ModuleInstance,
     NodeConnection,
     EntryPoint,
+    OutputChannelInstance,
     PipelineIndices,
     PinInfo,
 )
@@ -134,6 +135,18 @@ class PipelineService:
                     module_instance_id=module.module_instance_id
                 )
 
+        # Index output channels and their input pins
+        for output_channel in pipeline_state.output_channels:
+            for input_pin in output_channel.inputs:
+                pin_by_id[input_pin.node_id] = PinInfo(
+                    node_id=input_pin.node_id,
+                    type=input_pin.type,
+                    direction="output_channel",
+                    name=input_pin.name,
+                    module_instance_id=None,
+                    output_channel_instance_id=output_channel.output_channel_instance_id
+                )
+
         # Build input-to-upstream mapping
         for connection in pipeline_state.connections:
             input_to_upstream[connection.to_node_id] = connection.from_node_id
@@ -229,51 +242,35 @@ class PipelineService:
         """
         Remove unreachable modules from the pipeline (dead branch pruning).
 
-        A module is reachable if it's an output module module OR it has a path to an output module module.
-        Dead branches are modules that don't contribute to any output module execution.
+        A module is reachable if it has a path to any output channel.
+        Dead branches are modules that don't contribute to any output channel.
 
         Algorithm:
-        1. Find all output module modules (using module catalog)
-        2. Work backwards from output module inputs to find all upstream modules (BFS)
+        1. Start from all output channel input pins
+        2. Work backwards via BFS to find all upstream modules
         3. Filter pipeline to only include reachable modules and their connections
 
         Args:
             pipeline_state: Original validated pipeline
 
         Returns:
-            New PipelineState with only output module-reachable modules
+            New PipelineState with only output-channel-reachable modules
 
         Note:
             Original pipeline_state is not modified (returns new instance)
         """
         indices = self._build_indices(pipeline_state)
 
-        # Step 1: Find all output module modules using module catalog
-        output_modules: Set[str] = set()
-        for module in pipeline_state.modules:
-            # Parse module_ref to get module_id and version
-            if ":" not in module.module_ref:
-                continue  # Skip malformed refs (should be caught by validation)
+        logger.debug(f"Found {len(pipeline_state.output_channels)} output channel(s)")
 
-            module_id, version = module.module_ref.split(":", 1)
-
-            # Look up module in catalog
-            template = self.module_catalog_repository.get_by_module_ref(module_id, version)
-            if template and template.module_kind.value == "output":
-                output_modules.add(module.module_instance_id)
-
-        logger.debug(f"Found {len(output_modules)} output module module(s)")
-
-        # Step 2: BFS backwards from output module inputs to find all upstream modules
-        reachable_modules: Set[str] = set(output_modules)  # output modules are always reachable
+        # Step 1: BFS backwards from output channel inputs to find all upstream modules
+        reachable_modules: Set[str] = set()
         queue: List[str] = []
 
-        # Start BFS from all output module input pins
-        for module in pipeline_state.modules:
-            if module.module_instance_id in output_modules:
-                # Add all input pins to queue
-                for input_pin in module.inputs:
-                    queue.append(input_pin.node_id)
+        # Start BFS from all output channel input pins
+        for output_channel in pipeline_state.output_channels:
+            for input_pin in output_channel.inputs:
+                queue.append(input_pin.node_id)
 
         visited_pins: Set[str] = set()
 
@@ -312,7 +309,7 @@ class PipelineService:
         if modules_pruned > 0:
             logger.info(f"Pruned {modules_pruned} dead branch module(s) ({modules_after}/{modules_before} remain)")
 
-        # Step 3: Build set of reachable pin node_ids
+        # Step 2: Build set of reachable pin node_ids
         reachable_pins: Set[str] = set()
 
         for module in pipeline_state.modules:
@@ -328,29 +325,38 @@ class PipelineService:
             for output_pin in entry_point.outputs:
                 reachable_pins.add(output_pin.node_id)
 
-        # Step 4: Filter modules to reachable only
+        # Also add output channel input pins
+        for output_channel in pipeline_state.output_channels:
+            for input_pin in output_channel.inputs:
+                reachable_pins.add(input_pin.node_id)
+
+        # Step 3: Filter modules to reachable only
         pruned_modules = [
             module
             for module in pipeline_state.modules
             if module.module_instance_id in reachable_modules
         ]
 
-        # Step 5: Filter connections to those between reachable pins
+        # Step 4: Filter connections to those between reachable pins
         pruned_connections = [
             conn
             for conn in pipeline_state.connections
             if conn.from_node_id in reachable_pins and conn.to_node_id in reachable_pins
         ]
 
-        # Step 6: Keep all entry points (they're pipeline inputs, always needed)
+        # Step 5: Keep all entry points (they're pipeline inputs, always needed)
         # Note: Could prune unused entry points, but keeping them preserves interface
         pruned_entry_points = pipeline_state.entry_points
+
+        # Step 6: Keep all output channels (they're pipeline outputs)
+        pruned_output_channels = pipeline_state.output_channels
 
         # Return new PipelineState with pruned data
         return PipelineState(
             entry_points=pruned_entry_points,
             modules=pruned_modules,
             connections=pruned_connections,
+            output_channels=pruned_output_channels,
         )
 
     def _compile_pipeline(self, pruned_pipeline: PipelineState) -> List[PipelineDefinitionStepCreate]:

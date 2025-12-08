@@ -80,14 +80,16 @@ class PipelineExecutionResult:
     """
     Result of pipeline execution (simulation mode).
 
-    Contains all execution steps and collected action data without
-    any database persistence.
+    Contains all execution steps and collected output channel values
+    without any database persistence.
 
     Used by simulate endpoint to show users what would happen if
     the pipeline were executed in production.
     """
     status: str
     steps: list[PipelineExecutionStepResult]
-    output_module_id: str | None
-    output_module_inputs: dict[str, Any]
+    output_channel_values: dict[str, Any]  # {channel_type: value} e.g., {"hawb": "ABC123", "pickup_address": "123 Main St"}
     error: str | None
+    # Legacy fields for backward compatibility (deprecated)
+    output_module_id: str | None = None
+    output_module_inputs: dict[str, Any] = field(default_factory=dict)

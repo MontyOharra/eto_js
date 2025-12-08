@@ -6,7 +6,7 @@
  */
 
 import { useState } from "react";
-import { useModules, ModuleSelectorPane } from "../../../modules";
+import { useModules, useOutputChannels, ModuleSelectorPane } from "../../../modules";
 import { PipelineGraph } from "../PipelineGraph";
 import type { PipelineState, VisualState, EntryPoint } from "../../types";
 
@@ -25,8 +25,9 @@ export function PipelineEditor({
   onPipelineStateChange,
   onVisualStateChange,
 }: PipelineEditorProps) {
-  // Fetch modules using TanStack Query
+  // Fetch modules and output channels using TanStack Query
   const { data: modules = [], isLoading: modulesLoading } = useModules();
+  const { data: outputChannels = [] } = useOutputChannels();
 
   // Module selection state
   const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null);
@@ -61,6 +62,7 @@ export function PipelineEditor({
       {/* Module Selector Pane */}
       <ModuleSelectorPane
         modules={modules}
+        outputChannels={outputChannels}
         selectedModuleId={selectedModuleId}
         onModuleSelect={handleModuleSelect}
       />
@@ -73,6 +75,7 @@ export function PipelineEditor({
           entryPoints={effectiveEntryPoints}
           mode="edit"
           modules={modules}
+          outputChannels={outputChannels}
           selectedModuleId={selectedModuleId}
           onModulePlaced={handleModulePlaced}
           onPipelineStateChange={onPipelineStateChange}

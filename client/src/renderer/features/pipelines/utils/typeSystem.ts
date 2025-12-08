@@ -3,7 +3,7 @@
  * Pure functions for type constraint validation and propagation
  */
 
-import { PipelineState, EntryPoint, ModuleInstance, NodePin } from "../types";
+import { PipelineState, EntryPoint, ModuleInstance, NodePin, OutputChannelInstance } from "../types";
 
 /**
  * Calculate intersection of two type arrays
@@ -40,7 +40,7 @@ function findModule(
   pipelineState: PipelineState,
   effectiveEntryPoints: EntryPoint[],
   moduleId: string
-): { module: ModuleInstance; isEntryPoint: boolean } | undefined {
+): { module: ModuleInstance; isEntryPoint: boolean; isOutputChannel: boolean } | undefined {
   // Check if it's an entry point
   const entryPoint = effectiveEntryPoints.find((ep) => ep.entry_point_id === moduleId);
   if (entryPoint) {
@@ -52,13 +52,29 @@ function findModule(
       inputs: [],
       outputs: entryPoint.outputs,
     };
-    return { module: moduleInstance, isEntryPoint: true };
+    return { module: moduleInstance, isEntryPoint: true, isOutputChannel: false };
   }
 
   // Check regular modules
   const module = pipelineState.modules.find((m) => m.module_instance_id === moduleId);
   if (module) {
-    return { module, isEntryPoint: false };
+    return { module, isEntryPoint: false, isOutputChannel: false };
+  }
+
+  // Check output channels
+  const outputChannel = (pipelineState.output_channels || []).find(
+    (oc) => oc.output_channel_instance_id === moduleId
+  );
+  if (outputChannel) {
+    // Convert OutputChannelInstance to ModuleInstance structure
+    const moduleInstance: ModuleInstance = {
+      module_instance_id: outputChannel.output_channel_instance_id,
+      module_ref: `output_channel_${outputChannel.channel_type}:1.0.0`,
+      config: {},
+      inputs: outputChannel.inputs,
+      outputs: [],
+    };
+    return { module: moduleInstance, isEntryPoint: false, isOutputChannel: true };
   }
 
   return undefined;
@@ -184,6 +200,13 @@ function findModuleIdForPin(
     const allPins = [...module.inputs, ...module.outputs];
     if (allPins.some((p) => p.node_id === pinId)) {
       return module.module_instance_id;
+    }
+  }
+
+  // Check output channels
+  for (const oc of pipelineState.output_channels || []) {
+    if (oc.inputs.some((p) => p.node_id === pinId)) {
+      return oc.output_channel_instance_id;
     }
   }
 

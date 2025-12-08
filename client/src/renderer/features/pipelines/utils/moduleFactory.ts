@@ -11,8 +11,9 @@ import {
   ModuleInstance,
   NodePin,
   EntryPoint,
+  OutputChannelInstance,
 } from "../types";
-import { generateModuleId, generateNodeId } from "./idGenerator";
+import { generateModuleId, generateNodeId, generateOutputChannelId } from "./idGenerator";
 
 const ALL_TYPES = ["str", "int", "float", "bool", "datetime"];
 
@@ -464,5 +465,125 @@ export function enrichEntryPoint(entryPoint: EntryPoint): EntryPoint {
   return {
     ...entryPoint,
     outputs: enrichedOutputs,
+  };
+}
+
+// ============================================================================
+// Output Channel Functions
+// ============================================================================
+
+/**
+ * Color used for all output channel nodes
+ */
+export const OUTPUT_CHANNEL_COLOR = "#FFFFFF"; // white
+
+/**
+ * Create a ModuleTemplate for an output channel
+ * Unlike ENTRY_POINT_TEMPLATE, this is generated per-channel since each has different types
+ */
+export function createOutputChannelTemplate(
+  channelName: string,
+  channelLabel: string,
+  dataType: string
+): ModuleTemplate {
+  return {
+    id: `output_channel_${channelName}`,
+    version: "1.0.0",
+    title: channelLabel,
+    description: `Output channel for ${channelLabel}`,
+    kind: "output_channel",
+    color: OUTPUT_CHANNEL_COLOR,
+    category: "system",
+    meta: {
+      io_shape: {
+        inputs: {
+          nodes: [
+            {
+              label: "Input",
+              min_count: 1,
+              max_count: 1,
+              typing: {
+                allowed_types: [dataType],
+              },
+            },
+          ],
+        },
+        outputs: { nodes: [] },
+        type_params: {},
+      },
+    },
+    config_schema: {},
+  };
+}
+
+/**
+ * Create a new output channel instance
+ */
+export function createOutputChannelInstance(
+  channelType: string,
+  channelLabel: string,
+  dataType: string
+): OutputChannelInstance {
+  const instanceId = generateOutputChannelId();
+  const template = createOutputChannelTemplate(channelType, channelLabel, dataType);
+
+  // Create input pin using the template
+  const typeParams = template.meta?.io_shape?.type_params || {};
+  const inputs = createPins(
+    template.meta?.io_shape?.inputs,
+    "in",
+    typeParams
+  );
+
+  // Set the node_id to be based on the instance ID for consistency
+  if (inputs.length > 0) {
+    inputs[0] = {
+      ...inputs[0],
+      node_id: `${instanceId}_in`,
+    };
+  }
+
+  return {
+    output_channel_instance_id: instanceId,
+    channel_type: channelType,
+    inputs,
+  };
+}
+
+/**
+ * Enrich an output channel loaded from backend with template metadata
+ */
+export function enrichOutputChannel(
+  outputChannel: OutputChannelInstance,
+  channelLabel: string,
+  dataType: string
+): OutputChannelInstance {
+  const template = createOutputChannelTemplate(
+    outputChannel.channel_type,
+    channelLabel,
+    dataType
+  );
+
+  const inputShape = template.meta?.io_shape?.inputs;
+
+  // Enrich input pins
+  const enrichedInputs = outputChannel.inputs.map((pin) => {
+    const nodeGroup = inputShape?.nodes?.[0];
+    if (!nodeGroup) {
+      console.warn(`No NodeGroup found for output channel input`);
+      return pin;
+    }
+
+    return {
+      ...pin,
+      direction: "in" as const,
+      label: nodeGroup.label,
+      allowed_types: nodeGroup.typing?.allowed_types || [dataType],
+    };
+  });
+
+  return {
+    ...outputChannel,
+    inputs: enrichedInputs,
   };
 }

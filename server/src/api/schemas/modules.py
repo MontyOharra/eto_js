@@ -2,7 +2,7 @@
 Modules API Schemas
 Pydantic models for module catalog endpoints
 """
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Literal
 from pydantic import BaseModel, Field
 
 
@@ -21,6 +21,20 @@ class Module(BaseModel):
     config_schema: Dict[str, Any]  # JSON schema for module configuration
     color: str
     category: str
+
+
+# ============================================================================
+# Output Channel Types
+# ============================================================================
+
+class OutputChannel(BaseModel):
+    """Output channel type definition for API responses"""
+    name: str
+    label: str
+    data_type: Literal["str", "int", "float", "datetime"]
+    category: Literal["identification", "pickup", "delivery", "cargo", "other"]
+    description: Optional[str] = None
+    is_required: bool
 
 
 # ============================================================================

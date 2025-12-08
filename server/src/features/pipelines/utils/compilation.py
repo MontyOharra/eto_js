@@ -5,7 +5,7 @@ Compiles pruned pipeline into ordered execution steps with proper layer-based to
 from typing import List, Dict, Set
 import logging
 
-from shared.types.pipelines import PipelineState, PipelineIndices, ModuleInstance, NodeConnection
+from shared.types.pipelines import PipelineState, PipelineIndices, ModuleInstance, NodeConnection, OutputChannelInstance
 from shared.types.pipeline_definition_step import PipelineDefinitionStepCreate
 
 logger = logging.getLogger(__name__)
@@ -189,6 +189,12 @@ class PipelineCompiler:
                 )
                 steps.append(step)
 
+        # Build output channel steps (terminal collection points)
+        output_channel_steps = PipelineCompiler._build_output_channel_steps(
+            pipeline, layers
+        )
+        steps.extend(output_channel_steps)
+
         return steps
 
     @staticmethod
@@ -223,6 +229,94 @@ class PipelineCompiler:
         for conn in connections:
             if conn.to_node_id in input_pin_ids:
                 # This connection feeds one of our inputs
+                mappings[conn.to_node_id] = conn.from_node_id
+
+        return mappings
+
+    @staticmethod
+    def _build_output_channel_steps(
+        pipeline: PipelineState,
+        layers: List[List[str]]
+    ) -> List[PipelineDefinitionStepCreate]:
+        """
+        Build steps for output channels (terminal collection points).
+
+        Output channels are placed in the layer after all modules,
+        ensuring they execute last and collect final values.
+
+        Args:
+            pipeline: Pruned pipeline state
+            layers: Topological layers of module_instance_ids
+
+        Returns:
+            List of output channel step creation objects
+        """
+        if not pipeline.output_channels:
+            return []
+
+        # Output channels go in the layer after all modules
+        final_layer = len(layers) if layers else 0
+
+        steps: List[PipelineDefinitionStepCreate] = []
+
+        for output_channel in pipeline.output_channels:
+            # Build input mappings (channel input pin → upstream source)
+            input_field_mappings = PipelineCompiler._build_output_channel_input_mappings(
+                output_channel, pipeline.connections
+            )
+
+            # Build node metadata (inputs only, no outputs for terminal nodes)
+            node_metadata = {
+                "inputs": list(output_channel.inputs),
+                "outputs": []
+            }
+
+            # Create step with NULL module_ref to indicate output channel
+            step = PipelineDefinitionStepCreate(
+                pipeline_definition_id=0,  # Will be set by service layer
+                module_instance_id=output_channel.output_channel_instance_id,
+                module_ref=None,  # NULL indicates output channel step
+                module_config={"channel_type": output_channel.channel_type},
+                input_field_mappings=input_field_mappings,
+                node_metadata=node_metadata,
+                step_number=final_layer
+            )
+            steps.append(step)
+
+            logger.debug(
+                f"Created output channel step: {output_channel.output_channel_instance_id} "
+                f"(channel_type={output_channel.channel_type}, layer={final_layer})"
+            )
+
+        logger.info(f"Added {len(steps)} output channel steps at layer {final_layer}")
+
+        return steps
+
+    @staticmethod
+    def _build_output_channel_input_mappings(
+        output_channel: OutputChannelInstance,
+        connections: List[NodeConnection]
+    ) -> Dict[str, str]:
+        """
+        Build input field mappings for an output channel.
+
+        Maps the output channel's input pin to its upstream source.
+
+        Args:
+            output_channel: Output channel to build mappings for
+            connections: All pipeline connections
+
+        Returns:
+            Dict mapping input_pin_id → source_pin_id
+        """
+        mappings: Dict[str, str] = {}
+
+        # Get all input pin IDs for this output channel
+        input_pin_ids = {pin.node_id for pin in output_channel.inputs}
+
+        # Find connections that target these inputs
+        for conn in connections:
+            if conn.to_node_id in input_pin_ids:
                 mappings[conn.to_node_id] = conn.from_node_id
 
         return mappings

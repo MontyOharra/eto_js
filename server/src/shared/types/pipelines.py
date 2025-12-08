@@ -42,6 +42,14 @@ class NodeConnection:
 
 
 @dataclass(frozen=True)
+class OutputChannelInstance:
+    """Output channel instance for collecting pipeline outputs"""
+    output_channel_instance_id: str  # Format: OC01, OC02, etc.
+    channel_type: str                 # e.g., "hawb", "pickup_address"
+    inputs: List[NodeInstance] = field(default_factory=list)  # Single input pin
+
+
+@dataclass(frozen=True)
 class Position:
     """2D position for visual layout"""
     x: float
@@ -54,6 +62,7 @@ class PipelineState:
     entry_points: List[EntryPoint] = field(default_factory=list)
     modules: List[ModuleInstance] = field(default_factory=list)
     connections: List[NodeConnection] = field(default_factory=list)
+    output_channels: List[OutputChannelInstance] = field(default_factory=list)
 
 
 VisualState: TypeAlias = Dict[str, Position]
@@ -64,9 +73,10 @@ class PinInfo:
     """Information about a pin for index lookups"""
     node_id: str
     type: str
-    direction: str  # "entry" | "in" | "out"
+    direction: str  # "entry" | "in" | "out" | "output_channel"
     name: str
     module_instance_id: Optional[str] = None
+    output_channel_instance_id: Optional[str] = None
 
 
 @dataclass(frozen=True)

@@ -152,7 +152,7 @@ class ServiceContainer:
             },
             'pipeline_results': {
                 'class': 'features.pipeline_results.service.PipelineResultService',
-                'args': [cls._data_database_manager],
+                'args': [cls._connection_manager, cls._data_database_manager],
                 'singleton': True,
                 'description': 'Pipeline result service for executing output modules and order operations'
             },

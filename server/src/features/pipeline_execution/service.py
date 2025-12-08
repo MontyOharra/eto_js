@@ -368,21 +368,27 @@ class PipelineExecutionService:
 
         # Step 6: Build Dask graph (all modules in topological order)
         task_of_step: Dict[str, Any] = {}
-        output_module_step: Optional[PipelineDefinitionStep] = None
+        output_channel_values: Dict[str, Any] = {}  # Collected output channel values
 
         for step in steps:
-            module_id = step.module_ref.split(":")[0] if ":" in step.module_ref else step.module_ref
-            handler = self.module_registry.get(module_id)
+            # Check if this is an output channel step (module_ref is None)
+            if step.module_ref is None:
+                # Output channel step - create collection task
+                task = self._make_output_channel_collection_task(
+                    step, producer_of_pin, output_channel_values
+                )
+                task_of_step[step.module_instance_id] = task
+                # No downstream publishing - output channels are terminal nodes
+                channel_type = step.module_config.get("channel_type", "unknown")
+                logger.debug(f"Created output channel collection task: {step.module_instance_id} (channel_type={channel_type})")
+            else:
+                # Regular module step
+                module_id = step.module_ref.split(":")[0] if ":" in step.module_ref else step.module_ref
 
-            # Create task for this step
-            task = self._make_step_task(step, producer_of_pin, collector, all_nodes_metadata, entry_points_lookup)
-            task_of_step[step.module_instance_id] = task
-            self._publish_outputs_for_downstream(step, task, producer_of_pin)
-
-            # Track output module (validation ensures only one)
-            if handler and handler.kind.value == 'output':
-                output_module_step = step
-                logger.debug(f"Found output module: {module_id} at step {step.module_instance_id}")
+                # Create task for this step
+                task = self._make_step_task(step, producer_of_pin, collector, all_nodes_metadata, entry_points_lookup)
+                task_of_step[step.module_instance_id] = task
+                self._publish_outputs_for_downstream(step, task, producer_of_pin)
 
         # Step 7: Execute graph
         try:
@@ -422,39 +428,18 @@ class PipelineExecutionService:
             else:
                 logger.debug(f"  Step {step.step_number} ({step.module_instance_id}): SUCCESS")
 
-        # Step 9: Extract output module data
-        output_module_id: Optional[str] = None
-        output_module_inputs: Dict[str, Any] = {}
-
-        if output_module_step:
-            # Find the step result for the output module
-            output_step_result = next(
-                (s for s in collected_steps if s.module_instance_id == output_module_step.module_instance_id),
-                None
-            )
-
-            if output_step_result and not output_step_result.error:
-                # Extract module ID
-                output_module_id = output_module_step.module_ref.split(":")[0] if ":" in output_module_step.module_ref else output_module_step.module_ref
-
-                # Convert step result inputs to plain dict {name: value}
-                # The inputs are in format {node_id: {name, value, type}}
-                output_module_inputs = {
-                    pin_data["name"]: pin_data["value"]
-                    for pin_data in output_step_result.inputs.values()
-                }
-
-                logger.info(f"Output module data collected: module_id={output_module_id}, inputs={list(output_module_inputs.keys())}")
-            elif output_step_result and output_step_result.error:
-                logger.warning(f"Output module failed during execution: {output_step_result.error}")
+        # Step 9: Log collected output channel values
+        if output_channel_values:
+            logger.info(f"Output channel values collected: {list(output_channel_values.keys())}")
+            for channel_type, value in output_channel_values.items():
+                logger.debug(f"  {channel_type}: {value}")
         else:
-            logger.debug("No output module found in pipeline")
+            logger.debug("No output channel values collected")
 
         return PipelineExecutionResult(
             status=status,
             steps=collected_steps,
-            output_module_id=output_module_id,
-            output_module_inputs=output_module_inputs,
+            output_channel_values=output_channel_values,
             error=error
         )
 
@@ -780,3 +765,63 @@ class PipelineExecutionService:
             producer_of_pin[node_id] = _select(task, node_id)
 
         logger.debug(f"Published {len(output_pins)} outputs for {step.module_instance_id}")
+
+    def _make_output_channel_collection_task(
+        self,
+        step: PipelineDefinitionStep,
+        producer_of_pin: Dict[str, Any],
+        output_channel_values: Dict[str, Any],
+    ) -> Any:
+        """
+        Create a Dask task that collects the input value for an output channel.
+
+        Output channels are terminal nodes in the DAG - they consume values but
+        produce nothing. The collected value is stored in output_channel_values dict.
+
+        Args:
+            step: Output channel step (module_ref is None)
+            producer_of_pin: Map of pin_id -> delayed value
+            output_channel_values: Dict to store collected values (mutated by task)
+
+        Returns:
+            Delayed task that collects the input value
+        """
+        channel_type = step.module_config.get("channel_type", "unknown")
+
+        # Get the upstream producer for the input pin
+        # Output channels have exactly one input
+        if not step.input_field_mappings:
+            logger.warning(f"Output channel {step.module_instance_id} has no input mappings")
+            return delayed(lambda: None)()
+
+        input_pin_id = list(step.input_field_mappings.keys())[0]
+        upstream_pin_id = step.input_field_mappings[input_pin_id]
+
+        if upstream_pin_id not in producer_of_pin:
+            logger.error(
+                f"Output channel {step.module_instance_id} references missing upstream pin {upstream_pin_id}"
+            )
+            return delayed(lambda: None)()
+
+        upstream_task = producer_of_pin[upstream_pin_id]
+
+        @delayed(pure=False)  # type: ignore
+        def _collect_output_channel(value, ch_type: str):
+            """
+            Collect the value flowing into this output channel.
+
+            Args:
+                value: The value from upstream
+                ch_type: The channel type (e.g., "hawb", "pickup_address")
+            """
+            # Skip sentinel values (ExecutionCancelled, BranchNotTaken)
+            if isinstance(value, (ExecutionCancelled, BranchNotTaken)):
+                logger.debug(f"Output channel {ch_type} received sentinel value, skipping collection")
+                return None
+
+            # Store the collected value
+            output_channel_values[ch_type] = value
+            logger.info(f"Collected output channel '{ch_type}': {value}")
+            return value
+
+        return _collect_output_channel(upstream_task, channel_type)

@@ -19,6 +19,7 @@ export const API_CONFIG = {
     PDF_FILES: '/api/pdf-files',
     ETO_RUNS: '/api/eto-runs',
     MODULES: '/api/modules',
+    OUTPUT_CHANNELS: '/api/modules/output-channels',
   },
 } as const;
 

@@ -76,3 +76,20 @@ export interface ModuleTemplate {
   meta: ModuleMeta;
   config_schema: any;
 }
+
+// ============================================================================
+// Output Channel Types
+// ============================================================================
+
+/**
+ * Output channel type definition
+ * Represents an output channel available for pipeline outputs
+ */
+export interface OutputChannelType {
+  name: string;
+  label: string;
+  data_type: string;  // "str", "int", "float", "datetime"
+  category: string;   // "identification", "pickup", "delivery", "cargo", "other"
+  description?: string;
+  is_required: boolean;
+}

@@ -6,7 +6,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../../../shared/api/client';
 import { API_CONFIG } from '../../../shared/api/config';
-import type { ModuleTemplate } from '../types';
+import type { ModuleTemplate, OutputChannelType } from '../types';
 import type { Module, ModulesQueryParams } from './types';
 
 /**
@@ -117,5 +117,27 @@ export function useModule(moduleId: string | null) {
     enabled: !!moduleId, // Only run query if moduleId is provided
     staleTime: 0, // Always fetch fresh data (modules may be synced externally via curl)
     gcTime: 1000 * 60 * 10,
+  });
+}
+
+/**
+ * Fetch output channel types from the API
+ *
+ * Query key: ['outputChannels']
+ * Cache: Always fresh (staleTime: 0), 10 minutes garbage collection
+ *
+ * @returns TanStack Query result with output channel types array
+ */
+export function useOutputChannels() {
+  return useQuery({
+    queryKey: ['outputChannels'],
+    queryFn: async (): Promise<OutputChannelType[]> => {
+      const response = await apiClient.get<OutputChannelType[]>(
+        API_CONFIG.ENDPOINTS.OUTPUT_CHANNELS
+      );
+      return response.data;
+    },
+    staleTime: 0, // Always fetch fresh data (channels may be synced externally)
+    gcTime: 1000 * 60 * 10, // 10 minutes - keep in cache
   });
 }

@@ -39,3 +39,11 @@ export function generateEntryPointId(): string {
 export function generateNodeId(): string {
   return `N${generateRandomString(3)}`;
 }
+
+/**
+ * Generate an output channel ID in format OC{xx}
+ * Example: OCab, OC3x, OCZq
+ */
+export function generateOutputChannelId(): string {
+  return `OC${generateRandomString(2)}`;
+}

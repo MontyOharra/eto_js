@@ -2,7 +2,7 @@
  * Module utility functions and constants
  */
 
-import { NodePin, EntryPoint, ModuleInstance } from "../types";
+import { NodePin, EntryPoint, ModuleInstance, OutputChannelInstance } from "../types";
 import { updatePinInModule } from "./moduleFactory";
 
 /**
@@ -48,13 +48,14 @@ export function groupNodesByIndex(nodes: NodePin[]): Map<number, NodePin[]> {
 }
 
 /**
- * Find a pin by its node_id across entry points and modules
+ * Find a pin by its node_id across entry points, modules, and output channels
  * Useful for searching through the entire pipeline state
  */
 export function findPinInPipeline(
   nodeId: string,
   entryPoints: EntryPoint[],
-  modules: ModuleInstance[]
+  modules: ModuleInstance[],
+  outputChannels: OutputChannelInstance[] = []
 ): NodePin | undefined {
   // Check entry points
   for (const ep of entryPoints) {
@@ -65,6 +66,12 @@ export function findPinInPipeline(
   // Check modules
   for (const module of modules) {
     const pin = [...module.inputs, ...module.outputs].find((p) => p.node_id === nodeId);
+    if (pin) return pin;
+  }
+
+  // Check output channels
+  for (const oc of outputChannels) {
+    const pin = oc.inputs.find((p) => p.node_id === nodeId);
     if (pin) return pin;
   }
 

@@ -105,7 +105,7 @@ class PipelineValidator:
 
     def _check_node_id_uniqueness(self, pipeline_state: PipelineState) -> None:
         """
-        Check all node IDs are globally unique across entry points and all module pins.
+        Check all node IDs are globally unique across entry points, modules, and output channels.
         Fails fast on first duplicate found.
 
         Raises:
@@ -128,6 +128,13 @@ class PipelineValidator:
             for pin in module.outputs:
                 node_ids.append(
                     (pin.node_id, f"output pin '{pin.name}' in module '{module.module_instance_id}'")
+                )
+
+        # Output channel pins
+        for oc in pipeline_state.output_channels:
+            for pin in oc.inputs:
+                node_ids.append(
+                    (pin.node_id, f"input pin '{pin.name}' in output channel '{oc.output_channel_instance_id}'")
                 )
 
         # Find duplicates (fail fast on first duplicate)
@@ -245,6 +252,18 @@ class PipelineValidator:
                     module_instance_id=module.module_instance_id
                 )
 
+        # Index output channels and their input pins
+        for output_channel in pipeline_state.output_channels:
+            for input_pin in output_channel.inputs:
+                pin_by_id[input_pin.node_id] = PinInfo(
+                    node_id=input_pin.node_id,
+                    type=input_pin.type,
+                    direction="output_channel",
+                    name=input_pin.name,
+                    module_instance_id=None,
+                    output_channel_instance_id=output_channel.output_channel_instance_id
+                )
+
         # Index connections (input pin -> upstream output pin)
         for connection in pipeline_state.connections:
             input_to_upstream[connection.to_node_id] = connection.from_node_id
@@ -257,14 +276,14 @@ class PipelineValidator:
 
     def _validate_modules(self, pipeline_state: PipelineState, indices: PipelineIndices) -> None:
         """
-        Stage 3: Validate modules (catalog, groups, type vars, config, outputs)
+        Stage 3: Validate modules (catalog, groups, type vars, config, output channels)
 
         Checks:
         - Module exists in catalog
         - Group cardinality constraints (min_count, max_count)
         - Type variable unification (all uses of "T" have same type)
         - Config has required fields
-        - At least one output module present
+        - Exactly one required output channel present
 
         Args:
             pipeline_state: Pipeline to validate
@@ -276,8 +295,8 @@ class PipelineValidator:
         logger.info(f"[VALIDATION DEBUG] _validate_modules called with {len(pipeline_state.modules)} modules")
         logger.info(f"[VALIDATION DEBUG] module_catalog_repo is None: {self.module_catalog_repo is None}")
 
-        # Check 1: Only one output module must be present
-        self._check_output_modules(pipeline_state)
+        # Check 1: Exactly one required output channel must be present
+        self._check_output_channels(pipeline_state)
 
         # Skip module catalog validation if no repository provided
         if not self.module_catalog_repo:
@@ -317,36 +336,37 @@ class PipelineValidator:
             logger.info(f"[VALIDATION DEBUG] Checking config...")
             self._check_config(module, template)
 
-    def _check_output_modules(self, pipeline_state: PipelineState) -> None:
+    def _check_output_channels(self, pipeline_state: PipelineState) -> None:
         """
-        Check that pipeline contains at least one output module.
-        Output modules are what actually DO something (send emails, etc).
-        Fails fast if no output modules present.
+        Check that pipeline contains exactly one required output channel.
+        Required output channels (e.g., hawb) must be placed exactly once.
+        Fails fast if validation fails.
 
         Args:
             pipeline_state: Pipeline to validate
 
         Raises:
-            ModuleValidationError: If no output modules found
+            ModuleValidationError: If required output channel validation fails
         """
-        # Skip if no catalog repo (can't determine module kinds)
-        if not self.module_catalog_repo:
-            return
+        from features.pipeline_results.output_channels import OUTPUT_CHANNEL_DEFINITIONS
 
-        # Count output modules
-        output_count = 0
-        for module in pipeline_state.modules:
-            module_id, version = self._parse_module_ref(module.module_ref)
-            template = self.module_catalog_repo.get_by_module_ref(module_id, version)
+        # Get required channel names from definitions
+        required_channels = {ch.name for ch in OUTPUT_CHANNEL_DEFINITIONS if ch.is_required}
 
-            if template and template.module_kind.value == "output":
-                output_count += 1
+        # Count required output channels that are placed
+        placed_required = [
+            oc.channel_type for oc in pipeline_state.output_channels
+            if oc.channel_type in required_channels
+        ]
 
-        if output_count != 1:
+        if len(placed_required) != 1:
             raise ModuleValidationError(
-                message="Pipeline must contain only one output module",
-                code="no_output_modules",
-                where={"module_count": len(pipeline_state.modules)}
+                message=f"Pipeline must contain exactly one required output channel (e.g., hawb). Found: {len(placed_required)}",
+                code="invalid_required_output_channels",
+                where={
+                    "placed_required": placed_required,
+                    "required_options": list(required_channels)
+                }
             )
 
     def _parse_module_ref(self, module_ref: str) -> tuple[str, str]:
@@ -622,7 +642,7 @@ class PipelineValidator:
 
     def _check_input_cardinality(self, pipeline_state: PipelineState, indices: PipelineIndices) -> None:
         """
-        Check that each input pin has exactly one upstream connection.
+        Check that each input pin (module inputs and output channel inputs) has exactly one upstream connection.
         Fails fast on first violation.
 
         Args:
@@ -632,21 +652,30 @@ class PipelineValidator:
         Raises:
             EdgeValidationError: If input cardinality violated
         """
-        # Find all input pins (direction="in")
+        # Find all input pins (direction="in" for modules, direction="output_channel" for output channels)
         input_pins = [
             pin_info for pin_info in indices.pin_by_id.values()
-            if pin_info.direction == "in"
+            if pin_info.direction in ("in", "output_channel")
         ]
 
         # Check for missing upstreams
         for pin_info in input_pins:
             if pin_info.node_id not in indices.input_to_upstream:
+                # Determine the container (module or output channel)
+                if pin_info.direction == "in":
+                    container_type = "module"
+                    container_id = pin_info.module_instance_id
+                else:
+                    container_type = "output channel"
+                    container_id = pin_info.output_channel_instance_id
+
                 raise EdgeValidationError(
-                    message=f"Input pin '{pin_info.name}' in module '{pin_info.module_instance_id}' has no upstream connection",
+                    message=f"Input pin '{pin_info.name}' in {container_type} '{container_id}' has no upstream connection",
                     code="missing_upstream",
                     where={
                         "node_id": pin_info.node_id,
-                        "module_instance_id": pin_info.module_instance_id,
+                        "container_type": container_type,
+                        "container_id": container_id,
                         "pin_name": pin_info.name
                     }
                 )
@@ -655,18 +684,27 @@ class PipelineValidator:
         input_connection_counts: Dict[str, int] = {}
         for conn in pipeline_state.connections:
             to_pin = indices.pin_by_id.get(conn.to_node_id)
-            if to_pin and to_pin.direction == "in":
+            if to_pin and to_pin.direction in ("in", "output_channel"):
                 input_connection_counts[conn.to_node_id] = input_connection_counts.get(conn.to_node_id, 0) + 1
 
         for node_id, count in input_connection_counts.items():
             if count > 1:
                 pin_info = indices.pin_by_id[node_id]
+                # Determine the container (module or output channel)
+                if pin_info.direction == "in":
+                    container_type = "module"
+                    container_id = pin_info.module_instance_id
+                else:
+                    container_type = "output channel"
+                    container_id = pin_info.output_channel_instance_id
+
                 raise EdgeValidationError(
-                    message=f"Input pin '{pin_info.name}' in module '{pin_info.module_instance_id}' has {count} upstream connections (expected 1)",
+                    message=f"Input pin '{pin_info.name}' in {container_type} '{container_id}' has {count} upstream connections (expected 1)",
                     code="multiple_upstreams",
                     where={
                         "node_id": node_id,
-                        "module_instance_id": pin_info.module_instance_id,
+                        "container_type": container_type,
+                        "container_id": container_id,
                         "pin_name": pin_info.name,
                         "upstream_count": count
                     }

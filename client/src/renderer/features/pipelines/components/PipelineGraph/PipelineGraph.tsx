@@ -22,8 +22,8 @@ import {
   applyEdgeChanges,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import type { PipelineState, VisualState, EntryPoint, NodePin } from '../../types';
-import type { ModuleTemplate } from '../../../modules/types';
+import type { PipelineState, VisualState, EntryPoint, NodePin, OutputChannelInstance } from '../../types';
+import type { ModuleTemplate, OutputChannelType } from '../../../modules/types';
 import {
   createModuleInstance,
   addPinToModule,
@@ -31,6 +31,9 @@ import {
   updatePinInModule,
   enrichModuleWithTemplate,
   enrichEntryPoint,
+  createOutputChannelInstance,
+  createOutputChannelTemplate,
+  enrichOutputChannel,
 } from '../../utils/moduleFactory';
 import { getTypeColor } from '../../utils/edgeUtils';
 import { findPinInPipeline, synchronizeTypeVarUpdate } from '../../utils';
@@ -38,6 +41,7 @@ import { calculateNewEntryPointPosition } from '../../utils/layoutUtils';
 import { getEffectiveAllowedTypes, validateConnection, calculateTypePropagation, applyTypeUpdates, TypeUpdate } from '../../utils/typeSystem';
 import { Module } from './Module';
 import { EntryPoint as EntryPointComponent } from './EntryPoint';
+import { OutputChannel } from './OutputChannel';
 
 interface PipelineGraphProps {
   pipelineState?: PipelineState;
@@ -45,6 +49,7 @@ interface PipelineGraphProps {
   entryPoints?: EntryPoint[]; // External entry points (overrides pipelineState.entry_points)
   mode?: 'view' | 'edit';
   modules?: ModuleTemplate[];
+  outputChannels?: OutputChannelType[]; // Available output channel types
   selectedModuleId?: string | null;
   onModulePlaced?: () => void;
   onPipelineStateChange?: (newState: PipelineState) => void;
@@ -54,6 +59,7 @@ interface PipelineGraphProps {
 const nodeTypes = {
   module: Module,
   entryPoint: EntryPointComponent,
+  outputChannel: OutputChannel,
 };
 
 const edgeTypes = {
@@ -66,6 +72,7 @@ function PipelineGraphInner({
   entryPoints,
   mode = 'view',
   modules = [],
+  outputChannels = [],
   onModulePlaced,
   onPipelineStateChange,
   onVisualStateChange,
@@ -106,11 +113,22 @@ function PipelineGraphInner({
       return enrichModuleWithTemplate(moduleInstance, template);
     });
 
+    // Enrich output channels with their definitions
+    const enrichedOutputChannels = (pipelineState.output_channels || []).map((oc) => {
+      const channelDef = outputChannels.find((c) => c.name === oc.channel_type);
+      if (!channelDef) {
+        console.warn(`[PipelineGraph] Channel definition not found for: ${oc.channel_type}`);
+        return oc;
+      }
+      return enrichOutputChannel(oc, channelDef.label, channelDef.data_type);
+    });
+
     return {
       ...pipelineState,
       modules: enrichedModules,
+      output_channels: enrichedOutputChannels,
     };
-  }, [pipelineState, modules]);
+  }, [pipelineState, modules, outputChannels]);
 
   // Effective types cache - pre-calculated for all pins
   const [effectiveTypesCache, setEffectiveTypesCache] = useState<
@@ -152,6 +170,21 @@ function PipelineGraphInner({
       });
     });
 
+    // Calculate effective types for output channel pins
+    (enrichedPipelineState.output_channels || []).forEach((oc) => {
+      oc.inputs.forEach((pin) => {
+        const key = `${oc.output_channel_instance_id}:${pin.node_id}`;
+        const effectiveTypes = getEffectiveAllowedTypes(
+          enrichedPipelineState,
+          effectiveEntryPoints,
+          oc.output_channel_instance_id,
+          pin.node_id,
+          pin.allowed_types || []
+        );
+        newCache.set(key, effectiveTypes);
+      });
+    });
+
     setEffectiveTypesCache(newCache);
   }, [enrichedPipelineState, effectiveEntryPoints]);
 
@@ -168,7 +201,7 @@ function PipelineGraphInner({
   const findPin = useCallback(
     (nodeId: string): NodePin | undefined => {
       if (!pipelineState) return undefined;
-      return findPinInPipeline(nodeId, effectiveEntryPoints, pipelineState.modules);
+      return findPinInPipeline(nodeId, effectiveEntryPoints, pipelineState.modules, pipelineState.output_channels || []);
     },
     [pipelineState, effectiveEntryPoints]
   );
@@ -373,6 +406,31 @@ function PipelineGraphInner({
     [pipelineState, visualState, onPipelineStateChange, onVisualStateChange]
   );
 
+  // Handle deleting an output channel
+  const handleDeleteOutputChannel = useCallback(
+    (outputChannelId: string) => {
+      if (!pipelineState || !onPipelineStateChange || !onVisualStateChange) return;
+
+      // Remove output channel from pipeline state
+      const updatedOutputChannels = (pipelineState.output_channels || []).filter(
+        (oc) => oc.output_channel_instance_id !== outputChannelId
+      );
+
+      onPipelineStateChange({
+        ...pipelineState,
+        output_channels: updatedOutputChannels,
+      });
+
+      // Remove from visual state
+      const updatedVisualState = { ...visualState };
+      delete updatedVisualState[outputChannelId];
+      onVisualStateChange(updatedVisualState);
+
+      // TODO: Also remove any connections involving this output channel
+    },
+    [pipelineState, visualState, onPipelineStateChange, onVisualStateChange]
+  );
+
   // Handle config changes
   const handleConfigChange = useCallback(
     (moduleId: string, configKey: string, value: any) => {
@@ -500,6 +558,30 @@ function PipelineGraphInner({
       });
     });
 
+    // Create output channel nodes
+    (enrichedPipelineState.output_channels || []).forEach((outputChannel) => {
+      // Find the channel definition
+      const channelDef = outputChannels.find((c) => c.name === outputChannel.channel_type);
+
+      if (!channelDef) {
+        console.warn(`Channel definition not found for: ${outputChannel.channel_type}`);
+        return;
+      }
+
+      newNodes.push({
+        id: outputChannel.output_channel_instance_id,
+        type: 'outputChannel',
+        position: visualState?.[outputChannel.output_channel_instance_id] || { x: 400, y: 0 },
+        data: {
+          outputChannel,
+          channelDefinition: channelDef,
+          // Edit callbacks
+          onDeleteOutputChannel: mode === 'edit' ? handleDeleteOutputChannel : undefined,
+        },
+        draggable: mode === 'edit',
+      });
+    });
+
     setNodes(newNodes);
 
     // Persist any newly calculated entry point positions to visualState
@@ -509,7 +591,7 @@ function PipelineGraphInner({
         ...newPositions,
       });
     }
-  }, [enrichedPipelineState, visualState, modules, mode, effectiveEntryPoints, handleDeleteModule, handleUpdateNode, handleAddNode, handleRemoveNode, handleConfigChange, getEffectiveAllowedTypesForPin, getConnectedOutputName, onVisualStateChange]);
+  }, [enrichedPipelineState, visualState, modules, outputChannels, mode, effectiveEntryPoints, handleDeleteModule, handleDeleteOutputChannel, handleUpdateNode, handleAddNode, handleRemoveNode, handleConfigChange, getEffectiveAllowedTypesForPin, getConnectedOutputName, onVisualStateChange]);
 
   // Initialize/update edges when pipeline state changes
   useEffect(() => {
@@ -539,6 +621,13 @@ function PipelineGraphInner({
         }
         if (module.inputs.some((inp) => inp.node_id === connection.to_node_id)) {
           targetNodeId = module.module_instance_id;
+        }
+      });
+
+      // Check output channels for target
+      (pipelineState.output_channels || []).forEach((oc) => {
+        if (oc.inputs.some((inp) => inp.node_id === connection.to_node_id)) {
+          targetNodeId = oc.output_channel_instance_id;
         }
       });
 
@@ -904,7 +993,7 @@ function PipelineGraphInner({
     [mode]
   );
 
-  // Handle module drop from selector pane
+  // Handle module or output channel drop from selector pane
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       if (mode === 'view' || !pipelineState || !onPipelineStateChange || !onVisualStateChange) return;
@@ -914,14 +1003,64 @@ function PipelineGraphInner({
       const data = event.dataTransfer.getData('application/reactflow');
       if (!data) return;
 
-      const { moduleId } = JSON.parse(data);
-      const template = modules.find((t) => t.id === moduleId);
-      if (!template) return;
-
+      const parsedData = JSON.parse(data);
       const position = screenToFlowPosition({
         x: event.clientX,
         y: event.clientY,
       });
+
+      // Handle output channel drop
+      if (parsedData.type === 'outputChannel') {
+        const { channelName, channelLabel, dataType } = parsedData;
+
+        // Create new output channel instance
+        const newOutputChannel = createOutputChannelInstance(channelName, channelLabel, dataType);
+
+        // Add output channel to pipeline state
+        const updatedPipelineState: PipelineState = {
+          ...pipelineState,
+          output_channels: [...(pipelineState.output_channels || []), newOutputChannel],
+        };
+
+        // Add position to visual state
+        const updatedVisualState: VisualState = {
+          ...visualState,
+          [newOutputChannel.output_channel_instance_id]: position,
+        };
+
+        // Find channel definition for immediate rendering
+        const channelDef = outputChannels.find((c) => c.name === channelName);
+
+        if (channelDef) {
+          // Create new node for immediate rendering
+          const newNode: Node = {
+            id: newOutputChannel.output_channel_instance_id,
+            type: 'outputChannel',
+            position,
+            data: {
+              outputChannel: newOutputChannel,
+              channelDefinition: channelDef,
+              onDeleteOutputChannel: handleDeleteOutputChannel,
+            },
+            draggable: true,
+          };
+
+          // Add to internal nodes state immediately (for smooth rendering)
+          setNodes((nds) => [...nds, newNode]);
+        }
+
+        // Update parent states (for persistence)
+        onPipelineStateChange(updatedPipelineState);
+        onVisualStateChange(updatedVisualState);
+
+        onModulePlaced?.();
+        return;
+      }
+
+      // Handle module drop
+      const { moduleId } = parsedData;
+      const template = modules.find((t) => t.id === moduleId);
+      if (!template) return;
 
       // Create new module instance
       const newModule = createModuleInstance(template);
@@ -959,7 +1098,7 @@ function PipelineGraphInner({
 
       onModulePlaced?.();
     },
-    [mode, modules, screenToFlowPosition, pipelineState, visualState, onPipelineStateChange, onVisualStateChange, onModulePlaced]
+    [mode, modules, outputChannels, screenToFlowPosition, pipelineState, visualState, onPipelineStateChange, onVisualStateChange, onModulePlaced, handleDeleteOutputChannel]
   );
 
   // Show message if no pipeline state provided

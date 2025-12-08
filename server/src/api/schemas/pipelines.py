@@ -40,11 +40,19 @@ class NodeConnection(BaseModel):
     to_node_id: str
 
 
+class OutputChannelInstance(BaseModel):
+    """Output channel instance for collecting pipeline outputs"""
+    output_channel_instance_id: str  # Format: OC01, OC02, etc.
+    channel_type: str                 # e.g., "hawb", "pickup_address"
+    inputs: List[Node] = []
+
+
 class PipelineState(BaseModel):
     """Pipeline execution structure"""
     entry_points: List[EntryPoint] = []
     modules: List[ModuleInstance] = []
     connections: List[NodeConnection] = []
+    output_channels: List[OutputChannelInstance] = []
 
 
 # ============================================================================
