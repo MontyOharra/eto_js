@@ -605,3 +605,110 @@ Features:
 | Required fields configurable? | Hardcoded list |
 | Track who approved updates? | No, not needed |
 | Re-read from HTC? | Yes, pending updates show current value from HTC |
+
+---
+
+## System Integration & Crash Resilience
+
+### Two Interconnected Systems
+
+This pending orders system integrates with the existing `eto_sub_run_output_executions` table (defined in `pipeline-result-service-design.md`). Together they form a crash-resilient architecture:
+
+#### 1. `eto_sub_run_output_executions` (Per-Sub-Run Tracking)
+- **Role**: Durable record of each sub-run's output execution attempt
+- **Status machine**: `pending` → `processing` → `success`/`error`
+- **Stores**: `input_data_json` (output channel values from pipeline)
+- **This IS the crash resilience layer** - data persists before processing begins
+
+#### 2. `pending_orders` + `pending_order_history` (Order Aggregation)
+- **Role**: Aggregates data from multiple sub-runs by HAWB
+- **Handles**: Multi-form compilation, conflict resolution, auto-creation
+- **Status**: `incomplete` → `ready` → `created`
+
+### Complete Data Flow with Crash Resilience
+
+```
+Pipeline Execution Completes
+         │
+         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  STEP 1: Create eto_sub_run_output_executions (status=pending)  │
+│  - Stores output_channel_values in input_data_json              │
+│  - Record is crash-safe at this point                           │
+│  - If server crashes, data survives for recovery                │
+└────────────────────────┬────────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  STEP 2: Update status to 'processing'                          │
+└────────────────────────┬────────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  STEP 3: Check HAWB in HTC Access Database                      │
+│                                                                  │
+│  ┌─ HAWB exists in HTC ───────────────────────────────────────┐ │
+│  │  → Create pending_updates records (one per field)          │ │
+│  │  → Update execution status='success'                       │ │
+│  │  → User reviews/approves updates via frontend              │ │
+│  └────────────────────────────────────────────────────────────┘ │
+│                                                                  │
+│  ┌─ HAWB NOT in HTC ──────────────────────────────────────────┐ │
+│  │  → Find or create pending_order by HAWB                    │ │
+│  │  → Add pending_order_history entries (one per field)       │ │
+│  │  → Recalculate field states (set/conflict)                 │ │
+│  │  → If all required fields present:                         │ │
+│  │       → Auto-create order in HTC                           │ │
+│  │       → Update pending_order.status='created'              │ │
+│  │  → Update execution status='success'                       │ │
+│  └────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Crash Recovery
+
+On server startup, the system should:
+
+```python
+def recover_pending_output_executions():
+    """Resume processing of any interrupted output executions."""
+
+    # Find executions that were in progress when server crashed
+    pending_executions = output_execution_repo.get_by_status(['pending', 'processing'])
+
+    for execution in pending_executions:
+        logger.info(f"Recovering output execution {execution.id}")
+        try:
+            # Re-process from the beginning (idempotent operations)
+            process_output_execution(execution)
+        except Exception as e:
+            logger.error(f"Recovery failed for execution {execution.id}: {e}")
+            # Mark as error so it doesn't retry forever
+            output_execution_repo.update(execution.id, {
+                'status': 'error',
+                'error_type': 'recovery_failed',
+                'error_message': str(e)
+            })
+```
+
+### Implementation Status
+
+| Layer | Status | Notes |
+|-------|--------|-------|
+| Output channels in pipeline | ✅ Done | `output_channel_values` collected during execution |
+| `eto_sub_run_output_executions` table | ⚠️ Exists | May need additional fields for pending orders integration |
+| `pending_orders` table | ❌ Not created | New SQLite table needed |
+| `pending_order_history` table | ❌ Not created | New SQLite table needed |
+| `pending_updates` table | ❌ Not created | New SQLite table needed |
+| Output execution service | ❌ Not implemented | Bridges pipeline → pending orders |
+| Crash recovery on startup | ❌ Not implemented | Query and resume pending executions |
+
+### Key Design Principle
+
+**Store first, process second.** The `eto_sub_run_output_executions` table acts as a durable queue:
+
+1. Pipeline completes → Immediately create execution record with all data
+2. If crash occurs → Record survives in database
+3. On recovery → Find pending records and resume processing
+
+This eliminates the risk of losing pipeline output data due to crashes during order processing.

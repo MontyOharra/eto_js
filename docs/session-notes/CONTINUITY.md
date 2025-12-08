@@ -1,211 +1,197 @@
 # Session Continuity Document
 
-## Current Status (2025-12-05)
+## Current Status (2025-12-08)
 
 ### Session Summary
 
-This session focused on building out the **Email Account and Ingestion Config API layer**:
-1. **Email Ingestion Configs API** - Full CRUD endpoints for managing email folder monitoring configs
-2. **Email Account Folders API** - New endpoint to list IMAP folders from connected accounts
-3. **IMAP Integration Enhancements** - Added folder listing and email fetching capabilities
+This session completed the **customer_id integration for templates** and analyzed the **output channel processing architecture** for crash resilience.
 
 ---
 
 ## Recently Completed
 
-### 1. Email Ingestion Configs API Layer
+### 1. Customer ID Feature (Complete & Pushed)
 
-Created full API layer for managing email ingestion configurations:
+Added full customer_id support to templates with name display across the application.
 
-**Files Created:**
-- `server/src/api/schemas/email_ingestion_configs.py` - Pydantic models for API requests/responses
-- `server/src/api/mappers/email_ingestion_configs.py` - Domain-to-API conversion functions
-- `server/src/api/routers/email_ingestion_configs.py` - REST endpoints
+**Backend Changes:**
+- `GET /api/pdf-templates/customers` - Fetch customers from Access DB
+- `customer_name` field added to template API responses (list and detail)
+- `customer_name` added to ETO sub-run API responses
+- `_get_customer_name()` and `_get_customer_names()` helper methods in PdfTemplateService
+- `template_customer_id` added to `EtoSubRunDetailView` domain type
+- Repository joins to get customer_id from pdf_templates table
 
-**Endpoints Available:**
-- `POST /api/email-ingestion-configs/validate` - Validate config before creation
-- `GET /api/email-ingestion-configs` - List all configs with account info
-- `GET /api/email-ingestion-configs/{id}` - Get single config
-- `POST /api/email-ingestion-configs` - Create new config
-- `PATCH /api/email-ingestion-configs/{id}` - Update config
-- `DELETE /api/email-ingestion-configs/{id}` - Delete config
+**Frontend Changes:**
+- `CustomerSelect` dropdown component for template builder
+- `useCustomers` hook for fetching customer list
+- Fixed customer_id not being saved (was missing from 3 API call locations)
+- Customer name displayed on: template cards, detail modal, ETO sub-run sections
 
-**Key Schema Types:**
-- `FilterRuleSchema` - Email filter rules (sender, subject, date, attachments)
-- `CreateIngestionConfigRequest` - name, account_id, folder_name, filter_rules, poll settings
-- `IngestionConfigResponse` - Full config with all fields including timestamps
+**Commit:** `2fb6b0b` - "feat: Add customer name display and selection for templates"
 
-### 2. Email Account Folders Endpoint
+### 2. Output Channel Processing Design Analysis
 
-Added ability to list available folders from a connected email account:
+Analyzed how the two design documents fit together:
+- `pipeline-result-service-design.md` - Per-sub-run execution tracking
+- `pending-orders-system-v2.md` - Order aggregation by HAWB
 
-**Files Modified:**
-- `server/src/api/schemas/email_accounts.py` - Added `FolderListResponse` schema
-- `server/src/api/routers/email_accounts.py` - Added `GET /{account_id}/folders` endpoint
-- `server/src/features/email/service.py` - Added `list_account_folders()` method
+**Key Insight:** Crash resilience is achieved via `eto_sub_run_output_executions` table:
+1. Pipeline completes → Create execution record (status='pending')
+2. Store output_channel_values in input_data_json
+3. If crash → Record survives in database
+4. On recovery → Query pending records and resume
 
-**Endpoint:**
-- `GET /api/email-accounts/{account_id}/folders`
-- Returns: `{ "account_id": 1, "folders": ["INBOX", "INBOX.Sent", ...] }`
-
-### 3. IMAP Integration Enhancements
-
-Enhanced the IMAP integration with folder listing and email fetching:
-
-**`list_folders()` Method:**
-- Properly parses IMAP LIST response format
-- Handles both quoted and unquoted folder names
-- Skips empty folder names (root namespace)
-- Returns alphabetically sorted folder list (case-insensitive)
-
-**Email Fetching Methods (added in parallel session):**
-- `get_emails_since_uid(folder, since_uid, limit)` - UID-based email retrieval
-- `get_highest_uid(folder)` - Get highest UID in folder
-- `_fetch_email_by_uid(uid, folder)` - Fetch single email
-- `_parse_email_message(msg, uid, folder)` - Parse to EmailMessage dataclass
-- `_decode_header_value(value)` - RFC 2047 header decoding
-
-**EmailMessage Dataclass** (in base_integration.py):
-- uid, message_id, subject, sender_email, sender_name
-- received_date, folder_name, body_text, body_html
-- has_attachments, attachment_count, attachment_filenames
-
-### 4. Type Narrowing Fix
-
-Fixed Pylance type error for `get_capabilities()` call:
-
-**Problem:** After `isinstance(integration, ImapIntegration)` check, Pylance still thought `integration` was `BaseEmailIntegration`.
-
-**Solution:** Assign to typed local variable after isinstance check:
-```python
-if isinstance(integration, ImapIntegration):
-    imap_integration: ImapIntegration = integration
-    capabilities = imap_integration.get_capabilities()
-```
+**Updated:** `docs/designs/pending-orders-system-v2.md` with System Integration section.
 
 ---
 
 ## Architecture Notes
 
-### Email System Architecture
-
-The email system has been restructured to separate concerns:
+### Two-System Integration for Output Processing
 
 ```
-EmailAccount (credentials)
-  └─ Stores: host, port, email_address, password, capabilities
-  └─ Validation: test connection before saving
-  └─ One account can have multiple ingestion configs
-
-EmailIngestionConfig (monitoring settings)
-  └─ References: account_id (FK to email_accounts)
-  └─ Stores: folder_name, filter_rules, poll_interval, use_idle
-  └─ Activation: is_active flag, activated_at timestamp
-  └─ State: last_check_time, last_processed_uid, last_error
+Pipeline Execution Completes
+         │
+         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  eto_sub_run_output_executions (status=pending)                  │
+│  - Stores output_channel_values in input_data_json              │
+│  - CRASH-SAFE: Record persists before processing begins         │
+└────────────────────────┬────────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Check HAWB in HTC Access Database                              │
+│                                                                  │
+│  HAWB exists → Create pending_updates (queue for review)        │
+│  HAWB not found → Add to pending_order + pending_order_history  │
+│       └── If all required fields → Auto-create in HTC           │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-### IMAP Folder Hierarchy
+### Customer Name Lookup Pattern
 
-IMAP uses a delimiter character (usually `.` or `/`) for folder hierarchy:
-- `INBOX` - Root inbox
-- `INBOX.Sent` - Subfolder under INBOX
-- `INBOX.SOS GLOBAL` - Another subfolder
-
-The API returns full folder paths. Frontend can split on delimiter for tree display.
-
-### UID-Based Polling
-
-Email ingestion uses UID-based polling for efficiency:
-1. Store `last_processed_uid` per config
-2. Query: `SEARCH UID {last_uid+1}:*`
-3. Server returns only new emails (no date comparison needed)
-4. UIDs are unique and monotonically increasing per folder
+Customer names come from Access DB, not SQLite. Pattern used:
+1. Repository joins get `customer_id` from pdf_templates
+2. Router calls `service._get_customer_names([ids])` to batch-fetch names
+3. Mapper receives customer_names dict and includes in API response
 
 ---
 
 ## Important Files Reference
 
-### Email Service Layer
-- `server/src/features/email/service.py` - EmailService with account + ingestion config methods
-- `server/src/features/email/integrations/imap_integration.py` - IMAP implementation
-- `server/src/features/email/integrations/base_integration.py` - Abstract base class
+### Customer Feature (This Session)
+```
+# Backend
+server/src/api/routers/pdf_templates.py          # /customers endpoint, name lookup
+server/src/api/routers/eto_runs.py               # Customer names for sub-runs
+server/src/features/pdf_templates/service.py     # _get_customer_name methods
+server/src/shared/database/repositories/eto_sub_run.py  # Join for customer_id
 
-### Email API Layer
-- `server/src/api/routers/email_accounts.py` - Account endpoints including folders
-- `server/src/api/routers/email_ingestion_configs.py` - Ingestion config endpoints
-- `server/src/api/schemas/email_accounts.py` - Account schemas
-- `server/src/api/schemas/email_ingestion_configs.py` - Ingestion config schemas
-- `server/src/api/mappers/email_accounts.py` - Account mappers
-- `server/src/api/mappers/email_ingestion_configs.py` - Ingestion config mappers
+# Frontend
+client/src/renderer/features/templates/components/TemplateBuilder/CustomerSelect.tsx
+client/src/renderer/features/templates/api/hooks.ts  # useCustomers hook
+```
 
-### Database Layer
-- `server/src/shared/database/models.py` - EmailAccountModel, EmailIngestionConfigModel
-- `server/src/shared/database/repositories/email_account.py` - Account repository
-- `server/src/shared/database/repositories/email_ingestion_config.py` - Config repository
-
-### Type Definitions
-- `server/src/shared/types/email_accounts.py` - Account domain types
-- `server/src/shared/types/email_ingestion_configs.py` - Config domain types
+### Output Processing Design
+```
+docs/designs/pending-orders-system-v2.md         # Updated with integration section
+docs/pipeline-result-service-design.md           # Original execution service design
+```
 
 ---
 
 ## Next Session Priorities
 
-### High Priority
-1. **Email Ingestion Runtime**
-   - Build polling service that uses ingestion configs
-   - Process emails matching filter rules
-   - Track UIDs and update last_processed_uid
+### High Priority: Implement Pending Orders Backend
 
-2. **Activate/Deactivate Config Endpoints**
-   - `POST /api/email-ingestion-configs/{id}/activate`
-   - `POST /api/email-ingestion-configs/{id}/deactivate`
-   - Start/stop monitoring for specific configs
+1. **Database Tables** - Create SQLite tables:
+   ```sql
+   pending_orders           -- Order state aggregation
+   pending_order_history    -- Field contribution tracking
+   pending_updates          -- Proposed changes for existing orders
+   ```
+
+2. **PendingOrdersService** - Core logic:
+   - `handle_output_channels()` - Main entry point
+   - `add_field_contribution()` - Add data to pending order
+   - `get_field_state()` - Compute field state from history
+   - `create_order_in_htc()` - Auto-create when ready
+
+3. **Integration Point** - Call after pipeline execution:
+   ```python
+   if execution_result.output_channel_values:
+       execution = output_execution_repo.create(...)  # Crash-safe record
+       pending_orders_service.handle_output_channels(...)
+   ```
+
+4. **Crash Recovery** - On server startup:
+   ```python
+   pending = output_execution_repo.get_by_status(['pending', 'processing'])
+   for execution in pending:
+       process_output_execution(execution)
+   ```
 
 ### Medium Priority
-3. **Frontend for Email Configuration**
-   - Account management UI (add/edit/delete accounts)
-   - Ingestion config UI (folder selection, filter rules)
-   - Config activation controls
 
-4. **Filter Rule Implementation**
-   - Apply filter rules to fetched emails
-   - Filter by sender, subject, attachments, date
+5. **API Endpoints**:
+   - `GET/POST /api/pending-orders/*`
+   - `GET/POST /api/pending-updates/*`
 
-### Low Priority
-5. **Email Attachment Handling**
-   - Extract PDF attachments from emails
-   - Store and process through ETO pipeline
+6. **Frontend Connection** - Orders page exists but needs real API
+
+---
+
+## Implementation Status
+
+| Layer | Status | Notes |
+|-------|--------|-------|
+| Output channels in pipeline | ✅ Done | `output_channel_values` collected |
+| Customer ID on templates | ✅ Done | Full CRUD + display |
+| Customer name in ETO sub-runs | ✅ Done | Shown in matched templates |
+| `eto_sub_run_output_executions` table | ⚠️ Exists | May need fields for pending orders |
+| `pending_orders` table | ❌ Not created | New SQLite table needed |
+| `pending_order_history` table | ❌ Not created | New SQLite table needed |
+| `pending_updates` table | ❌ Not created | New SQLite table needed |
+| PendingOrdersService | ❌ Not implemented | Bridges pipeline → pending orders |
+| Crash recovery on startup | ❌ Not implemented | Query and resume pending |
 
 ---
 
 ## Testing Commands
 
 ```bash
-# Test folder listing
-curl http://localhost:8000/api/email-accounts/1/folders
+# Verify customer dropdown works
+curl http://localhost:8000/api/pdf-templates/customers
 
-# List ingestion configs
-curl http://localhost:8000/api/email-ingestion-configs
+# Check template includes customer_name
+curl http://localhost:8000/api/pdf-templates/1
 
-# Create ingestion config
-curl -X POST http://localhost:8000/api/email-ingestion-configs \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "SOS Orders",
-    "account_id": 1,
-    "folder_name": "INBOX.SOS GLOBAL",
-    "poll_interval_seconds": 60
-  }'
+# View design doc
+cat docs/designs/pending-orders-system-v2.md
 ```
 
 ---
 
-**Last Updated:** 2025-12-05
-**Next Session:** Build email polling runtime and activation endpoints
+## Open Questions for Next Session
 
-**Session Notes:**
-- Email account/ingestion config separation is complete
-- Folder listing works with proper IMAP parsing and sorting
-- UID-based email fetching infrastructure ready
-- Full CRUD API available for ingestion configs
+1. **Required fields for auto-creation** - Is this list correct?
+   ```python
+   REQUIRED_FIELDS = [
+       'pickup_address', 'pickup_time_start', 'pickup_time_end',
+       'delivery_address', 'delivery_time_start', 'delivery_time_end',
+   ]
+   ```
+
+2. **HAWB format** - What do real HAWBs look like for test data?
+
+3. **PendingOrdersService vs PipelineResultService** - Keep separate or merge?
+
+---
+
+**Last Updated:** 2025-12-08
+**Next Session:** Implement pending orders database tables and service layer
+
+**Key Commits This Session:**
+- `2fb6b0b` - feat: Add customer name display and selection for templates
