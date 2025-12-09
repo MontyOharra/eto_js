@@ -1,9 +1,9 @@
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, Link } from '@tanstack/react-router';
 import { useState, useEffect } from 'react';
 import {
   PendingOrdersHeader,
   PendingOrdersTable,
-  PendingOrderDetail,
+  PendingOrderDetailView,
   PendingUpdatesHeader,
   PendingUpdatesTable,
   OrderHistoryTimeline,
@@ -190,16 +190,22 @@ function OrdersPage() {
     console.log('View run:', runId);
   };
 
+  const handleResolveConflict = (fieldName: string, historyId: number) => {
+    // TODO: Call API to resolve conflict
+    console.log('Resolve conflict:', fieldName, historyId);
+  };
+
   // ============================================================================
   // Render Detail Views
   // ============================================================================
 
   if (detailView?.type === 'order-detail' && orderDetail) {
     return (
-      <PendingOrderDetail
+      <PendingOrderDetailView
         order={orderDetail}
         onBack={handleBackToList}
         onViewHistory={handleViewHistory}
+        onResolveConflict={handleResolveConflict}
       />
     );
   }
@@ -255,6 +261,17 @@ function OrdersPage() {
           </button>
         </div>
 
+        {/* Preview Link */}
+        <Link
+          to="/dashboard/orders/layout-a"
+          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+          </svg>
+          Preview Detail
+        </Link>
       </div>
 
       {/* Pending Orders View */}

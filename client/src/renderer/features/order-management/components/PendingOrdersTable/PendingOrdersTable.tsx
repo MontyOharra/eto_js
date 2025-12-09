@@ -111,7 +111,11 @@ function StatusCell({ row }: CellContext<PendingOrderListItem, unknown>) {
   return (
     <div className="flex flex-col gap-1.5">
       <OrderStatusBadge status={data.status} />
-      <FieldStatusBadge fieldStatus={data.field_status} />
+      <FieldStatusBadge
+        requiredPresent={data.required_fields_present}
+        requiredTotal={data.required_field_count}
+        conflictCount={data.conflict_count}
+      />
     </div>
   );
 }
@@ -122,7 +126,7 @@ function ContributorsCell({ row }: CellContext<PendingOrderListItem, unknown>) {
   return (
     <div className="flex items-center gap-2">
       <span className="text-sm text-gray-400">
-        {data.contributing_run_count} run{data.contributing_run_count !== 1 ? 's' : ''}
+        {data.contributing_sub_run_count} sub-run{data.contributing_sub_run_count !== 1 ? 's' : ''}
       </span>
     </div>
   );

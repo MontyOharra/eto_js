@@ -43,31 +43,21 @@ export type ContributionType =
 // =============================================================================
 
 /**
- * Summary of which fields are present/missing on a pending order
+ * Summary of field completeness for a pending order (counts)
  */
-export interface PendingOrderFieldStatus {
-  /** Fields that have been provided */
-  present: string[];
-  /** Required fields that are still missing */
-  missing_required: string[];
-  /** Optional fields that are missing (informational) */
-  missing_optional: string[];
+export interface PendingOrderFieldCounts {
+  /** Total required fields */
+  required_field_count: number;
+  /** Number of required fields that have values */
+  required_fields_present: number;
+  /** Total optional fields */
+  optional_field_count: number;
+  /** Number of optional fields that have values */
+  optional_fields_present: number;
+  /** Number of fields with conflicts */
+  conflict_count: number;
 }
 
-/**
- * A run that contributed data to a pending order
- */
-export interface ContributingRun {
-  run_id: number;
-  sub_run_id: number;
-  contributed_at: string; // ISO 8601
-  fields_contributed: string[];
-  contribution_type: ContributionType;
-  /** Template name used for extraction */
-  template_name: string | null;
-  /** PDF filename */
-  pdf_filename: string;
-}
 
 /**
  * Pending order list item (for table display)
@@ -76,17 +66,21 @@ export interface PendingOrderListItem {
   id: number;
   hawb: string;
   customer_id: number;
-  customer_name: string;
+  customer_name: string | null;
   status: PendingOrderStatus;
 
   /** HTC order number (only set if status === 'created') */
   htc_order_number: number | null;
 
-  /** Field completeness info */
-  field_status: PendingOrderFieldStatus;
+  /** Field completeness counts */
+  required_field_count: number;
+  required_fields_present: number;
+  optional_field_count: number;
+  optional_fields_present: number;
+  conflict_count: number;
 
-  /** Count of runs that contributed */
-  contributing_run_count: number;
+  /** Count of sub-runs that contributed */
+  contributing_sub_run_count: number;
 
   /** Timestamps */
   created_at: string; // ISO 8601
@@ -97,24 +91,72 @@ export interface PendingOrderListItem {
 }
 
 /**
+ * Source information for a field value
+ */
+export interface FieldSource {
+  history_id: number;
+  sub_run_id: number | null;
+  contributed_at: string; // ISO 8601
+}
+
+/**
+ * A conflict option when multiple values exist for a field
+ */
+export interface ConflictOption {
+  history_id: number;
+  value: string;
+  sub_run_id: number | null;
+  contributed_at: string; // ISO 8601
+}
+
+/**
+ * Field state type
+ */
+export type FieldState = 'empty' | 'set' | 'confirmed' | 'conflict';
+
+/**
+ * Detailed field information for pending order detail view
+ */
+export interface FieldDetail {
+  name: string;
+  label: string;
+  required: boolean;
+  value: string | null;
+  state: FieldState;
+  /** Only present if state === 'conflict' */
+  conflict_options: ConflictOption[] | null;
+  /** Source info (for set/confirmed states) */
+  source: FieldSource | null;
+}
+
+/**
+ * Information about a sub-run that contributed to an order
+ */
+export interface ContributingSubRun {
+  sub_run_id: number;
+  run_id: number;
+  pdf_filename: string;
+  template_name: string | null;
+  fields_contributed: string[];
+  contributed_at: string; // ISO 8601
+}
+
+/**
  * Pending order detail (full view)
  */
 export interface PendingOrderDetail {
   id: number;
   hawb: string;
   customer_id: number;
-  customer_name: string;
+  customer_name: string | null;
   status: PendingOrderStatus;
   htc_order_number: number | null;
 
-  /** All field values currently set */
-  field_values: Record<string, unknown>;
+  /** All fields with their states */
+  fields: FieldDetail[];
 
-  /** Field completeness info */
-  field_status: PendingOrderFieldStatus;
-
-  /** All runs that contributed to this order */
-  contributing_runs: ContributingRun[];
+  /** Contributing sources */
+  contributing_sub_runs: ContributingSubRun[];
 
   /** Timestamps */
   created_at: string;
@@ -131,33 +173,26 @@ export interface PendingOrderDetail {
  */
 export interface PendingUpdateListItem {
   id: number;
-
-  /** The HTC order being updated */
-  htc_order_number: number;
+  customer_id: number;
   hawb: string;
+  htc_order_number: number;
+  customer_name: string | null;
 
   /** The field being updated */
   field_name: string;
   field_label: string; // Human-readable label
 
-  /** Values */
-  current_value: string | null;
+  /** Proposed value */
   proposed_value: string;
 
-  /** Source run info */
-  source_run_id: number;
-  source_sub_run_id: number;
-  source_pdf_filename: string;
-  source_template_name: string | null;
-
-  /** Timestamps */
-  proposed_at: string; // ISO 8601 - when the form was received
+  /** Source sub-run */
+  sub_run_id: number | null;
 
   /** Status */
   status: PendingUpdateStatus;
 
-  /** Review info (if reviewed) */
-  reviewed_by: string | null;
+  /** Timestamps */
+  proposed_at: string; // ISO 8601
   reviewed_at: string | null; // ISO 8601
 }
 

@@ -4,6 +4,7 @@
 export { PendingOrdersTable } from './PendingOrdersTable';
 export { PendingOrdersHeader } from './PendingOrdersHeader';
 export { PendingOrderDetail } from './PendingOrderDetail';
+export { PendingOrderDetailView } from './PendingOrderDetailView';
 
 // Pending Updates
 export { PendingUpdatesTable } from './PendingUpdatesTable';

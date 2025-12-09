@@ -1,0 +1,1 @@
+export { PendingOrderDetailView } from './PendingOrderDetailView';

@@ -5,83 +5,55 @@
  * Shows count of present/missing fields with visual indicator.
  */
 
-import type { PendingOrderFieldStatus } from '../../types';
-
 interface FieldStatusBadgeProps {
-  fieldStatus: PendingOrderFieldStatus;
-  /** Show detailed breakdown or just summary */
-  detailed?: boolean;
+  /** Number of required fields present */
+  requiredPresent: number;
+  /** Total number of required fields */
+  requiredTotal: number;
+  /** Number of fields with conflicts */
+  conflictCount: number;
   className?: string;
 }
 
 export function FieldStatusBadge({
-  fieldStatus,
-  detailed = false,
+  requiredPresent,
+  requiredTotal,
+  conflictCount,
   className = '',
 }: FieldStatusBadgeProps) {
-  const presentCount = fieldStatus.present.length;
-  const missingRequiredCount = fieldStatus.missing_required.length;
-  const totalRequired = presentCount + missingRequiredCount;
+  const isComplete = requiredPresent >= requiredTotal;
+  const hasConflicts = conflictCount > 0;
 
-  const isComplete = missingRequiredCount === 0;
-
-  if (detailed) {
-    return (
-      <div className={`flex flex-col gap-1 ${className}`}>
-        {/* Present fields */}
-        {fieldStatus.present.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {fieldStatus.present.map((field) => (
-              <span
-                key={field}
-                className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-green-500/20 text-green-400 border border-green-500/30"
-              >
-                {formatFieldName(field)}
-              </span>
-            ))}
-          </div>
-        )}
-
-        {/* Missing required fields */}
-        {fieldStatus.missing_required.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {fieldStatus.missing_required.map((field) => (
-              <span
-                key={field}
-                className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-red-500/20 text-red-400 border border-red-500/30"
-              >
-                {formatFieldName(field)}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // Summary view
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${
-        isComplete
-          ? 'bg-green-500/20 text-green-400 border-green-500/30'
-          : 'bg-orange-500/20 text-orange-400 border-orange-500/30'
-      } ${className}`}
-    >
-      <span className="font-semibold">{presentCount}</span>
-      <span className="text-gray-400">/</span>
-      <span>{totalRequired}</span>
-      <span className="text-gray-400">fields</span>
-    </span>
-  );
-}
+    <div className={`flex items-center gap-2 ${className}`}>
+      {/* Field count badge */}
+      <span
+        className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${
+          isComplete
+            ? 'bg-green-500/20 text-green-400 border-green-500/30'
+            : 'bg-orange-500/20 text-orange-400 border-orange-500/30'
+        }`}
+      >
+        <span className="font-semibold">{requiredPresent}</span>
+        <span className="text-gray-400">/</span>
+        <span>{requiredTotal}</span>
+        <span className="text-gray-400">fields</span>
+      </span>
 
-/**
- * Convert field_name to Field Name
- */
-function formatFieldName(fieldName: string): string {
-  return fieldName
-    .split('_')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
+      {/* Conflict indicator */}
+      {hasConflicts && (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+            />
+          </svg>
+          <span>{conflictCount}</span>
+        </span>
+      )}
+    </div>
+  );
 }
