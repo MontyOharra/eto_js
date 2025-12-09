@@ -83,12 +83,12 @@ export function ModuleHeader({
             {onDeleteModule && (
               <button
                 onClick={() => onDeleteModule(moduleInstance.module_instance_id)}
-                className={`module-delete-btn-${moduleInstance.module_instance_id} p-1 rounded transition-all`}
+                className={`module-delete-btn-${moduleInstance.module_instance_id} p-0.5 rounded transition-all`}
                 style={{ color: textColor }}
                 title="Delete module"
               >
                 <svg
-                  className="w-4 h-4"
+                  className="w-3.5 h-3.5"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
