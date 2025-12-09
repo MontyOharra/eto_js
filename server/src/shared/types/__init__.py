@@ -73,6 +73,31 @@ from shared.types.pipeline_execution import (
     PipelineExecutionResult,
 )
 
+# Pending orders types
+from shared.types.pending_orders import (
+    PendingOrderStatus,
+    PendingUpdateStatus,
+    FieldState,
+    REQUIRED_FIELDS,
+    VALID_FIELD_NAMES,
+    PendingOrder,
+    PendingOrderCreate,
+    PendingOrderUpdate,
+    PendingOrderHistory,
+    PendingOrderHistoryCreate,
+    PendingOrderHistoryUpdate,
+    PendingUpdate,
+    PendingUpdateCreate,
+    PendingUpdateUpdate,
+    FieldSource,
+    FieldStateEmpty,
+    FieldStateSet,
+    FieldStateConfirmed,
+    FieldStateConflict,
+    FieldStateResult,
+    ProcessingResult,
+)
+
 __all__ = [
     # Email accounts
     "ImapProviderSettings",
@@ -126,4 +151,26 @@ __all__ = [
     # Simulation
     "PipelineExecutionStepResult",
     "PipelineExecutionResult",
+    # Pending orders
+    "PendingOrderStatus",
+    "PendingUpdateStatus",
+    "FieldState",
+    "REQUIRED_FIELDS",
+    "VALID_FIELD_NAMES",
+    "PendingOrder",
+    "PendingOrderCreate",
+    "PendingOrderUpdate",
+    "PendingOrderHistory",
+    "PendingOrderHistoryCreate",
+    "PendingOrderHistoryUpdate",
+    "PendingUpdate",
+    "PendingUpdateCreate",
+    "PendingUpdateUpdate",
+    "FieldSource",
+    "FieldStateEmpty",
+    "FieldStateSet",
+    "FieldStateConfirmed",
+    "FieldStateConflict",
+    "FieldStateResult",
+    "ProcessingResult",
 ]

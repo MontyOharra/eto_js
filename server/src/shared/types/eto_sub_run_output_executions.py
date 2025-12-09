@@ -7,19 +7,23 @@ from datetime import datetime
 from typing import Any, Dict, Literal, Optional, TypedDict
 
 # =========================
-# Status and Action Type Literals
+# Status Literal
 # =========================
 
 OutputExecutionStatus = Literal[
-    "pending",            # Record created, not yet started
-    "processing",         # Actively checking HAWB or executing create/update
-    "awaiting_approval",  # HAWB found once, needs user approval for update
-    "success",            # Completed successfully (order created or updated)
-    "rejected",           # User rejected the update
-    "error",              # Failed (multiple HAWBs, DB error, etc.)
+    "pending",     # Record created, not yet started
+    "processing",  # Actively processing
+    "success",     # Completed successfully
+    "error",       # Failed
 ]
 
-ActionType = Literal["create", "update"]
+# Action taken after processing
+ActionTaken = Literal[
+    "pending_order_created",   # New pending order created
+    "pending_order_updated",   # Added to existing pending order
+    "pending_updates_created", # HAWB exists in HTC, queued updates for approval
+    "order_created",           # Pending order was complete, created in HTC
+]
 
 
 # =========================
@@ -29,40 +33,27 @@ ActionType = Literal["create", "update"]
 @dataclass
 class EtoSubRunOutputExecutionCreate:
     """
-    Data required to create a new output execution record for a sub-run.
+    Data required to create a new output execution record.
 
-    This is created by PipelineResultService after pipeline execution succeeds.
-    The module_id and input_data come from the pipeline execution's return value.
-    HAWB is extracted from input_data for easy querying.
-    Status defaults to "pending" in the database.
+    One record is created per HAWB (if pipeline returns multiple HAWBs,
+    multiple records are created with the same output_channel_data).
     """
     sub_run_id: int
-    module_id: str
-    input_data: Dict[str, Any]  # Stored as JSON in DB
-    hawb: str  # Extracted from input_data
+    customer_id: int
+    hawb: str
+    output_channel_data: Dict[str, Any]  # Stored as JSON in DB
 
 
 class EtoSubRunOutputExecutionUpdate(TypedDict, total=False):
     """
     Dict for updating an output execution record.
     All fields are optional - only provided fields will be updated.
-
-    Uses dict keys to distinguish between:
-    - Field not provided (key absent) - field will not be updated
-    - Field set to None (key present, value None) - field will be cleared/nulled in database
-    - Field set to value (key present, value set) - field will be updated to that value
-
-    Note: input_data, result, and existing_order_data are Dict in domain but stored as JSON string in DB.
-    Repository handles serialization.
     """
     status: OutputExecutionStatus
-    action_type: ActionType | None
-    input_data: Dict[str, Any] | None
-    result: Dict[str, Any] | None
+    action_taken: str | None
+    htc_order_number: float | None
     error_message: str | None
     error_type: str | None
-    existing_order_number: int | None
-    existing_order_data: Dict[str, Any] | None
     started_at: datetime | None
     completed_at: datetime | None
 
@@ -73,54 +64,16 @@ class EtoSubRunOutputExecution:
     Complete output execution record as stored in the database.
 
     Represents the eto_sub_run_output_executions table.
-
-    input_data format (from output module inputs):
-    {
-        "customer_id": 123,
-        "hawb": "12345678",
-        "pickup_address_id": 456,
-        ...
-    }
-
-    result format for successful create:
-    {
-        "action": "create",
-        "order_number": 12345,
-        "hawb": "ABC123",
-        "customer_id": 5,
-        "email_sent": true,
-        "email_recipient": "sender@example.com"
-    }
-
-    result format for successful update:
-    {
-        "action": "update",
-        "order_number": 12345,
-        "hawb": "ABC123",
-        "fields_updated": ["pickup_time_start", "pickup_time_end"],
-        "email_sent": true,
-        "email_recipient": "sender@example.com"
-    }
-
-    existing_order_data format (snapshot for comparison UI):
-    {
-        "OrderNumber": 12345,
-        "HAWB": "ABC123",
-        "CustomerID": 5,
-        "PickupTimeStart": "08:00",
-        ...
-    }
+    The unique order identifier is (customer_id, hawb).
     """
     id: int
     sub_run_id: int
-    module_id: str
-    input_data: Dict[str, Any]
+    customer_id: int
     hawb: str
+    output_channel_data: Dict[str, Any]
     status: OutputExecutionStatus
-    action_type: Optional[ActionType]
-    existing_order_number: Optional[int]
-    existing_order_data: Optional[Dict[str, Any]]
-    result: Optional[Dict[str, Any]]
+    action_taken: Optional[str]
+    htc_order_number: Optional[float]
     error_message: Optional[str]
     error_type: Optional[str]
     started_at: Optional[datetime]

@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from features.pipelines.service import PipelineService
     from src.features.pipeline_execution.service import PipelineExecutionService
     from features.pipeline_results.service import PipelineResultService
+    from features.pending_orders.service import PendingOrdersService
     from features.eto_runs.service import EtoRunsService
     from shared.database.connection import DatabaseConnectionManager
 
@@ -156,6 +157,12 @@ class ServiceContainer:
                 'singleton': True,
                 'description': 'Pipeline result service for executing output modules and order operations'
             },
+            'pending_orders': {
+                'class': 'features.pending_orders.service.PendingOrdersService',
+                'args': [cls._connection_manager, cls._data_database_manager],
+                'singleton': True,
+                'description': 'Pending orders service for processing output channel data'
+            },
             'pipelines': {
                 'class': 'features.pipelines.service.PipelineService',
                 'args': [cls._connection_manager, '_service:pipeline_execution', '_service:modules', cls._data_database_manager],
@@ -170,7 +177,7 @@ class ServiceContainer:
             },
             'eto_runs': {
                 'class': 'features.eto_runs.service.EtoRunsService',
-                'args': [cls._connection_manager, '_service:pdf_templates', '_service:pdf_files', '_service:pipeline_execution', '_service:pipeline_results'],
+                'args': [cls._connection_manager, '_service:pdf_templates', '_service:pdf_files', '_service:pipeline_execution', '_service:pending_orders'],
                 'singleton': True,
                 'description': 'ETO runs service for processing lifecycle management'
             },
@@ -398,6 +405,11 @@ class ServiceContainer:
     def get_pipeline_result_service(cls) -> 'PipelineResultService':
         """Get the pipeline result service"""
         return cls.get('pipeline_results')
+
+    @classmethod
+    def get_pending_orders_service(cls) -> 'PendingOrdersService':
+        """Get the pending orders service"""
+        return cls.get('pending_orders')
 
     @classmethod
     def get_eto_runs_service(cls) -> 'EtoRunsService':

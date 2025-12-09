@@ -57,18 +57,10 @@ ETO_STEP_STATUS = SAEnum(
     validate_strings=True
 )
 
-# Output execution status (includes pending state and approval flow)
+# Output execution status
 ETO_OUTPUT_STATUS = SAEnum(
-    'pending', 'processing', 'awaiting_approval', 'success', 'rejected', 'error',
+    'pending', 'processing', 'success', 'error',
     name='eto_output_status',
-    native_enum=False,
-    validate_strings=True
-)
-
-# Output execution action type (create vs update)
-ETO_OUTPUT_ACTION_TYPE = SAEnum(
-    'create', 'update',
-    name='eto_output_action_type',
     native_enum=False,
     validate_strings=True
 )
@@ -301,6 +293,7 @@ class PdfTemplateModel(BaseModel):
         nullable=False,
         default='active',
     )
+    is_autoskip: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     current_version_id: Mapped[Optional[int]] = mapped_column(ForeignKey("pdf_template_versions.id"))
 
     created_at: Mapped[datetime] = mapped_column(
@@ -329,7 +322,7 @@ class PdfTemplateVersionModel(BaseModel):
     version_num: Mapped[int] = mapped_column(Integer, nullable=False)
     signature_objects: Mapped[str] = mapped_column(Text, nullable=False)
     extraction_fields: Mapped[str] = mapped_column(Text, nullable=False)
-    pipeline_definition_id: Mapped[int] = mapped_column(ForeignKey("pipeline_definitions.id"), nullable=False, index=True)
+    pipeline_definition_id: Mapped[Optional[int]] = mapped_column(ForeignKey("pipeline_definitions.id"), nullable=True, index=True)  # Nullable for autoskip templates
     usage_count: Mapped[int] = mapped_column(Integer, default=0)
     last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
@@ -580,8 +573,8 @@ class EtoSubRunModel(BaseModel):
     pipeline_executions: Mapped[List["EtoSubRunPipelineExecutionModel"]] = relationship(
         back_populates="sub_run", cascade="all, delete-orphan"
     )
-    output_execution: Mapped[Optional["EtoSubRunOutputExecutionModel"]] = relationship(
-        back_populates="sub_run", cascade="all, delete-orphan", uselist=False
+    output_executions: Mapped[List["EtoSubRunOutputExecutionModel"]] = relationship(
+        back_populates="sub_run", cascade="all, delete-orphan"
     )
 
     __table_args__ = (
@@ -706,71 +699,60 @@ class EtoSubRunPipelineExecutionStepModel(BaseModel):
 
 
 # =========================
-# eto_sub_run_output_executions (NEW: output execution stage per sub-run)
+# eto_sub_run_output_executions (output channel processing per HAWB)
 # =========================
 
 class EtoSubRunOutputExecutionModel(BaseModel):
     """
-    Tracks the execution of output operations (order creation, email sending, etc.)
-    after pipeline completes successfully.
+    Tracks output channel processing for a single HAWB from a sub-run.
 
-    Decoupled from pipeline execution - orchestrator passes data in-memory.
-    One-to-one with sub_run (one output execution per sub-run).
+    One sub-run can produce multiple output executions (one per HAWB if list).
+    This is the crash-resilience layer - data persists before processing begins.
 
-    Supports create/update flow with user approval for updates:
-    - HAWB not found → auto-create order
-    - HAWB found once → queue for user approval before updating
-    - HAWB found multiple times → error state
+    The unique order identifier is (customer_id, hawb) since different customers
+    may have overlapping HAWB values.
     """
     __tablename__ = "eto_sub_run_output_executions"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
     sub_run_id: Mapped[int] = mapped_column(
         ForeignKey("eto_sub_runs.id", ondelete="CASCADE"),
         nullable=False,
-        unique=True,
         index=True
+        # NOTE: No unique constraint - one sub-run can have multiple (for HAWB lists)
     )
 
-    # Which output module to execute (from pipeline return value)
-    module_id: Mapped[str] = mapped_column(
-        ForeignKey("modules.id"),
-        nullable=False,
-        index=True
-    )
-
-    # Input data for the output module (from pipeline return value)
-    input_data_json: Mapped[str] = mapped_column(Text, nullable=False)
-
-    # HAWB extracted from input_data for easy querying
+    # The unique order identifier (customer_id + hawb)
+    customer_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     hawb: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
 
-    # Execution status tracking
-    # States: pending -> processing -> success/error/awaiting_approval -> rejected
+    # All output channel values from pipeline (JSON dict)
+    # e.g., {"pickup_address": "123 Main St", "pieces": 5, ...}
+    output_channel_data: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # Execution status: pending -> processing -> success/error
     status: Mapped[str] = mapped_column(
         ETO_OUTPUT_STATUS,
         nullable=False,
         server_default="pending",
     )
 
-    # Action type: 'create' or 'update' (NULL before HAWB check completes)
-    action_type: Mapped[Optional[str]] = mapped_column(ETO_OUTPUT_ACTION_TYPE, nullable=True)
+    # What action was taken (set after processing completes)
+    # Values: 'pending_order_created', 'pending_order_updated',
+    #         'pending_updates_created', 'order_created'
+    action_taken: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
-    # For updates: the existing order being updated
-    existing_order_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # HTC order number if order was created during this execution
+    htc_order_number: Mapped[Optional[float]] = mapped_column(nullable=True)
 
-    # For updates: snapshot of current order data for comparison UI
-    existing_order_data_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Error tracking
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    error_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
+    # Timestamps
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
-
-    # Results from execution
-    result_json: Mapped[Optional[str]] = mapped_column(Text)
-    error_message: Mapped[Optional[str]] = mapped_column(Text)
-    error_type: Mapped[Optional[str]] = mapped_column(String(100))
-
-    # Audit timestamps
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
     )
@@ -779,15 +761,12 @@ class EtoSubRunOutputExecutionModel(BaseModel):
     )
 
     # Relationships
-    sub_run: Mapped["EtoSubRunModel"] = relationship(back_populates="output_execution", uselist=False)
-    module: Mapped["ModuleModel"] = relationship()
+    sub_run: Mapped["EtoSubRunModel"] = relationship(back_populates="output_executions")
 
     __table_args__ = (
-        Index("idx_eto_sub_run_output_exec_sub_run", "sub_run_id"),
-        Index("idx_eto_sub_run_output_exec_status", "status"),
-        Index("idx_eto_sub_run_output_exec_module", "module_id"),
-        Index("idx_eto_sub_run_output_exec_hawb", "hawb"),
-        Index("idx_eto_sub_run_output_exec_awaiting", "status", postgresql_where="status = 'awaiting_approval'"),
+        Index("idx_output_exec_sub_run", "sub_run_id"),
+        Index("idx_output_exec_status", "status"),
+        Index("idx_output_exec_customer_hawb", "customer_id", "hawb"),
     )
 
 
@@ -831,4 +810,205 @@ class OutputChannelTypeModel(BaseModel):
         Index("idx_output_channel_types_name", "name"),
         Index("idx_output_channel_types_category", "category"),
         Index("idx_output_channel_types_required", "is_required"),
+    )
+
+
+# =========================
+# ENUMS for pending orders system
+# =========================
+
+# Pending order status
+PENDING_ORDER_STATUS = SAEnum(
+    'incomplete', 'ready', 'created',
+    name='pending_order_status',
+    native_enum=False,
+    validate_strings=True
+)
+
+# Pending update status
+PENDING_UPDATE_STATUS = SAEnum(
+    'pending', 'approved', 'rejected',
+    name='pending_update_status',
+    native_enum=False,
+    validate_strings=True
+)
+
+
+# =========================
+# pending_orders (aggregated order state by HAWB)
+# =========================
+
+class PendingOrderModel(BaseModel):
+    """
+    Aggregated order state for a single HAWB.
+
+    Compiles data from multiple sub-runs into a single order.
+    When all required fields are present and no conflicts exist,
+    the order is auto-created in HTC.
+
+    Unique identifier is (customer_id, hawb) since different customers
+    may have overlapping HAWB values.
+    """
+    __tablename__ = "pending_orders"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    # Unique identifier (customer_id + hawb)
+    customer_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    hawb: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+
+    # Status: incomplete -> ready -> created
+    status: Mapped[str] = mapped_column(
+        PENDING_ORDER_STATUS,
+        nullable=False,
+        server_default="incomplete",
+    )
+
+    # HTC integration (set when order created in HTC)
+    htc_order_number: Mapped[Optional[float]] = mapped_column(nullable=True)
+    htc_created_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Required fields (all must be non-null for status='ready')
+    pickup_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    pickup_time_start: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    pickup_time_end: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    delivery_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    delivery_time_start: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    delivery_time_end: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+
+    # Optional fields
+    mawb: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    pickup_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    delivery_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    order_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    pieces: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    weight: Mapped[Optional[float]] = mapped_column(nullable=True)
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+    )
+
+    # Relationships
+    history: Mapped[List["PendingOrderHistoryModel"]] = relationship(
+        back_populates="pending_order", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        UniqueConstraint("customer_id", "hawb", name="uq_pending_orders_customer_hawb"),
+        Index("idx_pending_orders_status", "status"),
+        Index("idx_pending_orders_customer_hawb", "customer_id", "hawb"),
+    )
+
+
+# =========================
+# pending_order_history (field contribution audit trail)
+# =========================
+
+class PendingOrderHistoryModel(BaseModel):
+    """
+    Tracks each field contribution from sub-runs.
+
+    Used to compute field state (set/conflict/confirmed) and provide
+    audit trail of which sub-runs contributed which data.
+
+    One row per field per contribution (a sub-run contributing 5 fields = 5 rows).
+    """
+    __tablename__ = "pending_order_history"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    # Parent pending order
+    pending_order_id: Mapped[int] = mapped_column(
+        ForeignKey("pending_orders.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+
+    # Source tracking
+    sub_run_id: Mapped[int] = mapped_column(
+        ForeignKey("eto_sub_runs.id", ondelete="SET NULL"),
+        nullable=True,  # Nullable due to SET NULL on delete
+        index=True
+    )
+
+    # Field contribution
+    field_name: Mapped[str] = mapped_column(String(50), nullable=False)
+    field_value: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # Conflict resolution - TRUE if user explicitly chose this value
+    is_selected: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    # Timestamp
+    contributed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
+    )
+
+    # Relationships
+    pending_order: Mapped["PendingOrderModel"] = relationship(back_populates="history")
+    sub_run: Mapped[Optional["EtoSubRunModel"]] = relationship()
+
+    __table_args__ = (
+        Index("idx_poh_pending_order", "pending_order_id"),
+        Index("idx_poh_field", "pending_order_id", "field_name"),
+        Index("idx_poh_sub_run", "sub_run_id"),
+        Index("idx_poh_selected", "pending_order_id", "field_name", "is_selected"),
+    )
+
+
+# =========================
+# pending_updates (approval queue for existing HTC orders)
+# =========================
+
+class PendingUpdateModel(BaseModel):
+    """
+    Queue for proposed changes to orders that already exist in HTC.
+
+    When pipeline outputs data for a HAWB that's already in HTC,
+    updates are queued here for user approval instead of auto-applying.
+    """
+    __tablename__ = "pending_updates"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    # Order identification
+    customer_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    hawb: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    htc_order_number: Mapped[float] = mapped_column(nullable=False, index=True)
+
+    # Source tracking
+    sub_run_id: Mapped[int] = mapped_column(
+        ForeignKey("eto_sub_runs.id", ondelete="SET NULL"),
+        nullable=True,  # Nullable due to SET NULL on delete
+        index=True
+    )
+
+    # Proposed change
+    field_name: Mapped[str] = mapped_column(String(50), nullable=False)
+    proposed_value: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # Status: pending -> approved/rejected
+    status: Mapped[str] = mapped_column(
+        PENDING_UPDATE_STATUS,
+        nullable=False,
+        server_default="pending",
+    )
+
+    # Timestamps
+    proposed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
+    )
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Relationships
+    sub_run: Mapped[Optional["EtoSubRunModel"]] = relationship()
+
+    __table_args__ = (
+        Index("idx_pending_updates_status", "status"),
+        Index("idx_pending_updates_customer_hawb", "customer_id", "hawb"),
+        Index("idx_pending_updates_order", "htc_order_number"),
+        Index("idx_pending_updates_sub_run", "sub_run_id"),
     )

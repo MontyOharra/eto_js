@@ -7,7 +7,7 @@ Used by output definitions to perform order-related database operations.
 
 import threading
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 from shared.logging import get_logger
 from shared.exceptions import OutputExecutionError
@@ -151,3 +151,44 @@ class OrderHelpers:
             except Exception as e:
                 logger.error(f"Failed to generate next order number: {e}")
                 raise OutputExecutionError(f"Failed to generate next order number: {e}") from e
+
+    def lookup_order_by_customer_and_hawb(self, customer_id: int, hawb: str) -> Optional[float]:
+        """
+        Check if an order exists in HTC Open Orders for a customer/HAWB pair.
+
+        Queries the Open Orders table to find if this customer already has
+        an order with the given HAWB.
+
+        Args:
+            customer_id: The customer ID to look up
+            hawb: The HAWB string to look up
+
+        Returns:
+            The HTC order number (float) if found, None if not found
+        """
+        connection = self._get_connection()
+
+        try:
+            with connection.cursor() as cursor:
+                query = """
+                    SELECT [M_OrderNo]
+                    FROM [HTC300_G040_T010A Open Orders]
+                    WHERE [M_CustomerID] = ?
+                      AND [M_HAWB] = ?
+                      AND [M_CoID] = ?
+                      AND [M_BrID] = ?
+                """
+                cursor.execute(query, (customer_id, hawb, self.CO_ID, self.BR_ID))
+                row = cursor.fetchone()
+
+                if row is None:
+                    logger.debug(f"No order found for customer {customer_id}, HAWB {hawb}")
+                    return None
+
+                order_no = float(row[0]) if row[0] is not None else None
+                logger.debug(f"Found order {order_no} for customer {customer_id}, HAWB {hawb}")
+                return order_no
+
+        except Exception as e:
+            logger.error(f"Failed to lookup order for customer {customer_id}, HAWB {hawb}: {e}")
+            raise

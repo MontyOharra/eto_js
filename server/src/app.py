@@ -556,6 +556,7 @@ def register_routers(app: FastAPI) -> None:
             modules_router,
             admin_router,
             eto_runs_router,
+            order_management_router,
         )
 
         # Register all routers
@@ -582,6 +583,9 @@ def register_routers(app: FastAPI) -> None:
 
         app.include_router(eto_runs_router, prefix="/api")
         logger.info("Registered eto runs router at /api/eto-runs")
+
+        app.include_router(order_management_router, prefix="/api")
+        logger.info("Registered order management router at /api/order-management")
 
     except ImportError as e:
         logger.error(f"Could not import routers: {e}", exc_info=True)
