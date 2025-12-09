@@ -187,12 +187,18 @@ function LayoutAPreviewPage() {
     alert(`Would navigate to history view for HAWB: ${hawb}`);
   };
 
+  const handleViewSubRun = (subRunId: number) => {
+    console.log('View sub-run:', subRunId);
+    alert(`Would open ETO sub-run detail modal for: ${subRunId}`);
+  };
+
   return (
     <PendingOrderDetailView
       order={mockOrder}
       onBack={handleBack}
       onResolveConflict={handleResolveConflict}
       onViewHistory={handleViewHistory}
+      onViewSubRun={handleViewSubRun}
     />
   );
 }

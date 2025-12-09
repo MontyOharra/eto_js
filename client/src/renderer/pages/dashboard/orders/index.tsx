@@ -19,6 +19,7 @@ import {
   PendingUpdateSortOption,
   PendingOrderStatus,
 } from '../../../features/order-management';
+import { EtoSubRunDetailViewer } from '../../../features/eto';
 
 export const Route = createFileRoute('/dashboard/orders/')({
   component: OrdersPage,
@@ -55,6 +56,9 @@ function OrdersPage() {
 
   // Detail view state
   const [detailView, setDetailView] = useState<DetailView>(null);
+
+  // ETO Sub-run viewer modal state
+  const [viewingSubRunId, setViewingSubRunId] = useState<number | null>(null);
 
   // ============================================================================
   // Pending Orders State
@@ -184,10 +188,12 @@ function OrdersPage() {
     setSelectedUpdateIds(new Set());
   };
 
-  const handleViewRun = (runId: number) => {
-    // Navigate to ETO runs page with the run selected
-    // For now, just log - can implement navigation later
-    console.log('View run:', runId);
+  const handleViewSubRun = (subRunId: number) => {
+    setViewingSubRunId(subRunId);
+  };
+
+  const handleCloseSubRunViewer = () => {
+    setViewingSubRunId(null);
   };
 
   const handleResolveConflict = (fieldName: string, historyId: number) => {
@@ -201,22 +207,37 @@ function OrdersPage() {
 
   if (detailView?.type === 'order-detail' && orderDetail) {
     return (
-      <PendingOrderDetailView
-        order={orderDetail}
-        onBack={handleBackToList}
-        onViewHistory={handleViewHistory}
-        onResolveConflict={handleResolveConflict}
-      />
+      <>
+        <PendingOrderDetailView
+          order={orderDetail}
+          onBack={handleBackToList}
+          onViewHistory={handleViewHistory}
+          onResolveConflict={handleResolveConflict}
+          onViewSubRun={handleViewSubRun}
+        />
+        <EtoSubRunDetailViewer
+          isOpen={viewingSubRunId !== null}
+          subRunId={viewingSubRunId}
+          onClose={handleCloseSubRunViewer}
+        />
+      </>
     );
   }
 
   if (detailView?.type === 'order-history' && orderHistory) {
     return (
-      <OrderHistoryTimeline
-        history={orderHistory}
-        onBack={handleBackToList}
-        onViewRun={handleViewRun}
-      />
+      <>
+        <OrderHistoryTimeline
+          history={orderHistory}
+          onBack={handleBackToList}
+          onViewSubRun={handleViewSubRun}
+        />
+        <EtoSubRunDetailViewer
+          isOpen={viewingSubRunId !== null}
+          subRunId={viewingSubRunId}
+          onClose={handleCloseSubRunViewer}
+        />
+      </>
     );
   }
 
@@ -389,7 +410,7 @@ function OrdersPage() {
                 data={updatesData?.items ?? []}
                 onApprove={handleApproveUpdate}
                 onReject={handleRejectUpdate}
-                onViewRun={handleViewRun}
+                onViewSubRun={handleViewSubRun}
                 selectedIds={selectedUpdateIds}
                 onSelectionChange={setSelectedUpdateIds}
               />
@@ -397,6 +418,13 @@ function OrdersPage() {
           </div>
         </div>
       )}
+
+      {/* ETO Sub-run Detail Modal */}
+      <EtoSubRunDetailViewer
+        isOpen={viewingSubRunId !== null}
+        subRunId={viewingSubRunId}
+        onClose={handleCloseSubRunViewer}
+      />
     </div>
   );
 }

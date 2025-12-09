@@ -24,6 +24,7 @@ from shared.exceptions import OutputExecutionError
 
 if TYPE_CHECKING:
     from shared.database.data_database_manager import DataDatabaseManager
+    from shared.types.pending_orders import PendingOrder
 
 logger = get_logger(__name__)
 
@@ -395,6 +396,50 @@ class HtcIntegrationService:
             raise OutputExecutionError(f"Failed to update HTC order: {e}") from e
 
     # ==================== Order Deletion ====================
+
+    def create_order_from_pending(self, pending_order: 'PendingOrder') -> float:
+        """
+        Create an HTC order from a pending order.
+
+        TEMPORARY DUMMY IMPLEMENTATION: Just prints the data and returns a dummy order number.
+        Will be replaced with actual HTC creation logic later.
+
+        Args:
+            pending_order: The PendingOrder dataclass with all required fields
+
+        Returns:
+            The new HTC order number (currently a dummy value)
+        """
+        logger.info("=" * 60)
+        logger.info("HTC ORDER CREATION (DUMMY)")
+        logger.info("=" * 60)
+        logger.info(f"Pending Order ID: {pending_order.id}")
+        logger.info(f"Customer ID: {pending_order.customer_id}")
+        logger.info(f"HAWB: {pending_order.hawb}")
+        logger.info("-" * 40)
+        logger.info("REQUIRED FIELDS:")
+        logger.info(f"  Pickup Address: {pending_order.pickup_address}")
+        logger.info(f"  Pickup Time Start: {pending_order.pickup_time_start}")
+        logger.info(f"  Pickup Time End: {pending_order.pickup_time_end}")
+        logger.info(f"  Delivery Address: {pending_order.delivery_address}")
+        logger.info(f"  Delivery Time Start: {pending_order.delivery_time_start}")
+        logger.info(f"  Delivery Time End: {pending_order.delivery_time_end}")
+        logger.info("-" * 40)
+        logger.info("OPTIONAL FIELDS:")
+        logger.info(f"  MAWB: {pending_order.mawb}")
+        logger.info(f"  Pickup Notes: {pending_order.pickup_notes}")
+        logger.info(f"  Delivery Notes: {pending_order.delivery_notes}")
+        logger.info(f"  Order Notes: {pending_order.order_notes}")
+        logger.info(f"  Pieces: {pending_order.pieces}")
+        logger.info(f"  Weight: {pending_order.weight}")
+        logger.info("=" * 60)
+
+        # TODO: Replace with actual HTC create_order call
+        # For now, return a dummy order number
+        dummy_order_number = 99999.0
+        logger.info(f"DUMMY: Would create HTC order, returning dummy order number: {dummy_order_number}")
+
+        return dummy_order_number
 
     def remove_from_orders_in_work(self, order_number: float) -> None:
         """

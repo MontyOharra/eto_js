@@ -135,6 +135,8 @@ export interface FieldDetail {
 export interface ContributingSubRun {
   sub_run_id: number;
   run_id: number;
+  source_type: string; // "email" or "manual"
+  source_identifier: string; // email sender or "Manual Upload"
   pdf_filename: string;
   template_name: string | null;
   fields_contributed: string[];

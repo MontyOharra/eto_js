@@ -24,6 +24,7 @@ interface PendingOrderDetailViewProps {
   onBack: () => void;
   onResolveConflict: (fieldName: string, historyId: number) => void;
   onViewHistory: (hawb: string) => void;
+  onViewSubRun: (subRunId: number) => void;
 }
 
 interface LocalFieldState {
@@ -224,15 +225,23 @@ function FieldRow({ field, localSelection, onConflictSelect }: FieldRowProps) {
 
 interface SourceCardProps {
   source: ContributingSubRun;
+  onViewSubRun: (subRunId: number) => void;
 }
 
-function SourceCard({ source }: SourceCardProps) {
+function SourceCard({ source, onViewSubRun }: SourceCardProps) {
   return (
     <div className="rounded-lg border border-gray-600 bg-gray-800 p-3">
       <div className="min-w-0">
-        <p className="text-sm font-medium truncate text-white">{source.pdf_filename}</p>
+        <p className="text-sm font-medium text-white break-words">{source.pdf_filename}</p>
+        <p className="text-xs text-gray-400 mt-0.5 break-words">
+          {source.source_type === 'email' ? (
+            <>From: {source.source_identifier}</>
+          ) : (
+            <>{source.source_identifier}</>
+          )}
+        </p>
         {source.template_name && (
-          <p className="text-xs text-gray-500 truncate mt-0.5">
+          <p className="text-xs text-gray-500 mt-0.5 break-words">
             Template: {source.template_name}
           </p>
         )}
@@ -249,6 +258,13 @@ function SourceCard({ source }: SourceCardProps) {
           </span>
         ))}
       </div>
+
+      <button
+        onClick={() => onViewSubRun(source.sub_run_id)}
+        className="mt-3 w-full text-xs py-1.5 rounded bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors"
+      >
+        View Details
+      </button>
     </div>
   );
 }
@@ -262,6 +278,7 @@ export function PendingOrderDetailView({
   onBack,
   onResolveConflict,
   onViewHistory,
+  onViewSubRun,
 }: PendingOrderDetailViewProps) {
   // Track local conflict selections (before submitting to API)
   const [localSelections, setLocalSelections] = useState<LocalFieldState>({});
@@ -428,7 +445,7 @@ export function PendingOrderDetailView({
         </div>
 
         {/* Right Column - Data Sources */}
-        <div className="w-80 flex-shrink-0 overflow-auto p-6 bg-gray-800/30 flex flex-col">
+        <div className="w-[400px] flex-shrink-0 overflow-auto p-6 bg-gray-800/30 flex flex-col">
           <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">
             Sources ({order.contributing_sub_runs.length} PDFs)
           </h3>
@@ -438,7 +455,7 @@ export function PendingOrderDetailView({
               <p className="text-gray-500 text-sm italic">No sources yet</p>
             ) : (
               order.contributing_sub_runs.map((source) => (
-                <SourceCard key={source.sub_run_id} source={source} />
+                <SourceCard key={source.sub_run_id} source={source} onViewSubRun={onViewSubRun} />
               ))
             )}
           </div>

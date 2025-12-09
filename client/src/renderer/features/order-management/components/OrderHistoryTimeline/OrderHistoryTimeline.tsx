@@ -10,7 +10,7 @@ import { OrderStatusBadge } from '../OrderStatusBadge';
 interface OrderHistoryTimelineProps {
   history: OrderHistory;
   onBack: () => void;
-  onViewRun: (runId: number) => void;
+  onViewSubRun: (subRunId: number) => void;
 }
 
 function formatDate(isoDate: string | null): string {
@@ -100,11 +100,11 @@ function getColorClasses(color: string) {
 
 interface TimelineEventProps {
   event: OrderHistoryEvent;
-  onViewRun: (runId: number) => void;
+  onViewSubRun: (subRunId: number) => void;
   isLast: boolean;
 }
 
-function TimelineEvent({ event, onViewRun, isLast }: TimelineEventProps) {
+function TimelineEvent({ event, onViewSubRun, isLast }: TimelineEventProps) {
   const config = eventTypeConfig[event.event_type];
   const colors = getColorClasses(config.color);
 
@@ -132,10 +132,10 @@ function TimelineEvent({ event, onViewRun, isLast }: TimelineEventProps) {
         {/* Source info */}
         <div className="flex items-center gap-2 mb-2">
           <button
-            onClick={() => onViewRun(event.run_id)}
+            onClick={() => onViewSubRun(event.sub_run_id)}
             className="text-sm text-blue-400 hover:text-blue-300 hover:underline"
           >
-            Run #{event.run_id}
+            View Details
           </button>
           <span className="text-gray-600">•</span>
           <span className="text-sm text-gray-500 truncate max-w-[200px]">
@@ -207,7 +207,7 @@ function TimelineEvent({ event, onViewRun, isLast }: TimelineEventProps) {
 export function OrderHistoryTimeline({
   history,
   onBack,
-  onViewRun,
+  onViewSubRun,
 }: OrderHistoryTimelineProps) {
   return (
     <div className="h-full flex flex-col overflow-hidden bg-gray-900">
@@ -266,7 +266,7 @@ export function OrderHistoryTimeline({
                   <TimelineEvent
                     key={event.id}
                     event={event}
-                    onViewRun={onViewRun}
+                    onViewSubRun={onViewSubRun}
                     isLast={index === history.events.length - 1}
                   />
                 ))}

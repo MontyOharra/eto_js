@@ -63,7 +63,8 @@ class PendingOrderListItem(BaseModel):
     status: Literal["incomplete", "ready", "created"]
 
     # HTC info (only set if status == 'created')
-    htc_order_number: Optional[float] = None
+    # order_number is DOUBLE in Access but always whole numbers
+    htc_order_number: Optional[int] = None
     htc_created_at: Optional[str] = None  # ISO 8601
 
     # Field completion summary
@@ -110,6 +111,8 @@ class ContributingSubRun(BaseModel):
     """Information about a sub-run that contributed to this order"""
     sub_run_id: int
     run_id: int
+    source_type: str  # "email" or "manual"
+    source_identifier: str  # email sender or "Manual Upload"
     pdf_filename: str
     template_name: Optional[str] = None
     fields_contributed: List[str]
@@ -124,8 +127,8 @@ class PendingOrderDetail(BaseModel):
     customer_name: Optional[str] = None
     status: Literal["incomplete", "ready", "created"]
 
-    # HTC info
-    htc_order_number: Optional[float] = None
+    # HTC info (order_number is DOUBLE in Access but always whole numbers)
+    htc_order_number: Optional[int] = None
     htc_created_at: Optional[str] = None
 
     # All fields with their states

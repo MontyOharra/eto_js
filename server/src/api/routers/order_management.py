@@ -25,6 +25,7 @@ from api.schemas.order_management import (
     get_field_label,
     FIELD_LABELS,
 )
+from api.mappers.order_management import map_pending_order_detail_to_api
 from shared.services.service_container import ServiceContainer
 from shared.types.pending_orders import REQUIRED_FIELDS, VALID_FIELD_NAMES
 
@@ -123,7 +124,7 @@ async def list_pending_orders(
             customer_id=order.customer_id,
             customer_name=None,  # TODO: Resolve from Access DB
             status=order.status,
-            htc_order_number=order.htc_order_number,
+            htc_order_number=int(order.htc_order_number) if order.htc_order_number is not None else None,
             htc_created_at=order.htc_created_at.isoformat() if order.htc_created_at else None,
             required_field_count=len(REQUIRED_FIELDS),
             required_fields_present=required_present,
@@ -158,125 +159,17 @@ async def get_pending_order_detail(
     """
     logger.debug(f"Get pending order detail: id={pending_order_id}")
 
-    pending_order_repo = service._pending_order_repo
-    pending_order_history_repo = service._pending_order_history_repo
+    # Get detail from service
+    detail = service.get_pending_order_detail(pending_order_id)
 
-    # Get the order
-    order = pending_order_repo.get_by_id(pending_order_id)
-    if not order:
+    if not detail:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Pending order {pending_order_id} not found"
         )
 
-    # Build field details
-    from api.schemas.order_management import FieldDetail, FieldSource, ConflictOption
-
-    fields = []
-    for field_name in VALID_FIELD_NAMES:
-        value = getattr(order, field_name, None)
-        is_required = field_name in REQUIRED_FIELDS
-
-        # Get history for this field
-        history_entries = pending_order_history_repo.get_by_field(order.id, field_name)
-        unique_values = pending_order_history_repo.get_unique_values_for_field(order.id, field_name)
-        selected = pending_order_history_repo.get_selected_for_field(order.id, field_name)
-
-        # Determine state
-        if len(history_entries) == 0:
-            state = "empty"
-            conflict_options = None
-            source = None
-        elif selected is not None:
-            state = "confirmed"
-            conflict_options = None
-            source = FieldSource(
-                history_id=selected.id,
-                sub_run_id=selected.sub_run_id,
-                contributed_at=selected.contributed_at.isoformat(),
-            )
-        elif len(unique_values) > 1:
-            state = "conflict"
-            conflict_options = [
-                ConflictOption(
-                    history_id=h.id,
-                    value=h.field_value,
-                    sub_run_id=h.sub_run_id,
-                    contributed_at=h.contributed_at.isoformat(),
-                )
-                for h in history_entries
-            ]
-            source = None
-        else:
-            state = "set"
-            conflict_options = None
-            # Use first history entry as source
-            if history_entries:
-                h = history_entries[0]
-                source = FieldSource(
-                    history_id=h.id,
-                    sub_run_id=h.sub_run_id,
-                    contributed_at=h.contributed_at.isoformat(),
-                )
-            else:
-                source = None
-
-        fields.append(FieldDetail(
-            name=field_name,
-            label=get_field_label(field_name),
-            required=is_required,
-            value=value,
-            state=state,
-            conflict_options=conflict_options,
-            source=source,
-        ))
-
-    # Build contributing sub-runs
-    from api.schemas.order_management import ContributingSubRun
-
-    all_history = pending_order_history_repo.get_by_pending_order_id(order.id)
-
-    # Group by sub_run_id
-    sub_run_contributions: dict = {}
-    for h in all_history:
-        if h.sub_run_id is None:
-            continue
-        if h.sub_run_id not in sub_run_contributions:
-            sub_run_contributions[h.sub_run_id] = {
-                "sub_run_id": h.sub_run_id,
-                "fields": [],
-                "contributed_at": h.contributed_at,
-            }
-        sub_run_contributions[h.sub_run_id]["fields"].append(h.field_name)
-        # Use earliest contributed_at
-        if h.contributed_at < sub_run_contributions[h.sub_run_id]["contributed_at"]:
-            sub_run_contributions[h.sub_run_id]["contributed_at"] = h.contributed_at
-
-    contributing_sub_runs = [
-        ContributingSubRun(
-            sub_run_id=data["sub_run_id"],
-            run_id=0,  # TODO: Get from sub_run relation
-            pdf_filename="",  # TODO: Get from sub_run relation
-            template_name=None,  # TODO: Get from sub_run relation
-            fields_contributed=data["fields"],
-            contributed_at=data["contributed_at"].isoformat(),
-        )
-        for data in sub_run_contributions.values()
-    ]
-
-    return PendingOrderDetail(
-        id=order.id,
-        hawb=order.hawb,
-        customer_id=order.customer_id,
-        customer_name=None,  # TODO: Resolve from Access DB
-        status=order.status,
-        htc_order_number=order.htc_order_number,
-        htc_created_at=order.htc_created_at.isoformat() if order.htc_created_at else None,
-        fields=fields,
-        contributing_sub_runs=contributing_sub_runs,
-        created_at=order.created_at.isoformat(),
-        updated_at=order.updated_at.isoformat(),
-    )
+    # Map to API response
+    return map_pending_order_detail_to_api(detail)
 
 
 # =============================================================================

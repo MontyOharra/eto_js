@@ -16,6 +16,12 @@ from shared.logging import get_logger
 from shared.database.repositories.pending_order import PendingOrderRepository
 from shared.database.repositories.pending_order_history import PendingOrderHistoryRepository
 from shared.database.repositories.pending_update import PendingUpdateRepository
+from shared.database.repositories.eto_sub_run import EtoSubRunRepository
+from shared.database.repositories.eto_run import EtoRunRepository
+from shared.database.repositories.pdf_file import PdfFileRepository
+from shared.database.repositories.email import EmailRepository
+from shared.database.repositories.pdf_template_version import PdfTemplateVersionRepository
+from shared.database.repositories.pdf_template import PdfTemplateRepository
 from shared.types.pending_orders import (
     PendingOrder,
     PendingOrderHistory,
@@ -79,7 +85,7 @@ class PendingOrderDetail:
     customer_id: int
     customer_name: Optional[str]
     status: str
-    htc_order_number: Optional[int]
+    htc_order_number: Optional[float]  # DOUBLE in Access DB, always whole numbers
     contributing_sources: List[ContributingSource]
     fields: List[FieldWithOptions]
     created_at: datetime
@@ -163,6 +169,26 @@ class OrderManagementService:
             connection_manager=connection_manager
         )
 
+        # Repositories for source lookup
+        self._sub_run_repo = EtoSubRunRepository(
+            connection_manager=connection_manager
+        )
+        self._run_repo = EtoRunRepository(
+            connection_manager=connection_manager
+        )
+        self._pdf_file_repo = PdfFileRepository(
+            connection_manager=connection_manager
+        )
+        self._email_repo = EmailRepository(
+            connection_manager=connection_manager
+        )
+        self._template_version_repo = PdfTemplateVersionRepository(
+            connection_manager=connection_manager
+        )
+        self._template_repo = PdfTemplateRepository(
+            connection_manager=connection_manager
+        )
+
         logger.info("OrderManagementService initialized successfully")
 
     # ==================== Pending Orders - Read ====================
@@ -221,9 +247,8 @@ class OrderManagementService:
             logger.warning(f"Pending order {pending_order_id} not found")
             return None
 
-        # 2. Get history with source details
-        # TODO: Implement get_history_with_sources in repository
-        history_records = self._pending_order_history_repo.get_by_pending_order(pending_order_id)
+        # 2. Get history records
+        history_records = self._pending_order_history_repo.get_by_pending_order_id(pending_order_id)
 
         # 3. Build contributing sources
         contributing_sources = self._build_contributing_sources(history_records)
@@ -274,19 +299,61 @@ class OrderManagementService:
 
         sources = []
         for sub_run_id, records in by_sub_run.items():
-            # TODO: Fetch actual source info via JOIN query
-            # For now, create placeholder
+            # Fetch actual source info via repository lookups
+            run_id = 0
+            source_type = "unknown"
+            source_identifier = "Unknown"
+            pdf_filename = "Unknown"
+            template_id = None
+            template_name = None
+            template_customer_id = None
+            template_customer_name = None
+
+            # Get sub_run to find eto_run_id and template_version_id
+            sub_run = self._sub_run_repo.get_by_id(sub_run_id)
+            if sub_run:
+                run_id = sub_run.eto_run_id
+
+                # Get template info if available
+                if sub_run.template_version_id:
+                    template_version = self._template_version_repo.get_by_id(sub_run.template_version_id)
+                    if template_version:
+                        template_id = template_version.template_id
+                        template = self._template_repo.get_by_id(template_version.template_id)
+                        if template:
+                            template_name = template.name
+                            template_customer_id = template.customer_id
+
+                # Get run to find pdf_file_id and source_email_id
+                run = self._run_repo.get_by_id(sub_run.eto_run_id)
+                if run:
+                    # Get PDF filename
+                    if run.pdf_file_id:
+                        pdf_file = self._pdf_file_repo.get_by_id(run.pdf_file_id)
+                        if pdf_file:
+                            pdf_filename = pdf_file.original_filename
+
+                    # Get source type and identifier
+                    if run.source_email_id:
+                        source_type = "email"
+                        email = self._email_repo.get_by_id(run.source_email_id)
+                        if email:
+                            source_identifier = email.sender_email or "Unknown sender"
+                    else:
+                        source_type = "manual"
+                        source_identifier = "Manual Upload"
+
             sources.append(ContributingSource(
                 sub_run_id=sub_run_id,
-                run_id=0,  # TODO: Get from sub_run
-                source_type="unknown",  # TODO: Get from run -> email
-                source_identifier="Unknown",  # TODO: Get email sender
-                pdf_filename="Unknown",  # TODO: Get from run -> pdf_file
-                template_id=None,
-                template_name=None,
-                template_customer_id=None,
-                template_customer_name=None,
-                processed_at=records[0].created_at,
+                run_id=run_id,
+                source_type=source_type,
+                source_identifier=source_identifier,
+                pdf_filename=pdf_filename,
+                template_id=template_id,
+                template_name=template_name,
+                template_customer_id=template_customer_id,
+                template_customer_name=template_customer_name,
+                processed_at=records[0].contributed_at,
                 fields_contributed=[r.field_name for r in records],
             ))
 
@@ -338,7 +405,7 @@ class OrderManagementService:
                     sub_run_id=h.sub_run_id,
                     pdf_filename="Unknown",  # TODO: Get from JOIN
                     is_selected=h.is_selected,
-                    contributed_at=h.created_at,
+                    contributed_at=h.contributed_at,
                 )
                 for h in history_for_field
             ]

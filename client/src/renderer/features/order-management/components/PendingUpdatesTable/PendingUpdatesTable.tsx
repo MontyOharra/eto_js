@@ -11,7 +11,7 @@ interface PendingUpdatesTableProps {
   data: PendingUpdatesByOrder[];
   onApprove: (updateId: number) => void;
   onReject: (updateId: number) => void;
-  onViewRun: (runId: number) => void;
+  onViewSubRun: (subRunId: number) => void;
   selectedIds: Set<number>;
   onSelectionChange: (ids: Set<number>) => void;
 }
@@ -43,7 +43,7 @@ interface UpdateRowProps {
   update: PendingUpdateListItem;
   onApprove: (updateId: number) => void;
   onReject: (updateId: number) => void;
-  onViewRun: (runId: number) => void;
+  onViewSubRun: (subRunId: number) => void;
   isSelected: boolean;
   onToggleSelect: (updateId: number) => void;
 }
@@ -52,7 +52,7 @@ function UpdateRow({
   update,
   onApprove,
   onReject,
-  onViewRun,
+  onViewSubRun,
   isSelected,
   onToggleSelect,
 }: UpdateRowProps) {
@@ -110,15 +110,16 @@ function UpdateRow({
 
       {/* Source */}
       <td className="px-3 py-2.5">
-        <button
-          onClick={() => onViewRun(update.source_run_id)}
-          className="text-sm text-blue-400 hover:text-blue-300 hover:underline"
-        >
-          Run #{update.source_run_id}
-        </button>
-        <p className="text-xs text-gray-500 truncate max-w-[150px]">
-          {update.source_pdf_filename}
-        </p>
+        {update.sub_run_id ? (
+          <button
+            onClick={() => onViewSubRun(update.sub_run_id!)}
+            className="text-sm text-blue-400 hover:text-blue-300 hover:underline"
+          >
+            View Details
+          </button>
+        ) : (
+          <span className="text-sm text-gray-500">-</span>
+        )}
       </td>
 
       {/* Proposed At */}
@@ -193,7 +194,7 @@ export function PendingUpdatesTable({
   data,
   onApprove,
   onReject,
-  onViewRun,
+  onViewSubRun,
   selectedIds,
   onSelectionChange,
 }: PendingUpdatesTableProps) {
@@ -332,7 +333,7 @@ export function PendingUpdatesTable({
                       update={update}
                       onApprove={onApprove}
                       onReject={onReject}
-                      onViewRun={onViewRun}
+                      onViewSubRun={onViewSubRun}
                       isSelected={selectedIds.has(update.id)}
                       onToggleSelect={toggleSelect}
                     />

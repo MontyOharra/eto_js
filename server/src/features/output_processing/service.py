@@ -9,7 +9,7 @@ User-facing operations (viewing, conflict resolution, approvals) are handled
 by the OrderManagementService.
 """
 
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, TYPE_CHECKING, cast
 from datetime import datetime, timezone
 
 from shared.logging import get_logger
@@ -29,6 +29,7 @@ from shared.types.pending_orders import (
 if TYPE_CHECKING:
     from shared.database.connection import DatabaseConnectionManager
     from features.htc_integration.service import HtcIntegrationService
+    from shared.types.pending_orders import PendingOrder
 
 logger = get_logger(__name__)
 
@@ -266,14 +267,14 @@ class OutputProcessingService:
             for field_name, new_value in field_data.items():
                 new_value_str = str(new_value)
 
-                # Add history record
+                # Add history record with is_selected=True (these are the selected values)
                 history_creates.append(
                     PendingOrderHistoryCreate(
                         pending_order_id=pending_order.id,
                         sub_run_id=sub_run_id,
                         field_name=field_name,
                         field_value=new_value_str,
-                        is_selected=False,
+                        is_selected=True,
                     )
                 )
 
@@ -286,28 +287,17 @@ class OutputProcessingService:
 
             # Update field values
             if field_updates:
-                self._pending_order_repo.update(pending_order.id, field_updates)
+                self._pending_order_repo.update(pending_order.id, cast(PendingOrderUpdate, field_updates))
 
         else:
             # Existing pending order - check for conflicts
             logger.info(f"Found existing pending order {pending_order.id} for HAWB '{hawb}'")
 
-            history_creates = []
+            history_creates: List[PendingOrderHistoryCreate] = []
             field_updates: Dict[str, Any] = {}
 
             for field_name, new_value in field_data.items():
                 new_value_str = str(new_value)
-
-                # Add history record for provenance (always)
-                history_creates.append(
-                    PendingOrderHistoryCreate(
-                        pending_order_id=pending_order.id,
-                        sub_run_id=sub_run_id,
-                        field_name=field_name,
-                        field_value=new_value_str,
-                        is_selected=False,
-                    )
-                )
 
                 # Check if field has existing history
                 existing_history = self._pending_order_history_repo.get_by_field(
@@ -315,22 +305,54 @@ class OutputProcessingService:
                 )
 
                 if len(existing_history) == 0:
-                    # No prior history - just set the new value
+                    # No prior history - set new value and mark as selected
+                    history_creates.append(
+                        PendingOrderHistoryCreate(
+                            pending_order_id=pending_order.id,
+                            sub_run_id=sub_run_id,
+                            field_name=field_name,
+                            field_value=new_value_str,
+                            is_selected=True,
+                        )
+                    )
                     field_updates[field_name] = new_value_str
                     logger.debug(f"Field '{field_name}' has no history - setting to '{new_value_str}'")
                 else:
                     # Has existing history - check for conflict
                     current_value = getattr(pending_order, field_name, None)
 
-                    if current_value is None:
-                        # Field is already in conflict state or empty
-                        # Don't change - user needs to resolve existing conflict first
-                        logger.debug(f"Field '{field_name}' already NULL (conflict/empty) - keeping as NULL")
-                    elif current_value == new_value_str:
-                        # Same value - no change needed
+                    if current_value == new_value_str:
+                        # Same value - add history but don't select it (current is already selected)
+                        history_creates.append(
+                            PendingOrderHistoryCreate(
+                                pending_order_id=pending_order.id,
+                                sub_run_id=sub_run_id,
+                                field_name=field_name,
+                                field_value=new_value_str,
+                                is_selected=False,
+                            )
+                        )
                         logger.debug(f"Field '{field_name}' value matches - no change")
                     else:
-                        # Different value - set to NULL to indicate conflict
+                        # Different value (or current is NULL) - conflict!
+                        # Clear all existing selections for this field
+                        cleared_count = self._pending_order_history_repo.clear_selection_for_field(
+                            pending_order.id, field_name
+                        )
+                        logger.debug(f"Cleared {cleared_count} selections for field '{field_name}'")
+
+                        # Add new history as not selected
+                        history_creates.append(
+                            PendingOrderHistoryCreate(
+                                pending_order_id=pending_order.id,
+                                sub_run_id=sub_run_id,
+                                field_name=field_name,
+                                field_value=new_value_str,
+                                is_selected=False,
+                            )
+                        )
+
+                        # Set field to NULL to indicate conflict
                         field_updates[field_name] = None
                         logger.info(
                             f"Conflict detected for field '{field_name}': "
@@ -338,15 +360,23 @@ class OutputProcessingService:
                         )
 
             # Create history records
-            self._pending_order_history_repo.create_batch(history_creates)
-            logger.info(f"Added {len(history_creates)} history records for existing pending order {pending_order.id}")
+            if history_creates:
+                self._pending_order_history_repo.create_batch(history_creates)
+                logger.info(f"Added {len(history_creates)} history records for existing pending order {pending_order.id}")
 
             # Apply field updates (including conflicts)
             if field_updates:
-                self._pending_order_repo.update(pending_order.id, field_updates)
+                self._pending_order_repo.update(pending_order.id, cast(PendingOrderUpdate, field_updates))
 
         # Update status based on required fields
         self._update_pending_order_status(pending_order.id)
+
+        # Re-fetch the pending order to check if it's now ready for HTC creation
+        updated_pending_order = self._pending_order_repo.get_by_id(pending_order.id)
+        if updated_pending_order and updated_pending_order.status == "ready":
+            # All required fields are filled - create order in HTC
+            htc_order_number = self._create_htc_order(updated_pending_order)
+            return "order_created"
 
         return "pending_order_created" if was_created else "pending_order_updated"
 
@@ -380,6 +410,40 @@ class OutputProcessingService:
             valid_fields[field_name] = value
 
         return valid_fields
+
+    def _create_htc_order(self, pending_order: 'PendingOrder') -> float:
+        """
+        Create an order in HTC from a ready pending order.
+
+        Updates the pending order with:
+        - status = "created"
+        - htc_order_number = the returned order number
+        - htc_created_at = current timestamp
+
+        Args:
+            pending_order: The pending order with all required fields filled
+
+        Returns:
+            The HTC order number
+        """
+        logger.info(f"Creating HTC order for pending order {pending_order.id}")
+
+        # Call HTC service to create the order
+        htc_order_number = self._htc_service.create_order_from_pending(pending_order)
+
+        # Update pending order with HTC info
+        created_at = datetime.now(timezone.utc)
+        self._pending_order_repo.update(pending_order.id, {
+            "status": "created",
+            "htc_order_number": htc_order_number,
+            "htc_created_at": created_at,
+        })
+
+        logger.info(
+            f"Pending order {pending_order.id} created in HTC as order {htc_order_number}"
+        )
+
+        return htc_order_number
 
     def _update_pending_order_status(self, pending_order_id: int) -> None:
         """
