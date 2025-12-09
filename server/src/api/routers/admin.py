@@ -11,7 +11,6 @@ from api.schemas.output_channels import SyncOutputChannelsResponse
 
 from shared.services.service_container import ServiceContainer
 from features.modules.service import ModulesService
-from features.pipeline_results.service import PipelineResultService
 
 logger = logging.getLogger(__name__)
 
@@ -134,7 +133,7 @@ async def sync_modules(
 
 @router.post("/sync-output-channels", response_model=SyncOutputChannelsResponse, status_code=status.HTTP_200_OK)
 async def sync_output_channels(
-    pipeline_result_service: PipelineResultService = Depends(lambda: ServiceContainer.get_pipeline_result_service())
+    modules_service: ModulesService = Depends(lambda: ServiceContainer.get_modules_service())
 ) -> SyncOutputChannelsResponse:
     """
     Sync output channel type definitions from code to database catalog.
@@ -148,7 +147,7 @@ async def sync_output_channels(
     try:
         logger.info("Starting output channel types sync via API...")
 
-        result = pipeline_result_service.sync_output_channel_types()
+        result = modules_service.sync_output_channel_types()
 
         return SyncOutputChannelsResponse(
             success=True,

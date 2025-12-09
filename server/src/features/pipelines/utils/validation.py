@@ -348,7 +348,7 @@ class PipelineValidator:
         Raises:
             ModuleValidationError: If required output channel validation fails
         """
-        from features.pipeline_results.output_channels import OUTPUT_CHANNEL_DEFINITIONS
+        from features.modules.output_channel_definitions import OUTPUT_CHANNEL_DEFINITIONS
 
         # Get required channel names from definitions
         required_channels = {ch.name for ch in OUTPUT_CHANNEL_DEFINITIONS if ch.is_required}

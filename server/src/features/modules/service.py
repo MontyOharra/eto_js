@@ -6,10 +6,13 @@ import logging
 from typing import Dict, Optional, Type, Any
 
 from shared.types.modules import BaseModule, Module
+from shared.types.output_channels import OutputChannelTypeCreate
 from shared.database.repositories.module import ModuleRepository
+from shared.database.repositories import OutputChannelTypeRepository
 from shared.exceptions.service import ObjectNotFoundError
 
 from features.modules.utils.registry import ModuleRegistry
+from features.modules.output_channel_definitions import OUTPUT_CHANNEL_DEFINITIONS
 
 logger = logging.getLogger(__name__)
 
@@ -72,13 +75,13 @@ class ModulesService:
     def _auto_discover_modules(self):
         """
         Auto-discover and register all module classes at startup.
-        Recursively scans the entire pipeline_modules directory.
+        Recursively scans the features/modules/definitions directory.
         """
         try:
-            logger.info("Auto-discovering modules from pipeline_modules...")
+            logger.info("Auto-discovering modules from features.modules.definitions...")
 
-            # Just scan the entire pipeline_modules directory - no package list needed!
-            self._registry.auto_discover(["pipeline_modules"])
+            # Scan the definitions directory within the modules feature
+            self._registry.auto_discover(["features.modules.definitions"])
 
             # Log how many modules were registered
             registered_count = len(self._registry.get_all())
@@ -321,4 +324,61 @@ class ModulesService:
             "registered_count": len(registered_modules),
             "registered_modules": list(registered_modules.keys()),
             "cache_stats": cache_stats
+        }
+
+    # ========== Output Channel Sync Operations ==========
+
+    def sync_output_channel_types(self) -> Dict[str, Any]:
+        """
+        Sync output channel type definitions to the database.
+
+        Reads static definitions from OUTPUT_CHANNEL_DEFINITIONS and
+        upserts each into the output_channel_types table.
+
+        Returns:
+            Dict with sync statistics:
+                - total: number of definitions processed
+                - created: number of new records created
+                - updated: number of existing records updated
+                - channel_names: list of all channel names synced
+        """
+        logger.info("Starting output channel types sync...")
+
+        repo = OutputChannelTypeRepository(connection_manager=self.connection_manager)
+
+        created = 0
+        updated = 0
+        channel_names = []
+
+        for definition in OUTPUT_CHANNEL_DEFINITIONS:
+            # Convert definition to create dataclass
+            channel_create = OutputChannelTypeCreate(
+                name=definition.name,
+                label=definition.label,
+                data_type=definition.data_type,
+                is_required=definition.is_required,
+                category=definition.category,
+                description=definition.description,
+            )
+
+            # Check if exists to track created vs updated
+            existing = repo.get_by_name(definition.name)
+
+            # Upsert the channel type
+            repo.upsert(channel_create)
+
+            if existing:
+                updated += 1
+            else:
+                created += 1
+
+            channel_names.append(definition.name)
+
+        logger.info(f"Output channel types sync complete: {created} created, {updated} updated")
+
+        return {
+            "total": len(OUTPUT_CHANNEL_DEFINITIONS),
+            "created": created,
+            "updated": updated,
+            "channel_names": channel_names,
         }

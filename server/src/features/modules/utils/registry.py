@@ -19,7 +19,8 @@ class ModuleSecurityValidator:
     """Security validation for module loading"""
 
     ALLOWED_PACKAGES = [
-        "pipeline_modules",  # Allow all modules in pipeline_modules
+        "features.modules.definitions",  # New location for module definitions
+        "pipeline_modules",  # Legacy location (for backwards compatibility)
     ]
 
     BLOCKED_PATTERNS = [

@@ -14,6 +14,9 @@ if TYPE_CHECKING:
     from src.features.pipeline_execution.service import PipelineExecutionService
     from features.pipeline_results.service import PipelineResultService
     from features.pending_orders.service import PendingOrdersService
+    from features.htc_integration.service import HtcIntegrationService
+    from features.output_processing.service import OutputProcessingService
+    from features.order_management.service import OrderManagementService
     from features.eto_runs.service import EtoRunsService
     from shared.database.connection import DatabaseConnectionManager
 
@@ -161,7 +164,25 @@ class ServiceContainer:
                 'class': 'features.pending_orders.service.PendingOrdersService',
                 'args': [cls._connection_manager, cls._data_database_manager],
                 'singleton': True,
-                'description': 'Pending orders service for processing output channel data'
+                'description': 'Pending orders service for processing output channel data (legacy)'
+            },
+            'htc_integration': {
+                'class': 'features.htc_integration.service.HtcIntegrationService',
+                'args': [cls._data_database_manager],
+                'singleton': True,
+                'description': 'HTC Access database integration service for order operations'
+            },
+            'output_processing': {
+                'class': 'features.output_processing.service.OutputProcessingService',
+                'args': [cls._connection_manager, '_service:htc_integration'],
+                'singleton': True,
+                'description': 'Output processing service for routing pipeline data to pending orders/updates'
+            },
+            'order_management': {
+                'class': 'features.order_management.service.OrderManagementService',
+                'args': [cls._connection_manager, '_service:htc_integration'],
+                'singleton': True,
+                'description': 'Order management service for user-facing pending order operations'
             },
             'pipelines': {
                 'class': 'features.pipelines.service.PipelineService',
@@ -408,8 +429,23 @@ class ServiceContainer:
 
     @classmethod
     def get_pending_orders_service(cls) -> 'PendingOrdersService':
-        """Get the pending orders service"""
+        """Get the pending orders service (legacy)"""
         return cls.get('pending_orders')
+
+    @classmethod
+    def get_htc_integration_service(cls) -> 'HtcIntegrationService':
+        """Get the HTC integration service"""
+        return cls.get('htc_integration')
+
+    @classmethod
+    def get_output_processing_service(cls) -> 'OutputProcessingService':
+        """Get the output processing service"""
+        return cls.get('output_processing')
+
+    @classmethod
+    def get_order_management_service(cls) -> 'OrderManagementService':
+        """Get the order management service"""
+        return cls.get('order_management')
 
     @classmethod
     def get_eto_runs_service(cls) -> 'EtoRunsService':
