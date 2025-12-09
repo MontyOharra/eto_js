@@ -21,6 +21,7 @@ import { Route as DashboardEtoIndexRouteImport } from './pages/dashboard/eto/ind
 import { Route as DashboardEtoOldIndexRouteImport } from './pages/dashboard/eto-old/index'
 import { Route as DashboardConfigsIndexRouteImport } from './pages/dashboard/configs/index'
 import { Route as DashboardOrdersLayoutARouteImport } from './pages/dashboard/orders/layout-a'
+import { Route as DashboardOrdersDetailPreviewRouteImport } from './pages/dashboard/orders/detail-preview'
 import { Route as DashboardEtoRunIdRouteImport } from './pages/dashboard/eto/$runId'
 
 const LoginRoute = LoginRouteImport.update({
@@ -84,6 +85,12 @@ const DashboardOrdersLayoutARoute = DashboardOrdersLayoutARouteImport.update({
   path: '/orders/layout-a',
   getParentRoute: () => DashboardRouteRoute,
 } as any)
+const DashboardOrdersDetailPreviewRoute =
+  DashboardOrdersDetailPreviewRouteImport.update({
+    id: '/orders/detail-preview',
+    path: '/orders/detail-preview',
+    getParentRoute: () => DashboardRouteRoute,
+  } as any)
 const DashboardEtoRunIdRoute = DashboardEtoRunIdRouteImport.update({
   id: '/eto/$runId',
   path: '/eto/$runId',
@@ -96,6 +103,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/dashboard/eto/$runId': typeof DashboardEtoRunIdRoute
+  '/dashboard/orders/detail-preview': typeof DashboardOrdersDetailPreviewRoute
   '/dashboard/orders/layout-a': typeof DashboardOrdersLayoutARoute
   '/dashboard/configs': typeof DashboardConfigsIndexRoute
   '/dashboard/eto-old': typeof DashboardEtoOldIndexRoute
@@ -110,6 +118,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/dashboard': typeof DashboardIndexRoute
   '/dashboard/eto/$runId': typeof DashboardEtoRunIdRoute
+  '/dashboard/orders/detail-preview': typeof DashboardOrdersDetailPreviewRoute
   '/dashboard/orders/layout-a': typeof DashboardOrdersLayoutARoute
   '/dashboard/configs': typeof DashboardConfigsIndexRoute
   '/dashboard/eto-old': typeof DashboardEtoOldIndexRoute
@@ -126,6 +135,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/dashboard/eto/$runId': typeof DashboardEtoRunIdRoute
+  '/dashboard/orders/detail-preview': typeof DashboardOrdersDetailPreviewRoute
   '/dashboard/orders/layout-a': typeof DashboardOrdersLayoutARoute
   '/dashboard/configs/': typeof DashboardConfigsIndexRoute
   '/dashboard/eto-old/': typeof DashboardEtoOldIndexRoute
@@ -143,6 +153,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/dashboard/'
     | '/dashboard/eto/$runId'
+    | '/dashboard/orders/detail-preview'
     | '/dashboard/orders/layout-a'
     | '/dashboard/configs'
     | '/dashboard/eto-old'
@@ -157,6 +168,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/dashboard'
     | '/dashboard/eto/$runId'
+    | '/dashboard/orders/detail-preview'
     | '/dashboard/orders/layout-a'
     | '/dashboard/configs'
     | '/dashboard/eto-old'
@@ -172,6 +184,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/dashboard/'
     | '/dashboard/eto/$runId'
+    | '/dashboard/orders/detail-preview'
     | '/dashboard/orders/layout-a'
     | '/dashboard/configs/'
     | '/dashboard/eto-old/'
@@ -274,6 +287,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardOrdersLayoutARouteImport
       parentRoute: typeof DashboardRouteRoute
     }
+    '/dashboard/orders/detail-preview': {
+      id: '/dashboard/orders/detail-preview'
+      path: '/orders/detail-preview'
+      fullPath: '/dashboard/orders/detail-preview'
+      preLoaderRoute: typeof DashboardOrdersDetailPreviewRouteImport
+      parentRoute: typeof DashboardRouteRoute
+    }
     '/dashboard/eto/$runId': {
       id: '/dashboard/eto/$runId'
       path: '/eto/$runId'
@@ -287,6 +307,7 @@ declare module '@tanstack/react-router' {
 interface DashboardRouteRouteChildren {
   DashboardIndexRoute: typeof DashboardIndexRoute
   DashboardEtoRunIdRoute: typeof DashboardEtoRunIdRoute
+  DashboardOrdersDetailPreviewRoute: typeof DashboardOrdersDetailPreviewRoute
   DashboardOrdersLayoutARoute: typeof DashboardOrdersLayoutARoute
   DashboardConfigsIndexRoute: typeof DashboardConfigsIndexRoute
   DashboardEtoOldIndexRoute: typeof DashboardEtoOldIndexRoute
@@ -300,6 +321,7 @@ interface DashboardRouteRouteChildren {
 const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
   DashboardIndexRoute: DashboardIndexRoute,
   DashboardEtoRunIdRoute: DashboardEtoRunIdRoute,
+  DashboardOrdersDetailPreviewRoute: DashboardOrdersDetailPreviewRoute,
   DashboardOrdersLayoutARoute: DashboardOrdersLayoutARoute,
   DashboardConfigsIndexRoute: DashboardConfigsIndexRoute,
   DashboardEtoOldIndexRoute: DashboardEtoOldIndexRoute,

@@ -25,10 +25,41 @@ interface ExecutionEdgeProps extends Omit<EdgeProps, 'style' | 'data'> {
   data?: ExecutionEdgeData;
 }
 
+// Check if a string is an ISO datetime format
+const isISODateTime = (value: string): boolean => {
+  // Match ISO 8601 datetime format: YYYY-MM-DDTHH:MM:SS or with milliseconds/timezone
+  const isoPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
+  return isoPattern.test(value);
+};
+
+// Format ISO datetime to human readable format
+const formatDateTime = (isoString: string): string => {
+  try {
+    const date = new Date(isoString);
+    if (isNaN(date.getTime())) return isoString;
+
+    // Format as "MM/DD/YY HH:MM AM/PM"
+    return date.toLocaleString('en-US', {
+      month: '2-digit',
+      day: '2-digit',
+      year: '2-digit',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
+  } catch {
+    return isoString;
+  }
+};
+
 const formatValue = (value: any, truncate: boolean = true): string => {
   if (value === null) return 'null';
   if (value === undefined) return 'undefined';
   if (typeof value === 'string') {
+    // Check for ISO datetime format and convert to human readable
+    if (isISODateTime(value)) {
+      return formatDateTime(value);
+    }
     return truncate && value.length > 30 ? value.substring(0, 30) + '...' : value;
   }
   if (typeof value === 'number') return value.toString();

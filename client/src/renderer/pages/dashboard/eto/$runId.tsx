@@ -211,6 +211,9 @@ function EtoRunDetailPage() {
 
   // Handler for saving a template from the builder
   const handleSaveTemplate = async (templateData: TemplateBuilderData) => {
+    console.log('[ETO handleSaveTemplate] Received templateData:', templateData);
+    console.log('[ETO handleSaveTemplate] templateData.is_autoskip:', templateData.is_autoskip);
+
     try {
       // Upload the PDF file
       const pdfToUpload = templateData.pdf_file || builderPdfFile;
@@ -228,12 +231,16 @@ function EtoRunDetailPage() {
         name: templateData.name,
         description: templateData.description || '',
         customer_id: templateData.customer_id ?? undefined,
+        is_autoskip: templateData.is_autoskip ?? false,
         source_pdf_id: uploadedPdf.id,
         signature_objects: templateData.signature_objects,
         extraction_fields: templateData.extraction_fields,
         pipeline_state: templateData.pipeline_state,
         visual_state: templateData.visual_state,
       };
+
+      console.log('[ETO handleSaveTemplate] createRequest:', createRequest);
+      console.log('[ETO handleSaveTemplate] createRequest.is_autoskip:', createRequest.is_autoskip);
 
       const createdTemplate = await createTemplate.mutateAsync(createRequest);
 
