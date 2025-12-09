@@ -61,7 +61,7 @@ async def list_pending_orders(
         description="Field to sort by"
     ),
     sort_order: Literal["asc", "desc"] = Query("desc", description="Sort order"),
-    service = Depends(lambda: ServiceContainer.get_pending_orders_service())
+    service = Depends(lambda: ServiceContainer.get_order_management_service())
 ) -> GetPendingOrdersResponse:
     """
     List pending orders with filtering and pagination.
@@ -151,7 +151,7 @@ async def list_pending_orders(
 @router.get("/pending-orders/{pending_order_id}", response_model=PendingOrderDetail)
 async def get_pending_order_detail(
     pending_order_id: int,
-    service = Depends(lambda: ServiceContainer.get_pending_orders_service())
+    service = Depends(lambda: ServiceContainer.get_order_management_service())
 ) -> PendingOrderDetail:
     """
     Get detailed view of a pending order including all fields and their states.
@@ -299,7 +299,7 @@ async def list_pending_updates(
     ),
     limit: int = Query(50, ge=1, le=200, description="Number of items to return"),
     offset: int = Query(0, ge=0, description="Number of items to skip"),
-    service = Depends(lambda: ServiceContainer.get_pending_orders_service())
+    service = Depends(lambda: ServiceContainer.get_order_management_service())
 ) -> GetPendingUpdatesResponse:
     """
     List pending updates for existing HTC orders.

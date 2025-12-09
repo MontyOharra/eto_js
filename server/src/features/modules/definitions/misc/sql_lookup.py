@@ -28,10 +28,10 @@ def _get_column_name(identifier: Identifier) -> str:
     """
     # If there's an alias, use it
     if identifier.has_alias():
-        return identifier.get_alias()
+        return identifier.get_alias() or str(identifier)
 
     # Otherwise use the real name
-    return identifier.get_real_name()
+    return identifier.get_real_name() or str(identifier)
 
 
 class SqlLookupConfig(BaseModel):

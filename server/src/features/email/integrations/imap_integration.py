@@ -5,6 +5,7 @@ Platform-independent IMAP implementation using imaplib.
 import email
 from email.header import decode_header
 from email.utils import parseaddr, parsedate_to_datetime
+from email.message import Message
 import imaplib
 import logging
 import ssl
@@ -380,7 +381,7 @@ class ImapIntegration(BaseEmailIntegration):
 
             self.logger.debug(f"Searching for UIDs in range {search_range}")
 
-            status, data = self._imap.uid("SEARCH", None, f"UID {search_range}")
+            status, data = self._imap.uid("SEARCH", f"UID {search_range}")
             if status != "OK":
                 self.logger.warning(f"UID SEARCH failed: {data}")
                 return []
@@ -429,7 +430,7 @@ class ImapIntegration(BaseEmailIntegration):
             if status != "OK":
                 raise RuntimeError(f"Failed to select folder '{folder_name}': {data}")
 
-            status, data = self._imap.uid("SEARCH", None, "ALL")
+            status, data = self._imap.uid("SEARCH", "ALL")
             if status != "OK":
                 self.logger.warning(f"UID SEARCH ALL failed: {data}")
                 return None
@@ -503,7 +504,7 @@ class ImapIntegration(BaseEmailIntegration):
 
     def _extract_attachments(
         self,
-        msg: email.message.Message,
+        msg: Message,
         file_extensions: list[str] | None = None,
     ) -> list[EmailAttachment]:
         """
@@ -554,7 +555,10 @@ class ImapIntegration(BaseEmailIntegration):
                 if payload is None:
                     self.logger.warning(f"Empty payload for attachment '{filename}'")
                     continue
-
+                if not isinstance(payload, bytes):
+                    self.logger.warning(f"Unexpected payload type for '{filename}': {type(payload)}")
+                    continue
+            
                 content_type = part.get_content_type() or "application/octet-stream"
 
                 attachments.append(EmailAttachment(
@@ -631,7 +635,7 @@ class ImapIntegration(BaseEmailIntegration):
 
     def _parse_email_message(
         self,
-        msg: email.message.Message,
+        msg: Message,
         uid: int,
         folder_name: str,
     ) -> EmailMessage:
@@ -671,7 +675,7 @@ class ImapIntegration(BaseEmailIntegration):
                 if content_type == "text/plain" and body_text is None:
                     try:
                         payload = part.get_payload(decode=True)
-                        if payload:
+                        if payload and isinstance(payload, bytes):
                             charset = part.get_content_charset() or "utf-8"
                             body_text = payload.decode(charset, errors="replace")
                     except Exception:
@@ -680,7 +684,7 @@ class ImapIntegration(BaseEmailIntegration):
                 elif content_type == "text/html" and body_html is None:
                     try:
                         payload = part.get_payload(decode=True)
-                        if payload:
+                        if payload and isinstance(payload, bytes):
                             charset = part.get_content_charset() or "utf-8"
                             body_html = payload.decode(charset, errors="replace")
                     except Exception:
@@ -689,7 +693,7 @@ class ImapIntegration(BaseEmailIntegration):
             content_type = msg.get_content_type()
             try:
                 payload = msg.get_payload(decode=True)
-                if payload:
+                if payload and isinstance(payload, bytes):
                     charset = msg.get_content_charset() or "utf-8"
                     text = payload.decode(charset, errors="replace")
                     if content_type == "text/html":

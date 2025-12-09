@@ -12,8 +12,6 @@ if TYPE_CHECKING:
     from features.pdf_templates.service import PdfTemplateService
     from features.pipelines.service import PipelineService
     from src.features.pipeline_execution.service import PipelineExecutionService
-    from features.pipeline_results.service import PipelineResultService
-    from features.pending_orders.service import PendingOrdersService
     from features.htc_integration.service import HtcIntegrationService
     from features.output_processing.service import OutputProcessingService
     from features.order_management.service import OrderManagementService
@@ -154,18 +152,6 @@ class ServiceContainer:
                 'singleton': True,
                 'description': 'Pipeline execution service for running compiled pipelines'
             },
-            'pipeline_results': {
-                'class': 'features.pipeline_results.service.PipelineResultService',
-                'args': [cls._connection_manager, cls._data_database_manager],
-                'singleton': True,
-                'description': 'Pipeline result service for executing output modules and order operations'
-            },
-            'pending_orders': {
-                'class': 'features.pending_orders.service.PendingOrdersService',
-                'args': [cls._connection_manager, cls._data_database_manager],
-                'singleton': True,
-                'description': 'Pending orders service for processing output channel data (legacy)'
-            },
             'htc_integration': {
                 'class': 'features.htc_integration.service.HtcIntegrationService',
                 'args': [cls._data_database_manager],
@@ -198,7 +184,7 @@ class ServiceContainer:
             },
             'eto_runs': {
                 'class': 'features.eto_runs.service.EtoRunsService',
-                'args': [cls._connection_manager, '_service:pdf_templates', '_service:pdf_files', '_service:pipeline_execution', '_service:pending_orders'],
+                'args': [cls._connection_manager, '_service:pdf_templates', '_service:pdf_files', '_service:pipeline_execution', '_service:output_processing'],
                 'singleton': True,
                 'description': 'ETO runs service for processing lifecycle management'
             },
@@ -215,7 +201,7 @@ class ServiceContainer:
         the same ServiceProxy simultaneously, causing false circular dependency errors.
         """
         eager_services = [
-            'pipeline_results',  # Used by eto_runs worker, resolved lazily via ServiceProxy
+            'output_processing',  # Used by eto_runs worker, resolved lazily via ServiceProxy
         ]
 
         for service_name in eager_services:
@@ -421,16 +407,6 @@ class ServiceContainer:
     def get_pipeline_execution_service(cls) -> 'PipelineExecutionService':
         """Get the pipeline execution service"""
         return cls.get('pipeline_execution')
-
-    @classmethod
-    def get_pipeline_result_service(cls) -> 'PipelineResultService':
-        """Get the pipeline result service"""
-        return cls.get('pipeline_results')
-
-    @classmethod
-    def get_pending_orders_service(cls) -> 'PendingOrdersService':
-        """Get the pending orders service (legacy)"""
-        return cls.get('pending_orders')
 
     @classmethod
     def get_htc_integration_service(cls) -> 'HtcIntegrationService':

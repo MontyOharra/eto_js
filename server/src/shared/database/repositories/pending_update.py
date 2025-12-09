@@ -3,7 +3,7 @@ Pending Update Repository
 Repository for pending_updates table with CRUD operations
 """
 import logging
-from typing import Type, Optional, List
+from typing import Type, Optional, List, cast
 
 from shared.database.repositories.base import BaseRepository
 from shared.database.models import PendingUpdateModel
@@ -11,6 +11,7 @@ from shared.types.pending_orders import (
     PendingUpdate,
     PendingUpdateCreate,
     PendingUpdateUpdate,
+    PendingUpdateStatus,
 )
 
 logger = logging.getLogger(__name__)
@@ -46,7 +47,7 @@ class PendingUpdateRepository(BaseRepository[PendingUpdateModel]):
             sub_run_id=model.sub_run_id,
             field_name=model.field_name,
             proposed_value=model.proposed_value,
-            status=model.status,
+            status=cast(PendingUpdateStatus, model.status),
             proposed_at=model.proposed_at,
             reviewed_at=model.reviewed_at,
         )

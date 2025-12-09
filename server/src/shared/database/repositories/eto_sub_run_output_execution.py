@@ -4,7 +4,7 @@ Repository for eto_sub_run_output_executions table with CRUD operations
 """
 import json
 import logging
-from typing import Any, Dict, Type, Optional, List
+from typing import Any, Dict, Type, Optional, List, cast
 
 from shared.database.repositories.base import BaseRepository
 from shared.database.models import EtoSubRunOutputExecutionModel
@@ -12,6 +12,7 @@ from shared.types.eto_sub_run_output_executions import (
     EtoSubRunOutputExecution,
     EtoSubRunOutputExecutionCreate,
     EtoSubRunOutputExecutionUpdate,
+    OutputExecutionStatus,
 )
 
 logger = logging.getLogger(__name__)
@@ -68,7 +69,7 @@ class EtoSubRunOutputExecutionRepository(BaseRepository[EtoSubRunOutputExecution
             customer_id=model.customer_id,
             hawb=model.hawb,
             output_channel_data=self._deserialize_json_dict(model.output_channel_data) or {},
-            status=model.status,
+            status=cast(OutputExecutionStatus, model.status),
             action_taken=model.action_taken,
             htc_order_number=model.htc_order_number,
             error_message=model.error_message,

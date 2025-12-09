@@ -60,6 +60,7 @@ from shared.types.eto_sub_run_output_executions import (
     EtoSubRunOutputExecutionUpdate,
 )
 from shared.types.pdf_templates import TemplateMatchingResult
+from shared.types.pipeline_execution import PipelineExecutionResult
 
 from shared.exceptions.service import ObjectNotFoundError, ServiceError
 
@@ -74,7 +75,7 @@ if TYPE_CHECKING:
     from features.pdf_templates.service import PdfTemplateService
     from features.pdf_files.service import PdfFilesService
     from src.features.pipeline_execution.service import PipelineExecutionService
-    from features.pending_orders.service import PendingOrdersService
+    from features.output_processing.service import OutputProcessingService
 
 logger = get_logger(__name__)
 
@@ -105,7 +106,7 @@ class EtoRunsService:
     pdf_template_service: 'PdfTemplateService'
     pdf_files_service: 'PdfFilesService'
     pipeline_execution_service: 'PipelineExecutionService'
-    pending_orders_service: 'PendingOrdersService'
+    output_processing_service: 'OutputProcessingService'
 
     # ==================== Repositories ====================
 
@@ -122,7 +123,7 @@ class EtoRunsService:
         pdf_template_service: 'PdfTemplateService',
         pdf_files_service: 'PdfFilesService',
         pipeline_execution_service: 'PipelineExecutionService',
-        pending_orders_service: 'PendingOrdersService'
+        output_processing_service: 'OutputProcessingService'
     ) -> None:
         """
         Initialize ETO Runs Service.
@@ -132,7 +133,7 @@ class EtoRunsService:
             pdf_template_service: Service for template matching
             pdf_files_service: Service for PDF file access
             pipeline_execution_service: Service for pipeline execution
-            pending_orders_service: Service for processing output channels into pending orders
+            output_processing_service: Service for processing output channels into pending orders
         """
         logger.debug("Initializing EtoRunsService...")
 
@@ -141,7 +142,7 @@ class EtoRunsService:
         self.pdf_template_service: 'PdfTemplateService' = pdf_template_service
         self.pdf_files_service: 'PdfFilesService' = pdf_files_service
         self.pipeline_execution_service: 'PipelineExecutionService' = pipeline_execution_service
-        self.pending_orders_service: 'PendingOrdersService' = pending_orders_service
+        self.output_processing_service: 'OutputProcessingService' = output_processing_service
 
         # Initialize repositories
         self.eto_run_repo: EtoRunRepository = EtoRunRepository(connection_manager=connection_manager)
@@ -903,7 +904,7 @@ class EtoRunsService:
 
         return extracted_data
 
-    def _process_sub_run_pipeline(self, sub_run_id: int, extracted_data: list) -> "PipelineExecutionResult":
+    def _process_sub_run_pipeline(self, sub_run_id: int, extracted_data: list) -> PipelineExecutionResult:
         """
         Execute pipeline execution stage for a single sub-run.
 
@@ -920,7 +921,6 @@ class EtoRunsService:
         Raises:
             Exception: If pipeline execution fails
         """
-        from shared.types.pipeline_execution import PipelineExecutionResult
         logger.monitor(f"Sub-run {sub_run_id}: Executing pipeline execution stage")
 
         # Step 1: Get sub-run with template info
@@ -949,6 +949,10 @@ class EtoRunsService:
         )
 
         # Step 4: Get pipeline definition with pipeline_state
+        if template_version.pipeline_definition_id is None:
+            raise ServiceError(
+                f"Template version {sub_run.template_version_id} has no pipeline definition"
+            )
         pipeline_definition = self.pipeline_execution_service.pipeline_repo.get_by_id(
             template_version.pipeline_definition_id
         )
@@ -1128,7 +1132,7 @@ class EtoRunsService:
         Execute output channel processing stage for a single sub-run.
 
         Creates output execution record(s) for each HAWB and calls the
-        PendingOrdersService to process them.
+        OutputProcessingService to process them.
 
         Args:
             sub_run_id: Sub-run ID
@@ -1161,8 +1165,8 @@ class EtoRunsService:
             )
             logger.debug(f"Sub-run {sub_run_id}: Created output_execution record {output_execution.id} for HAWB {hawb}")
 
-            # Process via PendingOrdersService
-            self.pending_orders_service.process(output_execution.id)
+            # Process via OutputProcessingService
+            self.output_processing_service.process(output_execution.id)
 
         logger.monitor(f"Sub-run {sub_run_id}: Output execution completed for {len(hawbs)} HAWB(s)")
 

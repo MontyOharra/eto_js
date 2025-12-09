@@ -3,7 +3,7 @@ Pending Order Repository
 Repository for pending_orders table with CRUD operations
 """
 import logging
-from typing import Type, Optional, List
+from typing import Type, Optional, List, cast
 
 from shared.database.repositories.base import BaseRepository
 from shared.database.models import PendingOrderModel
@@ -11,6 +11,7 @@ from shared.types.pending_orders import (
     PendingOrder,
     PendingOrderCreate,
     PendingOrderUpdate,
+    PendingOrderStatus,
 )
 
 logger = logging.getLogger(__name__)
@@ -41,7 +42,7 @@ class PendingOrderRepository(BaseRepository[PendingOrderModel]):
             id=model.id,
             customer_id=model.customer_id,
             hawb=model.hawb,
-            status=model.status,
+            status=cast(PendingOrderStatus, model.status),
             htc_order_number=model.htc_order_number,
             htc_created_at=model.htc_created_at,
             pickup_address=model.pickup_address,

@@ -671,9 +671,10 @@ class EmailService:
                         EmailIngestionConfigUpdate(last_processed_uid=highest_uid)
                     )
                     # Update local config copy
-                    config = self.ingestion_config_repository.get_by_id(config.id)
-                    if config is None:
+                    updated_config = self.ingestion_config_repository.get_by_id(config.id)
+                    if updated_config is None:
                         raise ObjectNotFoundError(f"Ingestion config {config.id} not found after update")
+                    config = updated_config
                     logger.info(f"  Initialized last_processed_uid to {highest_uid}")
             except Exception as e:
                 logger.warning(f"  Failed to initialize UID: {e}")

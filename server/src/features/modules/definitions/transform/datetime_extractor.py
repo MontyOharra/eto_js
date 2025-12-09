@@ -146,7 +146,10 @@ class DateTimeExtractor(TransformModule):
             )
 
             # Parse the JSON response
-            extracted_data = json.loads(response.choices[0].message.content)
+            content = response.choices[0].message.content
+            if content is None:
+                raise ValueError("Empty response from LLM")
+            extracted_data = json.loads(content)
 
             logger.info(f"Extracted date/time: {extracted_data}")
 

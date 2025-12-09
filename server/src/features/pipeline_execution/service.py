@@ -602,6 +602,8 @@ class PipelineExecutionService:
             Delayed task that produces {output_pin_id: value}
         """
         # Resolve handler
+        if step.module_ref is None:
+            raise RuntimeError(f"Step {step.step_number} has no module_ref")
         module_id = step.module_ref.split(":")[0] if ":" in step.module_ref else step.module_ref
 
         handler = self.module_registry.get(module_id)

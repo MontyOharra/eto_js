@@ -172,7 +172,7 @@ class PdfTemplateService:
         self,
         template_id: int,
         update_data: PdfTemplateUpdate
-    ) -> tuple[PdfTemplate, int, int]:
+    ) -> tuple[PdfTemplate, int, int | None]:
         """
         Update template with smart versioning logic.
 
@@ -246,7 +246,7 @@ class PdfTemplateService:
 
         # ==================== Case 2 & 3: Wizard Data Changed ====================
         with self.connection_manager.unit_of_work() as uow:
-            pipeline_definition_id: int
+            pipeline_definition_id: int | None
 
             # Sub-case: Pipeline changed (Complex Case)
             if pipeline_changed:

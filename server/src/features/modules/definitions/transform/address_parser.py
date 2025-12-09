@@ -145,7 +145,7 @@ class AddressParser(TransformModule):
         # Parse address using usaddress
         try:
             parsed, address_type = usaddress.tag(address_string)
-        except usaddress.RepeatedLabelError as e:
+        except usaddress.RepeatedLabelError as e:  # type: ignore[attr-defined]
             # This happens when multiple instances of the same label are found
             logger.error(f"Address parsing failed - ambiguous address: {e}")
             return {
