@@ -23,12 +23,14 @@ interface ExtractionFieldsStepProps {
   selectedSignatureObjects: PdfObjects;
   pipelineState: PipelineState;
   visualState: VisualState;
+  isAutoskip: boolean;
   onTemplateNameChange: (name: string) => void;
   onTemplateDescriptionChange: (description: string) => void;
   onCustomerIdChange: (customerId: number | null) => void;
   onExtractionFieldsChange: (fields: ExtractionField[]) => void;
   onPipelineStateChange: (state: PipelineState) => void;
   onVisualStateChange: (state: VisualState) => void;
+  onIsAutoskipChange: (isAutoskip: boolean) => void;
 }
 
 // Helper: Convert extraction field to entry point
@@ -48,12 +50,14 @@ export function ExtractionFieldsStep({
   selectedSignatureObjects,
   pipelineState,
   visualState,
+  isAutoskip,
   onTemplateNameChange,
   onTemplateDescriptionChange,
   onCustomerIdChange,
   onExtractionFieldsChange,
   onPipelineStateChange,
   onVisualStateChange,
+  onIsAutoskipChange,
 }: ExtractionFieldsStepProps) {
 
   // Drawing state
@@ -70,8 +74,8 @@ export function ExtractionFieldsStep({
   const [fieldDescription, setFieldDescription] = useState('');
   const [fieldNameError, setFieldNameError] = useState<string | null>(null);
 
-  // Signature objects visibility
-  const [showSignatureObjects, setShowSignatureObjects] = useState(true);
+  // Signature objects visibility (default to unchecked when entering this step)
+  const [showSignatureObjects, setShowSignatureObjects] = useState(false);
 
   // Determine sidebar mode
   const sidebarMode: SidebarMode = tempFieldData ? 'create' : stagedFieldId ? 'detail' : 'list';
@@ -386,6 +390,7 @@ export function ExtractionFieldsStep({
         mode={sidebarMode}
         selectedFieldId={stagedFieldId}
         showSignatureObjects={showSignatureObjects}
+        isAutoskip={isAutoskip}
         fieldName={fieldName}
         fieldDescription={fieldDescription}
         fieldNameError={fieldNameError}
@@ -394,6 +399,7 @@ export function ExtractionFieldsStep({
         onTemplateDescriptionChange={onTemplateDescriptionChange}
         onCustomerIdChange={onCustomerIdChange}
         onShowSignatureObjectsChange={setShowSignatureObjects}
+        onIsAutoskipChange={onIsAutoskipChange}
         onFieldNameChange={handleFieldNameChange}
         onFieldDescriptionChange={setFieldDescription}
         onSaveField={handleSaveField}

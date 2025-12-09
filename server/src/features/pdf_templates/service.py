@@ -214,7 +214,11 @@ class PdfTemplateService:
         assert current_version is not None
 
         # Detect what changed
-        metadata_changed = update_data.name is not None or update_data.description is not None
+        metadata_changed = (
+            update_data.name is not None or
+            update_data.description is not None or
+            update_data.is_autoskip is not None
+        )
         signature_changed = update_data.signature_objects is not None
         extraction_changed = update_data.extraction_fields is not None
         pipeline_changed = update_data.pipeline_state is not None or update_data.visual_state is not None
@@ -228,6 +232,8 @@ class PdfTemplateService:
                 updates["name"] = update_data.name
             if update_data.description is not None:
                 updates["description"] = update_data.description
+            if update_data.is_autoskip is not None:
+                updates["is_autoskip"] = update_data.is_autoskip
 
             updated_template = self.template_repository.update(template_id, updates)
             if not updated_template:
@@ -306,6 +312,8 @@ class PdfTemplateService:
                 updates["name"] = update_data.name
             if update_data.description is not None:
                 updates["description"] = update_data.description
+            if update_data.is_autoskip is not None:
+                updates["is_autoskip"] = update_data.is_autoskip
 
             updated_template = uow.pdf_templates.update(template_id, updates)
             if not updated_template:
@@ -318,18 +326,21 @@ class PdfTemplateService:
             )
             return updated_template, next_version_num, pipeline_definition_id
 
-    def create_template(self, template_data: PdfTemplateCreate) -> tuple[PdfTemplate, int, int]:
+    def create_template(self, template_data: PdfTemplateCreate) -> tuple[PdfTemplate, int, int | None]:
         """
         Create new PDF template with initial version atomically.
 
         Creates template + version 1 + pipeline definition in a single transaction.
         Template starts with status="inactive".
 
+        For autoskip templates, no pipeline definition is created (pipeline_definition_id=None).
+
         Args:
             template_data: PdfTemplateCreate dataclass with all wizard data
 
         Returns:
             Tuple of (created_template, version_number, pipeline_definition_id)
+            pipeline_definition_id is None for autoskip templates
 
         Raises:
             ServiceError: If creation fails at any step
@@ -339,22 +350,29 @@ class PdfTemplateService:
 
         try:
             with self.connection_manager.unit_of_work() as uow:
-                # Step 1: Create pipeline definition (validation, compilation, hash-based dedup)
-                logger.info("Creating pipeline definition for template")
+                # Step 1: Create pipeline definition (skip for autoskip templates)
+                pipeline_definition_id: int | None = None
 
-                # Convert API types to domain types (handles both Pydantic models and dicts)
-                pipeline_state_obj = convert_pipeline_state_to_domain(template_data.pipeline_state)
-                visual_state_obj = convert_visual_state_to_domain(template_data.visual_state)
+                if template_data.is_autoskip:
+                    # Autoskip templates don't need pipelines - they skip processing entirely
+                    logger.info("Creating autoskip template - skipping pipeline creation")
+                else:
+                    # Normal templates need pipeline definition
+                    logger.info("Creating pipeline definition for template")
 
-                # Create pipeline definition (handles validation, compilation, and creation)
-                pipeline_create_data = PipelineDefinitionCreate(
-                    pipeline_state=pipeline_state_obj,
-                    visual_state=visual_state_obj
-                )
+                    # Convert API types to domain types (handles both Pydantic models and dicts)
+                    pipeline_state_obj = convert_pipeline_state_to_domain(template_data.pipeline_state)
+                    visual_state_obj = convert_visual_state_to_domain(template_data.visual_state)
 
-                pipeline_definition = self.pipeline_service.create_pipeline_definition(pipeline_create_data)
-                pipeline_definition_id = pipeline_definition.id
-                logger.info(f"Created/reused pipeline definition {pipeline_definition_id}")
+                    # Create pipeline definition (handles validation, compilation, and creation)
+                    pipeline_create_data = PipelineDefinitionCreate(
+                        pipeline_state=pipeline_state_obj,
+                        visual_state=visual_state_obj
+                    )
+
+                    pipeline_definition = self.pipeline_service.create_pipeline_definition(pipeline_create_data)
+                    pipeline_definition_id = pipeline_definition.id
+                    logger.info(f"Created/reused pipeline definition {pipeline_definition_id}")
 
                 # Step 2: Create template record (status=inactive, current_version_id=None initially)
                 template = uow.pdf_templates.create(
@@ -362,7 +380,8 @@ class PdfTemplateService:
                     description=template_data.description,
                     customer_id=template_data.customer_id,
                     source_pdf_id=template_data.source_pdf_id,
-                    status="inactive"
+                    status="inactive",
+                    is_autoskip=template_data.is_autoskip
                 )
 
                 # Step 3: Create version 1 with signature objects, extraction fields, and pipeline ID

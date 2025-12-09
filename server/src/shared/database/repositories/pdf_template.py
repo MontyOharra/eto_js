@@ -42,6 +42,7 @@ class PdfTemplateRepository(BaseRepository[PdfTemplateModel]):
             description=model.description,
             customer_id=model.customer_id,
             status=model.status,  # Convert enum to string
+            is_autoskip=model.is_autoskip,
             source_pdf_id=model.source_pdf_id,
             current_version_id=model.current_version_id,
             created_at=model.created_at,
@@ -134,6 +135,7 @@ class PdfTemplateRepository(BaseRepository[PdfTemplateModel]):
                     description=template.description,
                     customer_id=template.customer_id,
                     status=template.status,  # Convert enum to string
+                    is_autoskip=template.is_autoskip,
                     source_pdf_id=template.source_pdf_id,
                     current_version_id=template.current_version_id,
                     current_version_number=version_num,
@@ -172,7 +174,8 @@ class PdfTemplateRepository(BaseRepository[PdfTemplateModel]):
         description: str | None,
         customer_id: int | None,
         source_pdf_id: int,
-        status: str = "inactive"
+        status: str = "inactive",
+        is_autoskip: bool = False
     ) -> PdfTemplate:
         """
         Create new template record.
@@ -183,6 +186,7 @@ class PdfTemplateRepository(BaseRepository[PdfTemplateModel]):
             customer_id: Customer ID from external Access DB (optional)
             source_pdf_id: Source PDF file ID
             status: Template status (default: "inactive")
+            is_autoskip: If True, pages matching this template are automatically skipped
 
         Returns:
             Created PdfTemplateMetadata
@@ -195,6 +199,7 @@ class PdfTemplateRepository(BaseRepository[PdfTemplateModel]):
                 customer_id=customer_id,
                 source_pdf_id=source_pdf_id,
                 status=status,
+                is_autoskip=is_autoskip,
                 current_version_id=None  # Will be set after version is created
             )
 

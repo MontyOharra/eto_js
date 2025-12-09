@@ -9,6 +9,7 @@
 import { useRef, useEffect, useState } from 'react';
 import type { ExtractionField } from '../../types';
 import { CustomerSelect } from './CustomerSelect';
+import { ToggleSwitch } from '../../../../shared/components';
 
 export type SidebarMode = 'list' | 'create' | 'detail';
 
@@ -21,6 +22,7 @@ interface ExtractionFieldsSidebarProps {
   mode: SidebarMode;
   selectedFieldId: string | null;
   showSignatureObjects: boolean;
+  isAutoskip: boolean;
 
   // Form state for create/edit
   fieldName: string;
@@ -36,6 +38,7 @@ interface ExtractionFieldsSidebarProps {
   onTemplateDescriptionChange: (description: string) => void;
   onCustomerIdChange: (customerId: number | null) => void;
   onShowSignatureObjectsChange: (show: boolean) => void;
+  onIsAutoskipChange: (isAutoskip: boolean) => void;
   onFieldNameChange: (name: string) => void;
   onFieldDescriptionChange: (description: string) => void;
   onSaveField: () => void;
@@ -55,6 +58,7 @@ export function ExtractionFieldsSidebar({
   mode,
   selectedFieldId,
   showSignatureObjects,
+  isAutoskip,
   fieldName,
   fieldDescription,
   fieldNameError,
@@ -63,6 +67,7 @@ export function ExtractionFieldsSidebar({
   onTemplateDescriptionChange,
   onCustomerIdChange,
   onShowSignatureObjectsChange,
+  onIsAutoskipChange,
   onFieldNameChange,
   onFieldDescriptionChange,
   onSaveField,
@@ -140,20 +145,22 @@ export function ExtractionFieldsSidebar({
               className="w-full px-3 py-2 text-sm bg-gray-800 border border-gray-600 rounded text-white focus:border-blue-500 focus:outline-none resize-none"
             />
           </div>
-          <div className="flex items-center pt-1">
-            <input
-              type="checkbox"
+          <div className="space-y-3 pt-2">
+            <ToggleSwitch
               id="showSignatureObjects"
               checked={showSignatureObjects}
-              onChange={(e) => onShowSignatureObjectsChange(e.target.checked)}
-              className="mr-2"
+              onChange={onShowSignatureObjectsChange}
+              label="Show signature objects"
+              size="sm"
             />
-            <label
-              htmlFor="showSignatureObjects"
-              className="text-xs text-gray-300"
-            >
-              Show signature objects
-            </label>
+            <ToggleSwitch
+              id="isAutoskip"
+              checked={isAutoskip}
+              onChange={onIsAutoskipChange}
+              label="Skip processing"
+              description="Pages matching this template will be automatically skipped"
+              size="sm"
+            />
           </div>
         </div>
       </div>

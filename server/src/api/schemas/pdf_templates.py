@@ -3,7 +3,7 @@ PDF Templates API Schemas
 Pydantic models for PDF template endpoints
 """
 from typing import Optional, List, Dict, Any, Literal, Tuple, Union
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 # Import canonical pipeline types (single source of truth)
 from api.schemas.pipelines import PipelineState, VisualState, ExecutionStepResult
@@ -32,6 +32,7 @@ class TemplateListItem(BaseModel):
     customer_id: Optional[int] = None  # References external Access DB
     customer_name: Optional[str] = None  # Customer name from Access DB (if available)
     status: str
+    is_autoskip: bool = False  # If True, pages matching this template are automatically skipped
     source_pdf_id: int
     current_version: TemplateVersionSummary
     total_versions: int
@@ -53,6 +54,7 @@ class PdfTemplate(BaseModel):
     customer_id: Optional[int] = None  # References external Access DB
     customer_name: Optional[str] = None  # Customer name from Access DB (if available)
     status: str
+    is_autoskip: bool = False  # If True, pages matching this template are automatically skipped
     source_pdf_id: int
     current_version_id: Optional[int] = None
     versions: List[VersionListItem]  # All versions for navigation
@@ -63,11 +65,19 @@ class CreatePdfTemplateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = Field(None, max_length=1000)
     customer_id: Optional[int] = None  # References external Access DB
+    is_autoskip: bool = False  # If True, pages matching this template are automatically skipped
     source_pdf_id: int  # Required - PDF must be uploaded first via POST /pdf-files
     signature_objects: PdfObjects
-    extraction_fields: List[ExtractionField] = Field(..., min_length=1)
+    extraction_fields: List[ExtractionField] = Field(default_factory=list)  # Can be empty for autoskip templates
     pipeline_state: PipelineState
     visual_state: VisualState
+
+    @model_validator(mode='after')
+    def validate_extraction_fields(self):
+        """Autoskip templates can have empty extraction fields, normal templates require at least one"""
+        if not self.is_autoskip and len(self.extraction_fields) == 0:
+            raise ValueError('extraction_fields must have at least 1 item for non-autoskip templates')
+        return self
 
 
 # PUT /pdf-templates/{id} - Update Request
@@ -75,6 +85,7 @@ class UpdatePdfTemplateRequest(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = Field(None, max_length=1000)
     customer_id: Optional[int] = None  # References external Access DB
+    is_autoskip: Optional[bool] = None  # If True, pages matching this template are automatically skipped
     signature_objects: Optional[PdfObjects] = None
     extraction_fields: Optional[List[ExtractionField]] = None
     pipeline_state: Optional[PipelineState] = None
@@ -90,7 +101,7 @@ class GetTemplateVersionResponse(BaseModel):
     is_current: bool
     signature_objects: PdfObjects
     extraction_fields: List[ExtractionField]
-    pipeline_definition_id: int
+    pipeline_definition_id: Optional[int] = None  # Nullable for autoskip templates
 
 
 # POST /pdf-templates/simulate - Simulate Request

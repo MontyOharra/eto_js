@@ -175,6 +175,7 @@ def convert_pdf_template(
         customer_id=template.customer_id,
         customer_name=customer_name,
         status=template.status,
+        is_autoskip=template.is_autoskip,
         source_pdf_id=template.source_pdf_id,
         current_version_id=template.current_version_id,
         versions=convert_version_list(version_list)
@@ -201,6 +202,7 @@ def convert_template_summary(
         customer_id=summary.customer_id,
         customer_name=customer_name,
         status=summary.status,
+        is_autoskip=summary.is_autoskip,
         source_pdf_id=summary.source_pdf_id,
         current_version=TemplateVersionSummary(
             version_id=summary.current_version_id or 0,
@@ -258,7 +260,8 @@ def convert_create_template_request(request: CreatePdfTemplateRequest) -> PdfTem
         extraction_fields=convert_extraction_fields_to_domain(request.extraction_fields),
         pipeline_state=request.pipeline_state.model_dump(),
         visual_state=request.visual_state if isinstance(request.visual_state, dict) else dict(request.visual_state),
-        source_pdf_id=request.source_pdf_id or 0
+        source_pdf_id=request.source_pdf_id or 0,
+        is_autoskip=request.is_autoskip
     )
 
 
@@ -273,6 +276,7 @@ def convert_update_template_request(request: UpdatePdfTemplateRequest) -> PdfTem
         name=request.name,
         description=request.description,
         customer_id=request.customer_id,
+        is_autoskip=request.is_autoskip,
         signature_objects=convert_pdf_objects_to_domain(request.signature_objects) if request.signature_objects else None,
         extraction_fields=convert_extraction_fields_to_domain(request.extraction_fields) if request.extraction_fields else None,
         pipeline_state=request.pipeline_state.model_dump() if request.pipeline_state else None,

@@ -74,7 +74,7 @@ if TYPE_CHECKING:
     from features.pdf_templates.service import PdfTemplateService
     from features.pdf_files.service import PdfFilesService
     from src.features.pipeline_execution.service import PipelineExecutionService
-    from features.pipeline_results.service import PipelineResultService
+    from features.pending_orders.service import PendingOrdersService
 
 logger = get_logger(__name__)
 
@@ -105,7 +105,7 @@ class EtoRunsService:
     pdf_template_service: 'PdfTemplateService'
     pdf_files_service: 'PdfFilesService'
     pipeline_execution_service: 'PipelineExecutionService'
-    pipeline_result_service: 'PipelineResultService'
+    pending_orders_service: 'PendingOrdersService'
 
     # ==================== Repositories ====================
 
@@ -122,7 +122,7 @@ class EtoRunsService:
         pdf_template_service: 'PdfTemplateService',
         pdf_files_service: 'PdfFilesService',
         pipeline_execution_service: 'PipelineExecutionService',
-        pipeline_result_service: 'PipelineResultService'
+        pending_orders_service: 'PendingOrdersService'
     ) -> None:
         """
         Initialize ETO Runs Service.
@@ -132,7 +132,7 @@ class EtoRunsService:
             pdf_template_service: Service for template matching
             pdf_files_service: Service for PDF file access
             pipeline_execution_service: Service for pipeline execution
-            pipeline_result_service: Service for output module execution
+            pending_orders_service: Service for processing output channels into pending orders
         """
         logger.debug("Initializing EtoRunsService...")
 
@@ -141,7 +141,7 @@ class EtoRunsService:
         self.pdf_template_service: 'PdfTemplateService' = pdf_template_service
         self.pdf_files_service: 'PdfFilesService' = pdf_files_service
         self.pipeline_execution_service: 'PipelineExecutionService' = pipeline_execution_service
-        self.pipeline_result_service: 'PipelineResultService' = pipeline_result_service
+        self.pending_orders_service: 'PendingOrdersService' = pending_orders_service
 
         # Initialize repositories
         self.eto_run_repo: EtoRunRepository = EtoRunRepository(connection_manager=connection_manager)
@@ -602,8 +602,9 @@ class EtoRunsService:
         1. Update sub-run to "processing"
         2. Execute Stage 1: Data Extraction (for this sub-run's pages only)
         3. Execute Stage 2: Pipeline Execution (with this sub-run's data)
-        4. Update sub-run to "success" or "failure"
-        5. Update parent run status based on all sub-runs
+        4. Execute Stage 3: Output Execution (if has output channels)
+        5. Update sub-run to "success" or "failure"
+        6. Update parent run status based on all sub-runs
 
         Args:
             sub_run_id: ETO sub-run ID to process
@@ -618,6 +619,14 @@ class EtoRunsService:
         if not sub_run:
             logger.error(f"Sub-run {sub_run_id} not found")
             raise ObjectNotFoundError(f"Sub-run {sub_run_id} not found")
+
+        # Get customer_id from template (via template_version)
+        customer_id: Optional[int] = None
+        if sub_run.template_version_id:
+            template_version = self.pdf_template_service.get_version_by_id(sub_run.template_version_id)
+            template = self.pdf_template_service.get_template(template_version.template_id)
+            customer_id = template.customer_id
+            logger.debug(f"Sub-run {sub_run_id}: Retrieved customer_id={customer_id} from template {template.id}")
 
         try:
             # Update to processing status
@@ -656,13 +665,14 @@ class EtoRunsService:
                 self._update_parent_run_status(sub_run.eto_run_id)
                 return False
 
-            # Stage 3: Output Execution (if pipeline has an output module)
-            if pipeline_result.output_module_id:
+            # Stage 3: Output Execution (if pipeline has output channel values)
+            output_channel_values = pipeline_result.output_channel_values or {}
+            if output_channel_values and customer_id is not None:
                 try:
                     self._process_sub_run_output_execution(
                         sub_run_id=sub_run_id,
-                        output_module_id=pipeline_result.output_module_id,
-                        output_module_inputs=pipeline_result.output_module_inputs or {}
+                        output_channel_values=output_channel_values,
+                        customer_id=customer_id,
                     )
 
                 except Exception as e:
@@ -670,8 +680,10 @@ class EtoRunsService:
                     self._mark_sub_run_failure(sub_run_id, error=e, error_type="OutputExecutionError")
                     self._update_parent_run_status(sub_run.eto_run_id)
                     return False
+            elif output_channel_values and customer_id is None:
+                logger.warning(f"Sub-run {sub_run_id}: Has output channels but no customer_id on template, skipping output execution")
             else:
-                logger.debug(f"Sub-run {sub_run_id}: No output module in pipeline, skipping output execution")
+                logger.debug(f"Sub-run {sub_run_id}: No output channels in pipeline, skipping output execution")
 
             # All stages completed successfully
             self._mark_sub_run_success(sub_run_id)
@@ -761,12 +773,23 @@ class EtoRunsService:
                     matched_pages=json.dumps(match.matched_pages),
                     template_version_id=match.version_id,
                 ))
-                # Update status to 'matched' - ready for extraction + pipeline
-                self.sub_run_repo.update(new_sub_run.id, {"status": "matched"})
-                logger.debug(
-                    f"Sub-run {sub_run_id}: Created matched sub-run {new_sub_run.id} "
-                    f"for pages {match.matched_pages} with template version {match.version_id}"
-                )
+
+                # Check if template is marked as autoskip
+                template = self.pdf_template_service.get_template(match.template_id)
+                if template.is_autoskip:
+                    # Autoskip template - mark as skipped, no further processing needed
+                    self.sub_run_repo.update(new_sub_run.id, {"status": "skipped"})
+                    logger.info(
+                        f"Sub-run {sub_run_id}: Created skipped sub-run {new_sub_run.id} "
+                        f"for pages {match.matched_pages} (autoskip template '{template.name}')"
+                    )
+                else:
+                    # Normal template - mark as matched, ready for extraction + pipeline
+                    self.sub_run_repo.update(new_sub_run.id, {"status": "matched"})
+                    logger.debug(
+                        f"Sub-run {sub_run_id}: Created matched sub-run {new_sub_run.id} "
+                        f"for pages {match.matched_pages} with template version {match.version_id}"
+                    )
 
             # Create new sub-run for unmatched pages if any
             if match_result.unmatched_pages:
@@ -1098,82 +1121,74 @@ class EtoRunsService:
     def _process_sub_run_output_execution(
         self,
         sub_run_id: int,
-        output_module_id: str,
-        output_module_inputs: Dict[str, Any]
+        output_channel_values: Dict[str, Any],
+        customer_id: int,
     ) -> None:
         """
-        Execute output module processing stage for a single sub-run.
+        Execute output channel processing stage for a single sub-run.
 
-        Creates an output execution record and calls the PipelineResultService
-        to execute the output module (e.g., create order).
-
-        For now, this only handles the "create" flow - HAWB checking and
-        update approval flow will be added later.
+        Creates output execution record(s) for each HAWB and calls the
+        PendingOrdersService to process them.
 
         Args:
             sub_run_id: Sub-run ID
-            output_module_id: ID of the output module (e.g., "test_output")
-            output_module_inputs: Input data collected by the output module
+            output_channel_values: Output channel values from pipeline execution
+            customer_id: Customer ID from the template
 
         Raises:
             Exception: If output execution fails
         """
-        logger.monitor(f"Sub-run {sub_run_id}: Executing output module stage")
+        logger.monitor(f"Sub-run {sub_run_id}: Executing output channel processing stage")
 
-        # Step 1: Extract HAWB from inputs (for test_output, it's "test_value")
-        # Different output modules may have different field names for HAWB
-        hawb = output_module_inputs.get("hawb") or output_module_inputs.get("test_value") or ""
+        # Step 1: Extract HAWB(s) from output channel values
+        hawbs = self._extract_hawbs(output_channel_values)
+        if not hawbs:
+            logger.warning(f"Sub-run {sub_run_id}: No HAWB found in output channels, skipping output execution")
+            return
 
-        # Step 2: Create output execution record with status="pending"
-        started_at = datetime.now(timezone.utc)
-        output_execution = self.sub_run_output_execution_repo.create(
-            EtoSubRunOutputExecutionCreate(
-                sub_run_id=sub_run_id,
-                module_id=output_module_id,
-                input_data=output_module_inputs,
-                hawb=str(hawb)
+        logger.debug(f"Sub-run {sub_run_id}: Found {len(hawbs)} HAWB(s) to process: {hawbs}")
+
+        # Step 2: For each HAWB, create output execution record and process
+        for hawb in hawbs:
+            # Create output execution record with status="pending" (crash-safe)
+            output_execution = self.sub_run_output_execution_repo.create(
+                EtoSubRunOutputExecutionCreate(
+                    sub_run_id=sub_run_id,
+                    customer_id=customer_id,
+                    hawb=str(hawb),
+                    output_channel_data=output_channel_values,
+                )
             )
-        )
-        logger.debug(f"Sub-run {sub_run_id}: Created output_execution record {output_execution.id}")
+            logger.debug(f"Sub-run {sub_run_id}: Created output_execution record {output_execution.id} for HAWB {hawb}")
 
-        # Step 3: Update status to "processing"
-        self.sub_run_output_execution_repo.update(output_execution.id, {
-            "status": "processing",
-            "action_type": "create",  # For now, always create (HAWB check comes later)
-            "started_at": started_at
-        })
+            # Process via PendingOrdersService
+            self.pending_orders_service.process(output_execution.id)
 
-        # Step 4: Execute order creation via PipelineResultService
-        try:
-            result = self.pipeline_result_service.create_order(
-                module_id=output_module_id,
-                input_data=output_module_inputs
-            )
+        logger.monitor(f"Sub-run {sub_run_id}: Output execution completed for {len(hawbs)} HAWB(s)")
 
-            # Step 5: Update output execution record with success
-            completed_at = datetime.now(timezone.utc)
-            self.sub_run_output_execution_repo.update(output_execution.id, {
-                "status": "success",
-                "result": result,
-                "completed_at": completed_at
-            })
+    def _extract_hawbs(self, output_channel_values: Dict[str, Any]) -> List[str]:
+        """
+        Extract HAWB value(s) from output channel values.
 
-            logger.monitor(
-                f"Sub-run {sub_run_id}: Output execution completed successfully - "
-                f"order_number={result.get('order_number')}"
-            )
+        Handles both single string and list of strings.
 
-        except Exception as e:
-            # Step 5 (error): Update output execution record with failure
-            completed_at = datetime.now(timezone.utc)
-            self.sub_run_output_execution_repo.update(output_execution.id, {
-                "status": "error",
-                "error_message": str(e),
-                "error_type": type(e).__name__,
-                "completed_at": completed_at
-            })
-            logger.error(f"Sub-run {sub_run_id}: Output execution failed: {e}")
-            raise
+        Args:
+            output_channel_values: Output channel values dict
+
+        Returns:
+            List of HAWB strings (may be empty if no HAWB found)
+        """
+        hawb_value = output_channel_values.get("hawb")
+
+        if hawb_value is None:
+            return []
+
+        # Handle list of HAWBs
+        if isinstance(hawb_value, list):
+            return [str(h) for h in hawb_value if h]
+
+        # Handle single HAWB string
+        return [str(hawb_value)] if hawb_value else []
 
     # ==================== Helper Methods (Sub-Run) ====================
 

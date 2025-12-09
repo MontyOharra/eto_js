@@ -46,6 +46,7 @@ export interface TemplateBuilderData {
   pipeline_state: PipelineState;
   visual_state: VisualState;
   pdf_file?: File; // Optional: Only provided when PDF needs to be uploaded
+  is_autoskip: boolean; // If true, pages matching this template are automatically skipped
 }
 
 export function TemplateBuilder({
@@ -103,6 +104,11 @@ export function TemplateBuilder({
   // Visual state (node positions)
   const [visualState, setVisualState] = useState<VisualState>(
     initialData?.visual_state || {}
+  );
+
+  // Autoskip state - if true, template will automatically skip matching pages
+  const [isAutoskip, setIsAutoskip] = useState<boolean>(
+    initialData?.is_autoskip ?? false
   );
 
   // Saving state
@@ -215,6 +221,7 @@ export function TemplateBuilder({
         connections: [],
       });
       setVisualState({});
+      setIsAutoskip(false);
       setViewMode('summary');
       setSimulationResult(null);
       setCenterTrigger(0);
@@ -461,7 +468,11 @@ export function TemplateBuilder({
         if (templateName.trim().length === 0) {
           return false;
         }
-        // Must have at least one extraction field
+        // Autoskip templates don't need extraction fields - can save directly
+        if (isAutoskip) {
+          return true;
+        }
+        // Normal templates must have at least one extraction field
         return extractionFields.length > 0;
       }
       case 'pipeline': {
@@ -484,7 +495,7 @@ export function TemplateBuilder({
       default:
         return false;
     }
-  }, [currentStep, selectedPages, selectedSignatureObjects, extractionFields, templateName, isPipelineValid, isPipelineValidating, isCreatingSubset, subsetCreationError, pdfFile, subsetPdfFile]);
+  }, [currentStep, selectedPages, selectedSignatureObjects, extractionFields, templateName, isPipelineValid, isPipelineValidating, isCreatingSubset, subsetCreationError, pdfFile, subsetPdfFile, isAutoskip]);
 
   const validationMessage = useMemo(() => {
     // Show message while creating subset PDF
@@ -517,6 +528,10 @@ export function TemplateBuilder({
         if (templateName.trim().length === 0) {
           return 'Enter a template name to continue';
         }
+        // Autoskip templates can proceed without extraction fields
+        if (isAutoskip) {
+          return undefined;
+        }
         return 'Create at least one extraction field to continue';
       case 'pipeline':
         if (templateName.trim().length === 0) {
@@ -543,7 +558,7 @@ export function TemplateBuilder({
       default:
         return undefined;
     }
-  }, [canProceed, currentStep, selectedPages, templateName, pipelineState, isPipelineValidating, pipelineValidationError, isCreatingSubset, subsetCreationError, pdfFile, subsetPdfFile]);
+  }, [canProceed, currentStep, selectedPages, templateName, pipelineState, isPipelineValidating, pipelineValidationError, isCreatingSubset, subsetCreationError, pdfFile, subsetPdfFile, isAutoskip]);
 
   // Track completed steps
   const completedSteps = useMemo(() => {
@@ -659,6 +674,7 @@ export function TemplateBuilder({
       console.log('  subsetPdfFile:', subsetPdfFile?.name);
       console.log('  pdfToSave:', pdfToSave?.name);
       console.log('  selectedPages:', selectedPages);
+      console.log('  isAutoskip state value:', isAutoskip);
 
       const data: TemplateBuilderData = {
         name: templateName,
@@ -668,6 +684,7 @@ export function TemplateBuilder({
         extraction_fields: extractionFields,
         pipeline_state: pipelineState,
         visual_state: visualState,
+        is_autoskip: isAutoskip,
         ...(pdfToSave && { pdf_file: pdfToSave }),
       };
 
@@ -675,6 +692,7 @@ export function TemplateBuilder({
         ...data,
         pdf_file: data.pdf_file?.name,
       });
+      console.log('[TemplateBuilder] data.is_autoskip:', data.is_autoskip);
 
       await onSave(data, templateId);
       // Parent will close modal on success
@@ -697,6 +715,7 @@ export function TemplateBuilder({
     extractionFields,
     pipelineState,
     visualState,
+    isAutoskip,
     onSave,
   ]);
 
@@ -789,12 +808,14 @@ export function TemplateBuilder({
                   selectedSignatureObjects={selectedSignatureObjects}
                   pipelineState={pipelineState}
                   visualState={visualState}
+                  isAutoskip={isAutoskip}
                   onTemplateNameChange={setTemplateName}
                   onTemplateDescriptionChange={setTemplateDescription}
                   onCustomerIdChange={setCustomerId}
                   onExtractionFieldsChange={setExtractionFields}
                   onPipelineStateChange={setPipelineState}
                   onVisualStateChange={setVisualState}
+                  onIsAutoskipChange={setIsAutoskip}
                 />
               )}
 
@@ -833,6 +854,7 @@ export function TemplateBuilder({
           isTesting={simulateMutation.isPending}
           viewMode={viewMode}
           mode={templateId ? 'version' : 'create'}
+          isAutoskip={isAutoskip}
           onBack={handleBack}
           onNext={handleNext}
           onTest={handleTest}

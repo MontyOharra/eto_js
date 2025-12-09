@@ -40,6 +40,8 @@ class PdfTemplateVersion:
 
     signature_objects is a PdfObjects instance - a subset of the objects
     extracted from source_pdf_id, containing only the objects selected for matching.
+
+    pipeline_definition_id is nullable for autoskip templates (no pipeline needed).
     """
     id: int
     template_id: int
@@ -47,7 +49,7 @@ class PdfTemplateVersion:
     source_pdf_id: int
     signature_objects: PdfObjects  # Subset of extracted PDF objects
     extraction_fields: list[ExtractionField]
-    pipeline_definition_id: int
+    pipeline_definition_id: int | None  # Nullable for autoskip templates
     created_at: datetime
 
 
@@ -59,13 +61,15 @@ class PdfVersionCreate:
 
     signature_objects is a PdfObjects instance - a subset of the objects
     extracted from source_pdf_id, containing only the objects selected for matching.
+
+    pipeline_definition_id is nullable for autoskip templates (no pipeline needed).
     """
     template_id: int
     version_number: int
     source_pdf_id: int
     signature_objects: PdfObjects  # Subset of extracted PDF objects
     extraction_fields: list[ExtractionField]
-    pipeline_definition_id: int
+    pipeline_definition_id: int | None  # Nullable for autoskip templates
 
 
 @dataclass(frozen=True)
@@ -89,12 +93,16 @@ class PdfTemplate:
 
     Points to current version via current_version_id. Template status
     controls whether template is used for ETO matching.
+
+    is_autoskip: If True, pages matching this template are automatically
+    skipped during ETO processing (useful for cover pages, safety forms, etc.)
     """
     id: int
     name: str
     description: str | None
     customer_id: int | None  # References external Access DB
     status: str
+    is_autoskip: bool
     source_pdf_id: int
     current_version_id: int | None
     created_at: datetime
@@ -108,6 +116,7 @@ class PdfTemplateListView:
     description: str | None
     customer_id: int | None  # References external Access DB
     status: str
+    is_autoskip: bool
     source_pdf_id: int
     current_version_id: int | None
     current_version_number: int | None
@@ -131,6 +140,9 @@ class PdfTemplateCreate:
 
     pipeline_state and visual_state are the wizard Step 3 data, which the service
     will use to create a new pipeline_definition record.
+
+    is_autoskip: If True, pages matching this template are automatically
+    skipped during ETO processing (useful for cover pages, safety forms, etc.)
     """
     name: str
     description: str | None
@@ -140,6 +152,7 @@ class PdfTemplateCreate:
     pipeline_state: dict[str, Any]  # Pipeline graph structure from wizard
     visual_state: dict[str, Any]  # Node positions from wizard
     source_pdf_id: int
+    is_autoskip: bool = False  # Default to normal processing
 
 
 @dataclass(frozen=True)
@@ -148,7 +161,7 @@ class PdfTemplateUpdate:
     Unified update data for templates - all possible fields in one place.
 
     SMART UPDATE LOGIC:
-    - If ONLY name/description/customer_id change: Update template metadata only (no new version)
+    - If ONLY name/description/customer_id/is_autoskip change: Update template metadata only (no new version)
     - If signature_objects, extraction_fields, OR pipeline fields change: Create new version
     - If pipeline fields specifically included: Run full validation/compilation/creation
 
@@ -159,6 +172,7 @@ class PdfTemplateUpdate:
     name: str | None = None
     description: str | None = None
     customer_id: int | None = None  # References external Access DB
+    is_autoskip: bool | None = None  # Update autoskip without new version
 
     # Wizard data fields (trigger version creation)
     signature_objects: PdfObjects | None = None

@@ -30,6 +30,7 @@ export interface CreateTemplateRequest {
   name: string; // required, 1-255 chars
   description?: string; // optional, max 1000 chars
   customer_id?: number; // optional - references external Access DB
+  is_autoskip?: boolean; // optional - if true, pages matching this template are automatically skipped
   source_pdf_id: number; // required - PDF must be uploaded first via POST /pdf-files
 
   // Step 1: Signature objects (PdfObjects format)
@@ -52,6 +53,7 @@ export interface UpdateTemplateRequest {
   name?: string; // optional, 1-255 chars
   description?: string; // optional, max 1000 chars
   customer_id?: number; // optional - references external Access DB
+  is_autoskip?: boolean; // optional - if true, pages matching this template are automatically skipped
 
   // Optional: New version data (wizard steps)
   signature_objects?: PdfObjects;

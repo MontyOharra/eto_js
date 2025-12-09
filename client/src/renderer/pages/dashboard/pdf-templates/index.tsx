@@ -294,6 +294,7 @@ function TemplatesPage() {
             name: templateData.name,
             description: templateData.description,
             customer_id: templateData.customer_id ?? undefined,
+            is_autoskip: templateData.is_autoskip ?? false,  // Ensure boolean is always sent
             signature_objects: templateData.signature_objects,
             extraction_fields: templateData.extraction_fields,
             pipeline_state: templateData.pipeline_state,
@@ -310,6 +311,7 @@ function TemplatesPage() {
           name: templateData.name,
           description: templateData.description || '',
           customer_id: templateData.customer_id ?? undefined,
+          is_autoskip: templateData.is_autoskip ?? false,  // Ensure boolean is always sent
           source_pdf_id: pdfId,
           signature_objects: templateData.signature_objects,
           extraction_fields: templateData.extraction_fields,
@@ -319,6 +321,7 @@ function TemplatesPage() {
 
         console.log('[handleSaveTemplate] Request payload:', {
           ...createRequest,
+          is_autoskip: createRequest.is_autoskip,
           signature_objects: `${Object.keys(createRequest.signature_objects).length} object types`,
           extraction_fields: `${createRequest.extraction_fields.length} fields`,
         });

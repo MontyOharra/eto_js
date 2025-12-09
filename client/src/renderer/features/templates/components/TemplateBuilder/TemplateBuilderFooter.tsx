@@ -38,6 +38,7 @@ interface TemplateBuilderFooterProps {
   isTesting?: boolean;
   viewMode?: ViewMode;
   mode: 'create' | 'version';
+  isAutoskip?: boolean; // When true on extraction-fields step, show Save button instead of Next
   onBack: () => void;
   onNext: () => void;
   onTest?: () => void;
@@ -55,6 +56,7 @@ export function TemplateBuilderFooter({
   isTesting = false,
   viewMode = 'summary',
   mode,
+  isAutoskip = false,
   onBack,
   onNext,
   onTest,
@@ -70,6 +72,8 @@ export function TemplateBuilderFooter({
     : currentStep === 'signature-objects';
   const isLastStep = currentStep === 'testing';
   const isPipelineStep = currentStep === 'pipeline';
+  const isExtractionFieldsStep = currentStep === 'extraction-fields';
+  const showSaveOnExtractionFields = isExtractionFieldsStep && isAutoskip;
   const currentStepNumber = STEPS.find((s) => s.id === currentStep)?.number || 1;
 
   return (
@@ -176,14 +180,14 @@ export function TemplateBuilderFooter({
         </button>
 
         {/* Test / Next / Save Button with Tooltip */}
-        {isLastStep ? (
+        {isLastStep || showSaveOnExtractionFields ? (
           <div className="relative group">
             <button
               onClick={onSave}
               disabled={!canProceed || isSaving}
               className="px-6 py-2 text-sm bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
             >
-              {isSaving ? 'Saving...' : 'Save Template'}
+              {isSaving ? 'Saving...' : showSaveOnExtractionFields ? 'Save as Skip Template' : 'Save Template'}
             </button>
             {/* Tooltip - only show when button is disabled and there's a validation message */}
             {!canProceed && validationMessage && (

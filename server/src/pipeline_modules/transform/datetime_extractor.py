@@ -196,8 +196,9 @@ Rules:
 - Infer year for partial dates (use next year if date passed)
 - Parse formats: 9am, 9:00, 0900, nine am, noon, ranges (9-5)
 - "at T": start=end=T
-- "by/before T": end=T, start="09:00"
-- "after/from T": start=T, end="16:00"
-- No time given: start="09:00", end="16:00"
+- "by/before T": end=T, start="09:00" (if T is time only)
+- "by/before D" (date only, no time): start="09:00", end="17:00"
+- "after/from T": start=T, end="17:00"
+- No time given: start="09:00", end="17:00"
 
 Return only JSON."""
