@@ -4,16 +4,21 @@
  * Displays pipeline graph without module selector or edit capabilities
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { PipelineGraph } from "../PipelineGraph/PipelineGraph";
 import { ExecutePipelineModal } from "../ExecutePipelineModal";
 import { PipelineBuilderModal } from "../PipelineBuilderModal";
 import { usePipelinesApi, PipelineDetail } from "../../";
 import { useModules, useOutputChannels } from "../../../modules";
+import type { ModuleTemplate, OutputChannelType } from "../../../modules/types";
+
+// Stable empty arrays to prevent infinite re-renders
+const EMPTY_MODULES: ModuleTemplate[] = [];
+const EMPTY_OUTPUT_CHANNELS: OutputChannelType[] = [];
 
 interface PipelineViewerModalProps {
   isOpen: boolean;
-  pipelineId: number;
+  pipelineId: number | null;
   onClose: () => void;
 }
 
@@ -25,12 +30,20 @@ export function PipelineViewerModal({
   const { getPipeline, createPipeline } = usePipelinesApi();
 
   // Fetch modules and output channels using TanStack Query
-  const { data: modules = [] } = useModules();
-  const { data: outputChannels = [] } = useOutputChannels();
+  // Use stable empty arrays as defaults to prevent infinite re-renders
+  const { data: modulesData, isLoading: modulesLoading } = useModules();
+  const { data: outputChannelsData, isLoading: channelsLoading } = useOutputChannels();
+
+  // Memoize to ensure stable references
+  const modules = useMemo(() => modulesData ?? EMPTY_MODULES, [modulesData]);
+  const outputChannels = useMemo(() => outputChannelsData ?? EMPTY_OUTPUT_CHANNELS, [outputChannelsData]);
 
   const [pipeline, setPipeline] = useState<PipelineDetail | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isPipelineLoading, setIsPipelineLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Combined loading state - wait for all data
+  const isLoading = isPipelineLoading || modulesLoading || channelsLoading;
   const [showExecuteModal, setShowExecuteModal] = useState(false);
   const [showBuilderModal, setShowBuilderModal] = useState(false);
 
@@ -43,7 +56,7 @@ export function PipelineViewerModal({
     }
 
     async function loadData() {
-      setIsLoading(true);
+      setIsPipelineLoading(true);
       setError(null);
 
       try {
@@ -55,7 +68,7 @@ export function PipelineViewerModal({
           err instanceof Error ? err.message : "Failed to load pipeline"
         );
       } finally {
-        setIsLoading(false);
+        setIsPipelineLoading(false);
       }
     }
 
@@ -143,10 +156,15 @@ export function PipelineViewerModal({
           {isLoading && (
             <div className="h-full flex items-center justify-center">
               <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
                 <div className="text-white text-lg mb-2">
-                  Loading pipeline...
+                  Loading...
                 </div>
-                <div className="text-gray-400 text-sm">Please wait</div>
+                <div className="text-gray-400 text-sm">
+                  {isPipelineLoading && 'Loading pipeline data...'}
+                  {modulesLoading && 'Loading module definitions...'}
+                  {channelsLoading && 'Loading output channels...'}
+                </div>
               </div>
             </div>
           )}

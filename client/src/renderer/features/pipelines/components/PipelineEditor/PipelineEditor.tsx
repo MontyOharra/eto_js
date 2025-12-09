@@ -5,10 +5,15 @@
  * Always operates in edit mode
  */
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useModules, useOutputChannels, ModuleSelectorPane } from "../../../modules";
 import { PipelineGraph } from "../PipelineGraph";
 import type { PipelineState, VisualState, EntryPoint } from "../../types";
+import type { ModuleTemplate, OutputChannelType } from "../../../modules/types";
+
+// Stable empty arrays to prevent infinite re-renders
+const EMPTY_MODULES: ModuleTemplate[] = [];
+const EMPTY_OUTPUT_CHANNELS: OutputChannelType[] = [];
 
 interface PipelineEditorProps {
   pipelineState: PipelineState;
@@ -26,8 +31,13 @@ export function PipelineEditor({
   onVisualStateChange,
 }: PipelineEditorProps) {
   // Fetch modules and output channels using TanStack Query
-  const { data: modules = [], isLoading: modulesLoading } = useModules();
-  const { data: outputChannels = [] } = useOutputChannels();
+  // Use stable empty arrays as defaults to prevent infinite re-renders
+  const { data: modulesData, isLoading: modulesLoading } = useModules();
+  const { data: outputChannelsData } = useOutputChannels();
+
+  // Memoize to ensure stable references
+  const modules = useMemo(() => modulesData ?? EMPTY_MODULES, [modulesData]);
+  const outputChannels = useMemo(() => outputChannelsData ?? EMPTY_OUTPUT_CHANNELS, [outputChannelsData]);
 
   // Module selection state
   const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null);
