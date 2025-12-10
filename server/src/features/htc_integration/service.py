@@ -151,6 +151,40 @@ class HtcIntegrationService:
             logger.error(f"Failed to lookup order for customer {customer_id}, HAWB {hawb}: {e}")
             raise
 
+    def get_customer_name(self, customer_id: int) -> Optional[str]:
+        """
+        Look up customer name by customer ID.
+
+        Args:
+            customer_id: The customer ID to look up
+
+        Returns:
+            Customer name string if found, None if not found
+        """
+        connection = self._get_connection()
+
+        try:
+            with connection.cursor() as cursor:
+                query = """
+                    SELECT [Customer]
+                    FROM [HTC300_G030_T010 Customers]
+                    WHERE [CustomerID] = ?
+                """
+                cursor.execute(query, (customer_id,))
+                row = cursor.fetchone()
+
+                if row is None:
+                    logger.debug(f"Customer {customer_id} not found")
+                    return None
+
+                customer_name = str(row[0]) if row[0] else None
+                logger.debug(f"Found customer name '{customer_name}' for ID {customer_id}")
+                return customer_name
+
+        except Exception as e:
+            logger.error(f"Failed to lookup customer name for ID {customer_id}: {e}")
+            return None
+
     def get_order_details(self, order_number: float) -> Optional[HtcOrderDetails]:
         """
         Get details of an HTC order by order number.

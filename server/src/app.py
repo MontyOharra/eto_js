@@ -318,6 +318,20 @@ async def initialize_services() -> None:
         except Exception as e:
             logger.warning(f"Failed to initialize ETO runs service: {e}")
 
+        # 5. Initialize HTC integration service (needed by order management)
+        try:
+            htc_integration_service = ServiceContainer.get_htc_integration_service()
+            logger.info("HTC integration service initialized")
+        except Exception as e:
+            logger.warning(f"Failed to initialize HTC integration service: {e}")
+
+        # 6. Initialize order management service
+        try:
+            order_management_service = ServiceContainer.get_order_management_service()
+            logger.info("Order management service initialized")
+        except Exception as e:
+            logger.warning(f"Failed to initialize order management service: {e}")
+
         logger.info("All services initialized successfully")
 
         # Start ETO processing worker (background polling)

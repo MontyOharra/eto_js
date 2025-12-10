@@ -256,9 +256,8 @@ class OrderManagementService:
         # 4. Build fields with options
         fields = self._build_fields_with_options(pending_order, history_records)
 
-        # 5. Get customer name
-        # TODO: Look up customer name from customers table
-        customer_name = None
+        # 5. Get customer name from HTC
+        customer_name = self._htc_service.get_customer_name(pending_order.customer_id)
 
         return PendingOrderDetail(
             id=pending_order.id,

@@ -62,7 +62,8 @@ async def list_pending_orders(
         description="Field to sort by"
     ),
     sort_order: Literal["asc", "desc"] = Query("desc", description="Sort order"),
-    service = Depends(lambda: ServiceContainer.get_order_management_service())
+    service = Depends(lambda: ServiceContainer.get_order_management_service()),
+    htc_service = Depends(lambda: ServiceContainer.get_htc_integration_service())
 ) -> GetPendingOrdersResponse:
     """
     List pending orders with filtering and pagination.
@@ -118,11 +119,14 @@ async def list_pending_orders(
         history = pending_order_history_repo.get_by_pending_order_id(order.id)
         sub_run_ids = set(h.sub_run_id for h in history if h.sub_run_id is not None)
 
+        # Look up customer name
+        customer_name = htc_service.get_customer_name(order.customer_id)
+
         items.append(PendingOrderListItem(
             id=order.id,
             hawb=order.hawb,
             customer_id=order.customer_id,
-            customer_name=None,  # TODO: Resolve from Access DB
+            customer_name=customer_name,
             status=order.status,
             htc_order_number=int(order.htc_order_number) if order.htc_order_number is not None else None,
             htc_created_at=order.htc_created_at.isoformat() if order.htc_created_at else None,
@@ -192,7 +196,8 @@ async def list_pending_updates(
     ),
     limit: int = Query(50, ge=1, le=200, description="Number of items to return"),
     offset: int = Query(0, ge=0, description="Number of items to skip"),
-    service = Depends(lambda: ServiceContainer.get_order_management_service())
+    service = Depends(lambda: ServiceContainer.get_order_management_service()),
+    htc_service = Depends(lambda: ServiceContainer.get_htc_integration_service())
 ) -> GetPendingUpdatesResponse:
     """
     List pending updates for existing HTC orders.
@@ -213,14 +218,16 @@ async def list_pending_updates(
         offset=offset,
     )
 
-    # Build response items
-    items = [
-        PendingUpdateListItem(
+    # Build response items with customer name lookup
+    items = []
+    for update in updates:
+        customer_name = htc_service.get_customer_name(update.customer_id)
+        items.append(PendingUpdateListItem(
             id=update.id,
             customer_id=update.customer_id,
             hawb=update.hawb,
             htc_order_number=update.htc_order_number,
-            customer_name=None,  # TODO: Resolve from Access DB
+            customer_name=customer_name,
             field_name=update.field_name,
             field_label=get_field_label(update.field_name),
             proposed_value=update.proposed_value,
@@ -228,9 +235,7 @@ async def list_pending_updates(
             status=update.status,
             proposed_at=update.proposed_at.isoformat(),
             reviewed_at=update.reviewed_at.isoformat() if update.reviewed_at else None,
-        )
-        for update in updates
-    ]
+        ))
 
     # Get total count
     all_updates = pending_update_repo.list_all(status=status, customer_id=customer_id, hawb=hawb)

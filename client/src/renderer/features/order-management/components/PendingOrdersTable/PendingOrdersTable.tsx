@@ -14,7 +14,6 @@ import {
 } from '@tanstack/react-table';
 import type { PendingOrderListItem } from '../../types';
 import { OrderStatusBadge } from '../OrderStatusBadge';
-import { FieldStatusBadge } from '../FieldStatusBadge';
 
 // ============================================================================
 // Types
@@ -77,20 +76,13 @@ function HawbCell({ row }: CellContext<PendingOrderListItem, unknown>) {
   const isComplete = data.status === 'created';
 
   return (
-    <div className="flex flex-col gap-0.5">
-      <span
-        className={`font-mono text-sm font-semibold ${
-          isComplete ? 'text-green-400' : 'text-white'
-        }`}
-      >
-        {data.hawb}
-      </span>
-      {data.htc_order_number && (
-        <span className="text-xs text-gray-500">
-          Order #{data.htc_order_number}
-        </span>
-      )}
-    </div>
+    <span
+      className={`font-mono text-sm font-semibold ${
+        isComplete ? 'text-green-400' : 'text-white'
+      }`}
+    >
+      {data.hawb}
+    </span>
   );
 }
 
@@ -98,24 +90,55 @@ function CustomerCell({ row }: CellContext<PendingOrderListItem, unknown>) {
   const data = row.original;
 
   return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-sm text-gray-300">{data.customer_name}</span>
-      <span className="text-xs text-gray-500">ID: {data.customer_id}</span>
-    </div>
+    <span className="text-sm text-gray-300">{data.customer_name ?? '-'}</span>
   );
 }
 
 function StatusCell({ row }: CellContext<PendingOrderListItem, unknown>) {
   const data = row.original;
+  const isCreated = data.status === 'created';
+  const requiredComplete = data.required_fields_present >= data.required_field_count;
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 items-center">
+      {/* Row 1: Status + Required fields */}
       <OrderStatusBadge status={data.status} />
-      <FieldStatusBadge
-        requiredPresent={data.required_fields_present}
-        requiredTotal={data.required_field_count}
-        conflictCount={data.conflict_count}
-      />
+      <div className="flex items-center gap-2">
+        <span
+          className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border ${
+            requiredComplete
+              ? 'bg-green-500/20 text-green-400 border-green-500/30'
+              : 'bg-orange-500/20 text-orange-400 border-orange-500/30'
+          }`}
+        >
+          {data.required_fields_present}/{data.required_field_count} Required
+        </span>
+        {data.conflict_count > 0 && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
+            </svg>
+            {data.conflict_count}
+          </span>
+        )}
+      </div>
+
+      {/* Row 2: Order number (if created) + Optional fields */}
+      {isCreated && data.htc_order_number ? (
+        <span className="text-xs text-blue-400 font-medium">
+          OrderNo: {data.htc_order_number}
+        </span>
+      ) : (
+        <span /> // Empty cell to maintain grid alignment
+      )}
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border bg-gray-500/20 text-gray-400 border-gray-500/30 w-fit">
+        {data.optional_fields_present}/{data.optional_field_count} Optional
+      </span>
     </div>
   );
 }

@@ -538,15 +538,20 @@ class PdfFilesService:
                             linewidth=line.get('linewidth', 1.0)
                         ))
 
-                    # Extract rectangles → GraphicRect dataclasses
+                    # Extract rectangles → GraphicRect or GraphicLine dataclasses
                     # Filter out full-page rectangles (useless and block other objects)
+                    # Reclassify thin rectangles as lines (many PDFs use thin rects for borders)
                     rects = page.rects
                     page_width = page.width
                     page_height = page.height
                     page_area = page_width * page_height
 
+                    # Thresholds for thin rectangle → line reclassification
+                    THIN_DIMENSION_THRESHOLD = 3.0  # Points - rects thinner than this become lines
+                    ASPECT_RATIO_THRESHOLD = 15.0   # Ratio - rects more extreme than this become lines
+
                     for rect in rects:
-                        # Calculate rectangle area
+                        # Calculate rectangle dimensions
                         rect_width = rect['x1'] - rect['x0']
                         rect_height = rect['y1'] - rect['y0']
                         rect_area = rect_width * rect_height
@@ -560,11 +565,45 @@ class PdfFilesService:
                             )
                             continue
 
-                        graphic_rects.append(GraphicRect(
-                            page=page_num,
-                            bbox=(rect['x0'], rect['y0'], rect['x1'], rect['y1']),
-                            linewidth=rect.get('linewidth', 1.0)
-                        ))
+                        # Check if rectangle should be reclassified as a line
+                        # A rectangle is "line-like" if:
+                        # 1. Its minimum dimension is very small (< threshold), OR
+                        # 2. Its aspect ratio is extreme (> threshold)
+                        min_dimension = min(rect_width, rect_height)
+                        max_dimension = max(rect_width, rect_height)
+                        aspect_ratio = max_dimension / max(min_dimension, 0.01)  # Avoid division by zero
+
+                        is_line_like = (
+                            min_dimension < THIN_DIMENSION_THRESHOLD or
+                            aspect_ratio > ASPECT_RATIO_THRESHOLD
+                        )
+
+                        if is_line_like:
+                            # Reclassify as a line
+                            # Use CENTER coordinates to avoid stroke-width offset issues
+                            # For horizontal lines (thin height): use center Y
+                            # For vertical lines (thin width): use center X
+                            if rect_height < rect_width:
+                                # Horizontal line - use center Y
+                                y_center = (rect['y0'] + rect['y1']) / 2
+                                line_bbox = (rect['x0'], y_center, rect['x1'], y_center)
+                            else:
+                                # Vertical line - use center X
+                                x_center = (rect['x0'] + rect['x1']) / 2
+                                line_bbox = (x_center, rect['y0'], x_center, rect['y1'])
+
+                            graphic_lines.append(GraphicLine(
+                                page=page_num,
+                                bbox=line_bbox,
+                                linewidth=rect.get('linewidth', 1.0)
+                            ))
+                        else:
+                            # Keep as rectangle
+                            graphic_rects.append(GraphicRect(
+                                page=page_num,
+                                bbox=(rect['x0'], rect['y0'], rect['x1'], rect['y1']),
+                                linewidth=rect.get('linewidth', 1.0)
+                            ))
 
                     # Extract curves → GraphicCurve dataclasses
                     curves = page.curves
@@ -605,13 +644,18 @@ class PdfFilesService:
                             cols=len(table_data[0]) if table_data else 0
                         ))
 
+            # Merge collinear connected lines into single lines
+            # This consolidates fragmented line segments (common in PDFs)
+            lines_before_merge = len(graphic_lines)
+            graphic_lines = self._merge_collinear_lines(graphic_lines, tolerance=2.0)
+
             total_objects = (
                 len(text_words) + len(graphic_rects) +
                 len(graphic_lines) + len(graphic_curves) + len(images) + len(tables)
             )
             logger.debug(
                 f"Extracted {total_objects} objects from {filename} "
-                f"({len(pdf.pages)} pages)"
+                f"({len(pdf.pages)} pages, lines: {lines_before_merge} → {len(graphic_lines)} after merge)"
             )
 
             # Return typed container
@@ -655,3 +699,369 @@ class PdfFilesService:
 
         except Exception as e:
             return False, f"Invalid PDF: {str(e)}"
+
+    def _merge_collinear_lines(
+        self,
+        lines: list[GraphicLine],
+        tolerance: float = 2.0
+    ) -> list[GraphicLine]:
+        """
+        Merge collinear lines that share endpoints into single longer lines.
+
+        Many PDFs create visual "lines" as multiple small connected segments.
+        This method consolidates them into single lines for better usability.
+
+        Only merges lines that:
+        1. Are on the same page
+        2. Have the same direction (horizontal, vertical, or same diagonal slope)
+        3. Share an endpoint (are connected) or overlap
+
+        Args:
+            lines: List of GraphicLine objects to merge
+            tolerance: Coordinate tolerance for grouping and endpoint matching
+
+        Returns:
+            List of merged GraphicLine objects
+        """
+        from collections import defaultdict
+
+        if not lines:
+            return []
+
+        # Group lines by page first
+        lines_by_page: dict[int, list[GraphicLine]] = defaultdict(list)
+        for line in lines:
+            lines_by_page[line.page].append(line)
+
+        merged_lines: list[GraphicLine] = []
+
+        for page_num, page_lines in lines_by_page.items():
+            # Classify lines by direction
+            horizontal: list[GraphicLine] = []  # Height ≈ 0
+            vertical: list[GraphicLine] = []    # Width ≈ 0
+            diagonal: list[GraphicLine] = []    # Others
+
+            for line in page_lines:
+                x0, y0, x1, y1 = line.bbox
+                width = abs(x1 - x0)
+                height = abs(y1 - y0)
+
+                if height < tolerance:  # Horizontal line
+                    horizontal.append(line)
+                elif width < tolerance:  # Vertical line
+                    vertical.append(line)
+                else:  # Diagonal line
+                    diagonal.append(line)
+
+            # Merge horizontal lines (group by y-coordinate, merge along x)
+            merged_horizontal = self._merge_lines_along_axis(
+                horizontal, axis='horizontal', tolerance=tolerance
+            )
+
+            # Merge vertical lines (group by x-coordinate, merge along y)
+            merged_vertical = self._merge_lines_along_axis(
+                vertical, axis='vertical', tolerance=tolerance
+            )
+
+            # Merge diagonal lines (group by slope and intercept)
+            merged_diagonal = self._merge_diagonal_lines(diagonal, tolerance=tolerance)
+
+            merged_lines.extend(merged_horizontal)
+            merged_lines.extend(merged_vertical)
+            merged_lines.extend(merged_diagonal)
+
+        logger.debug(
+            f"Line merging: {len(lines)} input lines → {len(merged_lines)} merged lines"
+        )
+
+        return merged_lines
+
+    def _merge_lines_along_axis(
+        self,
+        lines: list[GraphicLine],
+        axis: str,
+        tolerance: float
+    ) -> list[GraphicLine]:
+        """
+        Merge lines along a specific axis (horizontal or vertical).
+
+        Groups lines by their perpendicular coordinate, then merges
+        segments that touch or overlap within each group.
+
+        Args:
+            lines: Lines to merge (should all be same direction)
+            axis: 'horizontal' or 'vertical'
+            tolerance: Coordinate tolerance for grouping
+
+        Returns:
+            List of merged lines
+        """
+        from collections import defaultdict
+
+        if not lines:
+            return []
+
+        # Group by the perpendicular coordinate
+        # For horizontal lines: group by y-coordinate
+        # For vertical lines: group by x-coordinate
+        groups: dict[float, list[GraphicLine]] = defaultdict(list)
+
+        for line in lines:
+            x0, y0, x1, y1 = line.bbox
+
+            if axis == 'horizontal':
+                # Use midpoint y for grouping (handles thin rects)
+                key = round((y0 + y1) / 2 / tolerance) * tolerance
+            else:  # vertical
+                # Use midpoint x for grouping
+                key = round((x0 + x1) / 2 / tolerance) * tolerance
+
+            groups[key].append(line)
+
+        merged: list[GraphicLine] = []
+
+        for coord_key, group_lines in groups.items():
+            # Merge connected segments in this group
+            merged_group = self._merge_connected_segments(
+                group_lines, axis, coord_key, tolerance
+            )
+            merged.extend(merged_group)
+
+        return merged
+
+    def _merge_connected_segments(
+        self,
+        lines: list[GraphicLine],
+        axis: str,
+        perpendicular_coord: float,
+        tolerance: float
+    ) -> list[GraphicLine]:
+        """
+        Merge line segments that touch or overlap along a single axis line.
+
+        Args:
+            lines: Lines on the same axis line (same y for horizontal, same x for vertical)
+            axis: 'horizontal' or 'vertical'
+            perpendicular_coord: The shared coordinate (y for horizontal, x for vertical) - used for grouping only
+            tolerance: Distance tolerance for considering segments connected
+
+        Returns:
+            List of merged line segments
+        """
+        if len(lines) <= 1:
+            return lines
+
+        # Extract segments as (start, end, perp_coord, linewidth, page)
+        # IMPORTANT: Preserve the ACTUAL perpendicular coordinate from each line,
+        # not the rounded group key, to maintain accurate positioning
+        segments: list[tuple[float, float, float, float, int]] = []
+
+        for line in lines:
+            x0, y0, x1, y1 = line.bbox
+
+            if axis == 'horizontal':
+                start, end = min(x0, x1), max(x0, x1)
+                # Use actual Y coordinate (average of y0 and y1 for the line)
+                actual_perp = (y0 + y1) / 2
+            else:  # vertical
+                start, end = min(y0, y1), max(y0, y1)
+                # Use actual X coordinate
+                actual_perp = (x0 + x1) / 2
+
+            segments.append((start, end, actual_perp, line.linewidth, line.page))
+
+        # Sort by start position
+        segments.sort(key=lambda s: s[0])
+
+        # Merge overlapping/touching segments
+        # Track actual perpendicular coordinates to compute weighted average for merged lines
+        merged: list[GraphicLine] = []
+        current_start, current_end, current_perp, current_linewidth, current_page = segments[0]
+        current_perp_sum = current_perp * (current_end - current_start)  # Weighted by length
+        current_length_sum = current_end - current_start
+
+        for start, end, perp, linewidth, page in segments[1:]:
+            # Check if this segment connects with or overlaps current
+            if start <= current_end + tolerance:
+                # Extend current segment
+                segment_length = end - start
+                current_perp_sum += perp * segment_length
+                current_length_sum += segment_length
+                current_end = max(current_end, end)
+                current_linewidth = max(current_linewidth, linewidth)
+            else:
+                # Save current segment and start new one
+                # Use weighted average of perpendicular coordinates
+                avg_perp = current_perp_sum / current_length_sum if current_length_sum > 0 else current_perp
+                merged.append(self._create_line_from_segment(
+                    axis, avg_perp, current_start, current_end,
+                    current_linewidth, current_page
+                ))
+                current_start, current_end = start, end
+                current_perp = perp
+                current_perp_sum = perp * (end - start)
+                current_length_sum = end - start
+                current_linewidth = linewidth
+
+        # Don't forget the last segment
+        avg_perp = current_perp_sum / current_length_sum if current_length_sum > 0 else current_perp
+        merged.append(self._create_line_from_segment(
+            axis, avg_perp, current_start, current_end,
+            current_linewidth, current_page
+        ))
+
+        return merged
+
+    def _create_line_from_segment(
+        self,
+        axis: str,
+        perpendicular_coord: float,
+        start: float,
+        end: float,
+        linewidth: float,
+        page: int
+    ) -> GraphicLine:
+        """Create a GraphicLine from segment data."""
+        if axis == 'horizontal':
+            # Horizontal line: y is fixed, x varies
+            return GraphicLine(
+                page=page,
+                bbox=(start, perpendicular_coord, end, perpendicular_coord),
+                linewidth=linewidth
+            )
+        else:
+            # Vertical line: x is fixed, y varies
+            return GraphicLine(
+                page=page,
+                bbox=(perpendicular_coord, start, perpendicular_coord, end),
+                linewidth=linewidth
+            )
+
+    def _merge_diagonal_lines(
+        self,
+        lines: list[GraphicLine],
+        tolerance: float
+    ) -> list[GraphicLine]:
+        """
+        Merge diagonal lines that are collinear and connected.
+
+        Groups lines by slope and y-intercept, then merges connected segments.
+
+        Args:
+            lines: Diagonal lines to merge
+            tolerance: Coordinate tolerance
+
+        Returns:
+            List of merged diagonal lines
+        """
+        from collections import defaultdict
+
+        if not lines:
+            return []
+
+        # Group by (slope, intercept) - rounded for tolerance
+        # Line equation: y = mx + b, where m is slope and b is y-intercept
+        groups: dict[tuple[float, float], list[GraphicLine]] = defaultdict(list)
+
+        for line in lines:
+            x0, y0, x1, y1 = line.bbox
+
+            # Calculate slope
+            dx = x1 - x0
+            dy = y1 - y0
+
+            if abs(dx) < 0.001:  # Nearly vertical, shouldn't be here but handle anyway
+                slope_key = float('inf')
+                intercept_key = round(x0 / tolerance) * tolerance
+            else:
+                slope = dy / dx
+                # Round slope to reduce floating point issues
+                slope_key = round(slope * 100) / 100
+
+                # Calculate y-intercept: b = y - mx
+                intercept = y0 - slope * x0
+                intercept_key = round(intercept / tolerance) * tolerance
+
+            groups[(slope_key, intercept_key)].append(line)
+
+        merged: list[GraphicLine] = []
+
+        for (slope_key, intercept_key), group_lines in groups.items():
+            if len(group_lines) == 1:
+                merged.extend(group_lines)
+                continue
+
+            # For diagonal lines, merge by projecting onto the line direction
+            # and finding connected segments
+            merged_group = self._merge_diagonal_segments(
+                group_lines, slope_key, tolerance
+            )
+            merged.extend(merged_group)
+
+        return merged
+
+    def _merge_diagonal_segments(
+        self,
+        lines: list[GraphicLine],
+        slope: float,
+        tolerance: float
+    ) -> list[GraphicLine]:
+        """
+        Merge connected diagonal line segments.
+
+        Projects segments onto their direction vector and merges overlapping ones.
+
+        Args:
+            lines: Collinear diagonal lines
+            slope: The slope of these lines
+            tolerance: Connection tolerance
+
+        Returns:
+            List of merged diagonal lines
+        """
+        if len(lines) <= 1:
+            return lines
+
+        # For diagonal lines, project onto the x-axis for simplicity
+        # (could also project onto the line direction for more accuracy)
+        # Tuple: (x0, y0, x1, y1, linewidth, page)
+        segments: list[tuple[float, float, float, float, float, int]] = []
+
+        for line in lines:
+            x0, y0, x1, y1 = line.bbox
+            # Ensure x0 <= x1 for consistent ordering
+            if x0 > x1:
+                x0, y0, x1, y1 = x1, y1, x0, y0
+            segments.append((x0, y0, x1, y1, line.linewidth, line.page))
+
+        # Sort by x0 (start x)
+        segments.sort(key=lambda s: s[0])
+
+        merged: list[GraphicLine] = []
+        curr_x0, curr_y0, curr_x1, curr_y1, curr_lw, curr_page = segments[0]
+
+        for x0, y0, x1, y1, lw, page in segments[1:]:
+            # Check if segments connect (x0 of next ≈ x1 of current)
+            if x0 <= curr_x1 + tolerance:
+                # Extend current segment
+                if x1 > curr_x1:
+                    curr_x1, curr_y1 = x1, y1
+                curr_lw = max(curr_lw, lw)
+            else:
+                # Save current and start new
+                merged.append(GraphicLine(
+                    page=curr_page,
+                    bbox=(curr_x0, curr_y0, curr_x1, curr_y1),
+                    linewidth=curr_lw
+                ))
+                curr_x0, curr_y0, curr_x1, curr_y1 = x0, y0, x1, y1
+                curr_lw = lw
+
+        # Don't forget the last segment
+        merged.append(GraphicLine(
+            page=curr_page,
+            bbox=(curr_x0, curr_y0, curr_x1, curr_y1),
+            linewidth=curr_lw
+        ))
+
+        return merged

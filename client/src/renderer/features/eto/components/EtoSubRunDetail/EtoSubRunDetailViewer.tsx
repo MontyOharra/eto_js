@@ -107,7 +107,7 @@ export function EtoSubRunDetailViewer({
                     <div className="flex-1 overflow-auto bg-gray-900 rounded p-3 relative">
                       {viewMode === "summary" ? (
                         runDetail.status === "success" ? (
-                          <SummarySuccessView />
+                          <SummarySuccessView runDetail={runDetail} />
                         ) : runDetail.status === "failure" ? (
                           <SummaryErrorView
                             errorType={runDetail.error_type}
@@ -132,11 +132,7 @@ export function EtoSubRunDetailViewer({
                 rightPanel={
                   <PdfViewerPanel
                     pdfFileId={runDetail.pdf.id}
-                    overlayFields={
-                      viewMode === "detail"
-                        ? runDetail.stage_data_extraction?.extraction_results
-                        : undefined
-                    }
+                    overlayFields={runDetail.stage_data_extraction?.extraction_results}
                     isDragging={isDragging}
                     matchedPages={runDetail.matched_pages}
                   />

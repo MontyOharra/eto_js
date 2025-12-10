@@ -17,7 +17,7 @@ interface ResizablePanelLayoutProps {
 export function ResizablePanelLayout({
   leftPanel,
   rightPanel,
-  defaultSplitPercentage = 60,
+  defaultSplitPercentage = 50,
   onDragStateChange,
 }: ResizablePanelLayoutProps) {
   const [leftWidth, setLeftWidth] = useState(defaultSplitPercentage);
