@@ -37,9 +37,11 @@ FieldState = Literal[
 # =========================
 
 REQUIRED_FIELDS = [
+    "pickup_company_name",
     "pickup_address",
     "pickup_time_start",
     "pickup_time_end",
+    "delivery_company_name",
     "delivery_address",
     "delivery_time_start",
     "delivery_time_end",
@@ -47,10 +49,12 @@ REQUIRED_FIELDS = [
 
 # All valid field names for pending orders
 VALID_FIELD_NAMES = [
+    "pickup_company_name",
     "pickup_address",
     "pickup_time_start",
     "pickup_time_end",
     "pickup_notes",
+    "delivery_company_name",
     "delivery_address",
     "delivery_time_start",
     "delivery_time_end",
@@ -83,9 +87,11 @@ class PendingOrderUpdate(TypedDict, total=False):
     status: PendingOrderStatus
     htc_order_number: float | None
     htc_created_at: datetime | None
+    pickup_company_name: str | None
     pickup_address: str | None
     pickup_time_start: str | None
     pickup_time_end: str | None
+    delivery_company_name: str | None
     delivery_address: str | None
     delivery_time_start: str | None
     delivery_time_end: str | None
@@ -109,9 +115,11 @@ class PendingOrder:
     htc_order_number: Optional[float]
     htc_created_at: Optional[datetime]
     # Required fields
+    pickup_company_name: Optional[str]
     pickup_address: Optional[str]
     pickup_time_start: Optional[str]
     pickup_time_end: Optional[str]
+    delivery_company_name: Optional[str]
     delivery_address: Optional[str]
     delivery_time_start: Optional[str]
     delivery_time_end: Optional[str]
