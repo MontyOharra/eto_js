@@ -86,7 +86,7 @@ Sub CreateNewOrder(sCoID As Integer, _
 - `FileLen()` - VBA function to get file size
 - `Environ()` - VBA function to get environment variables
 - `MsgBox()` - VBA message box display function
-- `FormatCurrency()` - VBA number formatting function
+- `FormatCurrency()` - VBA number formatting functionf
 
 ## Detailed Behavioral Breakdown
 

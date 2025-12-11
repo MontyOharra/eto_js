@@ -1,0 +1,232 @@
+{
+  "table": {
+    "name": "HTC300_G010_T010 DFW_ACI_Data",
+    "column_count": 22
+  },
+  "columns": [
+    {
+      "name": "ACICoID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 1
+    },
+    {
+      "name": "ACIBrID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 2
+    },
+    {
+      "name": "ID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 3
+    },
+    {
+      "name": "ACIKey",
+      "type": "VARCHAR",
+      "size": 100,
+      "nullable": true,
+      "position": 4
+    },
+    {
+      "name": "STATE",
+      "type": "VARCHAR",
+      "size": 255,
+      "nullable": true,
+      "position": 5
+    },
+    {
+      "name": "Country",
+      "type": "VARCHAR",
+      "size": 75,
+      "nullable": true,
+      "position": 6
+    },
+    {
+      "name": "CITY_PLACE",
+      "type": "VARCHAR",
+      "size": 255,
+      "nullable": true,
+      "position": 7
+    },
+    {
+      "name": "ZIP_CODE",
+      "type": "VARCHAR",
+      "size": 255,
+      "nullable": true,
+      "position": 8
+    },
+    {
+      "name": "AIRP_CODE",
+      "type": "VARCHAR",
+      "size": 255,
+      "nullable": true,
+      "position": 9
+    },
+    {
+      "name": "CARRIER",
+      "type": "VARCHAR",
+      "size": 255,
+      "nullable": true,
+      "position": 10
+    },
+    {
+      "name": "AREA",
+      "type": "VARCHAR",
+      "size": 255,
+      "nullable": true,
+      "position": 11
+    },
+    {
+      "name": "PLUS_ONE",
+      "type": "VARCHAR",
+      "size": 255,
+      "nullable": true,
+      "position": 12
+    },
+    {
+      "name": "RATE_MIN",
+      "type": "DOUBLE",
+      "size": 53,
+      "nullable": true,
+      "position": 13
+    },
+    {
+      "name": "RATE_100",
+      "type": "DOUBLE",
+      "size": 53,
+      "nullable": true,
+      "position": 14
+    },
+    {
+      "name": "RATE_1000",
+      "type": "DOUBLE",
+      "size": 53,
+      "nullable": true,
+      "position": 15
+    },
+    {
+      "name": "RATE_2000",
+      "type": "DOUBLE",
+      "size": 53,
+      "nullable": true,
+      "position": 16
+    },
+    {
+      "name": "RATE_5000",
+      "type": "DOUBLE",
+      "size": 53,
+      "nullable": true,
+      "position": 17
+    },
+    {
+      "name": "CreateDate",
+      "type": "DATETIME",
+      "size": 19,
+      "nullable": true,
+      "position": 18
+    },
+    {
+      "name": "CreatedBy",
+      "type": "VARCHAR",
+      "size": 25,
+      "nullable": true,
+      "position": 19
+    },
+    {
+      "name": "ChgDate",
+      "type": "DATETIME",
+      "size": 19,
+      "nullable": true,
+      "position": 20
+    },
+    {
+      "name": "ChgdBy",
+      "type": "VARCHAR",
+      "size": 25,
+      "nullable": true,
+      "position": 21
+    },
+    {
+      "name": "Active",
+      "type": "BIT",
+      "size": 1,
+      "nullable": false,
+      "position": 22
+    }
+  ],
+  "indexes": [
+    {
+      "name": "PrimaryKey",
+      "unique": true,
+      "columns": [
+        {
+          "name": "ACICoID",
+          "position": 1
+        },
+        {
+          "name": "ACIBrID",
+          "position": 2
+        },
+        {
+          "name": "ID",
+          "position": 3
+        }
+      ]
+    },
+    {
+      "name": "ACIBrID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "ACIBrID",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "ACICoID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "ACICoID",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "ACIKey",
+      "unique": false,
+      "columns": [
+        {
+          "name": "ACIKey",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "AIRP_CODE",
+      "unique": false,
+      "columns": [
+        {
+          "name": "AIRP_CODE",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "ZIP_CODE",
+      "unique": false,
+      "columns": [
+        {
+          "name": "ZIP_CODE",
+          "position": 1
+        }
+      ]
+    }
+  ]
+}

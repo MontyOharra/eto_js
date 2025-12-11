@@ -1,0 +1,92 @@
+{
+  "table": {
+    "name": "HTC300_G060_T030 Addresses Update History",
+    "column_count": 6
+  },
+  "columns": [
+    {
+      "name": "Addr_UpdtDate",
+      "type": "DATETIME",
+      "size": 19,
+      "nullable": true,
+      "position": 1
+    },
+    {
+      "name": "Addr_UpdtLID",
+      "type": "VARCHAR",
+      "size": 25,
+      "nullable": true,
+      "position": 2
+    },
+    {
+      "name": "Addr_UpdtCoID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 3
+    },
+    {
+      "name": "Addr_UpdtBrID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 4
+    },
+    {
+      "name": "Addr_ID",
+      "type": "DOUBLE",
+      "size": 53,
+      "nullable": true,
+      "position": 5
+    },
+    {
+      "name": "Addr_Chgs",
+      "type": "LONGCHAR",
+      "size": 1073741823,
+      "nullable": true,
+      "position": 6
+    }
+  ],
+  "indexes": [
+    {
+      "name": "Addr_PUKey",
+      "unique": false,
+      "columns": [
+        {
+          "name": "Addr_ID",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "Addr_UpdtBrID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "Addr_UpdtBrID",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "Addr_UpdtCoID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "Addr_UpdtCoID",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "Addr_UpdtLID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "Addr_UpdtLID",
+          "position": 1
+        }
+      ]
+    }
+  ]
+}
