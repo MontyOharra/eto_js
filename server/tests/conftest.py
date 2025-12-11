@@ -17,6 +17,16 @@ from pathlib import Path
 # Add src to path so imports work
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
+# Load .env file if python-dotenv is available
+try:
+    from dotenv import load_dotenv
+    env_path = Path(__file__).parent.parent / '.env'
+    if env_path.exists():
+        load_dotenv(env_path)
+        print(f"✓ Loaded environment from {env_path}")
+except ImportError:
+    pass  # python-dotenv not installed, rely on actual env vars
+
 from shared.database.database_manager import DatabaseManager
 from shared.database.connection import DatabaseConnectionManager
 from shared.database.access_connection import AccessConnectionManager
