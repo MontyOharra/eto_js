@@ -1,144 +1,155 @@
 # Session Continuity Document
 
-## Current Status (2025-12-09)
+## Current Status (2025-12-10)
 
 ### Session Summary
 
-This session focused on **PDF extraction improvements**, **order management UI enhancements**, **service startup race condition fixes**, and **VBA analysis research** for HTC order creation.
+This session focused on **HTC order creation implementation** and **service refactoring**:
+1. Implemented full HTC order creation with all 75 fields
+2. Created test API endpoint for order creation without pending orders
+3. Refactored the monolithic service into utility modules for maintainability
 
 ---
 
-## Recently Completed
+## What Was Completed This Session
 
-### 1. PDF Extraction Improvements (Complete)
+### 1. HTC Order Creation - FULLY IMPLEMENTED ✅
 
-Enhanced the PDF object extraction in `server/src/features/pdf_files/service.py`:
+The `create_order()` method in `HtcIntegrationService` now creates real HTC orders:
 
-**Thin Rectangle → Line Reclassification:**
-- Many PDFs create visual "lines" as very thin rectangles
-- Added logic to reclassify thin rectangles as lines based on:
-  - Minimum dimension < 3.0 points, OR
-  - Aspect ratio > 15:1
-- Uses CENTER coordinates (not bbox edges) to avoid stroke-width offset issues
-
-**Collinear Line Merging:**
-- PDFs often create a single visual line as many small connected segments
-- Implemented merging algorithm that consolidates collinear connected lines
-- Groups by direction (horizontal, vertical, diagonal)
-- Merges segments that touch or overlap (within 2pt tolerance)
-- Uses weighted average of perpendicular coordinates to preserve accurate positioning
-
-**Key Methods Added:**
-- `_merge_collinear_lines()` - Main entry point
-- `_merge_lines_along_axis()` - For horizontal/vertical lines
-- `_merge_connected_segments()` - Core merge logic
-- `_merge_diagonal_lines()` - For diagonal lines by slope/intercept
-- `_merge_diagonal_segments()` - Merge connected diagonal segments
-
-### 2. Order Management UI Enhancements (Complete)
-
-**Customer Name Display:**
-- Added `get_customer_name()` method to `HtcIntegrationService`
-- Looks up customer name from `[HTC300_G030_T010 Customers]` table
-- Updated `list_pending_orders` and `list_pending_updates` endpoints to resolve customer names
-- Frontend now shows customer name instead of ID
-
-**Status Cell Layout Update** (`PendingOrdersTable.tsx`):
-- Redesigned StatusCell with CSS Grid layout (`grid-cols-[auto_1fr]`)
-- Shows both required AND optional field counts
-- Moved order number from HAWB column to Status column (only when status="created")
-- Added bubble/pill styling for Required and Optional badges
-- Format: "OrderNo: 99999" (not "Order #99999")
-
-**Layout:**
+**Two-Phase Order Creation Flow:**
 ```
-[Status Badge]     [3/6 Required]  [⚠ 1]
-OrderNo: 99999     [2/7 Optional]
+Phase 1 - Data Gathering:
+  1. Resolve pickup address (find_or_create_address)
+  2. Resolve delivery address (find_or_create_address)
+  3. Look up full address info (get_address_info)
+  4. Look up customer info (get_customer_info)
+  5. Determine order type (determine_order_type)
+  6. Parse dates/times
+  7. Prepare all 75 field values (PreparedOrderData)
+
+Phase 2 - Order Creation (DB writes):
+  8. Reserve order number (adds to OIW lock table)
+  9. INSERT order record (75 fields)
+  10. INSERT dimension record
+  11. Update LON (Last Order Number)
+  12. Remove from OIW (release lock)
+  13. Save HAWB association
+  14. Create order history
 ```
 
-### 3. Service Startup Race Condition Fixes (Complete)
+**Key Methods Implemented:**
+- `create_order()` - Main orchestrator with explicit parameters
+- `create_order_from_pending()` - Wrapper that extracts from PendingOrder
+- `_create_order_record()` - INSERT with all 75 fields
+- `_create_dimension_record()` - INSERT dimension record
+- `_update_lon()` - Update Last Order Number table (called AFTER creation)
+- `save_hawb_association()` - INSERT HAWB tracking
+- `_create_order_history()` - INSERT audit trail
+- `determine_order_type()` - Classification logic (types 1-11)
+- `_extract_company_from_address()` - Parse company from address string
+- `_parse_datetime_string()` - Parse various datetime formats
 
-**Problem:** Multiple concurrent requests could trigger false "circular dependency" errors when services weren't initialized at startup.
+**Key Data Structures:**
+- `PreparedOrderData` - Dataclass holding all 75 fields for INSERT
+- `AddressInfo` - Full address lookup result
+- `CustomerInfo` - Customer lookup result
 
-**Root Cause:** The `_resolving` list in ServiceContainer is shared across threads. When Thread A starts resolving a service and Thread B tries to get the same service before A finishes, B sees it in `_resolving` and throws a circular dependency error.
+### 2. Test API Endpoint ✅
 
-**Fix:** Added services to startup initialization in `app.py`:
+Added `POST /api/htc/test-create-order` endpoint to test order creation without needing a pending order:
+
 ```python
-# 5. Initialize HTC integration service (needed by order management)
-htc_integration_service = ServiceContainer.get_htc_integration_service()
-
-# 6. Initialize order management service
-order_management_service = ServiceContainer.get_order_management_service()
+class TestCreateOrderRequest(BaseModel):
+    customer_id: int
+    hawb: str
+    pickup_address: str
+    pickup_time_start: str
+    pickup_time_end: str
+    delivery_address: str
+    delivery_time_start: str
+    delivery_time_end: str
+    # Optional fields
+    mawb: Optional[str] = None
+    pickup_notes: Optional[str] = None
+    delivery_notes: Optional[str] = None
+    order_notes: Optional[str] = None
+    pieces: Optional[int] = None
+    weight: Optional[float] = None
 ```
 
-This ensures both services are cached before any concurrent API requests arrive.
+**Test with curl:**
+```bash
+curl -X POST http://localhost:8000/api/htc/test-create-order \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer_id": 1,
+    "hawb": "TEST123456",
+    "pickup_address": "Test Company, 123 Main St, Dallas, TX 75201",
+    "pickup_time_start": "2025-12-15 09:00",
+    "pickup_time_end": "2025-12-15 12:00",
+    "delivery_address": "Another Company, 456 Oak Ave, Fort Worth, TX 76102",
+    "delivery_time_start": "2025-12-15 14:00",
+    "delivery_time_end": "2025-12-15 17:00"
+  }'
+```
 
-### 4. VBA Analysis Research (Complete)
+### 3. Bug Fix: Column Name ✅
 
-Analyzed the CreateNewOrder VBA function for future HTC order creation implementation.
+Fixed `FavGroundCarrierYN` → `FavCarrierGroundYN` in `get_address_info()`. Access was interpreting the wrong column name as a parameter, causing "Expected 4 parameters" error.
 
-**Key Files Reviewed:**
-- `docs/vba-analysis/HTC_350C_Sub_2_of_2_CreateOrders.md`
-- `docs/vba-analysis/HTC_350C_Sub_2_of_2_CreateOrders/CreateNewOrder.md`
-- `docs/vba-analysis/HTC_350C_Sub_2_of_2_CreateOrders/GetOrderNo.md`
-- `docs/vba-analysis/HTC_350C_Sub_2_of_2_CreateOrders/ProcessWorkTable.md`
+### 4. Service Refactoring - Utility Modules ✅
 
-**CreateNewOrder Flow Summary:**
-1. Retrieve customer info (`HTC200_GetCusName`)
-2. Retrieve pickup/delivery address info (`HTC200F_AddrInfo` x2)
-3. Get ACI area codes (`HTC200_GetACIArea` x2)
-4. Determine order type 1-10 (`HTC200F_SetOrderType`)
-5. Validate/correct dates and times (default to next business day if invalid)
-6. Create order record → `HTC300_G040_T010A Open Orders` (60+ fields)
-7. Create dimension record → `HTC300_G040_T012A Open Order Dims`
-8. Attach PDF files → `HTC300_G040_T014A Open Order Attachments`
-9. Update tracking tables (LON, OIW)
-10. Save HAWB association → `HTC300_G040_T040 HAWB Values`
-11. Create history record → `HTC300_G040_T030 Orders Update History`
-12. Send customer confirmation email
-13. Log results with 8-position action tracking array
+Split the 2400-line `service.py` monolith into focused utility modules:
 
-**Tables Written:**
-- `HTC300_G040_T010A Open Orders` - Main order record
-- `HTC300_G040_T012A Open Order Dims` - Package dimensions
-- `HTC300_G040_T014A Open Order Attachments` - PDF file references
-- `HTC300_G040_T030 Orders Update History` - Audit trail
-- `HTC300_G040_T040 HAWB Values` - HAWB tracking
-- `HTC300_G040_T000 Last OrderNo Assigned` - Order numbering
-- `HTC300_G040_T005 Orders In Work` - Pending queue
-- `HTC350_G800_T010 ETOLog` - Processing log
+```
+server/src/features/htc_integration/
+├── service.py          # Main orchestrator (unchanged for now)
+├── lookup_utils.py     # NEW - HtcLookupUtils class (~330 lines)
+├── order_utils.py      # NEW - HtcOrderUtils class (~700 lines)
+└── address_utils.py    # NEW - HtcAddressUtils class (~720 lines)
+```
+
+**Each utility class:**
+- Takes `(get_connection, co_id, br_id)` in constructor
+- Contains related methods copied from service.py
+- Is ready to be integrated into the main service
+
+| File | Class | Contains |
+|------|-------|----------|
+| `lookup_utils.py` | `HtcLookupUtils` | Customer/address/ACI/order lookups, dataclasses (AddressInfo, CustomerInfo, HtcOrderDetails) |
+| `order_utils.py` | `HtcOrderUtils` | Order number gen, record creation, dimension/history/HAWB, order type classification, PreparedOrderData |
+| `address_utils.py` | `HtcAddressUtils` | Address parsing, normalization, lookup, creation, abbreviation mappings |
 
 ---
 
-## Where We Left Off - HTC Order Creation
+## Where We Left Off
 
-The `create_order_from_pending()` method in `HtcIntegrationService` is currently a dummy that just logs data. Next step is to implement actual HTC order creation based on the VBA analysis.
+### Current State
+- **Order creation is working** - tested successfully via API endpoint
+- **Utility files created** - code copied (not moved) from service.py
+- **Main service.py unchanged** - still has all original code
 
-### Current Dummy Implementation
-```python
-def create_order_from_pending(self, pending_order: 'PendingOrder') -> float:
-    """TEMPORARY DUMMY - just prints data and returns 99999.0"""
-    logger.info("HTC ORDER CREATION (DUMMY)")
-    # ... logs all fields ...
-    return 99999.0
-```
+### Next Steps (In Order)
 
-### Implementation Needed
+1. **Integrate utility modules into main service**
+   - Import utils classes in service.py
+   - Replace method implementations with delegation to utils
+   - Remove duplicate code from service.py
+   - Test everything still works
 
-1. **Order Number Generation** - Already implemented: `_generate_next_order_number()`
+2. **Clean up service.py**
+   - After integration, remove the now-duplicated methods
+   - Service becomes thin orchestrator that delegates to utils
+   - Target: ~500 lines instead of 2400
 
-2. **Create Order Record** - INSERT into `[HTC300_G040_T010A Open Orders]`
-   - Need to map pending_order fields to HTC columns
-   - Need to call `HTC200F_SetOrderType()` equivalent
-   - Need address info lookup
+3. **Consider additional refactoring**
+   - The main `create_order()` orchestrator could stay in service.py
+   - Or create a dedicated `HtcOrderCreationService` if preferred
 
-3. **Create Dimension Record** - INSERT into `[HTC300_G040_T012A Open Order Dims]`
-
-4. **Create History Record** - INSERT into `[HTC300_G040_T030 Orders Update History]`
-
-5. **Save HAWB Association** - INSERT into `[HTC300_G040_T040 HAWB Values]`
-
-6. **Update Tracking** - Already have `remove_from_orders_in_work()`
+4. **Pending from previous sessions**
+   - Detail API revision
+   - Conflict resolution endpoint
 
 ---
 
@@ -152,53 +163,59 @@ def create_order_from_pending(self, pending_order: 'PendingOrder') -> float:
 | Status cell layout | ✅ Done | Grid layout with required/optional |
 | Service startup fix | ✅ Done | htc_integration + order_management |
 | VBA analysis review | ✅ Done | CreateNewOrder flow documented |
-| HTC order creation | ❌ Not started | Next priority |
+| Address resolution | ✅ Done | find_address_id, find_or_create_address |
+| Address creation | ✅ Done | create_address with all 34 fields |
+| **HTC order creation** | ✅ Done | Full 75-field INSERT working |
+| **Order type classification** | ✅ Done | Types 1-11 based on location flags |
+| **Test API endpoint** | ✅ Done | /api/htc/test-create-order |
+| **Service refactoring** | 🔄 In Progress | Utils created, integration pending |
 | Detail API revision | ⚠️ Pending | From previous session |
 | Conflict resolution | ❌ Not created | From previous session |
 
 ---
 
-## Next Steps
-
-1. **Implement HTC order creation** - Replace dummy `create_order_from_pending()` with real implementation
-2. **Map pending order fields to HTC columns** - Need to understand all 60+ HTC order fields
-3. **Implement order type determination** - Port `HTC200F_SetOrderType()` logic
-4. **Add address info lookup** - May need to port `HTC200F_AddrInfo()` functionality
-5. **Implement revised detail API** - From previous session
-6. **Add conflict resolution endpoint** - From previous session
-
----
-
 ## Key Files Reference
 
-### PDF Extraction
+### HTC Integration (Current)
 ```
-server/src/features/pdf_files/service.py    # Thin rect→line, line merging
+server/src/features/htc_integration/
+├── service.py              # Main service (2400 lines, to be reduced)
+├── lookup_utils.py         # NEW: Lookup operations
+├── order_utils.py          # NEW: Order creation operations
+└── address_utils.py        # NEW: Address operations
+
+server/src/api/routers/htc_integration.py    # API endpoints including test-create-order
 ```
 
-### Order Management - Backend
+### Documentation
 ```
-server/src/features/htc_integration/service.py     # HTC database operations, customer lookup
-server/src/features/order_management/service.py    # Order management service
-server/src/api/routers/order_management.py         # API endpoints
-server/src/app.py                                  # Service startup (lines 321-333)
-```
-
-### Order Management - Frontend
-```
-client/src/renderer/features/order-management/components/PendingOrdersTable/PendingOrdersTable.tsx
+docs/htc-integration/order-creation.md       # Order creation specification (75 fields)
+docs/htc-integration/address-creation.md     # Address creation specification
+docs/session-notes/CONTINUITY.md             # This file
 ```
 
-### VBA Analysis
+### Order Number Management Tables
 ```
-docs/vba-analysis/HTC_350C_Sub_2_of_2_CreateOrders.md
-docs/vba-analysis/HTC_350C_Sub_2_of_2_CreateOrders/CreateNewOrder.md
-docs/vba-analysis/HTC_350C_Sub_2_of_2_CreateOrders/GetOrderNo.md
-docs/vba-analysis/HTC_350C_Sub_2_of_2_CreateOrders/ProcessWorkTable.md
-vba-code/HTC_350C_Sub_2_of_2_createorders.vba
+HTC300_G040_T000 Last OrderNo Assigned  - LON (updated AFTER order creation)
+HTC300_G040_T005 Orders In Work         - OIW (lock during creation)
 ```
+
+**Key insight:** LON is updated AFTER successful order creation. OIW acts as a lock - add during number generation, remove after creation succeeds.
 
 ---
 
-**Last Updated:** 2025-12-09
-**Next Session:** Implement HTC order creation in `create_order_from_pending()`
+## Quick Start for Next Session
+
+1. **Review this document** to understand current state
+2. **The order creation is complete and working** - don't re-implement
+3. **Next task: Integrate utility modules**
+   - Open `service.py` and the three `*_utils.py` files
+   - Import utils at top of service.py
+   - Create util instances in `__init__`
+   - Replace method bodies with delegation
+   - Test via `/api/htc/test-create-order`
+
+---
+
+**Last Updated:** 2025-12-10
+**Next Session:** Integrate utility modules into main service, then clean up duplicate code
