@@ -571,7 +571,7 @@ class HtcOrderUtils:
                     data.customer_tariff,                # M_Tariff
                     data.customer_qb_list_id,            # M_QBCustomerListID
                     data.customer_qb_full_name,          # M_QBCustFullName
-                    None,                                # M_CustAgent (DEFERRED - needs DB update)
+                    1,                                # M_CustAgent (DEFERRED - needs DB update)
 
                     # Order info
                     data.hawb,                           # M_HAWB

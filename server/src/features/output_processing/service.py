@@ -166,7 +166,7 @@ class OutputProcessingService:
         customer_id: int,
         hawb: str,
         htc_order_number: float,
-        sub_run_id: int,
+        sub_run_id: Optional[int],
         output_channel_data: Dict[str, Any],
     ) -> str:
         """
@@ -216,7 +216,7 @@ class OutputProcessingService:
         self,
         customer_id: int,
         hawb: str,
-        sub_run_id: int,
+        sub_run_id: Optional[int],
         output_channel_data: Dict[str, Any],
     ) -> str:
         """
