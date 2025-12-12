@@ -12,9 +12,11 @@ from typing import Any, Dict, List, Literal, Optional, TypedDict
 # =========================
 
 PendingOrderStatus = Literal[
-    "incomplete",  # Missing one or more required fields
-    "ready",       # All required fields present, can create in HTC
-    "created",     # Successfully created in HTC
+    "incomplete",   # Missing one or more required fields
+    "ready",        # All required fields present, queued for HTC creation
+    "processing",   # Worker is currently creating HTC order
+    "created",      # Successfully created in HTC
+    "failed",       # HTC creation failed (see error_message)
 ]
 
 PendingUpdateStatus = Literal[
@@ -87,6 +89,10 @@ class PendingOrderUpdate(TypedDict, total=False):
     status: PendingOrderStatus
     htc_order_number: float | None
     htc_created_at: datetime | None
+    # Error tracking (for failed HTC creation)
+    error_message: str | None
+    error_at: datetime | None
+    # Order fields
     pickup_company_name: str | None
     pickup_address: str | None
     pickup_time_start: str | None
@@ -114,6 +120,9 @@ class PendingOrder:
     status: PendingOrderStatus
     htc_order_number: Optional[float]
     htc_created_at: Optional[datetime]
+    # Error tracking (for failed HTC creation)
+    error_message: Optional[str]
+    error_at: Optional[datetime]
     # Required fields
     pickup_company_name: Optional[str]
     pickup_address: Optional[str]

@@ -15,9 +15,11 @@
  * Status of a pending order
  */
 export type PendingOrderStatus =
-  | 'incomplete'  // Missing required fields
+  | 'incomplete'  // Missing required fields or has unresolved conflicts
   | 'ready'       // Has all required fields, can be created
-  | 'created';    // Created in HTC database
+  | 'processing'  // Being processed by HTC worker
+  | 'created'     // Created in HTC database
+  | 'failed';     // HTC creation failed
 
 /**
  * Status of a pending update

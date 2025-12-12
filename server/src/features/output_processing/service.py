@@ -371,12 +371,8 @@ class OutputProcessingService:
         # Update status based on required fields
         self._update_pending_order_status(pending_order.id)
 
-        # Re-fetch the pending order to check if it's now ready for HTC creation
-        updated_pending_order = self._pending_order_repo.get_by_id(pending_order.id)
-        if updated_pending_order and updated_pending_order.status == "ready":
-            # All required fields are filled - create order in HTC
-            htc_order_number = self._create_htc_order(updated_pending_order)
-            return "order_created"
+        # Note: HTC order creation is now handled by the HtcOrderWorker background process.
+        # The pending order will stay at status="ready" until the worker picks it up.
 
         return "pending_order_created" if was_created else "pending_order_updated"
 
@@ -411,48 +407,53 @@ class OutputProcessingService:
 
         return valid_fields
 
-    def _create_htc_order(self, pending_order: 'PendingOrder') -> float:
+    def _has_unresolved_conflicts(self, pending_order_id: int) -> bool:
         """
-        Create an order in HTC from a ready pending order.
+        Check if a pending order has any unresolved conflicts.
 
-        Updates the pending order with:
-        - status = "created"
-        - htc_order_number = the returned order number
-        - htc_created_at = current timestamp
+        A conflict exists when a field has multiple different values in history
+        and none of them has been selected (is_selected=True).
 
         Args:
-            pending_order: The pending order with all required fields filled
+            pending_order_id: ID of the pending order to check
 
         Returns:
-            The HTC order number
+            True if there are any unresolved conflicts, False otherwise
         """
-        logger.info(f"Creating HTC order for pending order {pending_order.id}")
+        history_records = self._pending_order_history_repo.get_by_pending_order_id(pending_order_id)
 
-        # Call HTC service to create the order
-        htc_order_number = self._htc_service.create_order_from_pending(pending_order)
+        # Group history by field name
+        by_field: dict[str, list] = {}
+        for record in history_records:
+            if record.field_name not in by_field:
+                by_field[record.field_name] = []
+            by_field[record.field_name].append(record)
 
-        # Update pending order with HTC info
-        created_at = datetime.now(timezone.utc)
-        self._pending_order_repo.update(pending_order.id, {
-            "status": "created",
-            "htc_order_number": htc_order_number,
-            "htc_created_at": created_at,
-        })
+        # Check each field for conflicts
+        for field_name, records in by_field.items():
+            unique_values = set(r.field_value for r in records)
+            has_selection = any(r.is_selected for r in records)
 
-        logger.info(
-            f"Pending order {pending_order.id} created in HTC as order {htc_order_number}"
-        )
+            # Conflict: multiple unique values and no selection made
+            if len(unique_values) > 1 and not has_selection:
+                logger.debug(f"Unresolved conflict found for field '{field_name}' on pending order {pending_order_id}")
+                return True
 
-        return htc_order_number
+        return False
 
     def _update_pending_order_status(self, pending_order_id: int) -> None:
         """
-        Update pending order status based on required fields.
+        Update pending order status based on required fields and conflicts.
+
+        Only updates status for orders in 'incomplete' or 'ready' states.
+        Does not modify orders that are 'processing', 'created', or 'failed'.
 
         Status logic:
+        - 'incomplete': One or more required fields are null, OR any field has unresolved conflicts
+        - 'ready': All required fields are non-null AND no conflicts (queued for HTC worker)
+        - 'processing': Being processed by worker (don't change)
         - 'created': Already created in HTC (don't change)
-        - 'ready': All required fields are non-null
-        - 'incomplete': One or more required fields are null
+        - 'failed': HTC creation failed (don't change - user must retry)
 
         Args:
             pending_order_id: ID of the pending order to update
@@ -462,9 +463,9 @@ class OutputProcessingService:
             logger.error(f"Pending order {pending_order_id} not found for status update")
             return
 
-        # Don't change status if already created
-        if pending_order.status == "created":
-            logger.debug(f"Pending order {pending_order_id} already created, skipping status update")
+        # Don't change status if already in a terminal or processing state
+        if pending_order.status in ("created", "processing", "failed"):
+            logger.debug(f"Pending order {pending_order_id} status is '{pending_order.status}', skipping status update")
             return
 
         # Check if all required fields are set
@@ -476,8 +477,145 @@ class OutputProcessingService:
                 logger.debug(f"Required field '{field_name}' is missing for pending order {pending_order_id}")
                 break
 
-        new_status = "ready" if all_required_set else "incomplete"
+        # Check for unresolved conflicts (in any field, required or optional)
+        has_conflicts = self._has_unresolved_conflicts(pending_order_id)
+        if has_conflicts:
+            logger.debug(f"Pending order {pending_order_id} has unresolved conflicts")
+
+        # Ready only if all required fields set AND no unresolved conflicts
+        new_status = "ready" if (all_required_set and not has_conflicts) else "incomplete"
 
         if pending_order.status != new_status:
             self._pending_order_repo.update(pending_order_id, {"status": new_status})
             logger.info(f"Updated pending order {pending_order_id} status: {pending_order.status} -> {new_status}")
+
+    def cleanup_sub_run_contributions(self, sub_run_id: int) -> dict:
+        """
+        Clean up pending order contributions from a sub-run being deleted/reprocessed.
+
+        This should be called BEFORE the sub-run is deleted to properly clean up
+        the pending order data that was contributed by that sub-run.
+
+        Flow:
+        1. Delete all history entries for this sub-run
+        2. For each affected pending order and field:
+           - Recalculate field value from remaining history
+           - Update pending order status
+        3. Delete pending orders that have no remaining history
+
+        Args:
+            sub_run_id: ID of the sub-run being deleted
+
+        Returns:
+            Dict with cleanup statistics:
+            - deleted_history_count: Number of history entries deleted
+            - affected_pending_orders: Number of pending orders affected
+            - deleted_pending_orders: Number of pending orders deleted (had no remaining history)
+            - fields_recalculated: Total number of fields recalculated
+        """
+        logger.info(f"Cleaning up pending order contributions from sub-run {sub_run_id}")
+
+        # 1. Delete history entries and get affected orders/fields
+        result = self._pending_order_history_repo.delete_by_sub_run_id(sub_run_id)
+        deleted_history_count = result["deleted_count"]
+        affected_orders = result["affected_orders"]
+
+        if deleted_history_count == 0:
+            logger.info(f"No pending order contributions found for sub-run {sub_run_id}")
+            return {
+                "deleted_history_count": 0,
+                "affected_pending_orders": 0,
+                "deleted_pending_orders": 0,
+                "fields_recalculated": 0,
+            }
+
+        logger.info(f"Deleted {deleted_history_count} history entries affecting {len(affected_orders)} pending orders")
+
+        # 2. Recalculate field values for each affected pending order
+        fields_recalculated = 0
+        deleted_pending_orders = 0
+
+        for pending_order_id, field_names in affected_orders.items():
+            # Check if pending order still has any history
+            remaining_history = self._pending_order_history_repo.get_by_pending_order_id(pending_order_id)
+
+            if not remaining_history:
+                # No history remaining - delete the pending order
+                # But only if it hasn't been created in HTC yet
+                pending_order = self._pending_order_repo.get_by_id(pending_order_id)
+                if pending_order and pending_order.status not in ("created", "processing"):
+                    self._pending_order_repo.delete(pending_order_id)
+                    deleted_pending_orders += 1
+                    logger.info(f"Deleted pending order {pending_order_id} (no remaining history)")
+                continue
+
+            # Recalculate each affected field
+            for field_name in field_names:
+                self._recalculate_field_value(pending_order_id, field_name)
+                fields_recalculated += 1
+
+            # Update status based on new field values
+            self._update_pending_order_status(pending_order_id)
+
+        logger.info(
+            f"Sub-run {sub_run_id} cleanup complete: "
+            f"{deleted_history_count} history entries deleted, "
+            f"{fields_recalculated} fields recalculated, "
+            f"{deleted_pending_orders} pending orders deleted"
+        )
+
+        return {
+            "deleted_history_count": deleted_history_count,
+            "affected_pending_orders": len(affected_orders),
+            "deleted_pending_orders": deleted_pending_orders,
+            "fields_recalculated": fields_recalculated,
+        }
+
+    def _recalculate_field_value(self, pending_order_id: int, field_name: str) -> None:
+        """
+        Recalculate a pending order field value based on remaining history.
+
+        Logic:
+        - If no history remains for field: set to NULL
+        - If one entry with is_selected=True: keep that value
+        - If no selected entry but only one unique value: auto-select it
+        - If multiple unique values with no selection: conflict - set to NULL
+
+        Args:
+            pending_order_id: ID of the pending order
+            field_name: Name of the field to recalculate
+        """
+        # Get remaining history for this field
+        history_entries = self._pending_order_history_repo.get_by_field(pending_order_id, field_name)
+
+        if not history_entries:
+            # No history - set field to NULL
+            self._pending_order_repo.update(pending_order_id, {field_name: None})
+            logger.debug(f"Field '{field_name}' on pending order {pending_order_id}: no history, set to NULL")
+            return
+
+        # Check if there's a selected entry
+        selected_entry = next((h for h in history_entries if h.is_selected), None)
+
+        if selected_entry:
+            # Keep the selected value
+            self._pending_order_repo.update(pending_order_id, {field_name: selected_entry.field_value})
+            logger.debug(f"Field '{field_name}' on pending order {pending_order_id}: kept selected value")
+            return
+
+        # No selected entry - check unique values
+        unique_values = set(h.field_value for h in history_entries)
+
+        if len(unique_values) == 1:
+            # Only one unique value - auto-select the first entry
+            value = history_entries[0].field_value
+            self._pending_order_history_repo.update(history_entries[0].id, {"is_selected": True})
+            self._pending_order_repo.update(pending_order_id, {field_name: value})
+            logger.debug(f"Field '{field_name}' on pending order {pending_order_id}: auto-selected single value")
+        else:
+            # Multiple unique values - conflict, set to NULL
+            self._pending_order_repo.update(pending_order_id, {field_name: None})
+            logger.debug(
+                f"Field '{field_name}' on pending order {pending_order_id}: "
+                f"conflict ({len(unique_values)} values), set to NULL"
+            )

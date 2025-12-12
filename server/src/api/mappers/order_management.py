@@ -38,6 +38,8 @@ def map_pending_order_detail_to_api(
         status=domain.status,
         htc_order_number=int(domain.htc_order_number) if domain.htc_order_number is not None else None,
         htc_created_at=domain.htc_created_at.isoformat() if domain.htc_created_at else None,
+        error_message=domain.error_message,
+        error_at=domain.error_at.isoformat() if domain.error_at else None,
         fields=[_map_field_with_options(f) for f in domain.fields],
         contributing_sub_runs=[_map_contributing_source(s) for s in domain.contributing_sources],
         created_at=domain.created_at.isoformat(),

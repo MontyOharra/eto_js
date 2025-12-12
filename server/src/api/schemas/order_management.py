@@ -60,12 +60,16 @@ class PendingOrderListItem(BaseModel):
     hawb: str
     customer_id: int
     customer_name: Optional[str] = None  # Resolved from Access DB
-    status: Literal["incomplete", "ready", "created"]
+    status: Literal["incomplete", "ready", "processing", "created", "failed"]
 
     # HTC info (only set if status == 'created')
     # order_number is DOUBLE in Access but always whole numbers
     htc_order_number: Optional[int] = None
     htc_created_at: Optional[str] = None  # ISO 8601
+
+    # Error info (only set if status == 'failed')
+    error_message: Optional[str] = None
+    error_at: Optional[str] = None  # ISO 8601
 
     # Field completion summary
     required_field_count: int
@@ -125,11 +129,15 @@ class PendingOrderDetail(BaseModel):
     hawb: str
     customer_id: int
     customer_name: Optional[str] = None
-    status: Literal["incomplete", "ready", "created"]
+    status: Literal["incomplete", "ready", "processing", "created", "failed"]
 
     # HTC info (order_number is DOUBLE in Access but always whole numbers)
     htc_order_number: Optional[int] = None
     htc_created_at: Optional[str] = None
+
+    # Error info (only set if status == 'failed')
+    error_message: Optional[str] = None
+    error_at: Optional[str] = None
 
     # All fields with their states
     fields: List[FieldDetail]
@@ -171,6 +179,14 @@ class CreateOrderResponse(BaseModel):
     success: bool
     pending_order_id: int
     htc_order_number: float
+    message: Optional[str] = None
+
+
+class RetryPendingOrderResponse(BaseModel):
+    """Response after retrying a failed pending order"""
+    success: bool
+    pending_order_id: int
+    new_status: str
     message: Optional[str] = None
 
 
@@ -243,10 +259,12 @@ class BulkUpdateActionResponse(BaseModel):
 # =============================================================================
 
 FIELD_LABELS: Dict[str, str] = {
+    "pickup_company_name": "Pickup Company",
     "pickup_address": "Pickup Address",
     "pickup_time_start": "Pickup Start Time",
     "pickup_time_end": "Pickup End Time",
     "pickup_notes": "Pickup Notes",
+    "delivery_company_name": "Delivery Company",
     "delivery_address": "Delivery Address",
     "delivery_time_start": "Delivery Start Time",
     "delivery_time_end": "Delivery End Time",

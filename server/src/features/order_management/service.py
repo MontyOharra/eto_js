@@ -91,6 +91,8 @@ class PendingOrderDetail:
     created_at: datetime
     updated_at: datetime
     htc_created_at: Optional[datetime]
+    error_message: Optional[str]
+    error_at: Optional[datetime]
 
 
 @dataclass
@@ -114,10 +116,12 @@ class ApproveResult:
 FIELD_LABELS: Dict[str, str] = {
     "hawb": "HAWB",
     "mawb": "MAWB",
+    "pickup_company_name": "Pickup Company",
     "pickup_address": "Pickup Address",
     "pickup_time_start": "Pickup Start",
     "pickup_time_end": "Pickup End",
     "pickup_notes": "Pickup Notes",
+    "delivery_company_name": "Delivery Company",
     "delivery_address": "Delivery Address",
     "delivery_time_start": "Delivery Start",
     "delivery_time_end": "Delivery End",
@@ -126,6 +130,14 @@ FIELD_LABELS: Dict[str, str] = {
     "weight": "Weight",
     "order_notes": "Order Notes",
 }
+
+
+def get_field_label(field_name: str) -> str:
+    """
+    Get human-readable label for a field name.
+    Falls back to title-cased field name if not in mapping.
+    """
+    return FIELD_LABELS.get(field_name, field_name.replace("_", " ").title())
 
 
 # ==================== Service ====================
@@ -271,6 +283,8 @@ class OrderManagementService:
             created_at=pending_order.created_at,
             updated_at=pending_order.updated_at,
             htc_created_at=pending_order.htc_created_at,
+            error_message=pending_order.error_message,
+            error_at=pending_order.error_at,
         )
 
     def _build_contributing_sources(
@@ -411,7 +425,7 @@ class OrderManagementService:
 
             fields.append(FieldWithOptions(
                 name=field_name,
-                label=FIELD_LABELS.get(field_name, field_name),
+                label=get_field_label(field_name),
                 required=field_name in REQUIRED_FIELDS,
                 current_value=current_value,
                 state=state,
@@ -599,9 +613,42 @@ class OrderManagementService:
             "order_notes": pending_order.order_notes,
         }
 
+    def _has_unresolved_conflicts(self, pending_order_id: int) -> bool:
+        """
+        Check if a pending order has any unresolved conflicts.
+
+        A conflict exists when a field has multiple different values in history
+        and none of them has been selected (is_selected=True).
+
+        Args:
+            pending_order_id: ID of the pending order to check
+
+        Returns:
+            True if there are any unresolved conflicts, False otherwise
+        """
+        history_records = self._pending_order_history_repo.get_by_pending_order_id(pending_order_id)
+
+        # Group history by field name
+        by_field: Dict[str, List] = {}
+        for record in history_records:
+            if record.field_name not in by_field:
+                by_field[record.field_name] = []
+            by_field[record.field_name].append(record)
+
+        # Check each field for conflicts
+        for field_name, records in by_field.items():
+            unique_values = set(r.field_value for r in records)
+            has_selection = any(r.is_selected for r in records)
+
+            # Conflict: multiple unique values and no selection made
+            if len(unique_values) > 1 and not has_selection:
+                return True
+
+        return False
+
     def _update_pending_order_status(self, pending_order_id: int) -> None:
         """
-        Update pending order status based on required fields.
+        Update pending order status based on required fields and conflicts.
 
         Args:
             pending_order_id: ID of the pending order to update
@@ -620,7 +667,11 @@ class OrderManagementService:
                 all_required_set = False
                 break
 
-        new_status = "ready" if all_required_set else "incomplete"
+        # Check for unresolved conflicts (in any field, required or optional)
+        has_conflicts = self._has_unresolved_conflicts(pending_order_id)
+
+        # Ready only if all required fields set AND no unresolved conflicts
+        new_status = "ready" if (all_required_set and not has_conflicts) else "incomplete"
 
         if pending_order.status != new_status:
             self._pending_order_repo.update(pending_order_id, {"status": new_status})

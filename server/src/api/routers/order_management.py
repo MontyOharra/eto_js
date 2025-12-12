@@ -14,6 +14,7 @@ from api.schemas.order_management import (
     ResolveConflictRequest,
     ResolveConflictResponse,
     CreateOrderResponse,
+    RetryPendingOrderResponse,
     # Pending Updates
     GetPendingUpdatesResponse,
     PendingUpdateListItem,
@@ -43,7 +44,7 @@ router = APIRouter(
 
 @router.get("/pending-orders", response_model=GetPendingOrdersResponse)
 async def list_pending_orders(
-    status: Optional[Literal["incomplete", "ready", "created"]] = Query(
+    status: Optional[Literal["incomplete", "ready", "processing", "created", "failed"]] = Query(
         None,
         description="Filter by status"
     ),
@@ -130,6 +131,8 @@ async def list_pending_orders(
             status=order.status,
             htc_order_number=int(order.htc_order_number) if order.htc_order_number is not None else None,
             htc_created_at=order.htc_created_at.isoformat() if order.htc_created_at else None,
+            error_message=order.error_message,
+            error_at=order.error_at.isoformat() if order.error_at else None,
             required_field_count=len(REQUIRED_FIELDS),
             required_fields_present=required_present,
             optional_field_count=len(VALID_FIELD_NAMES) - len(REQUIRED_FIELDS),
@@ -174,6 +177,46 @@ async def get_pending_order_detail(
 
     # Map to API response
     return map_pending_order_detail_to_api(detail)
+
+
+@router.post("/pending-orders/{pending_order_id}/retry", response_model=RetryPendingOrderResponse)
+async def retry_pending_order(
+    pending_order_id: int,
+    htc_service = Depends(lambda: ServiceContainer.get_htc_integration_service())
+) -> RetryPendingOrderResponse:
+    """
+    Retry a failed pending order.
+
+    Resets the status from 'failed' to 'ready' so the HTC order worker
+    will attempt to create it again. Only works for orders with status='failed'.
+    """
+    logger.info(f"Retry pending order: id={pending_order_id}")
+
+    # Use HTC service to retry (it has access to the pending order repo)
+    success = htc_service.retry_pending_order(pending_order_id)
+
+    if not success:
+        # Check if order exists
+        pending_order_repo = htc_service._pending_order_repo
+        order = pending_order_repo.get_by_id(pending_order_id) if pending_order_repo else None
+
+        if not order:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Pending order {pending_order_id} not found"
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot retry pending order with status '{order.status}'. Only 'failed' orders can be retried."
+            )
+
+    return RetryPendingOrderResponse(
+        success=True,
+        pending_order_id=pending_order_id,
+        new_status="ready",
+        message="Pending order reset to 'ready' for retry. The worker will attempt HTC creation shortly."
+    )
 
 
 # =============================================================================
