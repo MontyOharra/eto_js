@@ -2,7 +2,7 @@
 
 # Email account types
 from shared.types.email_accounts import (
-    ImapProviderSettings,
+    StandardProviderSettings,
     ProviderSettings,
     PasswordCredentials,
     OAuthCredentials,
@@ -100,7 +100,7 @@ from shared.types.pending_orders import (
 
 __all__ = [
     # Email accounts
-    "ImapProviderSettings",
+    "StandardProviderSettings",
     "ProviderSettings",
     "PasswordCredentials",
     "OAuthCredentials",

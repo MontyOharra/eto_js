@@ -83,8 +83,10 @@ function EmailConnectionsSettings() {
     name: string;
     provider_type: string;
     email_address: string;
-    host: string;
-    port: number;
+    imap_host: string;
+    imap_port: number;
+    smtp_host: string;
+    smtp_port: number;
     password: string;
     use_ssl: boolean;
     capabilities: string[];
@@ -95,8 +97,10 @@ function EmailConnectionsSettings() {
         provider_type: data.provider_type,
         email_address: data.email_address,
         provider_settings: {
-          host: data.host,
-          port: data.port,
+          imap_host: data.imap_host,
+          imap_port: data.imap_port,
+          smtp_host: data.smtp_host,
+          smtp_port: data.smtp_port,
           use_ssl: data.use_ssl,
         },
         credentials: {
@@ -129,8 +133,10 @@ function EmailConnectionsSettings() {
   const handleTestConnection = async (data: {
     provider_type: string;
     email_address: string;
-    host: string;
-    port: number;
+    imap_host: string;
+    imap_port: number;
+    smtp_host: string;
+    smtp_port: number;
     password: string;
     use_ssl: boolean;
   }): Promise<ValidationResultResponse> => {
@@ -138,8 +144,10 @@ function EmailConnectionsSettings() {
       provider_type: data.provider_type,
       email_address: data.email_address,
       provider_settings: {
-        host: data.host,
-        port: data.port,
+        imap_host: data.imap_host,
+        imap_port: data.imap_port,
+        smtp_host: data.smtp_host,
+        smtp_port: data.smtp_port,
         use_ssl: data.use_ssl,
       },
       credentials: {
@@ -309,8 +317,10 @@ function CreateEmailConnectionModal({
     name: string;
     provider_type: string;
     email_address: string;
-    host: string;
-    port: number;
+    imap_host: string;
+    imap_port: number;
+    smtp_host: string;
+    smtp_port: number;
     password: string;
     use_ssl: boolean;
     capabilities: string[];
@@ -318,19 +328,23 @@ function CreateEmailConnectionModal({
   onTestConnection: (data: {
     provider_type: string;
     email_address: string;
-    host: string;
-    port: number;
+    imap_host: string;
+    imap_port: number;
+    smtp_host: string;
+    smtp_port: number;
     password: string;
     use_ssl: boolean;
   }) => Promise<ValidationResultResponse>;
 }) {
   const [step, setStep] = useState<'provider' | 'credentials'>('provider');
-  const [providerType, setProviderType] = useState<string>('imap');
+  const [providerType, setProviderType] = useState<string>('standard');
   const [formData, setFormData] = useState({
     name: '',
     email_address: '',
-    host: '',
-    port: 993,
+    imap_host: '',
+    imap_port: 993,
+    smtp_host: '',
+    smtp_port: 587,
     password: '',
     use_ssl: true,
   });
@@ -353,8 +367,10 @@ function CreateEmailConnectionModal({
       const result = await onTestConnection({
         provider_type: providerType,
         email_address: formData.email_address,
-        host: formData.host,
-        port: formData.port,
+        imap_host: formData.imap_host,
+        imap_port: formData.imap_port,
+        smtp_host: formData.smtp_host,
+        smtp_port: formData.smtp_port,
         password: formData.password,
         use_ssl: formData.use_ssl,
       });
@@ -379,8 +395,10 @@ function CreateEmailConnectionModal({
         name: formData.name,
         provider_type: providerType,
         email_address: formData.email_address,
-        host: formData.host,
-        port: formData.port,
+        imap_host: formData.imap_host,
+        imap_port: formData.imap_port,
+        smtp_host: formData.smtp_host,
+        smtp_port: formData.smtp_port,
         password: formData.password,
         use_ssl: formData.use_ssl,
         capabilities: connectionTestResult?.capabilities || [],
@@ -395,8 +413,8 @@ function CreateEmailConnectionModal({
   const isCredentialsValid =
     formData.name &&
     formData.email_address &&
-    formData.host &&
-    formData.port &&
+    formData.imap_host &&
+    formData.imap_port &&
     formData.password;
 
   const canCreate = isCredentialsValid && connectionTestResult?.success;
@@ -432,9 +450,9 @@ function CreateEmailConnectionModal({
               </p>
 
               <button
-                onClick={() => setProviderType('imap')}
+                onClick={() => setProviderType('standard')}
                 className={`w-full p-4 rounded-lg border-2 transition-all text-left ${
-                  providerType === 'imap'
+                  providerType === 'standard'
                     ? 'border-blue-600 bg-blue-600/10'
                     : 'border-gray-700 bg-gray-900 hover:border-gray-600'
                 }`}
@@ -443,21 +461,21 @@ function CreateEmailConnectionModal({
                   <div className="text-3xl">📧</div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <h4 className="text-base font-semibold text-white">IMAP</h4>
+                      <h4 className="text-base font-semibold text-white">Standard Email</h4>
                       <span className="text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-300">
                         Universal
                       </span>
                     </div>
                     <p className="text-sm text-gray-400 mt-1">
-                      Connect to any email server using IMAP protocol
+                      Connect using IMAP (receive) and SMTP (send)
                     </p>
                   </div>
                   <div
                     className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                      providerType === 'imap' ? 'border-blue-600 bg-blue-600' : 'border-gray-600'
+                      providerType === 'standard' ? 'border-blue-600 bg-blue-600' : 'border-gray-600'
                     }`}
                   >
-                    {providerType === 'imap' && (
+                    {providerType === 'standard' && (
                       <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                       </svg>
@@ -482,80 +500,125 @@ function CreateEmailConnectionModal({
                 />
               </div>
 
-              {/* IMAP Server */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  IMAP Server <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={formData.host}
-                  onChange={(e) => handleFieldChange('host', e.target.value)}
-                  placeholder="mail.example.com"
-                  className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-                />
-                <p className="mt-1 text-xs text-gray-500">
-                  Example: imap.gmail.com, outlook.office365.com
-                </p>
+              {/* Incoming Mail (IMAP) Section */}
+              <div className="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+                <h4 className="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                  </svg>
+                  Incoming Mail (IMAP)
+                </h4>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-2">
+                    <label className="block text-xs font-medium text-gray-400 mb-1">
+                      Server <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.imap_host}
+                      onChange={(e) => handleFieldChange('imap_host', e.target.value)}
+                      placeholder="imap.example.com"
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-400 mb-1">
+                      Port
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.imap_port}
+                      onChange={(e) => handleFieldChange('imap_port', parseInt(e.target.value) || 993)}
+                      placeholder="993"
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
+                    />
+                  </div>
+                </div>
               </div>
 
-              {/* Port */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Port <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="number"
-                  value={formData.port}
-                  onChange={(e) => handleFieldChange('port', parseInt(e.target.value) || 993)}
-                  placeholder="993"
-                  className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-                />
-                <p className="mt-1 text-xs text-gray-500">
-                  Default: 993 (SSL/TLS) or 143 (non-SSL)
-                </p>
+              {/* Outgoing Mail (SMTP) Section */}
+              <div className="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+                <h4 className="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                  </svg>
+                  Outgoing Mail (SMTP)
+                  <span className="text-xs text-gray-500 font-normal">(optional)</span>
+                </h4>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-2">
+                    <label className="block text-xs font-medium text-gray-400 mb-1">
+                      Server
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.smtp_host}
+                      onChange={(e) => handleFieldChange('smtp_host', e.target.value)}
+                      placeholder="smtp.example.com"
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-400 mb-1">
+                      Port
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.smtp_port}
+                      onChange={(e) => handleFieldChange('smtp_port', parseInt(e.target.value) || 587)}
+                      placeholder="587"
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
+                    />
+                  </div>
+                </div>
               </div>
 
-              {/* Email Address */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Email Address <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="email"
-                  value={formData.email_address}
-                  onChange={(e) => handleFieldChange('email_address', e.target.value)}
-                  placeholder="orders@example.com"
-                  className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-                />
-              </div>
-
-              {/* Password */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Password <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="password"
-                  value={formData.password}
-                  onChange={(e) => handleFieldChange('password', e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-                />
-              </div>
-
-              {/* SSL/TLS Checkbox */}
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="use_ssl"
-                  checked={formData.use_ssl}
-                  onChange={(e) => handleFieldChange('use_ssl', e.target.checked)}
-                  className="w-4 h-4 bg-gray-900 border-gray-700 rounded text-blue-600 focus:ring-2 focus:ring-blue-600"
-                />
-                <label htmlFor="use_ssl" className="ml-2 text-sm text-gray-300">
-                  Use SSL/TLS (recommended)
-                </label>
+              {/* Account Credentials Section */}
+              <div className="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+                <h4 className="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                  </svg>
+                  Account Credentials
+                </h4>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-400 mb-1">
+                      Email Address <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      value={formData.email_address}
+                      onChange={(e) => handleFieldChange('email_address', e.target.value)}
+                      placeholder="orders@example.com"
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-400 mb-1">
+                      Password <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="password"
+                      value={formData.password}
+                      onChange={(e) => handleFieldChange('password', e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
+                    />
+                  </div>
+                  <div className="flex items-center pt-1">
+                    <input
+                      type="checkbox"
+                      id="use_ssl"
+                      checked={formData.use_ssl}
+                      onChange={(e) => handleFieldChange('use_ssl', e.target.checked)}
+                      className="w-4 h-4 bg-gray-800 border-gray-600 rounded text-blue-600 focus:ring-2 focus:ring-blue-600"
+                    />
+                    <label htmlFor="use_ssl" className="ml-2 text-sm text-gray-300">
+                      Use SSL/TLS (recommended)
+                    </label>
+                  </div>
+                </div>
               </div>
 
               {/* Test Connection Button */}
