@@ -205,6 +205,45 @@ export function SignatureObjectsStep({
     setSelectedTypes(new Set());
   };
 
+  // Helper to convert selected IDs to PdfObjects format
+  const convertIdsToPdfObjects = useCallback((selectedIds: Set<string>): PdfObjects => {
+    const flatObjects = getFlattenedObjects();
+    const pdfObjectsFormat: PdfObjects = {
+      text_words: [],
+      graphic_rects: [],
+      graphic_lines: [],
+      graphic_curves: [],
+      images: [],
+      tables: [],
+    };
+
+    // Group selected objects by type (preserving all fields)
+    flatObjects.forEach((obj, idx) => {
+      const id = `${obj.type}-${obj.page}-${obj.bbox.join('-')}-${idx}`;
+      if (selectedIds.has(id)) {
+        // Remove 'type' field before storing (it's not in the PdfObjects schema)
+        const { type, ...objWithoutType } = obj;
+
+        // Map type names to PdfObjects field names
+        if (type === 'text_word') {
+          pdfObjectsFormat.text_words.push(objWithoutType);
+        } else if (type === 'graphic_rect') {
+          pdfObjectsFormat.graphic_rects.push(objWithoutType);
+        } else if (type === 'graphic_line') {
+          pdfObjectsFormat.graphic_lines.push(objWithoutType);
+        } else if (type === 'graphic_curve') {
+          pdfObjectsFormat.graphic_curves.push(objWithoutType);
+        } else if (type === 'image') {
+          pdfObjectsFormat.images.push(objWithoutType);
+        } else if (type === 'table') {
+          pdfObjectsFormat.tables.push(objWithoutType);
+        }
+      }
+    });
+
+    return pdfObjectsFormat;
+  }, [getFlattenedObjects]);
+
   const handleObjectClick = (objectId: string) => {
     setSelectedObjectIds((prev) => {
       const newSet = new Set(prev);
@@ -214,43 +253,19 @@ export function SignatureObjectsStep({
         newSet.add(objectId);
       }
 
-      // Convert selected IDs to PdfObjects format (grouped by type)
-      const flatObjects = getFlattenedObjects();
-      const pdfObjectsFormat: PdfObjects = {
-        text_words: [],
-        graphic_rects: [],
-        graphic_lines: [],
-        graphic_curves: [],
-        images: [],
-        tables: [],
-      };
+      onSignatureObjectsChange(convertIdsToPdfObjects(newSet));
+      return newSet;
+    });
+  };
 
-      // Group selected objects by type (preserving all fields)
-      flatObjects.forEach((obj, idx) => {
-        const id = `${obj.type}-${obj.page}-${obj.bbox.join('-')}-${idx}`;
-        if (newSet.has(id)) {
-          // Remove 'type' field before storing (it's not in the PdfObjects schema)
-          const { type, ...objWithoutType } = obj;
+  // Handle box selection (shift+drag) - adds all objects in the box to selection
+  const handleBoxSelect = (objectIds: string[]) => {
+    setSelectedObjectIds((prev) => {
+      const newSet = new Set(prev);
+      // Add all box-selected objects to selection
+      objectIds.forEach(id => newSet.add(id));
 
-          // Map type names to PdfObjects field names
-          if (type === 'text_word') {
-            pdfObjectsFormat.text_words.push(objWithoutType);
-          } else if (type === 'graphic_rect') {
-            pdfObjectsFormat.graphic_rects.push(objWithoutType);
-          } else if (type === 'graphic_line') {
-            pdfObjectsFormat.graphic_lines.push(objWithoutType);
-          } else if (type === 'graphic_curve') {
-            pdfObjectsFormat.graphic_curves.push(objWithoutType);
-          } else if (type === 'image') {
-            pdfObjectsFormat.images.push(objWithoutType);
-          } else if (type === 'table') {
-            pdfObjectsFormat.tables.push(objWithoutType);
-          }
-        }
-      });
-
-      onSignatureObjectsChange(pdfObjectsFormat);
-
+      onSignatureObjectsChange(convertIdsToPdfObjects(newSet));
       return newSet;
     });
   };
@@ -281,6 +296,7 @@ export function SignatureObjectsStep({
         selectedTypes={selectedTypes}
         selectedObjects={selectedObjectIds}
         onObjectClick={handleObjectClick}
+        onBoxSelect={handleBoxSelect}
       />
     </div>
   );

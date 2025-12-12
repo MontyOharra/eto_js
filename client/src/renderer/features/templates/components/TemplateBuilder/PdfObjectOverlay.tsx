@@ -4,13 +4,17 @@
  * Must be used as a child of PdfViewer.Canvas
  */
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
 import { usePdfViewer } from '../../../pdf';
 import { OBJECT_FILL_COLORS, OBJECT_BORDER_COLORS } from '../../constants';
 
 // Gray colors for hidden selected objects
 const HIDDEN_SELECTED_COLOR = 'rgba(128, 128, 128, 0.3)';
 const HIDDEN_SELECTED_BORDER = 'rgba(128, 128, 128, 0.7)';
+
+// Selection box colors
+const SELECTION_BOX_FILL = 'rgba(59, 130, 246, 0.15)';
+const SELECTION_BOX_BORDER = 'rgba(59, 130, 246, 0.8)';
 
 interface PdfObject {
   type: string;
@@ -24,6 +28,15 @@ interface PdfObjectOverlayProps {
   selectedTypes: Set<string>;
   selectedObjects: Set<string>; // Set of selected object IDs
   onObjectClick: (objectId: string) => void;
+  onBoxSelect?: (objectIds: string[]) => void; // Called when shift+drag selects multiple objects
+}
+
+interface DragState {
+  isDragging: boolean;
+  startX: number;
+  startY: number;
+  currentX: number;
+  currentY: number;
 }
 
 // Generate unique ID for an object
@@ -36,10 +49,20 @@ export function PdfObjectOverlay({
   selectedTypes,
   selectedObjects,
   onObjectClick,
+  onBoxSelect,
 }: PdfObjectOverlayProps) {
   // Get PDF viewer context
   const { renderScale, currentPage, pdfDimensions } = usePdfViewer();
   const [hoveredObjectId, setHoveredObjectId] = useState<string | null>(null);
+
+  // Box selection state
+  const [dragState, setDragState] = useState<DragState>({
+    isDragging: false,
+    startX: 0,
+    startY: 0,
+    currentX: 0,
+    currentY: 0,
+  });
 
   // Objects to render: visible (selected types) + hidden selected
   const objectsToRender = useMemo(() => {
@@ -67,6 +90,156 @@ export function PdfObjectOverlay({
         return false;
       });
   }, [objects, selectedTypes, selectedObjects, currentPage]);
+
+  // Helper: Check if two rectangles intersect
+  const rectanglesIntersect = useCallback((
+    r1: { x: number; y: number; width: number; height: number },
+    r2: { x: number; y: number; width: number; height: number }
+  ): boolean => {
+    return !(
+      r1.x + r1.width < r2.x ||
+      r2.x + r2.width < r1.x ||
+      r1.y + r1.height < r2.y ||
+      r2.y + r2.height < r1.y
+    );
+  }, []);
+
+  // Get objects that intersect with the selection box (only visible types on current page)
+  const getObjectsInSelectionBox = useCallback((
+    selectionRect: { x: number; y: number; width: number; height: number }
+  ): string[] => {
+    if (!pdfDimensions) return [];
+
+    const pageHeight = pdfDimensions.height;
+    const selectedIds: string[] = [];
+
+    objects.forEach((obj, idx) => {
+      // Only consider objects on current page and of visible types
+      if (obj.page !== currentPage) return;
+      if (!selectedTypes.has(obj.type)) return;
+
+      const [x0, y0, x1, y1] = obj.bbox;
+      const id = getObjectId(obj, idx);
+
+      // Apply same coordinate transformation as rendering
+      const noFlipping = obj.type === 'text_word' ||
+                         obj.type === 'table' ||
+                         obj.type === 'graphic_curve';
+
+      let screenY0: number, screenY1: number;
+      if (noFlipping) {
+        screenY0 = y0;
+        screenY1 = y1;
+      } else {
+        screenY0 = pageHeight - y1;
+        screenY1 = pageHeight - y0;
+      }
+
+      // Convert to screen coordinates
+      const objectRect = {
+        x: x0 * renderScale,
+        y: screenY0 * renderScale,
+        width: (x1 - x0) * renderScale,
+        height: (screenY1 - screenY0) * renderScale,
+      };
+
+      if (rectanglesIntersect(selectionRect, objectRect)) {
+        selectedIds.push(id);
+      }
+    });
+
+    return selectedIds;
+  }, [objects, currentPage, selectedTypes, pdfDimensions, renderScale, rectanglesIntersect]);
+
+  // Handle mouse down for box selection (shift+drag)
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (!e.shiftKey || !onBoxSelect) return;
+
+    // Get position relative to the overlay container
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    setDragState({
+      isDragging: true,
+      startX: x,
+      startY: y,
+      currentX: x,
+      currentY: y,
+    });
+
+    e.preventDefault();
+  }, [onBoxSelect]);
+
+  // Handle mouse move during drag
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!dragState.isDragging) return;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    setDragState(prev => ({
+      ...prev,
+      currentX: x,
+      currentY: y,
+    }));
+  }, [dragState.isDragging]);
+
+  // Handle mouse up to complete box selection
+  const handleMouseUp = useCallback((e: React.MouseEvent) => {
+    if (!dragState.isDragging || !onBoxSelect) {
+      setDragState(prev => ({ ...prev, isDragging: false }));
+      return;
+    }
+
+    // Calculate selection rectangle (handle negative width/height from dragging in any direction)
+    const x = Math.min(dragState.startX, dragState.currentX);
+    const y = Math.min(dragState.startY, dragState.currentY);
+    const width = Math.abs(dragState.currentX - dragState.startX);
+    const height = Math.abs(dragState.currentY - dragState.startY);
+
+    // Only select if drag was meaningful (more than 5px in both directions)
+    if (width > 5 && height > 5) {
+      const objectIds = getObjectsInSelectionBox({ x, y, width, height });
+      if (objectIds.length > 0) {
+        onBoxSelect(objectIds);
+      }
+    }
+
+    setDragState({
+      isDragging: false,
+      startX: 0,
+      startY: 0,
+      currentX: 0,
+      currentY: 0,
+    });
+  }, [dragState, onBoxSelect, getObjectsInSelectionBox]);
+
+  // Handle mouse leave to cancel drag
+  const handleMouseLeave = useCallback(() => {
+    if (dragState.isDragging) {
+      setDragState({
+        isDragging: false,
+        startX: 0,
+        startY: 0,
+        currentX: 0,
+        currentY: 0,
+      });
+    }
+  }, [dragState.isDragging]);
+
+  // Calculate selection box dimensions for rendering
+  const selectionBox = useMemo(() => {
+    if (!dragState.isDragging) return null;
+
+    const x = Math.min(dragState.startX, dragState.currentX);
+    const y = Math.min(dragState.startY, dragState.currentY);
+    const width = Math.abs(dragState.currentX - dragState.startX);
+    const height = Math.abs(dragState.currentY - dragState.startY);
+
+    return { x, y, width, height };
+  }, [dragState]);
 
   // Don't render if PDF dimensions aren't loaded yet
   if (!pdfDimensions) {
@@ -192,10 +365,41 @@ export function PdfObjectOverlay({
   };
 
   return (
-    <>
+    <div
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        cursor: dragState.isDragging ? 'crosshair' : 'default',
+      }}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseLeave}
+    >
+      {/* Render object boxes */}
       {objectsToRender.map(({ obj, index, id }, renderIndex) =>
         renderObjectBox(obj, index, id, renderIndex)
       )}
-    </>
+
+      {/* Render selection box while dragging */}
+      {selectionBox && (
+        <div
+          style={{
+            position: 'absolute',
+            left: `${selectionBox.x}px`,
+            top: `${selectionBox.y}px`,
+            width: `${selectionBox.width}px`,
+            height: `${selectionBox.height}px`,
+            backgroundColor: SELECTION_BOX_FILL,
+            border: `2px dashed ${SELECTION_BOX_BORDER}`,
+            pointerEvents: 'none',
+            zIndex: 999999999,
+          }}
+        />
+      )}
+    </div>
   );
 }

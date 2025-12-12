@@ -19,6 +19,7 @@ interface PdfViewerSectionProps {
   selectedTypes: Set<string>;
   selectedObjects: Set<string>;
   onObjectClick: (objectId: string) => void;
+  onBoxSelect?: (objectIds: string[]) => void; // Called when shift+drag selects multiple objects
   selectedPages?: number[]; // 0-indexed page numbers to display
 }
 
@@ -28,6 +29,7 @@ export function PdfViewerSection({
   selectedTypes,
   selectedObjects,
   onObjectClick,
+  onBoxSelect,
   selectedPages,
 }: PdfViewerSectionProps) {
   return (
@@ -39,6 +41,7 @@ export function PdfViewerSection({
             selectedTypes={selectedTypes}
             selectedObjects={selectedObjects}
             onObjectClick={onObjectClick}
+            onBoxSelect={onBoxSelect}
           />
         </PdfViewer.Canvas>
         <PdfViewer.ControlsSidebar position="right" />
