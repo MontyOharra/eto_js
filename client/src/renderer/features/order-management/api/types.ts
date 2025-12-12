@@ -54,6 +54,25 @@ export interface GetPendingOrdersResponse {
  */
 export type GetPendingOrderDetailResponse = PendingOrderDetail;
 
+/**
+ * Request for POST /order-management/pending-orders/{id}/confirm-field
+ */
+export interface ConfirmFieldRequest {
+  field_name: string;
+  history_id: number;
+}
+
+/**
+ * Response for POST /order-management/pending-orders/{id}/confirm-field
+ */
+export interface ConfirmFieldResponse {
+  success: boolean;
+  field_name: string;
+  selected_value: string;
+  new_status: PendingOrderStatus;
+  message?: string;
+}
+
 // =============================================================================
 // Pending Updates API
 // =============================================================================

@@ -49,11 +49,16 @@ def map_pending_order_detail_to_api(
 
 def _map_field_with_options(field: FieldWithOptions) -> FieldDetail:
     """Convert service FieldWithOptions to API FieldDetail."""
-    # Build conflict_options only if state is conflict
     conflict_options = None
     source = None
 
-    if field.state == "conflict":
+    # Check if there are multiple unique values in history
+    unique_values = set(opt.value for opt in field.options) if field.options else set()
+    has_multiple_values = len(unique_values) > 1
+
+    # Always provide conflict_options when there are multiple unique values
+    # This allows the frontend to show a dropdown even after a value is confirmed
+    if has_multiple_values:
         conflict_options = [
             ConflictOption(
                 history_id=opt.history_id,
@@ -63,7 +68,9 @@ def _map_field_with_options(field: FieldWithOptions) -> FieldDetail:
             )
             for opt in field.options
         ]
-    elif field.state in ("set", "confirmed") and field.options:
+
+    # Provide source info for set/confirmed states
+    if field.state in ("set", "confirmed") and field.options:
         # Find the selected option or use the first one
         selected_opt = next(
             (opt for opt in field.options if opt.is_selected),

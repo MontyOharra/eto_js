@@ -113,10 +113,10 @@ class FieldDetail(BaseModel):
 
 class ContributingSubRun(BaseModel):
     """Information about a sub-run that contributed to this order"""
-    sub_run_id: int
-    run_id: int
-    source_type: str  # "email" or "manual"
-    source_identifier: str  # email sender or "Manual Upload"
+    sub_run_id: Optional[int] = None  # None for mock/test data
+    run_id: Optional[int] = None  # None for mock/test data
+    source_type: str  # "email", "manual", or "mock"
+    source_identifier: str  # email sender, "Manual Upload", or "Mock Test Data"
     pdf_filename: str
     template_name: Optional[str] = None
     fields_contributed: List[str]
@@ -154,18 +154,24 @@ class PendingOrderDetail(BaseModel):
 # Pending Order Actions
 # =============================================================================
 
-class ResolveConflictRequest(BaseModel):
-    """Request to resolve a field conflict"""
+class ConfirmFieldRequest(BaseModel):
+    """Request to confirm/select a field value from history"""
     field_name: str
-    selected_history_id: int
+    history_id: int
 
 
-class ResolveConflictResponse(BaseModel):
-    """Response after resolving a conflict"""
+class ConfirmFieldResponse(BaseModel):
+    """Response after confirming a field selection"""
     success: bool
     field_name: str
     selected_value: str
-    new_status: Literal["incomplete", "ready", "created"]
+    new_status: Literal["incomplete", "ready", "processing", "created", "failed"]
+    message: Optional[str] = None
+
+
+# Legacy aliases for backwards compatibility
+ResolveConflictRequest = ConfirmFieldRequest
+ResolveConflictResponse = ConfirmFieldResponse
 
 
 class CreateOrderRequest(BaseModel):
@@ -279,3 +285,37 @@ FIELD_LABELS: Dict[str, str] = {
 def get_field_label(field_name: str) -> str:
     """Get human-readable label for a field name"""
     return FIELD_LABELS.get(field_name, field_name.replace("_", " ").title())
+
+
+# =============================================================================
+# Mock Output Processing (for testing)
+# =============================================================================
+
+class MockOutputProcessingRequest(BaseModel):
+    """
+    Request to mock pipeline output processing for testing.
+
+    Simulates the effect of a full ETO pipeline run without
+    actually processing a PDF. Useful for testing pending order
+    workflows.
+    """
+    customer_id: int = Field(..., description="Customer ID (must exist in HTC)")
+    hawb: str = Field(..., description="HAWB identifier")
+    output_channel_data: Dict[str, Any] = Field(
+        ...,
+        description="Output channel data dict. Valid fields: pickup_company_name, pickup_address, "
+                    "pickup_time_start, pickup_time_end, pickup_notes, delivery_company_name, "
+                    "delivery_address, delivery_time_start, delivery_time_end, delivery_notes, "
+                    "order_notes, mawb, pieces, weight"
+    )
+
+
+class MockOutputProcessingResponse(BaseModel):
+    """Response from mock output processing"""
+    success: bool
+    action: str  # "pending_order_created", "pending_order_updated", "pending_updates_created", "no_valid_fields"
+    pending_order_id: Optional[int] = None
+    pending_order_status: Optional[str] = None
+    fields_contributed: List[str] = []
+    conflicts_introduced: List[str] = []
+    message: Optional[str] = None

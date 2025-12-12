@@ -12,7 +12,6 @@ import type {
   FieldDetail,
   ConflictOption,
   ContributingSubRun,
-  FieldState,
 } from '../../types';
 
 // =============================================================================
@@ -22,9 +21,9 @@ import type {
 interface PendingOrderDetailViewProps {
   order: PendingOrderDetail;
   onBack: () => void;
-  onResolveConflict: (fieldName: string, historyId: number) => void;
-  onViewHistory: (hawb: string) => void;
+  onConfirmField: (fieldName: string, historyId: number) => void;
   onViewSubRun: (subRunId: number) => void;
+  confirmingFields?: Set<string>; // Fields currently being confirmed
 }
 
 interface LocalFieldState {
@@ -37,32 +36,6 @@ interface LocalFieldState {
 // =============================================================================
 // Helper Functions
 // =============================================================================
-
-function getStatusColor(status: string): string {
-  switch (status) {
-    case 'incomplete':
-      return 'text-yellow-400';
-    case 'ready':
-      return 'text-green-400';
-    case 'created':
-      return 'text-blue-400';
-    default:
-      return 'text-gray-400';
-  }
-}
-
-function getStatusBgColor(status: string): string {
-  switch (status) {
-    case 'incomplete':
-      return 'bg-yellow-500/20 border-yellow-500/30';
-    case 'ready':
-      return 'bg-green-500/20 border-green-500/30';
-    case 'created':
-      return 'bg-blue-500/20 border-blue-500/30';
-    default:
-      return 'bg-gray-500/20 border-gray-500/30';
-  }
-}
 
 function formatDate(isoDate: string): string {
   try {
@@ -78,34 +51,80 @@ function formatDate(isoDate: string): string {
   }
 }
 
+/** Fields that contain datetime values and should be formatted */
+const DATETIME_FIELDS = new Set([
+  'pickup_time_start',
+  'pickup_time_end',
+  'delivery_time_start',
+  'delivery_time_end',
+]);
+
+/**
+ * Format a field value for display.
+ * For datetime fields, converts ISO string to human-readable format.
+ */
+function formatFieldValue(fieldName: string, value: string | null): string | null {
+  if (value === null) return null;
+
+  if (DATETIME_FIELDS.has(fieldName)) {
+    try {
+      const date = new Date(value);
+      // Check if valid date
+      if (isNaN(date.getTime())) return value;
+
+      return date.toLocaleString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      });
+    } catch {
+      return value;
+    }
+  }
+
+  return value;
+}
+
 // =============================================================================
 // Conflict Dropdown Component
 // =============================================================================
 
-interface ConflictDropdownProps {
+interface FieldDropdownProps {
   field: FieldDetail;
   localSelection: { selectedHistoryId: number | null; selectedValue: string | null } | undefined;
   onSelect: (fieldName: string, option: ConflictOption) => void;
+  isConflict: boolean; // True if unresolved conflict (needs yellow styling)
 }
 
-function ConflictDropdown({ field, localSelection, onSelect }: ConflictDropdownProps) {
+function FieldDropdown({ field, localSelection, onSelect, isConflict }: FieldDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const options = field.conflict_options ?? [];
 
-  const selectedOption = localSelection?.selectedHistoryId
+  // Determine the display value:
+  // 1. If user has made a local selection, use that
+  // 2. Otherwise, use the field's current value (which is the confirmed/set value)
+  const localSelectedOption = localSelection?.selectedHistoryId
     ? options.find((o) => o.history_id === localSelection.selectedHistoryId)
     : null;
 
-  const displayValue = selectedOption?.value ?? localSelection?.selectedValue;
+  const rawDisplayValue = localSelectedOption?.value ?? localSelection?.selectedValue ?? field.value;
+  const displayValue = formatFieldValue(field.name, rawDisplayValue);
+
+  // Determine which option is currently "active" (for highlighting in dropdown)
+  // This is either the local selection or the currently confirmed value
+  const activeHistoryId = localSelection?.selectedHistoryId ?? field.source?.history_id ?? null;
 
   return (
     <div className="relative flex-1 min-w-0">
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={`w-full flex items-center justify-between gap-2 px-2 py-1 rounded border text-sm text-left ${
-          displayValue
-            ? 'bg-gray-700 border-gray-600 text-white'
-            : 'bg-yellow-500/10 border-yellow-500/50 text-yellow-400'
+          isConflict
+            ? 'bg-yellow-500/10 border-yellow-500/50 text-yellow-400'
+            : 'bg-gray-700 border-gray-600 text-white'
         }`}
       >
         <span className="truncate">{displayValue ?? 'Choose value...'}</span>
@@ -126,21 +145,29 @@ function ConflictDropdown({ field, localSelection, onSelect }: ConflictDropdownP
 
           {/* Dropdown */}
           <div className="absolute top-full left-0 right-0 mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl z-20 overflow-hidden max-h-48 overflow-y-auto">
-            {options.map((option) => (
-              <button
-                key={option.history_id}
-                onClick={() => {
-                  onSelect(field.name, option);
-                  setIsOpen(false);
-                }}
-                className={`w-full px-3 py-2 text-left hover:bg-gray-700 transition-colors ${
-                  localSelection?.selectedHistoryId === option.history_id ? 'bg-gray-700' : ''
-                }`}
-              >
-                <div className="text-sm text-white">{option.value}</div>
-                <div className="text-xs text-gray-500">{formatDate(option.contributed_at)}</div>
-              </button>
-            ))}
+            {options.map((option) => {
+              const isActive = option.history_id === activeHistoryId;
+              return (
+                <button
+                  key={option.history_id}
+                  onClick={() => {
+                    onSelect(field.name, option);
+                    setIsOpen(false);
+                  }}
+                  className={`w-full px-3 py-2 text-left hover:bg-gray-700 transition-colors ${
+                    isActive ? 'bg-gray-700' : ''
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-white">{formatFieldValue(field.name, option.value)}</span>
+                    {isActive && !isConflict && (
+                      <span className="text-xs text-blue-400">(current)</span>
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-500">{formatDate(option.contributed_at)}</div>
+                </button>
+              );
+            })}
           </div>
         </>
       )}
@@ -156,22 +183,24 @@ interface FieldRowProps {
   field: FieldDetail;
   localSelection: { selectedHistoryId: number | null; selectedValue: string | null } | undefined;
   onConflictSelect: (fieldName: string, option: ConflictOption) => void;
+  onConfirm: (fieldName: string, historyId: number) => void;
+  isConfirming: boolean;
+  canEdit: boolean;
 }
 
-function FieldRow({ field, localSelection, onConflictSelect }: FieldRowProps) {
+function FieldRow({ field, localSelection, onConflictSelect, onConfirm, isConfirming, canEdit }: FieldRowProps) {
   const isConflict = field.state === 'conflict';
-  const isResolved = isConflict && localSelection?.selectedHistoryId !== null;
-  const hasValue = field.value !== null || isResolved;
+  const hasMultipleOptions = (field.conflict_options?.length ?? 0) > 1;
+  const hasLocalSelection = localSelection?.selectedHistoryId !== null;
+  const hasValue = field.value !== null;
 
-  // Get display value
-  let displayValue = field.value;
-  if (isConflict && isResolved) {
-    displayValue = localSelection?.selectedValue ?? null;
-  }
+  // Determine if user has changed selection from the current confirmed value
+  const hasNewSelection = hasLocalSelection &&
+    localSelection?.selectedHistoryId !== field.source?.history_id;
 
   // Get state icon
   const getStateIcon = () => {
-    if (isConflict && !isResolved) {
+    if (isConflict) {
       return <span className="text-yellow-400 flex-shrink-0 w-4 text-center">!</span>;
     }
     if (field.state === 'confirmed') {
@@ -183,38 +212,68 @@ function FieldRow({ field, localSelection, onConflictSelect }: FieldRowProps) {
     return <span className="text-gray-500 flex-shrink-0 w-4 text-center">○</span>;
   };
 
+  const handleConfirm = () => {
+    if (localSelection?.selectedHistoryId) {
+      onConfirm(field.name, localSelection.selectedHistoryId);
+    }
+  };
+
+  // Show dropdown if there are multiple options (conflict or confirmed with history)
+  const showDropdown = hasMultipleOptions;
+
   return (
     <div
-      className={`flex items-center justify-between py-2 px-3 rounded ${
-        isConflict && !isResolved
+      className={`flex items-center gap-3 py-2 px-3 rounded ${
+        isConflict
           ? 'bg-yellow-500/10'
           : !hasValue
             ? 'bg-gray-800/50'
             : 'bg-gray-800'
       }`}
     >
-      <div className="flex items-center gap-3 min-w-0 flex-1">
-        {/* Status Icon */}
-        {getStateIcon()}
+      {/* Status Icon */}
+      {getStateIcon()}
 
-        {/* Label */}
-        <span className="text-sm text-gray-400 w-32 flex-shrink-0">{field.label}</span>
+      {/* Label */}
+      <span className="text-sm text-gray-400 w-32 flex-shrink-0">{field.label}</span>
 
-        {/* Value or Conflict Dropdown */}
-        {isConflict ? (
-          <ConflictDropdown
+      {/* Value display - either dropdown (multiple options) or static text */}
+      {showDropdown ? (
+        <>
+          <FieldDropdown
             field={field}
             localSelection={localSelection}
             onSelect={onConflictSelect}
+            isConflict={isConflict}
           />
-        ) : (
-          <span
-            className={`text-sm truncate ${displayValue ? 'text-white' : 'text-gray-600 italic'}`}
-          >
-            {displayValue ?? 'Missing'}
-          </span>
-        )}
-      </div>
+          {/* Confirm Button - shown when:
+              - Unresolved conflict: must select to resolve
+              - Confirmed field with new selection: user wants to change the value */}
+          {canEdit && (isConflict || hasNewSelection) && (
+            <button
+              onClick={handleConfirm}
+              disabled={!hasLocalSelection || isConfirming}
+              className={`px-3 py-1 text-sm rounded font-medium transition-colors flex-shrink-0 ${
+                hasLocalSelection && !isConfirming
+                  ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                  : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+              }`}
+            >
+              {isConfirming ? (
+                <span className="inline-block w-4 h-4 border-2 border-gray-500 border-t-white rounded-full animate-spin" />
+              ) : (
+                'Confirm'
+              )}
+            </button>
+          )}
+        </>
+      ) : (
+        <span
+          className={`text-sm truncate flex-1 ${hasValue ? 'text-white' : 'text-gray-600 italic'}`}
+        >
+          {formatFieldValue(field.name, field.value) ?? 'Missing'}
+        </span>
+      )}
     </div>
   );
 }
@@ -229,6 +288,8 @@ interface SourceCardProps {
 }
 
 function SourceCard({ source, onViewSubRun }: SourceCardProps) {
+  const isMockSource = source.sub_run_id === null;
+
   return (
     <div className="rounded-lg border border-gray-600 bg-gray-800 p-3">
       <div className="min-w-0">
@@ -236,6 +297,8 @@ function SourceCard({ source, onViewSubRun }: SourceCardProps) {
         <p className="text-xs text-gray-400 mt-0.5 break-words">
           {source.source_type === 'email' ? (
             <>From: {source.source_identifier}</>
+          ) : source.source_type === 'mock' ? (
+            <span className="text-purple-400">{source.source_identifier}</span>
           ) : (
             <>{source.source_identifier}</>
           )}
@@ -259,12 +322,14 @@ function SourceCard({ source, onViewSubRun }: SourceCardProps) {
         ))}
       </div>
 
-      <button
-        onClick={() => onViewSubRun(source.sub_run_id)}
-        className="mt-3 w-full text-xs py-1.5 rounded bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors"
-      >
-        View Details
-      </button>
+      {!isMockSource && (
+        <button
+          onClick={() => onViewSubRun(source.sub_run_id!)}
+          className="mt-3 w-full text-xs py-1.5 rounded bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors"
+        >
+          View Details
+        </button>
+      )}
     </div>
   );
 }
@@ -276,9 +341,9 @@ function SourceCard({ source, onViewSubRun }: SourceCardProps) {
 export function PendingOrderDetailView({
   order,
   onBack,
-  onResolveConflict,
-  onViewHistory,
+  onConfirmField,
   onViewSubRun,
+  confirmingFields = new Set(),
 }: PendingOrderDetailViewProps) {
   // Track local conflict selections (before submitting to API)
   const [localSelections, setLocalSelections] = useState<LocalFieldState>({});
@@ -291,9 +356,17 @@ export function PendingOrderDetailView({
         selectedValue: option.value,
       },
     }));
+  };
 
-    // Also trigger the API call
-    onResolveConflict(fieldName, option.history_id);
+  // Handle per-field confirm
+  const handleFieldConfirm = (fieldName: string, historyId: number) => {
+    onConfirmField(fieldName, historyId);
+    // Clear local selection for this field after confirming
+    setLocalSelections((prev) => {
+      const newState = { ...prev };
+      delete newState[fieldName];
+      return newState;
+    });
   };
 
   // Split fields into required and optional
@@ -303,106 +376,83 @@ export function PendingOrderDetailView({
   // Calculate field counts
   const getEffectiveValue = (f: FieldDetail) => {
     if (f.value !== null) return true;
-    if (f.state === 'conflict' && localSelections[f.name]?.selectedHistoryId !== null) return true;
     return false;
   };
 
   const presentRequiredCount = requiredFields.filter(getEffectiveValue).length;
   const presentOptionalCount = optionalFields.filter(getEffectiveValue).length;
-  const unresolvedConflicts = order.fields.filter(
-    (f) => f.state === 'conflict' && !localSelections[f.name]?.selectedHistoryId
-  );
-  const missingRequired = requiredFields.filter((f) => !getEffectiveValue(f) && f.state !== 'conflict');
 
-  // Build status message
-  const getStatusMessage = () => {
-    const parts: string[] = [];
-    if (missingRequired.length > 0) {
-      parts.push(`Missing: ${missingRequired.map((f) => f.label).join(', ')}`);
+  // Count conflicts
+  const conflictCount = order.fields.filter((f) => f.state === 'conflict').length;
+
+  // Can edit only if order is incomplete or ready
+  const canEdit = order.status === 'incomplete' || order.status === 'ready';
+
+  // Get status display info
+  const getStatusDisplay = () => {
+    switch (order.status) {
+      case 'incomplete':
+        return { label: 'Incomplete', color: 'text-yellow-400', bg: 'bg-yellow-500/20 border-yellow-500/30' };
+      case 'ready':
+        return { label: 'Ready', color: 'text-green-400', bg: 'bg-green-500/20 border-green-500/30' };
+      case 'processing':
+        return { label: 'Processing', color: 'text-blue-400', bg: 'bg-blue-500/20 border-blue-500/30' };
+      case 'created':
+        return { label: 'Created', color: 'text-blue-400', bg: 'bg-blue-500/20 border-blue-500/30' };
+      case 'failed':
+        return { label: 'Failed', color: 'text-red-400', bg: 'bg-red-500/20 border-red-500/30' };
+      default:
+        return { label: order.status, color: 'text-gray-400', bg: 'bg-gray-500/20 border-gray-500/30' };
     }
-    if (unresolvedConflicts.length > 0) {
-      parts.push(
-        `${unresolvedConflicts.length} conflict${unresolvedConflicts.length > 1 ? 's' : ''} to resolve`
-      );
-    }
-    return parts.join(' · ');
   };
+
+  const statusDisplay = getStatusDisplay();
 
   return (
     <div className="h-full flex flex-col overflow-hidden bg-gray-900">
-      {/* Header */}
+      {/* Header - Option C Layout */}
       <div className="flex-shrink-0 px-6 py-4 border-b border-gray-700">
-        {/* Nav Row */}
-        <div className="flex items-center justify-between">
-          <button
-            onClick={onBack}
-            className="text-gray-400 hover:text-white transition-colors flex items-center gap-2"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
-            Back
-          </button>
+        {/* Back Button Row */}
+        <button
+          onClick={onBack}
+          className="text-gray-400 hover:text-white transition-colors flex items-center gap-2"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M15 19l-7-7 7-7"
+            />
+          </svg>
+          Back
+        </button>
 
-          <button
-            onClick={() => onViewHistory(order.hawb)}
-            className="flex items-center gap-2 px-3 py-1.5 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 rounded transition-colors text-sm"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            View History
-          </button>
-        </div>
-
-        {/* Order Info + Status Row */}
-        <div className="mt-3 flex items-center justify-between">
-          {/* Left: Order Info */}
-          <div className="flex items-center gap-6">
-            <div>
-              <span className="text-sm text-gray-500">HAWB</span>
-              <h1 className="text-xl font-bold text-white font-mono">{order.hawb}</h1>
-            </div>
-            <div className="h-10 w-px bg-gray-700" />
-            <div>
-              <span className="text-sm text-gray-500">Customer</span>
-              <p className="text-white">
-                {order.customer_name ?? `ID: ${order.customer_id}`}
-              </p>
-            </div>
+        {/* Order Info Row - Left: Info, Right: Status */}
+        <div className="mt-4 flex items-start justify-between">
+          {/* Left: HAWB and Customer */}
+          <div>
+            <span className="text-xs text-gray-500 uppercase tracking-wider">HAWB</span>
+            <h1 className="text-2xl font-bold text-white font-mono">{order.hawb}</h1>
+            <p className="text-sm text-gray-400 mt-1">
+              {order.customer_name ?? `Customer ID: ${order.customer_id}`}
+            </p>
           </div>
 
           {/* Right: Status Badge */}
-          <div className={`px-4 py-2 rounded-lg border ${getStatusBgColor(order.status)}`}>
-            {order.status === 'incomplete' ? (
-              <div className="flex items-center gap-3">
-                <span className={`font-medium ${getStatusColor(order.status)}`}>
-                  {presentRequiredCount}/{requiredFields.length} Fields
-                </span>
-                {getStatusMessage() && (
-                  <span className="text-gray-400 text-sm">{getStatusMessage()}</span>
-                )}
+          <div className={`px-4 py-3 rounded-lg border ${statusDisplay.bg} text-right`}>
+            <div className={`font-medium ${statusDisplay.color}`}>
+              {statusDisplay.label}
+            </div>
+            {order.status === 'incomplete' && (
+              <div className="text-xs text-gray-400 mt-1">
+                {presentRequiredCount}/{requiredFields.length} required fields
+                {conflictCount > 0 && ` · ${conflictCount} conflict${conflictCount > 1 ? 's' : ''}`}
               </div>
-            ) : order.status === 'ready' ? (
-              <span className={`font-medium ${getStatusColor(order.status)}`}>
-                Ready to Create
-              </span>
-            ) : (
-              <div className="flex items-center gap-3">
-                <span className={`font-medium ${getStatusColor(order.status)}`}>
-                  Order #{order.htc_order_number}
-                </span>
-                <span className="text-gray-400 text-sm">Created</span>
+            )}
+            {order.status === 'created' && order.htc_order_number && (
+              <div className="text-xs text-gray-400 mt-1">
+                Order #{order.htc_order_number}
               </div>
             )}
           </div>
@@ -424,6 +474,9 @@ export function PendingOrderDetailView({
                 field={field}
                 localSelection={localSelections[field.name]}
                 onConflictSelect={handleConflictSelect}
+                onConfirm={handleFieldConfirm}
+                isConfirming={confirmingFields.has(field.name)}
+                canEdit={canEdit}
               />
             ))}
           </div>
@@ -439,6 +492,9 @@ export function PendingOrderDetailView({
                 field={field}
                 localSelection={localSelections[field.name]}
                 onConflictSelect={handleConflictSelect}
+                onConfirm={handleFieldConfirm}
+                isConfirming={confirmingFields.has(field.name)}
+                canEdit={canEdit}
               />
             ))}
           </div>
@@ -454,8 +510,8 @@ export function PendingOrderDetailView({
             {order.contributing_sub_runs.length === 0 ? (
               <p className="text-gray-500 text-sm italic">No sources yet</p>
             ) : (
-              order.contributing_sub_runs.map((source) => (
-                <SourceCard key={source.sub_run_id} source={source} onViewSubRun={onViewSubRun} />
+              order.contributing_sub_runs.map((source, index) => (
+                <SourceCard key={source.sub_run_id ?? `mock-${index}`} source={source} onViewSubRun={onViewSubRun} />
               ))
             )}
           </div>

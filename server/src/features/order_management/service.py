@@ -44,7 +44,7 @@ class FieldOption:
     """An option for a field value from history."""
     history_id: int
     value: str
-    sub_run_id: int
+    sub_run_id: Optional[int]  # None for mock/test data
     pdf_filename: str
     is_selected: bool
     contributed_at: datetime
@@ -64,10 +64,10 @@ class FieldWithOptions:
 @dataclass
 class ContributingSource:
     """Information about a source that contributed data."""
-    sub_run_id: int
-    run_id: int
-    source_type: str  # 'email' or 'manual_upload'
-    source_identifier: str  # Email sender or "Manual Upload"
+    sub_run_id: Optional[int]  # None for mock/test data
+    run_id: Optional[int]  # None for mock/test data
+    source_type: str  # 'email', 'manual', or 'mock'
+    source_identifier: str  # Email sender, "Manual Upload", or "Mock Test Data"
     pdf_filename: str
     template_id: Optional[int]
     template_name: Optional[str]
@@ -295,6 +295,7 @@ class OrderManagementService:
         Build list of contributing sources from history records.
 
         Groups history by sub_run_id and gathers source information.
+        Handles None sub_run_id (mock/test data) specially.
 
         Args:
             history_records: List of history records
@@ -302,8 +303,8 @@ class OrderManagementService:
         Returns:
             List of ContributingSource objects
         """
-        # Group by sub_run_id
-        by_sub_run: Dict[int, List[PendingOrderHistory]] = {}
+        # Group by sub_run_id (use a dict that can handle None keys)
+        by_sub_run: Dict[Optional[int], List[PendingOrderHistory]] = {}
         for record in history_records:
             sub_run_id = record.sub_run_id
             if sub_run_id not in by_sub_run:
@@ -312,8 +313,25 @@ class OrderManagementService:
 
         sources = []
         for sub_run_id, records in by_sub_run.items():
+            # Handle mock/test data (sub_run_id is None)
+            if sub_run_id is None:
+                sources.append(ContributingSource(
+                    sub_run_id=None,
+                    run_id=None,
+                    source_type="mock",
+                    source_identifier="Mock Test Data",
+                    pdf_filename="(No PDF)",
+                    template_id=None,
+                    template_name=None,
+                    template_customer_id=None,
+                    template_customer_name=None,
+                    processed_at=records[0].contributed_at,
+                    fields_contributed=[r.field_name for r in records],
+                ))
+                continue
+
             # Fetch actual source info via repository lookups
-            run_id = 0
+            run_id: Optional[int] = None
             source_type = "unknown"
             source_identifier = "Unknown"
             pdf_filename = "Unknown"

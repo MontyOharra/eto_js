@@ -10,6 +10,8 @@ import type {
   GetPendingOrdersParams,
   GetPendingOrdersResponse,
   GetPendingOrderDetailResponse,
+  ConfirmFieldRequest,
+  ConfirmFieldResponse,
   GetPendingUpdatesParams,
   GetPendingUpdatesResponse,
   GetPendingUpdatesGroupedResponse,
@@ -91,6 +93,41 @@ export function usePendingOrderDetail(id: number | null) {
     enabled: id !== null,
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Confirm a field selection to resolve a conflict
+ */
+export function useConfirmField() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      pendingOrderId,
+      fieldName,
+      historyId,
+    }: {
+      pendingOrderId: number;
+      fieldName: string;
+      historyId: number;
+    }): Promise<ConfirmFieldResponse> => {
+      const response = await apiClient.post<ConfirmFieldResponse>(
+        `${baseUrl}/pending-orders/${pendingOrderId}/confirm-field`,
+        { field_name: fieldName, history_id: historyId }
+      );
+      return response.data;
+    },
+    onSuccess: (_data, variables) => {
+      // Invalidate the specific order detail to refetch with new state
+      queryClient.invalidateQueries({
+        queryKey: orderManagementQueryKeys.pendingOrderDetail(variables.pendingOrderId),
+      });
+      // Also invalidate the list in case status changed
+      queryClient.invalidateQueries({
+        queryKey: orderManagementQueryKeys.pendingOrders(),
+      });
+    },
   });
 }
 

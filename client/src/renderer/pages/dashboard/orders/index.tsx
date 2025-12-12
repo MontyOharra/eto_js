@@ -9,6 +9,7 @@ import {
   OrderHistoryTimeline,
   usePendingOrders,
   usePendingOrderDetail,
+  useConfirmField,
   usePendingUpdatesGrouped,
   useOrderHistory,
   useApprovePendingUpdate,
@@ -135,6 +136,7 @@ function OrdersPage() {
     usePendingUpdatesGrouped(updatesQueryParams);
 
   // Mutations
+  const confirmField = useConfirmField();
   const approveUpdate = useApprovePendingUpdate();
   const rejectUpdate = useRejectPendingUpdate();
   const bulkApprove = useBulkApprovePendingUpdates();
@@ -158,10 +160,6 @@ function OrdersPage() {
 
   const handleRowClick = (orderId: number) => {
     setDetailView({ type: 'order-detail', orderId });
-  };
-
-  const handleViewHistory = (hawb: string) => {
-    setDetailView({ type: 'order-history', hawb });
   };
 
   const handleBackToList = () => {
@@ -192,13 +190,40 @@ function OrdersPage() {
     setViewingSubRunId(subRunId);
   };
 
+  const handleViewHistory = (hawb: string) => {
+    setDetailView({ type: 'order-history', hawb });
+  };
+
   const handleCloseSubRunViewer = () => {
     setViewingSubRunId(null);
   };
 
-  const handleResolveConflict = (fieldName: string, historyId: number) => {
-    // TODO: Call API to resolve conflict
-    console.log('Resolve conflict:', fieldName, historyId);
+  // Track which fields are currently being confirmed
+  const [confirmingFields, setConfirmingFields] = useState<Set<string>>(new Set());
+
+  const handleConfirmField = (fieldName: string, historyId: number) => {
+    if (!selectedOrderId) return;
+
+    // Add field to confirming set
+    setConfirmingFields((prev) => new Set(prev).add(fieldName));
+
+    confirmField.mutate(
+      {
+        pendingOrderId: selectedOrderId,
+        fieldName,
+        historyId,
+      },
+      {
+        onSettled: () => {
+          // Remove field from confirming set when done
+          setConfirmingFields((prev) => {
+            const next = new Set(prev);
+            next.delete(fieldName);
+            return next;
+          });
+        },
+      }
+    );
   };
 
   // ============================================================================
@@ -211,9 +236,9 @@ function OrdersPage() {
         <PendingOrderDetailView
           order={orderDetail}
           onBack={handleBackToList}
-          onViewHistory={handleViewHistory}
-          onResolveConflict={handleResolveConflict}
+          onConfirmField={handleConfirmField}
           onViewSubRun={handleViewSubRun}
+          confirmingFields={confirmingFields}
         />
         <EtoSubRunDetailViewer
           isOpen={viewingSubRunId !== null}

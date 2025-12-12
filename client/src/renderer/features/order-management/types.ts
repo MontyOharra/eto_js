@@ -125,7 +125,7 @@ export interface FieldDetail {
   required: boolean;
   value: string | null;
   state: FieldState;
-  /** Only present if state === 'conflict' */
+  /** Present when multiple unique values exist in history (conflict or confirmed with options) */
   conflict_options: ConflictOption[] | null;
   /** Source info (for set/confirmed states) */
   source: FieldSource | null;
@@ -135,10 +135,10 @@ export interface FieldDetail {
  * Information about a sub-run that contributed to an order
  */
 export interface ContributingSubRun {
-  sub_run_id: number;
-  run_id: number;
-  source_type: string; // "email" or "manual"
-  source_identifier: string; // email sender or "Manual Upload"
+  sub_run_id: number | null; // null for mock/test data
+  run_id: number | null; // null for mock/test data
+  source_type: string; // "email", "manual", or "mock"
+  source_identifier: string; // email sender, "Manual Upload", or "Mock Test Data"
   pdf_filename: string;
   template_name: string | null;
   fields_contributed: string[];
