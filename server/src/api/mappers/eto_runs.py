@@ -27,6 +27,7 @@ from api.schemas.eto_runs import (
     ExtractionResult,
     PipelineExecutionStep,
     PipelineExecutionStepError,
+    TransformResult,
 )
 
 
@@ -150,6 +151,8 @@ def eto_sub_run_detail_to_api(
     Returns:
         EtoSubRunDetail Pydantic model for API response
     """
+    from features.modules.output_channel_definitions import get_channel_by_name
+
     # Build template info (None for needs_template sub-runs)
     template: Optional[EtoSubRunTemplate] = None
     if sub_run.template_id is not None:
@@ -159,12 +162,38 @@ def eto_sub_run_detail_to_api(
             customer_name=customer_name,
         )
 
+    # Convert output channel data to transform results
+    transform_results: List[TransformResult] = []
+    if sub_run.output_channel_data:
+        # Build results with hawb first, then other fields
+        data = sub_run.output_channel_data
+
+        # Add hawb first if present
+        if "hawb" in data and data["hawb"]:
+            channel = get_channel_by_name("hawb")
+            label = channel.label if channel else "HAWB"
+            transform_results.append(TransformResult(
+                field_name=label,
+                value=str(data["hawb"])
+            ))
+
+        # Add remaining fields (excluding hawb)
+        for field_name, value in data.items():
+            if field_name == "hawb" or value is None or value == "":
+                continue
+            channel = get_channel_by_name(field_name)
+            label = channel.label if channel else field_name.replace("_", " ").title()
+            transform_results.append(TransformResult(
+                field_name=label,
+                value=str(value)
+            ))
+
     return EtoSubRunDetail(
         id=sub_run.id,
         status=sub_run.status,
         matched_pages=sub_run.matched_pages,
         template=template,
-        transform_results=[],  # Empty for now - future functionality
+        transform_results=transform_results,
         error_message=sub_run.error_message,
     )
 

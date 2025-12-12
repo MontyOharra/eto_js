@@ -16,6 +16,7 @@ from shared.database.models import (
     PdfFileModel,
     PdfTemplateModel,
     PdfTemplateVersionModel,
+    EtoSubRunOutputExecutionModel,
 )
 from shared.types.eto_sub_runs import (
     EtoSubRun,
@@ -383,6 +384,21 @@ class EtoSubRunRepository(BaseRepository[EtoSubRunModel]):
             except (json.JSONDecodeError, TypeError) as e:
                 logger.warning(f"Failed to parse matched_pages for sub-run {sub_run_id}: {e}")
 
+            # Fetch output channel data from output executions (for successful sub-runs)
+            # We take the first output execution's data (typically one per sub-run for single HAWB)
+            output_channel_data = None
+            if row.status == 'success':
+                output_exec = (
+                    session.query(EtoSubRunOutputExecutionModel.output_channel_data)
+                    .filter(EtoSubRunOutputExecutionModel.sub_run_id == sub_run_id)
+                    .first()
+                )
+                if output_exec and output_exec.output_channel_data:
+                    try:
+                        output_channel_data = json.loads(output_exec.output_channel_data)
+                    except (json.JSONDecodeError, TypeError) as e:
+                        logger.warning(f"Failed to parse output_channel_data for sub-run {sub_run_id}: {e}")
+
             # Build detail view
             return EtoSubRunDetailView(
                 # Core sub-run data
@@ -404,6 +420,8 @@ class EtoSubRunRepository(BaseRepository[EtoSubRunModel]):
                 # Stage data (TODO: fetch and add)
                 extraction=None,
                 pipeline_execution=None,
+                # Output channel data
+                output_channel_data=output_channel_data,
                 # Error tracking
                 error_type=row.error_type,
                 error_message=row.error_message,

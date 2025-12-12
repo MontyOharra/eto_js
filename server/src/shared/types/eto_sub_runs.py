@@ -119,6 +119,10 @@ class EtoSubRunDetailView:
     extraction: Optional[EtoRunExtractionDetailView] = None
     pipeline_execution: Optional[EtoRunPipelineExecutionDetailView] = None
 
+    # Output channel data from pipeline execution (for successful sub-runs)
+    # Dict of channel_name -> value, e.g., {"hawb": "12345", "pickup_address": "123 Main St"}
+    output_channel_data: Optional[Dict[str, Any]] = None
+
     # Error tracking (business-level failures)
     error_type: Optional[str] = None
     error_message: Optional[str] = None
