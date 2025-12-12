@@ -55,7 +55,8 @@ class DataDatabaseManager:
             database_name: Name of the business database (e.g., "htc_db", "htc_000_db")
 
         Returns:
-            Database connection object (pyodbc connection or SQLAlchemy engine)
+            For Access databases: AccessConnectionManager instance (use .cursor() context manager)
+            For SQLAlchemy databases: Raw database connection
 
         Raises:
             ValueError: If database connection not found or not configured
@@ -63,7 +64,8 @@ class DataDatabaseManager:
         Example:
             >>> data_db_manager = DataDatabaseManager({'htc_db': manager})
             >>> conn = data_db_manager.get_connection("htc_db")
-            >>> cursor = conn.cursor()
+            >>> with conn.cursor() as cursor:
+            ...     cursor.execute("SELECT * FROM table")
         """
         if database_name not in self.connection_managers:
             available = list(self.connection_managers.keys())
@@ -74,12 +76,15 @@ class DataDatabaseManager:
 
         connection_manager = self.connection_managers[database_name]
 
-        # Get the underlying connection
-        # For Access databases, the connection is stored in connection_manager.connection (pyodbc)
-        # For SQL Server databases, it's in connection_manager.engine.raw_connection() (SQLAlchemy)
+        # Return the appropriate connection type
+        # For Access databases: return the AccessConnectionManager (provides thread-safe cursor())
+        # For SQL Server databases: return raw connection from SQLAlchemy engine
         if hasattr(connection_manager, 'connection') and connection_manager.connection is not None:
-            # Access database (pyodbc) - AccessConnectionManager
-            connection = connection_manager.connection
+            # Access database (pyodbc) - return AccessConnectionManager for thread-safe cursor access
+            # The AccessConnectionManager.cursor() context manager handles locking to prevent
+            # concurrent access errors ("Function sequence error") when multiple threads
+            # try to use the same Access connection simultaneously.
+            connection = connection_manager
         elif hasattr(connection_manager, 'engine'):
             # SQLAlchemy database - DatabaseConnectionManager
             connection = connection_manager.engine.raw_connection()

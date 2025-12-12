@@ -133,10 +133,15 @@ class AccessConnectionManager:
     @contextmanager
     def cursor(self):
         """
-        Create a cursor with automatic commit/rollback.
+        Create a cursor with automatic commit/rollback and thread safety.
 
         This is the primary way to interact with the Access database.
         Automatically commits on success and rolls back on exception.
+
+        Thread Safety:
+            Uses a lock to serialize all cursor operations. This is required
+            because pyodbc + Access does not support multiple cursors executing
+            simultaneously on the same connection (causes "Function sequence error").
 
         Usage:
             with connection_manager.cursor() as cursor:
@@ -157,17 +162,19 @@ class AccessConnectionManager:
         if not self.connection:
             raise AccessConnectionError("Connection not available")
 
-        cursor = self.connection.cursor()
-        try:
-            yield cursor
-            self.connection.commit()
-            logger.debug("Access transaction committed")
-        except Exception:
-            self.connection.rollback()
-            logger.debug("Access transaction rolled back due to exception")
-            raise
-        finally:
-            cursor.close()
+        # Serialize all cursor operations to prevent concurrent access errors
+        with self._lock:
+            cursor = self.connection.cursor()
+            try:
+                yield cursor
+                self.connection.commit()
+                logger.debug("Access transaction committed")
+            except Exception:
+                self.connection.rollback()
+                logger.debug("Access transaction rolled back due to exception")
+                raise
+            finally:
+                cursor.close()
 
     def test_connection(self) -> bool:
         """
