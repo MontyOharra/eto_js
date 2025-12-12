@@ -82,12 +82,20 @@ export function MatchedSubRunsSection({
 
               <div className="flex gap-2">
                 {subRun.status === 'success' && (
-                  <button
-                    onClick={() => onViewDetails(subRun.id)}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium transition-colors whitespace-nowrap"
-                  >
-                    View Details
-                  </button>
+                  <>
+                    <button
+                      onClick={() => onViewDetails(subRun.id)}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium transition-colors whitespace-nowrap"
+                    >
+                      View Details
+                    </button>
+                    <button
+                      onClick={() => onReprocess(subRun.id)}
+                      className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm font-medium transition-colors whitespace-nowrap"
+                    >
+                      Reprocess
+                    </button>
+                  </>
                 )}
                 {subRun.status === 'failure' && (
                   <>

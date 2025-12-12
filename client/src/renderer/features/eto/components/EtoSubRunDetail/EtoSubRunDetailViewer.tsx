@@ -39,8 +39,14 @@ export function EtoSubRunDetailViewer({
 
   const error = queryError ? "Failed to load run details" : null;
 
-  // Check if sub-run has actionable status (failure or needs_template)
-  const hasActionableStatus =
+  // Reprocess is available for success, failure, and needs_template
+  const canReprocess =
+    runDetail?.status === "success" ||
+    runDetail?.status === "failure" ||
+    runDetail?.status === "needs_template";
+
+  // Skip is only available for failure and needs_template (not success)
+  const canSkip =
     runDetail?.status === "failure" || runDetail?.status === "needs_template";
 
   const handleReprocess = async () => {
@@ -146,7 +152,8 @@ export function EtoSubRunDetailViewer({
         <EtoSubRunDetailFooter
           runDetail={runDetail || null}
           onClose={onClose}
-          showActionButtons={hasActionableStatus}
+          showReprocessButton={canReprocess}
+          showSkipButton={canSkip}
           onReprocess={handleReprocess}
           onSkip={handleSkip}
           isReprocessing={reprocessMutation.isPending}

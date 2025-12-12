@@ -548,7 +548,8 @@ class EtoRunsService:
                     try:
                         error = json.loads(step.error)
                     except (json.JSONDecodeError, TypeError):
-                        pass
+                        # Error is stored as plain string, not JSON - keep as-is
+                        error = step.error
 
                 steps.append(EtoRunPipelineExecutionStepDetailView(
                     id=step.id,
@@ -1599,9 +1600,10 @@ class EtoRunsService:
         Workflow:
         1. Get all sub-runs with status 'failure' or 'needs_template'
         2. Collect all their pages into a single list
-        3. Delete those sub-runs (with their child extraction/pipeline records)
-        4. Create one new sub-run with all pages, status=not_started, no template
-        5. Update parent run status to 'processing'
+        3. Clean up pending order contributions from those sub-runs
+        4. Delete those sub-runs (with their child extraction/pipeline records)
+        5. Create one new sub-run with all pages, status=not_started, no template
+        6. Update parent run status to 'processing'
 
         The worker will pick up the new sub-run and run template matching (Phase 1).
 
@@ -1643,6 +1645,12 @@ class EtoRunsService:
         # Sort and dedupe pages
         all_pages = sorted(set(all_pages))
         logger.debug(f"Run {run_id}: Collected {len(all_pages)} pages from {len(eligible_sub_runs)} sub-runs")
+
+        # Clean up pending order contributions BEFORE deleting the sub-runs
+        for sub_run in eligible_sub_runs:
+            cleanup_result = self.output_processing_service.cleanup_sub_run_contributions(sub_run.id)
+            if cleanup_result["deleted_history_count"] > 0:
+                logger.debug(f"Sub-run {sub_run.id} pending order cleanup: {cleanup_result}")
 
         # Use Unit of Work for atomic transaction
         with self.connection_manager.unit_of_work() as uow:
@@ -1694,9 +1702,10 @@ class EtoRunsService:
         Workflow:
         1. Get all sub-runs with status 'failure' or 'needs_template'
         2. Collect all their pages into a single list
-        3. Delete those sub-runs (with their child extraction/pipeline records)
-        4. Create one new sub-run with all pages, status='skipped'
-        5. Update parent run status
+        3. Clean up pending order contributions from those sub-runs
+        4. Delete those sub-runs (with their child extraction/pipeline records)
+        5. Create one new sub-run with all pages, status='skipped'
+        6. Update parent run status
 
         Args:
             run_id: ID of the ETO run to skip
@@ -1736,6 +1745,12 @@ class EtoRunsService:
         # Sort and dedupe pages
         all_pages = sorted(set(all_pages))
         logger.debug(f"Run {run_id}: Collected {len(all_pages)} pages from {len(eligible_sub_runs)} sub-runs")
+
+        # Clean up pending order contributions BEFORE deleting the sub-runs
+        for sub_run in eligible_sub_runs:
+            cleanup_result = self.output_processing_service.cleanup_sub_run_contributions(sub_run.id)
+            if cleanup_result["deleted_history_count"] > 0:
+                logger.debug(f"Sub-run {sub_run.id} pending order cleanup: {cleanup_result}")
 
         # Use Unit of Work for atomic transaction
         with self.connection_manager.unit_of_work() as uow:
@@ -1789,12 +1804,13 @@ class EtoRunsService:
         Reprocess a single sub-run by deleting it and creating a new one with the same pages.
 
         Uses Unit of Work pattern for atomic transaction:
-        1. Get sub-run to retrieve pages and parent run ID
-        2. Delete extraction record if exists
-        3. Delete pipeline execution record if exists
-        4. Delete the sub-run itself
-        5. Create new sub-run with same pages, status=not_started, no template
-        6. Update parent run status
+        1. Clean up pending order contributions from this sub-run
+        2. Get sub-run to retrieve pages and parent run ID
+        3. Delete extraction record if exists
+        4. Delete pipeline execution record if exists
+        5. Delete the sub-run itself
+        6. Create new sub-run with same pages, status=not_started, no template
+        7. Update parent run status
 
         The worker will pick up the new sub-run and run template matching (Phase 1).
 
@@ -1816,6 +1832,11 @@ class EtoRunsService:
 
         parent_run_id = sub_run.eto_run_id
         matched_pages = sub_run.matched_pages  # Already JSON string
+
+        # Clean up pending order contributions BEFORE deleting the sub-run
+        # This ensures history records are properly cleaned up while sub_run_id still exists
+        cleanup_result = self.output_processing_service.cleanup_sub_run_contributions(sub_run_id)
+        logger.debug(f"Pending order cleanup result: {cleanup_result}")
 
         # Use Unit of Work for atomic transaction
         with self.connection_manager.unit_of_work() as uow:
@@ -1861,12 +1882,13 @@ class EtoRunsService:
         Skip a single sub-run by deleting it and creating a new one with status='skipped'.
 
         Uses Unit of Work pattern for atomic transaction:
-        1. Get sub-run to retrieve pages and parent run ID
-        2. Delete extraction record if exists
-        3. Delete pipeline execution record if exists
-        4. Delete the sub-run itself
-        5. Create new sub-run with same pages, status='skipped'
-        6. Update parent run status
+        1. Clean up pending order contributions from this sub-run
+        2. Get sub-run to retrieve pages and parent run ID
+        3. Delete extraction record if exists
+        4. Delete pipeline execution record if exists
+        5. Delete the sub-run itself
+        6. Create new sub-run with same pages, status='skipped'
+        7. Update parent run status
 
         Args:
             sub_run_id: ID of sub-run to skip
@@ -1894,6 +1916,10 @@ class EtoRunsService:
 
         parent_run_id = sub_run.eto_run_id
         matched_pages = sub_run.matched_pages  # Already JSON string
+
+        # Clean up pending order contributions BEFORE deleting the sub-run
+        cleanup_result = self.output_processing_service.cleanup_sub_run_contributions(sub_run_id)
+        logger.debug(f"Pending order cleanup result: {cleanup_result}")
 
         # Use Unit of Work for atomic transaction
         with self.connection_manager.unit_of_work() as uow:

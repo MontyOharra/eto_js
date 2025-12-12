@@ -9,7 +9,8 @@ import type { EtoSubRunFullDetail } from '../../types';
 interface EtoSubRunDetailFooterProps {
   runDetail: EtoSubRunFullDetail | null;
   onClose: () => void;
-  showActionButtons?: boolean;
+  showReprocessButton?: boolean;
+  showSkipButton?: boolean;
   onReprocess?: () => void;
   onSkip?: () => void;
   isReprocessing?: boolean;
@@ -19,7 +20,8 @@ interface EtoSubRunDetailFooterProps {
 export function EtoSubRunDetailFooter({
   runDetail,
   onClose,
-  showActionButtons = false,
+  showReprocessButton = false,
+  showSkipButton = false,
   onReprocess,
   onSkip,
   isReprocessing = false,
@@ -51,25 +53,25 @@ export function EtoSubRunDetailFooter({
 
       {/* Right side - Action buttons */}
       <div className="flex items-center space-x-3">
-        {showActionButtons && (
-          <>
-            <button
-              type="button"
-              onClick={onReprocess}
-              disabled={isProcessing}
-              className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isReprocessing ? "Reprocessing..." : "Reprocess"}
-            </button>
-            <button
-              type="button"
-              onClick={onSkip}
-              disabled={isProcessing}
-              className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSkipping ? "Skipping..." : "Skip"}
-            </button>
-          </>
+        {showReprocessButton && (
+          <button
+            type="button"
+            onClick={onReprocess}
+            disabled={isProcessing}
+            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isReprocessing ? "Reprocessing..." : "Reprocess"}
+          </button>
+        )}
+        {showSkipButton && (
+          <button
+            type="button"
+            onClick={onSkip}
+            disabled={isProcessing}
+            className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSkipping ? "Skipping..." : "Skip"}
+          </button>
         )}
         <button
           type="button"

@@ -291,3 +291,47 @@ class PendingOrderHistoryRepository(BaseRepository[PendingOrderHistoryModel]):
             ).distinct().all()
 
             return [r[0] for r in results]
+
+    def delete_by_sub_run_id(self, sub_run_id: int) -> dict:
+        """
+        Delete all history entries contributed by a specific sub-run.
+        Used when reprocessing a sub-run to clean up old contributions.
+
+        Args:
+            sub_run_id: Sub-run ID whose contributions should be deleted
+
+        Returns:
+            Dict with:
+            - deleted_count: Number of history entries deleted
+            - affected_orders: Dict mapping pending_order_id to list of affected field_names
+        """
+        with self._get_session() as session:
+            # First, find all affected entries to track what will be deleted
+            entries = session.query(self.model_class).filter_by(
+                sub_run_id=sub_run_id
+            ).all()
+
+            # Track affected pending orders and their fields
+            affected_orders: dict[int, set[str]] = {}
+            for entry in entries:
+                if entry.pending_order_id not in affected_orders:
+                    affected_orders[entry.pending_order_id] = set()
+                affected_orders[entry.pending_order_id].add(entry.field_name)
+
+            # Delete all entries for this sub-run
+            deleted_count = session.query(self.model_class).filter_by(
+                sub_run_id=sub_run_id
+            ).delete()
+
+            session.flush()
+
+            logger.info(f"Deleted {deleted_count} history entries for sub-run {sub_run_id}")
+
+            # Convert sets to lists for JSON serialization
+            return {
+                "deleted_count": deleted_count,
+                "affected_orders": {
+                    order_id: list(fields)
+                    for order_id, fields in affected_orders.items()
+                }
+            }
