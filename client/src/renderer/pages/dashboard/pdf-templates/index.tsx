@@ -7,6 +7,7 @@ import {
   useUpdateTemplate,
   useActivateTemplate,
   useDeactivateTemplate,
+  useCustomers,
 } from '../../../features/templates';
 import type { CreateTemplateRequest } from '../../../features/templates/api/types';
 import { usePipelinesApi } from '../../../features/pipelines/api';
@@ -28,6 +29,7 @@ type SortOrder = 'asc' | 'desc';
 function TemplatesPage() {
   // TanStack Query hooks
   const { data: allTemplates = [], isLoading, error } = useTemplates();
+  const { data: customers = [] } = useCustomers();
   const createTemplate = useCreateTemplate();
   const updateTemplate = useUpdateTemplate();
   const activateTemplate = useActivateTemplate();
@@ -37,6 +39,7 @@ function TemplatesPage() {
   const queryClient = useQueryClient();
 
   const [statusFilter, setStatusFilter] = useState<TemplateStatus | 'all'>('all');
+  const [customerFilter, setCustomerFilter] = useState<number | 'all'>('all');
   const [sortBy, setSortBy] = useState<SortBy>('name');
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
 
@@ -69,6 +72,11 @@ function TemplatesPage() {
         ? allTemplates
         : allTemplates.filter((t) => t.status === statusFilter);
 
+    // Filter by customer
+    if (customerFilter !== 'all') {
+      filtered = filtered.filter((t) => t.customer_id === customerFilter);
+    }
+
     // Sort
     const sorted = [...filtered].sort((a, b) => {
       let aValue: any;
@@ -100,7 +108,7 @@ function TemplatesPage() {
     });
 
     return sorted;
-  }, [allTemplates, statusFilter, sortBy, sortOrder]);
+  }, [allTemplates, statusFilter, customerFilter, sortBy, sortOrder]);
 
   // ==========================================================================
   // Button Handlers
@@ -406,6 +414,27 @@ function TemplatesPage() {
               <option value="all">All</option>
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
+            </select>
+          </div>
+
+          {/* Customer Filter */}
+          <div className="flex items-center space-x-2">
+            <label className="text-sm font-medium text-gray-300">
+              Customer:
+            </label>
+            <select
+              value={customerFilter}
+              onChange={(e) =>
+                setCustomerFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))
+              }
+              className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="all">All Customers</option>
+              {customers.map((customer) => (
+                <option key={customer.id} value={customer.id}>
+                  {customer.name}
+                </option>
+              ))}
             </select>
           </div>
 
