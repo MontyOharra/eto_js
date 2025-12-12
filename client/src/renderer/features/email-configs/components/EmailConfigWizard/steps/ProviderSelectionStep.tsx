@@ -18,9 +18,9 @@ interface Provider {
 
 const AVAILABLE_PROVIDERS: Provider[] = [
   {
-    id: 'imap',
-    name: 'IMAP',
-    description: 'Connect to any email server using IMAP protocol. Works with Gmail, Outlook, custom domains, and more.',
+    id: 'standard',
+    name: 'Standard Email',
+    description: 'Connect using IMAP (receive) and SMTP (send). Works with Gmail, Outlook, custom domains, and more.',
     icon: '📧',
     tag: 'Universal',
   },
@@ -117,10 +117,10 @@ export function ProviderSelectionStep({
             </svg>
           </div>
           <div className="flex-1">
-            <h5 className="text-sm font-medium text-blue-400 mb-1">About IMAP</h5>
+            <h5 className="text-sm font-medium text-blue-400 mb-1">About Standard Email</h5>
             <p className="text-sm text-gray-300 leading-relaxed">
-              IMAP is a universal email protocol supported by virtually all email providers.
-              You'll need your email server settings (host, port) and login credentials.
+              Standard email uses IMAP for receiving and SMTP for sending. This is supported
+              by virtually all email providers. You'll need your server settings and login credentials.
             </p>
           </div>
         </div>

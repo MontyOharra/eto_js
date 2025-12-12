@@ -3,7 +3,7 @@ Email Account Types
 
 Dataclasses for email account management (credentials storage).
 Decoupled from ingestion configs - accounts store credentials that can be
-shared across multiple ingestion listeners and future sending configs.
+shared across multiple ingestion listeners and sending configs.
 """
 
 from dataclasses import dataclass, field
@@ -16,15 +16,27 @@ from typing import Literal
 # =========================
 
 @dataclass(frozen=True)
-class ImapProviderSettings:
-    """IMAP connection settings (excludes credentials)"""
-    host: str
-    port: int
+class StandardProviderSettings:
+    """
+    Standard email provider settings (IMAP + SMTP).
+
+    IMAP is used for receiving/reading emails.
+    SMTP is used for sending emails.
+    """
+    # IMAP settings (receiving)
+    imap_host: str
+    imap_port: int = 993
+
+    # SMTP settings (sending)
+    smtp_host: str = ""
+    smtp_port: int = 587
+
+    # Shared settings
     use_ssl: bool = True
 
 
 # Union type for all provider settings
-ProviderSettings = ImapProviderSettings
+ProviderSettings = StandardProviderSettings
 
 
 # =========================

@@ -15,7 +15,7 @@ export type {
   UpdateEmailAccountRequest,
   ValidateConnectionRequest,
   ValidationResultResponse,
-  ImapProviderSettings,
+  StandardProviderSettings,
   PasswordCredentials,
   FolderListResponse,
 } from './api/types';

@@ -5,9 +5,11 @@
 
 import { useState } from 'react';
 
-interface ImapCredentials {
-  host: string;
-  port: number;
+interface StandardCredentials {
+  imap_host: string;
+  imap_port: number;
+  smtp_host: string;
+  smtp_port: number;
   email_address: string;
   password: string;
   use_ssl: boolean;
@@ -15,8 +17,8 @@ interface ImapCredentials {
 
 interface CredentialsStepProps {
   providerType: string;
-  credentials: ImapCredentials | null;
-  onCredentialsChange: (credentials: ImapCredentials) => void;
+  credentials: StandardCredentials | null;
+  onCredentialsChange: (credentials: StandardCredentials) => void;
   onTestConnection: () => Promise<void>;
   isTestingConnection: boolean;
   connectionTestResult: { success: boolean; message: string } | null;
@@ -30,17 +32,19 @@ export function CredentialsStep({
   isTestingConnection,
   connectionTestResult,
 }: CredentialsStepProps) {
-  const [localCredentials, setLocalCredentials] = useState<ImapCredentials>(
+  const [localCredentials, setLocalCredentials] = useState<StandardCredentials>(
     credentials || {
-      host: '',
-      port: 993,
+      imap_host: '',
+      imap_port: 993,
+      smtp_host: '',
+      smtp_port: 587,
       email_address: '',
       password: '',
       use_ssl: true,
     }
   );
 
-  const handleFieldChange = (field: keyof ImapCredentials, value: string | number | boolean) => {
+  const handleFieldChange = (field: keyof StandardCredentials, value: string | number | boolean) => {
     const updated = { ...localCredentials, [field]: value };
     setLocalCredentials(updated);
     onCredentialsChange(updated);
@@ -50,100 +54,145 @@ export function CredentialsStep({
     await onTestConnection();
   };
 
-  if (providerType === 'imap') {
+  if (providerType === 'standard') {
     return (
       <div className="space-y-4">
         <div className="mb-6">
-          <h3 className="text-lg font-semibold text-white mb-2">IMAP Server Settings</h3>
+          <h3 className="text-lg font-semibold text-white mb-2">Email Server Settings</h3>
           <p className="text-sm text-gray-400">
-            Enter your email server connection details
+            Enter your email server connection details for receiving and sending
           </p>
         </div>
 
         <div className="space-y-4">
-          {/* IMAP Server */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              IMAP Server <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={localCredentials.host}
-              onChange={(e) => handleFieldChange('host', e.target.value)}
-              placeholder="mail.example.com"
-              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-            />
-            <p className="mt-1 text-xs text-gray-500">
-              Example: mail.yourdomain.com or imap.gmail.com
-            </p>
+          {/* Incoming Mail (IMAP) Section */}
+          <div className="p-4 bg-gray-800/50 rounded-lg border border-gray-700">
+            <h4 className="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+              </svg>
+              Incoming Mail (IMAP)
+            </h4>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-gray-400 mb-1">
+                  Server <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={localCredentials.imap_host}
+                  onChange={(e) => handleFieldChange('imap_host', e.target.value)}
+                  placeholder="imap.example.com"
+                  className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1">
+                  Port
+                </label>
+                <input
+                  type="text"
+                  value={localCredentials.imap_port}
+                  onChange={(e) => handleFieldChange('imap_port', parseInt(e.target.value) || 993)}
+                  placeholder="993"
+                  className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
+                />
+              </div>
+            </div>
           </div>
 
-          {/* Port */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Port <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="number"
-              value={localCredentials.port}
-              onChange={(e) => handleFieldChange('port', parseInt(e.target.value) || 993)}
-              placeholder="993"
-              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-            />
-            <p className="mt-1 text-xs text-gray-500">
-              Default: 993 (SSL/TLS) or 143 (non-SSL)
-            </p>
+          {/* Outgoing Mail (SMTP) Section */}
+          <div className="p-4 bg-gray-800/50 rounded-lg border border-gray-700">
+            <h4 className="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              </svg>
+              Outgoing Mail (SMTP)
+              <span className="text-xs text-gray-500 font-normal">(optional)</span>
+            </h4>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-gray-400 mb-1">
+                  Server
+                </label>
+                <input
+                  type="text"
+                  value={localCredentials.smtp_host}
+                  onChange={(e) => handleFieldChange('smtp_host', e.target.value)}
+                  placeholder="smtp.example.com"
+                  className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1">
+                  Port
+                </label>
+                <input
+                  type="text"
+                  value={localCredentials.smtp_port}
+                  onChange={(e) => handleFieldChange('smtp_port', parseInt(e.target.value) || 587)}
+                  placeholder="587"
+                  className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
+                />
+              </div>
+            </div>
           </div>
 
-          {/* Email Address */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Email Address <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="email"
-              value={localCredentials.email_address}
-              onChange={(e) => handleFieldChange('email_address', e.target.value)}
-              placeholder="orders@example.com"
-              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-            />
-          </div>
-
-          {/* Password */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Password <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="password"
-              value={localCredentials.password}
-              onChange={(e) => handleFieldChange('password', e.target.value)}
-              placeholder="••••••••"
-              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-            />
-          </div>
-
-          {/* SSL/TLS Checkbox */}
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="use_ssl"
-              checked={localCredentials.use_ssl}
-              onChange={(e) => handleFieldChange('use_ssl', e.target.checked)}
-              className="w-4 h-4 bg-gray-800 border-gray-700 rounded text-blue-600 focus:ring-2 focus:ring-blue-600"
-            />
-            <label htmlFor="use_ssl" className="ml-2 text-sm text-gray-300">
-              Use SSL/TLS (recommended)
-            </label>
+          {/* Account Credentials Section */}
+          <div className="p-4 bg-gray-800/50 rounded-lg border border-gray-700">
+            <h4 className="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+              </svg>
+              Account Credentials
+            </h4>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1">
+                  Email Address <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  value={localCredentials.email_address}
+                  onChange={(e) => handleFieldChange('email_address', e.target.value)}
+                  placeholder="orders@example.com"
+                  className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1">
+                  Password <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="password"
+                  value={localCredentials.password}
+                  onChange={(e) => handleFieldChange('password', e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent text-sm"
+                />
+              </div>
+              <div className="flex items-center pt-1">
+                <input
+                  type="checkbox"
+                  id="use_ssl"
+                  checked={localCredentials.use_ssl}
+                  onChange={(e) => handleFieldChange('use_ssl', e.target.checked)}
+                  className="w-4 h-4 bg-gray-900 border-gray-600 rounded text-blue-600 focus:ring-2 focus:ring-blue-600"
+                />
+                <label htmlFor="use_ssl" className="ml-2 text-sm text-gray-300">
+                  Use SSL/TLS (recommended)
+                </label>
+              </div>
+            </div>
           </div>
 
           {/* Test Connection Button */}
-          <div className="pt-4">
+          <div className="pt-2">
             <button
               onClick={handleTestClick}
               disabled={
                 isTestingConnection ||
-                !localCredentials.host ||
+                !localCredentials.imap_host ||
                 !localCredentials.email_address ||
                 !localCredentials.password
               }
@@ -222,9 +271,9 @@ export function CredentialsStep({
             <div className="flex-1">
               <h5 className="text-sm font-medium text-gray-300 mb-1">Where to find these settings</h5>
               <p className="text-sm text-gray-400 leading-relaxed">
-                Contact your email provider or IT administrator for IMAP server settings.
-                Common providers: Gmail (imap.gmail.com), Outlook (outlook.office365.com),
-                or your custom domain's mail server.
+                Contact your email provider or IT administrator for server settings.
+                Common providers: Gmail (imap.gmail.com / smtp.gmail.com),
+                Outlook (outlook.office365.com / smtp.office365.com).
               </p>
             </div>
           </div>

@@ -15,7 +15,7 @@ from shared.types.email_accounts import (
     EmailAccountCreate,
     EmailAccountUpdate,
     ProviderSettings,
-    ImapProviderSettings,
+    StandardProviderSettings,
     Credentials,
     PasswordCredentials,
     OAuthCredentials,
@@ -57,11 +57,11 @@ class EmailAccountRepository(BaseRepository[EmailAccountModel]):
         settings_dict = json.loads(settings_json)
         data = settings_dict.get('data', settings_dict)  # Handle both formats
 
-        if provider_type == 'imap':
-            return ImapProviderSettings(**data)
+        if provider_type == 'standard':
+            return StandardProviderSettings(**data)
 
         # Default fallback
-        return ImapProviderSettings(**data)
+        return StandardProviderSettings(**data)
 
     def _credentials_to_json(self, credentials: Credentials) -> str:
         """Convert credentials dataclass to JSON string"""

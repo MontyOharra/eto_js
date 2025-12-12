@@ -12,14 +12,18 @@ class FilterRule:
 
 
 @dataclass(frozen=True)
-class ImapProviderSettings:
-    host: str
-    port: int
-    email_address: str
-    password: str
+class StandardProviderSettings:
+    """
+    Standard email provider settings (IMAP + SMTP).
+    Note: Credentials are stored separately in EmailAccount.
+    """
+    imap_host: str
+    imap_port: int = 993
+    smtp_host: str = ""
+    smtp_port: int = 587
     use_ssl: bool = True
 
-ProviderSettings = ImapProviderSettings    
+ProviderSettings = StandardProviderSettings
 
 @dataclass(frozen=True)
 class EmailConfig:

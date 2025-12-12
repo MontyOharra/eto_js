@@ -6,10 +6,10 @@ from .registry import IntegrationRegistry
 from .base_integration import BaseEmailIntegration
 
 # Import all integration implementations to trigger auto-registration
-from .imap_integration import ImapIntegration
+from .standard_integration import StandardEmailIntegration
 
 __all__ = [
     'IntegrationRegistry',
     'BaseEmailIntegration',
-    'ImapIntegration',
+    'StandardEmailIntegration',
 ]

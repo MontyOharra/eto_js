@@ -5,13 +5,15 @@
 
 // ========== Provider Settings ==========
 
-export interface ImapProviderSettings {
-  host: string;
-  port: number;
+export interface StandardProviderSettings {
+  imap_host: string;
+  imap_port: number;
+  smtp_host: string;
+  smtp_port: number;
   use_ssl: boolean;
 }
 
-export type ProviderSettings = ImapProviderSettings;
+export type ProviderSettings = StandardProviderSettings;
 
 // ========== Credentials ==========
 
@@ -34,7 +36,7 @@ export type Credentials = PasswordCredentials | OAuthCredentials;
 export interface ValidateConnectionRequest {
   provider_type: string;
   email_address: string;
-  provider_settings: ImapProviderSettings;
+  provider_settings: StandardProviderSettings;
   credentials: PasswordCredentials;
 }
 
@@ -52,7 +54,7 @@ export interface CreateEmailAccountRequest {
   description?: string;
   provider_type: string;
   email_address: string;
-  provider_settings: ImapProviderSettings;
+  provider_settings: StandardProviderSettings;
   credentials: PasswordCredentials;
   capabilities: string[];
 }
@@ -60,7 +62,7 @@ export interface CreateEmailAccountRequest {
 export interface UpdateEmailAccountRequest {
   name?: string;
   description?: string;
-  provider_settings?: ImapProviderSettings;
+  provider_settings?: StandardProviderSettings;
   credentials?: PasswordCredentials;
   is_validated?: boolean;
   capabilities?: string[];
@@ -84,7 +86,7 @@ export interface EmailAccountResponse {
   description?: string;
   provider_type: string;
   email_address: string;
-  provider_settings: ImapProviderSettings;
+  provider_settings: StandardProviderSettings;
   is_validated: boolean;
   validated_at?: string;
   capabilities: string[];

@@ -23,7 +23,7 @@ from shared.types.email_accounts import (
     EmailAccountUpdate,
     ProviderSettings,
     Credentials,
-    ImapProviderSettings,
+    StandardProviderSettings,
     PasswordCredentials,
 )
 from shared.types.email_ingestion_configs import (
@@ -219,18 +219,20 @@ class EmailService:
         """Build constructor params for integration based on provider type."""
         provider_type = account.provider_type
 
-        if provider_type == "imap":
+        if provider_type == "standard":
             settings = account.provider_settings
             credentials = account.credentials
 
-            if not isinstance(settings, ImapProviderSettings):
-                raise ValidationError("Invalid provider settings for IMAP")
+            if not isinstance(settings, StandardProviderSettings):
+                raise ValidationError("Invalid provider settings for standard email")
             if not isinstance(credentials, PasswordCredentials):
-                raise ValidationError("IMAP currently only supports password credentials")
+                raise ValidationError("Standard email currently only supports password credentials")
 
             return {
-                "host": settings.host,
-                "port": settings.port,
+                "imap_host": settings.imap_host,
+                "imap_port": settings.imap_port,
+                "smtp_host": settings.smtp_host,
+                "smtp_port": settings.smtp_port,
                 "email_address": account.email_address,
                 "password": credentials.password,
                 "use_ssl": settings.use_ssl,
@@ -317,15 +319,17 @@ class EmailService:
         credentials: Credentials,
     ) -> dict:
         """Build params for validation integration."""
-        if provider_type == "imap":
-            if not isinstance(provider_settings, ImapProviderSettings):
-                raise ValidationError("Invalid provider settings for IMAP")
+        if provider_type == "standard":
+            if not isinstance(provider_settings, StandardProviderSettings):
+                raise ValidationError("Invalid provider settings for standard email")
             if not isinstance(credentials, PasswordCredentials):
-                raise ValidationError("IMAP currently only supports password credentials")
+                raise ValidationError("Standard email currently only supports password credentials")
 
             return {
-                "host": provider_settings.host,
-                "port": provider_settings.port,
+                "imap_host": provider_settings.imap_host,
+                "imap_port": provider_settings.imap_port,
+                "smtp_host": provider_settings.smtp_host,
+                "smtp_port": provider_settings.smtp_port,
                 "email_address": email_address,
                 "password": credentials.password,
                 "use_ssl": provider_settings.use_ssl,

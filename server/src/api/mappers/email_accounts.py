@@ -9,7 +9,7 @@ from shared.types.email_accounts import (
     EmailAccountSummary,
     EmailAccountCreate,
     EmailAccountUpdate,
-    ImapProviderSettings,
+    StandardProviderSettings,
     ProviderSettings,
     PasswordCredentials,
     OAuthCredentials,
@@ -24,7 +24,7 @@ from api.schemas.email_accounts import (
     UpdateEmailAccountRequest,
     ValidateConnectionRequest,
     ValidationResultResponse,
-    ImapProviderSettingsSchema,
+    StandardProviderSettingsSchema,
     PasswordCredentialsSchema,
     OAuthCredentialsSchema,
 )
@@ -32,23 +32,27 @@ from api.schemas.email_accounts import (
 
 # ========== Provider Settings Conversions ==========
 
-def provider_settings_to_api(settings: ProviderSettings) -> ImapProviderSettingsSchema:
+def provider_settings_to_api(settings: ProviderSettings) -> StandardProviderSettingsSchema:
     """Convert domain ProviderSettings to API schema"""
-    if isinstance(settings, ImapProviderSettings):
-        return ImapProviderSettingsSchema(
-            host=settings.host,
-            port=settings.port,
+    if isinstance(settings, StandardProviderSettings):
+        return StandardProviderSettingsSchema(
+            imap_host=settings.imap_host,
+            imap_port=settings.imap_port,
+            smtp_host=settings.smtp_host,
+            smtp_port=settings.smtp_port,
             use_ssl=settings.use_ssl,
         )
     # Add other provider types here as needed
     raise ValueError(f"Unknown provider settings type: {type(settings)}")
 
 
-def provider_settings_to_domain(schema: ImapProviderSettingsSchema) -> ProviderSettings:
+def provider_settings_to_domain(schema: StandardProviderSettingsSchema) -> ProviderSettings:
     """Convert API schema to domain ProviderSettings"""
-    return ImapProviderSettings(
-        host=schema.host,
-        port=schema.port,
+    return StandardProviderSettings(
+        imap_host=schema.imap_host,
+        imap_port=schema.imap_port,
+        smtp_host=schema.smtp_host,
+        smtp_port=schema.smtp_port,
         use_ssl=schema.use_ssl,
     )
 
