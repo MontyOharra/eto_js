@@ -819,7 +819,7 @@ class OutputChannelTypeModel(BaseModel):
 
 # Pending order status
 PENDING_ORDER_STATUS = SAEnum(
-    'incomplete', 'ready', 'created',
+    'incomplete', 'ready', 'processing', 'created', 'failed',
     name='pending_order_status',
     native_enum=False,
     validate_strings=True
@@ -844,7 +844,14 @@ class PendingOrderModel(BaseModel):
 
     Compiles data from multiple sub-runs into a single order.
     When all required fields are present and no conflicts exist,
-    the order is auto-created in HTC.
+    the order becomes 'ready' for HTC creation by the worker.
+
+    Status flow:
+    - incomplete: Missing required fields or has conflicts
+    - ready: All required fields present, queued for HTC creation
+    - processing: Worker is currently creating HTC order
+    - created: Successfully created in HTC
+    - failed: HTC creation failed (see error_message)
 
     Unique identifier is (customer_id, hawb) since different customers
     may have overlapping HAWB values.
@@ -857,7 +864,7 @@ class PendingOrderModel(BaseModel):
     customer_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     hawb: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
 
-    # Status: incomplete -> ready -> created
+    # Status: incomplete -> ready -> processing -> created/failed
     status: Mapped[str] = mapped_column(
         PENDING_ORDER_STATUS,
         nullable=False,
@@ -868,10 +875,16 @@ class PendingOrderModel(BaseModel):
     htc_order_number: Mapped[Optional[float]] = mapped_column(nullable=True)
     htc_created_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Error tracking (for failed HTC creation)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    error_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
     # Required fields (all must be non-null for status='ready')
+    pickup_company_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     pickup_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     pickup_time_start: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     pickup_time_end: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    delivery_company_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     delivery_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     delivery_time_start: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     delivery_time_end: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)

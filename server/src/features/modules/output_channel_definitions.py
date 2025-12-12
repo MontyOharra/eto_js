@@ -44,6 +44,14 @@ OUTPUT_CHANNEL_DEFINITIONS: list[OutputChannelDefinition] = [
 
     # Pickup
     OutputChannelDefinition(
+        name="pickup_company_name",
+        label="Pickup Company",
+        data_type="str",
+        is_required=False,
+        category="pickup",
+        description="Company name at pickup location"
+    ),
+    OutputChannelDefinition(
         name="pickup_address",
         label="Pickup Address",
         data_type="str",
@@ -77,6 +85,14 @@ OUTPUT_CHANNEL_DEFINITIONS: list[OutputChannelDefinition] = [
     ),
 
     # Delivery
+    OutputChannelDefinition(
+        name="delivery_company_name",
+        label="Delivery Company",
+        data_type="str",
+        is_required=False,
+        category="delivery",
+        description="Company name at delivery location"
+    ),
     OutputChannelDefinition(
         name="delivery_address",
         label="Delivery Address",
