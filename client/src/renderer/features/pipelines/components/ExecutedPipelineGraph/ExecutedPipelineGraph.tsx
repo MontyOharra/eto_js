@@ -130,7 +130,7 @@ function calculateColumnHeight(numGroups: number, numRows: number): number {
 function calculateNodeHeight(nodeData: {
   inputs?: Record<string, PinData>;
   outputs?: Record<string, PinData>;
-  error?: string | null;
+  error?: string | { message: string } | null;
 }): number {
   // Count groups and rows
   const numInputGroups = countGroups(nodeData.inputs);

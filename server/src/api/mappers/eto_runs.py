@@ -336,11 +336,26 @@ def eto_sub_run_full_detail_to_api(
                 error_data = None
                 error = step.error
                 if error:
-                    error_data = PipelineExecutionStepError(
-                        type=error.get("type", ""),
-                        message=error.get("message", ""),
-                        details=error.get("details"),
-                    )
+                    # Error is stored as a string like "ExceptionType: message"
+                    # Parse it into type and message components
+                    if isinstance(error, str):
+                        if ": " in error:
+                            error_type, error_message = error.split(": ", 1)
+                        else:
+                            error_type = "Error"
+                            error_message = error
+                        error_data = PipelineExecutionStepError(
+                            type=error_type,
+                            message=error_message,
+                            details=None,
+                        )
+                    elif isinstance(error, dict):
+                        # Handle dict format if it exists (for future compatibility)
+                        error_data = PipelineExecutionStepError(
+                            type=error.get("type", "Error"),
+                            message=error.get("message", str(error)),
+                            details=error.get("details"),
+                        )
                 steps.append(PipelineExecutionStep(
                     id=step.id,
                     step_number=step.step_number,

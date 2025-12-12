@@ -108,6 +108,15 @@ export interface ExecutePipelineRequest {
 }
 
 /**
+ * Error information for a failed pipeline step
+ */
+export interface ExecutionStepError {
+  type: string;
+  message: string;
+  details?: any;
+}
+
+/**
  * Result of a single module execution step
  * Contains inputs, outputs, and any error that occurred
  */
@@ -116,7 +125,7 @@ export interface ExecutionStepResult {
   step_number: number;
   inputs: Record<string, Record<string, any>>;
   outputs: Record<string, Record<string, any>>;
-  error: string | null;
+  error: string | ExecutionStepError | null;
 }
 
 /**
