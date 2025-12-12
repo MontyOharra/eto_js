@@ -154,7 +154,7 @@ class ServiceContainer:
             },
             'htc_integration': {
                 'class': 'features.htc_integration.service.HtcIntegrationService',
-                'args': [cls._data_database_manager],
+                'args': [cls._data_database_manager, cls._connection_manager],
                 'singleton': True,
                 'description': 'HTC Access database integration service for order operations'
             },

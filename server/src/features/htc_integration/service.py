@@ -13,12 +13,14 @@ Architecture:
     - HtcLookupUtils: Customer, address, and order lookups
     - HtcAddressUtils: Address parsing, normalization, and creation
     - HtcOrderUtils: Order number generation, creation, and updates
+    - HtcOrderWorker: Background worker for creating HTC orders from pending orders
 """
 
 from typing import Any, Optional, TYPE_CHECKING
 
 from shared.logging import get_logger
 from shared.exceptions import OutputExecutionError
+from shared.database.repositories.pending_order import PendingOrderRepository
 
 from features.htc_integration.lookup_utils import (
     HtcLookupUtils,
@@ -28,6 +30,7 @@ from features.htc_integration.lookup_utils import (
 )
 from features.htc_integration.address_utils import HtcAddressUtils
 from features.htc_integration.order_utils import HtcOrderUtils, PreparedOrderData
+from features.htc_integration.htc_order_worker import HtcOrderWorker
 
 if TYPE_CHECKING:
     from shared.database.data_database_manager import DataDatabaseManager
@@ -68,19 +71,28 @@ class HtcIntegrationService:
     def __init__(
         self,
         data_database_manager: 'DataDatabaseManager',
+        connection_manager: Any = None,
         database_name: str = "htc_300_db",
+        worker_enabled: bool = True,
+        worker_polling_interval: int = 5,
+        worker_max_concurrent: int = 5,
     ) -> None:
         """
         Initialize the service.
 
         Args:
             data_database_manager: DataDatabaseManager for HTC database access
+            connection_manager: Database connection manager for pending order repo
             database_name: Name of the database containing HTC tables
+            worker_enabled: Whether to enable the HTC order worker
+            worker_polling_interval: Seconds between worker polling cycles
+            worker_max_concurrent: Maximum concurrent orders to process
         """
         logger.debug("Initializing HtcIntegrationService...")
 
         self._data_database_manager = data_database_manager
         self._database_name = database_name
+        self._pending_order_repo = PendingOrderRepository(connection_manager=connection_manager) if connection_manager else None
 
         # Initialize utility classes
         self._lookup_utils = HtcLookupUtils(
@@ -99,11 +111,62 @@ class HtcIntegrationService:
             br_id=self.BR_ID,
         )
 
+        # Initialize HTC order worker (only if pending_order_repo is available)
+        if self._pending_order_repo:
+            self._worker = HtcOrderWorker(
+                get_ready_pending_orders_callback=self.get_ready_pending_orders,
+                create_htc_order_callback=self.create_htc_order_by_id,
+                mark_processing_callback=self.mark_pending_order_processing,
+                mark_created_callback=self.mark_pending_order_created,
+                mark_failed_callback=self.mark_pending_order_failed,
+                enabled=worker_enabled,
+                max_concurrent=worker_max_concurrent,
+                polling_interval=worker_polling_interval,
+            )
+        else:
+            self._worker = None
+            if worker_enabled:
+                logger.warning("HTC order worker disabled: connection_manager not provided")
+
         logger.info("HtcIntegrationService initialized successfully")
 
     def _get_connection(self) -> Any:
         """Get the HTC database connection."""
         return self._data_database_manager.get_connection(self._database_name)
+
+    # ==================== Worker Lifecycle ====================
+
+    async def startup(self) -> bool:
+        """
+        Start the HTC order worker background process.
+
+        Returns:
+            True if worker started successfully, False otherwise
+        """
+        if not self._worker:
+            logger.warning("HTC order worker not available (no connection_manager)")
+            return False
+        return await self._worker.startup()
+
+    async def shutdown(self, graceful: bool = True) -> bool:
+        """
+        Stop the HTC order worker background process.
+
+        Args:
+            graceful: If True, wait for current batch to complete
+
+        Returns:
+            True if worker stopped successfully
+        """
+        if not self._worker:
+            return False
+        return await self._worker.shutdown(graceful=graceful)
+
+    def get_worker_status(self) -> dict:
+        """Get the current status of the HTC order worker."""
+        if not self._worker:
+            return {"enabled": False, "running": False, "error": "Worker not initialized"}
+        return self._worker.get_status()
 
     # ==================== Lookup Operations ====================
     # Delegated to HtcLookupUtils
@@ -582,3 +645,119 @@ class HtcIntegrationService:
             pieces=pending_order.pieces,
             weight=pending_order.weight,
         )
+
+    # ==================== Worker Callback Methods ====================
+    # These methods are used by HtcOrderWorker to process pending orders
+
+    def get_ready_pending_orders(self, limit: int) -> list:
+        """
+        Get pending orders with status='ready' for worker processing.
+
+        Args:
+            limit: Maximum number of orders to return
+
+        Returns:
+            List of PendingOrder dataclasses
+        """
+        return self._pending_order_repo.get_ready(limit=limit)
+
+    def mark_pending_order_processing(self, pending_order_id: int) -> None:
+        """
+        Mark a pending order as 'processing' (being created in HTC).
+
+        Args:
+            pending_order_id: ID of the pending order
+        """
+        self._pending_order_repo.update(pending_order_id, {
+            "status": "processing",
+            "error_message": None,
+            "error_at": None,
+        })
+        logger.info(f"Pending order {pending_order_id} marked as processing")
+
+    def mark_pending_order_created(self, pending_order_id: int, htc_order_number: float) -> None:
+        """
+        Mark a pending order as 'created' after successful HTC creation.
+
+        Args:
+            pending_order_id: ID of the pending order
+            htc_order_number: The HTC order number that was created
+        """
+        from datetime import datetime, timezone
+        self._pending_order_repo.update(pending_order_id, {
+            "status": "created",
+            "htc_order_number": htc_order_number,
+            "htc_created_at": datetime.now(timezone.utc),
+            "error_message": None,
+            "error_at": None,
+        })
+        logger.info(f"Pending order {pending_order_id} marked as created (HTC order {htc_order_number})")
+
+    def mark_pending_order_failed(self, pending_order_id: int, error_message: str) -> None:
+        """
+        Mark a pending order as 'failed' after HTC creation failure.
+
+        Args:
+            pending_order_id: ID of the pending order
+            error_message: The error message describing the failure
+        """
+        from datetime import datetime, timezone
+        self._pending_order_repo.update(pending_order_id, {
+            "status": "failed",
+            "error_message": error_message,
+            "error_at": datetime.now(timezone.utc),
+        })
+        logger.error(f"Pending order {pending_order_id} marked as failed: {error_message}")
+
+    def create_htc_order_by_id(self, pending_order_id: int) -> float:
+        """
+        Create an HTC order from a pending order by ID.
+
+        Used by the worker to create orders. First fetches the pending order,
+        then calls create_order_from_pending.
+
+        Args:
+            pending_order_id: ID of the pending order
+
+        Returns:
+            The new HTC order number
+
+        Raises:
+            ValueError: If pending order not found
+            Various HTC errors if creation fails
+        """
+        pending_order = self._pending_order_repo.get_by_id(pending_order_id)
+        if not pending_order:
+            raise ValueError(f"Pending order {pending_order_id} not found")
+
+        return self.create_order_from_pending(pending_order)
+
+    def retry_pending_order(self, pending_order_id: int) -> bool:
+        """
+        Retry a failed pending order by resetting its status to 'ready'.
+
+        Args:
+            pending_order_id: ID of the pending order to retry
+
+        Returns:
+            True if reset successful, False if order not found or not in failed state
+        """
+        pending_order = self._pending_order_repo.get_by_id(pending_order_id)
+        if not pending_order:
+            logger.warning(f"Cannot retry: pending order {pending_order_id} not found")
+            return False
+
+        if pending_order.status != "failed":
+            logger.warning(
+                f"Cannot retry: pending order {pending_order_id} status is "
+                f"'{pending_order.status}', expected 'failed'"
+            )
+            return False
+
+        self._pending_order_repo.update(pending_order_id, {
+            "status": "ready",
+            "error_message": None,
+            "error_at": None,
+        })
+        logger.info(f"Pending order {pending_order_id} reset to 'ready' for retry")
+        return True
