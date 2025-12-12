@@ -1,15 +1,15 @@
-import { createFileRoute } from '@tanstack/react-router';
-import { useState, useMemo } from 'react';
+import { createFileRoute, useSearch, useNavigate } from '@tanstack/react-router';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  useTemplates,
+  useTemplatesInfinite,
   useCreateTemplate,
   useUpdateTemplate,
   useActivateTemplate,
   useDeactivateTemplate,
   useCustomers,
 } from '../../../features/templates';
-import type { CreateTemplateRequest } from '../../../features/templates/api/types';
+import type { CreateTemplateRequest, AutoskipFilter } from '../../../features/templates/api/types';
 import { usePipelinesApi } from '../../../features/pipelines/api';
 import { TemplateCard } from '../../../features/templates/components';
 import { TemplateBuilder, TemplateBuilderData } from '../../../features/templates/components/TemplateBuilder';
@@ -19,16 +19,81 @@ import { useUploadPdf, usePdfMetadata, type PdfFileMetadata } from '../../../fea
 import { apiClient } from '../../../shared/api/client';
 import { API_CONFIG } from '../../../shared/api/config';
 
+// Search params type for URL state
+interface TemplatesSearchParams {
+  status?: TemplateStatus;
+  customer?: number;
+  autoskip?: AutoskipFilter;
+  sort?: 'name' | 'status' | 'usage_count';
+  order?: 'asc' | 'desc';
+}
+
 export const Route = createFileRoute('/dashboard/pdf-templates/')({
   component: TemplatesPage,
+  validateSearch: (search: Record<string, unknown>): TemplatesSearchParams => {
+    return {
+      status: search.status as TemplateStatus | undefined,
+      customer: search.customer ? Number(search.customer) : undefined,
+      autoskip: search.autoskip as AutoskipFilter | undefined,
+      sort: search.sort as 'name' | 'status' | 'usage_count' | undefined,
+      order: search.order as 'asc' | 'desc' | undefined,
+    };
+  },
 });
 
 type SortBy = 'name' | 'status' | 'usage_count';
 type SortOrder = 'asc' | 'desc';
 
+const DEFAULT_PAGE_SIZE = 20;
+
 function TemplatesPage() {
-  // TanStack Query hooks
-  const { data: allTemplates = [], isLoading, error } = useTemplates();
+  // URL state
+  const search = useSearch({ from: '/dashboard/pdf-templates/' });
+  const navigate = useNavigate({ from: '/dashboard/pdf-templates/' });
+
+  // Derive filter state from URL
+  const statusFilter = search.status ?? 'all';
+  const customerFilter = search.customer ?? 'all';
+  const autoskipFilter = search.autoskip ?? 'all';
+  const sortBy = search.sort ?? 'name';
+  const sortOrder = search.order ?? 'asc';
+
+  // Helper to update URL search params
+  const updateSearch = useCallback(
+    (updates: Partial<TemplatesSearchParams>) => {
+      navigate({
+        search: (prev) => {
+          const newSearch = { ...prev, ...updates };
+          // Remove undefined/default values to keep URL clean
+          if (newSearch.status === undefined || newSearch.status === 'all') delete (newSearch as any).status;
+          if (newSearch.customer === undefined) delete (newSearch as any).customer;
+          if (newSearch.autoskip === undefined || newSearch.autoskip === 'all') delete (newSearch as any).autoskip;
+          if (newSearch.sort === undefined || newSearch.sort === 'name') delete (newSearch as any).sort;
+          if (newSearch.order === undefined || newSearch.order === 'asc') delete (newSearch as any).order;
+          return newSearch;
+        },
+      });
+    },
+    [navigate]
+  );
+
+  // TanStack Query hooks with infinite scroll
+  const {
+    data,
+    isLoading,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+    error,
+  } = useTemplatesInfinite({
+    status: statusFilter === 'all' ? undefined : statusFilter,
+    customer_id: customerFilter === 'all' ? undefined : customerFilter,
+    autoskip_filter: autoskipFilter === 'all' ? undefined : autoskipFilter,
+    sort_by: sortBy,
+    sort_order: sortOrder,
+    limit: DEFAULT_PAGE_SIZE,
+  });
+
   const { data: customers = [] } = useCustomers();
   const createTemplate = useCreateTemplate();
   const updateTemplate = useUpdateTemplate();
@@ -38,10 +103,38 @@ function TemplatesPage() {
   const { getPipeline } = usePipelinesApi();
   const queryClient = useQueryClient();
 
-  const [statusFilter, setStatusFilter] = useState<TemplateStatus | 'all'>('all');
-  const [customerFilter, setCustomerFilter] = useState<number | 'all'>('all');
-  const [sortBy, setSortBy] = useState<SortBy>('name');
-  const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
+  // Flatten paginated results
+  const allTemplates = useMemo(() => {
+    if (!data?.pages) return [];
+    return data.pages.flatMap((page) => page?.items ?? []).filter(Boolean);
+  }, [data]);
+
+  // Total count for display
+  const totalCount = data?.pages?.[0]?.total ?? 0;
+
+  // Check if any filters are active (for clear filters button)
+  const hasActiveFilters =
+    statusFilter !== 'all' || customerFilter !== 'all' || autoskipFilter !== 'all';
+
+  // Infinite scroll - intersection observer
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (loadMoreRef.current) {
+      observer.observe(loadMoreRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   // Template Builder Modal State
   const [isBuilderOpen, setIsBuilderOpen] = useState(false);
@@ -63,52 +156,6 @@ function TemplatesPage() {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [detailTemplateId, setDetailTemplateId] = useState<number | null>(null);
   const [detailKey, setDetailKey] = useState(0);
-
-  // Filter and sort templates using useMemo
-  const filteredTemplates = useMemo((): TemplateListItem[] => {
-    // Filter by status
-    let filtered =
-      statusFilter === 'all'
-        ? allTemplates
-        : allTemplates.filter((t) => t.status === statusFilter);
-
-    // Filter by customer
-    if (customerFilter !== 'all') {
-      filtered = filtered.filter((t) => t.customer_id === customerFilter);
-    }
-
-    // Sort
-    const sorted = [...filtered].sort((a, b) => {
-      let aValue: any;
-      let bValue: any;
-
-      switch (sortBy) {
-        case 'name':
-          aValue = a.name.toLowerCase();
-          bValue = b.name.toLowerCase();
-          break;
-        case 'status':
-          aValue = a.status;
-          bValue = b.status;
-          break;
-        case 'usage_count':
-          aValue = a.current_version.usage_count;
-          bValue = b.current_version.usage_count;
-          break;
-        default:
-          aValue = a.id;
-          bValue = b.id;
-      }
-
-      if (sortOrder === 'asc') {
-        return aValue > bValue ? 1 : -1;
-      } else {
-        return aValue < bValue ? 1 : -1;
-      }
-    });
-
-    return sorted;
-  }, [allTemplates, statusFilter, customerFilter, sortBy, sortOrder]);
 
   // ==========================================================================
   // Button Handlers
@@ -407,7 +454,7 @@ function TemplatesPage() {
             <select
               value={statusFilter}
               onChange={(e) =>
-                setStatusFilter(e.target.value as TemplateStatus | 'all')
+                updateSearch({ status: e.target.value === 'all' ? undefined : e.target.value as TemplateStatus })
               }
               className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
             >
@@ -425,7 +472,7 @@ function TemplatesPage() {
             <select
               value={customerFilter}
               onChange={(e) =>
-                setCustomerFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))
+                updateSearch({ customer: e.target.value === 'all' ? undefined : Number(e.target.value) })
               }
               className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
             >
@@ -438,6 +485,24 @@ function TemplatesPage() {
             </select>
           </div>
 
+          {/* Autoskip Filter */}
+          <div className="flex items-center space-x-2">
+            <label className="text-sm font-medium text-gray-300">
+              Type:
+            </label>
+            <select
+              value={autoskipFilter}
+              onChange={(e) =>
+                updateSearch({ autoskip: e.target.value === 'all' ? undefined : e.target.value as AutoskipFilter })
+              }
+              className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="all">All Types</option>
+              <option value="processable">Processable</option>
+              <option value="skip">Auto-Skip</option>
+            </select>
+          </div>
+
           {/* Sort By */}
           <div className="flex items-center space-x-2">
             <label className="text-sm font-medium text-gray-300">
@@ -445,7 +510,7 @@ function TemplatesPage() {
             </label>
             <select
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as SortBy)}
+              onChange={(e) => updateSearch({ sort: e.target.value as SortBy })}
               className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg px-3 py-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="name">Name</option>
@@ -459,7 +524,7 @@ function TemplatesPage() {
             <label className="text-sm font-medium text-gray-300">Order:</label>
             <button
               onClick={() =>
-                setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
+                updateSearch({ order: sortOrder === 'asc' ? 'desc' : 'asc' })
               }
               className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg px-3 py-2 hover:bg-gray-600 transition-colors flex items-center space-x-1"
             >
@@ -480,18 +545,28 @@ function TemplatesPage() {
             </button>
           </div>
 
+          {/* Clear Filters Button */}
+          {hasActiveFilters && (
+            <button
+              onClick={() => updateSearch({ status: undefined, customer: undefined, autoskip: undefined })}
+              className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+            >
+              Clear filters
+            </button>
+          )}
+
           {/* Results Count */}
           <div className="ml-auto text-sm text-gray-400">
-            {filteredTemplates.length} template
-            {filteredTemplates.length !== 1 ? 's' : ''}
+            {allTemplates.length} of {totalCount} template
+            {totalCount !== 1 ? 's' : ''}
           </div>
         </div>
       </div>
 
       {/* Templates Display */}
       <div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredTemplates.map((template) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {allTemplates.map((template) => (
             <TemplateCard
               key={template.id}
               template={template}
@@ -506,43 +581,76 @@ function TemplatesPage() {
           ))}
         </div>
 
-      {/* Empty State */}
-      {filteredTemplates.length === 0 && !isLoading && (
-        <div className="bg-gray-800 border border-gray-700 rounded-lg p-12 text-center">
-          <div className="text-gray-400 mb-4">
-            <svg
-              className="mx-auto h-12 w-12 text-gray-500"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-              />
-            </svg>
-          </div>
-          <h3 className="text-lg font-medium text-white mb-2">
-            {statusFilter === 'all'
-              ? 'No templates yet'
-              : `No ${statusFilter} templates`}
-          </h3>
-          <p className="text-gray-400 mb-4">
-            {statusFilter === 'all'
-              ? 'Get started by creating your first template'
-              : `Try adjusting your filters or create a new template`}
-          </p>
-          <button
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
-            onClick={handleCreateTemplate}
-          >
-            Create Template
-          </button>
+        {/* Infinite Scroll Loading Trigger */}
+        <div ref={loadMoreRef} className="h-10 mt-4 flex items-center justify-center">
+          {isFetchingNextPage && (
+            <div className="flex items-center gap-2 text-gray-400">
+              <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                  fill="none"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
+              </svg>
+              <span>Loading more...</span>
+            </div>
+          )}
         </div>
-      )}
-    </div>
+
+        {/* Empty State */}
+        {allTemplates.length === 0 && !isLoading && (
+          <div className="bg-gray-800 border border-gray-700 rounded-lg p-12 text-center">
+            <div className="text-gray-400 mb-4">
+              <svg
+                className="mx-auto h-12 w-12 text-gray-500"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                />
+              </svg>
+            </div>
+            <h3 className="text-lg font-medium text-white mb-2">
+              {hasActiveFilters
+                ? 'No templates match your filters'
+                : 'No templates yet'}
+            </h3>
+            <p className="text-gray-400 mb-4">
+              {hasActiveFilters
+                ? 'Try adjusting your filters or create a new template'
+                : 'Get started by creating your first template'}
+            </p>
+            {hasActiveFilters ? (
+              <button
+                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors font-medium mr-2"
+                onClick={() => updateSearch({ status: undefined, customer: undefined, autoskip: undefined })}
+              >
+                Clear Filters
+              </button>
+            ) : null}
+            <button
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
+              onClick={handleCreateTemplate}
+            >
+              Create Template
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Template Builder Modal */}
       <TemplateBuilder

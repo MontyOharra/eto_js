@@ -3,11 +3,12 @@
  * TanStack Query hooks for template operations
  */
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { apiClient } from '../../../shared/api/client';
 import { API_CONFIG } from '../../../shared/api/config';
 import {
   GetTemplatesQueryParams,
+  PaginatedTemplateListResponse,
   CreateTemplateRequest,
   UpdateTemplateRequest,
   SimulateTemplateRequest,
@@ -22,21 +23,59 @@ const baseUrl = API_CONFIG.ENDPOINTS.TEMPLATES;
 // ============================================================================
 
 /**
- * Fetch list of templates with filtering and sorting
- * Returns array of templates (backend doesn't paginate templates yet)
+ * Fetch list of templates with filtering, sorting, and infinite scroll pagination
+ * Returns paginated results that can be loaded incrementally
+ */
+export function useTemplatesInfinite(params?: Omit<GetTemplatesQueryParams, 'offset'>) {
+  const limit = params?.limit ?? 20;
+
+  return useInfiniteQuery({
+    queryKey: ['templates', 'infinite', params],
+    queryFn: async ({ pageParam = 0 }): Promise<PaginatedTemplateListResponse> => {
+      const response = await apiClient.get<PaginatedTemplateListResponse>(baseUrl, {
+        params: {
+          status_filter: params?.status,
+          customer_id: params?.customer_id,
+          autoskip_filter: params?.autoskip_filter,
+          sort_by: params?.sort_by,
+          sort_order: params?.sort_order,
+          limit,
+          offset: pageParam,
+        },
+      });
+      return response.data;
+    },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => {
+      const nextOffset = lastPage.offset + lastPage.limit;
+      // Return undefined when there are no more pages
+      return nextOffset < lastPage.total ? nextOffset : undefined;
+    },
+    staleTime: 60 * 1000, // Consider data stale after 1 minute
+    gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
+  });
+}
+
+/**
+ * @deprecated Use useTemplatesInfinite instead for paginated results
+ * Legacy hook - fetches first page only for backwards compatibility
  */
 export function useTemplates(params?: GetTemplatesQueryParams) {
   return useQuery({
     queryKey: ['templates', params],
     queryFn: async (): Promise<TemplateListItem[]> => {
-      const response = await apiClient.get<TemplateListItem[]>(baseUrl, {
+      const response = await apiClient.get<PaginatedTemplateListResponse>(baseUrl, {
         params: {
-          status: params?.status,
+          status_filter: params?.status,
+          customer_id: params?.customer_id,
+          autoskip_filter: params?.autoskip_filter,
           sort_by: params?.sort_by,
           sort_order: params?.sort_order,
+          limit: params?.limit ?? 100,
+          offset: params?.offset ?? 0,
         },
       });
-      return response.data;
+      return response.data.items;
     },
     staleTime: 60 * 1000, // Consider data stale after 1 minute
     gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes

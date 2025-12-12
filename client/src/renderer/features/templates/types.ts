@@ -90,6 +90,7 @@ export interface TemplateListItem {
   customer_id: number | null; // References external Access DB
   customer_name: string | null; // Customer name from Access DB (if available)
   status: TemplateStatus;
+  is_autoskip: boolean; // If true, pages matching this template are automatically skipped
   source_pdf_id: number;
   current_version: TemplateVersionSummary;
   total_versions: number; // Count of all versions for this template
@@ -106,6 +107,7 @@ export interface TemplateDetail {
   customer_id: number | null; // References external Access DB
   customer_name: string | null; // Customer name from Access DB (if available)
   status: TemplateStatus;
+  is_autoskip: boolean; // If true, pages matching this template are automatically skipped
   source_pdf_id: number;
   current_version_id: number | null;
   versions: VersionListItem[]; // All versions for navigation (IDs + numbers only)

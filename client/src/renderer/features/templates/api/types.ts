@@ -16,10 +16,23 @@ import type { PdfObjectsResponse as PdfObjectsResponseDTO } from '../../pdf/api/
 // GET /pdf-templates - List templates
 // =============================================================================
 
+export type AutoskipFilter = 'all' | 'processable' | 'skip';
+
 export interface GetTemplatesQueryParams {
   status?: TemplateStatus;
+  customer_id?: number;
+  autoskip_filter?: AutoskipFilter;
   sort_by?: 'name' | 'status' | 'usage_count';
   sort_order?: 'asc' | 'desc';
+  limit?: number;
+  offset?: number;
+}
+
+export interface PaginatedTemplateListResponse {
+  items: import('../types').TemplateListItem[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 
 // =============================================================================

@@ -38,6 +38,14 @@ class TemplateListItem(BaseModel):
     total_versions: int
 
 
+class PaginatedTemplateListResponse(BaseModel):
+    """Paginated response for template list with infinite scroll support"""
+    items: List[TemplateListItem]
+    total: int  # Total count matching filters (for knowing when to stop infinite scroll)
+    limit: int  # Page size used
+    offset: int  # Current offset
+
+
 # Version list item (used in template responses)
 class VersionListItem(BaseModel):
     """Lightweight version identifier for navigation"""

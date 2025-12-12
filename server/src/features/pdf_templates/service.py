@@ -84,26 +84,41 @@ class PdfTemplateService:
     def list_templates(
         self,
         status: Literal["active", "inactive"] | None = None,
+        customer_id: int | None = None,
+        autoskip_filter: Literal["all", "processable", "skip"] | None = None,
         sort_by: Literal["name", "status", "usage_count"] = "name",
-        sort_order: Literal["asc", "desc"] = "asc"
-    ) -> list[PdfTemplateListView]:
+        sort_order: Literal["asc", "desc"] = "asc",
+        limit: int = 20,
+        offset: int = 0
+    ) -> tuple[list[PdfTemplateListView], int]:
         """
-        List PDF templates with filtering and sorting.
+        List PDF templates with filtering, sorting, and pagination.
 
         Args:
             status: Filter by status ("active" or "inactive"), None for all
+            customer_id: Filter by customer ID, None for all
+            autoskip_filter: Filter by autoskip setting:
+                - "all" or None: No filter
+                - "processable": is_autoskip=False
+                - "skip": is_autoskip=True
             sort_by: Field to sort by ("name", "status", "usage_count")
             sort_order: Sort direction ("asc" or "desc")
+            limit: Number of items to return (default 20)
+            offset: Number of items to skip (default 0)
 
         Returns:
-            List of PdfTemplateListView
+            Tuple of (list of PdfTemplateListView, total count)
         """
         # Parameters are validated by Pydantic at API layer
         # Just delegate to repository
         return self.template_repository.list_templates(
             status=status,
+            customer_id=customer_id,
+            autoskip_filter=autoskip_filter,
             sort_by=sort_by,
-            sort_order=sort_order
+            sort_order=sort_order,
+            limit=limit,
+            offset=offset
         )
 
     def get_template(self, template_id: int) -> PdfTemplate:
@@ -496,8 +511,8 @@ class PdfTemplateService:
         logger.debug(f"Starting template matching for PDF with {pdf_page_count} pages")
 
         try:
-            # Get all active templates
-            active_templates = self.template_repository.list_templates(status="active")
+            # Get all active templates (unpack tuple - we only need the list, not total count)
+            active_templates, _ = self.template_repository.list_templates(status="active")
 
             if not active_templates:
                 logger.debug("No active templates found for matching")
@@ -621,8 +636,8 @@ class PdfTemplateService:
             logger.debug(f"Starting multi-page template matching for PDF {pdf_file.id} ({pdf_file.page_count} pages)")
 
         try:
-            # Get all active templates
-            active_templates = self.template_repository.list_templates(status="active")
+            # Get all active templates (unpack tuple - we only need the list, not total count)
+            active_templates, _ = self.template_repository.list_templates(status="active")
             if not active_templates:
                 logger.debug("No active templates found for matching")
                 # All pages are unmatched

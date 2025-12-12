@@ -54,25 +54,34 @@ class PdfTemplateRepository(BaseRepository[PdfTemplateModel]):
     def list_templates(
         self,
         status: str | None = None,
+        customer_id: int | None = None,
+        autoskip_filter: str | None = None,
         sort_by: str | None = None,
-        sort_order: str | None = None
-    ) -> list[PdfTemplateListView]:
+        sort_order: str | None = None,
+        limit: int = 20,
+        offset: int = 0
+    ) -> tuple[list[PdfTemplateListView], int]:
         """
-        List templates with filtering and sorting.
+        List templates with filtering, sorting, and pagination.
 
         Complex query that:
         - Joins with current_version to get version_num and usage_count
         - Counts total versions per template via subquery
-        - Filters by status if provided
+        - Filters by status, customer_id, and autoskip if provided
         - Sorts dynamically based on parameters
+        - Returns paginated results with total count
 
         Args:
             status: Filter by status ("active" or "inactive"), None for all
+            customer_id: Filter by customer ID, None for all
+            autoskip_filter: Filter by autoskip ("all", "processable", "skip"), None/"all" for all
             sort_by: Field to sort by ("name", "status", "usage_count")
             sort_order: Sort direction ("asc" or "desc")
+            limit: Number of items to return
+            offset: Number of items to skip
 
         Returns:
-            List of PdfTemplateSummary
+            Tuple of (list of PdfTemplateListView, total count matching filters)
         """
         with self._get_session() as session:
             # Subquery to count versions per template
@@ -107,6 +116,20 @@ class PdfTemplateRepository(BaseRepository[PdfTemplateModel]):
             if status:
                 query = query.filter(PdfTemplateModel.status == status)
 
+            # Apply customer filter
+            if customer_id is not None:
+                query = query.filter(PdfTemplateModel.customer_id == customer_id)
+
+            # Apply autoskip filter
+            if autoskip_filter and autoskip_filter != "all":
+                if autoskip_filter == "processable":
+                    query = query.filter(PdfTemplateModel.is_autoskip == False)
+                elif autoskip_filter == "skip":
+                    query = query.filter(PdfTemplateModel.is_autoskip == True)
+
+            # Get total count before pagination
+            total = query.count()
+
             if not sort_by:
                 sort_by = "name"
             if not sort_order:
@@ -123,6 +146,9 @@ class PdfTemplateRepository(BaseRepository[PdfTemplateModel]):
                 query = query.order_by(desc(sort_column))
             else:
                 query = query.order_by(asc(sort_column))
+
+            # Apply pagination
+            query = query.offset(offset).limit(limit)
 
             # Execute query
             results = query.all()
@@ -146,7 +172,7 @@ class PdfTemplateRepository(BaseRepository[PdfTemplateModel]):
                 for template, version_num, usage_count, version_count in results
             ]
 
-            return summaries
+            return summaries, total
 
     def get_by_id(self, template_id: int) -> PdfTemplate | None:
         """

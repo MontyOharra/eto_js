@@ -10,6 +10,7 @@ from fastapi import APIRouter, Query, status, Depends, File, UploadFile, Form
 from api.schemas.pdf_templates import (
     PdfTemplate,
     TemplateListItem,
+    PaginatedTemplateListResponse,
     VersionListItem,
     CreatePdfTemplateRequest,
     UpdatePdfTemplateRequest,
@@ -46,25 +47,39 @@ router = APIRouter(
 )
 
 
-@router.get("", response_model=list[TemplateListItem])
+@router.get("", response_model=PaginatedTemplateListResponse)
 async def list_pdf_templates(
     status_filter: Optional[Literal["active", "inactive"]] = Query(None, description="Filter by status"),
+    customer_id: Optional[int] = Query(None, description="Filter by customer ID"),
+    autoskip_filter: Optional[Literal["all", "processable", "skip"]] = Query(None, description="Filter by autoskip: 'all' (default), 'processable' (is_autoskip=False), 'skip' (is_autoskip=True)"),
     sort_by: Literal["name", "status", "usage_count"] = Query("name", description="Field to sort by"),
     sort_order: Literal["asc", "desc"] = Query("asc", description="Sort order"),
+    limit: int = Query(20, ge=1, le=100, description="Number of items per page"),
+    offset: int = Query(0, ge=0, description="Number of items to skip"),
     service: PdfTemplateService = Depends(lambda: ServiceContainer.get_pdf_template_service())
-) -> list[TemplateListItem]:
-    """List all PDF templates with filtering and sorting"""
-    summaries = service.list_templates(
+) -> PaginatedTemplateListResponse:
+    """List PDF templates with filtering, sorting, and pagination"""
+    summaries, total = service.list_templates(
         status=status_filter,
+        customer_id=customer_id,
+        autoskip_filter=autoskip_filter,
         sort_by=sort_by,
-        sort_order=sort_order
+        sort_order=sort_order,
+        limit=limit,
+        offset=offset
     )
 
     # Batch fetch customer names for all templates with customer_id
     customer_ids = [s.customer_id for s in summaries if s.customer_id is not None]
     customer_names = service._get_customer_names(customer_ids) if customer_ids else {}
 
-    return convert_template_summary_list(summaries, customer_names)
+    items = convert_template_summary_list(summaries, customer_names)
+    return PaginatedTemplateListResponse(
+        items=items,
+        total=total,
+        limit=limit,
+        offset=offset
+    )
 
 
 @router.get("/customers", response_model=GetCustomersResponse)
