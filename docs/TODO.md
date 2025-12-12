@@ -45,28 +45,147 @@ Mismatch between error save format and retrieve format:
 
 ## 2. Pipeline Output Visibility in ETO Details
 
-**Status:** Not Started
+**Status:** COMPLETED
 
 **Issue:** Need to display pipeline output data from the list view in the ETO details page for successful sub-runs.
 
-**Details:**
-- Success sub-runs should show what data was extracted/transformed
-- Output should be visible without having to drill into each module
-- Consider a summary view of key outputs
+**Solution Applied:** Display output channel data in a 2-column grid below successful sub-runs.
+
+**Files Modified:**
+1. `server/src/shared/types/eto_sub_runs.py`
+   - Added `output_channel_data: Optional[Dict[str, Any]]` field to `EtoSubRunDetailView`
+
+2. `server/src/shared/database/repositories/eto_sub_run.py`
+   - Updated `get_detail_view()` to fetch output channel data from `eto_sub_run_output_executions` table
+
+3. `server/src/api/mappers/eto_runs.py`
+   - Updated `eto_sub_run_detail_to_api()` to convert output channel data to `TransformResult` objects
+   - HAWB is always displayed first, followed by other fields with proper labels
+
+4. `client/src/renderer/features/eto/components/EtoRunDetailView/MatchedSubRunsSection.tsx`
+   - Updated styling for transform results display (2-column grid with proper formatting)
 
 ---
 
-## 3. Pending Order Confirmation Workflow
+## 3. Pending Order Conflict Resolution & Auto-Creation
 
-**Status:** Not Started
+**Status:** COMPLETED
 
-**Issue:** Orders are being created immediately. Need a pending/confirmation state where users must approve creation.
+**Issue:** Users need to be able to resolve field conflicts before orders auto-create in HTC.
 
-**Details:**
-- Add new status state for orders awaiting user confirmation
-- System should process orders to this pending state instead of auto-creating
-- User must explicitly confirm before HTC order creation
-- Consider batch approval functionality
+### Current Data Model
+
+**PendingOrderModel** - The actual order state:
+- Field values (pickup_address, etc.) - NULL if no selected value (conflict)
+- Status: `incomplete` → `ready` → `processing` → `created` / `failed`
+
+**PendingOrderHistoryModel** - Audit trail:
+- Each value contribution from a sub-run
+- `is_selected: bool` - TRUE if this is the chosen value
+- When new conflicting value arrives → existing selected gets `is_selected=FALSE`, field in pending_order set to NULL
+
+### Status Flow
+
+```
+┌────────────┐   ┌─────────┐   ┌────────────┐   ┌─────────┐
+│ incomplete │──▶│  ready  │──▶│ processing │──▶│ created │
+└────────────┘   └─────────┘   └────────────┘   └─────────┘
+                                     │
+                                     ▼
+                               ┌─────────┐
+                               │ failed  │ (retryable → back to ready)
+                               └─────────┘
+```
+
+**Status meanings:**
+- `incomplete` - Missing required fields OR has unresolved conflicts (on ANY field)
+- `ready` - All required fields present AND no unresolved conflicts → worker auto-picks up
+- `processing` - Worker creating in HTC
+- `created` - Done
+- `failed` - HTC error, can retry
+
+### Conflict Resolution Logic
+
+```
+1. Sub-run A contributes pickup_time="9:00"
+   → History: [pickup_time="9:00", is_selected=TRUE]
+   → PendingOrder: pickup_time="9:00"
+
+2. Sub-run B contributes pickup_time="10:00" (different!)
+   → History: [pickup_time="9:00", is_selected=FALSE],
+              [pickup_time="10:00", is_selected=FALSE]
+   → PendingOrder: pickup_time=NULL (CONFLICT!)
+
+3. User selects "9:00" from dropdown, confirms
+   → History: [pickup_time="9:00", is_selected=TRUE],
+              [pickup_time="10:00", is_selected=FALSE]
+   → PendingOrder: pickup_time="9:00"
+
+4. Sub-run C contributes pickup_time="9:00" (same as selected)
+   → No change, already matches selected value
+
+5. Sub-run D contributes pickup_time="11:00" (different from selected!)
+   → Conflict again! User must re-resolve
+```
+
+### Ready Status Criteria
+
+An order transitions to `ready` (auto-create) when:
+1. All **required** fields have a value (not NULL in pending_order)
+2. No **unresolved conflicts** exist on ANY field (required or optional)
+
+Conflict detection: Field has conflict if multiple history entries exist AND none have `is_selected=TRUE`
+
+### Implementation Tasks
+
+**Backend:**
+1. Add conflict detection helper - query history to find fields with unresolved conflicts
+2. Update status transition logic - after any field update, re-evaluate if order should be `ready` (check both required fields AND conflicts)
+3. Add user confirmation endpoint:
+   - `POST /pending-orders/{id}/confirm-field`
+   - Sets `is_selected=TRUE` on chosen history entry
+   - Updates field value in pending_order
+   - Re-evaluates status
+   - **Guard**: Reject if status is `processing`, `created`, or `failed` (race condition protection)
+4. Add retry endpoint for failed orders - moves status back to `ready`
+
+**Frontend:**
+1. Update pending order detail view:
+   - Show fields with their current values
+   - For fields with conflicts: show dropdown with all history values
+   - "Confirm" button to lock in selection
+   - Dropdown remains visible after confirmation (user can change mind)
+   - Disable editing if order is `processing`/`created`/`failed`
+2. Handle race condition errors - if user tries to confirm but order already created, show appropriate message
+
+### Future Consideration: Manual Approval Mode
+
+Currently implementing auto-creation mode only. Future enhancement could add configurable manual approval mode where:
+- `incomplete` → `pending_review` → `ready` (requires explicit user approval)
+- Would add `pending_review` and `rejected` statuses
+
+### Implementation Summary
+
+**Backend:**
+- `server/src/api/routers/order_management.py` - Added endpoints:
+  - `GET /pending-orders` - List with conflict counts
+  - `GET /pending-orders/{id}` - Detail with field history and conflict options
+  - `POST /pending-orders/{id}/confirm-field` - Resolve conflicts by selecting a value
+  - `POST /pending-orders/{id}/retry` - Retry failed orders
+  - `POST /mock/process-output` - Mock endpoint for testing
+- `server/src/api/schemas/order_management.py` - Request/response schemas
+- `server/src/api/mappers/order_management.py` - Domain to API mapping with conflict options
+- `server/src/features/order_management/service.py` - Business logic for conflict resolution
+
+**Frontend:**
+- `client/src/renderer/features/order-management/components/PendingOrderDetailView/` - Two-column detail view with:
+  - Field list with conflict dropdowns
+  - Dropdown persists after confirmation (user can change selection)
+  - Confirm button appears for conflicts or when user changes confirmed value
+  - Human-readable datetime formatting for time fields
+  - Contributing sources panel showing PDFs that contributed data
+- `client/src/renderer/pages/dashboard/orders/index.tsx` - Orders page with list/detail navigation
+- `client/src/renderer/features/order-management/api/hooks.ts` - React Query hooks
 
 ---
 
@@ -86,30 +205,220 @@ Mismatch between error save format and retrieve format:
 
 ## 5. Templates Page Improvements
 
-**Status:** Not Started
+**Status:** COMPLETED
 
-**Issues:**
-1. Templates are filtered on frontend, should be backend-filtered (like ETO page)
-2. Need filter/toggle for autoskip templates
-3. Card components take too much space and don't show enough useful data
+**Issue:** Templates page uses frontend filtering instead of backend SQL filtering, and cards are too wide.
 
-**Details:**
-- Add backend filtering endpoint with query parameters
-- Add autoskip filter option
-- Redesign template cards to be more compact and informative
-- Consider list view option vs card grid
+### Implementation Summary
+
+**Backend:**
+- Added `customer_id`, `autoskip_filter`, `limit`, `offset` query params to `GET /pdf-templates`
+- Added `PaginatedTemplateListResponse` schema with `items`, `total`, `limit`, `offset`
+- Updated repository to filter by customer, autoskip, and apply pagination
+- Returns total count for infinite scroll detection
+
+**Frontend:**
+- Implemented infinite scroll using TanStack Query's `useInfiniteQuery`
+- Added autoskip filter dropdown (All Types / Processable / Auto-Skip)
+- Added "Clear filters" button when filters are active
+- Updated grid to 4 columns on extra-large screens (`xl:grid-cols-4`)
+- URL state for filters using TanStack Router's `validateSearch`
+- Removed client-side `useMemo` filtering - now handled by backend
+
+### Previous State (for reference)
+- Frontend fetches ALL templates, filters/sorts in memory with `useMemo`
+- Backend already supports `status_filter`, `sort_by`, `sort_order` - but frontend doesn't use them
+- Customer filter exists on frontend but backend has no customer filter support
+- No pagination - loads all templates at once
+
+### Requirements
+
+**Backend Filtering (SQL-level):**
+- Move all filtering from frontend to backend
+- Add customer filter support to backend endpoint
+- Add autoskip filter support to backend endpoint
+- Add pagination support
+
+**Filter Controls:**
+- Status: dropdown (All / Active / Inactive) - already exists
+- Customer: dropdown - already exists, needs backend support
+- Autoskip: dropdown (All / Autoskip Only / Non-Autoskip)
+- Sort: alphabetical by name
+
+**Pagination:**
+- Add limit/offset to backend endpoint
+- Add pagination controls to frontend
+
+**Card Layout:**
+- Make cards narrower so 3 fit per row instead of 2
+- Keep card view (no list/table view needed for now)
+
+### Implementation Tasks
+
+**Backend:**
+1. Update `GET /pdf-templates` endpoint to add:
+   - `customer_id` query parameter for customer filtering
+   - `autoskip_filter` query parameter ("all" | "autoskip" | "non_autoskip")
+   - `limit` and `offset` for pagination
+   - Return total count for pagination UI
+2. Update repository `list_templates()` to support new filters
+3. Update service layer accordingly
+
+**Frontend:**
+1. Update `useTemplates()` hook to pass filter parameters to API
+2. Remove `useMemo` filtering logic - let backend handle it
+3. Add autoskip filter dropdown to page
+4. Add pagination component and controls
+5. Adjust card CSS to fit 3 per row (reduce max-width)
+
+### Files to Modify
+
+**Backend:**
+- `server/src/api/routers/pdf_templates.py` - Add query parameters
+- `server/src/api/schemas/pdf_templates.py` - Add response with total count
+- `server/src/features/pdf_templates/service.py` - Pass new filters
+- `server/src/shared/database/repositories/pdf_template.py` - SQL filtering
+
+**Frontend:**
+- `client/src/renderer/pages/dashboard/pdf-templates/index.tsx` - Remove frontend filtering, add pagination
+- `client/src/renderer/features/templates/api/hooks.ts` - Pass params to API
+- `client/src/renderer/features/templates/api/types.ts` - Update query params type
+- `client/src/renderer/features/templates/components/TemplateCard/TemplateCard.tsx` - Adjust width
 
 ---
 
 ## 6. Pending Orders Page Improvements
 
-**Status:** Not Started
+**Status:** Not Started (Design Complete - Waiting for Pending Updates Core)
 
-**Issue:** Pending orders page needs improvements (details TBD).
+**Issue:** Pending orders page needs a unified view showing both creates and updates in a single list.
 
-**Details:**
-- To be discussed and expanded during review
-- May include: better filtering, sorting, bulk actions, improved detail view
+### Background: Data Model
+
+**Pending Order (Create)**
+- One per unique HAWB + Customer ID combo
+- Lifecycle: `incomplete` → `ready` → `processing` → `created`/`failed`
+- Once `created`, this record is "done"
+
+**Pending Update**
+- One active per HAWB + Customer ID combo at a time
+- Created when ETO outputs data for a combo that already exists in HTC
+- Multiple field changes accumulate into the same pending update record
+- When user approves/rejects → that record closes, next ETO output creates NEW pending update
+- Lifecycle: `pending` → `approved`/`rejected`
+
+**Key Constraint**: Creates and updates are mutually exclusive per combo - updates only start after create completes (or if order pre-existed in HTC).
+
+### Design Decisions
+
+#### Unified List View
+
+Single list showing both creates and updates as separate rows (not tabbed):
+
+```
+| [Icon] | Type   | HAWB      | Customer | HTC Order # | Status/Fields Info              | Updated  |
+|--------|--------|-----------|----------|-------------|----------------------------------|----------|
+| 🟡     | CREATE | 11111111  | ABC Co   | -           | incomplete, 3/5 Req, 2 Conflicts | 5m ago   |
+| 🔵     | CREATE | 22222222  | XYZ Inc  | -           | ready, 5/5 Required              | 10m ago  |
+| ✓      | CREATE | 33333333  | DEF Ltd  | 54321       | created, 5/5 Required            | 1h ago   |
+| 🟡     | UPDATE | 93203188  | ABC Co   | 12345       | Pending, pickup_time, addr       | 2m ago   |
+| ✓      | UPDATE | 87654321  | XYZ Inc  | 67890       | Approved                         | 1h ago   |
+| 🔴     | CREATE | 44444444  | GHI Inc  | -           | failed                           | 30m ago  |
+```
+
+#### Column Structure
+
+**Common columns (both types):**
+- Icon indicator (far left)
+- Type (CREATE / UPDATE)
+- HAWB
+- Customer
+- HTC Order # (shows `-` for creates until created)
+- Status/Info (type-specific content)
+- Last Updated
+- Actions (View Details, View History)
+
+**Create-specific info:**
+- Status: incomplete / ready / processing / created / failed
+- Field progress: "X/Y Required"
+- Conflict count if any
+
+**Update-specific info:**
+- Decision status: Pending / Approved / Rejected
+- Field names being changed (e.g., "pickup_time, delivery_addr")
+
+#### Icon/Indicator States
+
+| Icon | Color | Meaning | Used When |
+|------|-------|---------|-----------|
+| ● | Yellow | Needs user action | Conflicts to resolve, pending decision |
+| ● | Red | Failure/Error | Create failed, system error |
+| ● | Blue | Unread, no action needed | New data arrived, waiting for auto-process |
+| ✓ | Green | Completed successfully | Order created, update approved |
+| ✗ | Gray | Completed (rejected) | Update rejected |
+| (none) | - | Read, no action needed | User has seen it |
+
+#### Read/Unread Tracking
+
+- Add `is_read` field to both `pending_orders` and `pending_updates` tables
+- Marked as read when user clicks into detail view
+- User can manually toggle read/unread status
+
+#### Data Architecture
+
+**Approach: Separate Tables + Unified Backend Endpoint**
+
+Keep existing tables:
+- `pending_orders` - add `is_read` boolean field
+- `pending_updates` - add `is_read` boolean field
+
+Create unified backend endpoint:
+- `GET /api/order-management/unified-actions`
+- Returns union of both tables for list display
+- Supports filtering by type, status, read/unread
+- Supports unified sorting across both types
+
+### Implementation Tasks
+
+**Backend:**
+
+1. Add `is_read` field to `pending_orders` table
+2. Add `is_read` field to `pending_updates` table
+3. Create unified list endpoint that unions both tables:
+   - Query params: type filter, status filter, is_read filter, sort, pagination
+   - Returns normalized rows with common + type-specific fields
+4. Add endpoint to mark items as read: `POST /api/order-management/mark-read`
+   - Accepts: `{ type: 'create' | 'update', id: number, is_read: boolean }`
+5. Update detail endpoints to auto-mark as read when fetched
+
+**Frontend:**
+
+1. Create new unified `OrderActionsTable` component
+2. Create row components for each type with appropriate styling
+3. Create icon indicator component based on state logic
+4. Update hooks to use unified endpoint
+5. Add read/unread toggle functionality
+6. Remove old tabbed interface (PendingOrdersHeader, PendingUpdatesHeader tabs)
+7. Update filters for unified view (type, status, read/unread)
+
+### Files to Modify
+
+**Backend:**
+- `server/src/shared/database/models.py` - Add is_read fields
+- `server/src/api/routers/order_management.py` - Add unified endpoint
+- `server/src/api/schemas/order_management.py` - Add unified response schema
+- `server/src/features/order_management/service.py` - Add unified query logic
+
+**Frontend:**
+- `client/src/renderer/pages/dashboard/orders/index.tsx` - Replace tabbed view
+- `client/src/renderer/features/order-management/components/` - New unified components
+- `client/src/renderer/features/order-management/api/hooks.ts` - New unified hooks
+- `client/src/renderer/features/order-management/types.ts` - Unified types
+
+### Dependencies
+
+- **Prerequisite**: Pending Updates core system must be built and tested first
+- Item 13 (SSE real-time updates) can be added after this redesign
 
 ---
 
@@ -217,6 +526,112 @@ pyodbc.Error: ('HY010', '[HY010] [Microsoft][ODBC Driver Manager] Function seque
 2. `server/src/shared/database/data_database_manager.py`
    - Changed `get_connection()` to return `AccessConnectionManager` instance instead of raw pyodbc connection
    - Ensures pipeline modules use the thread-safe `cursor()` method
+
+---
+
+## 13. Pending Orders Page Real-Time Updates & Navigation Preservation
+
+**Status:** Not Started
+
+**Issue:** The pending orders page does not receive real-time updates when the ETO system modifies pending orders, and navigation between list/detail views resets state.
+
+### Current ETO Page Pattern (Reference Implementation)
+
+The ETO page (`client/src/renderer/pages/dashboard/eto/index.tsx`) implements two key patterns that the pending orders page should follow:
+
+#### 1. SSE (Server-Sent Events) for Real-Time Updates
+
+**Hook:** `useEtoEvents` (`client/src/renderer/features/eto/hooks/useEtoEvents.ts`)
+
+- Connects to SSE endpoint `/api/eto-runs/events`
+- Automatically reconnects on connection loss (3-second delay)
+- Handles event types: `run_created`, `run_updated`, `run_deleted`, `sub_run_updated`, etc.
+- Invalidates TanStack Query caches when events received, triggering automatic refetch
+- Fallback polling interval (default 10 seconds) in case SSE events are missed
+- Disables fallback polling when in detail view (list is hidden anyway)
+
+**Backend:** SSE endpoint broadcasts events when:
+- New runs/sub-runs are created
+- Run/sub-run status changes
+- Runs are deleted
+
+#### 2. Navigation State Preservation
+
+**Pattern:** List view is kept mounted but hidden when detail view is open
+
+```tsx
+{/* Detail view - shown when a run is selected */}
+{selectedRunId && (
+  <EtoRunDetailViewWrapper runId={selectedRunId} onBack={handleBackToList} />
+)}
+
+{/* List view - kept mounted but hidden when detail view is open to preserve scroll position */}
+<div className={`h-full flex flex-col overflow-hidden ${selectedRunId ? 'hidden' : ''}`}>
+  {/* ... list content ... */}
+</div>
+```
+
+This approach:
+- Preserves scroll position in the list when returning from detail
+- Keeps filter/pagination state intact
+- Avoids re-fetching list data when navigating back
+- Uses CSS `hidden` class rather than conditional rendering
+
+### Implementation Tasks for Pending Orders
+
+**Backend:**
+
+1. Create SSE endpoint for pending orders: `GET /api/order-management/events`
+   - Event types needed:
+     - `pending_order_created` - New pending order created
+     - `pending_order_updated` - Status change, field update, conflict resolution
+     - `pending_order_deleted` - Order removed
+     - `pending_update_created` - New pending update for existing HTC order
+     - `pending_update_resolved` - Update approved/rejected
+
+2. Emit events from relevant services:
+   - `OutputProcessingService` - when processing creates/updates pending orders
+   - `OrderManagementService` - when user confirms fields, resolves conflicts
+   - `HtcIntegrationService` - when HTC order creation succeeds/fails
+   - Background worker - when auto-creating orders
+
+**Frontend:**
+
+1. Create `usePendingOrderEvents` hook (similar to `useEtoEvents`):
+   - Connect to SSE endpoint
+   - Handle reconnection logic
+   - Invalidate `pendingOrdersQueryKeys` on relevant events
+   - Support fallback polling
+   - Export from `features/order-management/hooks/index.ts`
+
+2. Update query keys structure in `features/order-management/api/hooks.ts`:
+   - Ensure proper key hierarchy for granular invalidation
+   - `pendingOrdersQueryKeys.lists()` - for list invalidation
+   - `pendingOrdersQueryKeys.detail(id)` - for detail invalidation
+
+3. Update `pages/dashboard/orders/index.tsx`:
+   - Add `usePendingOrderEvents` hook
+   - Change detail/list rendering to use hidden pattern instead of conditional rendering
+   - Preserve scroll position and filter state
+
+### Files to Create
+
+- `server/src/api/routers/order_management_events.py` - SSE endpoint
+- `client/src/renderer/features/order-management/hooks/usePendingOrderEvents.ts` - SSE hook
+
+### Files to Modify
+
+**Backend:**
+- `server/src/features/output_processing/service.py` - Emit events on pending order changes
+- `server/src/features/order_management/service.py` - Emit events on user actions
+- `server/src/features/htc_integration/service.py` - Emit events on HTC operations
+- `server/src/api/routers/__init__.py` - Register new events router
+
+**Frontend:**
+- `client/src/renderer/features/order-management/api/hooks.ts` - Add/update query keys
+- `client/src/renderer/features/order-management/hooks/index.ts` - Export new hook
+- `client/src/renderer/features/order-management/index.ts` - Re-export hook
+- `client/src/renderer/pages/dashboard/orders/index.tsx` - Integrate SSE and fix navigation
 
 ---
 
