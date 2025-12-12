@@ -17,6 +17,7 @@ from .output_channel_type import OutputChannelTypeRepository
 from .pending_order import PendingOrderRepository
 from .pending_order_history import PendingOrderHistoryRepository
 from .pending_update import PendingUpdateRepository
+from .pending_update_history import PendingUpdateHistoryRepository
 
 __all__ = [
     'BaseRepository',
@@ -36,4 +37,5 @@ __all__ = [
     'PendingOrderRepository',
     'PendingOrderHistoryRepository',
     'PendingUpdateRepository',
+    'PendingUpdateHistoryRepository',
 ]

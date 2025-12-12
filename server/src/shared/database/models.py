@@ -978,30 +978,31 @@ class PendingOrderHistoryModel(BaseModel):
 
 class PendingUpdateModel(BaseModel):
     """
-    Queue for proposed changes to orders that already exist in HTC.
+    Aggregated proposed changes for a single HAWB that already exists in HTC.
 
     When pipeline outputs data for a HAWB that's already in HTC,
     updates are queued here for user approval instead of auto-applying.
+
+    Structure mirrors PendingOrderModel - one record per unique (customer_id, hawb)
+    with status='pending'. Multiple field changes accumulate into the same record
+    via PendingUpdateHistoryModel until user approves/rejects.
+
+    Status flow:
+    - pending: Awaiting user review, may accumulate more field changes
+    - approved: User approved, changes applied to HTC
+    - rejected: User rejected the changes
+
+    After approval/rejection, a NEW pending_update record is created for
+    subsequent field changes from ETO.
     """
     __tablename__ = "pending_updates"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
-    # Order identification
+    # Order identification (unique per customer_id + hawb when status='pending')
     customer_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     hawb: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     htc_order_number: Mapped[float] = mapped_column(nullable=False, index=True)
-
-    # Source tracking
-    sub_run_id: Mapped[int] = mapped_column(
-        ForeignKey("eto_sub_runs.id", ondelete="SET NULL"),
-        nullable=True,  # Nullable due to SET NULL on delete
-        index=True
-    )
-
-    # Proposed change
-    field_name: Mapped[str] = mapped_column(String(50), nullable=False)
-    proposed_value: Mapped[str] = mapped_column(Text, nullable=False)
 
     # Status: pending -> approved/rejected
     status: Mapped[str] = mapped_column(
@@ -1010,18 +1011,96 @@ class PendingUpdateModel(BaseModel):
         server_default="pending",
     )
 
+    # Proposed field values (NULL means no change proposed for that field)
+    # Required fields
+    pickup_company_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    pickup_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    pickup_time_start: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    pickup_time_end: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    delivery_company_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    delivery_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    delivery_time_start: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    delivery_time_end: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+
+    # Optional fields
+    mawb: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    pickup_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    delivery_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    order_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    pieces: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    weight: Mapped[Optional[float]] = mapped_column(nullable=True)
+
     # Timestamps
-    proposed_at: Mapped[datetime] = mapped_column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
     )
     reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Relationships
-    sub_run: Mapped[Optional["EtoSubRunModel"]] = relationship()
+    history: Mapped[List["PendingUpdateHistoryModel"]] = relationship(
+        back_populates="pending_update", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         Index("idx_pending_updates_status", "status"),
         Index("idx_pending_updates_customer_hawb", "customer_id", "hawb"),
         Index("idx_pending_updates_order", "htc_order_number"),
-        Index("idx_pending_updates_sub_run", "sub_run_id"),
+    )
+
+
+# =========================
+# pending_update_history (field contribution audit trail for updates)
+# =========================
+
+class PendingUpdateHistoryModel(BaseModel):
+    """
+    Tracks each field contribution from sub-runs for pending updates.
+
+    Mirrors PendingOrderHistoryModel structure for consistency.
+    Used to track which sub-runs contributed which proposed changes
+    and support conflict resolution if multiple sub-runs propose
+    different values for the same field.
+    """
+    __tablename__ = "pending_update_history"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    # Parent pending update
+    pending_update_id: Mapped[int] = mapped_column(
+        ForeignKey("pending_updates.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+
+    # Source tracking
+    sub_run_id: Mapped[int] = mapped_column(
+        ForeignKey("eto_sub_runs.id", ondelete="SET NULL"),
+        nullable=True,  # Nullable due to SET NULL on delete
+        index=True
+    )
+
+    # Field contribution
+    field_name: Mapped[str] = mapped_column(String(50), nullable=False)
+    field_value: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # Conflict resolution - TRUE if user explicitly chose this value
+    is_selected: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    # Timestamp
+    contributed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
+    )
+
+    # Relationships
+    pending_update: Mapped["PendingUpdateModel"] = relationship(back_populates="history")
+    sub_run: Mapped[Optional["EtoSubRunModel"]] = relationship()
+
+    __table_args__ = (
+        Index("idx_puh_pending_update", "pending_update_id"),
+        Index("idx_puh_field", "pending_update_id", "field_name"),
+        Index("idx_puh_sub_run", "sub_run_id"),
+        Index("idx_puh_selected", "pending_update_id", "field_name", "is_selected"),
     )

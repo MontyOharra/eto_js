@@ -194,34 +194,100 @@ class PendingUpdateCreate:
     customer_id: int
     hawb: str
     htc_order_number: float
-    sub_run_id: int
-    field_name: str
-    proposed_value: str
 
 
 class PendingUpdateUpdate(TypedDict, total=False):
     """
     Dict for updating a pending update record.
+    All fields are optional - only provided fields will be updated.
     """
     status: PendingUpdateStatus
     reviewed_at: datetime | None
+    # Field values
+    pickup_company_name: str | None
+    pickup_address: str | None
+    pickup_time_start: str | None
+    pickup_time_end: str | None
+    delivery_company_name: str | None
+    delivery_address: str | None
+    delivery_time_start: str | None
+    delivery_time_end: str | None
+    mawb: str | None
+    pickup_notes: str | None
+    delivery_notes: str | None
+    order_notes: str | None
+    pieces: int | None
+    weight: float | None
 
 
 @dataclass
 class PendingUpdate:
     """
     Complete pending update record as stored in the database.
+    Mirrors PendingOrder structure for consistency.
     """
     id: int
     customer_id: int
     hawb: str
     htc_order_number: float
+    status: PendingUpdateStatus
+    # Field values (NULL means no change proposed for that field)
+    pickup_company_name: Optional[str]
+    pickup_address: Optional[str]
+    pickup_time_start: Optional[str]
+    pickup_time_end: Optional[str]
+    delivery_company_name: Optional[str]
+    delivery_address: Optional[str]
+    delivery_time_start: Optional[str]
+    delivery_time_end: Optional[str]
+    mawb: Optional[str]
+    pickup_notes: Optional[str]
+    delivery_notes: Optional[str]
+    order_notes: Optional[str]
+    pieces: Optional[int]
+    weight: Optional[float]
+    # Timestamps
+    created_at: datetime
+    updated_at: datetime
+    reviewed_at: Optional[datetime]
+
+
+# =========================
+# Pending Update History Types
+# =========================
+
+@dataclass
+class PendingUpdateHistoryCreate:
+    """
+    Data required to create a new pending update history entry.
+    """
+    pending_update_id: int
+    sub_run_id: int
+    field_name: str
+    field_value: str
+    is_selected: bool = False
+
+
+class PendingUpdateHistoryUpdate(TypedDict, total=False):
+    """
+    Dict for updating a pending update history entry.
+    Typically only is_selected is updated (for conflict resolution).
+    """
+    is_selected: bool
+
+
+@dataclass
+class PendingUpdateHistory:
+    """
+    Complete pending update history entry as stored in the database.
+    """
+    id: int
+    pending_update_id: int
     sub_run_id: Optional[int]  # Can be null if sub-run deleted
     field_name: str
-    proposed_value: str
-    status: PendingUpdateStatus
-    proposed_at: datetime
-    reviewed_at: Optional[datetime]
+    field_value: str
+    is_selected: bool
+    contributed_at: datetime
 
 
 # =========================
