@@ -123,11 +123,11 @@ export function MatchedSubRunsSection({
             </div>
 
             {subRun.status === 'success' && subRun.transform_results.length > 0 && (
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm ml-11">
-                {subRun.transform_results.map((result) => (
-                  <div key={result.field_name} className="flex gap-2">
-                    <span className="text-gray-500 capitalize">{result.field_name.replace(/([A-Z])/g, ' $1').trim()}:</span>
-                    <span className="text-gray-300">{result.value}</span>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm ml-11 mt-2 p-3 bg-gray-800/50 rounded-lg">
+                {subRun.transform_results.map((result, index) => (
+                  <div key={`${result.field_name}-${index}`} className="flex gap-2 overflow-hidden">
+                    <span className="text-gray-400 font-medium whitespace-nowrap">{result.field_name}:</span>
+                    <span className="text-gray-200 truncate" title={result.value}>{result.value}</span>
                   </div>
                 ))}
               </div>

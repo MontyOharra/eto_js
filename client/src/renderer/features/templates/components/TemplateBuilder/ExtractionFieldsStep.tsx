@@ -412,7 +412,7 @@ export function ExtractionFieldsStep({
 
       {/* PDF Viewer */}
       <div className="flex-1 overflow-hidden bg-gray-800">
-        <PdfViewer pdfUrl={pdfUrl}>
+        <PdfViewer pdfUrl={pdfUrl} autoFitWidth>
           <PdfViewer.Canvas
             pdfUrl={pdfUrl}
             onMouseDown={handleMouseDown}

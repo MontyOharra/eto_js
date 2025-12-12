@@ -51,7 +51,7 @@
  * - Result: Overlays stay perfectly aligned during zoom and scroll
  */
 
-import { useState, useCallback, useEffect, ReactNode } from 'react';
+import { useState, useCallback, useEffect, useRef, ReactNode } from 'react';
 import { pdfjs } from 'react-pdf';
 import {
   PdfViewerContext,
@@ -92,6 +92,14 @@ export interface PdfViewerProps {
   onScaleChange?: (scale: number) => void;
   /** Callback when page changes (for controlled state) */
   onPageChange?: (page: number) => void;
+  /**
+   * Automatically fit PDF to container width when loaded.
+   * If true, ignores initialScale and calculates optimal scale.
+   * Assumes sidebar width of 64px (w-16).
+   */
+  autoFitWidth?: boolean;
+  /** Sidebar width in pixels for autoFitWidth calculation. Default: 64 */
+  sidebarWidth?: number;
 }
 
 export function PdfViewer({
@@ -104,12 +112,18 @@ export function PdfViewer({
   children,
   onScaleChange,
   onPageChange,
+  autoFitWidth = false,
+  sidebarWidth = 64,
 }: PdfViewerProps) {
   // State
   const [scale, setScaleState] = useState(initialScale);
   const [currentPage, setCurrentPageState] = useState(initialPage);
   const [totalPdfPages, setTotalPdfPages] = useState<number | null>(null);
   const [pdfDimensions, setPdfDimensions] = useState<PdfDimensions | null>(null);
+  const [hasAutoFitted, setHasAutoFitted] = useState(false);
+
+  // Ref for container to measure width
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Fixed high-quality render scale (matches PdfCanvas)
   const RENDER_SCALE = 3.0;
@@ -124,7 +138,7 @@ export function PdfViewer({
 
   // Sync with external state (controlled component)
   useEffect(() => {
-    if (initialScale !== scale) {
+    if (initialScale !== scale && !autoFitWidth) {
       setScaleState(initialScale);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -136,6 +150,27 @@ export function PdfViewer({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialPage]);
+
+  // Auto fit to width when PDF dimensions become available
+  useEffect(() => {
+    if (autoFitWidth && pdfDimensions && containerRef.current && !hasAutoFitted) {
+      const containerWidth = containerRef.current.clientWidth;
+      const padding = 32; // px-4 on PdfCanvas = 16px on each side
+      const availableWidth = containerWidth - sidebarWidth - padding;
+      const newScale = availableWidth / pdfDimensions.width;
+      const clampedScale = Math.max(minScale, Math.min(maxScale, newScale));
+      setScaleState(clampedScale);
+      onScaleChange?.(clampedScale);
+      setHasAutoFitted(true);
+    }
+  }, [autoFitWidth, pdfDimensions, hasAutoFitted, sidebarWidth, minScale, maxScale, onScaleChange]);
+
+  // Reset hasAutoFitted when pdfUrl changes (handled via pdfDimensions becoming null)
+  useEffect(() => {
+    if (!pdfDimensions) {
+      setHasAutoFitted(false);
+    }
+  }, [pdfDimensions]);
 
   // Scale control with bounds
   const setScale = useCallback((newScale: number) => {
@@ -240,7 +275,7 @@ export function PdfViewer({
 
   return (
     <PdfViewerContext.Provider value={contextValue}>
-      <div className="relative w-full h-full flex">
+      <div ref={containerRef} className="relative w-full h-full flex">
         {children}
       </div>
     </PdfViewerContext.Provider>

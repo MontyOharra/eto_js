@@ -34,7 +34,7 @@ export function PdfViewerSection({
 }: PdfViewerSectionProps) {
   return (
     <div className="flex-1 overflow-hidden bg-gray-800">
-      <PdfViewer pdfUrl={pdfUrl} selectedPages={selectedPages}>
+      <PdfViewer pdfUrl={pdfUrl} allowedPages={selectedPages} autoFitWidth>
         <PdfViewer.Canvas pdfUrl={pdfUrl}>
           <PdfObjectOverlay
             objects={pdfObjects}

@@ -59,7 +59,7 @@ export function PdfViewerModal({
 
         {/* PDF Viewer Content */}
         <div className="flex-1 overflow-hidden p-4">
-          <PdfViewer pdfUrl={pdfUrl} onError={handlePdfError}>
+          <PdfViewer pdfUrl={pdfUrl} onError={handlePdfError} autoFitWidth>
             <PdfViewer.Canvas pdfUrl={pdfUrl} onError={handlePdfError} />
             <PdfViewer.ControlsSidebar position="right" />
           </PdfViewer>

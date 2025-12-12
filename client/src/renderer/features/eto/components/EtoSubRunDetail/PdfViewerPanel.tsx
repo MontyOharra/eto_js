@@ -22,29 +22,6 @@ interface PdfViewerPanelProps {
 function AutoFitOnResize({ isDragging }: { isDragging: boolean }) {
   const { fitToWidth, pdfDimensions } = usePdfViewer();
   const pdfViewerRef = useRef<HTMLDivElement>(null);
-  const hasAutoFittedOnLoad = useRef(false);
-
-  // Auto-fit when PDF first loads
-  useEffect(() => {
-    if (
-      !pdfDimensions ||
-      !pdfViewerRef.current ||
-      hasAutoFittedOnLoad.current
-    ) {
-      return;
-    }
-
-    const pdfViewerContainer = pdfViewerRef.current.parentElement;
-    if (!pdfViewerContainer) {
-      return;
-    }
-
-    // Trigger fit-to-width on initial load
-    const containerWidth = pdfViewerContainer.clientWidth;
-    const sidebarWidth = 64; // w-16 = 64px
-    fitToWidth(containerWidth, sidebarWidth);
-    hasAutoFittedOnLoad.current = true;
-  }, [pdfDimensions, fitToWidth]);
 
   // Trigger fit-to-width on resize, but ONLY when dragging the divider
   useEffect(() => {
@@ -114,7 +91,7 @@ export function PdfViewerPanel({
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-lg h-full overflow-hidden relative pr-4 pl-1 py-4">
       {pdfUrl ? (
-        <PdfViewer pdfUrl={pdfUrl} onError={handlePdfError} allowedPages={sortedMatchedPages || undefined}>
+        <PdfViewer pdfUrl={pdfUrl} onError={handlePdfError} allowedPages={sortedMatchedPages || undefined} autoFitWidth>
           <AutoFitOnResize isDragging={isDragging} />
           <PdfViewer.Canvas pdfUrl={pdfUrl} onError={handlePdfError}>
             {/* Show extraction field overlay if provided */}

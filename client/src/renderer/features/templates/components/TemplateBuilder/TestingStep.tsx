@@ -241,7 +241,7 @@ function PdfViewerWithAutoFit({
 
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-lg h-full overflow-hidden relative pr-4 pl-1 py-4 pdf-viewer-container">
-      <PdfViewer pdfUrl={pdfUrl} onError={handlePdfError}>
+      <PdfViewer pdfUrl={pdfUrl} onError={handlePdfError} autoFitWidth>
         <AutoFitOnResize isDragging={isDragging} />
         <PdfViewer.Canvas pdfUrl={pdfUrl} onError={handlePdfError}>
           {extractionResults && extractionResults.length > 0 && (

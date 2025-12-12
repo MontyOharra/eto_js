@@ -60,7 +60,7 @@ export function ExtractionFieldsView({
 
       {/* PDF Viewer with overlay */}
       <div className="flex-1 bg-gray-900 p-4 overflow-auto">
-        <PdfViewer pdfUrl={pdfUrl}>
+        <PdfViewer pdfUrl={pdfUrl} autoFitWidth>
           <PdfViewer.Canvas pdfUrl={pdfUrl}>
             <ExtractionFieldsOverlay fields={extractionFields} />
           </PdfViewer.Canvas>
