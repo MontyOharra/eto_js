@@ -14,6 +14,7 @@ class TextCleanerConfig(BaseModel):
     """Configuration for text cleaning operations"""
     strip_whitespace: bool = Field(True, description="Remove leading/trailing whitespace")
     normalize_spaces: bool = Field(True, description="Convert multiple spaces to single space")
+    remove_all_spaces: bool = Field(False, description="Remove all spaces from the text")
     remove_empty_lines: bool = Field(False, description="Remove empty lines")
     replace_newlines_with_spaces: bool = Field(False, description="Replace newline characters with spaces")
     to_lowercase: bool = Field(False, description="Convert text to lowercase")
@@ -98,6 +99,10 @@ class BasicTextCleaner(TransformModule):
         if cfg.normalize_spaces:
             # Replace multiple spaces/tabs with single space
             cleaned_text = re.sub(r'\s+', ' ', cleaned_text)
+
+        if cfg.remove_all_spaces:
+            # Remove all space characters
+            cleaned_text = cleaned_text.replace(' ', '')
 
         if cfg.remove_empty_lines:
             # Remove empty lines
