@@ -4,17 +4,20 @@ Platform-independent email integration using IMAP (receive) and SMTP (send).
 """
 import email
 from email.header import decode_header
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from email.utils import parseaddr, parsedate_to_datetime
 from email.message import Message
 import imaplib
 import logging
+import smtplib
 import ssl
 import threading
 import time
 from datetime import datetime, timezone
 from typing import Optional
 
-from .base_integration import BaseEmailIntegration, EmailMessage, EmailAttachment, ValidationResult
+from .base_integration import BaseEmailIntegration, EmailMessage, EmailAttachment, ValidationResult, SendEmailResult
 from .registry import IntegrationRegistry
 
 logger = logging.getLogger(__name__)
@@ -759,3 +762,111 @@ class StandardEmailIntegration(BaseEmailIntegration):
             return "".join(result_parts)
         except Exception:
             return value
+
+    # ========== SMTP Email Sending ==========
+
+    def send_email(
+        self,
+        to_address: str,
+        subject: str,
+        body: str,
+        body_html: str | None = None,
+    ) -> SendEmailResult:
+        """
+        Send an email using SMTP.
+
+        Creates a new SMTP connection for each send operation (stateless).
+        Uses TLS/SSL based on port and use_ssl setting.
+
+        Args:
+            to_address: Recipient email address
+            subject: Email subject line
+            body: Plain text email body
+            body_html: Optional HTML email body (if provided, sends multipart)
+
+        Returns:
+            SendEmailResult with success status and message
+        """
+        if not self.smtp_host:
+            return SendEmailResult(
+                success=False,
+                message="SMTP host not configured for this email account",
+            )
+
+        self.logger.info(f"[SMTP] Sending email to {to_address}")
+        self.logger.debug(f"[SMTP]   Server: {self.smtp_host}:{self.smtp_port}")
+        self.logger.debug(f"[SMTP]   Subject: {subject}")
+
+        try:
+            # Build the email message
+            if body_html:
+                # Multipart message with both plain text and HTML
+                msg = MIMEMultipart("alternative")
+                msg.attach(MIMEText(body, "plain", "utf-8"))
+                msg.attach(MIMEText(body_html, "html", "utf-8"))
+            else:
+                # Plain text only
+                msg = MIMEText(body, "plain", "utf-8")
+
+            msg["Subject"] = subject
+            msg["From"] = self.email_address
+            msg["To"] = to_address
+
+            # Connect and send
+            # Port 465 = SSL (SMTPS), Port 587 = STARTTLS, others = try STARTTLS
+            if self.smtp_port == 465:
+                # Direct SSL connection
+                self.logger.debug("[SMTP] Using SSL connection (port 465)")
+                context = ssl.create_default_context()
+                with smtplib.SMTP_SSL(
+                    host=self.smtp_host,
+                    port=self.smtp_port,
+                    context=context,
+                ) as smtp:
+                    smtp.login(self.email_address, self.password)
+                    smtp.send_message(msg)
+            else:
+                # STARTTLS connection (port 587 or other)
+                self.logger.debug(f"[SMTP] Using STARTTLS connection (port {self.smtp_port})")
+                with smtplib.SMTP(
+                    host=self.smtp_host,
+                    port=self.smtp_port,
+                ) as smtp:
+                    smtp.ehlo()
+                    if self.use_ssl:
+                        context = ssl.create_default_context()
+                        smtp.starttls(context=context)
+                        smtp.ehlo()
+                    smtp.login(self.email_address, self.password)
+                    smtp.send_message(msg)
+
+            self.logger.info(f"[SMTP] Email sent successfully to {to_address}")
+            return SendEmailResult(
+                success=True,
+                message=f"Email sent successfully to {to_address}",
+            )
+
+        except smtplib.SMTPAuthenticationError as e:
+            self.logger.error(f"[SMTP] Authentication failed: {e}")
+            return SendEmailResult(
+                success=False,
+                message=f"SMTP authentication failed: {e}",
+            )
+        except smtplib.SMTPRecipientsRefused as e:
+            self.logger.error(f"[SMTP] Recipient refused: {e}")
+            return SendEmailResult(
+                success=False,
+                message=f"Recipient address refused: {to_address}",
+            )
+        except smtplib.SMTPException as e:
+            self.logger.error(f"[SMTP] SMTP error: {e}")
+            return SendEmailResult(
+                success=False,
+                message=f"SMTP error: {e}",
+            )
+        except Exception as e:
+            self.logger.error(f"[SMTP] Failed to send email: {e}")
+            return SendEmailResult(
+                success=False,
+                message=f"Failed to send email: {e}",
+            )

@@ -40,6 +40,7 @@ from features.email.integrations.base_integration import (
     BaseEmailIntegration,
     EmailMessage,
     ValidationResult,
+    SendEmailResult,
 )
 from features.email.poller import PollerWorker
 from features.email.processing import EmailProcessingHandler
@@ -336,6 +337,61 @@ class EmailService:
             }
 
         raise ValidationError(f"Provider type '{provider_type}' not yet implemented")
+
+    # ========== Email Sending ==========
+
+    def send_email(
+        self,
+        account_id: int,
+        to_address: str,
+        subject: str,
+        body: str,
+        body_html: str | None = None,
+    ) -> SendEmailResult:
+        """
+        Send an email using the specified account.
+
+        Uses a transient integration connection - creates connection, sends, disconnects.
+        Does not require an active ingestion config.
+
+        Args:
+            account_id: ID of the email account to send from
+            to_address: Recipient email address
+            subject: Email subject line
+            body: Plain text email body
+            body_html: Optional HTML email body
+
+        Returns:
+            SendEmailResult with success status and message
+        """
+        logger.info(f"Sending email via account {account_id} to {to_address}")
+
+        account = self.account_repository.get_by_id(account_id)
+        if not account:
+            raise ObjectNotFoundError(f"Email account {account_id} not found")
+
+        if not account.is_validated:
+            raise ValidationError(
+                f"Email account {account_id} is not validated. "
+                "Please validate the account first."
+            )
+
+        # Create transient integration for sending
+        integration = self._create_integration_from_account(account)
+
+        result = integration.send_email(
+            to_address=to_address,
+            subject=subject,
+            body=body,
+            body_html=body_html,
+        )
+
+        if result.success:
+            logger.info(f"Email sent successfully via account {account_id}")
+        else:
+            logger.warning(f"Failed to send email via account {account_id}: {result.message}")
+
+        return result
 
     # ========== Account Management ==========
 

@@ -130,3 +130,19 @@ class FolderListResponse(BaseModel):
     """List of folders for an email account"""
     account_id: int
     folders: list[str]
+
+
+# ========== Email Sending ==========
+
+class SendEmailRequest(BaseModel):
+    """Request to send an email"""
+    to_address: str = Field(..., description="Recipient email address")
+    subject: str = Field(..., description="Email subject line")
+    body: str = Field(..., description="Plain text email body")
+    body_html: Optional[str] = Field(None, description="Optional HTML email body")
+
+
+class SendEmailResponse(BaseModel):
+    """Response from sending an email"""
+    success: bool = Field(..., description="Whether email was sent successfully")
+    message: str = Field(..., description="Status message")

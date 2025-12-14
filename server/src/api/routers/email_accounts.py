@@ -15,6 +15,8 @@ from api.schemas.email_accounts import (
     EmailAccountResponse,
     EmailAccountListResponse,
     FolderListResponse,
+    SendEmailRequest,
+    SendEmailResponse,
 )
 from api.mappers.email_accounts import (
     email_account_to_api,
@@ -182,3 +184,34 @@ async def delete_account(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ConflictError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+
+
+@router.post(
+    "/{account_id}/send",
+    response_model=SendEmailResponse,
+    summary="Send email (test endpoint)",
+    description="Send an email using the specified account. This endpoint can be used "
+                "to test SMTP configuration before integrating into automated workflows.",
+)
+async def send_email(
+    account_id: int,
+    request: SendEmailRequest,
+    service: EmailService = Depends(lambda: ServiceContainer.get_email_service()),
+) -> SendEmailResponse:
+    """Send an email using the specified account."""
+    try:
+        result = service.send_email(
+            account_id=account_id,
+            to_address=request.to_address,
+            subject=request.subject,
+            body=request.body,
+            body_html=request.body_html,
+        )
+        return SendEmailResponse(
+            success=result.success,
+            message=result.message,
+        )
+    except ObjectNotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

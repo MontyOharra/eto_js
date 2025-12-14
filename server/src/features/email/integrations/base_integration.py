@@ -58,6 +58,17 @@ class ValidationResult:
     folder_count: int | None = None
 
 
+@dataclass(frozen=True)
+class SendEmailResult:
+    """
+    Result of sending an email.
+
+    Returned by send_email() - contains success status and message.
+    """
+    success: bool
+    message: str
+
+
 class BaseEmailIntegration(ABC):
     """
     Abstract base class for email integrations.
@@ -191,5 +202,29 @@ class BaseEmailIntegration(ABC):
 
         Returns:
             List of EmailAttachment dataclasses with filename, content_type, and data
+        """
+        pass
+
+    # ========== Email Sending Operations ==========
+
+    @abstractmethod
+    def send_email(
+        self,
+        to_address: str,
+        subject: str,
+        body: str,
+        body_html: str | None = None,
+    ) -> SendEmailResult:
+        """
+        Send an email using the configured SMTP settings.
+
+        Args:
+            to_address: Recipient email address
+            subject: Email subject line
+            body: Plain text email body
+            body_html: Optional HTML email body (if provided, sends multipart)
+
+        Returns:
+            SendEmailResult with success status and message
         """
         pass
