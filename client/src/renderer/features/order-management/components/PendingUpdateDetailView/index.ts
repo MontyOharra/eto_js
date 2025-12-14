@@ -1,0 +1,1 @@
+export { PendingUpdateDetailView } from './PendingUpdateDetailView';
