@@ -548,8 +548,14 @@ class EtoRunsService:
                     try:
                         error = json.loads(step.error)
                     except (json.JSONDecodeError, TypeError):
-                        # Error is stored as plain string, not JSON - keep as-is
-                        error = step.error
+                        # Error is stored as plain string, not JSON - convert to dict
+                        # Parse "ExceptionType: message" format if present
+                        error_str = step.error
+                        if ": " in error_str:
+                            error_type, error_msg = error_str.split(": ", 1)
+                            error = {"type": error_type, "message": error_msg}
+                        else:
+                            error = {"type": "Error", "message": error_str}
 
                 steps.append(EtoRunPipelineExecutionStepDetailView(
                     id=step.id,

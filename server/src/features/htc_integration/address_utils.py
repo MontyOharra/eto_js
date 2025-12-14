@@ -284,6 +284,7 @@ class HtcAddressUtils:
         """
         try:
             import usaddress
+            from usaddress import RepeatedLabelError #type: ignore
         except ImportError:
             logger.error("usaddress library not installed. Run: pip install usaddress")
             raise ImportError("usaddress library required for address parsing")
@@ -296,7 +297,7 @@ class HtcAddressUtils:
 
         try:
             parsed, address_type = usaddress.tag(address_string)
-        except usaddress.RepeatedLabelError as e:
+        except RepeatedLabelError as e:
             logger.warning(f"Address parsing ambiguous (repeated labels): {e}")
             return None
 
