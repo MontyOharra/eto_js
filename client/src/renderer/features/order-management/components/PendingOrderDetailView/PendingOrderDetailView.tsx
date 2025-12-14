@@ -219,7 +219,8 @@ function FieldRow({ field, localSelection, onConflictSelect, onConfirm, isConfir
   };
 
   // Show dropdown if there are multiple options (conflict or confirmed with history)
-  const showDropdown = hasMultipleOptions;
+  // But only if the order is editable (not created/processing/failed)
+  const showDropdown = hasMultipleOptions && canEdit;
 
   return (
     <div

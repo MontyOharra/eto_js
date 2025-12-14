@@ -8,10 +8,15 @@ export { PendingOrderDetailView } from './PendingOrderDetailView';
 
 // Pending Updates
 export { PendingUpdatesTable } from './PendingUpdatesTable';
+export { PendingUpdatesListTable } from './PendingUpdatesListTable';
+export { PendingUpdateDetailView } from './PendingUpdateDetailView';
 export { PendingUpdatesHeader } from './PendingUpdatesHeader';
 
 // Order History
 export { OrderHistoryTimeline } from './OrderHistoryTimeline';
+
+// Unified View
+export { UnifiedActionsTable } from './UnifiedActionsTable';
 
 // Shared
 export { FieldStatusBadge } from './FieldStatusBadge';

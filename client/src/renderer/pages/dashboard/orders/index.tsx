@@ -1,24 +1,20 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useState, useEffect } from 'react';
 import {
-  PendingOrdersHeader,
-  PendingOrdersTable,
+  UnifiedActionsTable,
   PendingOrderDetailView,
-  PendingUpdatesHeader,
-  PendingUpdatesTable,
+  PendingUpdateDetailView,
   OrderHistoryTimeline,
-  usePendingOrders,
   usePendingOrderDetail,
   useConfirmField,
-  usePendingUpdatesGrouped,
+  usePendingUpdateDetail,
   useOrderHistory,
   useApprovePendingUpdate,
   useRejectPendingUpdate,
-  useBulkApprovePendingUpdates,
-  useBulkRejectPendingUpdates,
-  PendingOrderSortOption,
-  PendingUpdateSortOption,
-  PendingOrderStatus,
+  useConfirmUpdateField,
+  useUnifiedActions,
+  useMarkRead,
+  ActionType,
 } from '../../../features/order-management';
 import { EtoSubRunDetailViewer } from '../../../features/eto';
 
@@ -26,35 +22,18 @@ export const Route = createFileRoute('/dashboard/orders/')({
   component: OrdersPage,
 });
 
-/**
- * Custom hook for debouncing a value
- */
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState(value);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [value, delay]);
-
-  return debouncedValue;
-}
-
-type ViewMode = 'pending-orders' | 'pending-updates';
 type DetailView =
   | { type: 'order-detail'; orderId: number }
+  | { type: 'update-detail'; updateId: number }
   | { type: 'order-history'; hawb: string }
   | null;
 
-function OrdersPage() {
-  // View mode toggle
-  const [viewMode, setViewMode] = useState<ViewMode>('pending-orders');
+// Filter type for unified view
+type TypeFilter = 'all' | 'create' | 'update';
+type StatusFilter = 'all' | string;
+type ReadFilter = 'all' | 'read' | 'unread';
 
+function OrdersPage() {
   // Detail view state
   const [detailView, setDetailView] = useState<DetailView>(null);
 
@@ -62,45 +41,34 @@ function OrdersPage() {
   const [viewingSubRunId, setViewingSubRunId] = useState<number | null>(null);
 
   // ============================================================================
-  // Pending Orders State
+  // Unified Actions State
   // ============================================================================
-  const [ordersSearchQuery, setOrdersSearchQuery] = useState('');
-  const [ordersStatusFilter, setOrdersStatusFilter] = useState<
-    PendingOrderStatus | 'all'
-  >('all');
-  const [ordersSortOption, setOrdersSortOption] =
-    useState<PendingOrderSortOption>('updated_at-desc');
-  const [ordersPage, setOrdersPage] = useState(1);
-  const ordersPerPage = 20;
-
-  const debouncedOrdersSearch = useDebounce(ordersSearchQuery, 300);
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [readFilter, setReadFilter] = useState<ReadFilter>('all');
+  const [page, setPage] = useState(1);
+  const perPage = 20;
 
   // Reset page when filters change
   useEffect(() => {
-    setOrdersPage(1);
-  }, [debouncedOrdersSearch, ordersStatusFilter, ordersSortOption]);
+    setPage(1);
+  }, [typeFilter, statusFilter, readFilter]);
 
-  const [ordersSortBy, ordersSortOrder] = ordersSortOption.split('-') as [
-    string,
-    'asc' | 'desc'
-  ];
-
-  const ordersQueryParams = {
-    search: debouncedOrdersSearch || undefined,
-    status: ordersStatusFilter !== 'all' ? ordersStatusFilter : undefined,
-    sort_by: ordersSortBy,
-    sort_order: ordersSortOrder,
-    limit: ordersPerPage,
-    offset: (ordersPage - 1) * ordersPerPage,
+  const unifiedQueryParams = {
+    type: typeFilter !== 'all' ? (typeFilter as ActionType) : undefined,
+    status: statusFilter !== 'all' ? statusFilter : undefined,
+    is_read: readFilter === 'all' ? undefined : readFilter === 'read',
+    limit: perPage,
+    offset: (page - 1) * perPage,
   };
 
   const {
-    data: ordersData,
-    isLoading: ordersLoading,
-    isFetching: ordersFetching,
-  } = usePendingOrders(ordersQueryParams);
+    data: unifiedData,
+    isLoading: unifiedLoading,
+    isFetching: unifiedFetching,
+  } = useUnifiedActions(unifiedQueryParams);
 
-  // Detail data
+  // Detail data - Pending Orders
   const selectedOrderId =
     detailView?.type === 'order-detail' ? detailView.orderId : null;
   const { data: orderDetail } = usePendingOrderDetail(selectedOrderId);
@@ -109,61 +77,43 @@ function OrdersPage() {
     detailView?.type === 'order-history' ? detailView.hawb : null;
   const { data: orderHistory } = useOrderHistory(selectedHawb);
 
-  // ============================================================================
-  // Pending Updates State
-  // ============================================================================
-  const [updatesSearchQuery, setUpdatesSearchQuery] = useState('');
-  const [updatesSortOption, setUpdatesSortOption] =
-    useState<PendingUpdateSortOption>('proposed_at-desc');
-  const [selectedUpdateIds, setSelectedUpdateIds] = useState<Set<number>>(
-    new Set()
-  );
+  // Detail data - Pending Updates
+  const selectedUpdateId =
+    detailView?.type === 'update-detail' ? detailView.updateId : null;
+  const { data: updateDetail } = usePendingUpdateDetail(selectedUpdateId);
 
-  const debouncedUpdatesSearch = useDebounce(updatesSearchQuery, 300);
-
-  const [updatesSortBy, updatesSortOrder] = updatesSortOption.split('-') as [
-    string,
-    'asc' | 'desc'
-  ];
-
-  const updatesQueryParams = {
-    hawb: debouncedUpdatesSearch || undefined,
-    sort_by: updatesSortBy,
-    sort_order: updatesSortOrder,
-  };
-
-  const { data: updatesData, isLoading: updatesLoading } =
-    usePendingUpdatesGrouped(updatesQueryParams);
-
-  // Mutations
+  // Mutations - Pending Orders
   const confirmField = useConfirmField();
+
+  // Mutations - Pending Updates
   const approveUpdate = useApprovePendingUpdate();
   const rejectUpdate = useRejectPendingUpdate();
-  const bulkApprove = useBulkApprovePendingUpdates();
-  const bulkReject = useBulkRejectPendingUpdates();
+  const confirmUpdateField = useConfirmUpdateField();
+  const markRead = useMarkRead();
 
   // ============================================================================
   // Handlers
   // ============================================================================
 
-  const handleOrdersClearFilters = () => {
-    setOrdersSearchQuery('');
-    setOrdersStatusFilter('all');
-    setOrdersSortOption('updated_at-desc');
+  const handleClearFilters = () => {
+    setTypeFilter('all');
+    setStatusFilter('all');
+    setReadFilter('all');
   };
 
-  const handleUpdatesClearFilters = () => {
-    setUpdatesSearchQuery('');
-    setUpdatesSortOption('proposed_at-desc');
-    setSelectedUpdateIds(new Set());
+  const handleRowClick = (type: ActionType, id: number) => {
+    // Mark as read when clicking into detail
+    markRead.mutate({ type, id, is_read: true });
+
+    if (type === 'create') {
+      setDetailView({ type: 'order-detail', orderId: id });
+    } else {
+      setDetailView({ type: 'update-detail', updateId: id });
+    }
   };
 
-  const handleRowClick = (orderId: number) => {
-    setDetailView({ type: 'order-detail', orderId });
-  };
-
-  const handleBackToList = () => {
-    setDetailView(null);
+  const handleToggleRead = (type: ActionType, id: number, isRead: boolean) => {
+    markRead.mutate({ type, id, is_read: isRead });
   };
 
   const handleApproveUpdate = (updateId: number) => {
@@ -174,16 +124,34 @@ function OrdersPage() {
     rejectUpdate.mutate({ updateId });
   };
 
-  const handleBulkApprove = () => {
-    if (selectedUpdateIds.size === 0) return;
-    bulkApprove.mutate({ update_ids: Array.from(selectedUpdateIds) });
-    setSelectedUpdateIds(new Set());
+  // Track which update fields are currently being confirmed
+  const [confirmingUpdateFields, setConfirmingUpdateFields] = useState<Set<string>>(new Set());
+
+  const handleConfirmUpdateField = (fieldName: string, historyId: number) => {
+    if (!selectedUpdateId) return;
+
+    setConfirmingUpdateFields((prev) => new Set(prev).add(fieldName));
+
+    confirmUpdateField.mutate(
+      {
+        pendingUpdateId: selectedUpdateId,
+        fieldName,
+        historyId,
+      },
+      {
+        onSettled: () => {
+          setConfirmingUpdateFields((prev) => {
+            const next = new Set(prev);
+            next.delete(fieldName);
+            return next;
+          });
+        },
+      }
+    );
   };
 
-  const handleBulkReject = () => {
-    if (selectedUpdateIds.size === 0) return;
-    bulkReject.mutate({ update_ids: Array.from(selectedUpdateIds) });
-    setSelectedUpdateIds(new Set());
+  const handleBackToList = () => {
+    setDetailView(null);
   };
 
   const handleViewSubRun = (subRunId: number) => {
@@ -266,45 +234,115 @@ function OrdersPage() {
     );
   }
 
+  if (detailView?.type === 'update-detail' && updateDetail) {
+    return (
+      <>
+        <PendingUpdateDetailView
+          update={updateDetail}
+          onBack={handleBackToList}
+          onApprove={handleApproveUpdate}
+          onReject={handleRejectUpdate}
+          onConfirmField={handleConfirmUpdateField}
+          onViewSubRun={handleViewSubRun}
+          isApproving={approveUpdate.isPending}
+          isRejecting={rejectUpdate.isPending}
+          confirmingFields={confirmingUpdateFields}
+        />
+        <EtoSubRunDetailViewer
+          isOpen={viewingSubRunId !== null}
+          subRunId={viewingSubRunId}
+          onClose={handleCloseSubRunViewer}
+        />
+      </>
+    );
+  }
+
   // ============================================================================
   // Render Main View
   // ============================================================================
 
+  // Get available status options based on type filter
+  const getStatusOptions = () => {
+    if (typeFilter === 'create') {
+      return [
+        { value: 'all', label: 'All Status' },
+        { value: 'incomplete', label: 'Incomplete' },
+        { value: 'ready', label: 'Ready' },
+        { value: 'processing', label: 'Processing' },
+        { value: 'created', label: 'Created' },
+        { value: 'failed', label: 'Failed' },
+      ];
+    } else if (typeFilter === 'update') {
+      return [
+        { value: 'all', label: 'All Status' },
+        { value: 'pending', label: 'Pending' },
+        { value: 'approved', label: 'Approved' },
+        { value: 'rejected', label: 'Rejected' },
+      ];
+    }
+    // All types - show common subset or all
+    return [
+      { value: 'all', label: 'All Status' },
+    ];
+  };
+
+  const hasActiveFilters = typeFilter !== 'all' || statusFilter !== 'all' || readFilter !== 'all';
+
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      {/* View Mode Toggle */}
-      <div className="px-6 pt-4 flex-shrink-0 flex items-center justify-between">
-        <div className="inline-flex bg-gray-800 rounded-lg p-1">
-          <button
-            onClick={() => setViewMode('pending-orders')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              viewMode === 'pending-orders'
-                ? 'bg-blue-600 text-white'
-                : 'text-gray-400 hover:text-white'
-            }`}
+      {/* Header with Filters */}
+      <div className="px-6 py-4 flex-shrink-0 flex items-center justify-between border-b border-gray-700">
+        <div className="flex items-center gap-4">
+          <h2 className="text-lg font-semibold text-white">Pending Actions</h2>
+
+          {/* Type Filter */}
+          <select
+            value={typeFilter}
+            onChange={(e) => {
+              setTypeFilter(e.target.value as TypeFilter);
+              setStatusFilter('all'); // Reset status when type changes
+            }}
+            className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            Pending Orders
-            {ordersData && ordersData.total > 0 && (
-              <span className="ml-2 px-2 py-0.5 bg-gray-700 rounded-full text-xs">
-                {ordersData.total}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setViewMode('pending-updates')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              viewMode === 'pending-updates'
-                ? 'bg-blue-600 text-white'
-                : 'text-gray-400 hover:text-white'
-            }`}
+            <option value="all">All Types</option>
+            <option value="create">Creates Only</option>
+            <option value="update">Updates Only</option>
+          </select>
+
+          {/* Status Filter - changes based on type */}
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            disabled={typeFilter === 'all'}
           >
-            Pending Updates
-            {updatesData && updatesData.total_updates > 0 && (
-              <span className="ml-2 px-2 py-0.5 bg-yellow-500/30 text-yellow-400 rounded-full text-xs">
-                {updatesData.total_updates}
-              </span>
-            )}
-          </button>
+            {getStatusOptions().map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+
+          {/* Read/Unread Filter */}
+          <select
+            value={readFilter}
+            onChange={(e) => setReadFilter(e.target.value as ReadFilter)}
+            className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="all">All Items</option>
+            <option value="unread">Unread Only</option>
+            <option value="read">Read Only</option>
+          </select>
+
+          {/* Clear Filters */}
+          {hasActiveFilters && (
+            <button
+              onClick={handleClearFilters}
+              className="text-sm text-gray-400 hover:text-white transition-colors"
+            >
+              Clear filters
+            </button>
+          )}
         </div>
 
         {/* Preview Link */}
@@ -320,129 +358,79 @@ function OrdersPage() {
         </Link>
       </div>
 
-      {/* Pending Orders View */}
-      {viewMode === 'pending-orders' && (
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <PendingOrdersHeader
-            searchQuery={ordersSearchQuery}
-            onSearchQueryChange={setOrdersSearchQuery}
-            statusFilter={ordersStatusFilter}
-            onStatusFilterChange={setOrdersStatusFilter}
-            sortOption={ordersSortOption}
-            onSortOptionChange={setOrdersSortOption}
-            onClearFilters={handleOrdersClearFilters}
-          />
-
-          {/* Pagination */}
-          <div className="px-6 pb-4 flex items-center justify-between flex-shrink-0">
-            <div className="text-sm text-gray-400 flex items-center gap-3">
-              <span>
-                {ordersData?.total === 0
-                  ? '0'
-                  : `${(ordersPage - 1) * ordersPerPage + 1}-${Math.min(
-                      ordersPage * ordersPerPage,
-                      ordersData?.total ?? 0
-                    )}`}{' '}
-                of {ordersData?.total ?? 0}
-              </span>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setOrdersPage((p) => p - 1)}
-                  disabled={ordersPage === 1}
-                  className="p-1.5 rounded hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M15 19l-7-7 7-7"
-                    />
-                  </svg>
-                </button>
-                <button
-                  onClick={() => setOrdersPage((p) => p + 1)}
-                  disabled={
-                    ordersPage * ordersPerPage >= (ordersData?.total ?? 0)
-                  }
-                  className="p-1.5 rounded hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 5l7 7-7 7"
-                    />
-                  </svg>
-                </button>
-              </div>
-              {ordersFetching && (
-                <span className="inline-block w-4 h-4 border-2 border-gray-600 border-t-blue-500 rounded-full animate-spin" />
-              )}
-            </div>
+      {/* Pagination */}
+      <div className="px-6 py-3 flex items-center justify-between flex-shrink-0">
+        <div className="text-sm text-gray-400 flex items-center gap-3">
+          <span>
+            {unifiedData?.total === 0
+              ? '0'
+              : `${(page - 1) * perPage + 1}-${Math.min(
+                  page * perPage,
+                  unifiedData?.total ?? 0
+                )}`}{' '}
+            of {unifiedData?.total ?? 0}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage((p) => p - 1)}
+              disabled={page === 1}
+              className="p-1.5 rounded hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 19l-7-7 7-7"
+                />
+              </svg>
+            </button>
+            <button
+              onClick={() => setPage((p) => p + 1)}
+              disabled={page * perPage >= (unifiedData?.total ?? 0)}
+              className="p-1.5 rounded hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5l7 7-7 7"
+                />
+              </svg>
+            </button>
           </div>
-
-          {/* Table */}
-          <div className="flex-1 min-h-0 px-6 pb-6">
-            {ordersLoading ? (
-              <div className="h-full flex items-center justify-center">
-                <div className="text-gray-400">Loading pending orders...</div>
-              </div>
-            ) : (
-              <PendingOrdersTable
-                data={ordersData?.items ?? []}
-                onRowClick={handleRowClick}
-                onViewHistory={handleViewHistory}
-              />
-            )}
-          </div>
+          {unifiedFetching && (
+            <span className="inline-block w-4 h-4 border-2 border-gray-600 border-t-blue-500 rounded-full animate-spin" />
+          )}
         </div>
-      )}
+      </div>
 
-      {/* Pending Updates View */}
-      {viewMode === 'pending-updates' && (
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <PendingUpdatesHeader
-            searchQuery={updatesSearchQuery}
-            onSearchQueryChange={setUpdatesSearchQuery}
-            sortOption={updatesSortOption}
-            onSortOptionChange={setUpdatesSortOption}
-            onClearFilters={handleUpdatesClearFilters}
-            selectedCount={selectedUpdateIds.size}
-            onBulkApprove={handleBulkApprove}
-            onBulkReject={handleBulkReject}
-          />
-
-          {/* Table */}
-          <div className="flex-1 min-h-0 px-6 pb-6 overflow-auto">
-            {updatesLoading ? (
-              <div className="h-full flex items-center justify-center">
-                <div className="text-gray-400">Loading pending updates...</div>
-              </div>
-            ) : (
-              <PendingUpdatesTable
-                data={updatesData?.items ?? []}
-                onApprove={handleApproveUpdate}
-                onReject={handleRejectUpdate}
-                onViewSubRun={handleViewSubRun}
-                selectedIds={selectedUpdateIds}
-                onSelectionChange={setSelectedUpdateIds}
-              />
-            )}
+      {/* Unified Table */}
+      <div className="flex-1 min-h-0 px-6 pb-6">
+        {unifiedLoading ? (
+          <div className="h-full flex items-center justify-center">
+            <div className="text-gray-400">Loading pending actions...</div>
           </div>
-        </div>
-      )}
+        ) : (
+          <UnifiedActionsTable
+            data={unifiedData?.items ?? []}
+            onRowClick={handleRowClick}
+            onViewHistory={handleViewHistory}
+            onToggleRead={handleToggleRead}
+          />
+        )}
+      </div>
 
       {/* ETO Sub-run Detail Modal */}
       <EtoSubRunDetailViewer
