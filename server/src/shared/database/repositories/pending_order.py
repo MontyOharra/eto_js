@@ -62,6 +62,7 @@ class PendingOrderRepository(BaseRepository[PendingOrderModel]):
             pieces=model.pieces,
             weight=model.weight,
             is_read=model.is_read,
+            last_processed_at=model.last_processed_at,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )

@@ -27,6 +27,8 @@ from shared.types.pending_orders import (
     PendingOrder,
     PendingOrderHistory,
     PendingUpdate,
+    PendingOrderStatus,
+    FieldState,
     VALID_FIELD_NAMES,
     REQUIRED_FIELDS,
 )
@@ -58,7 +60,7 @@ class FieldWithOptions:
     label: str
     required: bool
     current_value: Optional[str]
-    state: str  # 'empty', 'set', 'conflict', 'confirmed'
+    state: FieldState
     options: List[FieldOption]
 
 
@@ -85,7 +87,7 @@ class PendingOrderDetail:
     hawb: str
     customer_id: int
     customer_name: Optional[str]
-    status: str
+    status: PendingOrderStatus
     htc_order_number: Optional[float]  # DOUBLE in Access DB, always whole numbers
     contributing_sources: List[ContributingSource]
     fields: List[FieldWithOptions]
@@ -515,6 +517,7 @@ class OrderManagementService:
 
         # Apply field updates
         if field_updates:
+            field_updates["last_processed_at"] = datetime.now()
             self._pending_order_repo.update(pending_order_id, field_updates)
 
         # Recalculate status
@@ -571,6 +574,7 @@ class OrderManagementService:
                 "status": "created",
                 "htc_order_number": htc_order_number,
                 "htc_created_at": datetime.now(),
+                "last_processed_at": datetime.now(),
             })
 
             logger.info(f"Created HTC order {htc_order_number} from pending order {pending_order_id}")
@@ -696,7 +700,10 @@ class OrderManagementService:
         new_status = "ready" if (all_required_set and not has_conflicts) else "incomplete"
 
         if pending_order.status != new_status:
-            self._pending_order_repo.update(pending_order_id, {"status": new_status})
+            self._pending_order_repo.update(pending_order_id, {
+                "status": new_status,
+                "last_processed_at": datetime.now(),
+            })
 
     # ==================== Pending Updates ====================
 
@@ -766,6 +773,7 @@ class OrderManagementService:
             self._pending_update_repo.update(pending_update_id, {
                 "status": "applied",
                 "applied_at": datetime.now(),
+                "last_processed_at": datetime.now(),
             })
 
             logger.info(f"Applied pending update {pending_update_id} to HTC order {pending_update.htc_order_number}")
@@ -800,6 +808,7 @@ class OrderManagementService:
         self._pending_update_repo.update(pending_update_id, {
             "status": "rejected",
             "rejected_reason": reason,
+            "last_processed_at": datetime.now(),
         })
 
         return True

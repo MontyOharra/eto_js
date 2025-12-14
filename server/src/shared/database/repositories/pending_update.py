@@ -65,6 +65,7 @@ class PendingUpdateRepository(BaseRepository[PendingUpdateModel]):
             weight=model.weight,
             is_read=model.is_read,
             # Timestamps
+            last_processed_at=model.last_processed_at,
             created_at=model.created_at,
             updated_at=model.updated_at,
             reviewed_at=model.reviewed_at,
@@ -222,7 +223,8 @@ class PendingUpdateRepository(BaseRepository[PendingUpdateModel]):
 
     def get_active_by_customer_and_hawb(self, customer_id: int, hawb: str) -> Optional[PendingUpdate]:
         """
-        Get the active (status='pending') pending update for a customer and HAWB.
+        Get the active pending update for a customer and HAWB.
+        Active means status is 'pending' or 'manual_review' (not yet resolved).
         There should only be one active pending update per (customer_id, hawb) combo.
 
         Args:
@@ -233,10 +235,10 @@ class PendingUpdateRepository(BaseRepository[PendingUpdateModel]):
             PendingUpdate dataclass or None if no active update exists
         """
         with self._get_session() as session:
-            model = session.query(self.model_class).filter_by(
-                customer_id=customer_id,
-                hawb=hawb,
-                status="pending"
+            model = session.query(self.model_class).filter(
+                self.model_class.customer_id == customer_id,
+                self.model_class.hawb == hawb,
+                self.model_class.status.in_(["pending", "manual_review"])
             ).first()
 
             if model is None:

@@ -181,7 +181,7 @@ function FieldDropdown({ field, localSelection, onSelect, isConflict }: FieldDro
 }
 
 // =============================================================================
-// Field Row Component - Shows Old -> New
+// Field Row Component - Label | Old -> New (centered around arrow)
 // =============================================================================
 
 interface FieldRowProps {
@@ -213,17 +213,6 @@ function FieldRow({ field, localSelection, onConflictSelect, onConfirm, isConfir
     }
   };
 
-  // Get state icon
-  const getStateIcon = () => {
-    if (isConflict) {
-      return <span className="text-yellow-400 flex-shrink-0 w-4 text-center">!</span>;
-    }
-    if (field.state === 'confirmed') {
-      return <span className="text-blue-400 flex-shrink-0 w-4 text-center">✓</span>;
-    }
-    return <span className="text-green-400 flex-shrink-0 w-4 text-center">✓</span>;
-  };
-
   // Format current HTC value
   const currentValue = formatFieldValue(field.name, field.current_value);
 
@@ -237,59 +226,71 @@ function FieldRow({ field, localSelection, onConflictSelect, onConfirm, isConfir
 
   return (
     <div
-      className={`flex items-center gap-3 py-2 px-3 rounded ${
-        isConflict ? 'bg-yellow-500/10' : 'bg-gray-800'
+      className={`py-2 px-3 rounded-lg border ${
+        isConflict
+          ? 'bg-yellow-500/5 border-yellow-500/30'
+          : 'bg-gray-800/50 border-gray-700'
       }`}
     >
-      {/* Status Icon */}
-      {getStateIcon()}
-
-      {/* Label */}
-      <span className="text-sm text-gray-400 w-36 flex-shrink-0">{field.label}</span>
-
-      {/* Current Value */}
-      <span className="text-sm text-gray-500 w-40 flex-shrink-0 truncate font-mono">
-        {currentValue ?? <span className="italic">Empty</span>}
-      </span>
-
-      {/* Arrow */}
-      <span className="text-gray-600 flex-shrink-0">→</span>
-
-      {/* New Value - either dropdown or static */}
-      {showDropdown ? (
-        <>
-          <FieldDropdown
-            field={field}
-            localSelection={localSelection}
-            onSelect={onConflictSelect}
-            isConflict={isConflict}
-          />
-          {/* Confirm Button - shown when:
-              - Unresolved conflict: must select to resolve
-              - Confirmed field with new selection: user wants to change the value */}
-          {(isConflict || hasNewSelection) && (
-            <button
-              onClick={handleConfirm}
-              disabled={!hasLocalSelection || isConfirming}
-              className={`px-3 py-1 text-sm rounded font-medium transition-colors flex-shrink-0 ${
-                hasLocalSelection && !isConfirming
-                  ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                  : 'bg-gray-700 text-gray-500 cursor-not-allowed'
-              }`}
-            >
-              {isConfirming ? (
-                <span className="inline-block w-4 h-4 border-2 border-gray-500 border-t-white rounded-full animate-spin" />
-              ) : (
-                'Confirm'
-              )}
-            </button>
+      <div className="flex items-start gap-3">
+        {/* Label - fixed width on left */}
+        <div className="w-36 flex-shrink-0 flex items-center gap-2 pt-0.5">
+          {isConflict && (
+            <span className="text-yellow-400 text-sm">⚠</span>
           )}
-        </>
-      ) : (
-        <span className="text-sm text-white truncate flex-1 font-mono">
-          {formattedNewValue ?? 'N/A'}
-        </span>
-      )}
+          <span className="text-sm text-gray-400">{field.label}</span>
+        </div>
+
+        {/* Values section - flows naturally */}
+        <div className="flex-1 min-w-0 flex flex-wrap items-start gap-x-3 gap-y-1">
+          {/* Current Value - up to ~half width, then wraps */}
+          <div className="max-w-[45%] flex items-center gap-2">
+            <span className="text-sm text-gray-300 break-words">
+              {currentValue ?? <span className="italic text-gray-500">Empty</span>}
+            </span>
+            {/* Arrow inline after current */}
+            <svg className="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+            </svg>
+          </div>
+
+          {/* New Value */}
+          <div className="flex-1 min-w-0 flex items-center gap-2">
+            {showDropdown ? (
+              <>
+                <FieldDropdown
+                  field={field}
+                  localSelection={localSelection}
+                  onSelect={onConflictSelect}
+                  isConflict={isConflict}
+                />
+                {/* Confirm Button */}
+                {(isConflict || hasNewSelection) && (
+                  <button
+                    onClick={handleConfirm}
+                    disabled={!hasLocalSelection || isConfirming}
+                    className={`flex-shrink-0 px-3 py-1 text-sm rounded font-medium transition-colors ${
+                      hasLocalSelection && !isConfirming
+                        ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                        : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                    }`}
+                  >
+                    {isConfirming ? (
+                      <span className="inline-block w-4 h-4 border-2 border-gray-500 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      'Confirm'
+                    )}
+                  </button>
+                )}
+              </>
+            ) : (
+              <span className="text-sm text-white break-words">
+                {formattedNewValue ?? <span className="italic text-gray-500">N/A</span>}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -414,92 +415,108 @@ export function PendingUpdateDetailView({
     <div className="h-full flex flex-col overflow-hidden bg-gray-900">
       {/* Header */}
       <div className="flex-shrink-0 px-6 py-4 border-b border-gray-700">
-        {/* Back Button Row */}
-        <button
-          onClick={onBack}
-          className="text-gray-400 hover:text-white transition-colors flex items-center gap-2"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M15 19l-7-7 7-7"
-            />
-          </svg>
-          Back
-        </button>
-
-        {/* Order Info Row - Left: Info, Right: Status */}
-        <div className="mt-4 flex items-start justify-between">
-          {/* Left: HAWB and Customer */}
-          <div>
-            <span className="text-xs text-gray-500 uppercase tracking-wider">
-              Update for HTC Order #{update.htc_order_number}
-            </span>
-            <h1 className="text-2xl font-bold text-white font-mono">{update.hawb}</h1>
-            <p className="text-sm text-gray-400 mt-1">
-              {update.customer_name ?? `Customer ID: ${update.customer_id}`}
-            </p>
+        {/* Top Row: Back button and main info */}
+        <div className="flex items-start justify-between">
+          {/* Left: Back + Order Info */}
+          <div className="flex items-start gap-4">
+            <button
+              onClick={onBack}
+              className="text-gray-400 hover:text-white transition-colors mt-1"
+              title="Back to list"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 19l-7-7 7-7"
+                />
+              </svg>
+            </button>
+            <div>
+              <h1 className="text-xl font-bold text-white">
+                <span className="font-mono">{update.hawb}</span>
+                <span className="text-gray-400 font-normal mx-2">—</span>
+                <span className="font-normal">{update.customer_name ?? `Customer ${update.customer_id}`}</span>
+              </h1>
+              <p className="text-sm text-gray-400 mt-0.5">
+                HTC Order #{update.htc_order_number}
+              </p>
+            </div>
           </div>
 
-          {/* Right: Status Badge */}
-          <div className={`px-4 py-3 rounded-lg border ${statusDisplay.bg} text-right`}>
-            <div className={`font-medium ${statusDisplay.color}`}>
-              {statusDisplay.label}
-            </div>
-            <div className="text-xs text-gray-400 mt-1">
+          {/* Center: Review Update text */}
+          <div className="text-center">
+            <span className="text-lg font-medium text-gray-300">Review Update</span>
+            <div className="text-xs text-gray-500 mt-0.5">
               {fieldsWithChanges.length} field{fieldsWithChanges.length !== 1 ? 's' : ''} to update
-              {conflictCount > 0 && ` · ${conflictCount} conflict${conflictCount !== 1 ? 's' : ''}`}
+              {conflictCount > 0 && (
+                <span className="text-yellow-400"> · {conflictCount} conflict{conflictCount !== 1 ? 's' : ''}</span>
+              )}
             </div>
+          </div>
+
+          {/* Right: Status Badge + Action Buttons */}
+          <div className="flex flex-col items-end gap-2">
+            <div className={`px-3 py-1.5 rounded-lg border ${statusDisplay.bg}`}>
+              <span className={`text-sm font-medium ${statusDisplay.color}`}>
+                {statusDisplay.label}
+              </span>
+            </div>
+            {canEdit && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => onReject(update.id)}
+                  disabled={isRejecting || isApproving}
+                  className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isRejecting ? (
+                    <span className="flex items-center gap-2">
+                      <span className="inline-block w-3 h-3 border-2 border-red-400/50 border-t-red-400 rounded-full animate-spin" />
+                      Rejecting
+                    </span>
+                  ) : (
+                    'Reject'
+                  )}
+                </button>
+                <button
+                  onClick={() => onApprove(update.id)}
+                  disabled={isApproving || isRejecting || hasConflicts}
+                  title={hasConflicts ? 'Resolve all conflicts before approving' : undefined}
+                  className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isApproving ? (
+                    <span className="flex items-center gap-2">
+                      <span className="inline-block w-3 h-3 border-2 border-white/50 border-t-white rounded-full animate-spin" />
+                      Approving
+                    </span>
+                  ) : (
+                    'Approve'
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         </div>
-
-        {/* Action Buttons - Below header info */}
-        {canEdit && (
-          <div className="flex items-center gap-2 mt-4">
-            <button
-              onClick={() => onReject(update.id)}
-              disabled={isRejecting || isApproving}
-              className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isRejecting ? (
-                <span className="flex items-center gap-2">
-                  <span className="inline-block w-4 h-4 border-2 border-red-400/50 border-t-red-400 rounded-full animate-spin" />
-                  Rejecting...
-                </span>
-              ) : (
-                'Reject'
-              )}
-            </button>
-            <button
-              onClick={() => onApprove(update.id)}
-              disabled={isApproving || isRejecting || hasConflicts}
-              title={hasConflicts ? 'Resolve all conflicts before approving' : undefined}
-              className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isApproving ? (
-                <span className="flex items-center gap-2">
-                  <span className="inline-block w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin" />
-                  Approving...
-                </span>
-              ) : (
-                'Approve Update'
-              )}
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Two Column Layout */}
       <div className="flex-1 min-h-0 flex overflow-hidden">
         {/* Left Column - Field Changes */}
         <div className="flex-1 overflow-auto p-6 border-r border-gray-700">
-          <div className="space-y-2">
-            <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">
-              Proposed Changes ({fieldsWithChanges.length})
-            </h3>
+          {/* Column Headers Row */}
+          <div className="flex items-center py-2 px-3 mb-3 border-b border-gray-700">
+            <div className="w-36 flex-shrink-0">
+              <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Field</span>
+            </div>
+            <div className="flex-1 min-w-0 flex gap-3">
+              <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Current</span>
+              <span className="text-xs text-gray-600">→</span>
+              <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">New</span>
+            </div>
+          </div>
 
+          <div className="space-y-2">
             {fieldsWithChanges.length === 0 ? (
               <p className="text-gray-500 text-sm italic">No field changes proposed</p>
             ) : (

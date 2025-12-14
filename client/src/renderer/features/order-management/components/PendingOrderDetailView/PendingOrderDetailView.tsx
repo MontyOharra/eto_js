@@ -417,6 +417,7 @@ export function PendingOrderDetailView({
         <button
           onClick={onBack}
           className="text-gray-400 hover:text-white transition-colors flex items-center gap-2"
+          title="Back to list"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path

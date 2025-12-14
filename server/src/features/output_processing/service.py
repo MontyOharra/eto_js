@@ -121,7 +121,13 @@ class OutputProcessingService:
 
             logger.info(f"Processing HAWB '{hawb}' for customer {customer_id}")
 
-            # 4. Check if order already exists in HTC
+            # 4. Check for duplicate orders in HTC (requires manual review)
+            htc_order_count = self._htc_service.count_orders_by_customer_and_hawb(
+                customer_id=customer_id,
+                hawb=hawb
+            )
+
+            # 5. Check if order exists in HTC
             htc_order_number = self._htc_service.lookup_order_by_customer_and_hawb(
                 customer_id=customer_id,
                 hawb=hawb
@@ -129,12 +135,14 @@ class OutputProcessingService:
 
             if htc_order_number is not None:
                 # Order exists in HTC - create pending updates
+                # Pass duplicate count so handler can set manual_review status if needed
                 action_taken = self._handle_existing_order(
                     customer_id=customer_id,
                     hawb=hawb,
                     htc_order_number=htc_order_number,
                     sub_run_id=sub_run_id,
                     output_channel_data=output_channel_data,
+                    htc_order_count=htc_order_count,
                 )
             else:
                 # Order doesn't exist in HTC - create/update pending order
@@ -174,20 +182,32 @@ class OutputProcessingService:
         htc_order_number: float,
         sub_run_id: Optional[int],
         output_channel_data: Dict[str, Any],
+        htc_order_count: int = 1,
     ) -> str:
         """
         Handle data for a HAWB that already exists in HTC.
+
+        First compares incoming field values against current HTC values.
+        Only fields with different values are processed as pending updates.
+        Fields with identical values are ignored.
 
         Gets or creates a single pending_update record for this (customer_id, hawb)
         with status='pending'. Multiple field changes accumulate into the same
         record via history until user approves/rejects.
 
-        Logic mirrors _handle_new_order:
-        - If no existing pending_update with status='pending': create new one
-        - For each field:
-          - If no history: set value directly
-          - If history exists and value matches: add history (not selected)
-          - If history exists and value differs: conflict - clear selections, set NULL
+        If htc_order_count > 1, sets status to 'manual_review' instead of 'pending'
+        to flag that multiple HTC orders exist and require manual intervention.
+
+        Logic:
+        1. Fetch current HTC field values
+        2. Filter to only fields where new value differs from HTC value
+        3. If no differences, return early
+        4. If differences exist:
+           - If no existing pending_update: create new one
+           - For each differing field:
+             - If no history: set value directly
+             - If history exists and value matches pending: add history (not selected)
+             - If history exists and value differs: conflict - clear selections, set NULL
 
         Args:
             customer_id: Customer ID
@@ -195,11 +215,12 @@ class OutputProcessingService:
             htc_order_number: The existing HTC order number
             sub_run_id: Source sub-run ID
             output_channel_data: Field values from pipeline
+            htc_order_count: Number of HTC orders found (> 1 triggers manual_review)
 
         Returns:
             Action taken string for logging
         """
-        logger.info(f"HAWB '{hawb}' exists in HTC as order {htc_order_number} - processing pending update")
+        logger.info(f"HAWB '{hawb}' exists in HTC as order {htc_order_number} - checking for differences")
 
         # Filter to valid field names only (exclude 'hawb' itself)
         field_data = self._extract_valid_fields(output_channel_data)
@@ -208,20 +229,96 @@ class OutputProcessingService:
             logger.warning(f"No valid fields to update for HAWB '{hawb}'")
             return "no_valid_fields"
 
+        # Fetch current HTC field values for comparison
+        htc_fields = self._htc_service.get_order_fields(htc_order_number)
+        if not htc_fields:
+            logger.warning(f"Could not fetch HTC fields for order {htc_order_number} - skipping update")
+            return "htc_lookup_failed"
+
+        # Filter to only fields that differ from current HTC values
+        differing_fields: Dict[str, Any] = {}
+
+        # Address fields need ID comparison, not string comparison
+        ADDRESS_FIELDS = {"pickup_address", "delivery_address"}
+
+        for field_name, new_value in field_data.items():
+            new_value_str = str(new_value)
+
+            if field_name in ADDRESS_FIELDS:
+                # For address fields, compare by ID instead of string
+                # This handles cases where addresses with/without zip resolve to same ID
+                if field_name == "pickup_address":
+                    current_address_id = htc_fields.pickup_address_id
+                else:  # delivery_address
+                    current_address_id = htc_fields.delivery_address_id
+
+                # Look up the ID for the new address string (doesn't create if not found)
+                new_address_id = self._htc_service.find_address_id(new_value_str)
+
+                if new_address_id is None:
+                    # New address doesn't exist in HTC yet - definitely different
+                    differing_fields[field_name] = new_value
+                    logger.debug(f"Field '{field_name}' differs: new address not found in HTC")
+                elif new_address_id != current_address_id:
+                    # Address exists but has different ID - real change
+                    differing_fields[field_name] = new_value
+                    logger.debug(f"Field '{field_name}' differs: HTC ID={current_address_id} vs new ID={new_address_id}")
+                else:
+                    # Same address ID - no real change despite string difference
+                    logger.debug(f"Field '{field_name}' unchanged (same address ID: {new_address_id})")
+            else:
+                # Non-address fields: use string comparison
+                htc_value = getattr(htc_fields, field_name, None)
+                # Normalize HTC value for comparison (None -> "", and convert to string)
+                htc_value_str = str(htc_value) if htc_value is not None else ""
+
+                if new_value_str != htc_value_str:
+                    differing_fields[field_name] = new_value
+                    logger.debug(f"Field '{field_name}' differs: HTC='{htc_value_str}' vs new='{new_value_str}'")
+                else:
+                    logger.debug(f"Field '{field_name}' unchanged: '{new_value_str}'")
+
+        if not differing_fields:
+            logger.info(f"No field differences found for HAWB '{hawb}' - no pending update needed")
+            return "no_changes"
+
+        logger.info(f"Found {len(differing_fields)} field(s) with differences for HAWB '{hawb}': {list(differing_fields.keys())}")
+
+        # Replace field_data with only the differing fields
+        field_data = differing_fields
+
         # Check if there's an active (status='pending') pending_update for this combo
         pending_update = self._pending_update_repo.get_active_by_customer_and_hawb(customer_id, hawb)
         was_created = pending_update is None
 
         if was_created:
+            # Check if this needs manual review due to duplicate HTC orders
+            is_duplicate = htc_order_count > 1
+
+            if is_duplicate:
+                logger.warning(
+                    f"Multiple HTC orders ({htc_order_count}) found for customer {customer_id}, "
+                    f"HAWB '{hawb}' - flagging pending update for manual review"
+                )
+
             # Create new pending update
+            # Don't set htc_order_number if there are duplicates (user must check manually)
             pending_update = self._pending_update_repo.create(
                 PendingUpdateCreate(
                     customer_id=customer_id,
                     hawb=hawb,
-                    htc_order_number=htc_order_number,
+                    htc_order_number=None if is_duplicate else htc_order_number,
                 )
             )
-            logger.info(f"Created new pending update {pending_update.id} for HAWB '{hawb}'")
+
+            # Set status to manual_review if duplicates exist
+            if is_duplicate:
+                self._pending_update_repo.update(pending_update.id, cast(PendingUpdateUpdate, {
+                    "status": "manual_review",
+                }))
+                logger.info(f"Created new pending update {pending_update.id} for HAWB '{hawb}' (status: manual_review, no htc_order_number)")
+            else:
+                logger.info(f"Created new pending update {pending_update.id} for HAWB '{hawb}'")
 
             # For new pending update, add history and set all fields directly
             history_creates = []
@@ -250,6 +347,7 @@ class OutputProcessingService:
 
             # Update field values
             if field_updates:
+                field_updates["last_processed_at"] = datetime.now()
                 self._pending_update_repo.update(pending_update.id, cast(PendingUpdateUpdate, field_updates))
 
         else:
@@ -281,11 +379,20 @@ class OutputProcessingService:
                     field_updates[field_name] = new_value_str
                     logger.debug(f"Field '{field_name}' has no history - setting to '{new_value_str}'")
                 else:
-                    # Has existing history - check for conflict
+                    # Has existing history - check if this exact value already exists
+                    existing_values = {h.field_value for h in existing_history}
+
+                    if new_value_str in existing_values:
+                        # Value already exists in history - skip adding duplicate
+                        logger.debug(f"Field '{field_name}' value '{new_value_str}' already in history - skipping")
+                        continue
+
+                    # New value not in history - check for conflict
                     current_value = getattr(pending_update, field_name, None)
 
                     if current_value == new_value_str:
-                        # Same value - add history but don't select it
+                        # Same as current value but not in history (shouldn't happen normally)
+                        # Add history but don't select it
                         history_creates.append(
                             PendingUpdateHistoryCreate(
                                 pending_update_id=pending_update.id,
@@ -295,7 +402,7 @@ class OutputProcessingService:
                                 is_selected=False,
                             )
                         )
-                        logger.debug(f"Field '{field_name}' value matches - no change")
+                        logger.debug(f"Field '{field_name}' value matches current - adding to history")
                     else:
                         # Different value - conflict!
                         # Clear all existing selections for this field
@@ -329,6 +436,7 @@ class OutputProcessingService:
 
             # Apply field updates (including conflicts)
             if field_updates:
+                field_updates["last_processed_at"] = datetime.now()
                 self._pending_update_repo.update(pending_update.id, cast(PendingUpdateUpdate, field_updates))
 
         return "pending_update_created" if was_created else "pending_update_updated"
@@ -408,6 +516,7 @@ class OutputProcessingService:
 
             # Update field values
             if field_updates:
+                field_updates["last_processed_at"] = datetime.now()
                 self._pending_order_repo.update(pending_order.id, cast(PendingOrderUpdate, field_updates))
 
         else:
@@ -487,6 +596,7 @@ class OutputProcessingService:
 
             # Apply field updates (including conflicts)
             if field_updates:
+                field_updates["last_processed_at"] = datetime.now()
                 self._pending_order_repo.update(pending_order.id, cast(PendingOrderUpdate, field_updates))
 
         # Update status based on required fields
@@ -607,7 +717,10 @@ class OutputProcessingService:
         new_status = "ready" if (all_required_set and not has_conflicts) else "incomplete"
 
         if pending_order.status != new_status:
-            self._pending_order_repo.update(pending_order_id, {"status": new_status})
+            self._pending_order_repo.update(pending_order_id, {
+                "status": new_status,
+                "last_processed_at": datetime.now(),
+            })
             logger.info(f"Updated pending order {pending_order_id} status: {pending_order.status} -> {new_status}")
 
     def cleanup_sub_run_contributions(self, sub_run_id: int) -> dict:
@@ -711,7 +824,10 @@ class OutputProcessingService:
 
         if not history_entries:
             # No history - set field to NULL
-            self._pending_order_repo.update(pending_order_id, {field_name: None})
+            self._pending_order_repo.update(pending_order_id, {
+                field_name: None,
+                "last_processed_at": datetime.now(),
+            })
             logger.debug(f"Field '{field_name}' on pending order {pending_order_id}: no history, set to NULL")
             return
 
@@ -720,7 +836,10 @@ class OutputProcessingService:
 
         if selected_entry:
             # Keep the selected value
-            self._pending_order_repo.update(pending_order_id, {field_name: selected_entry.field_value})
+            self._pending_order_repo.update(pending_order_id, {
+                field_name: selected_entry.field_value,
+                "last_processed_at": datetime.now(),
+            })
             logger.debug(f"Field '{field_name}' on pending order {pending_order_id}: kept selected value")
             return
 
@@ -731,11 +850,17 @@ class OutputProcessingService:
             # Only one unique value - auto-select the first entry
             value = history_entries[0].field_value
             self._pending_order_history_repo.update(history_entries[0].id, {"is_selected": True})
-            self._pending_order_repo.update(pending_order_id, {field_name: value})
+            self._pending_order_repo.update(pending_order_id, {
+                field_name: value,
+                "last_processed_at": datetime.now(),
+            })
             logger.debug(f"Field '{field_name}' on pending order {pending_order_id}: auto-selected single value")
         else:
             # Multiple unique values - conflict, set to NULL
-            self._pending_order_repo.update(pending_order_id, {field_name: None})
+            self._pending_order_repo.update(pending_order_id, {
+                field_name: None,
+                "last_processed_at": datetime.now(),
+            })
             logger.debug(
                 f"Field '{field_name}' on pending order {pending_order_id}: "
                 f"conflict ({len(unique_values)} values), set to NULL"

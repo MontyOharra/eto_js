@@ -59,7 +59,7 @@ ETO_STEP_STATUS = SAEnum(
 
 # Output execution status
 ETO_OUTPUT_STATUS = SAEnum(
-    'pending', 'processing', 'success', 'error',
+    'pending', 'processing', 'success', 'error', 'manual_review',
     name='eto_output_status',
     native_enum=False,
     validate_strings=True
@@ -827,7 +827,7 @@ PENDING_ORDER_STATUS = SAEnum(
 
 # Pending update status
 PENDING_UPDATE_STATUS = SAEnum(
-    'pending', 'approved', 'rejected',
+    'pending', 'approved', 'rejected', 'manual_review',
     name='pending_update_status',
     native_enum=False,
     validate_strings=True
@@ -901,6 +901,9 @@ class PendingOrderModel(BaseModel):
     is_read: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="0")
 
     # Timestamps
+    # last_processed_at: Updated when actual processing occurs (field changes, status changes)
+    # NOT updated on read/unread toggle - use for stable list sorting
+    last_processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
     )
@@ -1005,7 +1008,8 @@ class PendingUpdateModel(BaseModel):
     # Order identification (unique per customer_id + hawb when status='pending')
     customer_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     hawb: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
-    htc_order_number: Mapped[float] = mapped_column(nullable=False, index=True)
+    # NULL when multiple HTC orders exist (manual_review status)
+    htc_order_number: Mapped[Optional[float]] = mapped_column(nullable=True, index=True)
 
     # Status: pending -> approved/rejected
     status: Mapped[str] = mapped_column(
@@ -1037,6 +1041,9 @@ class PendingUpdateModel(BaseModel):
     is_read: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="0")
 
     # Timestamps
+    # last_processed_at: Updated when actual processing occurs (field changes, status changes)
+    # NOT updated on read/unread toggle - use for stable list sorting
+    last_processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.getutcdate(), nullable=False
     )

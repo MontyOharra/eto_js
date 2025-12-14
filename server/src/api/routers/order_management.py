@@ -3,6 +3,7 @@ Order Management FastAPI Router
 REST endpoints for pending orders and pending updates
 """
 import logging
+from datetime import datetime
 from typing import Optional, Literal
 from fastapi import APIRouter, Query, Depends, HTTPException, status
 
@@ -182,13 +183,14 @@ async def list_unified_actions(
                 optional_field_count=len(VALID_FIELD_NAMES) - len(REQUIRED_FIELDS),
                 conflict_count=conflict_count,
                 error_message=order.error_message,
+                last_processed_at=order.last_processed_at.isoformat() if order.last_processed_at else None,
                 created_at=order.created_at.isoformat(),
                 updated_at=order.updated_at.isoformat(),
             ))
 
     # Collect pending updates if not filtered to creates only
     if type_filter != "create":
-        updates = pending_update_repo.list_all()
+        updates, _ = pending_update_repo.list_all()
 
         # Apply status filter
         if status_filter and status_filter in update_statuses:
@@ -234,17 +236,18 @@ async def list_unified_actions(
                 hawb=update.hawb,
                 customer_id=update.customer_id,
                 customer_name=customer_name,
-                htc_order_number=int(update.htc_order_number),
+                htc_order_number=int(update.htc_order_number) if update.htc_order_number is not None else None,
                 status=update.status,
                 is_read=update.is_read,
                 fields_with_changes=fields_with_changes,
                 conflict_count=conflict_count,
+                last_processed_at=update.last_processed_at.isoformat() if update.last_processed_at else None,
                 created_at=update.created_at.isoformat(),
                 updated_at=update.updated_at.isoformat(),
             ))
 
-    # Sort by updated_at descending (most recent first)
-    items.sort(key=lambda x: x.updated_at, reverse=True)
+    # Sort by last_processed_at descending (most recent first), falling back to updated_at
+    items.sort(key=lambda x: x.last_processed_at or x.updated_at, reverse=True)
 
     # Calculate total before pagination
     total = len(items)
@@ -557,7 +560,10 @@ async def confirm_field(
     history_repo.update(request.history_id, {"is_selected": True})
 
     # Update the field value on the pending order
-    pending_order_repo.update(pending_order_id, {request.field_name: history_entry.field_value})
+    pending_order_repo.update(pending_order_id, {
+        request.field_name: history_entry.field_value,
+        "last_processed_at": datetime.now()
+    })
 
     # Re-evaluate status
     service._update_pending_order_status(pending_order_id)
@@ -657,7 +663,7 @@ async def list_pending_updates(
             hawb=update.hawb,
             customer_id=update.customer_id,
             customer_name=customer_name,
-            htc_order_number=int(update.htc_order_number),
+            htc_order_number=int(update.htc_order_number) if update.htc_order_number is not None else None,
             status=update.status,
             fields_with_changes=fields_with_changes,
             conflict_count=conflict_count,
@@ -829,7 +835,7 @@ async def get_pending_update_detail(
         hawb=pending_update.hawb,
         customer_id=pending_update.customer_id,
         customer_name=customer_name,
-        htc_order_number=int(pending_update.htc_order_number),
+        htc_order_number=int(pending_update.htc_order_number) if pending_update.htc_order_number is not None else None,
         status=pending_update.status,
         fields=fields,
         contributing_sub_runs=contributing_sub_runs,
@@ -842,14 +848,16 @@ async def get_pending_update_detail(
 @router.post("/pending-updates/{pending_update_id}/approve", response_model=ApprovePendingUpdateResponse)
 async def approve_pending_update(
     pending_update_id: int,
-    service = Depends(lambda: ServiceContainer.get_order_management_service())
+    service = Depends(lambda: ServiceContainer.get_order_management_service()),
+    htc_service = Depends(lambda: ServiceContainer.get_htc_integration_service())
 ) -> ApprovePendingUpdateResponse:
     """
-    Approve a pending update.
+    Approve a pending update and apply it to the HTC order.
 
-    For now, this is a rudimentary implementation that prints the update data
-    to the terminal instead of actually updating HTC. This allows testing
-    the approve workflow before implementing the full HTC update logic.
+    This will:
+    1. Validate the pending update is in 'pending' status
+    2. Call the HTC update_order method to apply all field changes
+    3. Mark the pending update as 'approved'
     """
     logger.info(f"Approve pending update: id={pending_update_id}")
 
@@ -870,45 +878,70 @@ async def approve_pending_update(
             detail=f"Cannot approve pending update with status '{pending_update.status}'. Only 'pending' updates can be approved."
         )
 
+    # Guard: Must have htc_order_number to update
+    if pending_update.htc_order_number is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot approve: no HTC order number associated with this update. This may be a manual_review item."
+        )
+
+    htc_order_number = pending_update.htc_order_number
+
     # Collect fields that have proposed changes (non-NULL values)
     fields_to_update = []
-    update_data = {}
     for field_name in VALID_FIELD_NAMES:
         value = getattr(pending_update, field_name, None)
         if value is not None:
             fields_to_update.append(field_name)
-            update_data[field_name] = value
 
-    # RUDIMENTARY: Print to terminal instead of updating HTC
-    print("\n" + "=" * 60)
-    print(f"APPROVED PENDING UPDATE #{pending_update_id}")
-    print("=" * 60)
-    print(f"HTC Order Number: {int(pending_update.htc_order_number)}")
-    print(f"Customer ID: {pending_update.customer_id}")
-    print(f"HAWB: {pending_update.hawb}")
-    print("-" * 60)
-    print("Fields to update:")
-    for field_name, value in update_data.items():
-        print(f"  {get_field_label(field_name)}: {value}")
-    print("=" * 60 + "\n")
+    # Log what we're about to update
+    htc_order_str = str(int(htc_order_number))
+    logger.info(f"Applying {len(fields_to_update)} field updates to HTC order {htc_order_str}")
 
-    # Update status to approved
-    from datetime import datetime
-    pending_update_repo.update(pending_update_id, {
-        "status": "approved",
-        "reviewed_at": datetime.utcnow(),
-    })
+    try:
+        # Call the HTC update_order method with all the field values
+        updated_fields = htc_service.update_order(
+            order_number=htc_order_number,
+            pickup_company_name=pending_update.pickup_company_name,
+            pickup_address=pending_update.pickup_address,
+            pickup_time_start=pending_update.pickup_time_start,
+            pickup_time_end=pending_update.pickup_time_end,
+            delivery_company_name=pending_update.delivery_company_name,
+            delivery_address=pending_update.delivery_address,
+            delivery_time_start=pending_update.delivery_time_start,
+            delivery_time_end=pending_update.delivery_time_end,
+            mawb=pending_update.mawb,
+            pickup_notes=pending_update.pickup_notes,
+            delivery_notes=pending_update.delivery_notes,
+            order_notes=pending_update.order_notes,
+            pieces=pending_update.pieces,
+            weight=pending_update.weight,
+        )
 
-    logger.info(f"Approved pending update {pending_update_id} with {len(fields_to_update)} fields")
+        # Update status to approved
+        pending_update_repo.update(pending_update_id, {
+            "status": "approved",
+            "reviewed_at": datetime.utcnow(),
+            "last_processed_at": datetime.now(),
+        })
 
-    return ApprovePendingUpdateResponse(
-        success=True,
-        update_id=pending_update_id,
-        htc_order_number=int(pending_update.htc_order_number),
-        new_status="approved",
-        fields_updated=fields_to_update,
-        message=f"Approved update for HTC order {int(pending_update.htc_order_number)}. {len(fields_to_update)} fields printed to terminal."
-    )
+        logger.info(f"Approved pending update {pending_update_id}: {len(updated_fields)} fields updated in HTC")
+
+        return ApprovePendingUpdateResponse(
+            success=True,
+            update_id=pending_update_id,
+            htc_order_number=int(htc_order_number),
+            new_status="approved",
+            fields_updated=updated_fields,
+            message=f"Successfully updated HTC order {htc_order_str} with {len(updated_fields)} fields."
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to apply update to HTC order {htc_order_str}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update HTC order: {str(e)}"
+        )
 
 
 @router.post("/pending-updates/{pending_update_id}/reject", response_model=RejectPendingUpdateResponse)
@@ -941,19 +974,20 @@ async def reject_pending_update(
         )
 
     # Update status to rejected
-    from datetime import datetime
     pending_update_repo.update(pending_update_id, {
         "status": "rejected",
         "reviewed_at": datetime.utcnow(),
+        "last_processed_at": datetime.now(),
     })
 
     logger.info(f"Rejected pending update {pending_update_id}")
 
+    htc_order_str = str(int(pending_update.htc_order_number)) if pending_update.htc_order_number is not None else "N/A"
     return RejectPendingUpdateResponse(
         success=True,
         update_id=pending_update_id,
         new_status="rejected",
-        message=f"Rejected update for HTC order {int(pending_update.htc_order_number)}."
+        message=f"Rejected update for HTC order {htc_order_str}."
     )
 
 
@@ -1021,7 +1055,10 @@ async def confirm_update_field(
     pending_update_history_repo.update(request.history_id, {"is_selected": True})
 
     # Update the field value on the pending update
-    pending_update_repo.update(pending_update_id, {request.field_name: history_entry.field_value})
+    pending_update_repo.update(pending_update_id, {
+        request.field_name: history_entry.field_value,
+        "last_processed_at": datetime.now()
+    })
 
     logger.info(f"Confirmed {request.field_name}='{history_entry.field_value}' for pending update {pending_update_id}")
 
@@ -1071,6 +1108,12 @@ async def mock_process_output(
     logger.info(f"Mock output processing: customer_id={request.customer_id}, hawb='{request.hawb}'")
 
     try:
+        # Check for duplicate orders in HTC (requires manual review)
+        htc_order_count = htc_service.count_orders_by_customer_and_hawb(
+            customer_id=request.customer_id,
+            hawb=request.hawb
+        )
+
         # Check if HAWB already exists in HTC
         htc_order_number = htc_service.lookup_order_by_customer_and_hawb(
             customer_id=request.customer_id,
@@ -1090,12 +1133,14 @@ async def mock_process_output(
                     existing_field_values[field_name] = getattr(existing_update, field_name, None)
 
             # This creates or updates pending_update for user approval
+            # Pass htc_order_count so it can flag for manual_review if duplicates exist
             action = output_service._handle_existing_order(
                 customer_id=request.customer_id,
                 hawb=request.hawb,
                 htc_order_number=htc_order_number,
                 sub_run_id=None,  # NULL for mock data
                 output_channel_data=request.output_channel_data,
+                htc_order_count=htc_order_count,
             )
 
             # Get the pending update to return details

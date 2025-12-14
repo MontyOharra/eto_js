@@ -22,7 +22,6 @@ import type { UnifiedActionListItem, ActionType } from '../../types';
 interface UnifiedActionsTableProps {
   data: UnifiedActionListItem[];
   onRowClick: (type: ActionType, id: number) => void;
-  onViewHistory: (hawb: string) => void;
   onToggleRead?: (type: ActionType, id: number, isRead: boolean) => void;
 }
 
@@ -115,6 +114,7 @@ const columnHelper = createColumnHelper<UnifiedActionListItem>();
 
 function IndicatorCell({ row }: CellContext<UnifiedActionListItem, unknown>) {
   const state = getIndicatorState(row.original);
+  const isRead = row.original.is_read;
 
   if (state.icon === 'none') {
     return <div className="w-4" />;
@@ -131,7 +131,7 @@ function IndicatorCell({ row }: CellContext<UnifiedActionListItem, unknown>) {
 
   if (state.icon === 'dot') {
     return (
-      <span className={`text-lg ${colorClasses[state.color]}`}>
+      <span className={`text-lg ${colorClasses[state.color]} ${isRead ? 'opacity-50' : ''}`}>
         ●
       </span>
     );
@@ -140,7 +140,7 @@ function IndicatorCell({ row }: CellContext<UnifiedActionListItem, unknown>) {
   if (state.icon === 'check') {
     return (
       <svg
-        className={`w-4 h-4 ${colorClasses[state.color]}`}
+        className={`w-4 h-4 ${colorClasses[state.color]} ${isRead ? 'opacity-50' : ''}`}
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"
@@ -153,7 +153,7 @@ function IndicatorCell({ row }: CellContext<UnifiedActionListItem, unknown>) {
   if (state.icon === 'x') {
     return (
       <svg
-        className={`w-4 h-4 ${colorClasses[state.color]}`}
+        className={`w-4 h-4 ${colorClasses[state.color]} ${isRead ? 'opacity-50' : ''}`}
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"
@@ -167,11 +167,25 @@ function IndicatorCell({ row }: CellContext<UnifiedActionListItem, unknown>) {
 }
 
 function TypeCell({ row }: CellContext<UnifiedActionListItem, unknown>) {
-  const isCreate = row.original.type === 'create';
+  const { type, status, is_read: isRead } = row.original;
+  const isCreate = type === 'create';
+  const isManualReview = status === 'manual_review';
+  const textOpacity = isRead ? 'opacity-60' : 'opacity-100';
+
+  // Manual review gets a distinct orange/warning style
+  if (isManualReview) {
+    return (
+      <span
+        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold uppercase ${textOpacity} bg-orange-500/20 text-orange-400 border border-orange-500/30`}
+      >
+        Manual Review
+      </span>
+    );
+  }
 
   return (
     <span
-      className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold uppercase ${
+      className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold uppercase ${textOpacity} ${
         isCreate
           ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
           : 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
@@ -184,15 +198,21 @@ function TypeCell({ row }: CellContext<UnifiedActionListItem, unknown>) {
 
 function HawbCell({ row }: CellContext<UnifiedActionListItem, unknown>) {
   const data = row.original;
+  const isRead = data.is_read;
   const isComplete =
     (data.type === 'create' && data.status === 'created') ||
     (data.type === 'update' && data.status === 'approved');
 
+  const textOpacity = isRead ? 'opacity-60' : 'opacity-100';
+  const textColor = isComplete
+    ? 'text-green-400'
+    : isRead
+      ? 'text-gray-400'
+      : 'text-white';
+
   return (
     <span
-      className={`font-mono text-sm font-semibold ${
-        isComplete ? 'text-green-400' : 'text-white'
-      }`}
+      className={`font-mono text-sm ${textColor} ${textOpacity} ${!isRead ? 'font-semibold' : ''}`}
     >
       {data.hawb}
     </span>
@@ -200,27 +220,35 @@ function HawbCell({ row }: CellContext<UnifiedActionListItem, unknown>) {
 }
 
 function CustomerCell({ row }: CellContext<UnifiedActionListItem, unknown>) {
+  const isRead = row.original.is_read;
+  const textOpacity = isRead ? 'opacity-60' : 'opacity-100';
+  const textColor = isRead ? 'text-gray-400' : 'text-gray-300';
+
   return (
-    <span className="text-sm text-gray-300">{row.original.customer_name ?? '-'}</span>
+    <span className={`text-sm ${textColor} ${textOpacity}`}>{row.original.customer_name ?? '-'}</span>
   );
 }
 
 function OrderNumberCell({ row }: CellContext<UnifiedActionListItem, unknown>) {
   const data = row.original;
+  const isRead = data.is_read;
+  const textOpacity = isRead ? 'opacity-60' : 'opacity-100';
 
   if (data.htc_order_number) {
     return (
-      <span className="text-sm text-blue-400 font-medium">
+      <span className={`text-sm text-blue-400 ${textOpacity} ${!isRead ? 'font-medium' : ''}`}>
         {data.htc_order_number}
       </span>
     );
   }
 
-  return <span className="text-sm text-gray-500">-</span>;
+  return <span className={`text-sm text-gray-500 ${textOpacity}`}>-</span>;
 }
 
 function StatusInfoCell({ row }: CellContext<UnifiedActionListItem, unknown>) {
   const data = row.original;
+  const isRead = data.is_read;
+  const textOpacity = isRead ? 'opacity-60' : 'opacity-100';
 
   if (data.type === 'create') {
     // Create: Show status + field progress + conflicts
@@ -236,7 +264,7 @@ function StatusInfoCell({ row }: CellContext<UnifiedActionListItem, unknown>) {
       (data.required_fields_present ?? 0) >= (data.required_field_count ?? 1);
 
     return (
-      <div className="flex flex-wrap items-center gap-2">
+      <div className={`flex flex-wrap items-center gap-2 ${textOpacity}`}>
         {/* Status badge */}
         <span
           className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${
@@ -289,7 +317,7 @@ function StatusInfoCell({ row }: CellContext<UnifiedActionListItem, unknown>) {
     };
 
     return (
-      <div className="flex flex-wrap items-center gap-2">
+      <div className={`flex flex-wrap items-center gap-2 ${textOpacity}`}>
         {/* Status badge */}
         <span
           className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${
@@ -326,44 +354,6 @@ function StatusInfoCell({ row }: CellContext<UnifiedActionListItem, unknown>) {
   }
 }
 
-function ActionsCell({
-  row,
-  onViewHistory,
-}: CellContext<UnifiedActionListItem, unknown> & {
-  onViewHistory: (hawb: string) => void;
-}) {
-  const data = row.original;
-
-  return (
-    <div className="flex items-center gap-1.5 justify-end">
-      {/* View History button */}
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onViewHistory(data.hawb);
-        }}
-        className="flex items-center gap-1 px-2 py-1 bg-blue-900/30 hover:bg-blue-700/50 text-blue-400 hover:text-blue-300 rounded transition-colors text-xs font-medium"
-        title="View order history"
-      >
-        <svg
-          className="w-3.5 h-3.5 flex-shrink-0"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-          />
-        </svg>
-        <span className="hidden 2xl:inline whitespace-nowrap">History</span>
-      </button>
-    </div>
-  );
-}
-
 // ============================================================================
 // Main Component
 // ============================================================================
@@ -371,7 +361,6 @@ function ActionsCell({
 export function UnifiedActionsTable({
   data,
   onRowClick,
-  onViewHistory,
   onToggleRead,
 }: UnifiedActionsTableProps) {
   const columns = useMemo(
@@ -380,63 +369,92 @@ export function UnifiedActionsTable({
         id: 'indicator',
         header: '',
         cell: IndicatorCell,
-        size: 40,
-        minSize: 40,
+        size: 36,
+        minSize: 36,
       }),
       columnHelper.display({
         id: 'type',
         header: 'Type',
         cell: TypeCell,
-        size: 90,
-        minSize: 80,
+        size: 80,
+        minSize: 70,
       }),
       columnHelper.display({
         id: 'hawb',
         header: 'HAWB',
         cell: HawbCell,
-        size: 140,
-        minSize: 120,
+        size: 110,
+        minSize: 100,
       }),
       columnHelper.display({
         id: 'customer',
         header: 'Customer',
         cell: CustomerCell,
-        size: 160,
-        minSize: 120,
+        size: 130,
+        minSize: 100,
       }),
       columnHelper.display({
         id: 'orderNumber',
-        header: 'HTC Order #',
+        header: 'HTC #',
         cell: OrderNumberCell,
-        size: 110,
-        minSize: 90,
+        size: 80,
+        minSize: 70,
       }),
       columnHelper.display({
         id: 'statusInfo',
         header: 'Status / Info',
         cell: StatusInfoCell,
-        size: 320,
-        minSize: 200,
+        size: 450,
+        minSize: 300,
       }),
-      columnHelper.accessor('updated_at', {
+      columnHelper.display({
+        id: 'lastProcessed',
         header: 'Updated',
-        cell: ({ getValue }) => (
-          <span className="text-sm text-gray-400" title={formatDate(getValue())}>
-            {formatRelativeTime(getValue())}
-          </span>
-        ),
-        size: 100,
-        minSize: 80,
+        cell: ({ row }) => {
+          // Use last_processed_at if available, fall back to updated_at
+          const timestamp = row.original.last_processed_at ?? row.original.updated_at;
+          const isRead = row.original.is_read;
+          const textOpacity = isRead ? 'opacity-60' : 'opacity-100';
+          return (
+            <span className={`text-sm text-gray-400 ${textOpacity}`} title={formatDate(timestamp)}>
+              {formatRelativeTime(timestamp)}
+            </span>
+          );
+        },
+        size: 80,
+        minSize: 70,
       }),
       columnHelper.display({
         id: 'actions',
-        header: () => <span className="text-right block">Actions</span>,
-        cell: (props) => <ActionsCell {...props} onViewHistory={onViewHistory} />,
-        size: 100,
-        minSize: 80,
+        header: '',
+        cell: ({ row }) => {
+          const item = row.original;
+          return (
+            <div className="flex items-center justify-end">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleRead?.(item.type, item.id, !item.is_read);
+                }}
+                className="p-1.5 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-white flex-shrink-0"
+                title={item.is_read ? 'Mark as unread' : 'Mark as read'}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  {item.is_read ? (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  ) : (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                  )}
+                </svg>
+              </button>
+            </div>
+          );
+        },
+        size: 50,
+        minSize: 40,
       }),
     ],
-    [onViewHistory]
+    [onToggleRead]
   );
 
   const table = useReactTable({
@@ -537,40 +555,53 @@ export function UnifiedActionsTable({
               <tbody>
                 {table.getRowModel().rows.map((row, index) => {
                   const item = row.original;
+                  const isRead = item.is_read;
 
                   // Background styling based on state
                   let rowBg = '';
-                  if (item.type === 'create') {
-                    if (item.status === 'incomplete' || item.conflict_count > 0) {
+                  if (item.status === 'manual_review') {
+                    // Manual review gets distinct orange background
+                    rowBg = 'bg-orange-900/10';
+                  } else if (item.type === 'create') {
+                    if (item.status === 'failed') {
+                      rowBg = 'bg-red-900/10';
+                    } else if (item.status === 'incomplete' || item.conflict_count > 0) {
                       rowBg = 'bg-yellow-900/5';
                     } else if (item.status === 'ready') {
                       rowBg = 'bg-blue-900/5';
-                    } else if (item.status === 'failed') {
-                      rowBg = 'bg-red-900/5';
+                    } else if (!isRead) {
+                      rowBg = 'bg-blue-900/10';
                     }
                   } else {
                     if (item.status === 'pending') {
                       rowBg = item.conflict_count > 0 ? 'bg-yellow-900/5' : 'bg-purple-900/5';
+                    } else if (!isRead) {
+                      rowBg = 'bg-blue-900/10';
                     }
                   }
 
-                  // Unread styling
-                  const unreadStyle = !item.is_read ? 'font-medium' : '';
+                  const handleRowClick = () => {
+                    if (item.status === 'manual_review') {
+                      alert(
+                        'Multiple orders associated with this HAWB and customer. Please check HTC and make manual updates.'
+                      );
+                      return;
+                    }
+                    onRowClick(item.type, item.id);
+                  };
 
                   return (
                     <tr
                       key={row.id}
-                      onClick={() => onRowClick(item.type, item.id)}
-                      className={`hover:bg-gray-700/30 transition-colors cursor-pointer ${rowBg} ${unreadStyle} ${
+                      onClick={handleRowClick}
+                      className={`hover:bg-gray-700/30 transition-colors cursor-pointer ${rowBg} ${
                         index < data.length - 1 ? 'border-b border-gray-700' : ''
                       }`}
                     >
                       {row.getVisibleCells().map((cell) => (
                         <td
                           key={cell.id}
-                          className={`px-3 py-2.5 first:pl-6 last:pr-6 ${
-                            cell.column.id === 'actions' ? '' : 'overflow-hidden'
-                          }`}
+                          className="px-3 py-2.5 first:pl-6 last:pr-6 overflow-hidden"
                           style={{ width: `var(--col-${cell.column.id}-size)` }}
                         >
                           {flexRender(

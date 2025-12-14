@@ -158,10 +158,6 @@ function OrdersPage() {
     setViewingSubRunId(subRunId);
   };
 
-  const handleViewHistory = (hawb: string) => {
-    setDetailView({ type: 'order-history', hawb });
-  };
-
   const handleCloseSubRunViewer = () => {
     setViewingSubRunId(null);
   };
@@ -426,7 +422,6 @@ function OrdersPage() {
           <UnifiedActionsTable
             data={unifiedData?.items ?? []}
             onRowClick={handleRowClick}
-            onViewHistory={handleViewHistory}
             onToggleRead={handleToggleRead}
           />
         )}

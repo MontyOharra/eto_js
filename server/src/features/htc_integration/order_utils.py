@@ -12,7 +12,7 @@ Provides order-related operations for the HTC database:
 import threading
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Callable, Dict, Optional, TYPE_CHECKING
+from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING
 
 from shared.logging import get_logger
 from shared.exceptions import OutputExecutionError
@@ -211,48 +211,42 @@ class HtcOrderUtils:
 
     # ==================== Order Updates ====================
 
-    def update_order(self, order_number: float, updates: Dict[str, Any]) -> None:
+    def update_order_fields(
+        self,
+        order_number: float,
+        field_updates: Dict[str, Any],
+    ) -> List[str]:
         """
-        Update an existing order in HTC.
+        Update specific fields on an existing HTC order.
+
+        This is a low-level method that directly updates the specified HTC columns.
+        Use update_order_from_pending_update() for the full orchestration.
 
         Args:
             order_number: The HTC order number to update
-            updates: Dict of field_name -> new_value
+            field_updates: Dict mapping HTC column names to new values
+
+        Returns:
+            List of column names that were updated
 
         Raises:
             OutputExecutionError: If update fails
         """
-        logger.info(f"Updating HTC order {order_number} with {len(updates)} fields")
+        logger.info(f"Updating HTC order {order_number} with {len(field_updates)} fields")
 
-        if not updates:
+        if not field_updates:
             logger.warning(f"No updates provided for order {order_number}")
-            return
+            return []
 
         connection = self._get_connection()
 
         try:
-            # Build UPDATE query dynamically
-            # TODO: Map field names to actual HTC column names
-            field_mapping = {
-                "hawb": "M_HAWB",
-                "mawb": "M_MAWB",
-                # Add more field mappings as needed
-            }
-
             set_clauses = []
             values = []
 
-            for field_name, value in updates.items():
-                htc_column = field_mapping.get(field_name)
-                if htc_column:
-                    set_clauses.append(f"[{htc_column}] = ?")
-                    values.append(value)
-                else:
-                    logger.warning(f"Unknown field '{field_name}' - skipping")
-
-            if not set_clauses:
-                logger.warning(f"No valid fields to update for order {order_number}")
-                return
+            for column_name, value in field_updates.items():
+                set_clauses.append(f"[{column_name}] = ?")
+                values.append(value)
 
             # Add WHERE clause values
             values.extend([order_number, self.CO_ID, self.BR_ID])
@@ -266,11 +260,106 @@ class HtcOrderUtils:
             with connection.cursor() as cursor:
                 cursor.execute(query, values)
 
-            logger.info(f"Updated HTC order {order_number}")
+            logger.info(f"Updated HTC order {order_number}: {list(field_updates.keys())}")
+            return list(field_updates.keys())
 
         except Exception as e:
             logger.error(f"Failed to update HTC order {order_number}: {e}")
             raise OutputExecutionError(f"Failed to update HTC order: {e}") from e
+
+    def update_dimension_record(
+        self,
+        order_number: float,
+        pieces: Optional[int] = None,
+        weight: Optional[float] = None,
+    ) -> List[str]:
+        """
+        Update the dimension record for an order.
+
+        Args:
+            order_number: The HTC order number
+            pieces: New piece count (optional)
+            weight: New weight (optional)
+
+        Returns:
+            List of column names that were updated
+
+        Raises:
+            OutputExecutionError: If update fails
+        """
+        if pieces is None and weight is None:
+            return []
+
+        connection = self._get_connection()
+        updated_columns = []
+
+        try:
+            set_clauses = []
+            values = []
+
+            if pieces is not None:
+                set_clauses.append("[OD_UnitQty] = ?")
+                values.append(pieces)
+                updated_columns.append("OD_UnitQty")
+
+            if weight is not None:
+                set_clauses.append("[OD_UnitWeight] = ?")
+                values.append(weight)
+                updated_columns.append("OD_UnitWeight")
+
+            if not set_clauses:
+                return []
+
+            # Add WHERE clause values
+            values.extend([order_number, self.CO_ID, self.BR_ID])
+
+            query = f"""
+                UPDATE [HTC300_G040_T012A Open Order Dims]
+                SET {', '.join(set_clauses)}
+                WHERE [OD_OrderNo] = ? AND [OD_CoID] = ? AND [OD_BrID] = ?
+            """
+
+            with connection.cursor() as cursor:
+                cursor.execute(query, values)
+
+            logger.debug(f"Updated dimension record for order {order_number}: {updated_columns}")
+            return updated_columns
+
+        except Exception as e:
+            logger.error(f"Failed to update dimension record for order {order_number}: {e}")
+            raise OutputExecutionError(f"Failed to update dimension record: {e}") from e
+
+    def create_update_history(
+        self,
+        order_number: float,
+        changes_description: str,
+    ) -> None:
+        """
+        Create an order update history record.
+
+        Args:
+            order_number: The order number
+            changes_description: Human-readable description of what changed
+        """
+        connection = self._get_connection()
+
+        now = datetime.now()
+        user_id = "ETO_SYSTEM"
+
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO [HTC300_G040_T030 Orders Update History]
+                    ([Orders_UpdtDate], [Orders_UpdtLID], [Orders_CoID], [Orders_BrID],
+                     [Orders_OrderNbr], [Orders_Changes])
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (now, user_id, self.CO_ID, self.BR_ID, order_number, changes_description))
+
+            logger.debug(f"Created update history for order {order_number}")
+
+        except Exception as e:
+            # Log but don't fail the update if history creation fails
+            logger.warning(f"Failed to create update history for order {order_number}: {e}")
 
     def remove_from_orders_in_work(self, order_number: float) -> None:
         """

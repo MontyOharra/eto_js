@@ -25,10 +25,11 @@ export type PendingOrderStatus =
  * Status of a pending update
  */
 export type PendingUpdateStatus =
-  | 'pending'     // Awaiting user review
-  | 'approved'    // User approved, applied to HTC
-  | 'rejected'    // User rejected
-  | 'superseded'; // Another update for same field was approved
+  | 'pending'        // Awaiting user review
+  | 'approved'       // User approved, applied to HTC
+  | 'rejected'       // User rejected
+  | 'superseded'     // Another update for same field was approved
+  | 'manual_review'; // Requires manual intervention (e.g., duplicate HTC orders)
 
 /**
  * Type of contribution a run made to an order
@@ -181,7 +182,7 @@ export interface PendingUpdateListItem {
   hawb: string;
   customer_id: number;
   customer_name: string | null;
-  htc_order_number: number;
+  htc_order_number: number | null; // null when multiple HTC orders exist (manual_review)
   status: PendingUpdateStatus;
 
   /** Field summary - count of fields being changed */
@@ -220,7 +221,7 @@ export interface PendingUpdateDetail {
   hawb: string;
   customer_id: number;
   customer_name: string | null;
-  htc_order_number: number;
+  htc_order_number: number | null; // null when multiple HTC orders exist (manual_review)
   status: PendingUpdateStatus;
 
   /** All fields with their proposed changes */
@@ -240,7 +241,7 @@ export interface PendingUpdateDetail {
  * @deprecated Use PendingUpdateListItem[] instead
  */
 export interface PendingUpdatesByOrder {
-  htc_order_number: number;
+  htc_order_number: number | null;
   hawb: string;
   customer_name: string;
   updates: LegacyPendingUpdateItem[];
@@ -254,7 +255,7 @@ export interface LegacyPendingUpdateItem {
   id: number;
   customer_id: number;
   hawb: string;
-  htc_order_number: number;
+  htc_order_number: number | null;
   customer_name: string | null;
   field_name: string;
   field_label: string;
@@ -382,6 +383,8 @@ export interface UnifiedActionListItem {
   error_message: string | null;
 
   /** Timestamps */
+  /** When actual processing occurred (not read/unread toggle) */
+  last_processed_at: string | null;
   created_at: string;
   updated_at: string;
 }

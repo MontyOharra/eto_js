@@ -16,7 +16,7 @@ Architecture:
     - HtcOrderWorker: Background worker for creating HTC orders from pending orders
 """
 
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 from shared.logging import get_logger
 from shared.exceptions import OutputExecutionError
@@ -189,6 +189,25 @@ class HtcIntegrationService:
             The HTC order number (float) if found, None if not found
         """
         return self._lookup_utils.lookup_order_by_customer_and_hawb(customer_id, hawb)
+
+    def count_orders_by_customer_and_hawb(
+        self,
+        customer_id: int,
+        hawb: str,
+    ) -> int:
+        """
+        Count how many orders exist in HTC Open Orders for a customer/HAWB pair.
+
+        This is used to detect duplicate orders that require manual intervention.
+
+        Args:
+            customer_id: The customer ID to look up
+            hawb: The HAWB string to look up
+
+        Returns:
+            The count of matching orders (0, 1, or more)
+        """
+        return self._lookup_utils.count_orders_by_customer_and_hawb(customer_id, hawb)
 
     def get_customer_name(self, customer_id: int) -> Optional[str]:
         """
@@ -663,6 +682,261 @@ class HtcIntegrationService:
             weight=pending_order.weight,
         )
 
+    # ==================== Order Update Orchestrator ====================
+
+    def update_order(
+        self,
+        order_number: float,
+        pickup_company_name: Optional[str] = None,
+        pickup_address: Optional[str] = None,
+        pickup_time_start: Optional[str] = None,
+        pickup_time_end: Optional[str] = None,
+        delivery_company_name: Optional[str] = None,
+        delivery_address: Optional[str] = None,
+        delivery_time_start: Optional[str] = None,
+        delivery_time_end: Optional[str] = None,
+        mawb: Optional[str] = None,
+        pickup_notes: Optional[str] = None,
+        delivery_notes: Optional[str] = None,
+        order_notes: Optional[str] = None,
+        pieces: Optional[int] = None,
+        weight: Optional[float] = None,
+    ) -> List[str]:
+        """
+        Update an existing HTC order with new field values.
+
+        This orchestrator handles the complexity of updating an order:
+        - Address fields: Finds or creates the address, then updates all related columns
+        - DateTime fields: Parses and splits into date + time components
+        - Simple fields: Direct updates (notes, mawb)
+        - Dimension fields: Updates the dims table (pieces, weight)
+
+        After updates, recalculates order type if addresses changed.
+
+        Args:
+            order_number: The HTC order number to update
+            pickup_company_name: New pickup company name (required if pickup_address provided)
+            pickup_address: New pickup address string
+            pickup_time_start: New pickup start datetime (ISO format)
+            pickup_time_end: New pickup end datetime (ISO format)
+            delivery_company_name: New delivery company name (required if delivery_address provided)
+            delivery_address: New delivery address string
+            delivery_time_start: New delivery start datetime (ISO format)
+            delivery_time_end: New delivery end datetime (ISO format)
+            mawb: New MAWB value
+            pickup_notes: New pickup notes
+            delivery_notes: New delivery notes
+            order_notes: New order notes
+            pieces: New piece count
+            weight: New weight
+
+        Returns:
+            List of field names that were updated
+
+        Raises:
+            OutputExecutionError: If update fails
+            ValueError: If address provided without company name
+        """
+        logger.info(f"Updating HTC order {order_number}")
+
+        htc_updates: Dict[str, Any] = {}
+        updated_fields: List[str] = []
+        address_changed = False
+
+        # Track address info for order type recalculation
+        pu_addr_info = None
+        del_addr_info = None
+
+        # ================================================================
+        # PICKUP ADDRESS HANDLING
+        # ================================================================
+        if pickup_address is not None:
+            if not pickup_company_name:
+                raise ValueError("pickup_company_name is required when updating pickup_address")
+
+            # Find or create the address
+            pu_address_id = self._address_utils.find_or_create_address(
+                address_string=pickup_address,
+                company_name=pickup_company_name,
+            )
+            logger.debug(f"Resolved pickup address ID: {pu_address_id}")
+
+            # Get full address info
+            pu_addr_info = self._lookup_utils.get_address_info(pu_address_id)
+            if not pu_addr_info:
+                raise OutputExecutionError(f"Failed to get pickup address info for ID {pu_address_id}")
+
+            pu_aci_letter = self._lookup_utils.get_aci_letter(pu_addr_info.aci_id)
+
+            # Add all pickup address columns to update
+            htc_updates["M_PUID"] = pu_address_id
+            htc_updates["M_PUCo"] = pu_addr_info.company
+            htc_updates["M_PULocn"] = pu_addr_info.formatted_location
+            htc_updates["M_PUZip"] = pu_addr_info.zip_code
+            htc_updates["M_PULatitude"] = pu_addr_info.latitude
+            htc_updates["M_PULongitude"] = pu_addr_info.longitude
+            htc_updates["M_PUACI"] = pu_aci_letter
+            htc_updates["M_PUAssessorials"] = pu_addr_info.assessorials
+            htc_updates["M_PUCarrierYN"] = pu_addr_info.carrier_yn
+            htc_updates["M_PUCarrierGroundYN"] = pu_addr_info.carrier_ground_yn
+            htc_updates["M_PUIntlYN"] = pu_addr_info.international_yn
+            htc_updates["M_PULocalYN"] = pu_addr_info.local_yn
+            htc_updates["M_PUBranchYN"] = pu_addr_info.branch_yn
+
+            updated_fields.append("pickup_address")
+            updated_fields.append("pickup_company_name")
+            address_changed = True
+
+        # ================================================================
+        # DELIVERY ADDRESS HANDLING
+        # ================================================================
+        if delivery_address is not None:
+            if not delivery_company_name:
+                raise ValueError("delivery_company_name is required when updating delivery_address")
+
+            # Find or create the address
+            del_address_id = self._address_utils.find_or_create_address(
+                address_string=delivery_address,
+                company_name=delivery_company_name,
+            )
+            logger.debug(f"Resolved delivery address ID: {del_address_id}")
+
+            # Get full address info
+            del_addr_info = self._lookup_utils.get_address_info(del_address_id)
+            if not del_addr_info:
+                raise OutputExecutionError(f"Failed to get delivery address info for ID {del_address_id}")
+
+            del_aci_letter = self._lookup_utils.get_aci_letter(del_addr_info.aci_id)
+
+            # Add all delivery address columns to update
+            htc_updates["M_DelID"] = del_address_id
+            htc_updates["M_DelCo"] = del_addr_info.company
+            htc_updates["M_DelLocn"] = del_addr_info.formatted_location
+            htc_updates["M_DelZip"] = del_addr_info.zip_code
+            htc_updates["M_DelLatitude"] = del_addr_info.latitude
+            htc_updates["M_DelLongitude"] = del_addr_info.longitude
+            htc_updates["M_DelACI"] = del_aci_letter
+            htc_updates["M_Del_Assessorials"] = del_addr_info.assessorials
+            htc_updates["M_DelCarrierYN"] = del_addr_info.carrier_yn
+            htc_updates["M_DelCarrierGroundYN"] = del_addr_info.carrier_ground_yn
+            htc_updates["M_DelIntlYN"] = del_addr_info.international_yn
+            htc_updates["M_DelLocalYN"] = del_addr_info.local_yn
+            htc_updates["M_DelBranchYN"] = del_addr_info.branch_yn
+
+            updated_fields.append("delivery_address")
+            updated_fields.append("delivery_company_name")
+            address_changed = True
+
+        # ================================================================
+        # PICKUP DATETIME HANDLING
+        # ================================================================
+        if pickup_time_start is not None:
+            pu_date, pu_time_start_parsed = self._order_utils.parse_datetime_string(pickup_time_start)
+            htc_updates["M_PUDate"] = pu_date
+            htc_updates["M_PUTimeStart"] = pu_time_start_parsed
+            updated_fields.append("pickup_time_start")
+
+        if pickup_time_end is not None:
+            _, pu_time_end_parsed = self._order_utils.parse_datetime_string(pickup_time_end)
+            htc_updates["M_PUTimeEnd"] = pu_time_end_parsed
+            updated_fields.append("pickup_time_end")
+
+        # ================================================================
+        # DELIVERY DATETIME HANDLING
+        # ================================================================
+        if delivery_time_start is not None:
+            del_date, del_time_start_parsed = self._order_utils.parse_datetime_string(delivery_time_start)
+            htc_updates["M_DelDate"] = del_date
+            htc_updates["M_DelTimeStart"] = del_time_start_parsed
+            updated_fields.append("delivery_time_start")
+
+        if delivery_time_end is not None:
+            _, del_time_end_parsed = self._order_utils.parse_datetime_string(delivery_time_end)
+            htc_updates["M_DelTimeEnd"] = del_time_end_parsed
+            updated_fields.append("delivery_time_end")
+
+        # ================================================================
+        # SIMPLE FIELD HANDLING
+        # ================================================================
+        if mawb is not None:
+            htc_updates["M_MAWB"] = mawb
+            updated_fields.append("mawb")
+
+        if pickup_notes is not None:
+            htc_updates["M_PUNotes"] = pickup_notes
+            updated_fields.append("pickup_notes")
+
+        if delivery_notes is not None:
+            htc_updates["M_DelNotes"] = delivery_notes
+            updated_fields.append("delivery_notes")
+
+        if order_notes is not None:
+            htc_updates["M_OrderNotes"] = order_notes
+            updated_fields.append("order_notes")
+
+        # ================================================================
+        # ORDER TYPE RECALCULATION (if address changed)
+        # ================================================================
+        if address_changed:
+            # We need both pickup and delivery info to recalculate
+            # If only one changed, fetch the other from the existing order
+            if pu_addr_info is None:
+                # Fetch existing pickup address from order
+                existing_pu_id = self._lookup_utils.get_order_address_id(order_number, is_pickup=True)
+                if existing_pu_id:
+                    pu_addr_info = self._lookup_utils.get_address_info(existing_pu_id)
+
+            if del_addr_info is None:
+                # Fetch existing delivery address from order
+                existing_del_id = self._lookup_utils.get_order_address_id(order_number, is_pickup=False)
+                if existing_del_id:
+                    del_addr_info = self._lookup_utils.get_address_info(existing_del_id)
+
+            if pu_addr_info and del_addr_info:
+                pu_aci_letter = self._lookup_utils.get_aci_letter(pu_addr_info.aci_id)
+                del_aci_letter = self._lookup_utils.get_aci_letter(del_addr_info.aci_id)
+
+                new_order_type = self._order_utils.determine_order_type(
+                    pu_aci=pu_aci_letter,
+                    pu_branch=pu_addr_info.branch_yn,
+                    pu_carrier=pu_addr_info.carrier_yn,
+                    del_aci=del_aci_letter,
+                    del_branch=del_addr_info.branch_yn,
+                    del_carrier=del_addr_info.carrier_yn,
+                )
+                htc_updates["M_OrderType"] = new_order_type
+                logger.debug(f"Recalculated order type: {new_order_type}")
+
+        # ================================================================
+        # EXECUTE UPDATES
+        # ================================================================
+        if htc_updates:
+            self._order_utils.update_order_fields(order_number, htc_updates)
+
+        # ================================================================
+        # DIMENSION TABLE UPDATES (pieces, weight)
+        # ================================================================
+        if pieces is not None or weight is not None:
+            self._order_utils.update_dimension_record(
+                order_number=order_number,
+                pieces=pieces,
+                weight=weight,
+            )
+            if pieces is not None:
+                updated_fields.append("pieces")
+            if weight is not None:
+                updated_fields.append("weight")
+
+        # ================================================================
+        # CREATE UPDATE HISTORY
+        # ================================================================
+        if updated_fields:
+            changes_desc = f"Order #{int(order_number)} updated via ETO: {', '.join(updated_fields)}"
+            self._order_utils.create_update_history(order_number, changes_desc)
+
+        logger.info(f"Successfully updated HTC order {order_number}: {updated_fields}")
+        return updated_fields
+
     # ==================== Worker Callback Methods ====================
     # These methods are used by HtcOrderWorker to process pending orders
 
@@ -685,10 +959,12 @@ class HtcIntegrationService:
         Args:
             pending_order_id: ID of the pending order
         """
+        from datetime import datetime
         self._pending_order_repo.update(pending_order_id, {
             "status": "processing",
             "error_message": None,
             "error_at": None,
+            "last_processed_at": datetime.now(),
         })
         logger.info(f"Pending order {pending_order_id} marked as processing")
 
@@ -707,6 +983,7 @@ class HtcIntegrationService:
             "htc_created_at": datetime.now(timezone.utc),
             "error_message": None,
             "error_at": None,
+            "last_processed_at": datetime.now(),
         })
         logger.info(f"Pending order {pending_order_id} marked as created (HTC order {htc_order_number})")
 
@@ -723,6 +1000,7 @@ class HtcIntegrationService:
             "status": "failed",
             "error_message": error_message,
             "error_at": datetime.now(timezone.utc),
+            "last_processed_at": datetime.now(),
         })
         logger.error(f"Pending order {pending_order_id} marked as failed: {error_message}")
 
@@ -771,10 +1049,12 @@ class HtcIntegrationService:
             )
             return False
 
+        from datetime import datetime
         self._pending_order_repo.update(pending_order_id, {
             "status": "ready",
             "error_message": None,
             "error_at": None,
+            "last_processed_at": datetime.now(),
         })
         logger.info(f"Pending order {pending_order_id} reset to 'ready' for retry")
         return True

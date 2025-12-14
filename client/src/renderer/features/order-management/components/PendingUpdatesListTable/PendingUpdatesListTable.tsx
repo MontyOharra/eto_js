@@ -55,6 +55,12 @@ function getStatusBadge(status: PendingUpdateStatus) {
           Rejected
         </span>
       );
+    case 'manual_review':
+      return (
+        <span className="px-2 py-0.5 bg-orange-500/20 text-orange-400 text-xs rounded-full">
+          Manual Review
+        </span>
+      );
     default:
       return (
         <span className="px-2 py-0.5 bg-gray-500/20 text-gray-400 text-xs rounded-full">

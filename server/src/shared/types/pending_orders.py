@@ -20,9 +20,10 @@ PendingOrderStatus = Literal[
 ]
 
 PendingUpdateStatus = Literal[
-    "pending",   # Awaiting user review
-    "approved",  # User approved, applied to HTC
-    "rejected",  # User rejected the change
+    "pending",        # Awaiting user review
+    "approved",       # User approved, applied to HTC
+    "rejected",       # User rejected the change
+    "manual_review",  # Requires manual intervention (e.g., duplicate HTC orders)
 ]
 
 # Field state computed from history
@@ -94,6 +95,8 @@ class PendingOrderUpdate(TypedDict, total=False):
     error_at: datetime | None
     # Read/unread tracking
     is_read: bool
+    # Processing timestamp (set on actual processing, NOT on read/unread toggle)
+    last_processed_at: datetime | None
     # Order fields
     pickup_company_name: str | None
     pickup_address: str | None
@@ -144,6 +147,7 @@ class PendingOrder:
     # Read/unread tracking
     is_read: bool
     # Timestamps
+    last_processed_at: Optional[datetime]  # Set on actual processing, NOT on read/unread toggle
     created_at: datetime
     updated_at: datetime
 
@@ -194,10 +198,11 @@ class PendingOrderHistory:
 class PendingUpdateCreate:
     """
     Data required to create a new pending update.
+    htc_order_number is None when multiple HTC orders exist (manual_review).
     """
     customer_id: int
     hawb: str
-    htc_order_number: float
+    htc_order_number: Optional[float] = None
 
 
 class PendingUpdateUpdate(TypedDict, total=False):
@@ -209,6 +214,8 @@ class PendingUpdateUpdate(TypedDict, total=False):
     reviewed_at: datetime | None
     # Read/unread tracking
     is_read: bool
+    # Processing timestamp (set on actual processing, NOT on read/unread toggle)
+    last_processed_at: datetime | None
     # Field values
     pickup_company_name: str | None
     pickup_address: str | None
@@ -231,11 +238,12 @@ class PendingUpdate:
     """
     Complete pending update record as stored in the database.
     Mirrors PendingOrder structure for consistency.
+    htc_order_number is None when multiple HTC orders exist (manual_review).
     """
     id: int
     customer_id: int
     hawb: str
-    htc_order_number: float
+    htc_order_number: Optional[float]  # None when multiple HTC orders exist
     status: PendingUpdateStatus
     # Field values (NULL means no change proposed for that field)
     pickup_company_name: Optional[str]
@@ -255,6 +263,7 @@ class PendingUpdate:
     # Read/unread tracking
     is_read: bool
     # Timestamps
+    last_processed_at: Optional[datetime]  # Set on actual processing, NOT on read/unread toggle
     created_at: datetime
     updated_at: datetime
     reviewed_at: Optional[datetime]

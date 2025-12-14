@@ -130,7 +130,7 @@ export interface ApprovePendingUpdateRequest {
 export interface ApprovePendingUpdateResponse {
   success: boolean;
   update_id: number;
-  htc_order_number: number;
+  htc_order_number: number | null;
   new_status: string;
   fields_updated: string[];
   message?: string;

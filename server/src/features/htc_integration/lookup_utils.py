@@ -40,6 +40,10 @@ class HtcOrderFields:
     customer_id: int
     hawb: str
 
+    # Address IDs for comparison (comparing IDs is more reliable than string comparison)
+    pickup_address_id: Optional[float]    # M_PUID - FavID of pickup address
+    delivery_address_id: Optional[float]  # M_DelID - FavID of delivery address
+
     # Fields that can be updated (matching pending order field names)
     pickup_company_name: Optional[str]
     pickup_address: Optional[str]
@@ -144,7 +148,9 @@ class HtcLookupUtils:
             hawb: The HAWB string to look up
 
         Returns:
-            The HTC order number (float) if found, None if not found
+            The HTC order number (float) if found, None if not found.
+            If multiple orders exist, returns the first one (use count_orders_by_customer_and_hawb
+            to check for duplicates first).
         """
         connection = self._get_connection()
 
@@ -158,19 +164,100 @@ class HtcLookupUtils:
                       AND [M_CoID] = ?
                       AND [M_BrID] = ?
                 """
-                cursor.execute(query, (customer_id, hawb, self.CO_ID, self.BR_ID))
+                params = (customer_id, hawb, self.CO_ID, self.BR_ID)
+                logger.info(f"HTC lookup query params: customer_id={customer_id} (type={type(customer_id).__name__}), hawb='{hawb}' (type={type(hawb).__name__}), CO_ID={self.CO_ID}, BR_ID={self.BR_ID}")
+                cursor.execute(query, params)
                 row = cursor.fetchone()
 
                 if row is None:
-                    logger.debug(f"No order found for customer {customer_id}, HAWB {hawb}")
+                    logger.info(f"No order found for customer {customer_id}, HAWB '{hawb}'")
                     return None
 
                 order_no = float(row[0]) if row[0] is not None else None
-                logger.debug(f"Found order {order_no} for customer {customer_id}, HAWB {hawb}")
+                logger.info(f"Found order {order_no} for customer {customer_id}, HAWB '{hawb}'")
                 return order_no
 
         except Exception as e:
             logger.error(f"Failed to lookup order for customer {customer_id}, HAWB {hawb}: {e}")
+            raise
+
+    def count_orders_by_customer_and_hawb(
+        self,
+        customer_id: int,
+        hawb: str,
+    ) -> int:
+        """
+        Count how many orders exist in HTC Open Orders for a customer/HAWB pair.
+
+        This is used to detect duplicate orders that require manual intervention.
+
+        Args:
+            customer_id: The customer ID to look up
+            hawb: The HAWB string to look up
+
+        Returns:
+            The count of matching orders (0, 1, or more)
+        """
+        connection = self._get_connection()
+
+        try:
+            with connection.cursor() as cursor:
+                query = """
+                    SELECT COUNT(*)
+                    FROM [HTC300_G040_T010A Open Orders]
+                    WHERE [M_CustomerID] = ?
+                      AND [M_HAWB] = ?
+                      AND [M_CoID] = ?
+                      AND [M_BrID] = ?
+                """
+                params = (customer_id, hawb, self.CO_ID, self.BR_ID)
+                cursor.execute(query, params)
+                row = cursor.fetchone()
+
+                count = int(row[0]) if row and row[0] is not None else 0
+                logger.info(f"HTC duplicate check: Found {count} order(s) for customer {customer_id}, HAWB '{hawb}'")
+                return count
+
+        except Exception as e:
+            logger.error(f"Failed to count orders for customer {customer_id}, HAWB {hawb}: {e}")
+            raise
+
+    def get_order_address_id(
+        self,
+        order_number: float,
+        is_pickup: bool = True,
+    ) -> Optional[float]:
+        """
+        Get the address ID (M_PUID or M_DelID) from an existing order.
+
+        Args:
+            order_number: The HTC order number
+            is_pickup: True to get pickup address ID, False for delivery
+
+        Returns:
+            The address FavID, or None if order not found
+        """
+        connection = self._get_connection()
+        column = "M_PUID" if is_pickup else "M_DelID"
+
+        try:
+            with connection.cursor() as cursor:
+                query = f"""
+                    SELECT [{column}]
+                    FROM [HTC300_G040_T010A Open Orders]
+                    WHERE [M_OrderNo] = ?
+                      AND [M_CoID] = ?
+                      AND [M_BrID] = ?
+                """
+                cursor.execute(query, (order_number, self.CO_ID, self.BR_ID))
+                row = cursor.fetchone()
+
+                if row and row[0] is not None:
+                    return float(row[0])
+                return None
+
+        except Exception as e:
+            logger.error(f"Failed to get address ID for order {order_number}: {e}")
             raise
 
     def get_customer_name(self, customer_id: int) -> Optional[str]:
@@ -433,11 +520,13 @@ class HtcLookupUtils:
                         [M_OrderNo],
                         [M_CustomerID],
                         [M_HAWB],
+                        [M_PUID],
                         [M_PUCo],
                         [M_PULocn],
                         [M_PUDate],
                         [M_PUTimeStart],
                         [M_PUTimeEnd],
+                        [M_DelID],
                         [M_DelCo],
                         [M_DelLocn],
                         [M_DelDate],
@@ -513,18 +602,20 @@ class HtcLookupUtils:
                 order_number=float(order_row[0]),
                 customer_id=int(order_row[1]),
                 hawb=str(order_row[2]) if order_row[2] else "",
-                pickup_company_name=str(order_row[3]) if order_row[3] else None,
-                pickup_address=str(order_row[4]) if order_row[4] else None,
-                pickup_time_start=combine_datetime(order_row[5], order_row[6]),
-                pickup_time_end=combine_datetime(order_row[5], order_row[7]),
-                delivery_company_name=str(order_row[8]) if order_row[8] else None,
-                delivery_address=str(order_row[9]) if order_row[9] else None,
-                delivery_time_start=combine_datetime(order_row[10], order_row[11]),
-                delivery_time_end=combine_datetime(order_row[10], order_row[12]),
-                mawb=str(order_row[13]) if order_row[13] else None,
-                pickup_notes=str(order_row[14]) if order_row[14] else None,
-                delivery_notes=str(order_row[15]) if order_row[15] else None,
-                order_notes=str(order_row[16]) if order_row[16] else None,
+                pickup_address_id=float(order_row[3]) if order_row[3] is not None else None,
+                pickup_company_name=str(order_row[4]) if order_row[4] else None,
+                pickup_address=str(order_row[5]) if order_row[5] else None,
+                pickup_time_start=combine_datetime(order_row[6], order_row[7]),
+                pickup_time_end=combine_datetime(order_row[6], order_row[8]),
+                delivery_address_id=float(order_row[9]) if order_row[9] is not None else None,
+                delivery_company_name=str(order_row[10]) if order_row[10] else None,
+                delivery_address=str(order_row[11]) if order_row[11] else None,
+                delivery_time_start=combine_datetime(order_row[12], order_row[13]),
+                delivery_time_end=combine_datetime(order_row[12], order_row[14]),
+                mawb=str(order_row[15]) if order_row[15] else None,
+                pickup_notes=str(order_row[16]) if order_row[16] else None,
+                delivery_notes=str(order_row[17]) if order_row[17] else None,
+                order_notes=str(order_row[18]) if order_row[18] else None,
                 pieces=pieces,
                 weight=weight,
             )

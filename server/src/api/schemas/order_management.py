@@ -206,8 +206,8 @@ class PendingUpdateListItem(BaseModel):
     hawb: str
     customer_id: int
     customer_name: Optional[str] = None  # Resolved from Access DB
-    htc_order_number: int  # The existing HTC order being updated
-    status: Literal["pending", "approved", "rejected"]
+    htc_order_number: Optional[int] = None  # None when multiple HTC orders exist (manual_review)
+    status: Literal["pending", "approved", "rejected", "manual_review"]
 
     # Field summary - count of fields being changed
     fields_with_changes: int  # Number of fields with proposed changes (non-NULL)
@@ -253,8 +253,8 @@ class PendingUpdateDetail(BaseModel):
     hawb: str
     customer_id: int
     customer_name: Optional[str] = None
-    htc_order_number: int
-    status: Literal["pending", "approved", "rejected"]
+    htc_order_number: Optional[int] = None  # None when multiple HTC orders exist (manual_review)
+    status: Literal["pending", "approved", "rejected", "manual_review"]
 
     # All fields with their proposed changes
     fields: List[PendingUpdateFieldDetail]
@@ -276,7 +276,7 @@ class ApprovePendingUpdateResponse(BaseModel):
     """Response after approving a pending update"""
     success: bool
     update_id: int
-    htc_order_number: int
+    htc_order_number: Optional[int] = None
     new_status: str
     fields_updated: List[str]  # Field names that were updated
     message: Optional[str] = None
@@ -439,6 +439,7 @@ class UnifiedActionListItem(BaseModel):
     error_message: Optional[str] = None
 
     # Timestamps
+    last_processed_at: Optional[str] = None  # When actual processing occurred (not read/unread toggle)
     created_at: str
     updated_at: str
 
