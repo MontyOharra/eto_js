@@ -1117,3 +1117,26 @@ class PendingUpdateHistoryModel(BaseModel):
         Index("idx_puh_sub_run", "sub_run_id"),
         Index("idx_puh_selected", "pending_update_id", "field_name", "is_selected"),
     )
+
+
+# ============================================================
+# system_settings - Application configuration key-value store
+# ============================================================
+
+
+class SystemSettingModel(BaseModel):
+    """
+    Key-value store for application-wide settings.
+
+    Used for storing configuration like:
+    - email.default_sender_account_id - Which email account to use for sending
+    - Future: notification preferences, default recipients, etc.
+    """
+
+    __tablename__ = "system_settings"
+
+    key: Mapped[str] = mapped_column(String(100), primary_key=True)
+    value: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON serialized for complex values
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
+    )

@@ -10,6 +10,7 @@ from .admin import router as admin_router
 from .eto_runs import router as eto_runs_router
 from .order_management import router as order_management_router
 from .htc_integration import router as htc_integration_router
+from .system_settings import router as system_settings_router
 
 __all__ = [
     'email_accounts_router',
@@ -22,4 +23,5 @@ __all__ = [
     'eto_runs_router',
     'order_management_router',
     'htc_integration_router',
+    'system_settings_router',
 ]

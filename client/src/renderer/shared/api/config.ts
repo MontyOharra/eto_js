@@ -20,6 +20,7 @@ export const API_CONFIG = {
     ETO_RUNS: '/api/eto-runs',
     MODULES: '/api/modules',
     OUTPUT_CHANNELS: '/api/modules/output-channels',
+    SYSTEM_SETTINGS: '/api/settings',
   },
 } as const;
 

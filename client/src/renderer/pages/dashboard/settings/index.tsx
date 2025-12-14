@@ -5,6 +5,7 @@ import {
   type EmailAccountSummary,
   type ValidationResultResponse,
 } from '../../../features/email-accounts';
+import { useSystemSettingsApi } from '../../../features/system-settings';
 
 export const Route = createFileRoute('/dashboard/settings/')({
   component: SettingsPage,
@@ -20,9 +21,20 @@ const settingsSections = [
       </svg>
     ),
   },
+  {
+    id: 'outgoing-email',
+    name: 'Outgoing Email',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+      </svg>
+    ),
+  },
 ];
 
 function SettingsPage() {
+  const [activeSection, setActiveSection] = useState('email-connections');
+
   return (
     <div className="flex h-full">
       {/* Sidebar */}
@@ -32,7 +44,12 @@ function SettingsPage() {
           {settingsSections.map((section) => (
             <button
               key={section.id}
-              className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors bg-gray-700 text-blue-300"
+              onClick={() => setActiveSection(section.id)}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                activeSection === section.id
+                  ? 'bg-gray-700 text-blue-300'
+                  : 'text-gray-400 hover:bg-gray-700/50 hover:text-gray-200'
+              }`}
             >
               {section.icon}
               {section.name}
@@ -43,7 +60,8 @@ function SettingsPage() {
 
       {/* Content Area */}
       <div className="flex-1 p-6 overflow-auto">
-        <EmailConnectionsSettings />
+        {activeSection === 'email-connections' && <EmailConnectionsSettings />}
+        {activeSection === 'outgoing-email' && <OutgoingEmailSettings />}
       </div>
     </div>
   );
@@ -822,6 +840,164 @@ function DeleteConfirmationModal({
             </button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// Outgoing Email Settings Component
+function OutgoingEmailSettings() {
+  const { getEmailAccounts } = useEmailAccountsApi();
+  const { getEmailSettings, updateEmailSettings, isLoading: isUpdating } = useSystemSettingsApi();
+
+  const [accounts, setAccounts] = useState<EmailAccountSummary[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
+  const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
+  const [isLoadingSettings, setIsLoadingSettings] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Load accounts and current setting on mount
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setError(null);
+
+        // Load accounts
+        setIsLoadingAccounts(true);
+        const accountsList = await getEmailAccounts({ validated_only: true });
+        setAccounts(accountsList);
+        setIsLoadingAccounts(false);
+
+        // Load current email settings
+        setIsLoadingSettings(true);
+        const settings = await getEmailSettings();
+        setSelectedAccountId(settings.default_sender_account_id);
+        setIsLoadingSettings(false);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load settings');
+        setIsLoadingAccounts(false);
+        setIsLoadingSettings(false);
+      }
+    };
+
+    loadData();
+  }, []);
+
+  const handleSave = async () => {
+    try {
+      setError(null);
+      setSaveSuccess(false);
+      await updateEmailSettings({ default_sender_account_id: selectedAccountId });
+      setSaveSuccess(true);
+      // Clear success message after 3 seconds
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save settings');
+    }
+  };
+
+  const isLoading = isLoadingAccounts || isLoadingSettings;
+
+  return (
+    <div>
+      {/* Header */}
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-white">Outgoing Email</h1>
+        <p className="text-sm text-gray-400 mt-1">
+          Configure the email account used for sending notifications
+        </p>
+      </div>
+
+      {/* Error State */}
+      {error && (
+        <div className="mb-6 p-4 bg-red-600/10 border border-red-600/30 rounded-lg">
+          <div className="flex items-center gap-3">
+            <svg className="w-5 h-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+            </svg>
+            <span className="text-red-400">{error}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Success State */}
+      {saveSuccess && (
+        <div className="mb-6 p-4 bg-green-600/10 border border-green-600/30 rounded-lg">
+          <div className="flex items-center gap-3">
+            <svg className="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            </svg>
+            <span className="text-green-400">Settings saved successfully</span>
+          </div>
+        </div>
+      )}
+
+      {/* Settings Card */}
+      <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <svg className="animate-spin h-8 w-8 text-blue-500" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* Default Sender Account */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Default Sender Account
+              </label>
+              <p className="text-xs text-gray-500 mb-3">
+                Select which email account to use when sending notifications (e.g., order confirmations)
+              </p>
+
+              {accounts.length === 0 ? (
+                <div className="p-4 bg-gray-900/50 border border-gray-700 rounded-lg">
+                  <p className="text-sm text-gray-400">
+                    No validated email accounts available.{' '}
+                    <span className="text-blue-400">Add an email connection first.</span>
+                  </p>
+                </div>
+              ) : (
+                <select
+                  value={selectedAccountId ?? ''}
+                  onChange={(e) => setSelectedAccountId(e.target.value ? Number(e.target.value) : null)}
+                  className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+                >
+                  <option value="">-- None (disabled) --</option>
+                  {accounts.map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.name} ({account.email_address})
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            {/* Save Button */}
+            <div className="flex justify-end pt-4 border-t border-gray-700">
+              <button
+                onClick={handleSave}
+                disabled={isUpdating || accounts.length === 0}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
+              >
+                {isUpdating ? (
+                  <span className="flex items-center">
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Saving...
+                  </span>
+                ) : (
+                  'Save Changes'
+                )}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
