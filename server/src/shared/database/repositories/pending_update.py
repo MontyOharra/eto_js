@@ -63,6 +63,7 @@ class PendingUpdateRepository(BaseRepository[PendingUpdateModel]):
             order_notes=model.order_notes,
             pieces=model.pieces,
             weight=model.weight,
+            is_read=model.is_read,
             # Timestamps
             created_at=model.created_at,
             updated_at=model.updated_at,

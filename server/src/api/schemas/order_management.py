@@ -201,26 +201,24 @@ class RetryPendingOrderResponse(BaseModel):
 # =============================================================================
 
 class PendingUpdateListItem(BaseModel):
-    """Pending update summary for list/table view"""
+    """Pending update summary for list/table view - mirrors PendingOrderListItem"""
     id: int
-    customer_id: int
     hawb: str
-    htc_order_number: float
-    customer_name: Optional[str] = None
-
-    # The proposed change
-    field_name: str
-    field_label: str
-    proposed_value: str
-
-    # Source info
-    sub_run_id: Optional[int] = None
-
-    # Status
+    customer_id: int
+    customer_name: Optional[str] = None  # Resolved from Access DB
+    htc_order_number: int  # The existing HTC order being updated
     status: Literal["pending", "approved", "rejected"]
 
+    # Field summary - count of fields being changed
+    fields_with_changes: int  # Number of fields with proposed changes (non-NULL)
+    conflict_count: int  # Number of fields with conflicting values
+
+    # Source tracking
+    contributing_sub_run_count: int
+
     # Timestamps
-    proposed_at: str  # ISO 8601
+    created_at: str  # ISO 8601
+    updated_at: str  # ISO 8601
     reviewed_at: Optional[str] = None
 
 
@@ -232,11 +230,55 @@ class GetPendingUpdatesResponse(BaseModel):
     offset: int
 
 
+# =============================================================================
+# Pending Update Detail
+# =============================================================================
+
+class PendingUpdateFieldDetail(BaseModel):
+    """Detail for a single field in a pending update"""
+    name: str
+    label: str
+    current_value: Optional[str] = None  # The current HTC value
+    proposed_value: Optional[str] = None  # The proposed new value (NULL if conflict)
+    state: Literal["empty", "set", "confirmed", "conflict"]
+    # Only present if state == "conflict"
+    conflict_options: Optional[List[ConflictOption]] = None
+    # Source info (for set/confirmed states)
+    source: Optional[FieldSource] = None
+
+
+class PendingUpdateDetail(BaseModel):
+    """Full pending update detail for single view"""
+    id: int
+    hawb: str
+    customer_id: int
+    customer_name: Optional[str] = None
+    htc_order_number: int
+    status: Literal["pending", "approved", "rejected"]
+
+    # All fields with their proposed changes
+    fields: List[PendingUpdateFieldDetail]
+
+    # Contributing sources
+    contributing_sub_runs: List[ContributingSubRun]
+
+    # Timestamps
+    created_at: str
+    updated_at: str
+    reviewed_at: Optional[str] = None
+
+
+# =============================================================================
+# Pending Update Actions
+# =============================================================================
+
 class ApprovePendingUpdateResponse(BaseModel):
     """Response after approving a pending update"""
     success: bool
     update_id: int
+    htc_order_number: int
     new_status: str
+    fields_updated: List[str]  # Field names that were updated
     message: Optional[str] = None
 
 
@@ -245,6 +287,20 @@ class RejectPendingUpdateResponse(BaseModel):
     success: bool
     update_id: int
     new_status: str
+    message: Optional[str] = None
+
+
+class ConfirmUpdateFieldRequest(BaseModel):
+    """Request to confirm/select a field value for a pending update"""
+    field_name: str
+    history_id: int
+
+
+class ConfirmUpdateFieldResponse(BaseModel):
+    """Response after confirming a field selection for pending update"""
+    success: bool
+    field_name: str
+    selected_value: str
     message: Optional[str] = None
 
 
@@ -313,9 +369,98 @@ class MockOutputProcessingRequest(BaseModel):
 class MockOutputProcessingResponse(BaseModel):
     """Response from mock output processing"""
     success: bool
-    action: str  # "pending_order_created", "pending_order_updated", "pending_updates_created", "no_valid_fields"
+    action: str  # "pending_order_created", "pending_order_updated", "pending_update_created", "pending_update_updated", "no_valid_fields"
+    # For new orders (HAWB not in HTC)
     pending_order_id: Optional[int] = None
     pending_order_status: Optional[str] = None
+    # For updates (HAWB exists in HTC)
+    pending_update_id: Optional[int] = None
+    htc_order_number: Optional[int] = None
+    # Common fields
     fields_contributed: List[str] = []
     conflicts_introduced: List[str] = []
     message: Optional[str] = None
+
+
+# =============================================================================
+# Unified Action List (Combined Orders + Updates)
+# =============================================================================
+
+# Action types for unified list
+ActionType = Literal["create", "update"]
+
+# Combined status for unified filtering
+# For creates: incomplete, ready, processing, created, failed
+# For updates: pending, approved, rejected
+UnifiedStatus = Literal[
+    # Create statuses
+    "incomplete", "ready", "processing", "created", "failed",
+    # Update statuses
+    "pending", "approved", "rejected",
+]
+
+
+class UnifiedActionListItem(BaseModel):
+    """
+    A single item in the unified action list.
+    Represents either a pending order (create) or pending update.
+    """
+    # Discriminator
+    type: ActionType
+
+    # Common identifiers
+    id: int
+    hawb: str
+    customer_id: int
+    customer_name: Optional[str] = None
+
+    # HTC order number (always present for updates, only after creation for orders)
+    htc_order_number: Optional[int] = None
+
+    # Status (type-specific values)
+    status: str
+
+    # Read/unread state
+    is_read: bool
+
+    # Summary info
+    # For creates: field progress counts
+    # For updates: list of fields with changes
+    required_fields_present: Optional[int] = None  # Creates only
+    required_field_count: Optional[int] = None     # Creates only
+    optional_fields_present: Optional[int] = None  # Creates only
+    optional_field_count: Optional[int] = None     # Creates only
+    fields_with_changes: Optional[List[str]] = None  # Updates only
+
+    # Conflict info (both types)
+    conflict_count: int = 0
+
+    # Error info (creates only - failed status)
+    error_message: Optional[str] = None
+
+    # Timestamps
+    created_at: str
+    updated_at: str
+
+
+class UnifiedActionListResponse(BaseModel):
+    """Paginated response for unified action list"""
+    items: List[UnifiedActionListItem]
+    total: int
+    limit: int
+    offset: int
+
+
+class MarkReadRequest(BaseModel):
+    """Request to mark item(s) as read/unread"""
+    type: ActionType
+    id: int
+    is_read: bool
+
+
+class MarkReadResponse(BaseModel):
+    """Response after marking item as read/unread"""
+    success: bool
+    type: ActionType
+    id: int
+    is_read: bool

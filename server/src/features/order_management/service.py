@@ -16,6 +16,7 @@ from shared.logging import get_logger
 from shared.database.repositories.pending_order import PendingOrderRepository
 from shared.database.repositories.pending_order_history import PendingOrderHistoryRepository
 from shared.database.repositories.pending_update import PendingUpdateRepository
+from shared.database.repositories.pending_update_history import PendingUpdateHistoryRepository
 from shared.database.repositories.eto_sub_run import EtoSubRunRepository
 from shared.database.repositories.eto_run import EtoRunRepository
 from shared.database.repositories.pdf_file import PdfFileRepository
@@ -178,6 +179,9 @@ class OrderManagementService:
             connection_manager=connection_manager
         )
         self._pending_update_repo = PendingUpdateRepository(
+            connection_manager=connection_manager
+        )
+        self._pending_update_history_repo = PendingUpdateHistoryRepository(
             connection_manager=connection_manager
         )
 

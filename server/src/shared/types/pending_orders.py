@@ -92,6 +92,8 @@ class PendingOrderUpdate(TypedDict, total=False):
     # Error tracking (for failed HTC creation)
     error_message: str | None
     error_at: datetime | None
+    # Read/unread tracking
+    is_read: bool
     # Order fields
     pickup_company_name: str | None
     pickup_address: str | None
@@ -139,6 +141,8 @@ class PendingOrder:
     order_notes: Optional[str]
     pieces: Optional[int]
     weight: Optional[float]
+    # Read/unread tracking
+    is_read: bool
     # Timestamps
     created_at: datetime
     updated_at: datetime
@@ -203,6 +207,8 @@ class PendingUpdateUpdate(TypedDict, total=False):
     """
     status: PendingUpdateStatus
     reviewed_at: datetime | None
+    # Read/unread tracking
+    is_read: bool
     # Field values
     pickup_company_name: str | None
     pickup_address: str | None
@@ -246,6 +252,8 @@ class PendingUpdate:
     order_notes: Optional[str]
     pieces: Optional[int]
     weight: Optional[float]
+    # Read/unread tracking
+    is_read: bool
     # Timestamps
     created_at: datetime
     updated_at: datetime
