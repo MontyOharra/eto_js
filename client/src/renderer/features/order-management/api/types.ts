@@ -8,9 +8,16 @@ import type {
   PendingOrderStatus,
   PendingOrderSortOption,
   PendingUpdateListItem,
+  PendingUpdateDetail,
   PendingUpdatesByOrder,
   PendingUpdateSortOption,
+  PendingUpdateStatus,
   OrderHistory,
+  ActionType,
+  UnifiedActionListItem,
+  UnifiedActionListResponse,
+  MarkReadRequest,
+  MarkReadResponse,
 } from '../types';
 
 // =============================================================================
@@ -74,25 +81,21 @@ export interface ConfirmFieldResponse {
 }
 
 // =============================================================================
-// Pending Updates API
+// Pending Updates API (New Schema)
 // =============================================================================
 
 /**
  * Query params for GET /order-management/pending-updates
  */
 export interface GetPendingUpdatesParams {
-  /** Filter by HTC order number */
-  htc_order_number?: number;
+  /** Filter by status */
+  status?: PendingUpdateStatus | 'all';
+
+  /** Filter by customer */
+  customer_id?: number;
 
   /** Filter by HAWB */
   hawb?: string;
-
-  /** Group by order (returns PendingUpdatesByOrder[]) */
-  group_by_order?: boolean;
-
-  /** Sort option */
-  sort_by?: string;
-  sort_order?: 'asc' | 'desc';
 
   /** Pagination */
   limit?: number;
@@ -100,7 +103,7 @@ export interface GetPendingUpdatesParams {
 }
 
 /**
- * Response for GET /order-management/pending-updates (flat list)
+ * Response for GET /order-management/pending-updates
  */
 export interface GetPendingUpdatesResponse {
   items: PendingUpdateListItem[];
@@ -110,19 +113,27 @@ export interface GetPendingUpdatesResponse {
 }
 
 /**
- * Response for GET /order-management/pending-updates?group_by_order=true
+ * Response for GET /order-management/pending-updates/{id}
  */
-export interface GetPendingUpdatesGroupedResponse {
-  items: PendingUpdatesByOrder[];
-  total_orders: number;
-  total_updates: number;
-}
+export type GetPendingUpdateDetailResponse = PendingUpdateDetail;
 
 /**
  * Request for POST /order-management/pending-updates/{id}/approve
  */
 export interface ApprovePendingUpdateRequest {
-  // Currently no body needed, but placeholder for future options
+  // Currently no body needed
+}
+
+/**
+ * Response for POST /order-management/pending-updates/{id}/approve
+ */
+export interface ApprovePendingUpdateResponse {
+  success: boolean;
+  update_id: number;
+  htc_order_number: number;
+  new_status: string;
+  fields_updated: string[];
+  message?: string;
 }
 
 /**
@@ -130,6 +141,34 @@ export interface ApprovePendingUpdateRequest {
  */
 export interface RejectPendingUpdateRequest {
   reason?: string;
+}
+
+/**
+ * Response for POST /order-management/pending-updates/{id}/reject
+ */
+export interface RejectPendingUpdateResponse {
+  success: boolean;
+  update_id: number;
+  new_status: string;
+  message?: string;
+}
+
+/**
+ * Request for POST /order-management/pending-updates/{id}/confirm-field
+ */
+export interface ConfirmUpdateFieldRequest {
+  field_name: string;
+  history_id: number;
+}
+
+/**
+ * Response for POST /order-management/pending-updates/{id}/confirm-field
+ */
+export interface ConfirmUpdateFieldResponse {
+  success: boolean;
+  field_name: string;
+  selected_value: string;
+  message?: string;
 }
 
 /**
@@ -148,7 +187,7 @@ export interface BulkRejectPendingUpdatesRequest {
 }
 
 /**
- * Response for approve/reject operations
+ * Response for approve/reject operations (legacy compatibility)
  */
 export interface PendingUpdateActionResponse {
   success: boolean;
@@ -164,6 +203,16 @@ export interface BulkPendingUpdateActionResponse {
   success_count: number;
   failure_count: number;
   results: PendingUpdateActionResponse[];
+}
+
+/**
+ * Legacy: Response for grouped updates (deprecated)
+ * @deprecated
+ */
+export interface GetPendingUpdatesGroupedResponse {
+  items: PendingUpdatesByOrder[];
+  total_orders: number;
+  total_updates: number;
 }
 
 // =============================================================================
@@ -182,3 +231,40 @@ export interface GetOrderHistoryParams {
  * Response for GET /order-management/orders/{hawb}/history
  */
 export type GetOrderHistoryResponse = OrderHistory;
+
+// =============================================================================
+// Unified Actions API
+// =============================================================================
+
+/**
+ * Query params for GET /order-management/unified-actions
+ */
+export interface GetUnifiedActionsParams {
+  /** Filter by action type */
+  type?: ActionType | 'all';
+
+  /** Filter by status (varies by type) */
+  status?: string;
+
+  /** Filter by read/unread state */
+  is_read?: boolean;
+
+  /** Pagination */
+  limit?: number;
+  offset?: number;
+}
+
+/**
+ * Response for GET /order-management/unified-actions
+ */
+export { UnifiedActionListResponse as GetUnifiedActionsResponse };
+
+/**
+ * Request for POST /order-management/mark-read
+ */
+export { MarkReadRequest };
+
+/**
+ * Response for POST /order-management/mark-read
+ */
+export { MarkReadResponse };

@@ -169,45 +169,100 @@ export interface PendingOrderDetail {
 }
 
 // =============================================================================
-// Pending Update Types
+// Pending Update Types (New Schema - mirrors PendingOrder)
 // =============================================================================
 
 /**
  * Pending update list item (for table display)
+ * Now mirrors PendingOrderListItem - one record per HAWB
  */
 export interface PendingUpdateListItem {
   id: number;
-  customer_id: number;
   hawb: string;
-  htc_order_number: number;
+  customer_id: number;
   customer_name: string | null;
-
-  /** The field being updated */
-  field_name: string;
-  field_label: string; // Human-readable label
-
-  /** Proposed value */
-  proposed_value: string;
-
-  /** Source sub-run */
-  sub_run_id: number | null;
-
-  /** Status */
+  htc_order_number: number;
   status: PendingUpdateStatus;
 
+  /** Field summary - count of fields being changed */
+  fields_with_changes: number;
+  conflict_count: number;
+
+  /** Source tracking */
+  contributing_sub_run_count: number;
+
   /** Timestamps */
-  proposed_at: string; // ISO 8601
+  created_at: string; // ISO 8601
+  updated_at: string; // ISO 8601
   reviewed_at: string | null; // ISO 8601
 }
 
 /**
- * Grouped pending updates by order (for UI)
+ * Detail for a single field in a pending update
+ */
+export interface PendingUpdateFieldDetail {
+  name: string;
+  label: string;
+  /** Current value in HTC (for comparison) */
+  current_value: string | null;
+  /** Proposed new value from pipeline */
+  proposed_value: string | null;
+  state: FieldState;
+  conflict_options: ConflictOption[] | null;
+  source: FieldSource | null;
+}
+
+/**
+ * Full pending update detail
+ */
+export interface PendingUpdateDetail {
+  id: number;
+  hawb: string;
+  customer_id: number;
+  customer_name: string | null;
+  htc_order_number: number;
+  status: PendingUpdateStatus;
+
+  /** All fields with their proposed changes */
+  fields: PendingUpdateFieldDetail[];
+
+  /** Contributing sources */
+  contributing_sub_runs: ContributingSubRun[];
+
+  /** Timestamps */
+  created_at: string;
+  updated_at: string;
+  reviewed_at: string | null;
+}
+
+/**
+ * Legacy: Grouped pending updates by order (for old UI - deprecated)
+ * @deprecated Use PendingUpdateListItem[] instead
  */
 export interface PendingUpdatesByOrder {
   htc_order_number: number;
   hawb: string;
   customer_name: string;
-  updates: PendingUpdateListItem[];
+  updates: LegacyPendingUpdateItem[];
+}
+
+/**
+ * Legacy: Old pending update item format
+ * @deprecated
+ */
+export interface LegacyPendingUpdateItem {
+  id: number;
+  customer_id: number;
+  hawb: string;
+  htc_order_number: number;
+  customer_name: string | null;
+  field_name: string;
+  field_label: string;
+  proposed_value: string;
+  sub_run_id: number | null;
+  status: PendingUpdateStatus;
+  proposed_at: string;
+  reviewed_at: string | null;
 }
 
 // =============================================================================
@@ -279,3 +334,83 @@ export type PendingUpdateSortOption =
   | 'proposed_at-asc'
   | 'order_number-asc'
   | 'order_number-desc';
+
+// =============================================================================
+// Unified Action Types (Combined Orders + Updates)
+// =============================================================================
+
+/**
+ * Action type discriminator for unified list
+ */
+export type ActionType = 'create' | 'update';
+
+/**
+ * Unified action list item - can be either a pending order or pending update
+ */
+export interface UnifiedActionListItem {
+  /** Discriminator - "create" for orders, "update" for updates */
+  type: ActionType;
+
+  /** Common identifiers */
+  id: number;
+  hawb: string;
+  customer_id: number;
+  customer_name: string | null;
+
+  /** HTC order number (always present for updates, only after creation for orders) */
+  htc_order_number: number | null;
+
+  /** Status (type-specific values) */
+  status: string;
+
+  /** Read/unread state */
+  is_read: boolean;
+
+  /** Field progress for creates */
+  required_fields_present: number | null;
+  required_field_count: number | null;
+  optional_fields_present: number | null;
+  optional_field_count: number | null;
+
+  /** Fields being changed for updates */
+  fields_with_changes: string[] | null;
+
+  /** Conflict count (both types) */
+  conflict_count: number;
+
+  /** Error message (creates only - failed status) */
+  error_message: string | null;
+
+  /** Timestamps */
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Response from unified actions endpoint
+ */
+export interface UnifiedActionListResponse {
+  items: UnifiedActionListItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+/**
+ * Request to mark an item as read/unread
+ */
+export interface MarkReadRequest {
+  type: ActionType;
+  id: number;
+  is_read: boolean;
+}
+
+/**
+ * Response from mark-read endpoint
+ */
+export interface MarkReadResponse {
+  success: boolean;
+  type: ActionType;
+  id: number;
+  is_read: boolean;
+}

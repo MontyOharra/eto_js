@@ -14,15 +14,24 @@ import type {
   ConfirmFieldResponse,
   GetPendingUpdatesParams,
   GetPendingUpdatesResponse,
-  GetPendingUpdatesGroupedResponse,
+  GetPendingUpdateDetailResponse,
   ApprovePendingUpdateRequest,
+  ApprovePendingUpdateResponse,
   RejectPendingUpdateRequest,
+  RejectPendingUpdateResponse,
+  ConfirmUpdateFieldRequest,
+  ConfirmUpdateFieldResponse,
   BulkApprovePendingUpdatesRequest,
   BulkRejectPendingUpdatesRequest,
   PendingUpdateActionResponse,
   BulkPendingUpdateActionResponse,
   GetOrderHistoryResponse,
+  GetUnifiedActionsParams,
+  GetUnifiedActionsResponse,
+  MarkReadRequest,
+  MarkReadResponse,
 } from './types';
+import type { ActionType } from '../types';
 
 // Base URL for order management endpoints
 // TODO: Add to API_CONFIG when backend is ready
@@ -46,8 +55,13 @@ export const orderManagementQueryKeys = {
   pendingUpdates: () => [...orderManagementQueryKeys.all, 'pending-updates'] as const,
   pendingUpdatesList: (params?: GetPendingUpdatesParams) =>
     [...orderManagementQueryKeys.pendingUpdates(), 'list', params] as const,
-  pendingUpdatesGrouped: (params?: GetPendingUpdatesParams) =>
-    [...orderManagementQueryKeys.pendingUpdates(), 'grouped', params] as const,
+  pendingUpdateDetail: (id: number) =>
+    [...orderManagementQueryKeys.pendingUpdates(), 'detail', id] as const,
+
+  // Unified Actions
+  unifiedActions: () => [...orderManagementQueryKeys.all, 'unified-actions'] as const,
+  unifiedActionsList: (params?: GetUnifiedActionsParams) =>
+    [...orderManagementQueryKeys.unifiedActions(), 'list', params] as const,
 
   // Order History
   orderHistory: () => [...orderManagementQueryKeys.all, 'history'] as const,
@@ -136,7 +150,7 @@ export function useConfirmField() {
 // ============================================================================
 
 /**
- * Fetch list of pending updates (flat list)
+ * Fetch list of pending updates
  */
 export function usePendingUpdates(params?: GetPendingUpdatesParams) {
   return useQuery({
@@ -144,7 +158,7 @@ export function usePendingUpdates(params?: GetPendingUpdatesParams) {
     queryFn: async (): Promise<GetPendingUpdatesResponse> => {
       const response = await apiClient.get<GetPendingUpdatesResponse>(
         `${baseUrl}/pending-updates`,
-        { params: { ...params, group_by_order: false } }
+        { params }
       );
       return response.data;
     },
@@ -155,19 +169,18 @@ export function usePendingUpdates(params?: GetPendingUpdatesParams) {
 }
 
 /**
- * Fetch pending updates grouped by order
+ * Fetch detail for a single pending update
  */
-export function usePendingUpdatesGrouped(params?: Omit<GetPendingUpdatesParams, 'group_by_order'>) {
+export function usePendingUpdateDetail(id: number | null) {
   return useQuery({
-    queryKey: orderManagementQueryKeys.pendingUpdatesGrouped(params),
-    queryFn: async (): Promise<GetPendingUpdatesGroupedResponse> => {
-      const response = await apiClient.get<GetPendingUpdatesGroupedResponse>(
-        `${baseUrl}/pending-updates`,
-        { params: { ...params, group_by_order: true } }
+    queryKey: orderManagementQueryKeys.pendingUpdateDetail(id!),
+    queryFn: async (): Promise<GetPendingUpdateDetailResponse> => {
+      const response = await apiClient.get<GetPendingUpdateDetailResponse>(
+        `${baseUrl}/pending-updates/${id}`
       );
       return response.data;
     },
-    placeholderData: keepPreviousData,
+    enabled: id !== null,
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
   });
@@ -182,19 +195,19 @@ export function useApprovePendingUpdate() {
   return useMutation({
     mutationFn: async ({
       updateId,
-      request,
     }: {
       updateId: number;
-      request?: ApprovePendingUpdateRequest;
-    }): Promise<PendingUpdateActionResponse> => {
-      const response = await apiClient.post<PendingUpdateActionResponse>(
-        `${baseUrl}/pending-updates/${updateId}/approve`,
-        request
+    }): Promise<ApprovePendingUpdateResponse> => {
+      const response = await apiClient.post<ApprovePendingUpdateResponse>(
+        `${baseUrl}/pending-updates/${updateId}/approve`
       );
       return response.data;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: orderManagementQueryKeys.pendingUpdates() });
+      queryClient.invalidateQueries({
+        queryKey: orderManagementQueryKeys.pendingUpdateDetail(variables.updateId)
+      });
       queryClient.invalidateQueries({ queryKey: orderManagementQueryKeys.orderHistory() });
     },
   });
@@ -209,20 +222,53 @@ export function useRejectPendingUpdate() {
   return useMutation({
     mutationFn: async ({
       updateId,
-      request,
     }: {
       updateId: number;
-      request?: RejectPendingUpdateRequest;
-    }): Promise<PendingUpdateActionResponse> => {
-      const response = await apiClient.post<PendingUpdateActionResponse>(
-        `${baseUrl}/pending-updates/${updateId}/reject`,
-        request
+    }): Promise<RejectPendingUpdateResponse> => {
+      const response = await apiClient.post<RejectPendingUpdateResponse>(
+        `${baseUrl}/pending-updates/${updateId}/reject`
       );
       return response.data;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: orderManagementQueryKeys.pendingUpdates() });
+      queryClient.invalidateQueries({
+        queryKey: orderManagementQueryKeys.pendingUpdateDetail(variables.updateId)
+      });
       queryClient.invalidateQueries({ queryKey: orderManagementQueryKeys.orderHistory() });
+    },
+  });
+}
+
+/**
+ * Confirm a field selection to resolve a conflict in a pending update
+ */
+export function useConfirmUpdateField() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      pendingUpdateId,
+      fieldName,
+      historyId,
+    }: {
+      pendingUpdateId: number;
+      fieldName: string;
+      historyId: number;
+    }): Promise<ConfirmUpdateFieldResponse> => {
+      const response = await apiClient.post<ConfirmUpdateFieldResponse>(
+        `${baseUrl}/pending-updates/${pendingUpdateId}/confirm-field`,
+        { field_name: fieldName, history_id: historyId }
+      );
+      return response.data;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: orderManagementQueryKeys.pendingUpdateDetail(variables.pendingUpdateId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: orderManagementQueryKeys.pendingUpdates(),
+      });
     },
   });
 }
@@ -292,5 +338,61 @@ export function useOrderHistory(hawb: string | null) {
     enabled: hawb !== null && hawb.length > 0,
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
+  });
+}
+
+// ============================================================================
+// Unified Actions Hooks
+// ============================================================================
+
+/**
+ * Fetch unified list of pending orders and updates
+ */
+export function useUnifiedActions(params?: GetUnifiedActionsParams) {
+  return useQuery({
+    queryKey: orderManagementQueryKeys.unifiedActionsList(params),
+    queryFn: async (): Promise<GetUnifiedActionsResponse> => {
+      const response = await apiClient.get<GetUnifiedActionsResponse>(
+        `${baseUrl}/unified-actions`,
+        { params }
+      );
+      return response.data;
+    },
+    placeholderData: keepPreviousData,
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Mark an item as read or unread
+ */
+export function useMarkRead() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (request: MarkReadRequest): Promise<MarkReadResponse> => {
+      const response = await apiClient.post<MarkReadResponse>(
+        `${baseUrl}/mark-read`,
+        request
+      );
+      return response.data;
+    },
+    onSuccess: (_data, variables) => {
+      // Invalidate unified actions list
+      queryClient.invalidateQueries({
+        queryKey: orderManagementQueryKeys.unifiedActions(),
+      });
+      // Also invalidate the specific type's list
+      if (variables.type === 'create') {
+        queryClient.invalidateQueries({
+          queryKey: orderManagementQueryKeys.pendingOrders(),
+        });
+      } else {
+        queryClient.invalidateQueries({
+          queryKey: orderManagementQueryKeys.pendingUpdates(),
+        });
+      }
+    },
   });
 }
