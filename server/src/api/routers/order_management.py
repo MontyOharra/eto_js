@@ -2,10 +2,15 @@
 Order Management FastAPI Router
 REST endpoints for pending orders and pending updates
 """
+import asyncio
+import json
 import logging
 from datetime import datetime
 from typing import Optional, Literal
-from fastapi import APIRouter, Query, Depends, HTTPException, status
+from fastapi import APIRouter, Query, Depends, HTTPException, status, Request
+from fastapi.responses import StreamingResponse
+
+from shared.events.order_events import order_event_manager
 
 from api.schemas.order_management import (
     # Pending Orders
@@ -927,6 +932,14 @@ async def approve_pending_update(
 
         logger.info(f"Approved pending update {pending_update_id}: {len(updated_fields)} fields updated in HTC")
 
+        # Broadcast SSE event
+        order_event_manager.broadcast_sync("pending_update_resolved", {
+            "id": pending_update_id,
+            "status": "approved",
+            "htc_order_number": int(htc_order_number),
+            "fields_updated": updated_fields,
+        })
+
         return ApprovePendingUpdateResponse(
             success=True,
             update_id=pending_update_id,
@@ -981,6 +994,13 @@ async def reject_pending_update(
     })
 
     logger.info(f"Rejected pending update {pending_update_id}")
+
+    # Broadcast SSE event
+    order_event_manager.broadcast_sync("pending_update_resolved", {
+        "id": pending_update_id,
+        "status": "rejected",
+        "htc_order_number": int(pending_update.htc_order_number) if pending_update.htc_order_number else None,
+    })
 
     htc_order_str = str(int(pending_update.htc_order_number)) if pending_update.htc_order_number is not None else "N/A"
     return RejectPendingUpdateResponse(
@@ -1231,3 +1251,95 @@ async def mock_process_output(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
+
+
+# =============================================================================
+# Server-Sent Events (SSE) Endpoint
+# =============================================================================
+
+@router.get("/events")
+async def order_events_stream(request: Request):
+    """
+    Server-Sent Events (SSE) endpoint for real-time order management updates.
+
+    Streams events to connected clients whenever pending orders or updates change.
+    Multiple clients can connect simultaneously - each gets their own event stream.
+
+    Event Types:
+    - pending_order_created: New pending order created
+    - pending_order_updated: Pending order status, fields, or conflicts changed
+    - pending_order_deleted: Pending order deleted
+    - pending_update_created: New pending update created (for existing HTC order)
+    - pending_update_updated: Pending update fields or status changed
+    - pending_update_resolved: Pending update approved or rejected
+
+    Event Format:
+    data: {
+        "type": "pending_order_created" | "pending_order_updated" | ...,
+        "data": { ... event data ... },
+        "timestamp": "2025-10-29T10:00:00Z"
+    }
+
+    Connection automatically reconnects if dropped.
+    """
+    # Create a unique queue for this client connection
+    client_queue = asyncio.Queue(maxsize=100)  # Buffer up to 100 events
+
+    async def event_generator():
+        # Register this client with the global event manager
+        order_event_manager.register_client(client_queue)
+        logger.debug(f"Order SSE client connected - total: {order_event_manager.get_client_count()}")
+
+        try:
+            # Send initial connection event to establish the stream
+            yield ": connected\n\n"  # SSE comment - keeps connection alive
+
+            while not order_event_manager.is_shutting_down():
+                try:
+                    # Check if client disconnected
+                    try:
+                        if await asyncio.wait_for(request.is_disconnected(), timeout=0.1):
+                            logger.debug("Order SSE client disconnected")
+                            break
+                    except asyncio.TimeoutError:
+                        pass  # Client still connected
+
+                    # Wait for next event with timeout
+                    event = await asyncio.wait_for(
+                        client_queue.get(),
+                        timeout=1.0  # Short timeout to check shutdown flag frequently
+                    )
+
+                    # Format as SSE: "data: {...}\n\n"
+                    yield f"data: {json.dumps(event)}\n\n"
+
+                    # If this was a shutdown event, exit gracefully
+                    if event.get("type") == "server_shutdown":
+                        logger.debug("Order SSE shutdown event received")
+                        break
+
+                except asyncio.TimeoutError:
+                    # No event - continue to next iteration
+                    continue
+                except asyncio.CancelledError:
+                    # If cancelled during any await, exit immediately
+                    return
+
+        except asyncio.CancelledError:
+            return  # Exit generator immediately
+        except Exception as e:
+            logger.error(f"Order SSE error: {e}", exc_info=True)
+        finally:
+            # Always cleanup when connection closes
+            order_event_manager.unregister_client(client_queue)
+            logger.debug(f"Order SSE client disconnected - remaining: {order_event_manager.get_client_count()}")
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering if behind nginx
+        }
+    )

@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional, TYPE_CHECKING
 from datetime import datetime
 
 from shared.logging import get_logger
+from shared.events.order_events import order_event_manager
 from shared.database.repositories.pending_order import PendingOrderRepository
 from shared.database.repositories.pending_order_history import PendingOrderHistoryRepository
 from shared.database.repositories.pending_update import PendingUpdateRepository
@@ -529,6 +530,14 @@ class OrderManagementService:
 
         logger.info(f"Resolved {len(fields_updated)} conflicts, new status: {new_status}")
 
+        # Broadcast SSE event
+        order_event_manager.broadcast_sync("pending_order_updated", {
+            "id": pending_order_id,
+            "status": new_status,
+            "fields_updated": fields_updated,
+            "action": "conflict_resolved",
+        })
+
         return ResolveConflictsResult(
             success=True,
             fields_updated=fields_updated,
@@ -609,6 +618,11 @@ class OrderManagementService:
         # TODO: Implement soft delete or hard delete
         # For now, just delete
         self._pending_order_repo.delete(pending_order_id)
+
+        # Broadcast SSE event
+        order_event_manager.broadcast_sync("pending_order_deleted", {
+            "id": pending_order_id,
+        })
 
         return True
 
@@ -809,6 +823,12 @@ class OrderManagementService:
             "status": "rejected",
             "rejected_reason": reason,
             "last_processed_at": datetime.now(),
+        })
+
+        # Broadcast SSE event
+        order_event_manager.broadcast_sync("pending_update_resolved", {
+            "id": pending_update_id,
+            "status": "rejected",
         })
 
         return True

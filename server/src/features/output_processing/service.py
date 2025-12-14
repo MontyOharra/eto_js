@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional, TYPE_CHECKING, cast
 from datetime import datetime, timezone
 
 from shared.logging import get_logger
+from shared.events.order_events import order_event_manager
 from shared.database.repositories.eto_sub_run_output_execution import EtoSubRunOutputExecutionRepository
 from shared.database.repositories.pending_order import PendingOrderRepository
 from shared.database.repositories.pending_order_history import PendingOrderHistoryRepository
@@ -439,7 +440,17 @@ class OutputProcessingService:
                 field_updates["last_processed_at"] = datetime.now()
                 self._pending_update_repo.update(pending_update.id, cast(PendingUpdateUpdate, field_updates))
 
-        return "pending_update_created" if was_created else "pending_update_updated"
+        # Broadcast SSE event
+        event_type = "pending_update_created" if was_created else "pending_update_updated"
+        order_event_manager.broadcast_sync(event_type, {
+            "id": pending_update.id,
+            "hawb": hawb,
+            "customer_id": customer_id,
+            "htc_order_number": htc_order_number,
+            "fields_changed": list(field_data.keys()),
+        })
+
+        return event_type
 
     def _handle_new_order(
         self,
@@ -605,7 +616,19 @@ class OutputProcessingService:
         # Note: HTC order creation is now handled by the HtcOrderWorker background process.
         # The pending order will stay at status="ready" until the worker picks it up.
 
-        return "pending_order_created" if was_created else "pending_order_updated"
+        # Broadcast SSE event
+        # Refresh to get updated status
+        pending_order = self._pending_order_repo.get_by_id(pending_order.id)
+        event_type = "pending_order_created" if was_created else "pending_order_updated"
+        order_event_manager.broadcast_sync(event_type, {
+            "id": pending_order.id,
+            "hawb": hawb,
+            "customer_id": customer_id,
+            "status": pending_order.status if pending_order else "unknown",
+            "fields_changed": list(field_data.keys()),
+        })
+
+        return event_type
 
     def _extract_valid_fields(self, output_channel_data: Dict[str, Any]) -> Dict[str, Any]:
         """

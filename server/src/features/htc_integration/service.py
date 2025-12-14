@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 from shared.logging import get_logger
 from shared.exceptions import OutputExecutionError
+from shared.events.order_events import order_event_manager
 from shared.database.repositories.pending_order import PendingOrderRepository
 
 from features.htc_integration.lookup_utils import (
@@ -987,6 +988,14 @@ class HtcIntegrationService:
         })
         logger.info(f"Pending order {pending_order_id} marked as created (HTC order {htc_order_number})")
 
+        # Broadcast SSE event
+        order_event_manager.broadcast_sync("pending_order_updated", {
+            "id": pending_order_id,
+            "status": "created",
+            "htc_order_number": int(htc_order_number),
+            "action": "htc_created",
+        })
+
     def mark_pending_order_failed(self, pending_order_id: int, error_message: str) -> None:
         """
         Mark a pending order as 'failed' after HTC creation failure.
@@ -1003,6 +1012,14 @@ class HtcIntegrationService:
             "last_processed_at": datetime.now(),
         })
         logger.error(f"Pending order {pending_order_id} marked as failed: {error_message}")
+
+        # Broadcast SSE event
+        order_event_manager.broadcast_sync("pending_order_updated", {
+            "id": pending_order_id,
+            "status": "failed",
+            "error_message": error_message,
+            "action": "htc_failed",
+        })
 
     def create_htc_order_by_id(self, pending_order_id: int) -> float:
         """

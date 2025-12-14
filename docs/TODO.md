@@ -315,7 +315,7 @@ Currently implementing auto-creation mode only. Future enhancement could add con
 
 ## 6. Pending Orders Page Improvements
 
-**Status:** Not Started (Design Complete - Waiting for Pending Updates Core)
+**Status:** COMPLETED
 
 **Issue:** Pending orders page needs a unified view showing both creates and updates in a single list.
 

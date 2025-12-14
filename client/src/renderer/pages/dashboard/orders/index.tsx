@@ -16,6 +16,7 @@ import {
   useMarkRead,
   ActionType,
 } from '../../../features/order-management';
+import { useOrderEvents } from '../../../features/order-management/hooks';
 import { EtoSubRunDetailViewer } from '../../../features/eto';
 
 export const Route = createFileRoute('/dashboard/orders/')({
@@ -34,6 +35,9 @@ type StatusFilter = 'all' | string;
 type ReadFilter = 'all' | 'read' | 'unread';
 
 function OrdersPage() {
+  // Connect to SSE for real-time updates
+  useOrderEvents();
+
   // Detail view state
   const [detailView, setDetailView] = useState<DetailView>(null);
 

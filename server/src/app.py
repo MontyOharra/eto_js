@@ -373,9 +373,16 @@ async def cleanup_services() -> None:
         try:
             from shared.events.eto_events import eto_event_manager
             await eto_event_manager.shutdown()
-            logger.info("SSE connections closed gracefully")
+            logger.info("ETO SSE connections closed gracefully")
         except Exception as e:
-            logger.warning(f"Failed to close SSE connections: {e}")
+            logger.warning(f"Failed to close ETO SSE connections: {e}")
+
+        try:
+            from shared.events.order_events import order_event_manager
+            await order_event_manager.shutdown()
+            logger.info("Order SSE connections closed gracefully")
+        except Exception as e:
+            logger.warning(f"Failed to close Order SSE connections: {e}")
 
         if ServiceContainer.is_initialized():
             # Stop email service pollers
@@ -593,6 +600,7 @@ def register_routers(app: FastAPI) -> None:
             eto_runs_router,
             order_management_router,
             htc_integration_router,
+            system_settings_router,
         )
 
         # Register all routers
@@ -625,6 +633,9 @@ def register_routers(app: FastAPI) -> None:
 
         app.include_router(htc_integration_router, prefix="/api")
         logger.info("Registered HTC integration router at /api/htc")
+
+        app.include_router(system_settings_router, prefix="/api")
+        logger.info("Registered system settings router at /api/settings")
 
     except ImportError as e:
         logger.error(f"Could not import routers: {e}", exc_info=True)
