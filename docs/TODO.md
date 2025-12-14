@@ -191,7 +191,7 @@ Currently implementing auto-creation mode only. Future enhancement could add con
 
 ## 4. Order Update Functionality
 
-**Status:** Not Started
+**Status:** COMPLETED
 
 **Issue:** Update functionality for existing orders has not been built out.
 
@@ -200,6 +200,32 @@ Currently implementing auto-creation mode only. Future enhancement could add con
 - Need UI to review proposed updates
 - Approve/reject workflow for field changes
 - Apply approved updates to HTC database
+
+### Implementation Summary
+
+**Backend:**
+- `server/src/api/routers/order_management.py`:
+  - `GET /pending-updates` - List pending updates with pagination and status filter
+  - `GET /pending-updates/{id}` - Detail view with current HTC values vs proposed changes
+  - `POST /pending-updates/{id}/approve` - Approve update (rudimentary print for now)
+  - `POST /pending-updates/{id}/reject` - Reject update
+  - `POST /pending-updates/{id}/confirm-field` - Resolve conflicts by selecting a value
+  - Updated `/mock/process-output` to create pending updates for existing HTC orders
+- `server/src/api/schemas/order_management.py` - Added schemas for pending update list/detail/actions
+- `server/src/api/routers/htc_integration.py` - Added `GET /htc/orders/{order_number}` to fetch current HTC field values
+- `server/src/features/htc_integration/lookup_utils.py` - Added `get_order_fields()` method and `HtcOrderFields` dataclass
+- `server/src/features/htc_integration/service.py` - Exposed `get_order_fields()` method
+
+**Frontend:**
+- `client/src/renderer/features/order-management/components/PendingUpdatesListTable/` - Flat list table for pending updates
+- `client/src/renderer/features/order-management/components/PendingUpdateDetailView/` - Two-column detail view with:
+  - Current HTC value vs Proposed value comparison
+  - Conflict resolution with dropdown (persists after confirmation for re-selection)
+  - Approve/Reject buttons
+  - Contributing sources panel
+- `client/src/renderer/features/order-management/types.ts` - Added `PendingUpdateFieldDetail` with `current_value`
+- `client/src/renderer/features/order-management/api/hooks.ts` - Added hooks for pending updates
+- `client/src/renderer/pages/dashboard/orders/index.tsx` - Integrated pending updates list and detail view
 
 ---
 
