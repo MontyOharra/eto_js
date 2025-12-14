@@ -29,6 +29,35 @@ class HtcOrderDetails:
 
 
 @dataclass
+class HtcOrderFields:
+    """
+    All editable fields of an HTC order for comparison with pending updates.
+
+    These fields map to the pending_orders/pending_updates field structure,
+    allowing the frontend to show current HTC values vs proposed changes.
+    """
+    order_number: float
+    customer_id: int
+    hawb: str
+
+    # Fields that can be updated (matching pending order field names)
+    pickup_company_name: Optional[str]
+    pickup_address: Optional[str]
+    pickup_time_start: Optional[str]  # Combined date + time as ISO string
+    pickup_time_end: Optional[str]    # Combined date + time as ISO string
+    delivery_company_name: Optional[str]
+    delivery_address: Optional[str]
+    delivery_time_start: Optional[str]  # Combined date + time as ISO string
+    delivery_time_end: Optional[str]    # Combined date + time as ISO string
+    mawb: Optional[str]
+    pickup_notes: Optional[str]
+    delivery_notes: Optional[str]
+    order_notes: Optional[str]
+    pieces: Optional[int]
+    weight: Optional[float]
+
+
+@dataclass
 class AddressInfo:
     """Full address information for order creation."""
     fav_id: float
@@ -378,4 +407,128 @@ class HtcLookupUtils:
 
         except Exception as e:
             logger.error(f"Failed to get order details for {order_number}: {e}")
+            raise
+
+    def get_order_fields(self, order_number: float) -> Optional[HtcOrderFields]:
+        """
+        Get all editable fields of an HTC order for comparison with pending updates.
+
+        Retrieves the current field values from the Open Orders table and the
+        dimensions table, returning them in a structure that matches the
+        pending order field names.
+
+        Args:
+            order_number: The HTC order number
+
+        Returns:
+            HtcOrderFields if found, None if not found
+        """
+        connection = self._get_connection()
+
+        try:
+            # Query order fields from Open Orders table
+            with connection.cursor() as cursor:
+                query = """
+                    SELECT
+                        [M_OrderNo],
+                        [M_CustomerID],
+                        [M_HAWB],
+                        [M_PUCo],
+                        [M_PULocn],
+                        [M_PUDate],
+                        [M_PUTimeStart],
+                        [M_PUTimeEnd],
+                        [M_DelCo],
+                        [M_DelLocn],
+                        [M_DelDate],
+                        [M_DelTimeStart],
+                        [M_DelTimeEnd],
+                        [M_MAWB],
+                        [M_PUNotes],
+                        [M_DelNotes],
+                        [M_OrderNotes]
+                    FROM [HTC300_G040_T010A Open Orders]
+                    WHERE [M_OrderNo] = ?
+                      AND [M_CoID] = ?
+                      AND [M_BrID] = ?
+                """
+                cursor.execute(query, (order_number, self.CO_ID, self.BR_ID))
+                order_row = cursor.fetchone()
+
+                if order_row is None:
+                    logger.debug(f"Order {order_number} not found")
+                    return None
+
+            # Query pieces and weight from dimensions table
+            pieces = None
+            weight = None
+            with connection.cursor() as cursor:
+                dims_query = """
+                    SELECT [OD_UnitQty], [OD_UnitWeight]
+                    FROM [HTC300_G040_T012A Open Order Dims]
+                    WHERE [OD_OrderNo] = ?
+                      AND [OD_CoID] = ?
+                      AND [OD_BrID] = ?
+                      AND [OD_DimID] = 1
+                """
+                cursor.execute(dims_query, (order_number, self.CO_ID, self.BR_ID))
+                dims_row = cursor.fetchone()
+
+                if dims_row:
+                    pieces = int(dims_row[0]) if dims_row[0] is not None else None
+                    weight = float(dims_row[1]) if dims_row[1] is not None else None
+
+            # Helper to combine date and time into ISO format
+            def combine_datetime(date_val, time_val) -> Optional[str]:
+                """Combine date and time fields into ISO datetime string."""
+                if not date_val:
+                    return None
+
+                # Date could be a datetime object or string
+                if hasattr(date_val, 'strftime'):
+                    date_str = date_val.strftime("%Y-%m-%d")
+                else:
+                    date_str = str(date_val).strip()
+                    # Convert MM/DD/YYYY to YYYY-MM-DD if needed
+                    if '/' in date_str:
+                        parts = date_str.split('/')
+                        if len(parts) == 3:
+                            date_str = f"{parts[2]}-{parts[0].zfill(2)}-{parts[1].zfill(2)}"
+
+                # Time could be a time object or string
+                if time_val:
+                    if hasattr(time_val, 'strftime'):
+                        time_str = time_val.strftime("%H:%M")
+                    else:
+                        time_str = str(time_val).strip()
+                        # Handle HH:MM:SS format
+                        if len(time_str) > 5:
+                            time_str = time_str[:5]
+                else:
+                    time_str = "00:00"
+
+                return f"{date_str}T{time_str}:00"
+
+            return HtcOrderFields(
+                order_number=float(order_row[0]),
+                customer_id=int(order_row[1]),
+                hawb=str(order_row[2]) if order_row[2] else "",
+                pickup_company_name=str(order_row[3]) if order_row[3] else None,
+                pickup_address=str(order_row[4]) if order_row[4] else None,
+                pickup_time_start=combine_datetime(order_row[5], order_row[6]),
+                pickup_time_end=combine_datetime(order_row[5], order_row[7]),
+                delivery_company_name=str(order_row[8]) if order_row[8] else None,
+                delivery_address=str(order_row[9]) if order_row[9] else None,
+                delivery_time_start=combine_datetime(order_row[10], order_row[11]),
+                delivery_time_end=combine_datetime(order_row[10], order_row[12]),
+                mawb=str(order_row[13]) if order_row[13] else None,
+                pickup_notes=str(order_row[14]) if order_row[14] else None,
+                delivery_notes=str(order_row[15]) if order_row[15] else None,
+                order_notes=str(order_row[16]) if order_row[16] else None,
+                pieces=pieces,
+                weight=weight,
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to get order fields for {order_number}: {e}")
             raise

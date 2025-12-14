@@ -70,6 +70,14 @@ class TestCreateOrderResponse(BaseModel):
     message: str
 
 
+class HtcOrderFieldsResponse(BaseModel):
+    """Response containing all editable fields of an HTC order."""
+    order_number: float
+    customer_id: int
+    hawb: str
+    fields: dict  # Field name -> value mapping
+
+
 # ==================== Endpoints ====================
 
 @router.post("/test-create-order", response_model=TestCreateOrderResponse)
@@ -125,3 +133,63 @@ async def test_create_order(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error creating order: {str(e)}"
         )
+
+
+@router.get("/orders/{order_number}", response_model=HtcOrderFieldsResponse)
+async def get_order_fields(
+    order_number: float,
+    htc_service: HtcIntegrationService = Depends(lambda: ServiceContainer.get_htc_integration_service())
+) -> HtcOrderFieldsResponse:
+    """
+    Get all editable fields of an HTC order.
+
+    Returns all field values that can be compared against pending updates,
+    allowing the frontend to show current HTC values vs proposed changes.
+
+    The response includes a `fields` dict containing all editable field values
+    with keys matching the pending order field names:
+    - pickup_company_name
+    - pickup_address
+    - pickup_time_start
+    - pickup_time_end
+    - delivery_company_name
+    - delivery_address
+    - delivery_time_start
+    - delivery_time_end
+    - mawb
+    - pickup_notes
+    - delivery_notes
+    - order_notes
+    - pieces
+    - weight
+    """
+    order_fields = htc_service.get_order_fields(order_number)
+
+    if order_fields is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Order {order_number} not found"
+        )
+
+    # Convert dataclass to dict for the fields
+    return HtcOrderFieldsResponse(
+        order_number=order_fields.order_number,
+        customer_id=order_fields.customer_id,
+        hawb=order_fields.hawb,
+        fields={
+            "pickup_company_name": order_fields.pickup_company_name,
+            "pickup_address": order_fields.pickup_address,
+            "pickup_time_start": order_fields.pickup_time_start,
+            "pickup_time_end": order_fields.pickup_time_end,
+            "delivery_company_name": order_fields.delivery_company_name,
+            "delivery_address": order_fields.delivery_address,
+            "delivery_time_start": order_fields.delivery_time_start,
+            "delivery_time_end": order_fields.delivery_time_end,
+            "mawb": order_fields.mawb,
+            "pickup_notes": order_fields.pickup_notes,
+            "delivery_notes": order_fields.delivery_notes,
+            "order_notes": order_fields.order_notes,
+            "pieces": order_fields.pieces,
+            "weight": order_fields.weight,
+        }
+    )

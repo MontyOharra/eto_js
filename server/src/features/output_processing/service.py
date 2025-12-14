@@ -17,11 +17,14 @@ from shared.database.repositories.eto_sub_run_output_execution import EtoSubRunO
 from shared.database.repositories.pending_order import PendingOrderRepository
 from shared.database.repositories.pending_order_history import PendingOrderHistoryRepository
 from shared.database.repositories.pending_update import PendingUpdateRepository
+from shared.database.repositories.pending_update_history import PendingUpdateHistoryRepository
 from shared.types.pending_orders import (
     PendingOrderCreate,
     PendingOrderUpdate,
     PendingOrderHistoryCreate,
     PendingUpdateCreate,
+    PendingUpdateUpdate,
+    PendingUpdateHistoryCreate,
     REQUIRED_FIELDS,
     VALID_FIELD_NAMES,
 )
@@ -79,6 +82,9 @@ class OutputProcessingService:
             connection_manager=connection_manager
         )
         self._pending_update_repo = PendingUpdateRepository(
+            connection_manager=connection_manager
+        )
+        self._pending_update_history_repo = PendingUpdateHistoryRepository(
             connection_manager=connection_manager
         )
 
@@ -172,8 +178,16 @@ class OutputProcessingService:
         """
         Handle data for a HAWB that already exists in HTC.
 
-        Creates pending_update records for each field, which will be
-        queued for user approval before applying to HTC.
+        Gets or creates a single pending_update record for this (customer_id, hawb)
+        with status='pending'. Multiple field changes accumulate into the same
+        record via history until user approves/rejects.
+
+        Logic mirrors _handle_new_order:
+        - If no existing pending_update with status='pending': create new one
+        - For each field:
+          - If no history: set value directly
+          - If history exists and value matches: add history (not selected)
+          - If history exists and value differs: conflict - clear selections, set NULL
 
         Args:
             customer_id: Customer ID
@@ -185,32 +199,139 @@ class OutputProcessingService:
         Returns:
             Action taken string for logging
         """
-        logger.info(f"HAWB '{hawb}' exists in HTC as order {htc_order_number} - creating pending updates")
+        logger.info(f"HAWB '{hawb}' exists in HTC as order {htc_order_number} - processing pending update")
 
         # Filter to valid field names only (exclude 'hawb' itself)
         field_data = self._extract_valid_fields(output_channel_data)
 
         if not field_data:
             logger.warning(f"No valid fields to update for HAWB '{hawb}'")
-            return "pending_updates_created"
+            return "no_valid_fields"
 
-        # Create pending update records
-        update_creates = [
-            PendingUpdateCreate(
-                customer_id=customer_id,
-                hawb=hawb,
-                htc_order_number=htc_order_number,
-                sub_run_id=sub_run_id,
-                field_name=field_name,
-                proposed_value=str(value),
+        # Check if there's an active (status='pending') pending_update for this combo
+        pending_update = self._pending_update_repo.get_active_by_customer_and_hawb(customer_id, hawb)
+        was_created = pending_update is None
+
+        if was_created:
+            # Create new pending update
+            pending_update = self._pending_update_repo.create(
+                PendingUpdateCreate(
+                    customer_id=customer_id,
+                    hawb=hawb,
+                    htc_order_number=htc_order_number,
+                )
             )
-            for field_name, value in field_data.items()
-        ]
+            logger.info(f"Created new pending update {pending_update.id} for HAWB '{hawb}'")
 
-        created_updates = self._pending_update_repo.create_batch(update_creates)
-        logger.info(f"Created {len(created_updates)} pending updates for HAWB '{hawb}'")
+            # For new pending update, add history and set all fields directly
+            history_creates = []
+            field_updates: Dict[str, Any] = {}
 
-        return "pending_updates_created"
+            for field_name, new_value in field_data.items():
+                new_value_str = str(new_value)
+
+                # Add history record with is_selected=True
+                history_creates.append(
+                    PendingUpdateHistoryCreate(
+                        pending_update_id=pending_update.id,
+                        sub_run_id=sub_run_id,
+                        field_name=field_name,
+                        field_value=new_value_str,
+                        is_selected=True,
+                    )
+                )
+
+                # Set field value directly
+                field_updates[field_name] = new_value_str
+
+            # Create history records
+            self._pending_update_history_repo.create_batch(history_creates)
+            logger.info(f"Added {len(history_creates)} history records for new pending update {pending_update.id}")
+
+            # Update field values
+            if field_updates:
+                self._pending_update_repo.update(pending_update.id, cast(PendingUpdateUpdate, field_updates))
+
+        else:
+            # Existing pending update - check for conflicts
+            logger.info(f"Found existing pending update {pending_update.id} for HAWB '{hawb}'")
+
+            history_creates: List[PendingUpdateHistoryCreate] = []
+            field_updates: Dict[str, Any] = {}
+
+            for field_name, new_value in field_data.items():
+                new_value_str = str(new_value)
+
+                # Check if field has existing history
+                existing_history = self._pending_update_history_repo.get_by_field(
+                    pending_update.id, field_name
+                )
+
+                if len(existing_history) == 0:
+                    # No prior history - set new value and mark as selected
+                    history_creates.append(
+                        PendingUpdateHistoryCreate(
+                            pending_update_id=pending_update.id,
+                            sub_run_id=sub_run_id,
+                            field_name=field_name,
+                            field_value=new_value_str,
+                            is_selected=True,
+                        )
+                    )
+                    field_updates[field_name] = new_value_str
+                    logger.debug(f"Field '{field_name}' has no history - setting to '{new_value_str}'")
+                else:
+                    # Has existing history - check for conflict
+                    current_value = getattr(pending_update, field_name, None)
+
+                    if current_value == new_value_str:
+                        # Same value - add history but don't select it
+                        history_creates.append(
+                            PendingUpdateHistoryCreate(
+                                pending_update_id=pending_update.id,
+                                sub_run_id=sub_run_id,
+                                field_name=field_name,
+                                field_value=new_value_str,
+                                is_selected=False,
+                            )
+                        )
+                        logger.debug(f"Field '{field_name}' value matches - no change")
+                    else:
+                        # Different value - conflict!
+                        # Clear all existing selections for this field
+                        cleared_count = self._pending_update_history_repo.clear_selection_for_field(
+                            pending_update.id, field_name
+                        )
+                        logger.debug(f"Cleared {cleared_count} selections for field '{field_name}'")
+
+                        # Add new history as not selected
+                        history_creates.append(
+                            PendingUpdateHistoryCreate(
+                                pending_update_id=pending_update.id,
+                                sub_run_id=sub_run_id,
+                                field_name=field_name,
+                                field_value=new_value_str,
+                                is_selected=False,
+                            )
+                        )
+
+                        # Set field to NULL to indicate conflict
+                        field_updates[field_name] = None
+                        logger.info(
+                            f"Conflict detected for field '{field_name}': "
+                            f"current='{current_value}' vs new='{new_value_str}' - setting to NULL"
+                        )
+
+            # Create history records
+            if history_creates:
+                self._pending_update_history_repo.create_batch(history_creates)
+                logger.info(f"Added {len(history_creates)} history records for existing pending update {pending_update.id}")
+
+            # Apply field updates (including conflicts)
+            if field_updates:
+                self._pending_update_repo.update(pending_update.id, cast(PendingUpdateUpdate, field_updates))
+
+        return "pending_update_created" if was_created else "pending_update_updated"
 
     def _handle_new_order(
         self,

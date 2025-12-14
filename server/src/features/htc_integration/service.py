@@ -25,6 +25,7 @@ from shared.database.repositories.pending_order import PendingOrderRepository
 from features.htc_integration.lookup_utils import (
     HtcLookupUtils,
     HtcOrderDetails,
+    HtcOrderFields,
     AddressInfo,
     CustomerInfo,
 )
@@ -43,6 +44,7 @@ logger = get_logger(__name__)
 __all__ = [
     "HtcIntegrationService",
     "HtcOrderDetails",
+    "HtcOrderFields",
     "AddressInfo",
     "CustomerInfo",
     "PreparedOrderData",
@@ -247,6 +249,21 @@ class HtcIntegrationService:
             HtcOrderDetails if found, None if not found
         """
         return self._lookup_utils.get_order_details(order_number)
+
+    def get_order_fields(self, order_number: float) -> Optional[HtcOrderFields]:
+        """
+        Get all editable fields of an HTC order.
+
+        Returns all field values that can be compared against pending updates,
+        allowing the frontend to show current HTC values vs proposed changes.
+
+        Args:
+            order_number: The HTC order number
+
+        Returns:
+            HtcOrderFields if found, None if not found
+        """
+        return self._lookup_utils.get_order_fields(order_number)
 
     # ==================== Address Operations ====================
     # Delegated to HtcAddressUtils
