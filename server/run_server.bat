@@ -1,5 +1,7 @@
 @echo off
-cd /d C:\apps\pipeline_server   REM <-- change to your deploy path
+REM Change to the directory where this script is located
+cd /d "%~dp0"
+echo Starting Transformation Pipeline Server...
 set PYTHONUNBUFFERED=1
 call .venv\Scripts\activate
 python main.py
