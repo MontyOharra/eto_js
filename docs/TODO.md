@@ -473,7 +473,7 @@ Create unified backend endpoint:
 
 ## 8. Email Sending for Order Management
 
-**Status:** Not Started
+**Status:** COMPLETED
 
 **Issue:** Need email notifications as part of order management process.
 
@@ -482,6 +482,39 @@ Create unified backend endpoint:
 - Send emails on order updates
 - Make email functionality configurable via settings page
 - Consider: recipients, templates, enable/disable toggle
+
+**Implementation Summary:**
+
+**Architecture Changes:**
+- Moved `HtcOrderWorker` from `HtcIntegrationService` to `OrderManagementService`
+- Added `EmailService` dependency to `OrderManagementService`
+- `HtcIntegrationService` now focuses purely on HTC database operations
+
+**Backend Changes:**
+- `server/src/features/order_management/service.py`:
+  - Added worker lifecycle methods (`startup`, `shutdown`, `get_worker_status`)
+  - Added worker callback methods for pending order processing
+  - Added `_get_contributing_email_addresses()` - traces sub_run → eto_run → email to find sender addresses
+  - Added `_get_contributing_email_addresses_for_update()` - same for pending updates
+  - Added `_build_order_created_email()` - builds subject/body for create notifications
+  - Added `_build_order_updated_email()` - builds subject/body for update notifications
+  - Added `_send_order_notification()` - sends email using system settings sender account
+  - Integrated email notifications into `_mark_pending_order_created()` callback
+  - Integrated email notifications into `approve_pending_update()` method
+- `server/src/features/htc_integration/service.py`:
+  - Removed worker initialization, lifecycle methods, and callback methods
+  - Kept HTC database operations (lookup, create, update, address management)
+- `server/src/shared/services/service_container.py`:
+  - Updated `order_management` service definition to include `email` service dependency
+- `server/src/app.py`:
+  - Changed worker startup/shutdown calls from `htc_integration_service` to `order_management_service`
+
+**Email Notification Flow:**
+1. When HTC order is created (by worker), emails are sent to all unique sender addresses from contributing PDFs
+2. When user approves a pending update, emails are sent to all unique sender addresses from contributing PDFs
+3. Emails include HTC order number, HAWB, customer name, and relevant order details
+4. Uses `email.default_sender_account_id` system setting for sender account
+5. Email failures are logged but don't block order processing
 
 ---
 

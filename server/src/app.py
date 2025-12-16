@@ -348,8 +348,8 @@ async def initialize_services() -> None:
 
         # Start HTC order worker (background polling for ready pending orders)
         try:
-            if htc_integration_service:
-                htc_worker_started = await htc_integration_service.startup()
+            if order_management_service:
+                htc_worker_started = await order_management_service.startup()
                 if htc_worker_started:
                     logger.info("HTC order worker started successfully")
                 else:
@@ -404,9 +404,9 @@ async def cleanup_services() -> None:
 
             # Stop HTC order worker if running
             try:
-                htc_integration_service = ServiceContainer.get_htc_integration_service()
-                if hasattr(htc_integration_service, 'shutdown'):
-                    await htc_integration_service.shutdown(graceful=True)
+                order_management_service = ServiceContainer.get_order_management_service()
+                if hasattr(order_management_service, 'shutdown'):
+                    await order_management_service.shutdown(graceful=True)
                     logger.info("HTC order worker stopped gracefully")
             except Exception as e:
                 logger.warning(f"Failed to stop HTC order worker: {e}")

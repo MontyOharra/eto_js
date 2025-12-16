@@ -4,13 +4,13 @@ Order Management Service
 User-facing operations for managing pending orders and updates.
 Handles viewing, conflict resolution, and approval workflows.
 
-This service handles all user interactions - automated processing
-is handled by the OutputProcessingService.
+Also manages the HTC order worker for automated order creation
+and sends email notifications when orders are created/updated.
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
-from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
+from datetime import datetime, timezone
 
 from shared.logging import get_logger
 from shared.events.order_events import order_event_manager
@@ -24,6 +24,7 @@ from shared.database.repositories.pdf_file import PdfFileRepository
 from shared.database.repositories.email import EmailRepository
 from shared.database.repositories.pdf_template_version import PdfTemplateVersionRepository
 from shared.database.repositories.pdf_template import PdfTemplateRepository
+from shared.database.repositories.system_settings import SystemSettingsRepository
 from shared.types.pending_orders import (
     PendingOrder,
     PendingOrderHistory,
@@ -33,10 +34,12 @@ from shared.types.pending_orders import (
     VALID_FIELD_NAMES,
     REQUIRED_FIELDS,
 )
+from features.htc_integration.htc_order_worker import HtcOrderWorker
 
 if TYPE_CHECKING:
     from shared.database.connection import DatabaseConnectionManager
     from features.htc_integration.service import HtcIntegrationService
+    from features.email.service import EmailService
 
 logger = get_logger(__name__)
 
@@ -155,12 +158,18 @@ class OrderManagementService:
     - Detailed view with source information and conflict options
     - Conflict resolution (user selects correct value)
     - Approval workflow (creates/updates orders in HTC)
+    - Automated order creation via HTC order worker
+    - Email notifications when orders are created/updated
     """
 
     def __init__(
         self,
         connection_manager: 'DatabaseConnectionManager',
         htc_integration_service: 'HtcIntegrationService',
+        email_service: Optional['EmailService'] = None,
+        worker_enabled: bool = True,
+        worker_polling_interval: int = 5,
+        worker_max_concurrent: int = 5,
     ) -> None:
         """
         Initialize the service.
@@ -168,11 +177,16 @@ class OrderManagementService:
         Args:
             connection_manager: DatabaseConnectionManager for ETO database access
             htc_integration_service: Service for HTC database operations
+            email_service: Service for sending email notifications (optional)
+            worker_enabled: Whether to enable the HTC order worker
+            worker_polling_interval: Seconds between worker polling cycles
+            worker_max_concurrent: Maximum concurrent orders to process
         """
         logger.debug("Initializing OrderManagementService...")
 
         self._connection_manager = connection_manager
         self._htc_service = htc_integration_service
+        self._email_service = email_service
 
         # Initialize repositories
         self._pending_order_repo = PendingOrderRepository(
@@ -206,6 +220,21 @@ class OrderManagementService:
         )
         self._template_repo = PdfTemplateRepository(
             connection_manager=connection_manager
+        )
+        self._system_settings_repo = SystemSettingsRepository(
+            connection_manager=connection_manager
+        )
+
+        # Initialize HTC order worker
+        self._worker = HtcOrderWorker(
+            get_ready_pending_orders_callback=self._get_ready_pending_orders,
+            create_htc_order_callback=self._create_htc_order_by_id,
+            mark_processing_callback=self._mark_pending_order_processing,
+            mark_created_callback=self._mark_pending_order_created,
+            mark_failed_callback=self._mark_pending_order_failed,
+            enabled=worker_enabled,
+            max_concurrent=worker_max_concurrent,
+            polling_interval=worker_polling_interval,
         )
 
         logger.info("OrderManagementService initialized successfully")
@@ -760,6 +789,8 @@ class OrderManagementService:
         """
         Approve a pending update and apply it to HTC.
 
+        Also sends email notification to all contributing email addresses.
+
         Args:
             pending_update_id: ID of the pending update to approve
 
@@ -776,11 +807,29 @@ class OrderManagementService:
                 message=f"Pending update {pending_update_id} not found",
             )
 
+        # Collect all non-null fields to update
+        update_fields = {}
+        updated_field_names = []
+        for field_name in VALID_FIELD_NAMES:
+            if field_name == "hawb":
+                continue  # HAWB is the identifier, not updatable
+            value = getattr(pending_update, field_name, None)
+            if value is not None:
+                update_fields[field_name] = value
+                updated_field_names.append(field_name)
+
+        if not update_fields:
+            return ApproveResult(
+                success=False,
+                htc_order_number=pending_update.htc_order_number,
+                message="No fields to update",
+            )
+
         try:
             # Update the order in HTC
             self._htc_service.update_order(
                 order_number=pending_update.htc_order_number,
-                updates={pending_update.field_name: pending_update.proposed_value},
+                updates=update_fields,
             )
 
             # Mark update as applied
@@ -791,6 +840,9 @@ class OrderManagementService:
             })
 
             logger.info(f"Applied pending update {pending_update_id} to HTC order {pending_update.htc_order_number}")
+
+            # Send email notification
+            self._send_order_updated_notification(pending_update_id, updated_field_names)
 
             return ApproveResult(
                 success=True,
@@ -832,3 +884,553 @@ class OrderManagementService:
         })
 
         return True
+
+    # ==================== Worker Lifecycle ====================
+
+    async def startup(self) -> bool:
+        """
+        Start the HTC order worker background process.
+
+        Returns:
+            True if worker started successfully, False otherwise
+        """
+        return await self._worker.startup()
+
+    async def shutdown(self, graceful: bool = True) -> bool:
+        """
+        Stop the HTC order worker background process.
+
+        Args:
+            graceful: If True, wait for current batch to complete
+
+        Returns:
+            True if worker stopped successfully
+        """
+        return await self._worker.shutdown(graceful=graceful)
+
+    def get_worker_status(self) -> dict:
+        """Get the current status of the HTC order worker."""
+        return self._worker.get_status()
+
+    # ==================== Worker Callbacks ====================
+
+    def _get_ready_pending_orders(self, limit: int) -> List[PendingOrder]:
+        """
+        Get pending orders with status='ready' for worker processing.
+
+        Args:
+            limit: Maximum number of orders to return
+
+        Returns:
+            List of PendingOrder dataclasses
+        """
+        return self._pending_order_repo.get_ready(limit=limit)
+
+    def _mark_pending_order_processing(self, pending_order_id: int) -> None:
+        """
+        Mark a pending order as 'processing' (being created in HTC).
+
+        Args:
+            pending_order_id: ID of the pending order
+        """
+        self._pending_order_repo.update(pending_order_id, {
+            "status": "processing",
+            "error_message": None,
+            "error_at": None,
+            "last_processed_at": datetime.now(),
+        })
+        logger.info(f"Pending order {pending_order_id} marked as processing")
+
+    def _mark_pending_order_created(self, pending_order_id: int, htc_order_number: float) -> None:
+        """
+        Mark a pending order as 'created' after successful HTC creation.
+
+        Also sends email notification to all contributing email addresses.
+
+        Args:
+            pending_order_id: ID of the pending order
+            htc_order_number: The HTC order number that was created
+        """
+        self._pending_order_repo.update(pending_order_id, {
+            "status": "created",
+            "htc_order_number": htc_order_number,
+            "htc_created_at": datetime.now(timezone.utc),
+            "error_message": None,
+            "error_at": None,
+            "last_processed_at": datetime.now(),
+        })
+        logger.info(f"Pending order {pending_order_id} marked as created (HTC order {htc_order_number})")
+
+        # Broadcast SSE event
+        order_event_manager.broadcast_sync("pending_order_updated", {
+            "id": pending_order_id,
+            "status": "created",
+            "htc_order_number": int(htc_order_number),
+            "action": "htc_created",
+        })
+
+        # Send email notification
+        self._send_order_created_notification(pending_order_id, htc_order_number)
+
+    def _mark_pending_order_failed(self, pending_order_id: int, error_message: str) -> None:
+        """
+        Mark a pending order as 'failed' after HTC creation failure.
+
+        Args:
+            pending_order_id: ID of the pending order
+            error_message: The error message describing the failure
+        """
+        self._pending_order_repo.update(pending_order_id, {
+            "status": "failed",
+            "error_message": error_message,
+            "error_at": datetime.now(timezone.utc),
+            "last_processed_at": datetime.now(),
+        })
+        logger.error(f"Pending order {pending_order_id} marked as failed: {error_message}")
+
+        # Broadcast SSE event
+        order_event_manager.broadcast_sync("pending_order_updated", {
+            "id": pending_order_id,
+            "status": "failed",
+            "error_message": error_message,
+            "action": "htc_failed",
+        })
+
+    def _create_htc_order_by_id(self, pending_order_id: int) -> float:
+        """
+        Create an HTC order from a pending order by ID.
+
+        Used by the worker to create orders. First fetches the pending order,
+        then calls create_order_from_pending on HTC service.
+
+        Args:
+            pending_order_id: ID of the pending order
+
+        Returns:
+            The new HTC order number
+
+        Raises:
+            ValueError: If pending order not found
+            Various HTC errors if creation fails
+        """
+        pending_order = self._pending_order_repo.get_by_id(pending_order_id)
+        if not pending_order:
+            raise ValueError(f"Pending order {pending_order_id} not found")
+
+        return self._htc_service.create_order_from_pending(pending_order)
+
+    def retry_pending_order(self, pending_order_id: int) -> bool:
+        """
+        Retry a failed pending order by resetting its status to 'ready'.
+
+        Args:
+            pending_order_id: ID of the pending order to retry
+
+        Returns:
+            True if reset successful, False if order not found or not in failed state
+        """
+        pending_order = self._pending_order_repo.get_by_id(pending_order_id)
+        if not pending_order:
+            logger.warning(f"Cannot retry: pending order {pending_order_id} not found")
+            return False
+
+        if pending_order.status != "failed":
+            logger.warning(
+                f"Cannot retry: pending order {pending_order_id} status is "
+                f"'{pending_order.status}', expected 'failed'"
+            )
+            return False
+
+        self._pending_order_repo.update(pending_order_id, {
+            "status": "ready",
+            "error_message": None,
+            "error_at": None,
+            "last_processed_at": datetime.now(),
+        })
+        logger.info(f"Pending order {pending_order_id} reset to 'ready' for retry")
+        return True
+
+    # ==================== Email Notifications ====================
+
+    def _get_contributing_email_addresses(self, pending_order_id: int) -> List[str]:
+        """
+        Get unique sender email addresses from all sub_runs that contributed to this pending order.
+
+        Data path: pending_order_history -> eto_sub_run -> eto_run -> email
+
+        Only returns addresses from email sources (not manual uploads which have no source_email_id).
+
+        Args:
+            pending_order_id: ID of the pending order
+
+        Returns:
+            List of unique email addresses (may be empty if all sources were manual uploads)
+        """
+        history_records = self._pending_order_history_repo.get_by_pending_order_id(pending_order_id)
+
+        # Get unique sub_run_ids (excluding None for mock data)
+        sub_run_ids = set(h.sub_run_id for h in history_records if h.sub_run_id is not None)
+
+        email_addresses = set()
+        for sub_run_id in sub_run_ids:
+            sub_run = self._sub_run_repo.get_by_id(sub_run_id)
+            if sub_run:
+                run = self._run_repo.get_by_id(sub_run.eto_run_id)
+                if run and run.source_email_id:
+                    email = self._email_repo.get_by_id(run.source_email_id)
+                    if email and email.sender_email:
+                        email_addresses.add(email.sender_email)
+
+        return list(email_addresses)
+
+    def _get_contributing_email_addresses_for_update(self, pending_update_id: int) -> List[str]:
+        """
+        Get unique sender email addresses from all sub_runs that contributed to this pending update.
+
+        Data path: pending_update_history -> eto_sub_run -> eto_run -> email
+
+        Only returns addresses from email sources (not manual uploads which have no source_email_id).
+
+        Args:
+            pending_update_id: ID of the pending update
+
+        Returns:
+            List of unique email addresses (may be empty if all sources were manual uploads)
+        """
+        history_records = self._pending_update_history_repo.get_by_pending_update_id(pending_update_id)
+
+        # Get unique sub_run_ids (excluding None for mock data)
+        sub_run_ids = set(h.sub_run_id for h in history_records if h.sub_run_id is not None)
+
+        email_addresses = set()
+        for sub_run_id in sub_run_ids:
+            sub_run = self._sub_run_repo.get_by_id(sub_run_id)
+            if sub_run:
+                run = self._run_repo.get_by_id(sub_run.eto_run_id)
+                if run and run.source_email_id:
+                    email = self._email_repo.get_by_id(run.source_email_id)
+                    if email and email.sender_email:
+                        email_addresses.add(email.sender_email)
+
+        return list(email_addresses)
+
+    def _build_order_created_email(
+        self,
+        pending_order: PendingOrder,
+        htc_order_number: float,
+        customer_name: Optional[str],
+    ) -> Tuple[str, str, str]:
+        """
+        Build email subject and body for order creation notification.
+
+        Args:
+            pending_order: The pending order that was created
+            htc_order_number: The HTC order number
+            customer_name: The customer name (if available)
+
+        Returns:
+            Tuple of (subject, plain_text_body, html_body)
+        """
+        order_num = int(htc_order_number)
+        subject = f"HTC Order Created - #{order_num} - {pending_order.hawb}"
+
+        # Build plain text body
+        lines = [
+            f"An HTC order has been created from your submitted documents.",
+            f"",
+            f"Order Details:",
+            f"  HTC Order Number: #{order_num}",
+            f"  HAWB: {pending_order.hawb}",
+        ]
+
+        if pending_order.mawb:
+            lines.append(f"  MAWB: {pending_order.mawb}")
+
+        if customer_name:
+            lines.append(f"  Customer: {customer_name}")
+
+        lines.append(f"")
+
+        # Pickup info
+        if pending_order.pickup_address or pending_order.pickup_time_start:
+            lines.append(f"Pickup:")
+            if pending_order.pickup_company_name:
+                lines.append(f"  Company: {pending_order.pickup_company_name}")
+            if pending_order.pickup_address:
+                lines.append(f"  Address: {pending_order.pickup_address}")
+            if pending_order.pickup_time_start:
+                lines.append(f"  Time: {pending_order.pickup_time_start} - {pending_order.pickup_time_end or 'N/A'}")
+            if pending_order.pickup_notes:
+                lines.append(f"  Notes: {pending_order.pickup_notes}")
+            lines.append(f"")
+
+        # Delivery info
+        if pending_order.delivery_address or pending_order.delivery_time_start:
+            lines.append(f"Delivery:")
+            if pending_order.delivery_company_name:
+                lines.append(f"  Company: {pending_order.delivery_company_name}")
+            if pending_order.delivery_address:
+                lines.append(f"  Address: {pending_order.delivery_address}")
+            if pending_order.delivery_time_start:
+                lines.append(f"  Time: {pending_order.delivery_time_start} - {pending_order.delivery_time_end or 'N/A'}")
+            if pending_order.delivery_notes:
+                lines.append(f"  Notes: {pending_order.delivery_notes}")
+            lines.append(f"")
+
+        # Additional info
+        if pending_order.pieces or pending_order.weight:
+            lines.append(f"Shipment Info:")
+            if pending_order.pieces:
+                lines.append(f"  Pieces: {pending_order.pieces}")
+            if pending_order.weight:
+                lines.append(f"  Weight: {pending_order.weight}")
+            lines.append(f"")
+
+        if pending_order.order_notes:
+            lines.append(f"Notes: {pending_order.order_notes}")
+            lines.append(f"")
+
+        lines.append(f"This is an automated notification from the ETO system.")
+
+        plain_body = "\n".join(lines)
+
+        # Build HTML body
+        html_body = f"""
+<html>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <h2 style="color: #2c5282;">HTC Order Created</h2>
+    <p>An HTC order has been created from your submitted documents.</p>
+
+    <table style="border-collapse: collapse; margin: 20px 0;">
+        <tr>
+            <td style="padding: 8px; font-weight: bold;">HTC Order Number:</td>
+            <td style="padding: 8px;">#{order_num}</td>
+        </tr>
+        <tr>
+            <td style="padding: 8px; font-weight: bold;">HAWB:</td>
+            <td style="padding: 8px;">{pending_order.hawb}</td>
+        </tr>
+        {f'<tr><td style="padding: 8px; font-weight: bold;">MAWB:</td><td style="padding: 8px;">{pending_order.mawb}</td></tr>' if pending_order.mawb else ''}
+        {f'<tr><td style="padding: 8px; font-weight: bold;">Customer:</td><td style="padding: 8px;">{customer_name}</td></tr>' if customer_name else ''}
+    </table>
+
+    <p style="color: #666; font-size: 12px; margin-top: 30px;">
+        This is an automated notification from the ETO system.
+    </p>
+</body>
+</html>
+"""
+
+        return subject, plain_body, html_body
+
+    def _build_order_updated_email(
+        self,
+        pending_update: PendingUpdate,
+        updated_fields: List[str],
+        customer_name: Optional[str],
+    ) -> Tuple[str, str, str]:
+        """
+        Build email subject and body for order update notification.
+
+        Args:
+            pending_update: The pending update that was applied
+            updated_fields: List of field names that were updated
+            customer_name: The customer name (if available)
+
+        Returns:
+            Tuple of (subject, plain_text_body, html_body)
+        """
+        order_num = int(pending_update.htc_order_number) if pending_update.htc_order_number else "Unknown"
+        subject = f"HTC Order Updated - #{order_num} - {pending_update.hawb}"
+
+        # Build plain text body
+        lines = [
+            f"An HTC order has been updated with data from your submitted documents.",
+            f"",
+            f"Order Details:",
+            f"  HTC Order Number: #{order_num}",
+            f"  HAWB: {pending_update.hawb}",
+        ]
+
+        if customer_name:
+            lines.append(f"  Customer: {customer_name}")
+
+        lines.append(f"")
+        lines.append(f"Updated Fields:")
+
+        for field_name in updated_fields:
+            field_label = get_field_label(field_name)
+            field_value = getattr(pending_update, field_name, None)
+            if field_value:
+                lines.append(f"  {field_label}: {field_value}")
+
+        lines.append(f"")
+        lines.append(f"This is an automated notification from the ETO system.")
+
+        plain_body = "\n".join(lines)
+
+        # Build HTML body
+        field_rows = ""
+        for field_name in updated_fields:
+            field_label = get_field_label(field_name)
+            field_value = getattr(pending_update, field_name, None)
+            if field_value:
+                field_rows += f'<tr><td style="padding: 8px; font-weight: bold;">{field_label}:</td><td style="padding: 8px;">{field_value}</td></tr>'
+
+        html_body = f"""
+<html>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <h2 style="color: #2c5282;">HTC Order Updated</h2>
+    <p>An HTC order has been updated with data from your submitted documents.</p>
+
+    <table style="border-collapse: collapse; margin: 20px 0;">
+        <tr>
+            <td style="padding: 8px; font-weight: bold;">HTC Order Number:</td>
+            <td style="padding: 8px;">#{order_num}</td>
+        </tr>
+        <tr>
+            <td style="padding: 8px; font-weight: bold;">HAWB:</td>
+            <td style="padding: 8px;">{pending_update.hawb}</td>
+        </tr>
+        {f'<tr><td style="padding: 8px; font-weight: bold;">Customer:</td><td style="padding: 8px;">{customer_name}</td></tr>' if customer_name else ''}
+    </table>
+
+    <h3 style="color: #2c5282;">Updated Fields</h3>
+    <table style="border-collapse: collapse; margin: 20px 0;">
+        {field_rows}
+    </table>
+
+    <p style="color: #666; font-size: 12px; margin-top: 30px;">
+        This is an automated notification from the ETO system.
+    </p>
+</body>
+</html>
+"""
+
+        return subject, plain_body, html_body
+
+    def _send_order_notification(
+        self,
+        recipient_emails: List[str],
+        subject: str,
+        body: str,
+        body_html: str,
+    ) -> None:
+        """
+        Send notification email to all recipients.
+
+        Uses system setting 'email.default_sender_account_id' for sender.
+        Logs errors but does not raise - email failure should not block order processing.
+
+        Args:
+            recipient_emails: List of recipient email addresses
+            subject: Email subject
+            body: Plain text email body
+            body_html: HTML email body
+        """
+        if not self._email_service:
+            logger.warning("Email service not available - skipping notification")
+            return
+
+        if not recipient_emails:
+            logger.debug("No recipient emails - skipping notification")
+            return
+
+        # Get sender account from system settings
+        sender_account_id_str = self._system_settings_repo.get("email.default_sender_account_id")
+        if not sender_account_id_str:
+            logger.warning("No default sender account configured - skipping email notification")
+            return
+
+        try:
+            sender_account_id = int(sender_account_id_str)
+        except ValueError:
+            logger.error(f"Invalid sender account ID in settings: {sender_account_id_str}")
+            return
+
+        # Send to each recipient
+        for recipient in recipient_emails:
+            try:
+                result = self._email_service.send_email(
+                    account_id=sender_account_id,
+                    to_address=recipient,
+                    subject=subject,
+                    body=body,
+                    body_html=body_html,
+                )
+                if result.success:
+                    logger.info(f"Sent notification email to {recipient}")
+                else:
+                    logger.warning(f"Failed to send notification to {recipient}: {result.message}")
+            except Exception as e:
+                logger.error(f"Error sending notification to {recipient}: {e}")
+
+    def _send_order_created_notification(self, pending_order_id: int, htc_order_number: float) -> None:
+        """
+        Send email notification for a newly created order.
+
+        Args:
+            pending_order_id: ID of the pending order
+            htc_order_number: The HTC order number that was created
+        """
+        try:
+            # Get recipient emails
+            recipient_emails = self._get_contributing_email_addresses(pending_order_id)
+            if not recipient_emails:
+                logger.debug(f"No email recipients for pending order {pending_order_id} - skipping notification")
+                return
+
+            # Get pending order details
+            pending_order = self._pending_order_repo.get_by_id(pending_order_id)
+            if not pending_order:
+                logger.warning(f"Cannot send notification: pending order {pending_order_id} not found")
+                return
+
+            # Get customer name
+            customer_name = self._htc_service.get_customer_name(pending_order.customer_id)
+
+            # Build and send email
+            subject, body, body_html = self._build_order_created_email(
+                pending_order, htc_order_number, customer_name
+            )
+            self._send_order_notification(recipient_emails, subject, body, body_html)
+
+        except Exception as e:
+            logger.error(f"Failed to send order created notification for {pending_order_id}: {e}")
+
+    def _send_order_updated_notification(
+        self,
+        pending_update_id: int,
+        updated_fields: List[str],
+    ) -> None:
+        """
+        Send email notification for an updated order.
+
+        Args:
+            pending_update_id: ID of the pending update
+            updated_fields: List of field names that were updated
+        """
+        try:
+            # Get recipient emails
+            recipient_emails = self._get_contributing_email_addresses_for_update(pending_update_id)
+            if not recipient_emails:
+                logger.debug(f"No email recipients for pending update {pending_update_id} - skipping notification")
+                return
+
+            # Get pending update details
+            pending_update = self._pending_update_repo.get_by_id(pending_update_id)
+            if not pending_update:
+                logger.warning(f"Cannot send notification: pending update {pending_update_id} not found")
+                return
+
+            # Get customer name
+            customer_name = self._htc_service.get_customer_name(pending_update.customer_id)
+
+            # Build and send email
+            subject, body, body_html = self._build_order_updated_email(
+                pending_update, updated_fields, customer_name
+            )
+            self._send_order_notification(recipient_emails, subject, body, body_html)
+
+        except Exception as e:
+            logger.error(f"Failed to send order updated notification for {pending_update_id}: {e}")

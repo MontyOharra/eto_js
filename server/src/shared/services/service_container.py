@@ -166,9 +166,9 @@ class ServiceContainer:
             },
             'order_management': {
                 'class': 'features.order_management.service.OrderManagementService',
-                'args': [cls._connection_manager, '_service:htc_integration'],
+                'args': [cls._connection_manager, '_service:htc_integration', '_service:email'],
                 'singleton': True,
-                'description': 'Order management service for user-facing pending order operations'
+                'description': 'Order management service with worker and email notifications'
             },
             'pipelines': {
                 'class': 'features.pipelines.service.PipelineService',
