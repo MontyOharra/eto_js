@@ -450,7 +450,7 @@ Create unified backend endpoint:
 
 ## 7. Remove Pipelines Page
 
-**Status:** Not Started
+**Status:** COMPLETED
 
 **Issue:** The standalone pipelines page can be removed.
 
@@ -458,6 +458,16 @@ Create unified backend endpoint:
 - Pipeline management is done through template builder
 - Remove route and page component
 - Clean up any dead navigation links
+
+**Implementation Summary:**
+- Removed "Pipelines" tab from dashboard navigation (`route.tsx`)
+- Deleted `pages/dashboard/pipelines/` directory
+- Deleted unused components only used by pipelines page:
+  - `PipelineCard/`
+  - `PipelineViewerModal/`
+  - `ExecutePipelineModal/`
+- Updated `features/pipelines/components/index.ts` to remove deleted exports
+- Kept components used elsewhere: PipelineGraph, PipelineEditor, PipelineBuilderModal, ExecutedPipelineGraph
 
 ---
 
@@ -557,7 +567,7 @@ pyodbc.Error: ('HY010', '[HY010] [Microsoft][ODBC Driver Manager] Function seque
 
 ## 13. Pending Orders Page Real-Time Updates & Navigation Preservation
 
-**Status:** Not Started
+**Status:** COMPLETED
 
 **Issue:** The pending orders page does not receive real-time updates when the ETO system modifies pending orders, and navigation between list/detail views resets state.
 

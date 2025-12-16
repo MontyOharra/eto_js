@@ -12,7 +12,6 @@ function DashboardLayout() {
     { name: "ETO", href: "/dashboard/eto" },
     { name: "Orders", href: "/dashboard/orders" },
     { name: "Templates", href: "/dashboard/pdf-templates" },
-    { name: "Pipelines", href: "/dashboard/pipelines" },
     { name: "Configs", href: "/dashboard/configs" },
   ];
 
