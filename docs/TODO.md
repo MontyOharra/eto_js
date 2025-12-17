@@ -708,6 +708,54 @@ This approach:
 
 ---
 
+## 14. Pending Update History Tracking
+
+**Status:** Not Started
+
+**Issue:** When pending updates are approved/applied, the changes are not recorded in the order history like creations are.
+
+**Details:**
+- Order creations add records to pending_order_history tracking the data source
+- Pending update approvals should similarly track which fields were updated and from what source
+- Need audit trail showing: what changed, when, what was the source data
+- Consider: should rejected updates also be tracked?
+
+**Implementation Tasks:**
+- Review current history tracking for order creations
+- Extend history model or create new update_history table
+- Record field changes when updates are approved
+- Include source sub_run references like creations do
+
+---
+
+## 15. User Activity Tracking & Audit Log
+
+**Status:** Not Started
+
+**Issue:** Need to track user actions for support and auditing purposes.
+
+**Details:**
+- Track what users did and when
+- Support debugging user-reported issues
+- Provide audit trail for compliance/accountability
+
+**Potential Actions to Track:**
+- User login/logout
+- Order conflict resolutions (which value selected)
+- Pending update approvals/rejections
+- Template modifications
+- Email account configuration changes
+- System settings changes
+
+**Implementation Considerations:**
+- User authentication/identification system (if not already present)
+- Audit log table structure: user_id, action_type, entity_type, entity_id, details, timestamp
+- Retention policy for audit logs
+- UI for viewing activity (admin page? per-entity history?)
+- Consider privacy implications
+
+---
+
 ## Priority Notes
 
 _To be determined as we review each item._
