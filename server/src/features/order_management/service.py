@@ -1052,9 +1052,9 @@ class OrderManagementService:
 
     # ==================== Email Notifications ====================
 
-    def _get_contributing_email_addresses(self, pending_order_id: int) -> List[str]:
+    def _get_contributing_email_details(self, pending_order_id: int) -> Dict[str, datetime]:
         """
-        Get unique sender email addresses from all sub_runs that contributed to this pending order.
+        Get sender email addresses and their received dates from all sub_runs that contributed to this pending order.
 
         Data path: pending_order_history -> eto_sub_run -> eto_run -> email
 
@@ -1064,28 +1064,30 @@ class OrderManagementService:
             pending_order_id: ID of the pending order
 
         Returns:
-            List of unique email addresses (may be empty if all sources were manual uploads)
+            Dict mapping email address to received_date (may be empty if all sources were manual uploads)
         """
         history_records = self._pending_order_history_repo.get_by_pending_order_id(pending_order_id)
 
         # Get unique sub_run_ids (excluding None for mock data)
         sub_run_ids = set(h.sub_run_id for h in history_records if h.sub_run_id is not None)
 
-        email_addresses = set()
+        email_details: Dict[str, datetime] = {}
         for sub_run_id in sub_run_ids:
             sub_run = self._sub_run_repo.get_by_id(sub_run_id)
             if sub_run:
                 run = self._run_repo.get_by_id(sub_run.eto_run_id)
                 if run and run.source_email_id:
                     email = self._email_repo.get_by_id(run.source_email_id)
-                    if email and email.sender_email:
-                        email_addresses.add(email.sender_email)
+                    if email and email.sender_email and email.received_date:
+                        # Keep the most recent date if multiple emails from same sender
+                        if email.sender_email not in email_details or email.received_date > email_details[email.sender_email]:
+                            email_details[email.sender_email] = email.received_date
 
-        return list(email_addresses)
+        return email_details
 
-    def _get_contributing_email_addresses_for_update(self, pending_update_id: int) -> List[str]:
+    def _get_contributing_email_details_for_update(self, pending_update_id: int) -> Dict[str, datetime]:
         """
-        Get unique sender email addresses from all sub_runs that contributed to this pending update.
+        Get sender email addresses and their received dates from all sub_runs that contributed to this pending update.
 
         Data path: pending_update_history -> eto_sub_run -> eto_run -> email
 
@@ -1095,30 +1097,32 @@ class OrderManagementService:
             pending_update_id: ID of the pending update
 
         Returns:
-            List of unique email addresses (may be empty if all sources were manual uploads)
+            Dict mapping email address to received_date (may be empty if all sources were manual uploads)
         """
         history_records = self._pending_update_history_repo.get_by_pending_update_id(pending_update_id)
 
         # Get unique sub_run_ids (excluding None for mock data)
         sub_run_ids = set(h.sub_run_id for h in history_records if h.sub_run_id is not None)
 
-        email_addresses = set()
+        email_details: Dict[str, datetime] = {}
         for sub_run_id in sub_run_ids:
             sub_run = self._sub_run_repo.get_by_id(sub_run_id)
             if sub_run:
                 run = self._run_repo.get_by_id(sub_run.eto_run_id)
                 if run and run.source_email_id:
                     email = self._email_repo.get_by_id(run.source_email_id)
-                    if email and email.sender_email:
-                        email_addresses.add(email.sender_email)
+                    if email and email.sender_email and email.received_date:
+                        # Keep the most recent date if multiple emails from same sender
+                        if email.sender_email not in email_details or email.received_date > email_details[email.sender_email]:
+                            email_details[email.sender_email] = email.received_date
 
-        return list(email_addresses)
+        return email_details
 
     def _build_order_created_email(
         self,
         pending_order: PendingOrder,
         htc_order_number: float,
-        customer_name: Optional[str],
+        email_received_date: datetime,
     ) -> Tuple[str, str, str]:
         """
         Build email subject and body for order creation notification.
@@ -1126,7 +1130,7 @@ class OrderManagementService:
         Args:
             pending_order: The pending order that was created
             htc_order_number: The HTC order number
-            customer_name: The customer name (if available)
+            email_received_date: The date/time the source email was received
 
         Returns:
             Tuple of (subject, plain_text_body, html_body)
@@ -1134,9 +1138,12 @@ class OrderManagementService:
         order_num = int(htc_order_number)
         subject = f"HTC Order Created - #{order_num} - {pending_order.hawb}"
 
+        # Format the email received date
+        formatted_date = email_received_date.strftime("%B %d, %Y at %I:%M %p")
+
         # Build plain text body
         lines = [
-            f"An HTC order has been created from your submitted documents.",
+            f"An order has been created from your email sent at {formatted_date}. Thank you for your business.",
             f"",
             f"Order Details:",
             f"  HTC Order Number: #{order_num}",
@@ -1145,9 +1152,6 @@ class OrderManagementService:
 
         if pending_order.mawb:
             lines.append(f"  MAWB: {pending_order.mawb}")
-
-        if customer_name:
-            lines.append(f"  Customer: {customer_name}")
 
         lines.append(f"")
 
@@ -1190,7 +1194,7 @@ class OrderManagementService:
             lines.append(f"Notes: {pending_order.order_notes}")
             lines.append(f"")
 
-        lines.append(f"This is an automated notification from the ETO system.")
+        lines.append(f"This is an automated notification from the Harrah Email-To-Order system.")
 
         plain_body = "\n".join(lines)
 
@@ -1199,7 +1203,7 @@ class OrderManagementService:
 <html>
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
     <h2 style="color: #2c5282;">HTC Order Created</h2>
-    <p>An HTC order has been created from your submitted documents.</p>
+    <p>An order has been created from your email sent at {formatted_date}. Thank you for your business.</p>
 
     <table style="border-collapse: collapse; margin: 20px 0;">
         <tr>
@@ -1211,11 +1215,10 @@ class OrderManagementService:
             <td style="padding: 8px;">{pending_order.hawb}</td>
         </tr>
         {f'<tr><td style="padding: 8px; font-weight: bold;">MAWB:</td><td style="padding: 8px;">{pending_order.mawb}</td></tr>' if pending_order.mawb else ''}
-        {f'<tr><td style="padding: 8px; font-weight: bold;">Customer:</td><td style="padding: 8px;">{customer_name}</td></tr>' if customer_name else ''}
     </table>
 
     <p style="color: #666; font-size: 12px; margin-top: 30px;">
-        This is an automated notification from the ETO system.
+        This is an automated notification from the Harrah Email-To-Order system.
     </p>
 </body>
 </html>
@@ -1227,7 +1230,7 @@ class OrderManagementService:
         self,
         pending_update: PendingUpdate,
         updated_fields: List[str],
-        customer_name: Optional[str],
+        email_received_date: datetime,
     ) -> Tuple[str, str, str]:
         """
         Build email subject and body for order update notification.
@@ -1235,7 +1238,7 @@ class OrderManagementService:
         Args:
             pending_update: The pending update that was applied
             updated_fields: List of field names that were updated
-            customer_name: The customer name (if available)
+            email_received_date: The date/time the source email was received
 
         Returns:
             Tuple of (subject, plain_text_body, html_body)
@@ -1243,17 +1246,17 @@ class OrderManagementService:
         order_num = int(pending_update.htc_order_number) if pending_update.htc_order_number else "Unknown"
         subject = f"HTC Order Updated - #{order_num} - {pending_update.hawb}"
 
+        # Format the email received date
+        formatted_date = email_received_date.strftime("%B %d, %Y at %I:%M %p")
+
         # Build plain text body
         lines = [
-            f"An HTC order has been updated with data from your submitted documents.",
+            f"An order has been updated from your email sent at {formatted_date}. Thank you for your business.",
             f"",
             f"Order Details:",
             f"  HTC Order Number: #{order_num}",
             f"  HAWB: {pending_update.hawb}",
         ]
-
-        if customer_name:
-            lines.append(f"  Customer: {customer_name}")
 
         lines.append(f"")
         lines.append(f"Updated Fields:")
@@ -1265,7 +1268,7 @@ class OrderManagementService:
                 lines.append(f"  {field_label}: {field_value}")
 
         lines.append(f"")
-        lines.append(f"This is an automated notification from the ETO system.")
+        lines.append(f"This is an automated notification from the Harrah Email-To-Order system.")
 
         plain_body = "\n".join(lines)
 
@@ -1281,7 +1284,7 @@ class OrderManagementService:
 <html>
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
     <h2 style="color: #2c5282;">HTC Order Updated</h2>
-    <p>An HTC order has been updated with data from your submitted documents.</p>
+    <p>An order has been updated from your email sent at {formatted_date}. Thank you for your business.</p>
 
     <table style="border-collapse: collapse; margin: 20px 0;">
         <tr>
@@ -1292,7 +1295,6 @@ class OrderManagementService:
             <td style="padding: 8px; font-weight: bold;">HAWB:</td>
             <td style="padding: 8px;">{pending_update.hawb}</td>
         </tr>
-        {f'<tr><td style="padding: 8px; font-weight: bold;">Customer:</td><td style="padding: 8px;">{customer_name}</td></tr>' if customer_name else ''}
     </table>
 
     <h3 style="color: #2c5282;">Updated Fields</h3>
@@ -1301,7 +1303,7 @@ class OrderManagementService:
     </table>
 
     <p style="color: #666; font-size: 12px; margin-top: 30px;">
-        This is an automated notification from the ETO system.
+        This is an automated notification from the Harrah Email-To-Order system.
     </p>
 </body>
 </html>
@@ -1369,14 +1371,16 @@ class OrderManagementService:
         """
         Send email notification for a newly created order.
 
+        Sends personalized emails to each recipient with their specific email date.
+
         Args:
             pending_order_id: ID of the pending order
             htc_order_number: The HTC order number that was created
         """
         try:
-            # Get recipient emails
-            recipient_emails = self._get_contributing_email_addresses(pending_order_id)
-            if not recipient_emails:
+            # Get recipient emails with their received dates
+            email_details = self._get_contributing_email_details(pending_order_id)
+            if not email_details:
                 logger.debug(f"No email recipients for pending order {pending_order_id} - skipping notification")
                 return
 
@@ -1386,14 +1390,12 @@ class OrderManagementService:
                 logger.warning(f"Cannot send notification: pending order {pending_order_id} not found")
                 return
 
-            # Get customer name
-            customer_name = self._htc_service.get_customer_name(pending_order.customer_id)
-
-            # Build and send email
-            subject, body, body_html = self._build_order_created_email(
-                pending_order, htc_order_number, customer_name
-            )
-            self._send_order_notification(recipient_emails, subject, body, body_html)
+            # Build and send personalized email for each recipient
+            for recipient_email, received_date in email_details.items():
+                subject, body, body_html = self._build_order_created_email(
+                    pending_order, htc_order_number, received_date
+                )
+                self._send_order_notification([recipient_email], subject, body, body_html)
 
         except Exception as e:
             logger.error(f"Failed to send order created notification for {pending_order_id}: {e}")
@@ -1406,14 +1408,16 @@ class OrderManagementService:
         """
         Send email notification for an updated order.
 
+        Sends personalized emails to each recipient with their specific email date.
+
         Args:
             pending_update_id: ID of the pending update
             updated_fields: List of field names that were updated
         """
         try:
-            # Get recipient emails
-            recipient_emails = self._get_contributing_email_addresses_for_update(pending_update_id)
-            if not recipient_emails:
+            # Get recipient emails with their received dates
+            email_details = self._get_contributing_email_details_for_update(pending_update_id)
+            if not email_details:
                 logger.debug(f"No email recipients for pending update {pending_update_id} - skipping notification")
                 return
 
@@ -1423,14 +1427,12 @@ class OrderManagementService:
                 logger.warning(f"Cannot send notification: pending update {pending_update_id} not found")
                 return
 
-            # Get customer name
-            customer_name = self._htc_service.get_customer_name(pending_update.customer_id)
-
-            # Build and send email
-            subject, body, body_html = self._build_order_updated_email(
-                pending_update, updated_fields, customer_name
-            )
-            self._send_order_notification(recipient_emails, subject, body, body_html)
+            # Build and send personalized email for each recipient
+            for recipient_email, received_date in email_details.items():
+                subject, body, body_html = self._build_order_updated_email(
+                    pending_update, updated_fields, received_date
+                )
+                self._send_order_notification([recipient_email], subject, body, body_html)
 
         except Exception as e:
             logger.error(f"Failed to send order updated notification for {pending_update_id}: {e}")

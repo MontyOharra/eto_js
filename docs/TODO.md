@@ -510,11 +510,15 @@ Create unified backend endpoint:
   - Changed worker startup/shutdown calls from `htc_integration_service` to `order_management_service`
 
 **Email Notification Flow:**
-1. When HTC order is created (by worker), emails are sent to all unique sender addresses from contributing PDFs
-2. When user approves a pending update, emails are sent to all unique sender addresses from contributing PDFs
-3. Emails include HTC order number, HAWB, customer name, and relevant order details
-4. Uses `email.default_sender_account_id` system setting for sender account
-5. Email failures are logged but don't block order processing
+1. When HTC order is created (by worker), personalized emails are sent to each sender address from contributing PDFs
+2. When user approves a pending update, personalized emails are sent to each sender address from contributing PDFs
+3. Each recipient receives a personalized email with their specific email received date
+4. Email content:
+   - Opening: "An order has been created/updated from your email sent at {date-time}. Thank you for your business."
+   - Order details: HTC order number, HAWB, MAWB (if present), pickup/delivery info
+   - Footer: "This is an automated notification from the Harrah Email-To-Order system."
+5. Uses `email.default_sender_account_id` system setting for sender account
+6. Email failures are logged but don't block order processing
 
 ---
 
