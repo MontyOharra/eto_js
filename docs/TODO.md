@@ -522,18 +522,116 @@ Create unified backend endpoint:
 
 ---
 
-## 9. New Pipeline Modules
+## 9. User Activity Tracking & Audit Log
 
 **Status:** Not Started
 
+**Priority:** 1 (Next up)
+
+**Issue:** Need to track user actions for support and auditing purposes.
+
+**Details:**
+- Track what users did and when
+- Support debugging user-reported issues
+- Provide audit trail for compliance/accountability
+
+**Potential Actions to Track:**
+- User login/logout
+- Order conflict resolutions (which value selected)
+- Pending update approvals/rejections
+- Template modifications
+- Email account configuration changes
+- System settings changes
+
+**Implementation Considerations:**
+- User authentication/identification system (if not already present)
+- Audit log table structure: user_id, action_type, entity_type, entity_id, details, timestamp
+- Retention policy for audit logs
+- UI for viewing activity (admin page? per-entity history?)
+- Consider privacy implications
+
+---
+
+## 10. Pending Update History Tracking
+
+**Status:** Not Started
+
+**Priority:** 2
+
+**Issue:** When pending updates are approved/applied, the changes are not recorded in the order history like creations are.
+
+**Details:**
+- Order creations add records to pending_order_history tracking the data source
+- Pending update approvals should similarly track which fields were updated and from what source
+- Need audit trail showing: what changed, when, what was the source data
+- Consider: should rejected updates also be tracked?
+
+**Implementation Tasks:**
+- Review current history tracking for order creations
+- Extend history model or create new update_history table
+- Record field changes when updates are approved
+- Include source sub_run references like creations do
+
+---
+
+## 11. Sync Modules and Output Channels on Startup
+
+**Status:** Not Started
+
+**Priority:** 3
+
+**Issue:** Modules and output channels need to be synced on initial server startup automatically.
+
+**Details:**
+- Currently requires manual API calls to `/api/admin/sync-modules` and `/api/admin/sync-output-channels`
+- Should happen automatically when server starts
+- Same functionality as user calling both sync admin endpoints immediately after startup
+
+**Implementation Tasks:**
+- Add startup hook in `app.py` to call sync functions
+- Ensure sync happens after database connections are established
+- Handle errors gracefully (log but don't crash server)
+- Consider: should this be configurable (enable/disable auto-sync)?
+
+---
+
+## 12. Service Container Completeness Check
+
+**Status:** Not Started
+
+**Priority:** 4
+
+**Issue:** Need to ensure all services are properly initialized and the service container is correctly built out.
+
+**Details:**
+- Verify all services have proper dependencies injected
+- Check for circular dependency issues
+- Ensure singleton services are properly shared
+- Validate service initialization order
+
+**Implementation Tasks:**
+- Audit current service container configuration
+- Document all services and their dependencies
+- Add validation/health check for service initialization
+- Fix any missing or incorrect service wiring
+- Consider adding startup validation that all required services are available
+
+---
+
+## 13. New Pipeline Modules
+
+**Status:** Not Started
+
+**Priority:** 5
+
 **Issue:** Need general-purpose regex and LLM modules.
 
-### 9a. Regex Module
+### 13a. Regex Module
 - General regex pattern matching/extraction
 - Configurable pattern input
 - Multiple capture group support
 
-### 9b. LLM Module
+### 13b. LLM Module
 - Similar to SQL lookup module pattern
 - Long text input with referenceable pass-in values
 - Example: `"Please extract important info from {notes_input}. Return in datetime format..."`
@@ -544,9 +642,11 @@ Create unified backend endpoint:
 
 ---
 
-## 10. IDE / Syntax Error Cleanup
+## 14. IDE / Syntax Error Cleanup
 
 **Status:** Not Started
+
+**Priority:** 6
 
 **Issue:** General cleanup of IDE warnings and syntax errors across codebase.
 
@@ -558,9 +658,11 @@ Create unified backend endpoint:
 
 ---
 
-## 11. HTC Database Configuration
+## 15. HTC Database Configuration
 
 **Status:** Not Started
+
+**Priority:** 7 (Last)
 
 **Issue:** HTC database connection is only configurable via environment variables. Need in-app configuration.
 
@@ -573,7 +675,7 @@ Create unified backend endpoint:
 
 ---
 
-## 12. Access Database Concurrent Query Errors (ODBC Function Sequence Error)
+## 16. Access Database Concurrent Query Errors (ODBC Function Sequence Error)
 
 **Status:** COMPLETED
 
@@ -602,7 +704,7 @@ pyodbc.Error: ('HY010', '[HY010] [Microsoft][ODBC Driver Manager] Function seque
 
 ---
 
-## 13. Pending Orders Page Real-Time Updates & Navigation Preservation
+## 17. Pending Orders Page Real-Time Updates & Navigation Preservation
 
 **Status:** COMPLETED
 
@@ -705,54 +807,6 @@ This approach:
 - `client/src/renderer/features/order-management/hooks/index.ts` - Export new hook
 - `client/src/renderer/features/order-management/index.ts` - Re-export hook
 - `client/src/renderer/pages/dashboard/orders/index.tsx` - Integrate SSE and fix navigation
-
----
-
-## 14. Pending Update History Tracking
-
-**Status:** Not Started
-
-**Issue:** When pending updates are approved/applied, the changes are not recorded in the order history like creations are.
-
-**Details:**
-- Order creations add records to pending_order_history tracking the data source
-- Pending update approvals should similarly track which fields were updated and from what source
-- Need audit trail showing: what changed, when, what was the source data
-- Consider: should rejected updates also be tracked?
-
-**Implementation Tasks:**
-- Review current history tracking for order creations
-- Extend history model or create new update_history table
-- Record field changes when updates are approved
-- Include source sub_run references like creations do
-
----
-
-## 15. User Activity Tracking & Audit Log
-
-**Status:** Not Started
-
-**Issue:** Need to track user actions for support and auditing purposes.
-
-**Details:**
-- Track what users did and when
-- Support debugging user-reported issues
-- Provide audit trail for compliance/accountability
-
-**Potential Actions to Track:**
-- User login/logout
-- Order conflict resolutions (which value selected)
-- Pending update approvals/rejections
-- Template modifications
-- Email account configuration changes
-- System settings changes
-
-**Implementation Considerations:**
-- User authentication/identification system (if not already present)
-- Audit log table structure: user_id, action_type, entity_type, entity_id, details, timestamp
-- Retention policy for audit logs
-- UI for viewing activity (admin page? per-entity history?)
-- Consider privacy implications
 
 ---
 
