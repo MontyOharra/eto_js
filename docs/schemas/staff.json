@@ -1,0 +1,305 @@
+{
+  "table": {
+    "name": "HTC000_G090_T010 Staff",
+    "column_count": 31
+  },
+  "columns": [
+    {
+      "name": "Staff_CoID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 1
+    },
+    {
+      "name": "Staff_BrID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 2
+    },
+    {
+      "name": "Staff_EmpID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 3
+    },
+    {
+      "name": "Staff_Login",
+      "type": "VARCHAR",
+      "size": 100,
+      "nullable": true,
+      "position": 4
+    },
+    {
+      "name": "Staff_NamePrefix",
+      "type": "VARCHAR",
+      "size": 7,
+      "nullable": true,
+      "position": 5
+    },
+    {
+      "name": "Staff_FirstName",
+      "type": "VARCHAR",
+      "size": 50,
+      "nullable": true,
+      "position": 6
+    },
+    {
+      "name": "Staff_LastName",
+      "type": "VARCHAR",
+      "size": 50,
+      "nullable": true,
+      "position": 7
+    },
+    {
+      "name": "Staff_NameSuffix",
+      "type": "VARCHAR",
+      "size": 7,
+      "nullable": true,
+      "position": 8
+    },
+    {
+      "name": "Staff_Email",
+      "type": "VARCHAR",
+      "size": 100,
+      "nullable": true,
+      "position": 9
+    },
+    {
+      "name": "Staff_Phone",
+      "type": "VARCHAR",
+      "size": 10,
+      "nullable": true,
+      "position": 10
+    },
+    {
+      "name": "Staff_Mobile",
+      "type": "VARCHAR",
+      "size": 10,
+      "nullable": true,
+      "position": 11
+    },
+    {
+      "name": "Staff_TSA_Type",
+      "type": "VARCHAR",
+      "size": 255,
+      "nullable": true,
+      "position": 12
+    },
+    {
+      "name": "Staff_TSA_Number",
+      "type": "VARCHAR",
+      "size": 255,
+      "nullable": true,
+      "position": 13
+    },
+    {
+      "name": "Staff_TSA_Taken",
+      "type": "DATETIME",
+      "size": 19,
+      "nullable": true,
+      "position": 14
+    },
+    {
+      "name": "Staff_PC_LID",
+      "type": "VARCHAR",
+      "size": 255,
+      "nullable": true,
+      "position": 15
+    },
+    {
+      "name": "Staff_RoleID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 16
+    },
+    {
+      "name": "Staff_CommRate",
+      "type": "DOUBLE",
+      "size": 53,
+      "nullable": true,
+      "position": 17
+    },
+    {
+      "name": "Staff_Home_Street1",
+      "type": "VARCHAR",
+      "size": 100,
+      "nullable": true,
+      "position": 18
+    },
+    {
+      "name": "Staff_Home_Street2",
+      "type": "VARCHAR",
+      "size": 100,
+      "nullable": true,
+      "position": 19
+    },
+    {
+      "name": "Staff_Home_City",
+      "type": "VARCHAR",
+      "size": 100,
+      "nullable": true,
+      "position": 20
+    },
+    {
+      "name": "Staff_Home_StAbbr",
+      "type": "VARCHAR",
+      "size": 2,
+      "nullable": true,
+      "position": 21
+    },
+    {
+      "name": "Staff_Home_Zip",
+      "type": "VARCHAR",
+      "size": 10,
+      "nullable": true,
+      "position": 22
+    },
+    {
+      "name": "Staff_Home_Country",
+      "type": "VARCHAR",
+      "size": 25,
+      "nullable": true,
+      "position": 23
+    },
+    {
+      "name": "Staff_Home_Phone",
+      "type": "VARCHAR",
+      "size": 10,
+      "nullable": true,
+      "position": 24
+    },
+    {
+      "name": "Staff_DateOfHire",
+      "type": "DATETIME",
+      "size": 19,
+      "nullable": true,
+      "position": 25
+    },
+    {
+      "name": "Staff_DateOfTermination",
+      "type": "DATETIME",
+      "size": 19,
+      "nullable": true,
+      "position": 26
+    },
+    {
+      "name": "Staff_Password",
+      "type": "VARCHAR",
+      "size": 50,
+      "nullable": true,
+      "position": 27
+    },
+    {
+      "name": "Staff_SecCoord",
+      "type": "BIT",
+      "size": 1,
+      "nullable": false,
+      "position": 28
+    },
+    {
+      "name": "Staff_TSATrainer",
+      "type": "BIT",
+      "size": 1,
+      "nullable": false,
+      "position": 29
+    },
+    {
+      "name": "Staff_DefaultDocOwner",
+      "type": "BIT",
+      "size": 1,
+      "nullable": false,
+      "position": 30
+    },
+    {
+      "name": "Staff_Active",
+      "type": "BIT",
+      "size": 1,
+      "nullable": false,
+      "position": 31
+    }
+  ],
+  "indexes": [
+    {
+      "name": "PrimaryKey",
+      "unique": true,
+      "columns": [
+        {
+          "name": "Staff_CoID",
+          "position": 1
+        },
+        {
+          "name": "Staff_BrID",
+          "position": 2
+        },
+        {
+          "name": "Staff_EmpID",
+          "position": 3
+        }
+      ]
+    },
+    {
+      "name": "Staff_EmpID",
+      "unique": true,
+      "columns": [
+        {
+          "name": "Staff_EmpID",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "BrID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "Staff_BrID",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "CoID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "Staff_CoID",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "PC_LID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "Staff_PC_LID",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "Staff_Login",
+      "unique": false,
+      "columns": [
+        {
+          "name": "Staff_Login",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "Staff_RoleID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "Staff_RoleID",
+          "position": 1
+        }
+      ]
+    }
+  ]
+}

@@ -524,31 +524,34 @@ Create unified backend endpoint:
 
 ## 9. User Activity Tracking & Audit Log
 
-**Status:** Not Started
+**Status:** Design Complete
 
 **Priority:** 1 (Next up)
 
+**Design Spec:** [docs/designs/user-authentication-design.md](designs/user-authentication-design.md)
+
 **Issue:** Need to track user actions for support and auditing purposes.
 
-**Details:**
-- Track what users did and when
-- Support debugging user-reported issues
-- Provide audit trail for compliance/accountability
+**Scope (Simplified):**
+- Track only **pending update approvals** (not full audit log)
+- Record `Staff_EmpID` when user approves an update
+- Purpose: Update order history in main HTC system with who approved
 
-**Potential Actions to Track:**
-- User login/logout
-- Order conflict resolutions (which value selected)
-- Pending update approvals/rejections
-- Template modifications
-- Email account configuration changes
-- System settings changes
+**Authentication Approach:**
+1. **Auto-auth (primary):** Check `HTC000 WhosLoggedIn` table for matching `PCName` + `PCLid`
+2. **Manual login (fallback):** Username/password against `HTC000_G090_T010 Staff` table
+3. **Session:** In-memory only (React Context), re-auth on each app startup
+4. **Logout:** Button in Settings, clears session
 
-**Implementation Considerations:**
-- User authentication/identification system (if not already present)
-- Audit log table structure: user_id, action_type, entity_type, entity_id, details, timestamp
-- Retention policy for audit logs
-- UI for viewing activity (admin page? per-entity history?)
-- Consider privacy implications
+**Key Tables (Access DB: HTC000_Data_Staff.accdb):**
+- `HTC000 WhosLoggedIn` - Active sessions (read-only)
+- `HTC000_G090_T010 Staff` - User credentials
+
+**Implementation Tasks:**
+- Backend: Auth router, Auth service, Staff repository
+- Frontend: Auth context, Login page update, Auth guard, Logout button
+- Electron: IPC handler for `os.hostname()` and `os.userInfo().username`
+- Integration: Add `approved_by` to pending update approval flow
 
 ---
 

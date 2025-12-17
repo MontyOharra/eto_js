@@ -1,0 +1,100 @@
+{
+  "table": {
+    "name": "HTC000 WhosLoggedIn",
+    "column_count": 10
+  },
+  "columns": [
+    {
+      "name": "WLI_Company",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 1
+    },
+    {
+      "name": "WLI_Branch",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 2
+    },
+    {
+      "name": "WLI_HomeServer",
+      "type": "VARCHAR",
+      "size": 100,
+      "nullable": true,
+      "position": 3
+    },
+    {
+      "name": "WLI_ServerType",
+      "type": "VARCHAR",
+      "size": 25,
+      "nullable": true,
+      "position": 4
+    },
+    {
+      "name": "WLI_StaffID",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 5
+    },
+    {
+      "name": "PCName",
+      "type": "VARCHAR",
+      "size": 255,
+      "nullable": true,
+      "position": 6
+    },
+    {
+      "name": "PCLid",
+      "type": "VARCHAR",
+      "size": 255,
+      "nullable": true,
+      "position": 7
+    },
+    {
+      "name": "WhosLoggedIn",
+      "type": "VARCHAR",
+      "size": 255,
+      "nullable": true,
+      "position": 8
+    },
+    {
+      "name": "SecurityLevel",
+      "type": "SMALLINT",
+      "size": 5,
+      "nullable": true,
+      "position": 9
+    },
+    {
+      "name": "LogInTime",
+      "type": "DATETIME",
+      "size": 19,
+      "nullable": true,
+      "position": 10
+    }
+  ],
+  "indexes": [
+    {
+      "name": "PCLid",
+      "unique": false,
+      "columns": [
+        {
+          "name": "PCLid",
+          "position": 1
+        }
+      ]
+    },
+    {
+      "name": "WLI_StaffID",
+      "unique": false,
+      "columns": [
+        {
+          "name": "WLI_StaffID",
+          "position": 1
+        }
+      ]
+    }
+  ]
+}
