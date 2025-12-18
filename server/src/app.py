@@ -274,7 +274,14 @@ async def initialize_services() -> None:
         # Eagerly initialize all services to ensure proper startup
         logger.info("Eagerly initializing all services...")
 
-        # 1. Initialize modules service FIRST (triggers auto-discovery)
+        # 1. Initialize storage config FIRST (used by pdf_files)
+        try:
+            storage_config = ServiceContainer.get('storage_config')
+            logger.info("Storage config service initialized")
+        except Exception as e:
+            logger.warning(f"Failed to initialize storage config: {e}")
+
+        # 2. Initialize modules service (triggers auto-discovery)
         try:
             modules_service = ServiceContainer.get_modules_service()
             logger.info("Modules service initialized (auto-discovery complete)")
@@ -282,12 +289,18 @@ async def initialize_services() -> None:
             logger.error(f"Failed to initialize modules service: {e}")
             # Continue - other services may still work
 
-        # 2. Initialize core data services
+        # 3. Initialize core data services
         try:
             pdf_files_service = ServiceContainer.get_pdf_files_service()
             logger.info("PDF files service initialized")
         except Exception as e:
             logger.warning(f"Failed to initialize PDF files service: {e}")
+
+        try:
+            pipeline_execution_service = ServiceContainer.get_pipeline_execution_service()
+            logger.info("Pipeline execution service initialized")
+        except Exception as e:
+            logger.warning(f"Failed to initialize pipeline execution service: {e}")
 
         try:
             pipeline_service = ServiceContainer.get_pipeline_service()
@@ -301,7 +314,7 @@ async def initialize_services() -> None:
         except Exception as e:
             logger.warning(f"Failed to initialize PDF template service: {e}")
 
-        # 3. Initialize ingestion services and start email polling
+        # 4. Initialize ingestion services and start email polling
         try:
             email_service = ServiceContainer.get_email_service()
             logger.info("Email service initialized")
@@ -311,14 +324,7 @@ async def initialize_services() -> None:
         except Exception as e:
             logger.warning(f"Failed to initialize/start email service: {e}")
 
-        # 4. Initialize ETO processing services
-        try:
-            eto_runs_service = ServiceContainer.get_eto_runs_service()
-            logger.info("ETO runs service initialized")
-        except Exception as e:
-            logger.warning(f"Failed to initialize ETO runs service: {e}")
-
-        # 5. Initialize HTC integration service (needed by order management)
+        # 5. Initialize HTC integration service (needed by output_processing and order_management)
         htc_integration_service = None
         try:
             htc_integration_service = ServiceContainer.get_htc_integration_service()
@@ -326,12 +332,36 @@ async def initialize_services() -> None:
         except Exception as e:
             logger.warning(f"Failed to initialize HTC integration service: {e}")
 
-        # 6. Initialize order management service
+        # 6. Initialize output processing service (needed by eto_runs)
+        try:
+            output_processing_service = ServiceContainer.get_output_processing_service()
+            logger.info("Output processing service initialized")
+        except Exception as e:
+            logger.warning(f"Failed to initialize output processing service: {e}")
+
+        # 7. Initialize ETO runs service
+        try:
+            eto_runs_service = ServiceContainer.get_eto_runs_service()
+            logger.info("ETO runs service initialized")
+        except Exception as e:
+            logger.warning(f"Failed to initialize ETO runs service: {e}")
+
+        # 8. Initialize order management service
         try:
             order_management_service = ServiceContainer.get_order_management_service()
             logger.info("Order management service initialized")
         except Exception as e:
             logger.warning(f"Failed to initialize order management service: {e}")
+
+        # 9. Initialize auth service (for user authentication)
+        try:
+            auth_service = ServiceContainer.get_auth_service()
+            if auth_service.is_available():
+                logger.info("Auth service initialized (staff database connected)")
+            else:
+                logger.warning("Auth service initialized but staff database not available")
+        except Exception as e:
+            logger.warning(f"Failed to initialize auth service: {e}")
 
         logger.info("All services initialized successfully")
 

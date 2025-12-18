@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 
 export const Route = createFileRoute('/login')({
@@ -11,22 +11,34 @@ function LoginPage() {
   const { isAuthenticated, isLoading, error, login, autoLogin, clearError } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [attemptedAutoLogin, setAttemptedAutoLogin] = useState(false);
+  const [isCheckingAutoLogin, setIsCheckingAutoLogin] = useState(true);
+  const autoLoginAttempted = useRef(false);
 
   // Attempt auto-login on mount
   useEffect(() => {
-    if (!attemptedAutoLogin && !isAuthenticated) {
-      setAttemptedAutoLogin(true);
-      autoLogin();
-    }
-  }, [attemptedAutoLogin, isAuthenticated, autoLogin]);
+    if (autoLoginAttempted.current) return;
+    autoLoginAttempted.current = true;
 
-  // Navigate to dashboard when authenticated
+    const tryAutoLogin = async () => {
+      try {
+        const success = await autoLogin();
+        if (success) {
+          navigate({ to: '/dashboard' });
+        }
+      } finally {
+        setIsCheckingAutoLogin(false);
+      }
+    };
+
+    tryAutoLogin();
+  }, [autoLogin, navigate]);
+
+  // Navigate to dashboard if already authenticated
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && !isCheckingAutoLogin) {
       navigate({ to: '/dashboard' });
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, isCheckingAutoLogin, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,8 +54,8 @@ function LoginPage() {
     }
   };
 
-  // Show loading screen while attempting auto-login
-  if (isLoading && !attemptedAutoLogin) {
+  // Show loading screen while checking auto-login
+  if (isCheckingAutoLogin) {
     return (
       <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4">
         <div className="text-center">
