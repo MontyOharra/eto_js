@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useState, useEffect } from 'react';
 import {
   useEmailAccountsApi,
@@ -6,6 +6,7 @@ import {
   type ValidationResultResponse,
 } from '../../../features/email-accounts';
 import { useSystemSettingsApi } from '../../../features/system-settings';
+import { useAuth } from '../../../contexts/AuthContext';
 
 export const Route = createFileRoute('/dashboard/settings/')({
   component: SettingsPage,
@@ -27,6 +28,15 @@ const settingsSections = [
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+      </svg>
+    ),
+  },
+  {
+    id: 'account',
+    name: 'Account',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
       </svg>
     ),
   },
@@ -62,6 +72,7 @@ function SettingsPage() {
       <div className="flex-1 p-6 overflow-auto">
         {activeSection === 'email-connections' && <EmailConnectionsSettings />}
         {activeSection === 'outgoing-email' && <OutgoingEmailSettings />}
+        {activeSection === 'account' && <AccountSettings />}
       </div>
     </div>
   );
@@ -840,6 +851,75 @@ function DeleteConfirmationModal({
             </button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// Account Settings Component
+function AccountSettings() {
+  const navigate = useNavigate();
+  const { session, logout } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+    navigate({ to: '/login' });
+  };
+
+  return (
+    <div>
+      {/* Header */}
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-white">Account</h1>
+        <p className="text-sm text-gray-400 mt-1">
+          Manage your account and session
+        </p>
+      </div>
+
+      {/* User Info Card */}
+      <div className="bg-gray-800 rounded-lg border border-gray-700 p-6 mb-6">
+        <div className="flex items-center gap-4 mb-6">
+          <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center">
+            <span className="text-xl font-semibold text-white">
+              {session?.user.firstName?.[0] || session?.user.displayName?.[0] || '?'}
+            </span>
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold text-white">
+              {session?.user.displayName || 'Unknown User'}
+            </h3>
+            <p className="text-sm text-gray-400">
+              Staff ID: {session?.user.staffEmpId || 'N/A'}
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-3 text-sm">
+          <div className="flex justify-between py-2 border-b border-gray-700">
+            <span className="text-gray-400">Login Method</span>
+            <span className="text-white capitalize">{session?.loginMethod || 'Unknown'}</span>
+          </div>
+          <div className="flex justify-between py-2 border-b border-gray-700">
+            <span className="text-gray-400">Session Started</span>
+            <span className="text-white">
+              {session?.loginTime ? new Date(session.loginTime).toLocaleString() : 'Unknown'}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Logout Card */}
+      <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
+        <h3 className="text-lg font-semibold text-white mb-2">Sign Out</h3>
+        <p className="text-sm text-gray-400 mb-4">
+          Sign out of your current session. You will need to log in again to access the application.
+        </p>
+        <button
+          onClick={handleLogout}
+          className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg transition-colors font-medium"
+        >
+          Sign Out
+        </button>
       </div>
     </div>
   );

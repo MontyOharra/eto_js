@@ -21,6 +21,10 @@ declare global {
       response: number; // 0 = OK, 1 = Cancel
       confirmed: boolean;
     };
+    'auth:getMachineInfo': {
+      pcName: string;
+      pcLid: string;
+    };
   };
 
   // Input payloads (requests from renderer to main process)
@@ -63,6 +67,7 @@ declare global {
       confirmDialog: (
         options: InputPayloadMapping['dialog:confirm']
       ) => Promise<OutputPayloadMapping['dialog:confirm']>;
+      getMachineInfo: () => Promise<OutputPayloadMapping['auth:getMachineInfo']>;
     };
   }
 }

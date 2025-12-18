@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useAuth } from '../contexts/AuthContext';
 
 export const Route = createFileRoute('/login')({
   component: LoginPage,
@@ -7,14 +8,51 @@ export const Route = createFileRoute('/login')({
 
 function LoginPage() {
   const navigate = useNavigate();
+  const { isAuthenticated, isLoading, error, login, autoLogin, clearError } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [attemptedAutoLogin, setAttemptedAutoLogin] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Attempt auto-login on mount
+  useEffect(() => {
+    if (!attemptedAutoLogin && !isAuthenticated) {
+      setAttemptedAutoLogin(true);
+      autoLogin();
+    }
+  }, [attemptedAutoLogin, isAuthenticated, autoLogin]);
+
+  // Navigate to dashboard when authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate({ to: '/dashboard' });
+    }
+  }, [isAuthenticated, navigate]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Navigate directly to dashboard (no auth logic yet)
-    navigate({ to: '/dashboard' });
+    clearError();
+
+    if (!username.trim() || !password.trim()) {
+      return;
+    }
+
+    const success = await login(username, password);
+    if (success) {
+      navigate({ to: '/dashboard' });
+    }
   };
+
+  // Show loading screen while attempting auto-login
+  if (isLoading && !attemptedAutoLogin) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Checking authentication...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4">
@@ -29,6 +67,13 @@ function LoginPage() {
         {/* Login Form */}
         <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Error Message */}
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md text-sm">
+                {error}
+              </div>
+            )}
+
             {/* Username Field */}
             <div>
               <label
@@ -42,7 +87,8 @@ function LoginPage() {
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                disabled={isLoading}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
               />
             </div>
 
@@ -59,16 +105,25 @@ function LoginPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                disabled={isLoading}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
               />
             </div>
 
             {/* Submit Button */}
             <button
               type="submit"
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-md transition-colors"
+              disabled={isLoading}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-md transition-colors disabled:bg-indigo-400 disabled:cursor-not-allowed flex items-center justify-center"
             >
-              Sign In
+              {isLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Signing in...
+                </>
+              ) : (
+                'Sign In'
+              )}
             </button>
           </form>
         </div>

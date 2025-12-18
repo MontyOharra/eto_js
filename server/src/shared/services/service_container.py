@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from features.output_processing.service import OutputProcessingService
     from features.order_management.service import OrderManagementService
     from features.eto_runs.service import EtoRunsService
+    from features.auth.service import AuthService
     from shared.database.connection import DatabaseConnectionManager
 
 logger = logging.getLogger(__name__)
@@ -187,6 +188,12 @@ class ServiceContainer:
                 'args': [cls._connection_manager, '_service:pdf_templates', '_service:pdf_files', '_service:pipeline_execution', '_service:output_processing'],
                 'singleton': True,
                 'description': 'ETO runs service for processing lifecycle management'
+            },
+            'auth': {
+                'class': 'features.auth.service.AuthService',
+                'args': [cls._data_database_manager],
+                'singleton': True,
+                'description': 'Authentication service for user login via HTC Staff database'
             },
         }
 
@@ -427,6 +434,11 @@ class ServiceContainer:
     def get_eto_runs_service(cls) -> 'EtoRunsService':
         """Get the ETO runs service"""
         return cls.get('eto_runs')
+
+    @classmethod
+    def get_auth_service(cls) -> 'AuthService':
+        """Get the authentication service"""
+        return cls.get('auth')
 
     @classmethod
     def get_connection_manager(cls) -> 'DatabaseConnectionManager':

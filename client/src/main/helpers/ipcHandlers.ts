@@ -1,5 +1,6 @@
 import { dialog, BrowserWindow } from "electron";
 import { readFile } from "fs/promises";
+import { hostname, userInfo } from "os";
 import { ipcMainHandle } from "./ipcWrappers.js";
 
 /**
@@ -68,6 +69,14 @@ export function registerIpcHandlers(): void {
     return {
       response: result.response,
       confirmed: result.response === 0,
+    };
+  });
+
+  // Get machine info for auto-authentication
+  ipcMainHandle("auth:getMachineInfo", async () => {
+    return {
+      pcName: hostname(),
+      pcLid: userInfo().username,
     };
   });
 

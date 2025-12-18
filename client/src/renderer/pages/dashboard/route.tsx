@@ -1,9 +1,18 @@
 import { Link, Outlet, useLocation } from "@tanstack/react-router";
 import { createFileRoute } from "@tanstack/react-router";
+import { AuthGuard } from "../../components/AuthGuard";
 
 export const Route = createFileRoute("/dashboard")({
-  component: DashboardLayout,
+  component: ProtectedDashboardLayout,
 });
+
+function ProtectedDashboardLayout() {
+  return (
+    <AuthGuard>
+      <DashboardLayout />
+    </AuthGuard>
+  );
+}
 
 function DashboardLayout() {
   const location = useLocation();

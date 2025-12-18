@@ -13,5 +13,6 @@ contextBridge.exposeInMainWorld(
     readFile: (options) => ipcRendererInvoke("file:read", options),
     saveFile: (options) => ipcRendererInvoke("file:save", options),
     confirmDialog: (options) => ipcRendererInvoke("dialog:confirm", options),
+    getMachineInfo: () => ipcRendererInvoke("auth:getMachineInfo", {}),
   } satisfies Window["electron"]
 );

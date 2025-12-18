@@ -601,6 +601,7 @@ def register_routers(app: FastAPI) -> None:
             order_management_router,
             htc_integration_router,
             system_settings_router,
+            auth_router,
         )
 
         # Register all routers
@@ -636,6 +637,9 @@ def register_routers(app: FastAPI) -> None:
 
         app.include_router(system_settings_router, prefix="/api")
         logger.info("Registered system settings router at /api/settings")
+
+        app.include_router(auth_router, prefix="/api")
+        logger.info("Registered auth router at /api/auth")
 
     except ImportError as e:
         logger.error(f"Could not import routers: {e}", exc_info=True)
