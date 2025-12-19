@@ -342,6 +342,42 @@ class HtcLookupUtils:
             logger.error(f"Failed to get customer info for ID {customer_id}: {e}")
             return None
 
+    def get_default_agent_id(self, customer_id: int) -> Optional[int]:
+        """
+        Get the default agent ID for a customer.
+
+        Looks up the agent with agent_default=True for the given customer.
+
+        Args:
+            customer_id: The customer ID to look up the default agent for
+
+        Returns:
+            Agent ID if a default agent is found, None otherwise
+        """
+        connection = self._get_connection()
+
+        try:
+            with connection.cursor() as cursor:
+                query = """
+                    SELECT [Agent_ID]
+                    FROM [HTC300_G080_T010 Agents]
+                    WHERE [Agent_CustomerID] = ? AND [agent_default] = True
+                """
+                cursor.execute(query, (customer_id,))
+                row = cursor.fetchone()
+
+                if row is None:
+                    logger.debug(f"No default agent found for customer {customer_id}")
+                    return None
+
+                agent_id = int(row[0])
+                logger.debug(f"Found default agent {agent_id} for customer {customer_id}")
+                return agent_id
+
+        except Exception as e:
+            logger.error(f"Failed to get default agent for customer {customer_id}: {e}")
+            return None
+
     def get_address_info(self, address_id: float) -> Optional[AddressInfo]:
         """
         Get full address information for order creation.

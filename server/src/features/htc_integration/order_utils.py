@@ -58,6 +58,7 @@ class PreparedOrderData:
     customer_tariff: str
     customer_qb_list_id: str
     customer_qb_full_name: str
+    customer_agent_id: int                 # Default agent for this customer
 
     # === Pickup Address Lookup ===
     pu_company: str
@@ -703,7 +704,7 @@ class HtcOrderUtils:
                     data.customer_tariff,                # M_Tariff
                     data.customer_qb_list_id,            # M_QBCustomerListID
                     data.customer_qb_full_name,          # M_QBCustFullName
-                    1,                                # M_CustAgent (DEFERRED - needs DB update)
+                    data.customer_agent_id,              # M_CustAgent
 
                     # Order info
                     data.hawb,                           # M_HAWB

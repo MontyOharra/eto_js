@@ -456,6 +456,15 @@ class HtcIntegrationService:
         if not customer:
             raise OutputExecutionError(f"Failed to get customer info for ID {customer_id}")
 
+        # --- Step 5b: Look up default agent for customer ---
+        default_agent_id = self._lookup_utils.get_default_agent_id(customer_id)
+        if default_agent_id is None:
+            raise OutputExecutionError(
+                f"No default agent configured for customer {customer_id} ({customer.name}). "
+                "Please set a default agent in HTC before creating orders for this customer."
+            )
+        logger.debug(f"Found default agent {default_agent_id} for customer {customer_id}")
+
         # --- Step 6: Determine order type ---
         order_type = self._order_utils.determine_order_type(
             pu_aci=pu_aci_letter,
@@ -500,6 +509,7 @@ class HtcIntegrationService:
             customer_tariff=customer.tariff,
             customer_qb_list_id=customer.qb_list_id,
             customer_qb_full_name=customer.qb_full_name,
+            customer_agent_id=default_agent_id,
 
             # Pickup address lookup
             pu_company=pu_addr.company,
