@@ -19,6 +19,7 @@ import {
 // Types
 export interface AuthUser {
   staffEmpId: number;
+  username: string; // Staff_Login - used for audit trail (Orders_UpdtLID)
   displayName: string;
   firstName: string;
   lastName: string;
@@ -61,14 +62,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Auto-login using machine credentials
   const autoLogin = useCallback(async (): Promise<boolean> => {
+    console.log('[AuthContext] autoLogin() called');
     setIsLoading(true);
     setError(null);
 
     try {
       // Get machine info from Electron
+      console.log('[AuthContext] Getting machine info...');
       const machineInfo = await window.electron.getMachineInfo();
+      console.log('[AuthContext] Machine info received:', machineInfo);
 
       // Call auto-login API
+      console.log('[AuthContext] Calling /api/auth/auto-login...');
       const response = await fetch(`${API_BASE}/auth/auto-login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -77,13 +82,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
           pc_lid: machineInfo.pcLid,
         }),
       });
+      console.log('[AuthContext] Response status:', response.status);
 
       const data = await response.json();
+      console.log('[AuthContext] Response data:', data);
 
       if (data.success && data.user) {
+        console.log('[AuthContext] Auto-login successful, setting session...');
         setSession({
           user: {
             staffEmpId: data.user.staff_emp_id,
+            username: data.user.username,
             displayName: data.user.display_name,
             firstName: data.user.first_name,
             lastName: data.user.last_name,
@@ -91,16 +100,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
           loginMethod: 'auto',
           loginTime: new Date(),
         });
+        console.log('[AuthContext] Session set, returning true');
         return true;
       } else {
         // Auto-login failed - not an error, just means manual login needed
+        console.log('[AuthContext] Auto-login failed:', data.error);
         return false;
       }
     } catch (err) {
-      console.error('Auto-login error:', err);
+      console.error('[AuthContext] Auto-login error:', err);
       // Don't set error for auto-login failure - it's expected sometimes
       return false;
     } finally {
+      console.log('[AuthContext] autoLogin() finally block, setting isLoading=false');
       setIsLoading(false);
     }
   }, []);
@@ -124,6 +136,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           setSession({
             user: {
               staffEmpId: data.user.staff_emp_id,
+              username: data.user.username,
               displayName: data.user.display_name,
               firstName: data.user.first_name,
               lastName: data.user.last_name,

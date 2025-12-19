@@ -121,7 +121,7 @@ export type GetPendingUpdateDetailResponse = PendingUpdateDetail;
  * Request for POST /order-management/pending-updates/{id}/approve
  */
 export interface ApprovePendingUpdateRequest {
-  // Currently no body needed
+  approver_username: string; // Staff_Login of the user approving (for audit trail)
 }
 
 /**

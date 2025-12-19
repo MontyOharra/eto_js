@@ -524,9 +524,9 @@ Create unified backend endpoint:
 
 ## 9. User Activity Tracking & Audit Log
 
-**Status:** Design Complete
+**Status:** COMPLETED
 
-**Priority:** 1 (Next up)
+**Priority:** 1
 
 **Design Spec:** [docs/designs/user-authentication-design.md](designs/user-authentication-design.md)
 
@@ -541,23 +541,24 @@ Create unified backend endpoint:
 1. **Auto-auth (primary):** Check `HTC000 WhosLoggedIn` table for matching `PCName` + `PCLid`
 2. **Manual login (fallback):** Username/password against `HTC000_G090_T010 Staff` table
 3. **Session:** In-memory only (React Context), re-auth on each app startup
-4. **Logout:** Button in Settings, clears session
+4. **Logout:** Removed - session tied to app lifecycle (auto-reauth on startup if logged into HTC)
 
 **Key Tables (Access DB: HTC000_Data_Staff.accdb):**
 - `HTC000 WhosLoggedIn` - Active sessions (read-only)
 - `HTC000_G090_T010 Staff` - User credentials
 
-**Implementation Tasks:**
-- Backend: Auth router, Auth service, Staff repository
-- Frontend: Auth context, Login page update, Auth guard, Logout button
-- Electron: IPC handler for `os.hostname()` and `os.userInfo().username`
-- Integration: Add `approved_by` to pending update approval flow
+**Implementation Summary:**
+- Backend: Auth router (`/api/auth/auto-login`, `/api/auth/login`), Auth service with auto-login and manual login
+- Frontend: Auth context with session state, Login page with auto-login attempt on mount
+- Electron: IPC handler for `getMachineInfo()` returning `pcName` and `pcLid`
+- Fixed nested cursor deadlock in auth service by restructuring to match HTC integration pattern
+- Removed logout button (counterproductive with auto-auth)
 
 ---
 
 ## 10. Pending Update History Tracking
 
-**Status:** Not Started
+**Status:** COMPLETED
 
 **Priority:** 2
 
@@ -567,13 +568,32 @@ Create unified backend endpoint:
 - Order creations add records to pending_order_history tracking the data source
 - Pending update approvals should similarly track which fields were updated and from what source
 - Need audit trail showing: what changed, when, what was the source data
-- Consider: should rejected updates also be tracked?
 
-**Implementation Tasks:**
-- Review current history tracking for order creations
-- Extend history model or create new update_history table
-- Record field changes when updates are approved
-- Include source sub_run references like creations do
+**Implementation Summary:**
+
+**Backend Changes:**
+- `AuthenticatedUser` dataclass now includes `username` (Staff_Login) for audit trail
+- Auth router returns `username` in response for both auto-login and manual login
+- `approve_pending_update` endpoint:
+  - Accepts `approver_username` in request body
+  - Fetches current HTC values before update for old/new comparison
+  - Passes approver info and old/new values to HTC service
+- `HtcIntegrationService.update_order()` accepts `approver_username`, `old_values`, `new_values`
+- `HtcOrderUtils.create_update_history()` rewritten to:
+  - Accept `updated_fields`, `old_values`, `new_values`, `user_lid` parameters
+  - Use approver's username for `Orders_UpdtLID` column (falls back to `ETO_SYSTEM`)
+  - Build detailed change description in format:
+    ```
+    Update request approved from ETO System:
+    {Field Label} changed from {old_value} to {new_value},
+    {Field Label} changed from {old_value} to {new_value}
+    ```
+
+**Frontend Changes:**
+- `AuthUser` interface includes `username`
+- Auth context stores `username` from login response
+- `useApprovePendingUpdate` hook accepts `approverUsername` parameter
+- Orders page passes `session.user.username` when approving updates
 
 ---
 
@@ -810,6 +830,81 @@ This approach:
 - `client/src/renderer/features/order-management/hooks/index.ts` - Export new hook
 - `client/src/renderer/features/order-management/index.ts` - Re-export hook
 - `client/src/renderer/pages/dashboard/orders/index.tsx` - Integrate SSE and fix navigation
+
+---
+
+## 18. Attachment Processing
+
+**Status:** Not Started
+
+**Priority:** TBD
+
+**Issue:** Need to store PDF attachments in HTC database and create records linking PDFs to orders.
+
+**Details:**
+- Store full PDF files (all pages, not just matched pages) associated with sub-runs that contributed to an order
+- Create records in the PDF-to-order relationship table in HTC database
+- Get all PDF files from sub-runs that contributed to the pending order/update
+
+**Implementation Tasks:**
+- Identify HTC table structure for PDF storage and order relationships
+- Add logic to collect full PDFs from contributing sub-runs
+- Store PDFs in HTC database
+- Create relationship records linking PDFs to orders
+
+---
+
+## 19. Multi-HAWB Support (List Types in Pipelines)
+
+**Status:** Not Started
+
+**Priority:** TBD
+
+**Issue:** Need ability for a single PDF to create/update multiple orders when it contains multiple HAWBs.
+
+**Details:**
+- One PDF → Multiple Orders: A single PDF can contain data for multiple separate orders
+- Each HAWB in the extracted list results in its own order creation/update
+- Order management service already supports processing lists of HAWBs
+- Need to add list support to:
+  - Output channel execution
+  - Pipeline services
+  - Transformation pipelines (general list type support)
+- For now, only `list[str]` type needed (HAWBs are strings)
+- Future: Consider list support for other types (dims, etc.)
+
+**Implementation Tasks:**
+- Add `list[str]` type support to pipeline type system
+- Update output channel execution to handle list outputs
+- Update pipeline execution to propagate list types
+- Ensure downstream processing creates separate orders per HAWB
+
+---
+
+## 20. Manual Order Creation Mode (Auto-Creation Toggle)
+
+**Status:** Not Started
+
+**Priority:** TBD
+
+**Issue:** Need ability to disable automatic order creation via a settings toggle.
+
+**Details:**
+- Add toggle switch in Settings UI to enable/disable auto order creation
+- When disabled:
+  - Orders in `ready` status will NOT automatically be picked up by the worker
+  - Orders will remain in `ready` status until user explicitly confirms creation
+  - Similar UX to conflict resolution - user must take action to proceed
+- When enabled (current default behavior):
+  - Orders in `ready` status are automatically picked up by worker and created in HTC
+- Store setting in system settings (database or config)
+
+**Implementation Tasks:**
+- Add `auto_create_orders` setting to system settings
+- Add toggle switch to Settings page UI
+- Update HTC order worker to check setting before processing `ready` orders
+- Add "Create Order" button/action to pending order detail view (for manual mode)
+- Consider: Should there be a bulk "Create All Ready Orders" action?
 
 ---
 

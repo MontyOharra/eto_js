@@ -195,11 +195,14 @@ export function useApprovePendingUpdate() {
   return useMutation({
     mutationFn: async ({
       updateId,
+      approverUsername,
     }: {
       updateId: number;
+      approverUsername: string;
     }): Promise<ApprovePendingUpdateResponse> => {
       const response = await apiClient.post<ApprovePendingUpdateResponse>(
-        `${baseUrl}/pending-updates/${updateId}/approve`
+        `${baseUrl}/pending-updates/${updateId}/approve`,
+        { approver_username: approverUsername }
       );
       return response.data;
     },

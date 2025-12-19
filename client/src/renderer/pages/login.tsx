@@ -16,16 +16,21 @@ function LoginPage() {
 
   // Attempt auto-login on mount
   useEffect(() => {
+    console.log('[LoginPage] useEffect triggered, autoLoginAttempted:', autoLoginAttempted.current);
     if (autoLoginAttempted.current) return;
     autoLoginAttempted.current = true;
 
     const tryAutoLogin = async () => {
+      console.log('[LoginPage] tryAutoLogin() started');
       try {
         const success = await autoLogin();
+        console.log('[LoginPage] autoLogin() returned:', success);
         if (success) {
+          console.log('[LoginPage] Navigating to /dashboard...');
           navigate({ to: '/dashboard' });
         }
       } finally {
+        console.log('[LoginPage] Setting isCheckingAutoLogin to false');
         setIsCheckingAutoLogin(false);
       }
     };
@@ -35,7 +40,9 @@ function LoginPage() {
 
   // Navigate to dashboard if already authenticated
   useEffect(() => {
+    console.log('[LoginPage] Auth check effect - isAuthenticated:', isAuthenticated, 'isCheckingAutoLogin:', isCheckingAutoLogin);
     if (isAuthenticated && !isCheckingAutoLogin) {
+      console.log('[LoginPage] Already authenticated, navigating to /dashboard');
       navigate({ to: '/dashboard' });
     }
   }, [isAuthenticated, isCheckingAutoLogin, navigate]);

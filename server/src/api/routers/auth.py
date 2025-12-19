@@ -55,6 +55,7 @@ class LoginRequest(BaseModel):
 class AuthUserResponse(BaseModel):
     """Authenticated user information."""
     staff_emp_id: int
+    username: str  # Staff_Login - used for audit trail
     display_name: str
     first_name: str
     last_name: str
@@ -104,6 +105,7 @@ async def auto_login(
                 success=True,
                 user=AuthUserResponse(
                     staff_emp_id=user.staff_emp_id,
+                    username=user.username,
                     display_name=user.display_name,
                     first_name=user.first_name,
                     last_name=user.last_name,
@@ -141,6 +143,7 @@ async def login(
                 success=True,
                 user=AuthUserResponse(
                     staff_emp_id=user.staff_emp_id,
+                    username=user.username,
                     display_name=user.display_name,
                     first_name=user.first_name,
                     last_name=user.last_name,

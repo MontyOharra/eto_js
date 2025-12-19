@@ -18,6 +18,7 @@ import {
 } from '../../../features/order-management';
 import { useOrderEvents } from '../../../features/order-management/hooks';
 import { EtoSubRunDetailViewer } from '../../../features/eto';
+import { useAuth } from '../../../contexts/AuthContext';
 
 export const Route = createFileRoute('/dashboard/orders/')({
   component: OrdersPage,
@@ -37,6 +38,9 @@ type ReadFilter = 'all' | 'read' | 'unread';
 function OrdersPage() {
   // Connect to SSE for real-time updates
   useOrderEvents();
+
+  // Get current user from auth context
+  const { session } = useAuth();
 
   // Detail view state
   const [detailView, setDetailView] = useState<DetailView>(null);
@@ -121,7 +125,9 @@ function OrdersPage() {
   };
 
   const handleApproveUpdate = (updateId: number) => {
-    approveUpdate.mutate({ updateId });
+    // Get the current user's username for audit trail
+    const approverUsername = session?.user?.username || 'ETO_SYSTEM';
+    approveUpdate.mutate({ updateId, approverUsername });
   };
 
   const handleRejectUpdate = (updateId: number) => {

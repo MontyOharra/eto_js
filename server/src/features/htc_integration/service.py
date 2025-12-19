@@ -640,6 +640,9 @@ class HtcIntegrationService:
         order_notes: Optional[str] = None,
         pieces: Optional[int] = None,
         weight: Optional[float] = None,
+        approver_username: Optional[str] = None,
+        old_values: Optional[Dict[str, Any]] = None,
+        new_values: Optional[Dict[str, Any]] = None,
     ) -> List[str]:
         """
         Update an existing HTC order with new field values.
@@ -668,6 +671,9 @@ class HtcIntegrationService:
             order_notes: New order notes
             pieces: New piece count
             weight: New weight
+            approver_username: Staff_Login of user who approved (for audit trail)
+            old_values: Dict of field_name -> old value (before update) for audit trail
+            new_values: Dict of field_name -> new value (after update) for audit trail
 
         Returns:
             List of field names that were updated
@@ -870,8 +876,14 @@ class HtcIntegrationService:
         # CREATE UPDATE HISTORY
         # ================================================================
         if updated_fields:
-            changes_desc = f"Order #{int(order_number)} updated via ETO: {', '.join(updated_fields)}"
-            self._order_utils.create_update_history(order_number, changes_desc)
+            # Build detailed change description with old->new values
+            self._order_utils.create_update_history(
+                order_number=order_number,
+                updated_fields=updated_fields,
+                old_values=old_values or {},
+                new_values=new_values or {},
+                user_lid=approver_username,
+            )
 
         logger.info(f"Successfully updated HTC order {order_number}: {updated_fields}")
         return updated_fields

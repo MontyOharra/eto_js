@@ -24,6 +24,7 @@ logger = get_logger(__name__)
 class AuthenticatedUser:
     """Represents an authenticated user."""
     staff_emp_id: int
+    username: str  # Staff_Login - used for audit trail (Orders_UpdtLID)
     display_name: str
     first_name: str
     last_name: str
@@ -75,36 +76,53 @@ class AuthService:
         logger.info(f"Attempting auto-login for PCName='{pc_name}', PCLid='{pc_lid}'")
 
         try:
-            connection = self._get_connection()
+            # Step 1: Query WhosLoggedIn for matching session
+            staff_id = self._get_staff_id_from_session(pc_name, pc_lid)
 
-            with connection.cursor() as cursor:
-                # Query WhosLoggedIn for matching session
-                query = """
-                    SELECT [WLI_StaffID]
-                    FROM [HTC000 WhosLoggedIn]
-                    WHERE [PCName] = ? AND [PCLid] = ?
-                """
-                cursor.execute(query, (pc_name, pc_lid))
-                row = cursor.fetchone()
+            if staff_id is None:
+                return None
 
-                if row is None:
-                    logger.info(f"No active session found for PCName='{pc_name}', PCLid='{pc_lid}'")
-                    return None
-
-                staff_id = int(row[0]) if row[0] is not None else None
-
-                if staff_id is None or staff_id == 0:
-                    logger.info(f"Session found but no valid staff ID (StaffID={staff_id})")
-                    return None
-
-                logger.info(f"Found active session for staff ID {staff_id}")
-
-                # Get staff details
-                return self.get_staff_by_id(staff_id)
+            # Step 2: Get staff details (separate cursor operation)
+            return self.get_staff_by_id(staff_id)
 
         except Exception as e:
             logger.error(f"Auto-login failed: {e}")
             return None
+
+    def _get_staff_id_from_session(self, pc_name: str, pc_lid: str) -> Optional[int]:
+        """
+        Query WhosLoggedIn table for a matching session.
+
+        Args:
+            pc_name: Computer/hostname name
+            pc_lid: Windows login ID / username
+
+        Returns:
+            Staff ID if found, None otherwise
+        """
+        connection = self._get_connection()
+
+        with connection.cursor() as cursor:
+            query = """
+                SELECT [WLI_StaffID]
+                FROM [HTC000 WhosLoggedIn]
+                WHERE [PCName] = ? AND [PCLid] = ?
+            """
+            cursor.execute(query, (pc_name, pc_lid))
+            row = cursor.fetchone()
+
+            if row is None:
+                logger.info(f"No active session found for PCName='{pc_name}', PCLid='{pc_lid}'")
+                return None
+
+            staff_id = int(row[0]) if row[0] is not None else None
+
+            if staff_id is None or staff_id == 0:
+                logger.info(f"Session found but no valid staff ID (StaffID={staff_id})")
+                return None
+
+            logger.info(f"Found active session for staff ID {staff_id}")
+            return staff_id
 
     def validate_credentials(self, username: str, password: str) -> Optional[AuthenticatedUser]:
         """
@@ -125,7 +143,7 @@ class AuthService:
             with connection.cursor() as cursor:
                 # Query Staff table for matching credentials
                 query = """
-                    SELECT [Staff_EmpID], [Staff_FirstName], [Staff_LastName]
+                    SELECT [Staff_EmpID], [Staff_Login], [Staff_FirstName], [Staff_LastName]
                     FROM [HTC000_G090_T010 Staff]
                     WHERE [Staff_Login] = ?
                       AND [Staff_Password] = ?
@@ -139,14 +157,16 @@ class AuthService:
                     return None
 
                 staff_emp_id = int(row[0])
-                first_name = str(row[1]).strip() if row[1] else ""
-                last_name = str(row[2]).strip() if row[2] else ""
+                staff_login = str(row[1]).strip() if row[1] else username
+                first_name = str(row[2]).strip() if row[2] else ""
+                last_name = str(row[3]).strip() if row[3] else ""
                 display_name = f"{first_name} {last_name}".strip()
 
                 logger.info(f"Credentials valid for username='{username}' (EmpID={staff_emp_id})")
 
                 return AuthenticatedUser(
                     staff_emp_id=staff_emp_id,
+                    username=staff_login,
                     display_name=display_name,
                     first_name=first_name,
                     last_name=last_name,
@@ -173,7 +193,7 @@ class AuthService:
 
             with connection.cursor() as cursor:
                 query = """
-                    SELECT [Staff_EmpID], [Staff_FirstName], [Staff_LastName]
+                    SELECT [Staff_EmpID], [Staff_Login], [Staff_FirstName], [Staff_LastName]
                     FROM [HTC000_G090_T010 Staff]
                     WHERE [Staff_EmpID] = ?
                       AND [Staff_Active] = True
@@ -186,12 +206,14 @@ class AuthService:
                     return None
 
                 staff_emp_id = int(row[0])
-                first_name = str(row[1]).strip() if row[1] else ""
-                last_name = str(row[2]).strip() if row[2] else ""
+                staff_login = str(row[1]).strip() if row[1] else ""
+                first_name = str(row[2]).strip() if row[2] else ""
+                last_name = str(row[3]).strip() if row[3] else ""
                 display_name = f"{first_name} {last_name}".strip()
 
                 return AuthenticatedUser(
                     staff_emp_id=staff_emp_id,
+                    username=staff_login,
                     display_name=display_name,
                     first_name=first_name,
                     last_name=last_name,

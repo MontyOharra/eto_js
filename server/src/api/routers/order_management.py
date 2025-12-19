@@ -26,6 +26,7 @@ from api.schemas.order_management import (
     PendingUpdateListItem,
     PendingUpdateDetail,
     PendingUpdateFieldDetail,
+    ApprovePendingUpdateRequest,
     ApprovePendingUpdateResponse,
     RejectPendingUpdateResponse,
     ConfirmUpdateFieldRequest,
@@ -853,6 +854,7 @@ async def get_pending_update_detail(
 @router.post("/pending-updates/{pending_update_id}/approve", response_model=ApprovePendingUpdateResponse)
 async def approve_pending_update(
     pending_update_id: int,
+    request: ApprovePendingUpdateRequest,
     service = Depends(lambda: ServiceContainer.get_order_management_service()),
     htc_service = Depends(lambda: ServiceContainer.get_htc_integration_service())
 ) -> ApprovePendingUpdateResponse:
@@ -861,10 +863,12 @@ async def approve_pending_update(
 
     This will:
     1. Validate the pending update is in 'pending' status
-    2. Call the HTC update_order method to apply all field changes
-    3. Mark the pending update as 'approved'
+    2. Get current HTC values for audit trail comparison
+    3. Call the HTC update_order method to apply all field changes
+    4. Create an audit history record with old->new values
+    5. Mark the pending update as 'approved'
     """
-    logger.info(f"Approve pending update: id={pending_update_id}")
+    logger.info(f"Approve pending update: id={pending_update_id}, approver={request.approver_username}")
 
     pending_update_repo = service._pending_update_repo
 
@@ -892,19 +896,42 @@ async def approve_pending_update(
 
     htc_order_number = pending_update.htc_order_number
 
+    # Get current HTC values BEFORE the update (for audit trail)
+    htc_fields = htc_service.get_order_fields(htc_order_number)
+    old_values: dict = {}
+    if htc_fields:
+        old_values = {
+            "pickup_company_name": htc_fields.pickup_company_name,
+            "pickup_address": htc_fields.pickup_address,
+            "pickup_time_start": htc_fields.pickup_time_start,
+            "pickup_time_end": htc_fields.pickup_time_end,
+            "delivery_company_name": htc_fields.delivery_company_name,
+            "delivery_address": htc_fields.delivery_address,
+            "delivery_time_start": htc_fields.delivery_time_start,
+            "delivery_time_end": htc_fields.delivery_time_end,
+            "mawb": htc_fields.mawb,
+            "pickup_notes": htc_fields.pickup_notes,
+            "delivery_notes": htc_fields.delivery_notes,
+            "order_notes": htc_fields.order_notes,
+            "pieces": str(htc_fields.pieces) if htc_fields.pieces is not None else None,
+            "weight": str(htc_fields.weight) if htc_fields.weight is not None else None,
+        }
+
     # Collect fields that have proposed changes (non-NULL values)
     fields_to_update = []
+    new_values: dict = {}
     for field_name in VALID_FIELD_NAMES:
         value = getattr(pending_update, field_name, None)
         if value is not None:
             fields_to_update.append(field_name)
+            new_values[field_name] = str(value) if value is not None else None
 
     # Log what we're about to update
     htc_order_str = str(int(htc_order_number))
     logger.info(f"Applying {len(fields_to_update)} field updates to HTC order {htc_order_str}")
 
     try:
-        # Call the HTC update_order method with all the field values
+        # Call the HTC update_order method with all the field values and approver info
         updated_fields = htc_service.update_order(
             order_number=htc_order_number,
             pickup_company_name=pending_update.pickup_company_name,
@@ -921,6 +948,9 @@ async def approve_pending_update(
             order_notes=pending_update.order_notes,
             pieces=pending_update.pieces,
             weight=pending_update.weight,
+            approver_username=request.approver_username,
+            old_values=old_values,
+            new_values=new_values,
         )
 
         # Update status to approved

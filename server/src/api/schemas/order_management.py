@@ -272,6 +272,11 @@ class PendingUpdateDetail(BaseModel):
 # Pending Update Actions
 # =============================================================================
 
+class ApprovePendingUpdateRequest(BaseModel):
+    """Request to approve a pending update"""
+    approver_username: str  # Staff_Login of the user approving (for audit trail)
+
+
 class ApprovePendingUpdateResponse(BaseModel):
     """Response after approving a pending update"""
     success: bool

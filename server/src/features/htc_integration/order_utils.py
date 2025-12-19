@@ -332,19 +332,62 @@ class HtcOrderUtils:
     def create_update_history(
         self,
         order_number: float,
-        changes_description: str,
+        updated_fields: List[str],
+        old_values: Dict[str, Any],
+        new_values: Dict[str, Any],
+        user_lid: Optional[str] = None,
     ) -> None:
         """
-        Create an order update history record.
+        Create an order update history record with detailed field changes.
 
         Args:
             order_number: The order number
-            changes_description: Human-readable description of what changed
+            updated_fields: List of field names that were updated
+            old_values: Dict of field_name -> old value (before update)
+            new_values: Dict of field_name -> new value (after update)
+            user_lid: Staff_Login of user who approved (for audit trail)
         """
         connection = self._get_connection()
 
         now = datetime.now()
-        user_id = "ETO_SYSTEM"
+        # Use approver's username if provided, otherwise ETO_SYSTEM
+        user_id = user_lid if user_lid else "ETO_SYSTEM"
+
+        # Build human-readable field labels
+        field_labels = {
+            "pickup_company_name": "Pickup Company",
+            "pickup_address": "Pickup Address",
+            "pickup_time_start": "Pickup Start Time",
+            "pickup_time_end": "Pickup End Time",
+            "pickup_notes": "Pickup Notes",
+            "delivery_company_name": "Delivery Company",
+            "delivery_address": "Delivery Address",
+            "delivery_time_start": "Delivery Start Time",
+            "delivery_time_end": "Delivery End Time",
+            "delivery_notes": "Delivery Notes",
+            "order_notes": "Order Notes",
+            "mawb": "MAWB",
+            "pieces": "Pieces",
+            "weight": "Weight",
+        }
+
+        # Build the change description in the requested format
+        # "Update request approved from ETO System:\n{field1} changed from {old} to {new},\n..."
+        change_lines = []
+        for field_name in updated_fields:
+            label = field_labels.get(field_name, field_name.replace("_", " ").title())
+            old_val = old_values.get(field_name, "(empty)")
+            new_val = new_values.get(field_name, "(empty)")
+
+            # Format empty/None values nicely
+            if old_val is None or old_val == "":
+                old_val = "(empty)"
+            if new_val is None or new_val == "":
+                new_val = "(empty)"
+
+            change_lines.append(f"{label} changed from {old_val} to {new_val}")
+
+        changes_desc = "Update request approved from ETO System:\n" + ",\n".join(change_lines)
 
         try:
             with connection.cursor() as cursor:
@@ -353,9 +396,9 @@ class HtcOrderUtils:
                     ([Orders_UpdtDate], [Orders_UpdtLID], [Orders_CoID], [Orders_BrID],
                      [Orders_OrderNbr], [Orders_Changes])
                     VALUES (?, ?, ?, ?, ?, ?)
-                """, (now, user_id, self.CO_ID, self.BR_ID, order_number, changes_description))
+                """, (now, user_id, self.CO_ID, self.BR_ID, order_number, changes_desc))
 
-            logger.debug(f"Created update history for order {order_number}")
+            logger.debug(f"Created update history for order {order_number} by {user_id}")
 
         except Exception as e:
             # Log but don't fail the update if history creation fails
