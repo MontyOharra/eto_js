@@ -361,7 +361,7 @@ class HtcLookupUtils:
                 query = """
                     SELECT [Agent_ID]
                     FROM [HTC300_G080_T010 Agents]
-                    WHERE [Agent_CustomerID] = ? AND [agent_default] = True
+                    WHERE [Agent_Customer_ID] = ? AND [agent_default] = True
                 """
                 cursor.execute(query, (customer_id,))
                 row = cursor.fetchone()

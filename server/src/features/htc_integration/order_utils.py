@@ -372,19 +372,29 @@ class HtcOrderUtils:
             "weight": "Weight",
         }
 
+        def format_value(val: Any) -> str:
+            """Format a value for display, with special handling for datetimes."""
+            if val is None or val == "":
+                return "(empty)"
+            # Handle datetime objects
+            if isinstance(val, datetime):
+                return val.strftime("%m/%d/%Y %I:%M %p")
+            # Handle ISO format datetime strings (e.g., "2025-12-19T09:00:00")
+            if isinstance(val, str) and "T" in val and len(val) >= 16:
+                try:
+                    dt = datetime.fromisoformat(val.replace("Z", "+00:00"))
+                    return dt.strftime("%m/%d/%Y %I:%M %p")
+                except (ValueError, TypeError):
+                    pass
+            return str(val)
+
         # Build the change description in the requested format
         # "Update request approved from ETO System:\n{field1} changed from {old} to {new},\n..."
         change_lines = []
         for field_name in updated_fields:
             label = field_labels.get(field_name, field_name.replace("_", " ").title())
-            old_val = old_values.get(field_name, "(empty)")
-            new_val = new_values.get(field_name, "(empty)")
-
-            # Format empty/None values nicely
-            if old_val is None or old_val == "":
-                old_val = "(empty)"
-            if new_val is None or new_val == "":
-                new_val = "(empty)"
+            old_val = format_value(old_values.get(field_name))
+            new_val = format_value(new_values.get(field_name))
 
             change_lines.append(f"{label} changed from {old_val} to {new_val}")
 
