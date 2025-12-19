@@ -113,10 +113,6 @@ class ServiceContainer:
         cls._initialized = True
         logger.info("ServiceContainer initialized successfully")
 
-        # Eagerly create services that would otherwise be lazily resolved in worker threads
-        # This prevents race conditions with the _resolving list
-        cls._eager_load_services()
-
     @classmethod
     def _register_service_definitions(cls) -> None:
         """
@@ -198,26 +194,6 @@ class ServiceContainer:
         }
 
         logger.debug(f"Registered {len(cls._service_definitions)} service definitions")
-
-    @classmethod
-    def _eager_load_services(cls) -> None:
-        """
-        Eagerly load services that need to be resolved before worker threads start.
-
-        This prevents race conditions where multiple threads try to resolve
-        the same ServiceProxy simultaneously, causing false circular dependency errors.
-        """
-        eager_services = [
-            'output_processing',  # Used by eto_runs worker, resolved lazily via ServiceProxy
-        ]
-
-        for service_name in eager_services:
-            try:
-                cls.get(service_name)
-                logger.debug(f"Eagerly loaded service: {service_name}")
-            except Exception as e:
-                logger.error(f"Failed to eagerly load service '{service_name}': {e}")
-                raise
 
     @classmethod
     def get(cls, service_name: str) -> Any:
