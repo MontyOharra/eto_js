@@ -365,6 +365,19 @@ async def initialize_services() -> None:
 
         logger.info("All services initialized successfully")
 
+        # Sync modules and output channels to database
+        try:
+            modules_service.sync_registry_to_database()
+            logger.info("Module registry synced to database")
+        except Exception as e:
+            logger.warning(f"Failed to sync module registry: {e}")
+
+        try:
+            result = modules_service.sync_output_channel_types()
+            logger.info(f"Output channel types synced: {result['total']} types ({result['created']} created, {result['updated']} updated)")
+        except Exception as e:
+            logger.warning(f"Failed to sync output channel types: {e}")
+
         # Start ETO processing worker (background polling)
         try:
             eto_runs_service = ServiceContainer.get_eto_runs_service()

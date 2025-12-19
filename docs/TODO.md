@@ -599,22 +599,25 @@ Create unified backend endpoint:
 
 ## 11. Sync Modules and Output Channels on Startup
 
-**Status:** Not Started
+**Status:** COMPLETED
 
 **Priority:** 3
 
 **Issue:** Modules and output channels need to be synced on initial server startup automatically.
 
-**Details:**
-- Currently requires manual API calls to `/api/admin/sync-modules` and `/api/admin/sync-output-channels`
-- Should happen automatically when server starts
-- Same functionality as user calling both sync admin endpoints immediately after startup
+**Implementation Summary:**
 
-**Implementation Tasks:**
-- Add startup hook in `app.py` to call sync functions
-- Ensure sync happens after database connections are established
-- Handle errors gracefully (log but don't crash server)
-- Consider: should this be configurable (enable/disable auto-sync)?
+Added automatic sync calls in `app.py` after all services are initialized:
+
+```python
+# Sync modules and output channels to database
+modules_service.sync_registry_to_database()
+modules_service.sync_output_channel_types()
+```
+
+- Syncs happen after database connections and services are established
+- Errors are logged but don't crash the server (graceful degradation)
+- Runs before workers start, ensuring catalog is up-to-date for pipeline execution
 
 ---
 
@@ -893,28 +896,33 @@ This approach:
 
 ## 20. Manual Order Creation Mode (Auto-Creation Toggle)
 
-**Status:** Not Started
+**Status:** COMPLETED
 
 **Priority:** TBD
 
 **Issue:** Need ability to disable automatic order creation via a settings toggle.
 
-**Details:**
-- Add toggle switch in Settings UI to enable/disable auto order creation
-- When disabled:
-  - Orders in `ready` status will NOT automatically be picked up by the worker
-  - Orders will remain in `ready` status until user explicitly confirms creation
-  - Similar UX to conflict resolution - user must take action to proceed
-- When enabled (current default behavior):
-  - Orders in `ready` status are automatically picked up by worker and created in HTC
-- Store setting in system settings (database or config)
+**Implementation Summary:**
 
-**Implementation Tasks:**
-- Add `auto_create_orders` setting to system settings
-- Add toggle switch to Settings page UI
-- Update HTC order worker to check setting before processing `ready` orders
-- Add "Create Order" button/action to pending order detail view (for manual mode)
-- Consider: Should there be a bulk "Create All Ready Orders" action?
+**Backend:**
+- Added `order_management.auto_create_enabled` setting key
+- Added `GET /api/settings/order-management` endpoint
+- Added `PUT /api/settings/order-management` endpoint
+- Added `is_auto_create_enabled_callback` to HTC order worker
+- Worker checks setting before processing each batch
+
+**Frontend:**
+- Added "Order Processing" section to Settings page
+- Toggle switch for "Automatic Order Creation"
+- Immediate save on toggle with success/error feedback
+- Status indicator shows current mode
+
+**Behavior:**
+- Default: Auto-create **enabled** (backwards compatible)
+- When disabled: Orders stay in "ready" status, worker skips processing
+- When enabled: Normal automatic order creation
+
+**Note:** Manual "Create Order" button for individual orders not yet implemented - orders remain in ready status until setting is re-enabled. Consider adding a bulk "Create All Ready Orders" action in the future.
 
 ---
 
