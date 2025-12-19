@@ -10,6 +10,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from api.schemas.system_settings import (
     EmailSettingsResponse,
     UpdateEmailSettingsRequest,
+    OrderManagementSettingsResponse,
+    UpdateOrderManagementSettingsRequest,
 )
 from shared.database import DatabaseConnectionManager
 from shared.database.repositories.system_settings import SystemSettingsRepository
@@ -23,6 +25,7 @@ router = APIRouter(prefix="/settings", tags=["System Settings"])
 
 # Setting keys
 EMAIL_DEFAULT_SENDER_ACCOUNT_ID = "email.default_sender_account_id"
+ORDER_MANAGEMENT_AUTO_CREATE_ENABLED = "order_management.auto_create_enabled"
 
 
 def get_connection_manager() -> DatabaseConnectionManager:
@@ -88,4 +91,52 @@ async def update_email_settings(
 
     return EmailSettingsResponse(
         default_sender_account_id=request.default_sender_account_id,
+    )
+
+
+# ==================== Order Management Settings ====================
+
+
+@router.get(
+    "/order-management",
+    response_model=OrderManagementSettingsResponse,
+    summary="Get order management settings",
+    description="Get order management settings including auto-create toggle.",
+)
+async def get_order_management_settings(
+    connection_manager: DatabaseConnectionManager = Depends(get_connection_manager),
+) -> OrderManagementSettingsResponse:
+    """Get order management settings."""
+    repo = SystemSettingsRepository(connection_manager=connection_manager)
+
+    auto_create_str = repo.get(ORDER_MANAGEMENT_AUTO_CREATE_ENABLED)
+    # Default to True if not set
+    auto_create_enabled = auto_create_str.lower() == "true" if auto_create_str else True
+
+    return OrderManagementSettingsResponse(
+        auto_create_enabled=auto_create_enabled,
+    )
+
+
+@router.put(
+    "/order-management",
+    response_model=OrderManagementSettingsResponse,
+    summary="Update order management settings",
+    description="Update order management settings.",
+)
+async def update_order_management_settings(
+    request: UpdateOrderManagementSettingsRequest,
+    connection_manager: DatabaseConnectionManager = Depends(get_connection_manager),
+) -> OrderManagementSettingsResponse:
+    """Update order management settings."""
+    settings_repo = SystemSettingsRepository(connection_manager=connection_manager)
+
+    # Store as string "true" or "false"
+    value = "true" if request.auto_create_enabled else "false"
+    settings_repo.set(ORDER_MANAGEMENT_AUTO_CREATE_ENABLED, value)
+
+    logger.info(f"Updated order_management.auto_create_enabled to {request.auto_create_enabled}")
+
+    return OrderManagementSettingsResponse(
+        auto_create_enabled=request.auto_create_enabled,
     )

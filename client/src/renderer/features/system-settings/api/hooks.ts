@@ -6,7 +6,12 @@
 import { useState, useCallback } from 'react';
 import { apiClient } from '../../../shared/api/client';
 import { API_CONFIG } from '../../../shared/api/config';
-import type { EmailSettingsResponse, UpdateEmailSettingsRequest } from './types';
+import type {
+  EmailSettingsResponse,
+  UpdateEmailSettingsRequest,
+  OrderManagementSettingsResponse,
+  UpdateOrderManagementSettingsRequest,
+} from './types';
 
 interface UseSystemSettingsApiResult {
   // State
@@ -16,6 +21,10 @@ interface UseSystemSettingsApiResult {
   // Email settings operations
   getEmailSettings: () => Promise<EmailSettingsResponse>;
   updateEmailSettings: (data: UpdateEmailSettingsRequest) => Promise<EmailSettingsResponse>;
+
+  // Order management settings operations
+  getOrderManagementSettings: () => Promise<OrderManagementSettingsResponse>;
+  updateOrderManagementSettings: (data: UpdateOrderManagementSettingsRequest) => Promise<OrderManagementSettingsResponse>;
 }
 
 export function useSystemSettingsApi(): UseSystemSettingsApiResult {
@@ -70,10 +79,37 @@ export function useSystemSettingsApi(): UseSystemSettingsApiResult {
     [baseUrl, withLoadingAndError]
   );
 
+  /**
+   * GET /api/settings/order-management
+   * Get order management settings including auto-create toggle
+   */
+  const getOrderManagementSettings = useCallback(async (): Promise<OrderManagementSettingsResponse> => {
+    return withLoadingAndError(async () => {
+      const response = await apiClient.get<OrderManagementSettingsResponse>(`${baseUrl}/order-management`);
+      return response.data;
+    });
+  }, [baseUrl, withLoadingAndError]);
+
+  /**
+   * PUT /api/settings/order-management
+   * Update order management settings
+   */
+  const updateOrderManagementSettings = useCallback(
+    async (data: UpdateOrderManagementSettingsRequest): Promise<OrderManagementSettingsResponse> => {
+      return withLoadingAndError(async () => {
+        const response = await apiClient.put<OrderManagementSettingsResponse>(`${baseUrl}/order-management`, data);
+        return response.data;
+      });
+    },
+    [baseUrl, withLoadingAndError]
+  );
+
   return {
     isLoading,
     error,
     getEmailSettings,
     updateEmailSettings,
+    getOrderManagementSettings,
+    updateOrderManagementSettings,
   };
 }

@@ -232,12 +232,26 @@ class OrderManagementService:
             mark_processing_callback=self._mark_pending_order_processing,
             mark_created_callback=self._mark_pending_order_created,
             mark_failed_callback=self._mark_pending_order_failed,
+            is_auto_create_enabled_callback=self._is_auto_create_enabled,
             enabled=worker_enabled,
             max_concurrent=worker_max_concurrent,
             polling_interval=worker_polling_interval,
         )
 
         logger.info("OrderManagementService initialized successfully")
+
+    def _is_auto_create_enabled(self) -> bool:
+        """
+        Check if automatic order creation is enabled in settings.
+
+        Returns:
+            True if auto-create is enabled (default), False if disabled
+        """
+        setting_value = self._system_settings_repo.get("order_management.auto_create_enabled")
+        # Default to True if not set
+        if setting_value is None:
+            return True
+        return setting_value.lower() == "true"
 
     # ==================== Pending Orders - Read ====================
 

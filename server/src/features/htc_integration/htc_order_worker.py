@@ -41,6 +41,7 @@ class HtcOrderWorker:
         mark_processing_callback: Callable[[int], None],
         mark_created_callback: Callable[[int, float], None],
         mark_failed_callback: Callable[[int, str], None],
+        is_auto_create_enabled_callback: Optional[Callable[[], bool]] = None,
         # Configuration
         enabled: bool = True,
         max_concurrent: int = 5,
@@ -56,6 +57,7 @@ class HtcOrderWorker:
             mark_processing_callback: Sets status to 'processing'
             mark_created_callback: Sets status to 'created' with order number
             mark_failed_callback: Sets status to 'failed' with error message
+            is_auto_create_enabled_callback: Checks if auto-create is enabled in settings
             enabled: Whether worker is enabled
             max_concurrent: Maximum concurrent orders to process
             polling_interval: Seconds between polling cycles
@@ -73,6 +75,7 @@ class HtcOrderWorker:
         self.mark_processing_callback = mark_processing_callback
         self.mark_created_callback = mark_created_callback
         self.mark_failed_callback = mark_failed_callback
+        self.is_auto_create_enabled_callback = is_auto_create_enabled_callback
 
         # State
         self.running = False
@@ -187,6 +190,20 @@ class HtcOrderWorker:
 
     async def _process_batch(self) -> None:
         """Process a batch of ready pending orders."""
+        # Check if auto-create is enabled in settings
+        if self.is_auto_create_enabled_callback:
+            try:
+                is_enabled = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    self.is_auto_create_enabled_callback
+                )
+                if not is_enabled:
+                    # Auto-create is disabled, skip processing
+                    return
+            except Exception as e:
+                logger.error(f"Error checking auto-create setting: {e}")
+                # Continue processing if we can't check the setting
+
         # Calculate how many we can process
         available_slots = self.max_concurrent - len(self.currently_processing)
         if available_slots <= 0:

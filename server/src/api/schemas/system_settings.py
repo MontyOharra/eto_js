@@ -43,3 +43,21 @@ class UpdateEmailSettingsRequest(BaseModel):
         None,
         description="ID of the email account to use for sending (null to clear)"
     )
+
+
+# ========== Order Management Settings ==========
+
+class OrderManagementSettingsResponse(BaseModel):
+    """Response for order management settings"""
+    auto_create_enabled: bool = Field(
+        True,
+        description="Whether orders are automatically created when ready (default: True)"
+    )
+
+
+class UpdateOrderManagementSettingsRequest(BaseModel):
+    """Request to update order management settings"""
+    auto_create_enabled: bool = Field(
+        ...,
+        description="Whether to enable automatic order creation"
+    )

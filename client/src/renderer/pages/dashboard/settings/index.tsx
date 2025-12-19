@@ -30,6 +30,15 @@ const settingsSections = [
       </svg>
     ),
   },
+  {
+    id: 'order-processing',
+    name: 'Order Processing',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+      </svg>
+    ),
+  },
 ];
 
 function SettingsPage() {
@@ -62,6 +71,7 @@ function SettingsPage() {
       <div className="flex-1 p-6 overflow-auto">
         {activeSection === 'email-connections' && <EmailConnectionsSettings />}
         {activeSection === 'outgoing-email' && <OutgoingEmailSettings />}
+        {activeSection === 'order-processing' && <OrderProcessingSettings />}
       </div>
     </div>
   );
@@ -995,6 +1005,147 @@ function OutgoingEmailSettings() {
                   'Save Changes'
                 )}
               </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Order Processing Settings Component
+function OrderProcessingSettings() {
+  const { getOrderManagementSettings, updateOrderManagementSettings, isLoading: isUpdating } = useSystemSettingsApi();
+
+  const [autoCreateEnabled, setAutoCreateEnabled] = useState(true);
+  const [isLoadingSettings, setIsLoadingSettings] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Load current setting on mount
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setError(null);
+        setIsLoadingSettings(true);
+        const settings = await getOrderManagementSettings();
+        setAutoCreateEnabled(settings.auto_create_enabled);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load settings');
+      } finally {
+        setIsLoadingSettings(false);
+      }
+    };
+
+    loadData();
+  }, []);
+
+  const handleToggle = async () => {
+    const newValue = !autoCreateEnabled;
+    try {
+      setError(null);
+      setSaveSuccess(false);
+      await updateOrderManagementSettings({ auto_create_enabled: newValue });
+      setAutoCreateEnabled(newValue);
+      setSaveSuccess(true);
+      // Clear success message after 3 seconds
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save settings');
+    }
+  };
+
+  return (
+    <div>
+      {/* Header */}
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-white">Order Processing</h1>
+        <p className="text-sm text-gray-400 mt-1">
+          Configure how orders are processed and created in HTC
+        </p>
+      </div>
+
+      {/* Error State */}
+      {error && (
+        <div className="mb-6 p-4 bg-red-600/10 border border-red-600/30 rounded-lg">
+          <div className="flex items-center gap-3">
+            <svg className="w-5 h-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+            </svg>
+            <span className="text-red-400">{error}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Success State */}
+      {saveSuccess && (
+        <div className="mb-6 p-4 bg-green-600/10 border border-green-600/30 rounded-lg">
+          <div className="flex items-center gap-3">
+            <svg className="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            </svg>
+            <span className="text-green-400">Settings saved successfully</span>
+          </div>
+        </div>
+      )}
+
+      {/* Settings Card */}
+      <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
+        {isLoadingSettings ? (
+          <div className="flex items-center justify-center py-8">
+            <svg className="animate-spin h-8 w-8 text-blue-500" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* Auto-Create Toggle */}
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="block text-sm font-medium text-gray-300">
+                  Automatic Order Creation
+                </label>
+                <p className="text-xs text-gray-500 mt-1">
+                  When enabled, orders in "ready" status are automatically created in HTC.
+                  When disabled, orders require manual approval before creation.
+                </p>
+              </div>
+              <button
+                onClick={handleToggle}
+                disabled={isUpdating}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 focus:ring-offset-gray-800 ${
+                  autoCreateEnabled ? 'bg-blue-600' : 'bg-gray-600'
+                } ${isUpdating ? 'opacity-50 cursor-not-allowed' : ''}`}
+                role="switch"
+                aria-checked={autoCreateEnabled}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    autoCreateEnabled ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Status indicator */}
+            <div className="pt-4 border-t border-gray-700">
+              <div className="flex items-center gap-2">
+                <span
+                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    autoCreateEnabled
+                      ? 'bg-green-600/20 text-green-400'
+                      : 'bg-yellow-600/20 text-yellow-400'
+                  }`}
+                >
+                  {autoCreateEnabled ? 'Auto-create enabled' : 'Manual approval required'}
+                </span>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                {autoCreateEnabled
+                  ? 'Orders will be automatically created in HTC when all required fields are filled and conflicts are resolved.'
+                  : 'Orders will remain in "ready" status until manually approved for creation.'}
+              </p>
             </div>
           </div>
         )}

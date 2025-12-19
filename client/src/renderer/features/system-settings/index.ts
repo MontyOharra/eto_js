@@ -4,4 +4,9 @@
  */
 
 export { useSystemSettingsApi } from './api/hooks';
-export type { EmailSettingsResponse, UpdateEmailSettingsRequest } from './api/types';
+export type {
+  EmailSettingsResponse,
+  UpdateEmailSettingsRequest,
+  OrderManagementSettingsResponse,
+  UpdateOrderManagementSettingsRequest,
+} from './api/types';
