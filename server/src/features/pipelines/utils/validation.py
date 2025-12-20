@@ -338,34 +338,32 @@ class PipelineValidator:
 
     def _check_output_channels(self, pipeline_state: PipelineState) -> None:
         """
-        Check that pipeline contains exactly one required output channel.
-        Required output channels (e.g., hawb) must be placed exactly once.
+        Check that pipeline contains at least one HAWB identifier output channel.
+        Either 'hawb' (single) or 'hawb_list' (multiple) must be present.
         Fails fast if validation fails.
 
         Args:
             pipeline_state: Pipeline to validate
 
         Raises:
-            ModuleValidationError: If required output channel validation fails
+            ModuleValidationError: If HAWB output channel validation fails
         """
-        from features.modules.output_channel_definitions import OUTPUT_CHANNEL_DEFINITIONS
+        # HAWB identifier channels - at least one must be present
+        hawb_channels = {"hawb", "hawb_list"}
 
-        # Get required channel names from definitions
-        required_channels = {ch.name for ch in OUTPUT_CHANNEL_DEFINITIONS if ch.is_required}
-
-        # Count required output channels that are placed
-        placed_required = [
+        # Find placed HAWB channels
+        placed_hawb = [
             oc.channel_type for oc in pipeline_state.output_channels
-            if oc.channel_type in required_channels
+            if oc.channel_type in hawb_channels
         ]
 
-        if len(placed_required) != 1:
+        if len(placed_hawb) == 0:
             raise ModuleValidationError(
-                message=f"Pipeline must contain exactly one required output channel (e.g., hawb). Found: {len(placed_required)}",
-                code="invalid_required_output_channels",
+                message="Pipeline must contain at least one HAWB output channel (hawb or hawb_list).",
+                code="missing_hawb_output_channel",
                 where={
-                    "placed_required": placed_required,
-                    "required_options": list(required_channels)
+                    "placed_hawb": placed_hawb,
+                    "hawb_options": list(hawb_channels)
                 }
             )
 
