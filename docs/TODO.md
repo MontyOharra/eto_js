@@ -831,28 +831,30 @@ This approach:
 
 ## 19. Multi-HAWB Support (List Types in Pipelines)
 
-**Status:** Not Started
-
-**Priority:** TBD
+**Status:** COMPLETED
 
 **Issue:** Need ability for a single PDF to create/update multiple orders when it contains multiple HAWBs.
 
-**Details:**
-- One PDF → Multiple Orders: A single PDF can contain data for multiple separate orders
-- Each HAWB in the extracted list results in its own order creation/update
-- Order management service already supports processing lists of HAWBs
-- Need to add list support to:
-  - Output channel execution
-  - Pipeline services
-  - Transformation pipelines (general list type support)
-- For now, only `list[str]` type needed (HAWBs are strings)
-- Future: Consider list support for other types (dims, etc.)
+**Implementation Summary:**
 
-**Implementation Tasks:**
-- Add `list[str]` type support to pipeline type system
-- Update output channel execution to handle list outputs
-- Update pipeline execution to propagate list types
-- Ensure downstream processing creates separate orders per HAWB
+**Server-Side:**
+- Added `list[str]` to `AllowedNodeType` and `ALLOWED_PIN_TYPES`
+- Added `list[str]` to `OutputChannelDataType` and API schemas
+- Added `hawb_list` output channel (list[str] type) as alternative to `hawb`
+- Updated `_extract_hawbs()` to check both `hawb` and `hawb_list` channels with deduplication
+- Updated pipeline validation to require at least one HAWB channel (either `hawb` or `hawb_list`)
+- Created Text Splitter module that splits text by delimiter into `list[str]`
+  - Supports escape sequences (`\n`, `\t`, `\r`)
+  - Options: strip_parts, remove_empty
+
+**Client-Side:**
+- Added amber color for `list[str]` type to `TYPE_COLORS`
+- Added `list[str]` to TypeIndicator fallback types
+
+**Usage:**
+1. Use Text Splitter module to split multi-HAWB text by newline or comma
+2. Connect Text Splitter output to `hawb_list` output channel
+3. Each HAWB creates a separate output execution and order
 
 ---
 
