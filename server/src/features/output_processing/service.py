@@ -384,8 +384,18 @@ class OutputProcessingService:
                     existing_values = {h.field_value for h in existing_history}
 
                     if new_value_str in existing_values:
-                        # Value already exists in history - skip adding duplicate
-                        logger.debug(f"Field '{field_name}' value '{new_value_str}' already in history - skipping")
+                        # Value already exists in history - still add for sub-run tracking
+                        # but don't select it (doesn't create a conflict since value is same)
+                        history_creates.append(
+                            PendingUpdateHistoryCreate(
+                                pending_update_id=pending_update.id,
+                                sub_run_id=sub_run_id,
+                                field_name=field_name,
+                                field_value=new_value_str,
+                                is_selected=False,
+                            )
+                        )
+                        logger.debug(f"Field '{field_name}' value '{new_value_str}' already in history - adding for sub-run tracking")
                         continue
 
                     # New value not in history - check for conflict

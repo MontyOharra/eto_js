@@ -36,12 +36,19 @@ class FieldStateConfirmed(BaseModel):
     source: Optional[FieldSource] = None
 
 
-class ConflictOption(BaseModel):
-    """A single option in a conflict"""
+class ConflictOptionSource(BaseModel):
+    """A single source that contributed a value"""
     history_id: int
-    value: str
     sub_run_id: Optional[int] = None
     contributed_at: str  # ISO 8601
+
+
+class ConflictOption(BaseModel):
+    """A unique value option in a conflict, with all sources that contributed it"""
+    value: str
+    sources: List[ConflictOptionSource]
+    # For backwards compatibility and convenience - use first source's history_id for selection
+    history_id: int
 
 
 class FieldStateConflict(BaseModel):

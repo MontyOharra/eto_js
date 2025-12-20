@@ -2,7 +2,7 @@
 Order Management Mappers
 Convert between service domain types and API Pydantic models
 """
-from typing import Optional
+from typing import Dict, List, Optional
 
 from features.order_management.service import (
     PendingOrderDetail as PendingOrderDetailDomain,
@@ -15,6 +15,7 @@ from api.schemas.order_management import (
     FieldDetail,
     FieldSource,
     ConflictOption,
+    ConflictOptionSource,
     ContributingSubRun,
 )
 
@@ -58,16 +59,35 @@ def _map_field_with_options(field: FieldWithOptions) -> FieldDetail:
 
     # Always provide conflict_options when there are multiple unique values
     # This allows the frontend to show a dropdown even after a value is confirmed
+    # Options are deduplicated by value, with all contributing sources grouped together
     if has_multiple_values:
-        conflict_options = [
-            ConflictOption(
-                history_id=opt.history_id,
-                value=opt.value,
-                sub_run_id=opt.sub_run_id,
-                contributed_at=opt.contributed_at.isoformat(),
-            )
-            for opt in field.options
-        ]
+        # Group options by value
+        by_value: Dict[str, List[FieldOption]] = {}
+        for opt in field.options:
+            if opt.value not in by_value:
+                by_value[opt.value] = []
+            by_value[opt.value].append(opt)
+
+        # Build deduplicated conflict options
+        conflict_options = []
+        for value, opts in by_value.items():
+            # Sort sources by contributed_at (oldest first)
+            sorted_opts = sorted(opts, key=lambda o: o.contributed_at)
+
+            sources = [
+                ConflictOptionSource(
+                    history_id=opt.history_id,
+                    sub_run_id=opt.sub_run_id,
+                    contributed_at=opt.contributed_at.isoformat(),
+                )
+                for opt in sorted_opts
+            ]
+
+            conflict_options.append(ConflictOption(
+                value=value,
+                sources=sources,
+                history_id=sorted_opts[0].history_id,  # Use first source's history_id for selection
+            ))
 
     # Provide source info for set/confirmed states
     if field.state in ("set", "confirmed") and field.options:
