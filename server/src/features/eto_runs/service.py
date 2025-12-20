@@ -1181,7 +1181,8 @@ class EtoRunsService:
         """
         Extract HAWB value(s) from output channel values.
 
-        Handles both single string and list of strings.
+        Checks both 'hawb' (single string) and 'hawb_list' (list of strings) channels.
+        Results are deduplicated while preserving order.
 
         Args:
             output_channel_values: Output channel values dict
@@ -1189,17 +1190,33 @@ class EtoRunsService:
         Returns:
             List of HAWB strings (may be empty if no HAWB found)
         """
+        hawbs: List[str] = []
+
+        # Check hawb_list channel (list[str])
+        hawb_list_value = output_channel_values.get("hawb_list")
+        if hawb_list_value is not None:
+            if isinstance(hawb_list_value, list):
+                hawbs.extend([str(h) for h in hawb_list_value if h])
+            elif hawb_list_value:
+                hawbs.append(str(hawb_list_value))
+
+        # Check traditional hawb channel (str)
         hawb_value = output_channel_values.get("hawb")
+        if hawb_value is not None:
+            if isinstance(hawb_value, list):
+                hawbs.extend([str(h) for h in hawb_value if h])
+            elif hawb_value:
+                hawbs.append(str(hawb_value))
 
-        if hawb_value is None:
-            return []
+        # Deduplicate while preserving order
+        seen: set[str] = set()
+        unique_hawbs: List[str] = []
+        for h in hawbs:
+            if h not in seen:
+                seen.add(h)
+                unique_hawbs.append(h)
 
-        # Handle list of HAWBs
-        if isinstance(hawb_value, list):
-            return [str(h) for h in hawb_value if h]
-
-        # Handle single HAWB string
-        return [str(hawb_value)] if hawb_value else []
+        return unique_hawbs
 
     # ==================== Helper Methods (Sub-Run) ====================
 

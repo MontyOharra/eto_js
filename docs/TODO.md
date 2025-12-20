@@ -654,30 +654,6 @@ All 12 registered services are properly initialized in `app.py`'s `initialize_se
 
 ---
 
-## 13. New Pipeline Modules
-
-**Status:** Not Started
-
-**Priority:** 5
-
-**Issue:** Need general-purpose regex and LLM modules.
-
-### 13a. Regex Module
-- General regex pattern matching/extraction
-- Configurable pattern input
-- Multiple capture group support
-
-### 13b. LLM Module
-- Similar to SQL lookup module pattern
-- Long text input with referenceable pass-in values
-- Example: `"Please extract important info from {notes_input}. Return in datetime format..."`
-- **Challenge:** Need to design customizable output schema
-  - How to define expected output structure?
-  - Type inference for downstream connections?
-  - Validation of LLM responses?
-
----
-
 ## 14. IDE / Syntax Error Cleanup
 
 **Status:** Not Started
@@ -691,23 +667,6 @@ All 12 registered services are properly initialized in `app.py`'s `initialize_se
 - Review Python linting issues
 - Fix any type mismatches
 - Remove unused imports/variables
-
----
-
-## 15. HTC Database Configuration
-
-**Status:** Not Started
-
-**Priority:** 7 (Last)
-
-**Issue:** HTC database connection is only configurable via environment variables. Need in-app configuration.
-
-**Details:**
-- Add settings page section for HTC database configuration
-- Store connection settings in application database or config file
-- Support for connection testing
-- Migrate from env-only to app-configurable approach
-- Consider security implications of storing credentials
 
 ---
 

@@ -88,7 +88,7 @@ export interface ModuleTemplate {
 export interface OutputChannelType {
   name: string;
   label: string;
-  data_type: string;  // "str", "int", "float", "datetime"
+  data_type: string;  // "str", "int", "float", "datetime", "list[str]"
   category: string;   // "identification", "pickup", "delivery", "cargo", "other"
   description?: string;
   is_required: boolean;

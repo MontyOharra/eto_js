@@ -33,6 +33,7 @@ export function TypeIndicator({
     "float",
     "bool",
     "datetime",
+    "list[str]",
   ];
 
   // Use effective types if provided (for showing disabled options), otherwise use available types

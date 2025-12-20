@@ -14,6 +14,7 @@ export const TYPE_COLORS: Record<string, string> = {
   float: "#FCA5A5", // red-300 (light red)
   bool: "#10B981", // green-500
   datetime: "#8B5CF6", // purple-500
+  "list[str]": "#F59E0B", // amber-500
 };
 
 /**

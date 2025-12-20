@@ -15,7 +15,7 @@ class OutputChannelDefinition:
     """Definition of an output channel type."""
     name: str
     label: str
-    data_type: Literal["str", "int", "float", "datetime"]
+    data_type: Literal["str", "int", "float", "datetime", "list[str]"]
     is_required: bool
     category: Literal["identification", "pickup", "delivery", "cargo", "other"]
     description: str | None = None
@@ -32,6 +32,14 @@ OUTPUT_CHANNEL_DEFINITIONS: list[OutputChannelDefinition] = [
         is_required=True,
         category="identification",
         description="House Air Waybill number - primary order identifier"
+    ),
+    OutputChannelDefinition(
+        name="hawb_list",
+        label="HAWB List",
+        data_type="list[str]",
+        is_required=False,
+        category="identification",
+        description="List of House Air Waybill numbers - for multi-HAWB orders from single PDF"
     ),
     OutputChannelDefinition(
         name="mawb",
