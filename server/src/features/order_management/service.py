@@ -35,6 +35,7 @@ from shared.types.pending_orders import (
     REQUIRED_FIELDS,
 )
 from features.htc_integration.htc_order_worker import HtcOrderWorker
+from features.htc_integration.attachment_utils import PdfSource
 
 if TYPE_CHECKING:
     from shared.database.connection import DatabaseConnectionManager
@@ -955,12 +956,19 @@ class OrderManagementService:
         """
         Mark a pending order as 'created' after successful HTC creation.
 
-        Also sends email notification to all contributing email addresses.
+        Also processes attachments and sends email notification.
 
         Args:
             pending_order_id: ID of the pending order
             htc_order_number: The HTC order number that was created
         """
+        # Get the pending order for customer_id and hawb
+        pending_order = self._pending_order_repo.get_by_id(pending_order_id)
+        if not pending_order:
+            logger.error(f"Pending order {pending_order_id} not found for post-creation processing")
+            return
+
+        # Update status first
         self._pending_order_repo.update(pending_order_id, {
             "status": "created",
             "htc_order_number": htc_order_number,
@@ -970,6 +978,24 @@ class OrderManagementService:
             "last_processed_at": datetime.now(),
         })
         logger.info(f"Pending order {pending_order_id} marked as created (HTC order {htc_order_number})")
+
+        # Process attachments
+        try:
+            pdf_sources = self._get_contributing_pdf_files(pending_order_id)
+            if pdf_sources:
+                attachment_results = self._htc_service.process_attachments(
+                    order_number=htc_order_number,
+                    customer_id=pending_order.customer_id,
+                    hawb=pending_order.hawb,
+                    pdf_sources=pdf_sources,
+                )
+                successful_attachments = sum(1 for r in attachment_results if r.success)
+                logger.info(
+                    f"Processed {successful_attachments} attachment(s) for order {htc_order_number}"
+                )
+        except Exception as e:
+            # Log but don't fail - order was created successfully
+            logger.error(f"Failed to process attachments for order {htc_order_number}: {e}")
 
         # Broadcast SSE event
         order_event_manager.broadcast_sync("pending_order_updated", {
@@ -1127,6 +1153,55 @@ class OrderManagementService:
                             email_details[email.sender_email] = email.received_date
 
         return email_details
+
+    def _get_contributing_pdf_files(self, pending_order_id: int) -> List[PdfSource]:
+        """
+        Get PDF file information from all sub_runs that contributed to this pending order.
+
+        Data path: pending_order_history -> eto_sub_run -> eto_run -> pdf_file
+
+        Args:
+            pending_order_id: ID of the pending order
+
+        Returns:
+            List of PdfSource objects with PDF file info (deduplicated by pdf_file_id)
+        """
+        history_records = self._pending_order_history_repo.get_by_pending_order_id(pending_order_id)
+
+        # Get unique sub_run_ids (excluding None for mock data)
+        sub_run_ids = set(h.sub_run_id for h in history_records if h.sub_run_id is not None)
+
+        # Track seen pdf_file_ids to avoid duplicates
+        seen_pdf_ids: set = set()
+        pdf_sources: List[PdfSource] = []
+
+        for sub_run_id in sub_run_ids:
+            sub_run = self._sub_run_repo.get_by_id(sub_run_id)
+            if not sub_run:
+                continue
+
+            run = self._run_repo.get_by_id(sub_run.eto_run_id)
+            if not run:
+                continue
+
+            # Skip if we've already seen this PDF
+            if run.pdf_file_id in seen_pdf_ids:
+                continue
+            seen_pdf_ids.add(run.pdf_file_id)
+
+            pdf_file = self._pdf_file_repo.get_by_id(run.pdf_file_id)
+            if not pdf_file:
+                logger.warning(f"PDF file {run.pdf_file_id} not found for sub_run {sub_run_id}")
+                continue
+
+            pdf_sources.append(PdfSource(
+                pdf_file_id=pdf_file.id,
+                original_filename=pdf_file.original_filename,
+                file_path=pdf_file.file_path,
+            ))
+
+        logger.debug(f"Found {len(pdf_sources)} unique PDF files for pending order {pending_order_id}")
+        return pdf_sources
 
     def _build_order_created_email(
         self,

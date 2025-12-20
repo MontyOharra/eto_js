@@ -848,7 +848,7 @@ This approach:
 
 ## 18. Attachment Processing
 
-**Status:** Not Started
+**Status:** COMPLETED
 
 **Priority:** TBD
 
@@ -859,11 +859,14 @@ This approach:
 - Create records in the PDF-to-order relationship table in HTC database
 - Get all PDF files from sub-runs that contributed to the pending order/update
 
-**Implementation Tasks:**
-- Identify HTC table structure for PDF storage and order relationships
-- Add logic to collect full PDFs from contributing sub-runs
-- Store PDFs in HTC database
-- Create relationship records linking PDFs to orders
+**Implementation:**
+- Created `AttachmentManager` class in `server/src/features/htc_integration/attachment_utils.py`
+- Builds HTC attachment path: `{HTC_APPS_DIR}/HTCAttach-{CoID}-{BrID}/Co{CoID}Br{BrID}/Cust{CustID}/Order_{OrderNo}/`
+- Builds attachment filename: `{original}.{hawb}.{MM-DD-YYYY}_{HH-MM-SS}.pdf`
+- Copies PDFs from ETO storage to HTC attachment storage
+- Creates records in `HTC300_G040_T014A Open Order Attachments` table
+- Integrated into order creation flow via `_mark_pending_order_created()`
+- Added `_get_contributing_pdf_files()` to trace PDF sources from pending order history
 
 ---
 

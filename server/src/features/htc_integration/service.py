@@ -20,6 +20,8 @@ from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 from shared.logging import get_logger
 from shared.exceptions import OutputExecutionError
+from shared.config.database import get_htc_apps_dir
+from shared.config.storage import get_storage_configuration
 
 from features.htc_integration.lookup_utils import (
     HtcLookupUtils,
@@ -30,6 +32,7 @@ from features.htc_integration.lookup_utils import (
 )
 from features.htc_integration.address_utils import HtcAddressUtils
 from features.htc_integration.order_utils import HtcOrderUtils, PreparedOrderData
+from features.htc_integration.attachment_utils import AttachmentManager, PdfSource, AttachmentResult
 
 if TYPE_CHECKING:
     from shared.database.data_database_manager import DataDatabaseManager
@@ -45,6 +48,8 @@ __all__ = [
     "AddressInfo",
     "CustomerInfo",
     "PreparedOrderData",
+    "PdfSource",
+    "AttachmentResult",
 ]
 
 
@@ -102,6 +107,22 @@ class HtcIntegrationService:
             co_id=self.CO_ID,
             br_id=self.BR_ID,
         )
+
+        # Initialize attachment manager (optional - only if HTC_APPS_DIR is configured)
+        self._attachment_manager: Optional[AttachmentManager] = None
+        htc_apps_dir = get_htc_apps_dir()
+        if htc_apps_dir:
+            eto_storage_path = get_storage_configuration()
+            self._attachment_manager = AttachmentManager(
+                htc_apps_dir=htc_apps_dir,
+                eto_storage_path=eto_storage_path,
+                connection=self._get_connection(),
+                co_id=self.CO_ID,
+                br_id=self.BR_ID,
+            )
+            logger.info(f"AttachmentManager initialized (HTC: {htc_apps_dir}, ETO: {eto_storage_path})")
+        else:
+            logger.warning("HTC_APPS_DIR not configured - attachment processing disabled")
 
         logger.info("HtcIntegrationService initialized successfully")
 
@@ -864,3 +885,94 @@ class HtcIntegrationService:
 
         logger.info(f"Successfully updated HTC order {order_number}: {updated_fields}")
         return updated_fields
+
+    # ==================== Attachment Processing ====================
+
+    def process_attachments(
+        self,
+        order_number: float,
+        customer_id: int,
+        hawb: str,
+        pdf_sources: List[PdfSource],
+    ) -> List[AttachmentResult]:
+        """
+        Process PDF attachments for an HTC order.
+
+        Copies PDF files from ETO storage to HTC attachment storage and
+        creates records in the HTC attachments table.
+
+        Args:
+            order_number: The HTC order number
+            customer_id: Customer ID
+            hawb: HAWB identifier (used in attachment filename)
+            pdf_sources: List of PdfSource objects with PDF file info
+
+        Returns:
+            List of AttachmentResult for each processed attachment
+
+        Note:
+            If HTC_APPS_DIR is not configured, returns an empty list
+            and logs a warning (attachment processing disabled).
+        """
+        if not self._attachment_manager:
+            logger.warning(
+                f"Skipping attachment processing for order {order_number}: "
+                "HTC_APPS_DIR not configured"
+            )
+            return []
+
+        if not pdf_sources:
+            logger.debug(f"No PDF sources provided for order {order_number}")
+            return []
+
+        logger.info(
+            f"Processing {len(pdf_sources)} attachment(s) for order {order_number} "
+            f"(customer {customer_id}, HAWB {hawb})"
+        )
+
+        try:
+            results = self._attachment_manager.process_attachments_for_order(
+                order_number=order_number,
+                customer_id=customer_id,
+                hawb=hawb,
+                pdf_sources=pdf_sources,
+            )
+
+            successful = sum(1 for r in results if r.success)
+            if successful > 0:
+                logger.info(
+                    f"Successfully processed {successful}/{len(results)} attachments "
+                    f"for order {order_number}"
+                )
+
+            return results
+
+        except Exception as e:
+            logger.error(f"Failed to process attachments for order {order_number}: {e}")
+            return []
+
+    def get_attachment_count(
+        self,
+        order_number: float,
+    ) -> int:
+        """
+        Get the number of attachments for an order.
+
+        Args:
+            order_number: The HTC order number
+
+        Returns:
+            Number of attachments (0 if none or on error)
+        """
+        try:
+            connection = self._get_connection()
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT COUNT(*) FROM [HTC300_G040_T014A Open Order Attachments]
+                    WHERE [Att_CoID] = ? AND [Att_BrID] = ? AND [Att_OrderNo] = ?
+                """, (self.CO_ID, self.BR_ID, order_number))
+                result = cursor.fetchone()
+                return result[0] if result else 0
+        except Exception as e:
+            logger.error(f"Failed to get attachment count for order {order_number}: {e}")
+            return 0
