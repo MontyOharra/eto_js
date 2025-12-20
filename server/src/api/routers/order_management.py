@@ -729,8 +729,6 @@ async def get_pending_update_detail(
             "pickup_notes": htc_fields.pickup_notes,
             "delivery_notes": htc_fields.delivery_notes,
             "order_notes": htc_fields.order_notes,
-            "pieces": str(htc_fields.pieces) if htc_fields.pieces is not None else None,
-            "weight": str(htc_fields.weight) if htc_fields.weight is not None else None,
         }
 
     # Get history records
@@ -913,8 +911,6 @@ async def approve_pending_update(
             "pickup_notes": htc_fields.pickup_notes,
             "delivery_notes": htc_fields.delivery_notes,
             "order_notes": htc_fields.order_notes,
-            "pieces": str(htc_fields.pieces) if htc_fields.pieces is not None else None,
-            "weight": str(htc_fields.weight) if htc_fields.weight is not None else None,
         }
 
     # Collect fields that have proposed changes (non-NULL values)
@@ -946,8 +942,6 @@ async def approve_pending_update(
             pickup_notes=pending_update.pickup_notes,
             delivery_notes=pending_update.delivery_notes,
             order_notes=pending_update.order_notes,
-            pieces=pending_update.pieces,
-            weight=pending_update.weight,
             approver_username=request.approver_username,
             old_values=old_values,
             new_values=new_values,

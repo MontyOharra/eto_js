@@ -288,10 +288,14 @@ class ModulesService:
         Process:
         1. Get all registered modules as ModuleCreate dataclasses
         2. Upsert each to database
+        3. Soft delete any modules in database that are no longer in registry
         """
         try:
             # Get all modules from registry as ModuleCreate dataclasses
             catalog_entries = self._registry.to_catalog_entries()
+
+            # Build set of module refs (id:version) from registry
+            registry_refs = {(m.id, m.version) for m in catalog_entries}
 
             logger.info(f"Syncing {len(catalog_entries)} modules to database...")
 
@@ -306,6 +310,23 @@ class ModulesService:
                     logger.error(f"Failed to sync module {module_create.id}: {e}")
 
             logger.info(f"Successfully synced {synced_count}/{len(catalog_entries)} modules")
+
+            # Remove modules from database that are no longer in registry
+            db_modules = self.module_repository.get_all(only_active=True)
+            removed_count = 0
+
+            for db_module in db_modules:
+                db_ref = (db_module.id, db_module.version)
+                if db_ref not in registry_refs:
+                    try:
+                        self.module_repository.delete(db_module.id, db_module.version)
+                        removed_count += 1
+                        logger.info(f"Removed obsolete module: {db_module.id}:{db_module.version}")
+                    except Exception as e:
+                        logger.error(f"Failed to remove obsolete module {db_module.id}: {e}")
+
+            if removed_count > 0:
+                logger.info(f"Removed {removed_count} obsolete modules from database")
 
         except Exception as e:
             logger.error(f"Failed to sync registry to database: {e}")

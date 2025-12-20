@@ -14,6 +14,68 @@ from dataclasses import dataclass
 logger = logging.getLogger(__name__)
 
 
+# =============================================================================
+# HTC Database Configuration
+# =============================================================================
+
+# Maps database connection names to their filenames (without .accdb extension)
+# These databases are located in the HTC_APPS_DIR directory
+HTC_DATABASE_FILES: Dict[str, str] = {
+    "htc_000_data_staff": "HTC000_Data_Staff",
+    "htc_300_db": "HTC300_Data-01-01",
+    "htc_350d_db": "HTC350D_Database",
+}
+
+
+def get_htc_apps_dir() -> Optional[str]:
+    """
+    Get the HTC Apps directory from environment.
+
+    Returns:
+        HTC_APPS_DIR path (normalized with forward slashes) or None if not set
+    """
+    htc_apps_dir = os.getenv("HTC_APPS_DIR")
+    if htc_apps_dir:
+        return htc_apps_dir.replace("\\", "/")
+    return None
+
+
+def _build_htc_connections() -> Dict[str, 'DatabaseConnectionConfig']:
+    """
+    Build HTC Access database connections from HTC_APPS_DIR environment variable.
+
+    If HTC_APPS_DIR is set, builds connection strings for all databases in
+    HTC_DATABASE_FILES mapping.
+
+    Returns:
+        Dictionary mapping connection names to DatabaseConnectionConfig instances
+    """
+    connections = {}
+
+    htc_apps_dir = get_htc_apps_dir()
+    if not htc_apps_dir:
+        logger.debug("HTC_APPS_DIR not set, skipping HTC database auto-configuration")
+        return connections
+
+    logger.info(f"Building HTC database connections from HTC_APPS_DIR: {htc_apps_dir}")
+
+    for db_name, filename in HTC_DATABASE_FILES.items():
+        # Build Access connection string
+        db_path = f"{htc_apps_dir}/{filename}.accdb"
+        connection_string = f"Driver={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={db_path};"
+
+        connections[db_name] = DatabaseConnectionConfig(
+            name=db_name,
+            connection_string=connection_string,
+            connection_type="access",
+            description=f"HTC Access database: {filename}"
+        )
+
+        logger.info(f"Configured HTC database connection: {db_name} (file: {filename}.accdb)")
+
+    return connections
+
+
 @dataclass(frozen=True)
 class DatabaseConnectionConfig:
     """Configuration for a single database connection"""
@@ -111,14 +173,13 @@ class DatabaseConfig:
         """
         Load database configuration from environment variables.
 
-        Automatically discovers all database connections from environment variables:
-        - DATABASE_URL → main database (required)
-        - *_CONNECTION_STRING → additional databases (optional)
+        Configuration sources (in order of priority):
+        1. DATABASE_URL → main database (required)
+        2. HTC_APPS_DIR → builds HTC Access database connections from mapping
+        3. *_CONNECTION_STRING → additional databases (fallback/override)
 
-        Examples:
-        - HTC_300_DB_CONNECTION_STRING → htc_300_db
-        - HTC_000_DB_CONNECTION_STRING → htc_000_db
-        - MY_DB_CONNECTION_STRING → my_db
+        For HTC databases, prefer setting HTC_APPS_DIR over individual connection strings.
+        Individual *_CONNECTION_STRING vars will override HTC_APPS_DIR-based connections.
 
         Returns:
             DatabaseConfig instance
@@ -141,8 +202,15 @@ class DatabaseConfig:
         connections["main"] = main
         logger.info("Loaded main database connection")
 
+        # Build HTC database connections from HTC_APPS_DIR
+        htc_connections = _build_htc_connections()
+        connections.update(htc_connections)
+        if htc_connections:
+            logger.info(f"Loaded {len(htc_connections)} HTC database connection(s) from HTC_APPS_DIR")
+
         # Auto-discover additional databases from environment
         # Look for any env vars ending with _CONNECTION_STRING
+        # These can override HTC_APPS_DIR-based connections if needed
         discovered_count = 0
         for env_var_name, env_var_value in os.environ.items():
             if env_var_name.endswith("_CONNECTION_STRING") and env_var_value:
@@ -159,13 +227,15 @@ class DatabaseConfig:
                     )
 
                     if db_config:
+                        if db_name in connections:
+                            logger.info(f"Overriding {db_name} connection with explicit {env_var_name}")
                         connections[db_name] = db_config
                         discovered_count += 1
                         logger.info(f"Auto-discovered database connection: {db_name} (type: {db_config.connection_type})")
                 except Exception as e:
                     logger.warning(f"Failed to load database connection from {env_var_name}: {e}")
 
-        logger.info(f"Database configuration complete: 1 main + {discovered_count} additional connections")
+        logger.info(f"Database configuration complete: 1 main + {len(connections) - 1} additional connections")
 
         return cls(connections=connections)
 

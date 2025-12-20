@@ -200,6 +200,7 @@ Format: date="YYYY-MM-DD", times="HH:MM" 24h. Use null if unknown.
 Rules:
 - Year missing: pick year making date nearest to today (e.g., 12/1→1/3 = next year, 12/1→11/28 = same year)
 - Parse formats: 9am, 9:00, 0900, nine am, noon, ranges (9-5)
+- "cutoff" means end_time only (start="09:00")
 - "at T": start=end=T
 - "by/before T": end=T, start="09:00" (if T is time only)
 - "by/before D" (date only, no time): start="09:00", end="17:00"
