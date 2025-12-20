@@ -2,6 +2,7 @@
 Text Splitter Transform Module
 Splits a string into a list of strings based on a delimiter
 """
+import codecs
 import logging
 from typing import Dict, Any, List
 from pydantic import BaseModel, Field
@@ -16,7 +17,7 @@ class TextSplitterConfig(BaseModel):
     """Configuration for Text Splitter"""
     delimiter: str = Field(
         default=",",
-        description="Character(s) to split on"
+        description="Character(s) to split on. Supports escape sequences: \\n (newline), \\t (tab), \\r (carriage return)"
     )
     strip_parts: bool = Field(
         default=True,
@@ -97,8 +98,15 @@ class TextSplitter(TransformModule):
         elif not isinstance(input_text, str):
             input_text = str(input_text)
 
+        # Decode escape sequences in delimiter (e.g., \n -> actual newline)
+        try:
+            delimiter = codecs.decode(cfg.delimiter, 'unicode_escape')
+        except Exception:
+            # If decoding fails, use the raw delimiter
+            delimiter = cfg.delimiter
+
         # Split the text
-        parts: List[str] = input_text.split(cfg.delimiter)
+        parts: List[str] = input_text.split(delimiter)
 
         # Strip whitespace if configured
         if cfg.strip_parts:
@@ -108,7 +116,7 @@ class TextSplitter(TransformModule):
         if cfg.remove_empty:
             parts = [p for p in parts if p]
 
-        logger.info(f"Split text into {len(parts)} parts using delimiter '{cfg.delimiter}'")
+        logger.info(f"Split text into {len(parts)} parts using delimiter '{cfg.delimiter}' (resolved: {repr(delimiter)})")
 
         # Get output node ID
         output_node_id = context.outputs[0].node_id
