@@ -64,8 +64,6 @@ VALID_FIELD_NAMES = [
     "delivery_notes",
     "order_notes",
     "mawb",
-    "pieces",
-    "weight",
 ]
 
 
@@ -110,8 +108,6 @@ class PendingOrderUpdate(TypedDict, total=False):
     pickup_notes: str | None
     delivery_notes: str | None
     order_notes: str | None
-    pieces: int | None
-    weight: float | None
 
 
 @dataclass
@@ -142,8 +138,6 @@ class PendingOrder:
     pickup_notes: Optional[str]
     delivery_notes: Optional[str]
     order_notes: Optional[str]
-    pieces: Optional[int]
-    weight: Optional[float]
     # Read/unread tracking
     is_read: bool
     # Timestamps
@@ -229,8 +223,6 @@ class PendingUpdateUpdate(TypedDict, total=False):
     pickup_notes: str | None
     delivery_notes: str | None
     order_notes: str | None
-    pieces: int | None
-    weight: float | None
 
 
 @dataclass
@@ -258,8 +250,6 @@ class PendingUpdate:
     pickup_notes: Optional[str]
     delivery_notes: Optional[str]
     order_notes: Optional[str]
-    pieces: Optional[int]
-    weight: Optional[float]
     # Read/unread tracking
     is_read: bool
     # Timestamps

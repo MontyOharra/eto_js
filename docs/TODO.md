@@ -926,6 +926,36 @@ This approach:
 
 ---
 
+## 21. Dimensions Table Handling
+
+**Status:** In Progress (pieces/weight removed, proper dims system TBD)
+
+**Priority:** TBD
+
+**Issue:** Dimensions (pieces, weight, dims) need proper handling via the HTC dims table.
+
+**Phase 1 - Cleanup (COMPLETED):**
+Removed placeholder pieces/weight fields that were incorrectly implemented:
+- Removed from database models (PendingOrderModel, PendingUpdateModel)
+- Removed from types (PendingOrder, PendingUpdate, PendingOrderUpdate, etc.)
+- Removed from HTC integration (create_order, update_order, get_order_fields)
+- Removed create_dimension_record and update_dimension_record methods
+- Removed from API schemas and email notifications
+
+**Phase 2 - Proper Dims System (TODO):**
+Need to design and implement proper dimensions handling:
+- Understand HTC dims table structure (`[HTC300_G040_T012A Open Order Dims]`)
+- Determine if ETO should create/manage dims or leave to manual entry
+- Consider multi-line items with different dimensions
+- Define pipeline output channels for dims if needed
+
+**Investigation Needed:**
+- How are dims currently entered in HTC?
+- What fields are required vs optional?
+- Should dims be extracted from emails/PDFs?
+
+---
+
 ## Priority Notes
 
 _To be determined as we review each item._

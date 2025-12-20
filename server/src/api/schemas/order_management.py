@@ -338,8 +338,6 @@ FIELD_LABELS: Dict[str, str] = {
     "delivery_notes": "Delivery Notes",
     "order_notes": "Order Notes",
     "mawb": "MAWB",
-    "pieces": "Pieces",
-    "weight": "Weight",
 }
 
 
@@ -367,7 +365,7 @@ class MockOutputProcessingRequest(BaseModel):
         description="Output channel data dict. Valid fields: pickup_company_name, pickup_address, "
                     "pickup_time_start, pickup_time_end, pickup_notes, delivery_company_name, "
                     "delivery_address, delivery_time_start, delivery_time_end, delivery_notes, "
-                    "order_notes, mawb, pieces, weight"
+                    "order_notes, mawb"
     )
 
 

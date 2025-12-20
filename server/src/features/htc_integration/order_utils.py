@@ -268,68 +268,6 @@ class HtcOrderUtils:
             logger.error(f"Failed to update HTC order {order_number}: {e}")
             raise OutputExecutionError(f"Failed to update HTC order: {e}") from e
 
-    def update_dimension_record(
-        self,
-        order_number: float,
-        pieces: Optional[int] = None,
-        weight: Optional[float] = None,
-    ) -> List[str]:
-        """
-        Update the dimension record for an order.
-
-        Args:
-            order_number: The HTC order number
-            pieces: New piece count (optional)
-            weight: New weight (optional)
-
-        Returns:
-            List of column names that were updated
-
-        Raises:
-            OutputExecutionError: If update fails
-        """
-        if pieces is None and weight is None:
-            return []
-
-        connection = self._get_connection()
-        updated_columns = []
-
-        try:
-            set_clauses = []
-            values = []
-
-            if pieces is not None:
-                set_clauses.append("[OD_UnitQty] = ?")
-                values.append(pieces)
-                updated_columns.append("OD_UnitQty")
-
-            if weight is not None:
-                set_clauses.append("[OD_UnitWeight] = ?")
-                values.append(weight)
-                updated_columns.append("OD_UnitWeight")
-
-            if not set_clauses:
-                return []
-
-            # Add WHERE clause values
-            values.extend([order_number, self.CO_ID, self.BR_ID])
-
-            query = f"""
-                UPDATE [HTC300_G040_T012A Open Order Dims]
-                SET {', '.join(set_clauses)}
-                WHERE [OD_OrderNo] = ? AND [OD_CoID] = ? AND [OD_BrID] = ?
-            """
-
-            with connection.cursor() as cursor:
-                cursor.execute(query, values)
-
-            logger.debug(f"Updated dimension record for order {order_number}: {updated_columns}")
-            return updated_columns
-
-        except Exception as e:
-            logger.error(f"Failed to update dimension record for order {order_number}: {e}")
-            raise OutputExecutionError(f"Failed to update dimension record: {e}") from e
-
     def create_update_history(
         self,
         order_number: float,
@@ -368,8 +306,6 @@ class HtcOrderUtils:
             "delivery_notes": "Delivery Notes",
             "order_notes": "Order Notes",
             "mawb": "MAWB",
-            "pieces": "Pieces",
-            "weight": "Weight",
         }
 
         def format_value(val: Any) -> str:
@@ -566,61 +502,6 @@ class HtcOrderUtils:
         except Exception as e:
             # Log but don't fail order creation if history fails
             logger.warning(f"Failed to create order history for order {order_number}: {e}")
-
-    def create_dimension_record(
-        self,
-        order_number: float,
-        pieces: int = 1,
-        weight: float = 0.0,
-        length: int = 1,
-        width: int = 1,
-        height: int = 1,
-        unit_type: str = "EA",
-    ) -> None:
-        """
-        Create a dimension record for an order.
-
-        Args:
-            order_number: The order number
-            pieces: Number of pieces (default 1)
-            weight: Total weight (default 0.0)
-            length: Length in inches (default 1)
-            width: Width in inches (default 1)
-            height: Height in inches (default 1)
-            unit_type: Unit type code (default "EA" for each)
-        """
-        connection = self._get_connection()
-
-        # Calculate dimensional weight (L x W x H / 139 for air freight)
-        dim_weight = (length * width * height) / 139.0
-
-        try:
-            with connection.cursor() as cursor:
-                cursor.execute("""
-                    INSERT INTO [HTC300_G040_T012A Open Order Dims]
-                    ([OD_CoID], [OD_BrID], [OD_OrderNo], [OD_DimID],
-                     [OD_UnitType], [OD_UnitQty], [OD_UnitHeight],
-                     [OD_UnitLength], [OD_UnitWidth], [OD_UnitWeight], [OD_UnitDimWeight])
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    self.CO_ID,
-                    self.BR_ID,
-                    order_number,
-                    1,  # OD_DimID - first dimension record
-                    unit_type,
-                    pieces,
-                    height,
-                    length,
-                    width,
-                    weight,
-                    dim_weight,
-                ))
-
-            logger.debug(f"Created dimension record for order {order_number}")
-
-        except Exception as e:
-            logger.error(f"Failed to create dimension record for order {order_number}: {e}")
-            raise
 
     def create_order_record(
         self,

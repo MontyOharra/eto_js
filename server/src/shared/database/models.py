@@ -894,8 +894,6 @@ class PendingOrderModel(BaseModel):
     pickup_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     delivery_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     order_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    pieces: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    weight: Mapped[Optional[float]] = mapped_column(nullable=True)
 
     # Read/unread tracking for UI
     is_read: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="0")
@@ -1034,8 +1032,6 @@ class PendingUpdateModel(BaseModel):
     pickup_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     delivery_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     order_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    pieces: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    weight: Mapped[Optional[float]] = mapped_column(nullable=True)
 
     # Read/unread tracking for UI
     is_read: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="0")

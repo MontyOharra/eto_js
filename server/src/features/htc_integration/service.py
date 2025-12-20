@@ -360,8 +360,6 @@ class HtcIntegrationService:
         pickup_notes: Optional[str] = None,
         delivery_notes: Optional[str] = None,
         order_notes: Optional[str] = None,
-        pieces: Optional[int] = None,
-        weight: Optional[float] = None,
     ) -> float:
         """
         Create an HTC order from raw input data.
@@ -379,8 +377,7 @@ class HtcIntegrationService:
         Phase 2 - Order Creation:
             7. Reserve order number (adds to OIW)
             8. Insert order record
-            9. Insert dimension record
-            10. On success: update LON, remove from OIW, save HAWB, create history
+            9. On success: update LON, remove from OIW, save HAWB, create history
 
         Args:
             customer_id: HTC customer ID
@@ -397,8 +394,6 @@ class HtcIntegrationService:
             pickup_notes: Optional pickup notes
             delivery_notes: Optional delivery notes
             order_notes: Optional general order notes
-            pieces: Optional piece count (defaults to 1)
-            weight: Optional weight (defaults to 0.0)
 
         Returns:
             The new HTC order number
@@ -554,14 +549,7 @@ class HtcIntegrationService:
             # --- Step 10: Insert order record ---
             self._order_utils.create_order_record(order_number, prepared_data)
 
-            # --- Step 11: Insert dimension record ---
-            self._order_utils.create_dimension_record(
-                order_number=order_number,
-                pieces=pieces or 1,
-                weight=weight or 0.0,
-            )
-
-            # --- Step 12: Finalize on success ---
+            # --- Step 11: Finalize on success ---
             # Update LON
             self._order_utils.update_lon(order_number)
 
@@ -627,8 +615,6 @@ class HtcIntegrationService:
             pickup_notes=pending_order.pickup_notes,
             delivery_notes=pending_order.delivery_notes,
             order_notes=pending_order.order_notes,
-            pieces=pending_order.pieces,
-            weight=pending_order.weight,
         )
 
     # ==================== Order Update Orchestrator ====================
@@ -648,8 +634,6 @@ class HtcIntegrationService:
         pickup_notes: Optional[str] = None,
         delivery_notes: Optional[str] = None,
         order_notes: Optional[str] = None,
-        pieces: Optional[int] = None,
-        weight: Optional[float] = None,
         approver_username: Optional[str] = None,
         old_values: Optional[Dict[str, Any]] = None,
         new_values: Optional[Dict[str, Any]] = None,
@@ -661,7 +645,6 @@ class HtcIntegrationService:
         - Address fields: Finds or creates the address, then updates all related columns
         - DateTime fields: Parses and splits into date + time components
         - Simple fields: Direct updates (notes, mawb)
-        - Dimension fields: Updates the dims table (pieces, weight)
 
         After updates, recalculates order type if addresses changed.
 
@@ -679,8 +662,6 @@ class HtcIntegrationService:
             pickup_notes: New pickup notes
             delivery_notes: New delivery notes
             order_notes: New order notes
-            pieces: New piece count
-            weight: New weight
             approver_username: Staff_Login of user who approved (for audit trail)
             old_values: Dict of field_name -> old value (before update) for audit trail
             new_values: Dict of field_name -> new value (after update) for audit trail
@@ -867,20 +848,6 @@ class HtcIntegrationService:
         # ================================================================
         if htc_updates:
             self._order_utils.update_order_fields(order_number, htc_updates)
-
-        # ================================================================
-        # DIMENSION TABLE UPDATES (pieces, weight)
-        # ================================================================
-        if pieces is not None or weight is not None:
-            self._order_utils.update_dimension_record(
-                order_number=order_number,
-                pieces=pieces,
-                weight=weight,
-            )
-            if pieces is not None:
-                updated_fields.append("pieces")
-            if weight is not None:
-                updated_fields.append("weight")
 
         # ================================================================
         # CREATE UPDATE HISTORY

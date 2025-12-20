@@ -57,8 +57,6 @@ class HtcOrderFields:
     pickup_notes: Optional[str]
     delivery_notes: Optional[str]
     order_notes: Optional[str]
-    pieces: Optional[int]
-    weight: Optional[float]
 
 
 @dataclass
@@ -584,25 +582,6 @@ class HtcLookupUtils:
                     logger.debug(f"Order {order_number} not found")
                     return None
 
-            # Query pieces and weight from dimensions table
-            pieces = None
-            weight = None
-            with connection.cursor() as cursor:
-                dims_query = """
-                    SELECT [OD_UnitQty], [OD_UnitWeight]
-                    FROM [HTC300_G040_T012A Open Order Dims]
-                    WHERE [OD_OrderNo] = ?
-                      AND [OD_CoID] = ?
-                      AND [OD_BrID] = ?
-                      AND [OD_DimID] = 1
-                """
-                cursor.execute(dims_query, (order_number, self.CO_ID, self.BR_ID))
-                dims_row = cursor.fetchone()
-
-                if dims_row:
-                    pieces = int(dims_row[0]) if dims_row[0] is not None else None
-                    weight = float(dims_row[1]) if dims_row[1] is not None else None
-
             # Helper to combine date and time into ISO format
             def combine_datetime(date_val, time_val) -> Optional[str]:
                 """Combine date and time fields into ISO datetime string."""
@@ -652,8 +631,6 @@ class HtcLookupUtils:
                 pickup_notes=str(order_row[16]) if order_row[16] else None,
                 delivery_notes=str(order_row[17]) if order_row[17] else None,
                 order_notes=str(order_row[18]) if order_row[18] else None,
-                pieces=pieces,
-                weight=weight,
             )
 
         except Exception as e:

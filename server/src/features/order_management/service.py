@@ -133,8 +133,6 @@ FIELD_LABELS: Dict[str, str] = {
     "delivery_time_start": "Delivery Start",
     "delivery_time_end": "Delivery End",
     "delivery_notes": "Delivery Notes",
-    "pieces": "Pieces",
-    "weight": "Weight",
     "order_notes": "Order Notes",
 }
 
@@ -691,8 +689,6 @@ class OrderManagementService:
             "delivery_time_start": pending_order.delivery_time_start,
             "delivery_time_end": pending_order.delivery_time_end,
             "delivery_notes": pending_order.delivery_notes,
-            "pieces": pending_order.pieces,
-            "weight": pending_order.weight,
             "order_notes": pending_order.order_notes,
         }
 
@@ -1193,15 +1189,6 @@ class OrderManagementService:
                 lines.append(f"  Time: {pending_order.delivery_time_start} - {pending_order.delivery_time_end or 'N/A'}")
             if pending_order.delivery_notes:
                 lines.append(f"  Notes: {pending_order.delivery_notes}")
-            lines.append(f"")
-
-        # Additional info
-        if pending_order.pieces or pending_order.weight:
-            lines.append(f"Shipment Info:")
-            if pending_order.pieces:
-                lines.append(f"  Pieces: {pending_order.pieces}")
-            if pending_order.weight:
-                lines.append(f"  Weight: {pending_order.weight}")
             lines.append(f"")
 
         if pending_order.order_notes:
