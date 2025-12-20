@@ -76,6 +76,9 @@ class AttachmentManager:
 
         Format: {htc_apps_dir}/HTCAttach-{CoID}-{BrID}/Co{CoID}Br{BrID}/Cust{CustID}/Order_{OrderNo}/
 
+        Root folder uses 2-digit padding for both CoID and BrID.
+        Subdirectory uses 3-digit CoID and 5-digit BrID.
+
         Example: C:/HTC_Apps/HTCAttach-01-01/Co001Br00001/Cust00195/Order_0106299/
 
         Args:
@@ -86,14 +89,14 @@ class AttachmentManager:
             Path object for the attachment directory
         """
         # Format IDs with padding
-        co_id_padded = f"{self.CO_ID:02d}"
-        br_id_padded = f"{self.BR_ID:05d}"
         cust_id_padded = f"{customer_id:05d}"
         order_no_padded = f"{int(order_number):07d}"
 
         # Build path components
-        attach_folder = f"HTCAttach-{co_id_padded}-{br_id_padded}"
-        co_br_folder = f"Co{co_id_padded}Br{br_id_padded}"
+        # Root folder: HTCAttach-XX-XX (2-digit padding for both)
+        attach_folder = f"HTCAttach-{self.CO_ID:02d}-{self.BR_ID:02d}"
+        # Subdirectory: CoXXXBrXXXXX (3-digit CoID, 5-digit BrID)
+        co_br_folder = f"Co{self.CO_ID:03d}Br{self.BR_ID:05d}"
         cust_folder = f"Cust{cust_id_padded}"
         order_folder = f"Order_{order_no_padded}"
 
