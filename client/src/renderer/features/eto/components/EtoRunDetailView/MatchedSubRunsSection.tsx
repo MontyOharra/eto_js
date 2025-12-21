@@ -1,5 +1,108 @@
 import { EtoSubRunSummary, EtoSubRunStatus } from '../../types';
 
+/**
+ * Check if a string is an ISO datetime format
+ */
+function isISODateTime(value: string): boolean {
+  const isoPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
+  return isoPattern.test(value);
+}
+
+/**
+ * Format ISO datetime string to human readable format
+ */
+function formatISODateTime(isoString: string): string {
+  try {
+    const date = new Date(isoString);
+    if (isNaN(date.getTime())) return isoString;
+
+    return date.toLocaleString("en-US", {
+      month: "2-digit",
+      day: "2-digit",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+  } catch {
+    return isoString;
+  }
+}
+
+/**
+ * Check if value is a dim object (has height, length, width, qty, weight)
+ */
+function isDimObject(value: unknown): boolean {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "height" in value &&
+    "length" in value &&
+    "width" in value &&
+    "qty" in value &&
+    "weight" in value
+  );
+}
+
+/**
+ * Format a single dim object as "qty - HxLxW @weightlbs"
+ */
+function formatDim(dim: Record<string, unknown>): string {
+  const h = dim.height ?? 0;
+  const l = dim.length ?? 0;
+  const w = dim.width ?? 0;
+  const qty = dim.qty ?? 1;
+  const weight = dim.weight ?? 0;
+  return `${qty} - ${h}x${l}x${w} @${weight}lbs`;
+}
+
+/**
+ * Try to parse a value as JSON, handling Python-style single quotes
+ */
+function tryParseJson(value: string): unknown | null {
+  // First try standard JSON parse
+  try {
+    return JSON.parse(value);
+  } catch {
+    // Try converting Python-style single quotes to double quotes
+    try {
+      // Replace single quotes with double quotes (but not escaped ones or apostrophes in text)
+      const jsonified = value.replace(/'/g, '"');
+      return JSON.parse(jsonified);
+    } catch {
+      return null;
+    }
+  }
+}
+
+/**
+ * Format a value for display, handling datetime strings and dim objects
+ */
+function formatValue(value: string): string {
+  if (!value) return value;
+
+  // Check for ISO datetime string
+  if (isISODateTime(value)) {
+    return formatISODateTime(value);
+  }
+
+  // Try to parse as JSON for dim objects
+  const parsed = tryParseJson(value);
+  if (parsed !== null) {
+    // Check for dim object
+    if (isDimObject(parsed)) {
+      return formatDim(parsed as Record<string, unknown>);
+    }
+
+    // Check for list[dim] - array of dim objects
+    if (Array.isArray(parsed) && parsed.length > 0 && isDimObject(parsed[0])) {
+      return "[" + parsed.map((d) => formatDim(d as Record<string, unknown>)).join(", ") + "]";
+    }
+  }
+
+  return value;
+}
+
 interface MatchedSubRunsSectionProps {
   subRuns: EtoSubRunSummary[];
   onViewDetails: (subRunId: number) => void;
@@ -127,7 +230,7 @@ export function MatchedSubRunsSection({
                 {subRun.transform_results.map((result, index) => (
                   <div key={`${result.field_name}-${index}`} className="flex gap-2 overflow-hidden">
                     <span className="text-gray-400 font-medium whitespace-nowrap">{result.field_name}:</span>
-                    <span className="text-gray-200 truncate" title={result.value}>{result.value}</span>
+                    <span className="text-gray-200 truncate" title={formatValue(result.value)}>{formatValue(result.value)}</span>
                   </div>
                 ))}
               </div>

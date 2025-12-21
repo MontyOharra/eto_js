@@ -31,7 +31,7 @@ class OutputChannel(BaseModel):
     """Output channel type definition for API responses"""
     name: str
     label: str
-    data_type: Literal["str", "int", "float", "datetime", "list[str]"]
+    data_type: Literal["str", "int", "float", "datetime", "list[str]", "list[dim]"]
     category: Literal["identification", "pickup", "delivery", "cargo", "other"]
     description: Optional[str] = None
     is_required: bool

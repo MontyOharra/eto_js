@@ -34,6 +34,8 @@ export function TypeIndicator({
     "bool",
     "datetime",
     "list[str]",
+    "dim",
+    "list[dim]",
   ];
 
   // Use effective types if provided (for showing disabled options), otherwise use available types

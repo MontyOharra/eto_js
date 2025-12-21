@@ -15,7 +15,7 @@ class OutputChannelDefinition:
     """Definition of an output channel type."""
     name: str
     label: str
-    data_type: Literal["str", "int", "float", "datetime", "list[str]"]
+    data_type: Literal["str", "int", "float", "datetime", "list[str]", "list[dim]"]
     is_required: bool
     category: Literal["identification", "pickup", "delivery", "cargo", "other"]
     description: str | None = None
@@ -150,6 +150,14 @@ OUTPUT_CHANNEL_DEFINITIONS: list[OutputChannelDefinition] = [
         is_required=False,
         category="cargo",
         description="Total weight of shipment"
+    ),
+    OutputChannelDefinition(
+        name="dims",
+        label="Dimensions",
+        data_type="list[dim]",
+        is_required=False,
+        category="cargo",
+        description="List of dimension sets with height, length, width, qty, and weight"
     ),
 
     # Other

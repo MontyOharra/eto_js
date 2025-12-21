@@ -53,6 +53,13 @@ __all__ = [
 ]
 
 
+def _uppercase_str(value: Optional[str]) -> Optional[str]:
+    """Uppercase a string value, returning None if input is None."""
+    if value is None:
+        return None
+    return value.upper()
+
+
 class HtcIntegrationService:
     """
     Centralized service for HTC Access database operations.
@@ -290,18 +297,49 @@ class HtcIntegrationService:
     # ==================== Order Operations ====================
     # Delegated to HtcOrderUtils
 
-    def update_order(self, order_number: float, updates: dict) -> None:
+    def update_order_simple(self, order_number: float, updates: dict) -> None:
         """
-        Update an existing order in HTC.
+        Update an existing order in HTC with a simple dict of field updates.
+
+        This handles dims separately - if 'dims' is in updates, it will
+        replace the existing dims records.
 
         Args:
             order_number: The HTC order number to update
-            updates: Dict of field_name -> new_value
+            updates: Dict of field_name -> new_value (may include 'dims')
 
         Raises:
             OutputExecutionError: If update fails
         """
-        self._order_utils.update_order(order_number, updates)
+        import json
+
+        # Uppercase all string fields for HTC database
+        string_fields = [
+            'hawb', 'mawb', 'pickup_company_name', 'pickup_address', 'pickup_notes',
+            'delivery_company_name', 'delivery_address', 'delivery_notes', 'order_notes'
+        ]
+        for field in string_fields:
+            if field in updates and updates[field] is not None:
+                updates[field] = updates[field].upper()
+
+        # Extract dims from updates if present
+        dims = updates.pop('dims', None)
+
+        # Update regular fields if any remain
+        if updates:
+            self._order_utils.update_order_fields(order_number, updates)
+
+        # Handle dims separately (replace strategy)
+        if dims is not None:
+            # Parse dims if it's a JSON string
+            if isinstance(dims, str):
+                try:
+                    dims = json.loads(dims)
+                except json.JSONDecodeError:
+                    logger.warning(f"Failed to parse dims JSON for order {order_number}")
+                    dims = None
+            if dims:
+                self._order_utils.replace_dims_records(order_number, dims)
 
     def remove_from_orders_in_work(self, order_number: float) -> None:
         """
@@ -381,6 +419,7 @@ class HtcIntegrationService:
         pickup_notes: Optional[str] = None,
         delivery_notes: Optional[str] = None,
         order_notes: Optional[str] = None,
+        dims: Optional[List[Dict[str, Any]]] = None,
     ) -> float:
         """
         Create an HTC order from raw input data.
@@ -415,6 +454,7 @@ class HtcIntegrationService:
             pickup_notes: Optional pickup notes
             delivery_notes: Optional delivery notes
             order_notes: Optional general order notes
+            dims: Optional list of dimension objects (each with height, length, width, qty, weight)
 
         Returns:
             The new HTC order number
@@ -424,6 +464,19 @@ class HtcIntegrationService:
             ValueError: If required data is missing
         """
         logger.info(f"Creating HTC order for customer {customer_id}, HAWB: {hawb}")
+
+        # ================================================================
+        # UPPERCASE ALL STRING FIELDS FOR HTC DATABASE
+        # ================================================================
+        hawb = _uppercase_str(hawb) or ""
+        mawb = _uppercase_str(mawb)
+        pickup_company_name = _uppercase_str(pickup_company_name) or ""
+        pickup_address = _uppercase_str(pickup_address) or ""
+        pickup_notes = _uppercase_str(pickup_notes)
+        delivery_company_name = _uppercase_str(delivery_company_name) or ""
+        delivery_address = _uppercase_str(delivery_address) or ""
+        delivery_notes = _uppercase_str(delivery_notes)
+        order_notes = _uppercase_str(order_notes)
 
         # ================================================================
         # PHASE 1: DATA GATHERING
@@ -570,6 +623,10 @@ class HtcIntegrationService:
             # --- Step 10: Insert order record ---
             self._order_utils.create_order_record(order_number, prepared_data)
 
+            # --- Step 10b: Create dims records if provided ---
+            if dims:
+                self._order_utils.create_dims_records(order_number, dims)
+
             # --- Step 11: Finalize on success ---
             # Update LON
             self._order_utils.update_lon(order_number)
@@ -619,7 +676,17 @@ class HtcIntegrationService:
             OutputExecutionError: If order creation fails
             ValueError: If required data is missing
         """
+        import json
+
         logger.info(f"Creating HTC order from pending order {pending_order.id}")
+
+        # Parse dims from JSON string if present
+        dims_list = None
+        if pending_order.dims:
+            try:
+                dims_list = json.loads(pending_order.dims)
+            except json.JSONDecodeError as e:
+                logger.warning(f"Failed to parse dims JSON for pending order {pending_order.id}: {e}")
 
         return self.create_order(
             customer_id=pending_order.customer_id,
@@ -636,6 +703,7 @@ class HtcIntegrationService:
             pickup_notes=pending_order.pickup_notes,
             delivery_notes=pending_order.delivery_notes,
             order_notes=pending_order.order_notes,
+            dims=dims_list,
         )
 
     # ==================== Order Update Orchestrator ====================
@@ -655,6 +723,7 @@ class HtcIntegrationService:
         pickup_notes: Optional[str] = None,
         delivery_notes: Optional[str] = None,
         order_notes: Optional[str] = None,
+        dims: Optional[List[Dict[str, Any]]] = None,
         approver_username: Optional[str] = None,
         old_values: Optional[Dict[str, Any]] = None,
         new_values: Optional[Dict[str, Any]] = None,
@@ -683,6 +752,7 @@ class HtcIntegrationService:
             pickup_notes: New pickup notes
             delivery_notes: New delivery notes
             order_notes: New order notes
+            dims: New dimensions list (replaces existing dims)
             approver_username: Staff_Login of user who approved (for audit trail)
             old_values: Dict of field_name -> old value (before update) for audit trail
             new_values: Dict of field_name -> new value (after update) for audit trail
@@ -695,6 +765,18 @@ class HtcIntegrationService:
             ValueError: If address provided without company name
         """
         logger.info(f"Updating HTC order {order_number}")
+
+        # ================================================================
+        # UPPERCASE ALL STRING FIELDS FOR HTC DATABASE
+        # ================================================================
+        mawb = _uppercase_str(mawb)
+        pickup_company_name = _uppercase_str(pickup_company_name)
+        pickup_address = _uppercase_str(pickup_address)
+        pickup_notes = _uppercase_str(pickup_notes)
+        delivery_company_name = _uppercase_str(delivery_company_name)
+        delivery_address = _uppercase_str(delivery_address)
+        delivery_notes = _uppercase_str(delivery_notes)
+        order_notes = _uppercase_str(order_notes)
 
         htc_updates: Dict[str, Any] = {}
         updated_fields: List[str] = []
@@ -830,6 +912,13 @@ class HtcIntegrationService:
         if order_notes is not None:
             htc_updates["M_OrderNotes"] = order_notes
             updated_fields.append("order_notes")
+
+        # ================================================================
+        # DIMENSIONS HANDLING (replace strategy)
+        # ================================================================
+        if dims is not None:
+            self._order_utils.replace_dims_records(order_number, dims)
+            updated_fields.append("dims")
 
         # ================================================================
         # ORDER TYPE RECALCULATION (if address changed)

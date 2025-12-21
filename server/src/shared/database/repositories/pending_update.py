@@ -61,6 +61,7 @@ class PendingUpdateRepository(BaseRepository[PendingUpdateModel]):
             pickup_notes=model.pickup_notes,
             delivery_notes=model.delivery_notes,
             order_notes=model.order_notes,
+            dims=model.dims,
             is_read=model.is_read,
             # Timestamps
             last_processed_at=model.last_processed_at,

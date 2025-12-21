@@ -8,7 +8,7 @@ from typing import Literal
 
 
 # Type aliases for output channel fields
-OutputChannelDataType = Literal["str", "int", "float", "datetime", "list[str]"]
+OutputChannelDataType = Literal["str", "int", "float", "datetime", "list[str]", "list[dim]"]
 OutputChannelCategory = Literal["identification", "pickup", "delivery", "cargo", "other"]
 
 

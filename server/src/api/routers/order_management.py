@@ -729,6 +729,7 @@ async def get_pending_update_detail(
             "pickup_notes": htc_fields.pickup_notes,
             "delivery_notes": htc_fields.delivery_notes,
             "order_notes": htc_fields.order_notes,
+            "dims": htc_fields.dims,
         }
 
     # Get history records
@@ -911,6 +912,7 @@ async def approve_pending_update(
             "pickup_notes": htc_fields.pickup_notes,
             "delivery_notes": htc_fields.delivery_notes,
             "order_notes": htc_fields.order_notes,
+            "dims": htc_fields.dims,
         }
 
     # Collect fields that have proposed changes (non-NULL values)
@@ -925,6 +927,14 @@ async def approve_pending_update(
     # Log what we're about to update
     htc_order_str = str(int(htc_order_number))
     logger.info(f"Applying {len(fields_to_update)} field updates to HTC order {htc_order_str}")
+
+    # Parse dims from JSON string to list if present
+    dims_list = None
+    if pending_update.dims:
+        try:
+            dims_list = json.loads(pending_update.dims)
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse dims JSON for pending update {pending_update_id}: {e}")
 
     try:
         # Call the HTC update_order method with all the field values and approver info
@@ -942,6 +952,7 @@ async def approve_pending_update(
             pickup_notes=pending_update.pickup_notes,
             delivery_notes=pending_update.delivery_notes,
             order_notes=pending_update.order_notes,
+            dims=dims_list,
             approver_username=request.approver_username,
             old_values=old_values,
             new_values=new_values,

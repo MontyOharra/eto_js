@@ -8,6 +8,23 @@ from typing import Any, Dict, List, Literal, Optional, TypedDict
 
 
 # =========================
+# Dim Object Type
+# =========================
+
+class DimObject(TypedDict):
+    """
+    A single dimension entry.
+    Matches HTC dims table structure.
+    """
+    height: float
+    length: float
+    width: float
+    qty: int
+    weight: float
+    dim_weight: float  # Calculated: L * W * H / 144
+
+
+# =========================
 # Status Literals
 # =========================
 
@@ -64,6 +81,7 @@ VALID_FIELD_NAMES = [
     "delivery_notes",
     "order_notes",
     "mawb",
+    "dims",
 ]
 
 
@@ -108,6 +126,8 @@ class PendingOrderUpdate(TypedDict, total=False):
     pickup_notes: str | None
     delivery_notes: str | None
     order_notes: str | None
+    # Dimensions (JSON string of list[DimObject])
+    dims: str | None
 
 
 @dataclass
@@ -138,6 +158,8 @@ class PendingOrder:
     pickup_notes: Optional[str]
     delivery_notes: Optional[str]
     order_notes: Optional[str]
+    # Dimensions (JSON string of list[DimObject])
+    dims: Optional[str]
     # Read/unread tracking
     is_read: bool
     # Timestamps
@@ -223,6 +245,8 @@ class PendingUpdateUpdate(TypedDict, total=False):
     pickup_notes: str | None
     delivery_notes: str | None
     order_notes: str | None
+    # Dimensions (JSON string of list[DimObject])
+    dims: str | None
 
 
 @dataclass
@@ -250,6 +274,8 @@ class PendingUpdate:
     pickup_notes: Optional[str]
     delivery_notes: Optional[str]
     order_notes: Optional[str]
+    # Dimensions (JSON string of list[DimObject])
+    dims: Optional[str]
     # Read/unread tracking
     is_read: bool
     # Timestamps

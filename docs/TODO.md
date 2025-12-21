@@ -892,7 +892,7 @@ This approach:
 
 ## 21. Dimensions Table Handling
 
-**Status:** In Progress (pieces/weight removed, proper dims system TBD)
+**Status:** COMPLETED (basic implementation)
 
 **Priority:** TBD
 
@@ -906,17 +906,105 @@ Removed placeholder pieces/weight fields that were incorrectly implemented:
 - Removed create_dimension_record and update_dimension_record methods
 - Removed from API schemas and email notifications
 
-**Phase 2 - Proper Dims System (TODO):**
-Need to design and implement proper dimensions handling:
-- Understand HTC dims table structure (`[HTC300_G040_T012A Open Order Dims]`)
-- Determine if ETO should create/manage dims or leave to manual entry
-- Consider multi-line items with different dimensions
-- Define pipeline output channels for dims if needed
+**Phase 2 - Proper Dims System (COMPLETED):**
+Implemented basic dims handling with full replacement strategy:
 
-**Investigation Needed:**
-- How are dims currently entered in HTC?
-- What fields are required vs optional?
-- Should dims be extracted from emails/PDFs?
+**Backend:**
+- Added `dims` field to `PendingOrderModel` and `PendingUpdateModel` (JSON text)
+- Added `DimObject` TypedDict and `dims` to pending order/update types
+- Added `dims` to `VALID_FIELD_NAMES` for field validation
+- `HtcOrderUtils`: Added `create_dims_records()`, `delete_dims_records()`, `replace_dims_records()`
+- `HtcLookupUtils`: Added `dims` field to `HtcOrderFields`, updated `get_order_fields()` to query dims table
+- `HtcIntegrationService`: Updated `create_order()` and `update_order()` to handle dims
+- `OutputProcessingService`: Added JSON serialization for dims in `_extract_valid_fields()`
+- Order update history: Human-readable dims format ("Removed Dim #1: 2 - 10x12x8 @ 25lbs. Added Dim #1: ...")
+
+**Frontend:**
+- Added dims formatting to `PendingOrderDetailView` and `PendingUpdateDetailView`
+- Added dims formatting to `MatchedSubRunsSection` and `SummarySuccessView`
+- Format: `qty - HxLxW @ weightlbs` (e.g., "2 - 10x12x8 @ 25lbs")
+
+**New Pipeline Modules (untracked):**
+- `dim_builder.py` - Builds a single dim object from height/length/width/qty/weight
+- `dim_list_collector.py` - Collects multiple dim objects into a list
+
+**Current Behavior:**
+- Dims are stored as JSON array in pending orders/updates
+- On order creation: dims records are inserted into HTC dims table
+- On order update: existing dims are deleted and replaced with new dims (full replacement)
+- Conflicts work the same as other fields (dropdown selection)
+
+**Future Improvements:**
+- More granular dim updates (add/remove individual dims instead of full replacement)
+- Dim-level conflict resolution
+- Support for partial dim updates
+
+---
+
+## 23. Individual Field Approvals for Updates
+
+**Status:** Not Started
+
+**Priority:** TBD
+
+**Issue:** Currently pending updates are all-or-nothing (approve or reject entire update). Users need ability to accept or reject individual field changes within an update.
+
+**Details:**
+- Allow user to approve/reject individual fields within a pending update
+- Partial approvals - accept some field changes, reject others
+- Only approved fields get written to HTC
+- Rejected fields are discarded but update can still complete with approved subset
+
+---
+
+## 24. Manual Approval Mode for Order Creation
+
+**Status:** Not Started
+
+**Priority:** TBD
+
+**Issue:** When auto-create is disabled, pending orders sit in "ready" status with no way for users to manually approve/reject them.
+
+**Details:**
+- Add "Approve" button to create order in HTC when in manual mode
+- Add "Reject" button to cancel/discard pending order
+- Similar workflow to pending updates approval
+- Status flow: `ready` → user approves → `processing` → `created`
+- Or: `ready` → user rejects → `rejected`
+
+---
+
+## 25. Auto-Approve Setting for Updates
+
+**Status:** Not Started
+
+**Priority:** TBD
+
+**Issue:** Need ability to auto-approve pending updates similar to how auto-create works for new orders.
+
+**Details:**
+- Add `order_management.auto_approve_updates` setting
+- When enabled, pending updates are automatically approved and applied to HTC
+- When disabled, updates require manual user approval (current behavior)
+- Worker checks setting before processing updates
+- Symmetry with order creation auto/manual modes
+
+---
+
+## 22. Email Recovery When WiFi Disconnects
+
+**Status:** Not Started
+
+**Priority:** TBD
+
+**Issue:** When the server loses WiFi connectivity, email fetching fails and needs to recover gracefully when connection is restored.
+
+**Details:**
+- Need to handle network interruption during email IMAP connections
+- Detect when connection drops mid-fetch
+- Automatically retry/resume when connectivity returns
+- Avoid duplicate processing of emails
+- Consider exponential backoff for retry attempts
 
 ---
 

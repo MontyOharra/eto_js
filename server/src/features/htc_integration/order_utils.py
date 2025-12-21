@@ -9,6 +9,7 @@ Provides order-related operations for the HTC database:
 - Supporting records (dimensions, history, HAWB associations)
 """
 
+import json
 import threading
 from dataclasses import dataclass
 from datetime import datetime
@@ -306,6 +307,7 @@ class HtcOrderUtils:
             "delivery_notes": "Delivery Notes",
             "order_notes": "Order Notes",
             "mawb": "MAWB",
+            "dims": "Dimensions",
         }
 
         def format_value(val: Any) -> str:
@@ -324,17 +326,72 @@ class HtcOrderUtils:
                     pass
             return str(val)
 
+        def format_dim(dim: Dict[str, Any]) -> str:
+            """Format a single dim object as 'qty - HxLxW @ weightlbs'."""
+            h = dim.get('height', 0)
+            l = dim.get('length', 0)
+            w = dim.get('width', 0)
+            qty = dim.get('qty', 1)
+            weight = dim.get('weight', 0)
+            return f"{qty} - {h}x{l}x{w} @ {weight}lbs"
+
+        def format_dims_change(old_dims: Any, new_dims: Any) -> str:
+            """
+            Format dims change as human-readable string.
+            Example: "Removed Dim #1: 2 - 10x12x8 @ 25lbs. Added Dim #1: 1 - 1x1x1 @ 10lbs."
+            """
+            # Parse dims if they're JSON strings
+            if isinstance(old_dims, str):
+                try:
+                    old_dims = json.loads(old_dims)
+                except (json.JSONDecodeError, TypeError):
+                    old_dims = []
+            if isinstance(new_dims, str):
+                try:
+                    new_dims = json.loads(new_dims)
+                except (json.JSONDecodeError, TypeError):
+                    new_dims = []
+
+            # Ensure we have lists
+            if not isinstance(old_dims, list):
+                old_dims = []
+            if not isinstance(new_dims, list):
+                new_dims = []
+
+            parts = []
+
+            # Add "Removed" entries first
+            for i, dim in enumerate(old_dims, start=1):
+                parts.append(f"Removed Dim #{i}: {format_dim(dim)}")
+
+            # Add "Added" entries
+            for i, dim in enumerate(new_dims, start=1):
+                parts.append(f"Added Dim #{i}: {format_dim(dim)}")
+
+            if not parts:
+                return "Dimensions unchanged"
+
+            return ". ".join(parts) + "."
+
         # Build the change description in the requested format
         # "Update request approved from ETO System:\n{field1} changed from {old} to {new},\n..."
         change_lines = []
         for field_name in updated_fields:
+            # Special handling for dims field
+            if field_name == "dims":
+                old_dims = old_values.get(field_name)
+                new_dims = new_values.get(field_name)
+                dims_desc = format_dims_change(old_dims, new_dims)
+                change_lines.append(dims_desc)
+                continue
+
             label = field_labels.get(field_name, field_name.replace("_", " ").title())
             old_val = format_value(old_values.get(field_name))
             new_val = format_value(new_values.get(field_name))
 
             change_lines.append(f"{label} changed from {old_val} to {new_val}")
 
-        changes_desc = "Update request approved from ETO System:\n" + ",\n".join(change_lines)
+        changes_desc = "Update request approved from ETO System:\n\n" + ",\n".join(change_lines)
 
         try:
             with connection.cursor() as cursor:
@@ -867,3 +924,122 @@ class HtcOrderUtils:
         except Exception as e:
             logger.warning(f"Failed to parse datetime string '{datetime_str}': {e}")
             return (datetime_str, "")
+
+    # ==================== Dimensions ====================
+
+    def create_dims_records(
+        self,
+        order_number: float,
+        dims: List[Dict[str, Any]],
+    ) -> int:
+        """
+        Create dimension records for an order in HTC300_G040_T012A Open Order Dims.
+
+        Args:
+            order_number: The HTC order number
+            dims: List of dim objects, each with: height, length, width, qty, weight, dim_weight
+
+        Returns:
+            Number of dim records created
+
+        Raises:
+            OutputExecutionError: If insertion fails
+        """
+        if not dims:
+            logger.debug(f"No dims to create for order {order_number}")
+            return 0
+
+        connection = self._get_connection()
+        created_count = 0
+
+        try:
+            with connection.cursor() as cursor:
+                for dim_id, dim in enumerate(dims, start=1):
+                    height = float(dim.get('height', 0))
+                    length = float(dim.get('length', 0))
+                    width = float(dim.get('width', 0))
+                    qty = int(dim.get('qty', 1))
+                    weight = float(dim.get('weight', 0))
+                    # Use provided dim_weight or calculate: L * W * H / 144
+                    dim_weight = dim.get('dim_weight')
+                    if dim_weight is None:
+                        dim_weight = (length * width * height) / 144.0
+                    dim_weight = float(dim_weight)
+
+                    cursor.execute("""
+                        INSERT INTO [HTC300_G040_T012A Open Order Dims]
+                        ([OD_CoID], [OD_BrID], [OD_OrderNo], [OD_DimID],
+                         [OD_UnitType], [OD_UnitQty],
+                         [OD_UnitHeight], [OD_UnitLength], [OD_UnitWidth],
+                         [OD_UnitWeight], [OD_UnitDimWeight])
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        self.CO_ID,
+                        self.BR_ID,
+                        order_number,
+                        dim_id,
+                        "EA",  # Unit type is always "EA"
+                        qty,
+                        height,
+                        length,
+                        width,
+                        weight,
+                        dim_weight,
+                    ))
+                    created_count += 1
+
+            logger.info(f"Created {created_count} dim records for order {order_number}")
+            return created_count
+
+        except Exception as e:
+            logger.error(f"Failed to create dims for order {order_number}: {e}")
+            raise OutputExecutionError(f"Failed to create dims: {e}") from e
+
+    def delete_dims_records(self, order_number: float) -> int:
+        """
+        Delete all dimension records for an order.
+
+        Used when replacing dims during an update.
+
+        Args:
+            order_number: The HTC order number
+
+        Returns:
+            Number of dim records deleted
+        """
+        connection = self._get_connection()
+
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    DELETE FROM [HTC300_G040_T012A Open Order Dims]
+                    WHERE [OD_CoID] = ? AND [OD_BrID] = ? AND [OD_OrderNo] = ?
+                """, (self.CO_ID, self.BR_ID, order_number))
+                deleted_count = cursor.rowcount
+
+            logger.info(f"Deleted {deleted_count} dim records for order {order_number}")
+            return deleted_count
+
+        except Exception as e:
+            logger.error(f"Failed to delete dims for order {order_number}: {e}")
+            raise OutputExecutionError(f"Failed to delete dims: {e}") from e
+
+    def replace_dims_records(
+        self,
+        order_number: float,
+        dims: List[Dict[str, Any]],
+    ) -> int:
+        """
+        Replace all dimension records for an order.
+
+        Deletes existing dims and creates new ones.
+
+        Args:
+            order_number: The HTC order number
+            dims: List of dim objects to create
+
+        Returns:
+            Number of new dim records created
+        """
+        self.delete_dims_records(order_number)
+        return self.create_dims_records(order_number, dims)

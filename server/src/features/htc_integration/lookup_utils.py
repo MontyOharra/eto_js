@@ -8,8 +8,9 @@ Provides lookup operations for HTC database entities:
 - Order lookups
 """
 
+import json
 from dataclasses import dataclass
-from typing import Any, Callable, Optional
+from typing import Any, Callable, List, Optional
 
 from shared.logging import get_logger
 
@@ -57,6 +58,7 @@ class HtcOrderFields:
     pickup_notes: Optional[str]
     delivery_notes: Optional[str]
     order_notes: Optional[str]
+    dims: Optional[str]  # JSON string of dim objects from dims table
 
 
 @dataclass
@@ -613,6 +615,40 @@ class HtcLookupUtils:
 
                 return f"{date_str}T{time_str}:00"
 
+            # Query dims from the dims table
+            dims_json: Optional[str] = None
+            with connection.cursor() as cursor:
+                dims_query = """
+                    SELECT
+                        [OD_UnitHeight],
+                        [OD_UnitLength],
+                        [OD_UnitWidth],
+                        [OD_UnitQty],
+                        [OD_UnitWeight],
+                        [OD_UnitDimWeight]
+                    FROM [HTC300_G040_T012A Open Order Dims]
+                    WHERE [OD_OrderNo] = ?
+                      AND [OD_CoID] = ?
+                      AND [OD_BrID] = ?
+                    ORDER BY [OD_DimID]
+                """
+                cursor.execute(dims_query, (order_number, self.CO_ID, self.BR_ID))
+                dims_rows = cursor.fetchall()
+
+                if dims_rows:
+                    dims_list: List[dict] = []
+                    for dim_row in dims_rows:
+                        dims_list.append({
+                            "height": float(dim_row[0]) if dim_row[0] is not None else 0,
+                            "length": float(dim_row[1]) if dim_row[1] is not None else 0,
+                            "width": float(dim_row[2]) if dim_row[2] is not None else 0,
+                            "qty": int(dim_row[3]) if dim_row[3] is not None else 1,
+                            "weight": float(dim_row[4]) if dim_row[4] is not None else 0,
+                            "dim_weight": float(dim_row[5]) if dim_row[5] is not None else 0,
+                        })
+                    dims_json = json.dumps(dims_list)
+                    logger.debug(f"Found {len(dims_list)} dims for order {order_number}")
+
             return HtcOrderFields(
                 order_number=float(order_row[0]),
                 customer_id=int(order_row[1]),
@@ -631,6 +667,7 @@ class HtcLookupUtils:
                 pickup_notes=str(order_row[16]) if order_row[16] else None,
                 delivery_notes=str(order_row[17]) if order_row[17] else None,
                 order_notes=str(order_row[18]) if order_row[18] else None,
+                dims=dims_json,
             )
 
         except Exception as e:

@@ -11,6 +11,7 @@ by the OrderManagementService.
 
 from typing import Any, Dict, List, Optional, TYPE_CHECKING, cast
 from datetime import datetime, timezone
+import json
 
 from shared.logging import get_logger
 from shared.events.order_events import order_event_manager
@@ -645,6 +646,7 @@ class OutputProcessingService:
         Extract only valid field names from output channel data.
 
         Filters out 'hawb' (it's the key, not a field) and any unknown field names.
+        Special handling for 'dims' field which needs JSON serialization.
 
         Args:
             output_channel_data: Raw output channel data from pipeline
@@ -658,6 +660,10 @@ class OutputProcessingService:
             if field_name == "hawb":
                 continue
 
+            # Skip 'hawb_list' - it's processed into multiple HAWBs, not a field to store
+            if field_name == "hawb_list":
+                continue
+
             # Skip unknown field names
             if field_name not in VALID_FIELD_NAMES:
                 logger.warning(f"Ignoring unknown field: {field_name}")
@@ -666,6 +672,12 @@ class OutputProcessingService:
             # Skip None/empty values
             if value is None or value == "":
                 continue
+
+            # Special handling for dims - JSON serialize list/dict values
+            if field_name == "dims":
+                if isinstance(value, (list, dict)):
+                    value = json.dumps(value)
+                # If already a string (shouldn't happen normally), keep as-is
 
             valid_fields[field_name] = value
 

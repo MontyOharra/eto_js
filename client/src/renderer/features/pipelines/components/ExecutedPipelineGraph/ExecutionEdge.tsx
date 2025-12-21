@@ -52,6 +52,29 @@ const formatDateTime = (isoString: string): string => {
   }
 };
 
+// Check if value is a dim object (has height, length, width, qty, weight)
+const isDimObject = (value: any): boolean => {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'height' in value &&
+    'length' in value &&
+    'width' in value &&
+    'qty' in value &&
+    'weight' in value
+  );
+};
+
+// Format a single dim object as "qty - HxLxW @weightlbs"
+const formatDim = (dim: any): string => {
+  const h = dim.height ?? 0;
+  const l = dim.length ?? 0;
+  const w = dim.width ?? 0;
+  const qty = dim.qty ?? 1;
+  const weight = dim.weight ?? 0;
+  return `${qty} - ${h}x${l}x${w} @${weight}lbs`;
+};
+
 const formatValue = (value: any, truncate: boolean = true): string => {
   if (value === null) return 'null';
   if (value === undefined) return 'undefined';
@@ -65,6 +88,15 @@ const formatValue = (value: any, truncate: boolean = true): string => {
   if (typeof value === 'number') return value.toString();
   if (typeof value === 'boolean') return value.toString();
   if (typeof value === 'object') {
+    // Check for dim object
+    if (isDimObject(value)) {
+      return formatDim(value);
+    }
+    // Check for list[dim] - array of dim objects
+    if (Array.isArray(value) && value.length > 0 && isDimObject(value[0])) {
+      const formatted = '[' + value.map(formatDim).join(', ') + ']';
+      return truncate && formatted.length > 30 ? formatted.substring(0, 30) + '...' : formatted;
+    }
     const stringified = JSON.stringify(value, null, 2);
     return truncate && stringified.length > 30 ? stringified.substring(0, 30) + '...' : stringified;
   }

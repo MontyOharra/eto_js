@@ -42,7 +42,34 @@ function formatISODateTime(isoString: string): string {
 }
 
 /**
- * Format a value for display, handling datetime objects and ISO strings
+ * Check if value is a dim object (has height, length, width, qty, weight)
+ */
+function isDimObject(value: unknown): boolean {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "height" in value &&
+    "length" in value &&
+    "width" in value &&
+    "qty" in value &&
+    "weight" in value
+  );
+}
+
+/**
+ * Format a single dim object as "qty - HxLxW @weightlbs"
+ */
+function formatDim(dim: Record<string, unknown>): string {
+  const h = dim.height ?? 0;
+  const l = dim.length ?? 0;
+  const w = dim.width ?? 0;
+  const qty = dim.qty ?? 1;
+  const weight = dim.weight ?? 0;
+  return `${qty} - ${h}x${l}x${w} @${weight}lbs`;
+}
+
+/**
+ * Format a value for display, handling datetime objects, ISO strings, and dims
  */
 function formatValue(value: unknown): string {
   if (value === null || value === undefined) {
@@ -60,6 +87,17 @@ function formatValue(value: unknown): string {
   // Check if it's a datetime object (has year, month, day properties)
   if (typeof value === "object" && value !== null) {
     const obj = value as Record<string, unknown>;
+
+    // Check for dim object
+    if (isDimObject(value)) {
+      return formatDim(obj);
+    }
+
+    // Check for list[dim] - array of dim objects
+    if (Array.isArray(value) && value.length > 0 && isDimObject(value[0])) {
+      return "[" + value.map((d) => formatDim(d as Record<string, unknown>)).join(", ") + "]";
+    }
+
     if ("year" in obj && "month" in obj && "day" in obj) {
       const year = obj.year as number;
       const month = obj.month as number;

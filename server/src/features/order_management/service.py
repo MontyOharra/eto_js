@@ -135,6 +135,7 @@ FIELD_LABELS: Dict[str, str] = {
     "delivery_time_end": "Delivery End",
     "delivery_notes": "Delivery Notes",
     "order_notes": "Order Notes",
+    "dims": "Dimensions",
 }
 
 
@@ -838,7 +839,7 @@ class OrderManagementService:
 
         try:
             # Update the order in HTC
-            self._htc_service.update_order(
+            self._htc_service.update_order_simple(
                 order_number=pending_update.htc_order_number,
                 updates=update_fields,
             )

@@ -60,8 +60,52 @@ const DATETIME_FIELDS = new Set([
 ]);
 
 /**
+ * Check if value is a dim object (has height, length, width, qty, weight)
+ */
+function isDimObject(value: unknown): boolean {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'height' in value &&
+    'length' in value &&
+    'width' in value &&
+    'qty' in value &&
+    'weight' in value
+  );
+}
+
+/**
+ * Format a single dim object as "qty - HxLxW @weightlbs"
+ */
+function formatDim(dim: Record<string, unknown>): string {
+  const h = dim.height ?? 0;
+  const l = dim.length ?? 0;
+  const w = dim.width ?? 0;
+  const qty = dim.qty ?? 1;
+  const weight = dim.weight ?? 0;
+  return `${qty} - ${h}x${l}x${w} @${weight}lbs`;
+}
+
+/**
+ * Try to parse a value as JSON, handling Python-style single quotes
+ */
+function tryParseJson(value: string): unknown | null {
+  try {
+    return JSON.parse(value);
+  } catch {
+    try {
+      const jsonified = value.replace(/'/g, '"');
+      return JSON.parse(jsonified);
+    } catch {
+      return null;
+    }
+  }
+}
+
+/**
  * Format a field value for display.
  * For datetime fields, converts ISO string to human-readable format.
+ * For dims fields, formats dim objects as human-readable text.
  */
 function formatFieldValue(fieldName: string, value: string | null): string | null {
   if (value === null) return null;
@@ -82,6 +126,21 @@ function formatFieldValue(fieldName: string, value: string | null): string | nul
       });
     } catch {
       return value;
+    }
+  }
+
+  // Handle dims field
+  if (fieldName === 'dims') {
+    const parsed = tryParseJson(value);
+    if (parsed !== null) {
+      // Check for single dim object
+      if (isDimObject(parsed)) {
+        return formatDim(parsed as Record<string, unknown>);
+      }
+      // Check for list[dim] - array of dim objects
+      if (Array.isArray(parsed) && parsed.length > 0 && isDimObject(parsed[0])) {
+        return '[' + parsed.map((d) => formatDim(d as Record<string, unknown>)).join(', ') + ']';
+      }
     }
   }
 

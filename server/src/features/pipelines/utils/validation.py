@@ -18,7 +18,7 @@ from shared.utils.registry import get_registry
 logger = logging.getLogger(__name__)
 
 # Allowed types for module pins
-ALLOWED_PIN_TYPES = {"str", "int", "float", "bool", "datetime", "list[str]"}
+ALLOWED_PIN_TYPES = {"str", "int", "float", "bool", "datetime", "list[str]", "dim", "list[dim]"}
 
 
 class PipelineValidator:

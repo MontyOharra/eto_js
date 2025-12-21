@@ -345,6 +345,7 @@ FIELD_LABELS: Dict[str, str] = {
     "delivery_notes": "Delivery Notes",
     "order_notes": "Order Notes",
     "mawb": "MAWB",
+    "dims": "Dimensions",
 }
 
 

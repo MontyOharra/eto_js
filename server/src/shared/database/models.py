@@ -895,6 +895,10 @@ class PendingOrderModel(BaseModel):
     delivery_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     order_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # Dimensions (JSON array of dim objects)
+    # Each dim: {"height": float, "length": float, "width": float, "qty": int, "weight": float, "dim_weight": float}
+    dims: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     # Read/unread tracking for UI
     is_read: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="0")
 
@@ -1032,6 +1036,10 @@ class PendingUpdateModel(BaseModel):
     pickup_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     delivery_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     order_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Dimensions (JSON array of dim objects)
+    # Each dim: {"height": float, "length": float, "width": float, "qty": int, "weight": float, "dim_weight": float}
+    dims: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Read/unread tracking for UI
     is_read: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="0")

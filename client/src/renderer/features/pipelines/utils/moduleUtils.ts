@@ -15,6 +15,8 @@ export const TYPE_COLORS: Record<string, string> = {
   bool: "#10B981", // green-500
   datetime: "#8B5CF6", // purple-500
   "list[str]": "#F59E0B", // amber-500
+  dim: "#F97316", // orange-500
+  "list[dim]": "#EA580C", // orange-600
 };
 
 /**
