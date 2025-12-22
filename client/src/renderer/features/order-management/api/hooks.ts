@@ -145,6 +145,80 @@ export function useConfirmField() {
   });
 }
 
+/**
+ * Approve a pending order and create it in HTC
+ */
+export function useApprovePendingOrder() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      pendingOrderId,
+      approverUsername,
+    }: {
+      pendingOrderId: number;
+      approverUsername: string;
+    }): Promise<{ success: boolean; pending_order_id: number; htc_order_number?: number; new_status: string; message?: string }> => {
+      const response = await apiClient.post(
+        `${baseUrl}/pending-orders/${pendingOrderId}/approve`,
+        { approver_username: approverUsername }
+      );
+      return response.data;
+    },
+    onSuccess: (_data, variables) => {
+      // Invalidate the specific order detail
+      queryClient.invalidateQueries({
+        queryKey: orderManagementQueryKeys.pendingOrderDetail(variables.pendingOrderId),
+      });
+      // Invalidate the list
+      queryClient.invalidateQueries({
+        queryKey: orderManagementQueryKeys.pendingOrders(),
+      });
+      // Invalidate unified actions
+      queryClient.invalidateQueries({
+        queryKey: orderManagementQueryKeys.unifiedActions(),
+      });
+    },
+  });
+}
+
+/**
+ * Reject a pending order
+ */
+export function useRejectPendingOrder() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      pendingOrderId,
+      reason,
+    }: {
+      pendingOrderId: number;
+      reason?: string;
+    }): Promise<{ success: boolean; pending_order_id: number; new_status: string; message?: string }> => {
+      const response = await apiClient.post(
+        `${baseUrl}/pending-orders/${pendingOrderId}/reject`,
+        { reason }
+      );
+      return response.data;
+    },
+    onSuccess: (_data, variables) => {
+      // Invalidate the specific order detail
+      queryClient.invalidateQueries({
+        queryKey: orderManagementQueryKeys.pendingOrderDetail(variables.pendingOrderId),
+      });
+      // Invalidate the list
+      queryClient.invalidateQueries({
+        queryKey: orderManagementQueryKeys.pendingOrders(),
+      });
+      // Invalidate unified actions
+      queryClient.invalidateQueries({
+        queryKey: orderManagementQueryKeys.unifiedActions(),
+      });
+    },
+  });
+}
+
 // ============================================================================
 // Pending Updates Hooks
 // ============================================================================

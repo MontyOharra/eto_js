@@ -24,6 +24,10 @@ interface PendingOrderDetailViewProps {
   onConfirmField: (fieldName: string, historyId: number) => void;
   onViewSubRun: (subRunId: number) => void;
   confirmingFields?: Set<string>; // Fields currently being confirmed
+  onApprove?: () => void; // Approve and create order in HTC
+  onReject?: () => void; // Reject the pending order
+  isApproving?: boolean; // True while approve is in progress
+  isRejecting?: boolean; // True while reject is in progress
 }
 
 interface LocalFieldState {
@@ -404,6 +408,10 @@ export function PendingOrderDetailView({
   onConfirmField,
   onViewSubRun,
   confirmingFields = new Set(),
+  onApprove,
+  onReject,
+  isApproving = false,
+  isRejecting = false,
 }: PendingOrderDetailViewProps) {
   // Track local conflict selections (before submitting to API)
   const [localSelections, setLocalSelections] = useState<LocalFieldState>({});
@@ -461,10 +469,15 @@ export function PendingOrderDetailView({
         return { label: 'Created', color: 'text-blue-400', bg: 'bg-blue-500/20 border-blue-500/30' };
       case 'failed':
         return { label: 'Failed', color: 'text-red-400', bg: 'bg-red-500/20 border-red-500/30' };
+      case 'rejected':
+        return { label: 'Rejected', color: 'text-gray-400', bg: 'bg-gray-500/20 border-gray-500/30' };
       default:
         return { label: order.status, color: 'text-gray-400', bg: 'bg-gray-500/20 border-gray-500/30' };
     }
   };
+
+  // Can approve/reject only if order is ready
+  const canApproveReject = order.status === 'ready';
 
   const statusDisplay = getStatusDisplay();
 
@@ -489,7 +502,7 @@ export function PendingOrderDetailView({
           Back
         </button>
 
-        {/* Order Info Row - Left: Info, Right: Status */}
+        {/* Order Info Row - Left: Info, Right: Status + Actions */}
         <div className="mt-4 flex items-start justify-between">
           {/* Left: HAWB and Customer */}
           <div>
@@ -500,20 +513,43 @@ export function PendingOrderDetailView({
             </p>
           </div>
 
-          {/* Right: Status Badge */}
-          <div className={`px-4 py-3 rounded-lg border ${statusDisplay.bg} text-right`}>
-            <div className={`font-medium ${statusDisplay.color}`}>
-              {statusDisplay.label}
-            </div>
-            {order.status === 'incomplete' && (
-              <div className="text-xs text-gray-400 mt-1">
-                {presentRequiredCount}/{requiredFields.length} required fields
-                {conflictCount > 0 && ` · ${conflictCount} conflict${conflictCount > 1 ? 's' : ''}`}
+          {/* Right: Status Badge + Action Buttons */}
+          <div className="flex items-start gap-4">
+            {/* Status Badge */}
+            <div className={`px-4 py-3 rounded-lg border ${statusDisplay.bg} text-right`}>
+              <div className={`font-medium ${statusDisplay.color}`}>
+                {statusDisplay.label}
               </div>
-            )}
-            {order.status === 'created' && order.htc_order_number && (
-              <div className="text-xs text-gray-400 mt-1">
-                Order #{order.htc_order_number}
+              {order.status === 'incomplete' && (
+                <div className="text-xs text-gray-400 mt-1">
+                  {presentRequiredCount}/{requiredFields.length} required fields
+                  {conflictCount > 0 && ` · ${conflictCount} conflict${conflictCount > 1 ? 's' : ''}`}
+                </div>
+              )}
+              {order.status === 'created' && order.htc_order_number && (
+                <div className="text-xs text-gray-400 mt-1">
+                  Order #{order.htc_order_number}
+                </div>
+              )}
+            </div>
+
+            {/* Approve/Reject Buttons - only when ready */}
+            {canApproveReject && (
+              <div className="flex gap-2">
+                <button
+                  onClick={onReject}
+                  disabled={isRejecting || isApproving}
+                  className="px-4 py-2 rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isRejecting ? 'Rejecting...' : 'Reject'}
+                </button>
+                <button
+                  onClick={onApprove}
+                  disabled={isApproving || isRejecting}
+                  className="px-4 py-2 rounded-lg border border-green-500/30 bg-green-500/10 text-green-400 hover:bg-green-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isApproving ? 'Creating...' : 'Approve'}
+                </button>
               </div>
             )}
           </div>

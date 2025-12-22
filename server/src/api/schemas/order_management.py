@@ -203,6 +203,33 @@ class RetryPendingOrderResponse(BaseModel):
     message: Optional[str] = None
 
 
+class ApprovePendingOrderRequest(BaseModel):
+    """Request to manually approve a pending order for HTC creation"""
+    approver_username: str = Field(..., description="Staff_Login of the user approving (for audit trail)")
+
+
+class ApprovePendingOrderResponse(BaseModel):
+    """Response after manually approving a pending order"""
+    success: bool
+    pending_order_id: int
+    htc_order_number: Optional[int] = None  # The created HTC order number
+    new_status: str
+    message: Optional[str] = None
+
+
+class RejectPendingOrderRequest(BaseModel):
+    """Request to reject a pending order"""
+    reason: Optional[str] = Field(None, description="Optional reason for rejection")
+
+
+class RejectPendingOrderResponse(BaseModel):
+    """Response after rejecting a pending order"""
+    success: bool
+    pending_order_id: int
+    new_status: str
+    message: Optional[str] = None
+
+
 # =============================================================================
 # Pending Updates (for existing HTC orders)
 # =============================================================================

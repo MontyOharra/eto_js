@@ -647,27 +647,97 @@ class OrderManagementService:
 
     def reject_pending_order(self, pending_order_id: int, reason: Optional[str] = None) -> bool:
         """
-        Reject/delete a pending order.
+        Reject a pending order by setting its status to 'rejected'.
 
         Args:
             pending_order_id: ID of the pending order to reject
             reason: Optional reason for rejection
 
         Returns:
-            True if successfully deleted
+            True if successfully rejected
         """
         logger.info(f"Rejecting pending order {pending_order_id}: {reason}")
 
-        # TODO: Implement soft delete or hard delete
-        # For now, just delete
-        self._pending_order_repo.delete(pending_order_id)
+        pending_order = self._pending_order_repo.get_by_id(pending_order_id)
+        if not pending_order:
+            logger.warning(f"Cannot reject: pending order {pending_order_id} not found")
+            return False
 
-        # Broadcast SSE event
-        order_event_manager.broadcast_sync("pending_order_deleted", {
-            "id": pending_order_id,
+        if pending_order.status not in ("ready", "incomplete"):
+            logger.warning(
+                f"Cannot reject: pending order {pending_order_id} status is "
+                f"'{pending_order.status}', expected 'ready' or 'incomplete'"
+            )
+            return False
+
+        self._pending_order_repo.update(pending_order_id, {
+            "status": "rejected",
+            "last_processed_at": datetime.now(),
         })
 
+        # Broadcast SSE event
+        order_event_manager.broadcast_sync("pending_order_resolved", {
+            "id": pending_order_id,
+            "status": "rejected",
+        })
+
+        logger.info(f"Pending order {pending_order_id} rejected")
         return True
+
+    def create_pending_order_now(self, pending_order_id: int) -> float:
+        """
+        Manually create an HTC order from a pending order (synchronously).
+
+        This bypasses the auto-create worker and immediately creates the order.
+        Used for manual approval when auto-create is disabled.
+
+        Follows the same flow as the worker:
+        1. Mark as processing
+        2. Create order in HTC
+        3. Mark as created (includes attachments and email notifications)
+        4. Or mark as failed if creation fails
+
+        Args:
+            pending_order_id: ID of the pending order to create
+
+        Returns:
+            The created HTC order number
+
+        Raises:
+            ValueError: If pending order not found or not in 'ready' status
+            Exception: If HTC order creation fails
+        """
+        pending_order = self._pending_order_repo.get_by_id(pending_order_id)
+        if not pending_order:
+            raise ValueError(f"Pending order {pending_order_id} not found")
+
+        if pending_order.status != "ready":
+            raise ValueError(
+                f"Pending order {pending_order_id} status is '{pending_order.status}', "
+                f"expected 'ready'"
+            )
+
+        # Mark as processing
+        self._mark_pending_order_processing(pending_order_id)
+
+        try:
+            # Create the HTC order
+            htc_order_number = self._create_htc_order_by_id(pending_order_id)
+
+            # Mark as created (handles attachments and emails)
+            self._mark_pending_order_created(pending_order_id, htc_order_number)
+
+            logger.info(
+                f"Manually created HTC order {int(htc_order_number)} "
+                f"from pending order {pending_order_id}"
+            )
+
+            return htc_order_number
+
+        except Exception as e:
+            # Mark as failed
+            self._mark_pending_order_failed(pending_order_id, str(e))
+            raise
 
     def _build_htc_order_data(self, pending_order: PendingOrder) -> Dict[str, Any]:
         """

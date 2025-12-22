@@ -7,6 +7,8 @@ import {
   OrderHistoryTimeline,
   usePendingOrderDetail,
   useConfirmField,
+  useApprovePendingOrder,
+  useRejectPendingOrder,
   usePendingUpdateDetail,
   useOrderHistory,
   useApprovePendingUpdate,
@@ -92,6 +94,8 @@ function OrdersPage() {
 
   // Mutations - Pending Orders
   const confirmField = useConfirmField();
+  const approvePendingOrder = useApprovePendingOrder();
+  const rejectPendingOrder = useRejectPendingOrder();
 
   // Mutations - Pending Updates
   const approveUpdate = useApprovePendingUpdate();
@@ -164,6 +168,33 @@ function OrdersPage() {
     setDetailView(null);
   };
 
+  const handleApprovePendingOrder = () => {
+    if (!selectedOrderId) return;
+    const approverUsername = session?.user?.username || 'ETO_SYSTEM';
+    approvePendingOrder.mutate(
+      { pendingOrderId: selectedOrderId, approverUsername },
+      {
+        onSuccess: () => {
+          // Go back to list after successful creation
+          setDetailView(null);
+        },
+      }
+    );
+  };
+
+  const handleRejectPendingOrder = () => {
+    if (!selectedOrderId) return;
+    rejectPendingOrder.mutate(
+      { pendingOrderId: selectedOrderId },
+      {
+        onSuccess: () => {
+          // Go back to list after successful rejection
+          setDetailView(null);
+        },
+      }
+    );
+  };
+
   const handleViewSubRun = (subRunId: number) => {
     setViewingSubRunId(subRunId);
   };
@@ -213,6 +244,10 @@ function OrdersPage() {
           onConfirmField={handleConfirmField}
           onViewSubRun={handleViewSubRun}
           confirmingFields={confirmingFields}
+          onApprove={handleApprovePendingOrder}
+          onReject={handleRejectPendingOrder}
+          isApproving={approvePendingOrder.isPending}
+          isRejecting={rejectPendingOrder.isPending}
         />
         <EtoSubRunDetailViewer
           isOpen={viewingSubRunId !== null}

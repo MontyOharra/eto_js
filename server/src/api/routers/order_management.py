@@ -21,6 +21,10 @@ from api.schemas.order_management import (
     ConfirmFieldResponse,
     CreateOrderResponse,
     RetryPendingOrderResponse,
+    ApprovePendingOrderRequest,
+    ApprovePendingOrderResponse,
+    RejectPendingOrderRequest,
+    RejectPendingOrderResponse,
     # Pending Updates
     GetPendingUpdatesResponse,
     PendingUpdateListItem,
@@ -484,6 +488,113 @@ async def retry_pending_order(
         pending_order_id=pending_order_id,
         new_status="ready",
         message="Pending order reset to 'ready' for retry. The worker will attempt HTC creation shortly."
+    )
+
+
+@router.post("/pending-orders/{pending_order_id}/approve", response_model=ApprovePendingOrderResponse)
+async def approve_pending_order(
+    pending_order_id: int,
+    request: ApprovePendingOrderRequest,
+    service = Depends(lambda: ServiceContainer.get_order_management_service())
+) -> ApprovePendingOrderResponse:
+    """
+    Manually approve a pending order and create it in HTC.
+
+    This bypasses the auto-create setting and immediately creates the order.
+    Only works for orders with status='ready'.
+
+    Used when auto-create is disabled and user wants to manually approve
+    individual orders for creation.
+    """
+    logger.info(f"Approve pending order: id={pending_order_id}, approver={request.approver_username}")
+
+    # Get the pending order
+    pending_order_repo = service._pending_order_repo
+    order = pending_order_repo.get_by_id(pending_order_id)
+
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Pending order {pending_order_id} not found"
+        )
+
+    if order.status != "ready":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot approve pending order with status '{order.status}'. Only 'ready' orders can be approved."
+        )
+
+    try:
+        # Create the order in HTC (synchronously)
+        htc_order_number = service.create_pending_order_now(pending_order_id)
+
+        # Broadcast SSE event
+        order_event_manager.broadcast_sync("pending_order_resolved", {
+            "id": pending_order_id,
+            "status": "created",
+            "htc_order_number": int(htc_order_number),
+        })
+
+        return ApprovePendingOrderResponse(
+            success=True,
+            pending_order_id=pending_order_id,
+            htc_order_number=int(htc_order_number),
+            new_status="created",
+            message=f"Order created in HTC with order number {int(htc_order_number)}"
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to create HTC order for pending order {pending_order_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create HTC order: {str(e)}"
+        )
+
+
+@router.post("/pending-orders/{pending_order_id}/reject", response_model=RejectPendingOrderResponse)
+async def reject_pending_order(
+    pending_order_id: int,
+    request: RejectPendingOrderRequest,
+    service = Depends(lambda: ServiceContainer.get_order_management_service())
+) -> RejectPendingOrderResponse:
+    """
+    Reject a pending order.
+
+    Marks the order as rejected, preventing it from being created in HTC.
+    Works for orders with status='ready' or 'incomplete'.
+    """
+    logger.info(f"Reject pending order: id={pending_order_id}, reason={request.reason}")
+
+    # Get the pending order
+    pending_order_repo = service._pending_order_repo
+    order = pending_order_repo.get_by_id(pending_order_id)
+
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Pending order {pending_order_id} not found"
+        )
+
+    if order.status not in ("ready", "incomplete"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot reject pending order with status '{order.status}'. Only 'ready' or 'incomplete' orders can be rejected."
+        )
+
+    # Update status to rejected
+    pending_order_repo.update(pending_order_id, {"status": "rejected"})
+
+    # Broadcast SSE event
+    order_event_manager.broadcast_sync("pending_order_resolved", {
+        "id": pending_order_id,
+        "status": "rejected",
+    })
+
+    return RejectPendingOrderResponse(
+        success=True,
+        pending_order_id=pending_order_id,
+        new_status="rejected",
+        message="Pending order has been rejected"
     )
 
 
