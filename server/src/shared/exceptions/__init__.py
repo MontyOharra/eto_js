@@ -18,6 +18,12 @@ from .output_execution import (
     OutputExecutionError,
 )
 
+from .email import (
+    EmailIntegrationError,
+    PermanentEmailError,
+    TransientEmailError,
+)
+
 __all__ = [
     # Service exceptions
     'ServiceError',
@@ -33,4 +39,9 @@ __all__ = [
 
     # Output execution exceptions
     'OutputExecutionError',
+
+    # Email integration exceptions
+    'EmailIntegrationError',
+    'PermanentEmailError',
+    'TransientEmailError',
 ]

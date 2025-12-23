@@ -19,6 +19,7 @@ from typing import Optional
 
 from .base_integration import BaseEmailIntegration, EmailMessage, EmailAttachment, ValidationResult, SendEmailResult
 from .registry import IntegrationRegistry
+from shared.exceptions import PermanentEmailError, TransientEmailError
 
 logger = logging.getLogger(__name__)
 
@@ -386,11 +387,12 @@ class StandardEmailIntegration(BaseEmailIntegration):
             if self._imap is None:
                 raise RuntimeError("Not connected")
 
-            # Select the folder
-            self.logger.debug(f"[IMAP] Selecting folder '{folder_name}' for {self.email_address}")
-            status, data = self._imap.select(folder_name, readonly=True)
+            # Select the folder (quote if contains spaces)
+            quoted_folder = self._quote_folder_name(folder_name)
+            self.logger.debug(f"[IMAP] Selecting folder '{folder_name}' (quoted: {quoted_folder}) for {self.email_address}")
+            status, data = self._imap.select(quoted_folder, readonly=True)
             if status != "OK":
-                raise RuntimeError(f"Failed to select folder '{folder_name}': {data}")
+                self._raise_folder_error(folder_name, data)
 
             search_range = f"{since_uid + 1}:*"
 
@@ -441,9 +443,10 @@ class StandardEmailIntegration(BaseEmailIntegration):
             if self._imap is None:
                 raise RuntimeError("Not connected")
 
-            status, data = self._imap.select(folder_name, readonly=True)
+            quoted_folder = self._quote_folder_name(folder_name)
+            status, data = self._imap.select(quoted_folder, readonly=True)
             if status != "OK":
-                raise RuntimeError(f"Failed to select folder '{folder_name}': {data}")
+                self._raise_folder_error(folder_name, data)
 
             status, data = self._imap.uid("SEARCH", "ALL")
             if status != "OK":
@@ -488,8 +491,9 @@ class StandardEmailIntegration(BaseEmailIntegration):
             if self._imap is None:
                 raise RuntimeError("Not connected")
 
-            # Select folder
-            status, _ = self._imap.select(folder_name, readonly=True)
+            # Select folder (quote if contains spaces)
+            quoted_folder = self._quote_folder_name(folder_name)
+            status, _ = self._imap.select(quoted_folder, readonly=True)
             if status != "OK":
                 self.logger.error(f"Failed to select folder {folder_name}")
                 return []
@@ -618,6 +622,60 @@ class StandardEmailIntegration(BaseEmailIntegration):
                         capabilities.append(str(cap))
 
             return capabilities
+
+    # ========== Helper Methods ==========
+
+    def _quote_folder_name(self, folder_name: str) -> str:
+        """
+        Quote folder name for IMAP commands if needed.
+
+        IMAP requires folder names containing spaces or special characters
+        to be enclosed in double quotes.
+        """
+        # If already quoted, return as-is
+        if folder_name.startswith('"') and folder_name.endswith('"'):
+            return folder_name
+
+        # Quote if contains spaces or special IMAP characters
+        if ' ' in folder_name or any(c in folder_name for c in ['(', ')', '{', '}', '%', '*', '\\']):
+            # Escape any existing double quotes and backslashes
+            escaped = folder_name.replace('\\', '\\\\').replace('"', '\\"')
+            return f'"{escaped}"'
+
+        return folder_name
+
+    # ========== Error Handling ==========
+
+    def _raise_folder_error(self, folder_name: str, data: list) -> None:
+        """
+        Raise appropriate exception based on folder selection error.
+
+        Categorizes errors as permanent (folder doesn't exist) or transient
+        (connection issues, server errors).
+        """
+        error_str = str(data)
+        error_bytes = data[0] if data and isinstance(data[0], bytes) else b""
+
+        # Check for permanent errors (folder doesn't exist)
+        permanent_indicators = [
+            b"doesn't exist",
+            b"does not exist",
+            b"not exist",
+            b"Mailbox not found",
+            b"NO Mailbox",
+            b"NONEXISTENT",
+        ]
+
+        for indicator in permanent_indicators:
+            if indicator.lower() in error_bytes.lower():
+                raise PermanentEmailError(
+                    f"Folder '{folder_name}' does not exist: {error_str}"
+                )
+
+        # Default to transient error (may be connection issue, server problem, etc.)
+        raise TransientEmailError(
+            f"Failed to select folder '{folder_name}': {error_str}"
+        )
 
     # ========== Internal Email Parsing ==========
 

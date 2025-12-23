@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Callable
 
 from shared.database.repositories.email import EmailRepository
 from shared.types.email_ingestion_configs import EmailIngestionConfig
+from shared.exceptions import PermanentEmailError, TransientEmailError
 from features.email.integrations.base_integration import EmailMessage
 from features.email.utils.filter_rules import apply_filter_rules
 from features.email.utils.deduplication import filter_duplicate_emails
@@ -29,7 +30,15 @@ class PollerWorker:
     Each PollerWorker runs in its own thread and polls at the interval
     specified in the config. Uses the service's get_emails_since_uid()
     method which routes to the appropriate integration.
+
+    Error Handling:
+    - Permanent errors (e.g., folder doesn't exist): Deactivate immediately
+    - Transient errors (e.g., connection issues): Retry up to MAX_CONSECUTIVE_ERRORS
+      times before deactivating
     """
+
+    # Number of consecutive transient errors before auto-deactivating
+    MAX_CONSECUTIVE_ERRORS = 3
 
     def __init__(
         self,
@@ -58,6 +67,9 @@ class PollerWorker:
 
         # Track last processed UID (start from config's stored value)
         self._last_processed_uid = config.last_processed_uid or 0
+
+        # Track consecutive errors for auto-deactivation
+        self._consecutive_errors = 0
 
         self.logger = logging.getLogger(f"{__name__}.Poller-{config.id}")
 
@@ -119,13 +131,50 @@ class PollerWorker:
             poll_count += 1
             try:
                 self._poll_once(poll_count)
-            except Exception as e:
+                # Reset error count on successful poll
+                self._consecutive_errors = 0
+
+            except PermanentEmailError as e:
+                # Permanent error - deactivate immediately
                 self.logger.error(
-                    f"[POLLER {self.config.id}] Poll #{poll_count} ERROR: {e}",
+                    f"[POLLER {self.config.id}] Poll #{poll_count} PERMANENT ERROR: {e}"
+                )
+                self._deactivate_with_error(str(e))
+                break
+
+            except TransientEmailError as e:
+                # Transient error - retry with limit
+                self._consecutive_errors += 1
+                self.logger.warning(
+                    f"[POLLER {self.config.id}] Poll #{poll_count} TRANSIENT ERROR "
+                    f"({self._consecutive_errors}/{self.MAX_CONSECUTIVE_ERRORS}): {e}"
+                )
+
+                if self._consecutive_errors >= self.MAX_CONSECUTIVE_ERRORS:
+                    self._deactivate_with_error(
+                        f"Too many consecutive errors ({self.MAX_CONSECUTIVE_ERRORS}): {e}"
+                    )
+                    break
+                else:
+                    # Record the error but continue polling
+                    self._record_error(str(e))
+
+            except Exception as e:
+                # Unexpected error - treat as transient
+                self._consecutive_errors += 1
+                self.logger.error(
+                    f"[POLLER {self.config.id}] Poll #{poll_count} UNEXPECTED ERROR "
+                    f"({self._consecutive_errors}/{self.MAX_CONSECUTIVE_ERRORS}): {e}",
                     exc_info=True
                 )
-                # Record error in service (will be persisted)
-                self._record_error(str(e))
+
+                if self._consecutive_errors >= self.MAX_CONSECUTIVE_ERRORS:
+                    self._deactivate_with_error(
+                        f"Too many consecutive errors ({self.MAX_CONSECUTIVE_ERRORS}): {e}"
+                    )
+                    break
+                else:
+                    self._record_error(str(e))
 
             # Sleep for poll interval, but check stop event frequently
             # This allows faster shutdown
@@ -230,3 +279,23 @@ class PollerWorker:
             self.service.record_config_error(self.config.id, error_message)
         except Exception as e:
             self.logger.error(f"Failed to record error: {e}")
+
+    def _deactivate_with_error(self, error_message: str) -> None:
+        """
+        Record error and request deactivation from service.
+
+        Called when we encounter a permanent error or exceed the retry limit
+        for transient errors.
+        """
+        self.logger.error(
+            f"[POLLER {self.config.id}] AUTO-DEACTIVATING due to: {error_message}"
+        )
+
+        try:
+            self.service.deactivate_config_with_error(self.config.id, error_message)
+        except Exception as e:
+            self.logger.error(f"Failed to deactivate config: {e}")
+
+        # Stop the poll loop
+        self._running = False
+        self._stop_event.set()

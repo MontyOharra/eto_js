@@ -657,12 +657,13 @@ class EmailService:
             logger.warning(f"Config {config_id} is already active")
             return config
 
-        # Update DB first
+        # Update DB first (clear any previous errors on reactivation)
         config = self.ingestion_config_repository.update(
             config_id,
             EmailIngestionConfigUpdate(
                 is_active=True,
                 activated_at=datetime.now(timezone.utc),
+                clear_errors=True,
             )
         )
 
@@ -854,6 +855,59 @@ class EmailService:
 
         logger.info(f"CONFIG {config_id} DEACTIVATED")
         logger.info("-" * 40)
+
+    def deactivate_config_with_error(self, config_id: int, error_message: str) -> None:
+        """
+        Deactivate a config due to an error (called by poller on persistent failures).
+
+        Records the error and deactivates in one operation. Used for auto-deactivation
+        when the poller encounters permanent errors or too many transient errors.
+
+        Args:
+            config_id: ID of the config to deactivate
+            error_message: Error message to record
+        """
+        logger.warning(f"Auto-deactivating config {config_id} due to error: {error_message}")
+
+        # Update DB with error and deactivate
+        self.ingestion_config_repository.update(
+            config_id,
+            EmailIngestionConfigUpdate(
+                is_active=False,
+                last_error_message=error_message,
+                last_error_at=datetime.now(timezone.utc),
+            )
+        )
+
+        # Clean up runtime state
+        # Note: The poller will stop itself after calling this, so we just need to
+        # clean up the integration if no more configs are using it
+        account_id = None
+
+        # Get account_id from the poller if it exists
+        poller = self._pollers.pop(config_id, None)
+        if poller:
+            account_id = poller.config.account_id
+        else:
+            # Fall back to DB lookup
+            config = self.ingestion_config_repository.get_by_id(config_id)
+            if config:
+                account_id = config.account_id
+
+        if account_id is not None:
+            # Decrement config count
+            self._config_counts[account_id] = self._config_counts.get(account_id, 1) - 1
+            remaining = self._config_counts.get(account_id, 0)
+
+            # Shutdown integration if no more configs
+            if remaining <= 0:
+                integration = self._integrations.pop(account_id, None)
+                if integration:
+                    logger.info(f"Closing connection for account {account_id} (no more active configs)")
+                    integration.shutdown()
+                self._config_counts.pop(account_id, None)
+
+        logger.info(f"Config {config_id} auto-deactivated due to error")
 
     # ========== Poller Update Methods ==========
 
