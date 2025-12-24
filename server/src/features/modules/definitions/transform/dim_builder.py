@@ -33,7 +33,7 @@ class DimBuilder(TransformModule):
     id = "dim_builder"
     version = "1.0.0"
     title = "Dim Builder"
-    description = "Build a dimension object from individual components (H, L, W, qty, weight)"
+    description = "Build a dimension object from individual components (count, L, W, H, weight)"
     category = "Cargo"
     color = "#F97316"  # Orange
 
@@ -48,8 +48,8 @@ class DimBuilder(TransformModule):
                 inputs=IOSideShape(
                     nodes=[
                         NodeGroup(
-                            label="height",
-                            typing=NodeTypeRule(allowed_types=["float", "int"]),
+                            label="count",
+                            typing=NodeTypeRule(allowed_types=["int"]),
                             min_count=1,
                             max_count=1
                         ),
@@ -66,8 +66,8 @@ class DimBuilder(TransformModule):
                             max_count=1
                         ),
                         NodeGroup(
-                            label="qty",
-                            typing=NodeTypeRule(allowed_types=["int"]),
+                            label="height",
+                            typing=NodeTypeRule(allowed_types=["float", "int"]),
                             min_count=1,
                             max_count=1
                         ),
@@ -97,7 +97,7 @@ class DimBuilder(TransformModule):
         Execute dim object building
 
         Args:
-            inputs: Dictionary with height, length, width, qty, weight inputs
+            inputs: Dictionary with count, length, width, height, weight inputs
             cfg: Validated configuration (empty for this module)
             context: Execution context with ordered inputs/outputs
             services: Not used for this module
@@ -106,11 +106,11 @@ class DimBuilder(TransformModule):
             Dictionary with dim object output
         """
         # Get input values by group index order
-        # Group 0: height, Group 1: length, Group 2: width, Group 3: qty, Group 4: weight
-        height = 0.0
+        # Group 0: count, Group 1: length, Group 2: width, Group 3: height, Group 4: weight
+        qty = 1
         length = 0.0
         width = 0.0
-        qty = 1
+        height = 0.0
         weight = 0.0
 
         for input_node in context.inputs:
@@ -118,14 +118,14 @@ class DimBuilder(TransformModule):
             group_index = input_node.group_index
             value = inputs.get(node_id, 0)
 
-            if group_index == 0:  # height
-                height = float(value) if value is not None else 0.0
+            if group_index == 0:  # count
+                qty = int(value) if value is not None else 1
             elif group_index == 1:  # length
                 length = float(value) if value is not None else 0.0
             elif group_index == 2:  # width
                 width = float(value) if value is not None else 0.0
-            elif group_index == 3:  # qty
-                qty = int(value) if value is not None else 1
+            elif group_index == 3:  # height
+                height = float(value) if value is not None else 0.0
             elif group_index == 4:  # weight
                 weight = float(value) if value is not None else 0.0
 
