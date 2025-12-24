@@ -143,21 +143,13 @@ class PollerWorker:
                 break
 
             except TransientEmailError as e:
-                # Transient error - retry with limit
-                self._consecutive_errors += 1
+                # Transient error (connection issues) - do NOT count toward deactivation
+                # The connection has been cleared and will reconnect on next attempt
                 self.logger.warning(
-                    f"[POLLER {self.config.id}] Poll #{poll_count} TRANSIENT ERROR "
-                    f"({self._consecutive_errors}/{self.MAX_CONSECUTIVE_ERRORS}): {e}"
+                    f"[POLLER {self.config.id}] Poll #{poll_count} TRANSIENT ERROR (will retry): {e}"
                 )
-
-                if self._consecutive_errors >= self.MAX_CONSECUTIVE_ERRORS:
-                    self._deactivate_with_error(
-                        f"Too many consecutive errors ({self.MAX_CONSECUTIVE_ERRORS}): {e}"
-                    )
-                    break
-                else:
-                    # Record the error but continue polling
-                    self._record_error(str(e))
+                # Don't increment _consecutive_errors - just log and continue
+                # The connection will be re-established on the next poll cycle
 
             except Exception as e:
                 # Unexpected error - treat as transient

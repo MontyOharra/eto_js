@@ -263,8 +263,40 @@ class StandardEmailIntegration(BaseEmailIntegration):
         if self._imap is None:
             self.logger.warning(f"[IMAP] Connection lost for {self.email_address}, RECONNECTING...")
             if not self._connect():
-                raise RuntimeError(f"Failed to reconnect to IMAP server {self.imap_host}")
+                raise TransientEmailError(f"Failed to reconnect to IMAP server {self.imap_host}")
             self.logger.info(f"[IMAP] RECONNECTED successfully for {self.email_address}")
+
+    def _is_connection_error(self, error: Exception) -> bool:
+        """Check if an exception indicates a dead/broken connection."""
+        # imaplib.IMAP4.abort is raised for socket errors
+        if isinstance(error, imaplib.IMAP4.abort):
+            return True
+        # SSL errors indicate connection issues
+        if isinstance(error, (ssl.SSLError, ssl.SSLEOFError)):
+            return True
+        # Socket errors
+        if isinstance(error, (ConnectionError, OSError)):
+            return True
+        # Check error message for connection-related keywords
+        error_str = str(error).lower()
+        connection_keywords = ['socket', 'eof', 'connection', 'broken pipe', 'reset by peer']
+        return any(keyword in error_str for keyword in connection_keywords)
+
+    def _handle_connection_error(self, error: Exception, operation: str) -> None:
+        """
+        Handle a connection error by cleaning up and preparing for reconnection.
+
+        This sets self._imap to None so _ensure_connected will reconnect on retry.
+        Must be called while holding self._lock.
+        """
+        self.logger.warning(f"[IMAP] Connection error during {operation} for {self.email_address}: {error}")
+        try:
+            if self._imap is not None:
+                self._imap.logout()
+        except Exception:
+            pass  # Ignore errors during cleanup
+        self._imap = None
+        self.logger.info(f"[IMAP] Connection cleared for {self.email_address}, will reconnect on retry")
 
     def _start_keepalive(self) -> None:
         """Start keepalive background thread."""
@@ -300,7 +332,15 @@ class StandardEmailIntegration(BaseEmailIntegration):
                         self.logger.debug(f"[IMAP] Keepalive NOOP sent for {self.email_address}")
             except Exception as e:
                 self.logger.warning(f"[IMAP] Keepalive NOOP failed for {self.email_address}: {e}")
-                # Connection may be dead, will reconnect on next operation
+                # Connection is dead - set to None so _ensure_connected will reconnect
+                with self._lock:
+                    try:
+                        if self._imap is not None:
+                            self._imap.logout()
+                    except Exception:
+                        pass  # Ignore errors during cleanup
+                    self._imap = None
+                self.logger.info(f"[IMAP] Connection marked dead for {self.email_address}, will reconnect on next operation")
 
     # ========== Folder Operations ==========
 
@@ -380,90 +420,113 @@ class StandardEmailIntegration(BaseEmailIntegration):
         Get emails with UID greater than since_uid.
 
         Thread-safe - uses internal lock.
+        Automatically handles connection errors by clearing connection for retry.
         """
         with self._lock:
-            self._ensure_connected()
+            try:
+                self._ensure_connected()
 
-            if self._imap is None:
-                raise RuntimeError("Not connected")
+                if self._imap is None:
+                    raise TransientEmailError("Not connected")
 
-            # Select the folder (quote if contains spaces)
-            quoted_folder = self._quote_folder_name(folder_name)
-            self.logger.debug(f"[IMAP] Selecting folder '{folder_name}' (quoted: {quoted_folder}) for {self.email_address}")
-            status, data = self._imap.select(quoted_folder, readonly=True)
-            if status != "OK":
-                self._raise_folder_error(folder_name, data)
+                # Select the folder (quote if contains spaces)
+                quoted_folder = self._quote_folder_name(folder_name)
+                self.logger.debug(f"[IMAP] Selecting folder '{folder_name}' (quoted: {quoted_folder}) for {self.email_address}")
+                status, data = self._imap.select(quoted_folder, readonly=True)
+                if status != "OK":
+                    self._raise_folder_error(folder_name, data)
 
-            search_range = f"{since_uid + 1}:*"
+                search_range = f"{since_uid + 1}:*"
 
-            self.logger.debug(f"Searching for UIDs in range {search_range}")
+                self.logger.debug(f"Searching for UIDs in range {search_range}")
 
-            status, data = self._imap.uid("SEARCH", f"UID {search_range}")
-            if status != "OK":
-                self.logger.warning(f"UID SEARCH failed: {data}")
-                return []
+                status, data = self._imap.uid("SEARCH", f"UID {search_range}")
+                if status != "OK":
+                    self.logger.warning(f"UID SEARCH failed: {data}")
+                    return []
 
-            uid_list_str = data[0].decode("utf-8") if data[0] else ""
-            if not uid_list_str.strip():
-                self.logger.debug("No new emails found")
-                return []
+                uid_list_str = data[0].decode("utf-8") if data[0] else ""
+                if not uid_list_str.strip():
+                    self.logger.debug("No new emails found")
+                    return []
 
-            uid_list = [int(uid) for uid in uid_list_str.split()]
-            uid_list = [uid for uid in uid_list if uid > since_uid]
-            uid_list.sort()
-            uid_list = uid_list[:limit]
+                uid_list = [int(uid) for uid in uid_list_str.split()]
+                uid_list = [uid for uid in uid_list if uid > since_uid]
+                uid_list.sort()
+                uid_list = uid_list[:limit]
 
-            if not uid_list:
-                self.logger.debug("No new emails after filtering")
-                return []
+                if not uid_list:
+                    self.logger.debug("No new emails after filtering")
+                    return []
 
-            self.logger.debug(f"Found {len(uid_list)} new emails: UIDs {uid_list[0]}-{uid_list[-1]}")
+                self.logger.debug(f"Found {len(uid_list)} new emails: UIDs {uid_list[0]}-{uid_list[-1]}")
 
-            messages: list[EmailMessage] = []
-            for uid in uid_list:
-                try:
-                    msg = self._fetch_email_by_uid(uid, folder_name)
-                    if msg:
-                        messages.append(msg)
-                except Exception as e:
-                    self.logger.warning(f"Failed to fetch email UID {uid}: {e}")
-                    continue
+                messages: list[EmailMessage] = []
+                for uid in uid_list:
+                    try:
+                        msg = self._fetch_email_by_uid(uid, folder_name)
+                        if msg:
+                            messages.append(msg)
+                    except Exception as e:
+                        self.logger.warning(f"Failed to fetch email UID {uid}: {e}")
+                        continue
 
-            return messages
+                return messages
+
+            except (PermanentEmailError, TransientEmailError):
+                # Re-raise our own exceptions as-is
+                raise
+            except Exception as e:
+                # Check if this is a connection error
+                if self._is_connection_error(e):
+                    self._handle_connection_error(e, "get_emails_since_uid")
+                    raise TransientEmailError(f"Connection lost during email fetch: {e}")
+                # Unknown error - re-raise as-is
+                raise
 
     def get_highest_uid(self, folder_name: str) -> int | None:
         """
         Get the highest UID in the folder.
 
         Thread-safe - uses internal lock.
+        Automatically handles connection errors by clearing connection for retry.
         """
         with self._lock:
-            self._ensure_connected()
+            try:
+                self._ensure_connected()
 
-            if self._imap is None:
-                raise RuntimeError("Not connected")
+                if self._imap is None:
+                    raise TransientEmailError("Not connected")
 
-            quoted_folder = self._quote_folder_name(folder_name)
-            status, data = self._imap.select(quoted_folder, readonly=True)
-            if status != "OK":
-                self._raise_folder_error(folder_name, data)
+                quoted_folder = self._quote_folder_name(folder_name)
+                status, data = self._imap.select(quoted_folder, readonly=True)
+                if status != "OK":
+                    self._raise_folder_error(folder_name, data)
 
-            status, data = self._imap.uid("SEARCH", "ALL")
-            if status != "OK":
-                self.logger.warning(f"UID SEARCH ALL failed: {data}")
-                return None
+                status, data = self._imap.uid("SEARCH", "ALL")
+                if status != "OK":
+                    self.logger.warning(f"UID SEARCH ALL failed: {data}")
+                    return None
 
-            uid_list_str = data[0].decode("utf-8") if data[0] else ""
-            if not uid_list_str.strip():
-                return None
+                uid_list_str = data[0].decode("utf-8") if data[0] else ""
+                if not uid_list_str.strip():
+                    return None
 
-            uid_list = [int(uid) for uid in uid_list_str.split()]
-            if not uid_list:
-                return None
+                uid_list = [int(uid) for uid in uid_list_str.split()]
+                if not uid_list:
+                    return None
 
-            highest = max(uid_list)
-            self.logger.debug(f"Highest UID in {folder_name}: {highest}")
-            return highest
+                highest = max(uid_list)
+                self.logger.debug(f"Highest UID in {folder_name}: {highest}")
+                return highest
+
+            except (PermanentEmailError, TransientEmailError):
+                raise
+            except Exception as e:
+                if self._is_connection_error(e):
+                    self._handle_connection_error(e, "get_highest_uid")
+                    raise TransientEmailError(f"Connection lost during UID lookup: {e}")
+                raise
 
     def get_attachments(
         self,
@@ -475,6 +538,7 @@ class StandardEmailIntegration(BaseEmailIntegration):
         Download attachments for a specific email by UID.
 
         Thread-safe - uses internal lock.
+        Automatically handles connection errors by clearing connection for retry.
 
         Args:
             folder_name: Folder containing the email
@@ -486,40 +550,49 @@ class StandardEmailIntegration(BaseEmailIntegration):
             List of EmailAttachment dataclasses with filename, content_type, and data
         """
         with self._lock:
-            self._ensure_connected()
-
-            if self._imap is None:
-                raise RuntimeError("Not connected")
-
-            # Select folder (quote if contains spaces)
-            quoted_folder = self._quote_folder_name(folder_name)
-            status, _ = self._imap.select(quoted_folder, readonly=True)
-            if status != "OK":
-                self.logger.error(f"Failed to select folder {folder_name}")
-                return []
-
-            # Fetch the email
-            status, data = self._imap.uid("FETCH", str(uid), "(BODY.PEEK[])")
-            if status != "OK":
-                self.logger.warning(f"Failed to fetch UID {uid} for attachments: {data}")
-                return []
-
-            raw_email = None
-            for item in data:
-                if isinstance(item, tuple) and len(item) >= 2:
-                    raw_email = item[1]
-                    break
-
-            if not raw_email:
-                self.logger.warning(f"No email data for UID {uid}")
-                return []
-
             try:
-                msg = email.message_from_bytes(raw_email)
-                return self._extract_attachments(msg, file_extensions)
+                self._ensure_connected()
+
+                if self._imap is None:
+                    raise TransientEmailError("Not connected")
+
+                # Select folder (quote if contains spaces)
+                quoted_folder = self._quote_folder_name(folder_name)
+                status, _ = self._imap.select(quoted_folder, readonly=True)
+                if status != "OK":
+                    self.logger.error(f"Failed to select folder {folder_name}")
+                    return []
+
+                # Fetch the email
+                status, data = self._imap.uid("FETCH", str(uid), "(BODY.PEEK[])")
+                if status != "OK":
+                    self.logger.warning(f"Failed to fetch UID {uid} for attachments: {data}")
+                    return []
+
+                raw_email = None
+                for item in data:
+                    if isinstance(item, tuple) and len(item) >= 2:
+                        raw_email = item[1]
+                        break
+
+                if not raw_email:
+                    self.logger.warning(f"No email data for UID {uid}")
+                    return []
+
+                try:
+                    msg = email.message_from_bytes(raw_email)
+                    return self._extract_attachments(msg, file_extensions)
+                except Exception as e:
+                    self.logger.error(f"Failed to parse email UID {uid} for attachments: {e}")
+                    return []
+
+            except (PermanentEmailError, TransientEmailError):
+                raise
             except Exception as e:
-                self.logger.error(f"Failed to parse email UID {uid} for attachments: {e}")
-                return []
+                if self._is_connection_error(e):
+                    self._handle_connection_error(e, "get_attachments")
+                    raise TransientEmailError(f"Connection lost during attachment fetch: {e}")
+                raise
 
     def _extract_attachments(
         self,
