@@ -212,7 +212,6 @@ Currently implementing auto-creation mode only. Future enhancement could add con
   - `POST /pending-updates/{id}/confirm-field` - Resolve conflicts by selecting a value
   - Updated `/mock/process-output` to create pending updates for existing HTC orders
 - `server/src/api/schemas/order_management.py` - Added schemas for pending update list/detail/actions
-- `server/src/api/routers/htc_integration.py` - Added `GET /htc/orders/{order_number}` to fetch current HTC field values
 - `server/src/features/htc_integration/lookup_utils.py` - Added `get_order_fields()` method and `HtcOrderFields` dataclass
 - `server/src/features/htc_integration/service.py` - Exposed `get_order_fields()` method
 

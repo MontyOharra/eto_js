@@ -642,7 +642,6 @@ def register_routers(app: FastAPI) -> None:
             admin_router,
             eto_runs_router,
             order_management_router,
-            htc_integration_router,
             system_settings_router,
             auth_router,
         )
@@ -674,9 +673,6 @@ def register_routers(app: FastAPI) -> None:
 
         app.include_router(order_management_router, prefix="/api")
         logger.info("Registered order management router at /api/order-management")
-
-        app.include_router(htc_integration_router, prefix="/api")
-        logger.info("Registered HTC integration router at /api/htc")
 
         app.include_router(system_settings_router, prefix="/api")
         logger.info("Registered system settings router at /api/settings")
