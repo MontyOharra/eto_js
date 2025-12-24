@@ -240,34 +240,53 @@ class OutputProcessingService:
         # Filter to only fields that differ from current HTC values
         differing_fields: Dict[str, Any] = {}
 
-        # Address fields need ID comparison, not string comparison
+        # Fields that need special comparison logic
         ADDRESS_FIELDS = {"pickup_address", "delivery_address"}
+        DIMS_FIELDS = {"dims"}
 
         for field_name, new_value in field_data.items():
             new_value_str = str(new_value)
 
-            if field_name in ADDRESS_FIELDS:
+            if field_name in DIMS_FIELDS:
+                # Dims need semantic comparison, not string comparison
+                htc_dims = getattr(htc_fields, field_name, None)
+                if self._dims_are_equal(new_value, htc_dims):
+                    logger.debug(f"Field '{field_name}' unchanged (dims semantically equal)")
+                else:
+                    differing_fields[field_name] = new_value
+                    logger.debug(f"Field '{field_name}' differs: dims content changed")
+
+            elif field_name in ADDRESS_FIELDS:
                 # For address fields, compare by ID instead of string
                 # This handles cases where addresses with/without zip resolve to same ID
                 if field_name == "pickup_address":
                     current_address_id = htc_fields.pickup_address_id
+                    current_address_str = htc_fields.pickup_address
                 else:  # delivery_address
                     current_address_id = htc_fields.delivery_address_id
+                    current_address_str = htc_fields.delivery_address
+
+                logger.info(
+                    f"[ADDRESS COMPARE] {field_name}: "
+                    f"current_id={current_address_id}, current_str='{current_address_str}', "
+                    f"new_str='{new_value_str}'"
+                )
 
                 # Look up the ID for the new address string (doesn't create if not found)
                 new_address_id = self._htc_service.find_address_id(new_value_str)
+                logger.info(f"[ADDRESS COMPARE] find_address_id('{new_value_str}') returned: {new_address_id}")
 
                 if new_address_id is None:
                     # New address doesn't exist in HTC yet - definitely different
                     differing_fields[field_name] = new_value
-                    logger.debug(f"Field '{field_name}' differs: new address not found in HTC")
+                    logger.info(f"[ADDRESS COMPARE] Field '{field_name}' differs: new address not found in HTC (will create on update)")
                 elif new_address_id != current_address_id:
                     # Address exists but has different ID - real change
                     differing_fields[field_name] = new_value
-                    logger.debug(f"Field '{field_name}' differs: HTC ID={current_address_id} vs new ID={new_address_id}")
+                    logger.info(f"[ADDRESS COMPARE] Field '{field_name}' differs: HTC ID={current_address_id} vs new ID={new_address_id}")
                 else:
                     # Same address ID - no real change despite string difference
-                    logger.debug(f"Field '{field_name}' unchanged (same address ID: {new_address_id})")
+                    logger.info(f"[ADDRESS COMPARE] Field '{field_name}' unchanged (same address ID: {new_address_id})")
             else:
                 # Non-address fields: use string comparison
                 htc_value = getattr(htc_fields, field_name, None)
@@ -682,6 +701,87 @@ class OutputProcessingService:
             valid_fields[field_name] = value
 
         return valid_fields
+
+    def _dims_are_equal(self, new_dims: Any, htc_dims_json: Optional[str]) -> bool:
+        """
+        Compare dims semantically, not by string equality.
+
+        Handles differences in:
+        - Integer vs float representation (10 vs 10.0)
+        - Extra fields in HTC (dim_weight) that pipeline doesn't output
+        - Key ordering in JSON
+
+        Args:
+            new_dims: New dims value (could be list, dict, or JSON string)
+            htc_dims_json: Current HTC dims as JSON string (or None)
+
+        Returns:
+            True if dims are semantically equal, False otherwise
+        """
+        # Normalize new_dims to a list
+        if isinstance(new_dims, str):
+            try:
+                new_dims = json.loads(new_dims)
+            except json.JSONDecodeError:
+                logger.warning(f"Failed to parse new_dims as JSON: {new_dims}")
+                return False
+
+        # Normalize htc_dims to a list
+        if htc_dims_json is None or htc_dims_json == "":
+            htc_dims = []
+        else:
+            try:
+                htc_dims = json.loads(htc_dims_json)
+            except json.JSONDecodeError:
+                logger.warning(f"Failed to parse htc_dims_json as JSON: {htc_dims_json}")
+                return False
+
+        # Handle single dim object (wrap in list)
+        if isinstance(new_dims, dict):
+            new_dims = [new_dims]
+        if isinstance(htc_dims, dict):
+            htc_dims = [htc_dims]
+
+        # Both should be lists now
+        if not isinstance(new_dims, list) or not isinstance(htc_dims, list):
+            logger.warning(f"Dims not in expected format: new={type(new_dims)}, htc={type(htc_dims)}")
+            return False
+
+        # Different number of dims = not equal
+        if len(new_dims) != len(htc_dims):
+            logger.debug(f"Dims count differs: new={len(new_dims)}, htc={len(htc_dims)}")
+            return False
+
+        # Empty dims on both sides = equal
+        if len(new_dims) == 0:
+            return True
+
+        # Extract comparable fields from each dim, normalize to floats
+        # Only compare: height, length, width, qty, weight (not dim_weight which is calculated)
+        def normalize_dim(dim: dict) -> tuple:
+            """Extract and normalize the comparable fields from a dim."""
+            return (
+                float(dim.get("height", 0) or 0),
+                float(dim.get("length", 0) or 0),
+                float(dim.get("width", 0) or 0),
+                float(dim.get("qty", 1) or 1),
+                float(dim.get("weight", 0) or 0),
+            )
+
+        # Convert both to sets of normalized tuples for order-independent comparison
+        try:
+            new_set = set(normalize_dim(d) for d in new_dims)
+            htc_set = set(normalize_dim(d) for d in htc_dims)
+        except (TypeError, KeyError) as e:
+            logger.warning(f"Failed to normalize dims for comparison: {e}")
+            return False
+
+        if new_set == htc_set:
+            logger.debug(f"Dims are semantically equal: {new_set}")
+            return True
+        else:
+            logger.debug(f"Dims differ: new={new_set}, htc={htc_set}")
+            return False
 
     def _has_unresolved_conflicts(self, pending_order_id: int) -> bool:
         """

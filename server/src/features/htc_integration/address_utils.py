@@ -467,20 +467,30 @@ class HtcAddressUtils:
         Returns:
             Address ID (FavID as float) if found, None otherwise.
         """
+        logger.info(f"[FIND_ADDRESS_ID] Input: '{address_string}'")
+
         # Step 1: Parse the address string
         parsed = self.parse_address_string(address_string)
 
         if not parsed:
-            logger.debug(f"Could not parse address: '{address_string}'")
+            logger.info(f"[FIND_ADDRESS_ID] Parse FAILED for: '{address_string}'")
             return None
 
+        logger.info(
+            f"[FIND_ADDRESS_ID] Parsed: street='{parsed['street']}', "
+            f"city='{parsed['city']}', state='{parsed['state']}', zip='{parsed['zip_code']}'"
+        )
+
         # Step 2: Search for the address in the database
-        return self.find_address_by_text(
+        result = self.find_address_by_text(
             street=parsed['street'],
             city=parsed['city'],
             state=parsed['state'],
             zip_code=parsed['zip_code'],
         )
+
+        logger.info(f"[FIND_ADDRESS_ID] find_address_by_text returned: {result}")
+        return result
 
     def find_or_create_address(
         self,
