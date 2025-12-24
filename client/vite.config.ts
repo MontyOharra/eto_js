@@ -11,6 +11,7 @@ const RENDERER = path.resolve(__dirname, 'src/renderer');
 
 // https://vite.dev/config/
 export default defineConfig({
+  envDir: __dirname,  // Load .env from client root, not src/renderer
   plugins: [
     tanstackRouter({
       "target": "react",

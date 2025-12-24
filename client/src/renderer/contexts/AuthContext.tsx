@@ -15,6 +15,7 @@ import {
   useCallback,
   type ReactNode,
 } from 'react';
+import { apiClient } from '../shared/api/client';
 
 // Types
 export interface AuthUser {
@@ -41,9 +42,6 @@ interface AuthContextValue {
   logout: () => void;
   clearError: () => void;
 }
-
-// API base URL
-const API_BASE = 'http://localhost:8000/api';
 
 // Create context with undefined default (must be used within provider)
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -74,17 +72,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       // Call auto-login API
       console.log('[AuthContext] Calling /api/auth/auto-login...');
-      const response = await fetch(`${API_BASE}/auth/auto-login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          pc_name: machineInfo.pcName,
-          pc_lid: machineInfo.pcLid,
-        }),
+      const response = await apiClient.post('/api/auth/auto-login', {
+        pc_name: machineInfo.pcName,
+        pc_lid: machineInfo.pcLid,
       });
       console.log('[AuthContext] Response status:', response.status);
 
-      const data = await response.json();
+      const data = response.data;
       console.log('[AuthContext] Response data:', data);
 
       if (data.success && data.user) {
@@ -124,13 +118,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setError(null);
 
       try {
-        const response = await fetch(`${API_BASE}/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password }),
+        const response = await apiClient.post('/api/auth/login', {
+          username,
+          password,
         });
 
-        const data = await response.json();
+        const data = response.data;
 
         if (data.success && data.user) {
           setSession({
