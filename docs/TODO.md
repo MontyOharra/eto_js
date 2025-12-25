@@ -992,18 +992,17 @@ Implemented basic dims handling with full replacement strategy:
 
 ## 22. Email Recovery When WiFi Disconnects
 
-**Status:** Not Started
-
-**Priority:** TBD
+**Status:** COMPLETED
 
 **Issue:** When the server loses WiFi connectivity, email fetching fails and needs to recover gracefully when connection is restored.
 
-**Details:**
-- Need to handle network interruption during email IMAP connections
-- Detect when connection drops mid-fetch
-- Automatically retry/resume when connectivity returns
-- Avoid duplicate processing of emails
-- Consider exponential backoff for retry attempts
+**Implementation Summary:**
+- Added `TransientEmailError` and `PermanentEmailError` exception classes
+- Connection errors (socket/SSL) trigger reconnection on next poll cycle
+- Transient errors no longer count toward deactivation - just log and retry
+- Keepalive sets `self._imap = None` when NOOP fails
+- Added `_is_connection_error()` and `_handle_connection_error()` helpers
+- Deactivation only happens for permanent errors (auth failure, folder doesn't exist)
 
 ---
 

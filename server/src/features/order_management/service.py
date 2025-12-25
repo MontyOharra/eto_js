@@ -8,8 +8,9 @@ Also manages the HTC order worker for automated order creation
 and sends email notifications when orders are created/updated.
 """
 
+import json
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
+from typing import Any, cast, Dict, List, Optional, Tuple, TYPE_CHECKING
 from datetime import datetime, timezone
 
 from shared.logging import get_logger
@@ -29,6 +30,9 @@ from shared.types.pending_orders import (
     PendingOrder,
     PendingOrderHistory,
     PendingUpdate,
+    PendingUpdateCreate,
+    PendingUpdateUpdate,
+    PendingUpdateHistoryCreate,
     PendingOrderStatus,
     FieldState,
     VALID_FIELD_NAMES,
@@ -1108,13 +1112,14 @@ class OrderManagementService:
         Create an HTC order from a pending order by ID.
 
         Used by the worker to create orders. First fetches the pending order,
-        then calls create_order_from_pending on HTC service.
+        checks if the order already exists in HTC (prevents duplicates), then
+        either converts to pending update or creates new order.
 
         Args:
             pending_order_id: ID of the pending order
 
         Returns:
-            The new HTC order number
+            The HTC order number (new or existing)
 
         Raises:
             ValueError: If pending order not found
@@ -1124,7 +1129,258 @@ class OrderManagementService:
         if not pending_order:
             raise ValueError(f"Pending order {pending_order_id} not found")
 
+        # CHECK IF ORDER ALREADY EXISTS IN HTC (prevents duplicates)
+        # This handles the case where an order was manually created in HTC
+        # while the pending order was waiting for approval
+        existing_order_number = self._htc_service.lookup_order_by_customer_and_hawb(
+            pending_order.customer_id,
+            pending_order.hawb
+        )
+
+        if existing_order_number is not None:
+            logger.warning(
+                f"Order already exists in HTC as {existing_order_number} "
+                f"for pending order {pending_order_id}. Converting to pending update if needed."
+            )
+
+            # Convert to pending update if fields differ from HTC
+            self._convert_pending_order_to_update(pending_order, existing_order_number)
+
+            # Return existing order number - worker will mark pending order as "created"
+            return existing_order_number
+
+        # Order doesn't exist in HTC - create it normally
         return self._htc_service.create_order_from_pending(pending_order)
+
+    def _convert_pending_order_to_update(
+        self,
+        pending_order: PendingOrder,
+        htc_order_number: float
+    ) -> Optional[int]:
+        """
+        Convert a pending order to a pending update when order already exists in HTC.
+
+        Compares pending order field values against current HTC values.
+        Only creates a pending update if there are fields with different values.
+
+        Args:
+            pending_order: The pending order to convert
+            htc_order_number: The existing HTC order number
+
+        Returns:
+            The pending_update ID if created, None if no differences found
+        """
+        # Get current HTC field values
+        htc_fields = self._htc_service.get_order_fields(htc_order_number)
+        if not htc_fields:
+            logger.warning(
+                f"Could not fetch HTC fields for order {htc_order_number} - "
+                f"skipping conversion to pending update"
+            )
+            return None
+
+        # Get pending order history to know which sub_runs contributed
+        history = self._pending_order_history_repo.get_by_pending_order_id(pending_order.id)
+
+        # Build map of field_name -> sub_run_id (use selected value's sub_run)
+        field_to_sub_run: Dict[str, Optional[int]] = {}
+        for h in history:
+            if h.is_selected:
+                field_to_sub_run[h.field_name] = h.sub_run_id
+
+        # Compare fields and collect differences
+        # Format: field_name -> (value, sub_run_id)
+        differing_fields: Dict[str, Tuple[str, Optional[int]]] = {}
+
+        # Fields that need special comparison logic
+        ADDRESS_FIELDS = {"pickup_address", "delivery_address"}
+        DIMS_FIELDS = {"dims"}
+
+        for field_name in VALID_FIELD_NAMES:
+            if field_name == "hawb":
+                continue
+
+            pending_value = getattr(pending_order, field_name, None)
+            if pending_value is None:
+                continue
+
+            pending_value_str = str(pending_value)
+            sub_run_id = field_to_sub_run.get(field_name)
+
+            if field_name in DIMS_FIELDS:
+                # Dims need semantic comparison
+                htc_dims = getattr(htc_fields, field_name, None)
+                if not self._dims_are_equal(pending_value, htc_dims):
+                    differing_fields[field_name] = (pending_value_str, sub_run_id)
+                    logger.debug(f"Field '{field_name}' differs: dims content changed")
+
+            elif field_name in ADDRESS_FIELDS:
+                # For address fields, compare by ID
+                if field_name == "pickup_address":
+                    current_address_id = htc_fields.pickup_address_id
+                else:  # delivery_address
+                    current_address_id = htc_fields.delivery_address_id
+
+                # Look up the ID for the pending address string
+                new_address_id = self._htc_service.find_address_id(pending_value_str)
+
+                if new_address_id is None:
+                    # New address doesn't exist in HTC yet - definitely different
+                    differing_fields[field_name] = (pending_value_str, sub_run_id)
+                    logger.debug(f"Field '{field_name}' differs: address not found in HTC")
+                elif new_address_id != current_address_id:
+                    # Address exists but has different ID - real change
+                    differing_fields[field_name] = (pending_value_str, sub_run_id)
+                    logger.debug(
+                        f"Field '{field_name}' differs: ID {current_address_id} vs {new_address_id}"
+                    )
+            else:
+                # Other fields: use string comparison
+                htc_value = getattr(htc_fields, field_name, None)
+                htc_value_str = str(htc_value) if htc_value is not None else ""
+
+                if pending_value_str != htc_value_str:
+                    differing_fields[field_name] = (pending_value_str, sub_run_id)
+                    logger.debug(
+                        f"Field '{field_name}' differs: HTC='{htc_value_str}' vs pending='{pending_value_str}'"
+                    )
+
+        if not differing_fields:
+            logger.info(
+                f"No field differences found when converting pending order {pending_order.id} "
+                f"to update for HTC order {htc_order_number}"
+            )
+            return None
+
+        logger.info(
+            f"Found {len(differing_fields)} field(s) with differences: {list(differing_fields.keys())}"
+        )
+
+        # Create pending update
+        pending_update = self._pending_update_repo.create(
+            PendingUpdateCreate(
+                customer_id=pending_order.customer_id,
+                hawb=pending_order.hawb,
+                htc_order_number=htc_order_number,
+            )
+        )
+
+        # Add history and set field values
+        history_creates: List[PendingUpdateHistoryCreate] = []
+        field_updates: Dict[str, Any] = {}
+
+        for field_name, (value, sub_run_id) in differing_fields.items():
+            history_creates.append(
+                PendingUpdateHistoryCreate(
+                    pending_update_id=pending_update.id,
+                    sub_run_id=sub_run_id,
+                    field_name=field_name,
+                    field_value=value,
+                    is_selected=True,
+                )
+            )
+            field_updates[field_name] = value
+
+        if history_creates:
+            self._pending_update_history_repo.create_batch(history_creates)
+
+        if field_updates:
+            field_updates["last_processed_at"] = datetime.now()
+            self._pending_update_repo.update(
+                pending_update.id,
+                cast(PendingUpdateUpdate, field_updates)
+            )
+
+        # Broadcast SSE event
+        order_event_manager.broadcast_sync("pending_update_created", {
+            "id": pending_update.id,
+            "hawb": pending_order.hawb,
+            "customer_id": pending_order.customer_id,
+            "htc_order_number": htc_order_number,
+            "fields_changed": list(differing_fields.keys()),
+            "converted_from_pending_order": pending_order.id,
+        })
+
+        logger.info(
+            f"Converted pending order {pending_order.id} to pending update {pending_update.id} "
+            f"for existing HTC order {htc_order_number}"
+        )
+
+        return pending_update.id
+
+    def _dims_are_equal(self, new_dims: Any, htc_dims_json: Optional[str]) -> bool:
+        """
+        Compare dims semantically, not by string equality.
+
+        Handles differences in:
+        - Integer vs float representation (10 vs 10.0)
+        - Extra fields in HTC (dim_weight) that pipeline doesn't output
+        - Key ordering in JSON
+
+        Args:
+            new_dims: New dims value (could be list, dict, or JSON string)
+            htc_dims_json: Current HTC dims as JSON string (or None)
+
+        Returns:
+            True if dims are semantically equal, False otherwise
+        """
+        # Normalize new_dims to a list
+        if isinstance(new_dims, str):
+            try:
+                new_dims = json.loads(new_dims)
+            except json.JSONDecodeError:
+                logger.warning(f"Failed to parse new_dims as JSON: {new_dims}")
+                return False
+
+        # Normalize htc_dims to a list
+        if htc_dims_json is None or htc_dims_json == "":
+            htc_dims = []
+        else:
+            try:
+                htc_dims = json.loads(htc_dims_json)
+            except json.JSONDecodeError:
+                logger.warning(f"Failed to parse htc_dims_json as JSON: {htc_dims_json}")
+                return False
+
+        # Handle single dim object (wrap in list)
+        if isinstance(new_dims, dict):
+            new_dims = [new_dims]
+        if isinstance(htc_dims, dict):
+            htc_dims = [htc_dims]
+
+        # Both should be lists now
+        if not isinstance(new_dims, list) or not isinstance(htc_dims, list):
+            logger.warning(f"Dims not in expected format: new={type(new_dims)}, htc={type(htc_dims)}")
+            return False
+
+        # Different number of dims = not equal
+        if len(new_dims) != len(htc_dims):
+            logger.debug(f"Dims count differs: new={len(new_dims)}, htc={len(htc_dims)}")
+            return False
+
+        # Empty dims on both sides = equal
+        if len(new_dims) == 0:
+            return True
+
+        def normalize_dim(dim: dict) -> tuple:
+            """Extract and normalize the comparable fields from a dim."""
+            return (
+                float(dim.get("height", 0) or 0),
+                float(dim.get("length", 0) or 0),
+                float(dim.get("width", 0) or 0),
+                float(dim.get("qty", 1) or 1),
+                float(dim.get("weight", 0) or 0),
+            )
+
+        # Convert both to sets of normalized tuples for order-independent comparison
+        try:
+            new_set = set(normalize_dim(d) for d in new_dims)
+            htc_set = set(normalize_dim(d) for d in htc_dims)
+        except (TypeError, KeyError) as e:
+            logger.warning(f"Failed to normalize dims for comparison: {e}")
+            return False
+
+        return new_set == htc_set
 
     def retry_pending_order(self, pending_order_id: int) -> bool:
         """
