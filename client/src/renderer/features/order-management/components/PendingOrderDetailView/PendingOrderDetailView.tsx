@@ -466,7 +466,7 @@ export function PendingOrderDetailView({
       case 'processing':
         return { label: 'Processing', color: 'text-blue-400', bg: 'bg-blue-500/20 border-blue-500/30' };
       case 'created':
-        return { label: 'Created', color: 'text-blue-400', bg: 'bg-blue-500/20 border-blue-500/30' };
+        return { label: 'Created', color: 'text-green-400', bg: 'bg-green-500/20 border-green-500/30' };
       case 'failed':
         return { label: 'Failed', color: 'text-red-400', bg: 'bg-red-500/20 border-red-500/30' };
       case 'rejected':
@@ -502,36 +502,49 @@ export function PendingOrderDetailView({
           Back
         </button>
 
-        {/* Order Info Row - Left: Info, Right: Status + Actions */}
-        <div className="mt-4 flex items-start justify-between">
-          {/* Left: HAWB and Customer */}
-          <div>
-            <span className="text-xs text-gray-500 uppercase tracking-wider">HAWB</span>
-            <h1 className="text-2xl font-bold text-white font-mono">{order.hawb}</h1>
-            <p className="text-sm text-gray-400 mt-1">
-              {order.customer_name ?? `Customer ID: ${order.customer_id}`}
-            </p>
+        {/* Order Info Row - Left: Info columns, Right: Status + Actions */}
+        <div className="mt-4 flex items-center justify-between">
+          {/* Left: Customer, HAWB, HTC Order # columns */}
+          <div className="flex items-start gap-8">
+            {/* Customer */}
+            <div>
+              <span className="text-xs text-gray-500 uppercase tracking-wider">Customer</span>
+              <div className="text-xl text-white">
+                {order.customer_name ?? `Customer ID: ${order.customer_id}`}
+              </div>
+            </div>
+
+            {/* HAWB */}
+            <div>
+              <span className="text-xs text-gray-500 uppercase tracking-wider">HAWB</span>
+              <div className="text-xl font-bold text-white font-mono">{order.hawb}</div>
+            </div>
+
+            {/* HTC Order # */}
+            <div>
+              <span className="text-xs text-gray-500 uppercase tracking-wider">HTC Order #</span>
+              <div className="text-xl text-white font-mono">
+                {order.htc_order_number ?? '-'}
+              </div>
+            </div>
           </div>
 
-          {/* Right: Status Badge + Action Buttons */}
-          <div className="flex items-start gap-4">
-            {/* Status Badge */}
-            <div className={`px-4 py-3 rounded-lg border ${statusDisplay.bg} text-right`}>
-              <div className={`font-medium ${statusDisplay.color}`}>
-                {statusDisplay.label}
+          {/* Right: Status-specific area */}
+          <div className="flex items-center gap-4">
+            {/* Status Badge - hidden when ready (buttons are sufficient) */}
+            {order.status !== 'ready' && (
+              <div className={`px-4 py-3 rounded-lg border ${statusDisplay.bg} text-right`}>
+                <div className={`font-medium ${statusDisplay.color}`}>
+                  {statusDisplay.label}
+                </div>
+                {order.status === 'incomplete' && (
+                  <div className="text-xs text-gray-400 mt-1">
+                    {presentRequiredCount}/{requiredFields.length} required fields
+                    {conflictCount > 0 && ` · ${conflictCount} conflict${conflictCount > 1 ? 's' : ''}`}
+                  </div>
+                )}
               </div>
-              {order.status === 'incomplete' && (
-                <div className="text-xs text-gray-400 mt-1">
-                  {presentRequiredCount}/{requiredFields.length} required fields
-                  {conflictCount > 0 && ` · ${conflictCount} conflict${conflictCount > 1 ? 's' : ''}`}
-                </div>
-              )}
-              {order.status === 'created' && order.htc_order_number && (
-                <div className="text-xs text-gray-400 mt-1">
-                  Order #{order.htc_order_number}
-                </div>
-              )}
-            </div>
+            )}
 
             {/* Approve/Reject Buttons - only when ready */}
             {canApproveReject && (
@@ -539,14 +552,14 @@ export function PendingOrderDetailView({
                 <button
                   onClick={onReject}
                   disabled={isRejecting || isApproving}
-                  className="px-4 py-2 rounded-lg border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {isRejecting ? 'Rejecting...' : 'Reject'}
                 </button>
                 <button
                   onClick={onApprove}
                   disabled={isApproving || isRejecting}
-                  className="px-4 py-2 rounded-lg border border-green-500/30 bg-green-500/10 text-green-400 hover:bg-green-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {isApproving ? 'Creating...' : 'Approve'}
                 </button>

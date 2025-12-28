@@ -958,18 +958,18 @@ Implemented basic dims handling with full replacement strategy:
 
 ## 24. Manual Approval Mode for Order Creation
 
-**Status:** Not Started
+**Status:** In Progress
 
 **Priority:** TBD
 
-**Issue:** When auto-create is disabled, pending orders sit in "ready" status with no way for users to manually approve/reject them.
+**Issue:** Manual approval mode exists but UI needs improvement.
 
-**Details:**
-- Add "Approve" button to create order in HTC when in manual mode
-- Add "Reject" button to cancel/discard pending order
-- Similar workflow to pending updates approval
-- Status flow: `ready` → user approves → `processing` → `created`
-- Or: `ready` → user rejects → `rejected`
+**Current State:**
+- Backend supports manual approval/rejection of pending orders
+- Basic UI exists but needs refinement
+
+**UI Improvements Needed:**
+- TBD (exploring current implementation)
 
 ---
 
@@ -1003,6 +1003,35 @@ Implemented basic dims handling with full replacement strategy:
 - Keepalive sets `self._imap = None` when NOOP fails
 - Added `_is_connection_error()` and `_handle_connection_error()` helpers
 - Deactivation only happens for permanent errors (auth failure, folder doesn't exist)
+
+---
+
+## 26. Order Management SSE Stream & Polling Improvements
+
+**Status:** Not Started
+
+**Priority:** TBD
+
+**Issue:** The SSE event stream for the order management page is unreliable - some backend functions don't properly broadcast events to update the stream.
+
+**Details:**
+
+**SSE Broadcast Gaps:**
+- Some service methods that modify pending orders/updates don't emit SSE events
+- Need to audit all order management service methods to ensure proper event broadcasting
+- Compare with ETO runs SSE implementation for consistency
+
+**Frontend Polling Fallback:**
+- Add regular polling to order management page (like ETO runs page does)
+- ETO page uses fallback polling interval (default 10 seconds) in case SSE events are missed
+- Order management page should implement the same pattern for reliability
+- Disable polling when in detail view (list is hidden anyway)
+
+**Files to Audit:**
+- `server/src/features/order_management/service.py` - Check all methods that modify state
+- `server/src/features/output_processing/service.py` - Check pending order/update creation
+- `server/src/api/routers/order_management.py` - Check endpoint event emissions
+- `client/src/renderer/features/order-management/hooks/usePendingOrderEvents.ts` - Add polling fallback
 
 ---
 
