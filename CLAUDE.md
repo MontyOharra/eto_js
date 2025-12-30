@@ -7,8 +7,9 @@
 
 ### Before every chat
 1. **Review recent git history** (`git log --oneline -10` or `git log --graph --oneline -20`) to recover context, the last plan, and pending next steps.
-2. Check `docs/session-notes/CHANGELOG.md` for session history and continuity notes.
-3. Check `docs/` for reference documentation including VBA analysis and guides.
+2. **Check for active session notes** in `docs/session-notes/` - read the most recent session file (e.g., `2024-12-30-session.md`) to resume in-progress work.
+3. Check `docs/session-notes/CHANGELOG.md` for session history and continuity notes.
+4. Check `docs/` for reference documentation including VBA analysis and guides.
 
 ### After every chat
 1. If **substantial changes** were made (see "Commit Discipline"), run a commit with a descriptive message summarizing the work.

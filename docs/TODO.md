@@ -1098,6 +1098,21 @@ Implemented basic dims handling with full replacement strategy:
 
 ---
 
+## 31. Fix Missing 'rejected' Status Enum for Pending Orders
+
+**Status:** Not Started
+
+**Priority:** High (Bug)
+
+**Issue:** Rejecting a pending order fails due to a missing enum value for the 'rejected' status.
+
+**Details:**
+- The `reject_pending_order` function sets status to 'rejected'
+- The status enum/type definition is missing this value
+- Need to add 'rejected' to `PendingOrderStatus` type
+
+---
+
 ## Priority Notes
 
 _To be determined as we review each item._
