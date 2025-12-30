@@ -1035,6 +1035,69 @@ Implemented basic dims handling with full replacement strategy:
 
 ---
 
+## 27. Retry Failed Order Creation from Orders Page
+
+**Status:** Not Started
+
+**Priority:** TBD
+
+**Issue:** When a pending order is in the `failed` state, users must go to the ETO runs page, reprocess from there, and then retry order creation. This is cumbersome.
+
+**Details:**
+- Add a "Retry" button on the pending order detail view when status is `failed`
+- Allow immediate retry of order creation without navigating to ETO runs page
+- Should call the same logic as the existing retry mechanism but from the orders page context
+
+---
+
+## 28. DateTime Extractor Module - Always Output Both Values
+
+**Status:** Not Started
+
+**Priority:** TBD
+
+**Issue:** The datetime extractor module should always output both datetime values on every run, using defaults when it cannot determine the correct value.
+
+**Details:**
+- Currently the module may not output a value if it can't parse/extract it
+- Should always output both start and end datetime values
+- Use configurable default values when extraction fails
+- Ensures downstream pipeline steps always receive expected inputs
+
+---
+
+## 29. Template Builder Test Summary - Show Output Values
+
+**Status:** Not Started
+
+**Priority:** TBD
+
+**Issue:** The summary section of the testing step in the template builder needs to display the extracted values in the left pane, similar to how the ETO sub-run modal displays results.
+
+**Details:**
+- Update the template builder test summary view
+- Show output values in the left pane during testing
+- Match the presentation style of the ETO sub-run detail modal
+- Helps users verify extraction results during template development
+
+---
+
+## 30. View Email Account Connection Details in Settings
+
+**Status:** Not Started
+
+**Priority:** TBD
+
+**Issue:** Need ability to view email account connection details (IMAP/SMTP host, port, etc.) from the frontend settings page.
+
+**Details:**
+- Click on an email account in the Settings page to view its connection details
+- Display IMAP host, port, SMTP host, port, email address, SSL settings
+- Read-only view of current configuration
+- Helps with debugging connection issues
+
+---
+
 ## Priority Notes
 
 _To be determined as we review each item._

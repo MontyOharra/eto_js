@@ -6,7 +6,7 @@ import email
 from email.header import decode_header
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from email.utils import parseaddr, parsedate_to_datetime
+from email.utils import parseaddr, parsedate_to_datetime, formatdate, make_msgid
 from email.message import Message
 import imaplib
 import logging
@@ -939,9 +939,13 @@ class StandardEmailIntegration(BaseEmailIntegration):
                 # Plain text only
                 msg = MIMEText(body, "plain", "utf-8")
 
+            # Standard headers (required by RFC 5322 and expected by mail servers)
             msg["Subject"] = subject
             msg["From"] = self.email_address
             msg["To"] = to_address
+            msg["Date"] = formatdate(localtime=True)
+            msg["Message-ID"] = make_msgid(domain=self.email_address.split("@")[1])
+            msg["MIME-Version"] = "1.0"
 
             # Connect and send
             # Port 465 = SSL (SMTPS), Port 587 = STARTTLS, others = try STARTTLS
