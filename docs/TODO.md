@@ -1052,17 +1052,17 @@ Implemented basic dims handling with full replacement strategy:
 
 ## 28. DateTime Extractor Module - Always Output Both Values
 
-**Status:** Not Started
+**Status:** COMPLETED
 
 **Priority:** TBD
 
 **Issue:** The datetime extractor module should always output both datetime values on every run, using defaults when it cannot determine the correct value.
 
-**Details:**
-- Currently the module may not output a value if it can't parse/extract it
-- Should always output both start and end datetime values
-- Use configurable default values when extraction fails
-- Ensures downstream pipeline steps always receive expected inputs
+**Solution:**
+- Updated the LLM prompt to never return null values
+- Added rule: "NEVER return null. Always provide a best guess for date, start_time, and end_time."
+- Added fallback: "Date missing: use today's date"
+- Removed contradicting "Use null if unknown" instruction
 
 ---
 

@@ -195,10 +195,12 @@ class DateTimeExtractor(TransformModule):
         return f"""Extract delivery date/time as JSON: {{date, start_time, end_time}}
 
 Today: {today}
-Format: date="YYYY-MM-DD", times="HH:MM" 24h. Use null if unknown.
+Format: date="YYYY-MM-DD", times="HH:MM" 24h.
 
 Rules:
+- NEVER return null. Always provide a best guess for date, start_time, and end_time.
 - Year missing: pick year making date nearest to today (e.g., 12/1→1/3 = next year, 12/1→11/28 = same year)
+- Date missing: use today's date
 - Parse formats: 9am, 9:00, 0900, nine am, noon, ranges (9-5)
 - "cutoff" means end_time only (start="09:00")
 - "at T": start=end=T
