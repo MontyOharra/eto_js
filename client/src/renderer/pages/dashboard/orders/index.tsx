@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute } from '@tanstack/react-router';
 import { useState, useEffect } from 'react';
 import {
   UnifiedActionsTable,
@@ -19,6 +19,7 @@ import {
   ActionType,
 } from '../../../features/order-management';
 import { useOrderEvents } from '../../../features/order-management/hooks';
+import { useCustomers } from '../../../features/templates/api/hooks';
 import { EtoSubRunDetailViewer } from '../../../features/eto';
 import { useAuth } from '../../../contexts/AuthContext';
 
@@ -32,14 +33,31 @@ type DetailView =
   | { type: 'order-history'; hawb: string }
   | null;
 
-// Filter type for unified view
+// Filter types
 type TypeFilter = 'all' | 'create' | 'update';
 type StatusFilter = 'all' | string;
-type ReadFilter = 'all' | 'read' | 'unread';
+
+// Status options for each type
+const CREATE_STATUSES = [
+  { value: 'incomplete', label: 'Incomplete' },
+  { value: 'ready', label: 'Ready' },
+  { value: 'processing', label: 'Processing' },
+  { value: 'created', label: 'Created' },
+  { value: 'failed', label: 'Failed' },
+];
+
+const UPDATE_STATUSES = [
+  { value: 'pending', label: 'Pending' },
+  { value: 'approved', label: 'Approved' },
+  { value: 'rejected', label: 'Rejected' },
+];
 
 function OrdersPage() {
   // Connect to SSE for real-time updates
   useOrderEvents();
+
+  // Fetch customers for dropdown
+  const { data: customers, isLoading: customersLoading } = useCustomers();
 
   // Get current user from auth context
   const { session } = useAuth();
@@ -51,23 +69,28 @@ function OrdersPage() {
   const [viewingSubRunId, setViewingSubRunId] = useState<number | null>(null);
 
   // ============================================================================
-  // Unified Actions State
+  // Filter State
   // ============================================================================
+  const [customerFilter, setCustomerFilter] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [readFilter, setReadFilter] = useState<ReadFilter>('all');
   const [page, setPage] = useState(1);
   const perPage = 20;
 
   // Reset page when filters change
   useEffect(() => {
     setPage(1);
-  }, [typeFilter, statusFilter, readFilter]);
+  }, [customerFilter, searchQuery, typeFilter, statusFilter]);
 
+  // NOTE: customer_id and search are not yet implemented in the backend
+  // They are included here for UI purposes only - will be wired up later
   const unifiedQueryParams = {
     type: typeFilter !== 'all' ? (typeFilter as ActionType) : undefined,
     status: statusFilter !== 'all' ? statusFilter : undefined,
-    is_read: readFilter === 'all' ? undefined : readFilter === 'read',
+    // TODO: Add these when backend supports them:
+    // customer_id: customerFilter ?? undefined,
+    // search: searchQuery || undefined,
     limit: perPage,
     offset: (page - 1) * perPage,
   };
@@ -108,9 +131,10 @@ function OrdersPage() {
   // ============================================================================
 
   const handleClearFilters = () => {
+    setCustomerFilter(null);
+    setSearchQuery('');
     setTypeFilter('all');
     setStatusFilter('all');
-    setReadFilter('all');
   };
 
   const handleRowClick = (type: ActionType, id: number) => {
@@ -305,98 +329,138 @@ function OrdersPage() {
   // Get available status options based on type filter
   const getStatusOptions = () => {
     if (typeFilter === 'create') {
-      return [
-        { value: 'all', label: 'All Status' },
-        { value: 'incomplete', label: 'Incomplete' },
-        { value: 'ready', label: 'Ready' },
-        { value: 'processing', label: 'Processing' },
-        { value: 'created', label: 'Created' },
-        { value: 'failed', label: 'Failed' },
-      ];
+      return CREATE_STATUSES;
     } else if (typeFilter === 'update') {
-      return [
-        { value: 'all', label: 'All Status' },
-        { value: 'pending', label: 'Pending' },
-        { value: 'approved', label: 'Approved' },
-        { value: 'rejected', label: 'Rejected' },
-      ];
+      return UPDATE_STATUSES;
     }
-    // All types - show common subset or all
-    return [
-      { value: 'all', label: 'All Status' },
-    ];
+    // All types - combine both (will show all statuses)
+    return [...CREATE_STATUSES, ...UPDATE_STATUSES];
   };
 
-  const hasActiveFilters = typeFilter !== 'all' || statusFilter !== 'all' || readFilter !== 'all';
+  const hasActiveFilters =
+    customerFilter !== null ||
+    searchQuery !== '' ||
+    typeFilter !== 'all' ||
+    statusFilter !== 'all';
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      {/* Header with Filters */}
-      <div className="px-6 py-4 flex-shrink-0 flex items-center justify-between border-b border-gray-700">
-        <div className="flex items-center gap-4">
+      {/* Header */}
+      <div className="px-6 py-4 flex-shrink-0 border-b border-gray-700">
+        <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-white">Pending Actions</h2>
-
-          {/* Type Filter */}
-          <select
-            value={typeFilter}
-            onChange={(e) => {
-              setTypeFilter(e.target.value as TypeFilter);
-              setStatusFilter('all'); // Reset status when type changes
-            }}
-            className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="all">All Types</option>
-            <option value="create">Creates Only</option>
-            <option value="update">Updates Only</option>
-          </select>
-
-          {/* Status Filter - changes based on type */}
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            disabled={typeFilter === 'all'}
-          >
-            {getStatusOptions().map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-
-          {/* Read/Unread Filter */}
-          <select
-            value={readFilter}
-            onChange={(e) => setReadFilter(e.target.value as ReadFilter)}
-            className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="all">All Items</option>
-            <option value="unread">Unread Only</option>
-            <option value="read">Read Only</option>
-          </select>
 
           {/* Clear Filters */}
           {hasActiveFilters && (
             <button
               onClick={handleClearFilters}
-              className="text-sm text-gray-400 hover:text-white transition-colors"
+              className="text-sm text-gray-400 hover:text-white transition-colors flex items-center gap-1"
             >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
               Clear filters
             </button>
           )}
         </div>
 
-        {/* Preview Link */}
-        <Link
-          to="/dashboard/orders/layout-a"
-          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-          </svg>
-          Preview Detail
-        </Link>
+        {/* Filter Controls */}
+        <div className="flex items-center gap-3">
+          {/* Customer Dropdown */}
+          <div className="relative">
+            <select
+              value={customerFilter ?? ''}
+              onChange={(e) => setCustomerFilter(e.target.value ? Number(e.target.value) : null)}
+              disabled={customersLoading}
+              className="appearance-none bg-gray-700 border border-gray-600 rounded-lg pl-3 pr-8 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent min-w-[180px] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <option value="">
+                {customersLoading ? 'Loading...' : 'All Customers'}
+              </option>
+              {customers?.map((customer) => (
+                <option key={customer.id} value={customer.id}>
+                  {customer.name}
+                </option>
+              ))}
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
+              <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </div>
+
+          {/* Search Input */}
+          <div className="relative flex-1 max-w-md">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by HAWB or Order #..."
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg pl-10 pr-4 py-2 text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-white"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+
+          {/* Spacer */}
+          <div className="flex-shrink-0 w-px h-8 bg-gray-600" />
+
+          {/* Type Filter */}
+          <div className="relative">
+            <select
+              value={typeFilter}
+              onChange={(e) => {
+                setTypeFilter(e.target.value as TypeFilter);
+                setStatusFilter('all'); // Reset status when type changes
+              }}
+              className="appearance-none bg-gray-700 border border-gray-600 rounded-lg pl-3 pr-8 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent min-w-[130px]"
+            >
+              <option value="all">All Types</option>
+              <option value="create">Creates</option>
+              <option value="update">Updates</option>
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
+              <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </div>
+
+          {/* Status Filter */}
+          <div className="relative">
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="appearance-none bg-gray-700 border border-gray-600 rounded-lg pl-3 pr-8 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent min-w-[140px]"
+            >
+              <option value="all">All Statuses</option>
+              {getStatusOptions().map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
+              <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Pagination */}
