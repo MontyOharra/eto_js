@@ -119,13 +119,12 @@ export interface ExecutionStepResult {
 
 /**
  * Response for POST /pdf-templates/simulate
- * Matches backend: server-new/src/api/schemas/pdf_templates.py::SimulateTemplateResponse
+ * Matches backend: server/src/api/schemas/pdf_templates.py::SimulateTemplateResponse
  */
 export interface SimulateTemplateResponse {
   extraction_results: ExtractedFieldResult[];  // Fields with extracted values and bbox info
   pipeline_status: string;  // "success" | "failed"
   pipeline_steps: ExecutionStepResult[];
-  output_module_id: string | null;  // ID of the output module (if configured)
-  output_module_inputs: Record<string, unknown>;  // Inputs collected for the output module
+  output_channel_values: Record<string, unknown>;  // {channel_type: value} collected from output channels
   pipeline_error: string | null;
 }
