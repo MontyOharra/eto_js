@@ -1068,7 +1068,7 @@ Implemented basic dims handling with full replacement strategy:
 
 ## 29. Template Builder Test Summary - Show Output Values
 
-**Status:** Not Started
+**Status:** COMPLETED
 
 **Priority:** TBD
 
@@ -1079,6 +1079,12 @@ Implemented basic dims handling with full replacement strategy:
 - Show output values in the left pane during testing
 - Match the presentation style of the ETO sub-run detail modal
 - Helps users verify extraction results during template development
+
+**Solution:**
+- Fixed `SimulateTemplateResponse` type to use `output_channel_values` (matching backend API)
+- Added value formatting helpers for datetime, dims, and other types
+- Added color-coded display by channel type (purple=time, blue=address, amber=identifiers, etc.)
+- Uses output channel registry for proper human-readable labels
 
 ---
 
