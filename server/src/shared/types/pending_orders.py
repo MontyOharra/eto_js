@@ -90,6 +90,15 @@ VALID_FIELD_NAMES = [
 # =========================
 
 @dataclass
+class PendingOrderListResult:
+    """
+    Result of listing pending orders with pagination.
+    """
+    items: List["PendingOrder"]
+    total: int
+
+
+@dataclass
 class PendingOrderCreate:
     """
     Data required to create a new pending order.

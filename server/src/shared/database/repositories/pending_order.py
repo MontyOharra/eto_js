@@ -3,7 +3,7 @@ Pending Order Repository
 Repository for pending_orders table with CRUD operations
 """
 import logging
-from typing import Type, Optional, List, cast
+from typing import Type, Optional, List, Literal, cast
 
 from shared.database.repositories.base import BaseRepository
 from shared.database.models import PendingOrderModel
@@ -12,6 +12,7 @@ from shared.types.pending_orders import (
     PendingOrderCreate,
     PendingOrderUpdate,
     PendingOrderStatus,
+    PendingOrderListResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -253,41 +254,71 @@ class PendingOrderRepository(BaseRepository[PendingOrderModel]):
 
     def list_all(
         self,
+        *,
         status: Optional[str] = None,
         customer_id: Optional[int] = None,
-        limit: Optional[int] = None,
-        offset: Optional[int] = None,
-    ) -> List[PendingOrder]:
+        search: Optional[str] = None,
+        sort_by: Literal["created_at", "updated_at", "hawb"] = "updated_at",
+        sort_order: Literal["asc", "desc"] = "desc",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> PendingOrderListResult:
         """
-        List pending orders with optional filters.
+        List pending orders with filtering, search, sorting, and pagination.
 
         Args:
-            status: Optional status filter
-            customer_id: Optional customer ID filter
-            limit: Optional limit on number of results
-            offset: Optional offset for pagination
+            status: Filter by status (incomplete, ready, processing, created, failed)
+            customer_id: Filter by customer ID
+            search: Search string - matches HAWB (case-insensitive partial match)
+                    or exact HTC order number if numeric
+            sort_by: Column to sort by (created_at, updated_at, hawb)
+            sort_order: Sort direction (asc or desc)
+            limit: Max records to return (default 50)
+            offset: Records to skip (default 0)
 
         Returns:
-            List of PendingOrder dataclasses
+            PendingOrderListResult with items and total count
         """
         with self._get_session() as session:
+            # Build base query with filters
             query = session.query(self.model_class)
 
             if status:
-                query = query.filter_by(status=status)
+                query = query.filter(self.model_class.status == status)
 
             if customer_id:
-                query = query.filter_by(customer_id=customer_id)
+                query = query.filter(self.model_class.customer_id == customer_id)
 
-            # Order by most recently updated
-            query = query.order_by(self.model_class.updated_at.desc())
+            if search:
+                search_term = search.strip()
+                if search_term:
+                    # Try to parse as HTC order number first
+                    try:
+                        order_num = float(search_term)
+                        query = query.filter(
+                            self.model_class.htc_order_number == order_num
+                        )
+                    except ValueError:
+                        # Not a number - search HAWB with case-insensitive partial match
+                        query = query.filter(
+                            self.model_class.hawb.ilike(f"%{search_term}%")
+                        )
 
-            if offset:
-                query = query.offset(offset)
+            # Get total count BEFORE applying pagination
+            total = query.count()
 
-            if limit:
-                query = query.limit(limit)
+            # Apply sorting
+            sort_column = getattr(self.model_class, sort_by)
+            if sort_order == "desc":
+                query = query.order_by(sort_column.desc())
+            else:
+                query = query.order_by(sort_column.asc())
 
+            # Apply pagination
+            query = query.offset(offset).limit(limit)
+
+            # Execute and convert to domain objects
             models = query.all()
+            items = [self._model_to_domain(model) for model in models]
 
-            return [self._model_to_domain(model) for model in models]
+            return PendingOrderListResult(items=items, total=total)

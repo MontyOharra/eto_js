@@ -134,11 +134,13 @@ async def list_unified_actions(
 
     # Collect pending orders if not filtered to updates only
     if type_filter != "update":
-        orders = pending_order_repo.list_all()
-
-        # Apply status filter
-        if status_filter and status_filter in create_statuses:
-            orders = [o for o in orders if o.status == status_filter]
+        # Get all orders (no pagination here - we filter in-memory for unified view)
+        orders_result = pending_order_repo.list_all(
+            status=status_filter if status_filter in create_statuses else None,
+            limit=1000,  # High limit to get all
+            offset=0,
+        )
+        orders = orders_result.items
 
         # Apply is_read filter
         if is_read_filter is not None:
@@ -350,8 +352,8 @@ async def list_pending_orders(
     pending_order_repo = service._pending_order_repo
     pending_order_history_repo = service._pending_order_history_repo
 
-    # Get filtered list
-    orders = pending_order_repo.list_all(
+    # Get filtered list with pagination
+    result = pending_order_repo.list_all(
         status=status,
         customer_id=customer_id,
         limit=limit,
@@ -360,7 +362,7 @@ async def list_pending_orders(
 
     # Build response items with computed fields
     items = []
-    for order in orders:
+    for order in result.items:
         # Count fields and conflicts for this order
         required_present = 0
         optional_present = 0
@@ -415,14 +417,9 @@ async def list_pending_orders(
             updated_at=order.updated_at.isoformat(),
         ))
 
-    # Get total count (without pagination)
-    # For now, use len of full query - could optimize later
-    all_orders = pending_order_repo.list_all(status=status, customer_id=customer_id)
-    total = len(all_orders)
-
     return GetPendingOrdersResponse(
         items=items,
-        total=total,
+        total=result.total,
         limit=limit,
         offset=offset,
     )
