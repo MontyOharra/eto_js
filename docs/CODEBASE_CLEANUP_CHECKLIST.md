@@ -2,16 +2,6 @@
 
 Track file-by-file cleanup progress for the server codebase.
 
-## Cleanup Criteria
-
-When reviewing each file, check for:
-- [ ] No unnecessary `TYPE_CHECKING` guards
-- [ ] Proper import ordering (stdlib, third-party, local)
-- [ ] No unused imports
-- [ ] Consistent type hints
-- [ ] No circular dependency workarounds
-- [ ] Clean, focused code
-
 ---
 
 ## server/src/
