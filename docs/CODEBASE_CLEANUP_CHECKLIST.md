@@ -264,7 +264,6 @@ Track file-by-file cleanup progress for the server codebase.
 - [ ] `shared/types/__init__.py`
 - [ ] `shared/types/email.py`
 - [x] `shared/types/email_accounts.py`
-- [ ] `shared/types/email_configs.py`
 - [ ] `shared/types/email_ingestion_configs.py`
 - [ ] `shared/types/email_integrations.py`
 - [ ] `shared/types/eto_runs.py`
@@ -291,6 +290,6 @@ Track file-by-file cleanup progress for the server codebase.
 
 ## Progress Summary
 
-- **Total files:** 175
+- **Total files:** 174
 - **Completed:** 3
-- **Remaining:** 172
+- **Remaining:** 171
