@@ -6,7 +6,7 @@ Decoupled from ingestion configs - accounts store credentials that can be
 shared across multiple ingestion listeners and sending configs.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 
 
@@ -24,14 +24,14 @@ class StandardProviderSettings:
     """
     # IMAP settings (receiving)
     imap_host: str
-    imap_port: int = 993
+    imap_port: int
 
     # SMTP settings (sending)
-    smtp_host: str = ""
-    smtp_port: int = 587
+    smtp_host: str
+    smtp_port: int
 
     # Shared settings
-    use_ssl: bool = True
+    use_ssl: bool
 
 
 # Union type for all provider settings
