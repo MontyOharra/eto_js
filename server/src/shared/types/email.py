@@ -7,7 +7,6 @@ folders on the same account are not re-processed.
 """
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -19,7 +18,7 @@ class Email:
     """
     id: int
     account_id: int  # FK to email_accounts (for deduplication)
-    ingestion_config_id: Optional[int]  # FK to email_ingestion_configs (which config first ingested)
+    ingestion_config_id: int | None  # FK to email_ingestion_configs (which config first ingested)
     message_id: str
     sender_email: str
     subject: str
@@ -28,7 +27,7 @@ class Email:
     has_pdf_attachments: bool
     attachment_count: int
     pdf_count: int
-    processed_at: Optional[datetime]
+    processed_at: datetime | None
     created_at: datetime
 
 
@@ -42,10 +41,10 @@ class EmailCreate:
     ingestion_config_id: int  # FK to email_ingestion_configs (which config ingested)
     message_id: str
     sender_email: str
-    sender_name: Optional[str]
+    sender_name: str | None
     subject: str
     received_date: datetime
     folder_name: str
-    has_pdf_attachments: bool = False
-    attachment_count: int = 0
-    pdf_count: int = 0
+    has_pdf_attachments: bool
+    attachment_count: int
+    pdf_count: int
