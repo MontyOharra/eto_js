@@ -5,10 +5,9 @@ Background async worker for creating HTC orders from ready pending orders
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Callable, Optional, List, Set, TYPE_CHECKING
+from typing import Callable, Optional, List, Set
 
-if TYPE_CHECKING:
-    from shared.types.pending_orders import PendingOrder
+from shared.types.pending_orders import PendingOrder
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +35,7 @@ class HtcOrderWorker:
     def __init__(
         self,
         # Callbacks
-        get_ready_pending_orders_callback: Callable[[int], List['PendingOrder']],
+        get_ready_pending_orders_callback: Callable[[int], List[PendingOrder]],
         create_htc_order_callback: Callable[[int], float],
         mark_processing_callback: Callable[[int], None],
         mark_created_callback: Callable[[int, float], None],

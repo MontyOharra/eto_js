@@ -10,11 +10,12 @@ and sends email notifications when orders are created/updated.
 
 import json
 from dataclasses import dataclass
-from typing import Any, cast, Dict, List, Optional, Tuple, TYPE_CHECKING
+from typing import Any, cast, Dict, List, Optional, Tuple
 from datetime import datetime, timezone
 
 from shared.logging import get_logger
 from shared.events.order_events import order_event_manager
+from shared.database.connection import DatabaseConnectionManager
 from shared.database.repositories.pending_order import PendingOrderRepository
 from shared.database.repositories.pending_order_history import PendingOrderHistoryRepository
 from shared.database.repositories.pending_update import PendingUpdateRepository
@@ -43,11 +44,8 @@ from shared.types.pending_orders import (
 )
 from features.htc_integration.htc_order_worker import HtcOrderWorker
 from features.htc_integration.attachment_utils import PdfSource
-
-if TYPE_CHECKING:
-    from shared.database.connection import DatabaseConnectionManager
-    from features.htc_integration.service import HtcIntegrationService
-    from features.email.service import EmailService
+from features.htc_integration.service import HtcIntegrationService
+from features.email.service import EmailService
 
 logger = get_logger(__name__)
 
@@ -211,9 +209,9 @@ class OrderManagementService:
 
     def __init__(
         self,
-        connection_manager: 'DatabaseConnectionManager',
-        htc_integration_service: 'HtcIntegrationService',
-        email_service: Optional['EmailService'] = None,
+        connection_manager: DatabaseConnectionManager,
+        htc_integration_service: HtcIntegrationService,
+        email_service: Optional[EmailService] = None,
         worker_enabled: bool = True,
         worker_polling_interval: int = 5,
         worker_max_concurrent: int = 5,

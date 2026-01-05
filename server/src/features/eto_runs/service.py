@@ -69,13 +69,11 @@ from shared.types.pdf_files import PdfFile
 from shared.types.pdf_templates import PdfTemplate, PdfTemplateVersion
 from shared.types.email import Email
 
-# TYPE_CHECKING imports to avoid circular dependencies
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from features.pdf_templates.service import PdfTemplateService
-    from features.pdf_files.service import PdfFilesService
-    from src.features.pipeline_execution.service import PipelineExecutionService
-    from features.output_processing.service import OutputProcessingService
+# Service imports
+from features.pdf_templates.service import PdfTemplateService
+from features.pdf_files.service import PdfFilesService
+from features.pipeline_execution.service import PipelineExecutionService
+from features.output_processing.service import OutputProcessingService
 
 logger = get_logger(__name__)
 
@@ -103,10 +101,10 @@ class EtoRunsService:
     # ==================== Dependencies ====================
 
     connection_manager: DatabaseConnectionManager
-    pdf_template_service: 'PdfTemplateService'
-    pdf_files_service: 'PdfFilesService'
-    pipeline_execution_service: 'PipelineExecutionService'
-    output_processing_service: 'OutputProcessingService'
+    pdf_template_service: PdfTemplateService
+    pdf_files_service: PdfFilesService
+    pipeline_execution_service: PipelineExecutionService
+    output_processing_service: OutputProcessingService
 
     # ==================== Repositories ====================
 
@@ -120,10 +118,10 @@ class EtoRunsService:
     def __init__(
         self,
         connection_manager: DatabaseConnectionManager,
-        pdf_template_service: 'PdfTemplateService',
-        pdf_files_service: 'PdfFilesService',
-        pipeline_execution_service: 'PipelineExecutionService',
-        output_processing_service: 'OutputProcessingService'
+        pdf_template_service: PdfTemplateService,
+        pdf_files_service: PdfFilesService,
+        pipeline_execution_service: PipelineExecutionService,
+        output_processing_service: OutputProcessingService
     ) -> None:
         """
         Initialize ETO Runs Service.
@@ -139,10 +137,10 @@ class EtoRunsService:
 
         # Store service dependencies
         self.connection_manager: DatabaseConnectionManager = connection_manager
-        self.pdf_template_service: 'PdfTemplateService' = pdf_template_service
-        self.pdf_files_service: 'PdfFilesService' = pdf_files_service
-        self.pipeline_execution_service: 'PipelineExecutionService' = pipeline_execution_service
-        self.output_processing_service: 'OutputProcessingService' = output_processing_service
+        self.pdf_template_service: PdfTemplateService = pdf_template_service
+        self.pdf_files_service: PdfFilesService = pdf_files_service
+        self.pipeline_execution_service: PipelineExecutionService = pipeline_execution_service
+        self.output_processing_service: OutputProcessingService = output_processing_service
 
         # Initialize repositories
         self.eto_run_repo: EtoRunRepository = EtoRunRepository(connection_manager=connection_manager)

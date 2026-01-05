@@ -10,7 +10,6 @@ Unified service for email functionality including:
 """
 import logging
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
 
 from shared.database import DatabaseConnectionManager
 from shared.database.repositories.email_account import EmailAccountRepository
@@ -44,10 +43,8 @@ from features.email.integrations.base_integration import (
 )
 from features.email.poller import PollerWorker
 from features.email.processing import EmailProcessingHandler
-
-if TYPE_CHECKING:
-    from features.pdf_files.service import PdfFilesService
-    from features.eto_runs.service import EtoRunsService
+from features.pdf_files.service import PdfFilesService
+from features.eto_runs.service import EtoRunsService
 
 logger = logging.getLogger(__name__)
 
@@ -81,8 +78,8 @@ class EmailService:
     def __init__(
         self,
         connection_manager: DatabaseConnectionManager,
-        pdf_files_service: "PdfFilesService | None" = None,
-        eto_runs_service: "EtoRunsService | None" = None,
+        pdf_files_service: PdfFilesService | None = None,
+        eto_runs_service: EtoRunsService | None = None,
     ) -> None:
         """
         Initialize email service.

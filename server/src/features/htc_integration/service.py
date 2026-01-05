@@ -16,12 +16,13 @@ Architecture:
     - HtcOrderWorker: Background worker for creating HTC orders from pending orders
 """
 
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import Any, Dict, List, Optional
 
 from shared.logging import get_logger
 from shared.exceptions import OutputExecutionError
 from shared.config.database import get_htc_apps_dir
 from shared.config.storage import get_storage_configuration
+from shared.database.data_database_manager import DataDatabaseManager
 
 from features.htc_integration.lookup_utils import (
     HtcLookupUtils,
@@ -33,9 +34,6 @@ from features.htc_integration.lookup_utils import (
 from features.htc_integration.address_utils import HtcAddressUtils
 from features.htc_integration.order_utils import HtcOrderUtils, PreparedOrderData
 from features.htc_integration.attachment_utils import AttachmentManager, PdfSource, AttachmentResult
-
-if TYPE_CHECKING:
-    from shared.database.data_database_manager import DataDatabaseManager
 
 logger = get_logger(__name__)
 
@@ -81,7 +79,7 @@ class HtcIntegrationService:
 
     def __init__(
         self,
-        data_database_manager: 'DataDatabaseManager',
+        data_database_manager: DataDatabaseManager,
         connection_manager: Any = None,
         database_name: str = "htc_300",
     ) -> None:

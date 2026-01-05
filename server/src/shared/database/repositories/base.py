@@ -5,13 +5,12 @@ Supports dual-mode operation: standalone (via connection_manager) or transaction
 """
 import logging
 from abc import ABC, abstractmethod
-from typing import Optional, Any, Type, TypeVar, Generic, Protocol, TYPE_CHECKING
+from typing import Optional, Any, Type, TypeVar, Generic, Protocol
 from contextlib import contextmanager
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
-if TYPE_CHECKING:
-    from shared.database.connection import DatabaseConnectionManager
+from shared.database.connection import DatabaseConnectionManager
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +38,7 @@ class BaseRepository(ABC, Generic[ModelType]):
     def __init__(
         self,
         session: Optional[Session] = None,
-        connection_manager: Optional['DatabaseConnectionManager'] = None
+        connection_manager: Optional[DatabaseConnectionManager] = None
     ):
         """
         Initialize repository.

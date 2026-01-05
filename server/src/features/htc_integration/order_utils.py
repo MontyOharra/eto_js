@@ -13,13 +13,10 @@ import json
 import threading
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING
+from typing import Any, Callable, Dict, List, Optional
 
 from shared.logging import get_logger
 from shared.exceptions import OutputExecutionError
-
-if TYPE_CHECKING:
-    pass
 
 logger = get_logger(__name__)
 

@@ -10,12 +10,10 @@ Uses the same pattern as HtcIntegrationService for Access database access.
 """
 
 from dataclasses import dataclass
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Any, Optional
 
 from shared.logging import get_logger
-
-if TYPE_CHECKING:
-    from shared.database.data_database_manager import DataDatabaseManager
+from shared.database.data_database_manager import DataDatabaseManager
 
 logger = get_logger(__name__)
 
@@ -44,7 +42,7 @@ class AuthService:
 
     def __init__(
         self,
-        data_database_manager: 'DataDatabaseManager',
+        data_database_manager: DataDatabaseManager,
     ) -> None:
         """
         Initialize the auth service.

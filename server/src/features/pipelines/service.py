@@ -4,7 +4,7 @@ Handles pipeline definition, compilation, validation, and lifecycle management
 """
 import logging
 import json
-from typing import List, Dict, Set, Optional, Any, TYPE_CHECKING
+from typing import List, Dict, Set, Optional, Any
 from dataclasses import replace
 
 from shared.database import DatabaseConnectionManager
@@ -33,9 +33,7 @@ from shared.types.pipeline_execution import PipelineExecutionResult
 from shared.exceptions import ServiceError, ValidationError, ObjectNotFoundError, PipelineValidationError
 from .utils.validation import PipelineValidator
 from .utils.compilation import PipelineCompiler
-
-if TYPE_CHECKING:
-    from src.features.pipeline_execution.service import PipelineExecutionService
+from features.pipeline_execution.service import PipelineExecutionService
 
 logger = logging.getLogger(__name__)
 
@@ -57,11 +55,11 @@ class PipelineService:
     definition_repository: PipelineDefinitionRepository
     step_repository: PipelineDefinitionStepRepository
     module_catalog_repository: ModuleRepository
-    pipeline_execution_service: 'PipelineExecutionService'
+    pipeline_execution_service: PipelineExecutionService
     modules_service: Any  # ModulesService
     services: Any  # Services container for database access
 
-    def __init__(self, connection_manager: DatabaseConnectionManager, pipeline_execution_service: 'PipelineExecutionService', modules_service: Any, services: Any = None) -> None:
+    def __init__(self, connection_manager: DatabaseConnectionManager, pipeline_execution_service: PipelineExecutionService, modules_service: Any, services: Any = None) -> None:
         """
         Initialize pipeline service
 

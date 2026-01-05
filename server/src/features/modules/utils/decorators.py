@@ -3,11 +3,9 @@ Module Registration Decorators
 Global decorator system for marking module classes for registration
 """
 import logging
-from typing import Type, List, TYPE_CHECKING
+from typing import Type, List
 
-if TYPE_CHECKING:
-    from shared.types.modules import BaseModule
-    from features.modules.utils.registry import ModuleRegistry
+from shared.types.modules import BaseModule
 
 logger = logging.getLogger(__name__)
 
@@ -15,10 +13,10 @@ logger = logging.getLogger(__name__)
 # Global pending registrations queue
 # Module classes are added here by @register decorator during import
 # Then consumed by ModuleRegistry during auto-discovery
-_pending_registrations: List[Type['BaseModule']] = []
+_pending_registrations: List[Type[BaseModule]] = []
 
 
-def register(module_class: Type['BaseModule']) -> Type['BaseModule']:
+def register(module_class: Type[BaseModule]) -> Type[BaseModule]:
     """
     Decorator to mark a module class for registration.
 

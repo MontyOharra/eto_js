@@ -3,23 +3,20 @@ Unit of Work Pattern
 Manages database transactions and provides repository access within a transaction context
 """
 import logging
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
 from sqlalchemy.orm import Session
 
-# Import repository classes (will be created)
-# Using TYPE_CHECKING to avoid circular imports
-if TYPE_CHECKING:
-    from shared.database.repositories.email_account import EmailAccountRepository
-    from shared.database.repositories.email_ingestion_config import EmailIngestionConfigRepository
-    from shared.database.repositories.email import EmailRepository
-    from shared.database.repositories.pdf_template import PdfTemplateRepository
-    from shared.database.repositories.pdf_template_version import PdfTemplateVersionRepository
-    from shared.database.repositories.pipeline_definition import PipelineDefinitionRepository
-    from shared.database.repositories.pipeline_definition_step import PipelineDefinitionStepRepository
-    from shared.database.repositories.module import ModuleRepository
-    from shared.database.repositories.eto_sub_run import EtoSubRunRepository
-    from shared.database.repositories.eto_sub_run_extraction import EtoSubRunExtractionRepository
-    from shared.database.repositories.eto_sub_run_pipeline_execution import EtoSubRunPipelineExecutionRepository
+from shared.database.repositories.email_account import EmailAccountRepository
+from shared.database.repositories.email_ingestion_config import EmailIngestionConfigRepository
+from shared.database.repositories.email import EmailRepository
+from shared.database.repositories.pdf_template import PdfTemplateRepository
+from shared.database.repositories.pdf_template_version import PdfTemplateVersionRepository
+from shared.database.repositories.pipeline_definition import PipelineDefinitionRepository
+from shared.database.repositories.pipeline_definition_step import PipelineDefinitionStepRepository
+from shared.database.repositories.module import ModuleRepository
+from shared.database.repositories.eto_sub_run import EtoSubRunRepository
+from shared.database.repositories.eto_sub_run_extraction import EtoSubRunExtractionRepository
+from shared.database.repositories.eto_sub_run_pipeline_execution import EtoSubRunPipelineExecutionRepository
 
 logger = logging.getLogger(__name__)
 
@@ -51,22 +48,22 @@ class UnitOfWork:
 
         # Lazy-loaded repository instances
         # These are created on first access via properties
-        self._email_account_repository: Optional['EmailAccountRepository'] = None
-        self._email_ingestion_config_repository: Optional['EmailIngestionConfigRepository'] = None
-        self._email_repository: Optional['EmailRepository'] = None
-        self._pdf_template_repository: Optional['PdfTemplateRepository'] = None
-        self._pdf_template_version_repository: Optional['PdfTemplateVersionRepository'] = None
-        self._pipeline_definition_repository: Optional['PipelineDefinitionRepository'] = None
-        self._pipeline_definition_step_repository: Optional['PipelineDefinitionStepRepository'] = None
-        self._module_repository: Optional['ModuleRepository'] = None
-        self._eto_sub_run_repository: Optional['EtoSubRunRepository'] = None
-        self._eto_sub_run_extraction_repository: Optional['EtoSubRunExtractionRepository'] = None
-        self._eto_sub_run_pipeline_execution_repository: Optional['EtoSubRunPipelineExecutionRepository'] = None
+        self._email_account_repository: Optional[EmailAccountRepository] = None
+        self._email_ingestion_config_repository: Optional[EmailIngestionConfigRepository] = None
+        self._email_repository: Optional[EmailRepository] = None
+        self._pdf_template_repository: Optional[PdfTemplateRepository] = None
+        self._pdf_template_version_repository: Optional[PdfTemplateVersionRepository] = None
+        self._pipeline_definition_repository: Optional[PipelineDefinitionRepository] = None
+        self._pipeline_definition_step_repository: Optional[PipelineDefinitionStepRepository] = None
+        self._module_repository: Optional[ModuleRepository] = None
+        self._eto_sub_run_repository: Optional[EtoSubRunRepository] = None
+        self._eto_sub_run_extraction_repository: Optional[EtoSubRunExtractionRepository] = None
+        self._eto_sub_run_pipeline_execution_repository: Optional[EtoSubRunPipelineExecutionRepository] = None
 
         logger.debug("UnitOfWork initialized")
 
     @property
-    def email_accounts(self) -> 'EmailAccountRepository':
+    def email_accounts(self) -> EmailAccountRepository:
         """
         Access to email account repository within this transaction.
 
@@ -74,13 +71,12 @@ class UnitOfWork:
             EmailAccountRepository instance using this UoW's session
         """
         if not self._email_account_repository:
-            from shared.database.repositories.email_account import EmailAccountRepository
             self._email_account_repository = EmailAccountRepository(session=self.session)
             logger.debug("EmailAccountRepository loaded in UoW")
         return self._email_account_repository
 
     @property
-    def email_ingestion_configs(self) -> 'EmailIngestionConfigRepository':
+    def email_ingestion_configs(self) -> EmailIngestionConfigRepository:
         """
         Access to email ingestion config repository within this transaction.
 
@@ -88,13 +84,12 @@ class UnitOfWork:
             EmailIngestionConfigRepository instance using this UoW's session
         """
         if not self._email_ingestion_config_repository:
-            from shared.database.repositories.email_ingestion_config import EmailIngestionConfigRepository
             self._email_ingestion_config_repository = EmailIngestionConfigRepository(session=self.session)
             logger.debug("EmailIngestionConfigRepository loaded in UoW")
         return self._email_ingestion_config_repository
 
     @property
-    def emails(self) -> 'EmailRepository':
+    def emails(self) -> EmailRepository:
         """
         Access to email repository within this transaction.
 
@@ -102,13 +97,12 @@ class UnitOfWork:
             EmailRepository instance using this UoW's session
         """
         if not self._email_repository:
-            from shared.database.repositories.email import EmailRepository
             self._email_repository = EmailRepository(session=self.session)
             logger.debug("EmailRepository loaded in UoW")
         return self._email_repository
 
     @property
-    def pdf_templates(self) -> 'PdfTemplateRepository':
+    def pdf_templates(self) -> PdfTemplateRepository:
         """
         Access to PDF template repository within this transaction.
 
@@ -116,13 +110,12 @@ class UnitOfWork:
             PdfTemplateRepository instance using this UoW's session
         """
         if not self._pdf_template_repository:
-            from shared.database.repositories.pdf_template import PdfTemplateRepository
             self._pdf_template_repository = PdfTemplateRepository(session=self.session)
             logger.debug("PdfTemplateRepository loaded in UoW")
         return self._pdf_template_repository
 
     @property
-    def pdf_template_versions(self) -> 'PdfTemplateVersionRepository':
+    def pdf_template_versions(self) -> PdfTemplateVersionRepository:
         """
         Access to PDF template version repository within this transaction.
 
@@ -130,13 +123,12 @@ class UnitOfWork:
             PdfTemplateVersionRepository instance using this UoW's session
         """
         if not self._pdf_template_version_repository:
-            from shared.database.repositories.pdf_template_version import PdfTemplateVersionRepository
             self._pdf_template_version_repository = PdfTemplateVersionRepository(session=self.session)
             logger.debug("PdfTemplateVersionRepository loaded in UoW")
         return self._pdf_template_version_repository
 
     @property
-    def pipeline_definitions(self) -> 'PipelineDefinitionRepository':
+    def pipeline_definitions(self) -> PipelineDefinitionRepository:
         """
         Access to pipeline definition repository within this transaction.
 
@@ -144,13 +136,12 @@ class UnitOfWork:
             PipelineDefinitionRepository instance using this UoW's session
         """
         if not self._pipeline_definition_repository:
-            from shared.database.repositories.pipeline_definition import PipelineDefinitionRepository
             self._pipeline_definition_repository = PipelineDefinitionRepository(session=self.session)
             logger.debug("PipelineDefinitionRepository loaded in UoW")
         return self._pipeline_definition_repository
 
     @property
-    def pipeline_definition_steps(self) -> 'PipelineDefinitionStepRepository':
+    def pipeline_definition_steps(self) -> PipelineDefinitionStepRepository:
         """
         Access to pipeline definition step repository within this transaction.
 
@@ -158,13 +149,12 @@ class UnitOfWork:
             PipelineDefinitionStepRepository instance using this UoW's session
         """
         if not self._pipeline_definition_step_repository:
-            from shared.database.repositories.pipeline_definition_step import PipelineDefinitionStepRepository
             self._pipeline_definition_step_repository = PipelineDefinitionStepRepository(session=self.session)
             logger.debug("PipelineDefinitionStepRepository loaded in UoW")
         return self._pipeline_definition_step_repository
 
     @property
-    def module_catalog(self) -> 'ModuleRepository':
+    def module_catalog(self) -> ModuleRepository:
         """
         Access to module catalog repository within this transaction.
 
@@ -172,13 +162,12 @@ class UnitOfWork:
             ModuleRepository instance using this UoW's session
         """
         if not self._module_repository:
-            from shared.database.repositories.module import ModuleRepository
             self._module_repository = ModuleRepository(session=self.session)
             logger.debug("ModuleRepository loaded in UoW")
         return self._module_repository
 
     @property
-    def eto_sub_runs(self) -> 'EtoSubRunRepository':
+    def eto_sub_runs(self) -> EtoSubRunRepository:
         """
         Access to ETO sub-run repository within this transaction.
 
@@ -186,13 +175,12 @@ class UnitOfWork:
             EtoSubRunRepository instance using this UoW's session
         """
         if not self._eto_sub_run_repository:
-            from shared.database.repositories.eto_sub_run import EtoSubRunRepository
             self._eto_sub_run_repository = EtoSubRunRepository(session=self.session)
             logger.debug("EtoSubRunRepository loaded in UoW")
         return self._eto_sub_run_repository
 
     @property
-    def eto_sub_run_extractions(self) -> 'EtoSubRunExtractionRepository':
+    def eto_sub_run_extractions(self) -> EtoSubRunExtractionRepository:
         """
         Access to ETO sub-run extraction repository within this transaction.
 
@@ -200,13 +188,12 @@ class UnitOfWork:
             EtoSubRunExtractionRepository instance using this UoW's session
         """
         if not self._eto_sub_run_extraction_repository:
-            from shared.database.repositories.eto_sub_run_extraction import EtoSubRunExtractionRepository
             self._eto_sub_run_extraction_repository = EtoSubRunExtractionRepository(session=self.session)
             logger.debug("EtoSubRunExtractionRepository loaded in UoW")
         return self._eto_sub_run_extraction_repository
 
     @property
-    def eto_sub_run_pipeline_executions(self) -> 'EtoSubRunPipelineExecutionRepository':
+    def eto_sub_run_pipeline_executions(self) -> EtoSubRunPipelineExecutionRepository:
         """
         Access to ETO sub-run pipeline execution repository within this transaction.
 
@@ -214,7 +201,6 @@ class UnitOfWork:
             EtoSubRunPipelineExecutionRepository instance using this UoW's session
         """
         if not self._eto_sub_run_pipeline_execution_repository:
-            from shared.database.repositories.eto_sub_run_pipeline_execution import EtoSubRunPipelineExecutionRepository
             self._eto_sub_run_pipeline_execution_repository = EtoSubRunPipelineExecutionRepository(session=self.session)
             logger.debug("EtoSubRunPipelineExecutionRepository loaded in UoW")
         return self._eto_sub_run_pipeline_execution_repository

@@ -9,18 +9,20 @@ User-facing operations (viewing, conflict resolution, approvals) are handled
 by the OrderManagementService.
 """
 
-from typing import Any, Dict, List, Optional, TYPE_CHECKING, cast
+from typing import Any, Dict, List, Optional, cast
 from datetime import datetime, timezone
 import json
 
 from shared.logging import get_logger
 from shared.events.order_events import order_event_manager
+from shared.database.connection import DatabaseConnectionManager
 from shared.database.repositories.eto_sub_run_output_execution import EtoSubRunOutputExecutionRepository
 from shared.database.repositories.pending_order import PendingOrderRepository
 from shared.database.repositories.pending_order_history import PendingOrderHistoryRepository
 from shared.database.repositories.pending_update import PendingUpdateRepository
 from shared.database.repositories.pending_update_history import PendingUpdateHistoryRepository
 from shared.types.pending_orders import (
+    PendingOrder,
     PendingOrderCreate,
     PendingOrderUpdate,
     PendingOrderHistoryCreate,
@@ -30,11 +32,7 @@ from shared.types.pending_orders import (
     REQUIRED_FIELDS,
     VALID_FIELD_NAMES,
 )
-
-if TYPE_CHECKING:
-    from shared.database.connection import DatabaseConnectionManager
-    from features.htc_integration.service import HtcIntegrationService
-    from shared.types.pending_orders import PendingOrder
+from features.htc_integration.service import HtcIntegrationService
 
 logger = get_logger(__name__)
 
@@ -58,8 +56,8 @@ class OutputProcessingService:
 
     def __init__(
         self,
-        connection_manager: 'DatabaseConnectionManager',
-        htc_integration_service: 'HtcIntegrationService',
+        connection_manager: DatabaseConnectionManager,
+        htc_integration_service: HtcIntegrationService,
     ) -> None:
         """
         Initialize the service.
