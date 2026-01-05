@@ -12,16 +12,24 @@ from typing import Literal
 
 
 # =========================
+# Literal Type Aliases
+# =========================
+
+FilterRuleField = Literal["sender_email", "subject", "has_attachments", "received_date"]
+FilterRuleOperation = Literal["contains", "equals", "starts_with", "ends_with", "before", "after", "is"]
+
+
+# =========================
 # Filter Rules
 # =========================
 
 @dataclass(frozen=True)
 class FilterRule:
     """Rule for filtering which emails to process"""
-    field: Literal["sender_email", "subject", "has_attachments", "received_date"]
-    operation: Literal["contains", "equals", "starts_with", "ends_with", "before", "after", "is"]
+    field: FilterRuleField
+    operation: FilterRuleOperation
     value: str
-    case_sensitive: bool = False
+    case_sensitive: bool
 
 
 # =========================
@@ -117,5 +125,3 @@ class EmailIngestionConfigUpdate:
     last_processed_uid: int | None = None
     last_error_message: str | None = None
     last_error_at: datetime | None = None
-    clear_errors: bool = False  # When True, sets error fields to NULL
-    reset_last_processed_uid: bool = False  # When True, sets last_processed_uid to NULL
