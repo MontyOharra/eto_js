@@ -57,13 +57,13 @@ Track file-by-file cleanup progress for the server codebase.
 - [ ] `features/__init__.py`
 
 #### features/auth/
-- [x] `features/auth/__init__.py`
-- [x] `features/auth/service.py`
+- [ ] `features/auth/__init__.py`
+- [ ] `features/auth/service.py`
 
 #### features/email/
 - [ ] `features/email/__init__.py`
-- [x] `features/email/service.py`
-- [ ] `features/email/poller.py` *(has genuine circular with service.py)*
+- [ ] `features/email/service.py`
+- [ ] `features/email/poller.py`
 - [ ] `features/email/processing.py`
 
 ##### features/email/integrations/
@@ -79,7 +79,7 @@ Track file-by-file cleanup progress for the server codebase.
 
 #### features/eto_runs/
 - [ ] `features/eto_runs/__init__.py`
-- [x] `features/eto_runs/service.py`
+- [ ] `features/eto_runs/service.py`
 
 ##### features/eto_runs/utils/
 - [ ] `features/eto_runs/utils/__init__.py`
@@ -88,9 +88,9 @@ Track file-by-file cleanup progress for the server codebase.
 
 #### features/htc_integration/
 - [ ] `features/htc_integration/__init__.py`
-- [x] `features/htc_integration/service.py`
-- [x] `features/htc_integration/order_utils.py`
-- [x] `features/htc_integration/htc_order_worker.py`
+- [ ] `features/htc_integration/service.py`
+- [ ] `features/htc_integration/order_utils.py`
+- [ ] `features/htc_integration/htc_order_worker.py`
 - [ ] `features/htc_integration/address_utils.py`
 - [ ] `features/htc_integration/attachment_utils.py`
 - [ ] `features/htc_integration/lookup_utils.py`
@@ -102,7 +102,7 @@ Track file-by-file cleanup progress for the server codebase.
 
 ##### features/modules/utils/
 - [ ] `features/modules/utils/__init__.py`
-- [x] `features/modules/utils/decorators.py`
+- [ ] `features/modules/utils/decorators.py`
 - [ ] `features/modules/utils/registry.py`
 
 ##### features/modules/definitions/
@@ -152,11 +152,11 @@ Track file-by-file cleanup progress for the server codebase.
 
 #### features/order_management/
 - [ ] `features/order_management/__init__.py`
-- [x] `features/order_management/service.py`
+- [ ] `features/order_management/service.py`
 
 #### features/output_processing/
 - [ ] `features/output_processing/__init__.py`
-- [x] `features/output_processing/service.py`
+- [ ] `features/output_processing/service.py`
 
 #### features/pdf_files/
 - [ ] `features/pdf_files/__init__.py`
@@ -179,7 +179,7 @@ Track file-by-file cleanup progress for the server codebase.
 
 #### features/pipelines/
 - [ ] `features/pipelines/__init__.py`
-- [x] `features/pipelines/service.py`
+- [ ] `features/pipelines/service.py`
 
 ##### features/pipelines/utils/
 - [ ] `features/pipelines/utils/__init__.py`
@@ -205,12 +205,12 @@ Track file-by-file cleanup progress for the server codebase.
 - [ ] `shared/database/data_database_manager.py`
 - [ ] `shared/database/database_manager.py`
 - [ ] `shared/database/models.py`
-- [x] `shared/database/unit_of_work.py`
+- [ ] `shared/database/unit_of_work.py`
 - [ ] `shared/database/views.py`
 
 ##### shared/database/repositories/
 - [ ] `shared/database/repositories/__init__.py`
-- [x] `shared/database/repositories/base.py`
+- [ ] `shared/database/repositories/base.py`
 - [ ] `shared/database/repositories/email.py`
 - [ ] `shared/database/repositories/email_account.py`
 - [ ] `shared/database/repositories/email_ingestion_config.py`
@@ -249,7 +249,7 @@ Track file-by-file cleanup progress for the server codebase.
 #### shared/services/
 - [ ] `shared/services/__init__.py`
 - [ ] `shared/services/database_connection_pool.py`
-- [ ] `shared/services/service_container.py` *(intentional TYPE_CHECKING for DI pattern)*
+- [ ] `shared/services/service_container.py`
 
 #### shared/types/
 - [ ] `shared/types/__init__.py`
@@ -258,8 +258,8 @@ Track file-by-file cleanup progress for the server codebase.
 - [ ] `shared/types/email_configs.py`
 - [ ] `shared/types/email_ingestion_configs.py`
 - [ ] `shared/types/email_integrations.py`
-- [ ] `shared/types/eto_runs.py` *(has genuine circular with eto_sub_runs.py)*
-- [ ] `shared/types/eto_sub_runs.py` *(has genuine circular with eto_runs.py)*
+- [ ] `shared/types/eto_runs.py`
+- [ ] `shared/types/eto_sub_runs.py`
 - [ ] `shared/types/eto_sub_run_extractions.py`
 - [ ] `shared/types/eto_sub_run_output_executions.py`
 - [ ] `shared/types/eto_sub_run_pipeline_execution_steps.py`
@@ -284,11 +284,5 @@ Track file-by-file cleanup progress for the server codebase.
 ## Progress Summary
 
 - **Total files:** 176
-- **Completed:** 12
-- **Remaining:** 164
-
-### Notes
-
-Files marked with `[x]` have been cleaned up (TYPE_CHECKING removed where unnecessary).
-
-Files with notes like *(has genuine circular...)* or *(intentional TYPE_CHECKING...)* have known architectural issues that may require refactoring beyond simple cleanup.
+- **Completed:** 0
+- **Remaining:** 176
