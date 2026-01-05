@@ -8,7 +8,6 @@ shared across multiple ingestion listeners and sending configs.
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Literal
 
 
 # =========================
@@ -80,7 +79,6 @@ class EmailAccount:
     credentials: Credentials
     is_validated: bool
     validated_at: datetime | None
-    capabilities: list[str]  # ["IDLE", "UIDPLUS", etc.]
     last_error_message: str | None
     last_error_at: datetime | None
     created_at: datetime
@@ -98,7 +96,6 @@ class EmailAccountSummary:
     email_address: str
     provider_type: str
     is_validated: bool
-    capabilities: list[str]
 
 
 # =========================
@@ -128,7 +125,6 @@ class EmailAccountUpdate:
     credentials: Credentials | None = None
     is_validated: bool | None = None
     validated_at: datetime | None = None
-    capabilities: list[str] | None = None
     last_error_message: str | None = None
     last_error_at: datetime | None = None
     clear_errors: bool = False  # When True, sets error fields to NULL
@@ -143,5 +139,4 @@ class EmailAccountValidationResult:
     """Result of validating/testing an email account connection"""
     success: bool
     message: str
-    capabilities: list[str] = field(default_factory=list)  # Discovered capabilities
     folder_count: int | None = None  # Number of folders discovered

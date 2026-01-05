@@ -20,7 +20,6 @@ class ModuleSecurityValidator:
 
     ALLOWED_PACKAGES = [
         "features.modules.definitions",  # New location for module definitions
-        "pipeline_modules",  # Legacy location (for backwards compatibility)
     ]
 
     BLOCKED_PATTERNS = [

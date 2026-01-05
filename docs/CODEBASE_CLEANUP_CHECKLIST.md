@@ -2,6 +2,15 @@
 
 Track file-by-file cleanup progress for the server codebase.
 
+## Requirements
+
+- Use Python 3.10+ typing syntax: `T | None` instead of `Optional[T]`, `list[T]` instead of `List[T]`, etc.
+
+## Workflow
+
+- Commit after checking off each file or set of related files
+- All cleanup work is done on the `code_cleanup` branch
+
 ---
 
 ## server/src/
@@ -254,7 +263,7 @@ Track file-by-file cleanup progress for the server codebase.
 #### shared/types/
 - [ ] `shared/types/__init__.py`
 - [ ] `shared/types/email.py`
-- [ ] `shared/types/email_accounts.py`
+- [x] `shared/types/email_accounts.py`
 - [ ] `shared/types/email_configs.py`
 - [ ] `shared/types/email_ingestion_configs.py`
 - [ ] `shared/types/email_integrations.py`
@@ -275,14 +284,13 @@ Track file-by-file cleanup progress for the server codebase.
 - [ ] `shared/types/pipelines.py`
 
 #### shared/utils/
-- [ ] `shared/utils/__init__.py`
-- [ ] `shared/utils/datetime.py`
-- [ ] `shared/utils/registry.py`
+- [x] `shared/utils/__init__.py`
+- [x] `shared/utils/datetime.py`
 
 ---
 
 ## Progress Summary
 
-- **Total files:** 176
-- **Completed:** 0
-- **Remaining:** 176
+- **Total files:** 175
+- **Completed:** 3
+- **Remaining:** 172

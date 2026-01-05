@@ -4,82 +4,77 @@ All datetime operations should use timezone-aware UTC for consistency
 """
 from datetime import datetime, timezone
 
-class DateTimeUtils:
-    @staticmethod
-    def utc_now() -> datetime:
-        """
-        Get current time as timezone-aware UTC
 
-        Returns:
-            Current datetime in UTC with timezone info
-        """
-        return datetime.now(timezone.utc)
+def utc_now() -> datetime:
+    """
+    Get current time as timezone-aware UTC
 
-    @staticmethod
-    def ensure_utc_aware(dt: datetime) -> datetime:
-        """
-        Ensure datetime is timezone-aware UTC
+    Returns:
+        Current datetime in UTC with timezone info
+    """
+    return datetime.now(timezone.utc)
 
-        Args:
-            dt: Datetime that may be naive or aware
 
-        Returns:
-            Timezone-aware UTC datetime, or None if input was None
-        """
-        if dt is None:
-            return None
+def ensure_utc_aware(dt: datetime) -> datetime:
+    """
+    Ensure datetime is timezone-aware UTC
 
-        if dt.tzinfo is None:
-            # Assume naive datetimes are UTC (common from database)
-            return dt.replace(tzinfo=timezone.utc)
+    Args:
+        dt: Datetime that may be naive or aware
 
-        # Convert to UTC if different timezone
-        return dt.astimezone(timezone.utc)
+    Returns:
+        Timezone-aware UTC datetime
+    """
+    if dt.tzinfo is None:
+        # Assume naive datetimes are UTC (common from database)
+        return dt.replace(tzinfo=timezone.utc)
 
-    @staticmethod
-    def for_database(dt: datetime) -> datetime:
-        """
-        Convert timezone-aware datetime to naive UTC for SQL Server storage
-        SQL Server DATETIME2 columns store naive datetimes, so we store as naive UTC
+    # Convert to UTC if different timezone
+    return dt.astimezone(timezone.utc)
 
-        Args:
-            dt: Timezone-aware datetime
 
-        Returns:
-            Naive UTC datetime for database storage, or None if input was None
-        """
+def for_database(dt: datetime) -> datetime:
+    """
+    Convert timezone-aware datetime to naive UTC for SQL Server storage
+    SQL Server DATETIME2 columns store naive datetimes, so we store as naive UTC
 
-        if dt.tzinfo is None:
-            return dt  # Already naive, assume UTC
+    Args:
+        dt: Timezone-aware datetime
 
-        # Convert to UTC and remove timezone info for database storage
-        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    Returns:
+        Naive UTC datetime for database storage
+    """
+    if dt.tzinfo is None:
+        return dt  # Already naive, assume UTC
 
-    @staticmethod
-    def parse_iso_datetime(dt_string: str) -> datetime:
-        """
-        Parse ISO 8601 datetime string to timezone-aware UTC datetime
+    # Convert to UTC and remove timezone info for database storage
+    return dt.astimezone(timezone.utc).replace(tzinfo=None)
 
-        Args:
-            dt_string: ISO 8601 datetime string (e.g., "2024-01-15T10:30:00Z" or "2024-01-15T10:30:00+00:00")
 
-        Returns:
-            Timezone-aware UTC datetime
+def parse_iso_datetime(dt_string: str) -> datetime:
+    """
+    Parse ISO 8601 datetime string to timezone-aware UTC datetime
 
-        Raises:
-            ValueError: If the datetime string is invalid
-        """
-        try:
-            # Handle common ISO formats
-            if dt_string.endswith('Z'):
-                # Remove Z and add +00:00 for consistent parsing
-                dt_string = dt_string[:-1] + '+00:00'
+    Args:
+        dt_string: ISO 8601 datetime string (e.g., "2024-01-15T10:30:00Z" or "2024-01-15T10:30:00+00:00")
 
-            # Parse with timezone info
-            dt = datetime.fromisoformat(dt_string)
+    Returns:
+        Timezone-aware UTC datetime
 
-            # Ensure UTC
-            return DateTimeUtils.ensure_utc_aware(dt)
+    Raises:
+        ValueError: If the datetime string is invalid
+    """
+    try:
+        # Handle common ISO formats
+        if dt_string.endswith('Z'):
+            # Remove Z and add +00:00 for consistent parsing
+            dt_string = dt_string[:-1] + '+00:00'
 
-        except ValueError as e:
-            raise ValueError(f"Invalid ISO datetime format: {e}")
+        # Parse with timezone info
+        dt = datetime.fromisoformat(dt_string)
+
+        # Ensure UTC
+        return ensure_utc_aware(dt)
+
+    except ValueError as e:
+        raise ValueError(f"Invalid ISO datetime format: {e}")

@@ -13,7 +13,7 @@ from shared.exceptions import (
     EdgeValidationError,
     GraphValidationError,
 )
-from shared.utils.registry import get_registry
+from features.modules.utils.registry import ModuleRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ class PipelineValidator:
         """
         self.module_catalog_repo = module_catalog_repo
         # Use provided registry or fall back to singleton
-        self.module_registry = module_registry if module_registry is not None else get_registry()
+        self.module_registry = module_registry if module_registry is not None else ModuleRegistry()
         self.services = services
 
     def validate(self, pipeline_state: PipelineState) -> None:
