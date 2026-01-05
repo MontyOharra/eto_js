@@ -23,7 +23,7 @@ class DatabaseManager:
 
         Args:
             connection_managers: Dictionary mapping database names to their ConnectionManager instances
-                                e.g., {'main': manager1, 'htc_300_db': manager2}
+                                e.g., {'main': manager1, 'htc_300': manager2}
         """
         self.connection_managers = connection_managers
         logger.info(f"DatabaseManager initialized with {len(connection_managers)} connections: {', '.join(connection_managers.keys())}")
@@ -33,7 +33,7 @@ class DatabaseManager:
         Get a database connection by name.
 
         Args:
-            database_name: Name of the database connection (e.g., "htc_300_db", "htc_000_db")
+            database_name: Name of the database connection (e.g., "htc_300", "htc_000_db")
 
         Returns:
             Database connection object (pyodbc connection or SQLAlchemy engine)
@@ -42,8 +42,8 @@ class DatabaseManager:
             ValueError: If database connection not found or not configured
 
         Example:
-            >>> db_manager = DatabaseManager({'htc_300_db': manager})
-            >>> conn = db_manager.get_connection("htc_300_db")
+            >>> db_manager = DatabaseManager({'htc_300': manager})
+            >>> conn = db_manager.get_connection("htc_300")
             >>> cursor = conn.cursor()
         """
         if database_name not in self.connection_managers:

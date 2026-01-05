@@ -114,12 +114,12 @@ class AddressNameSwapsLookup(MiscModule):
 
         # Get connection to HTC350D_Database (Address Name Swaps table)
         try:
-            connection_350d = services.get_connection("htc_350d_db")
+            connection_350d = services.get_connection("htc_350d")
         except Exception as e:
-            logger.error(f"Failed to get database connection 'htc_350d_db': {e}")
+            logger.error(f"Failed to get database connection 'htc_350d': {e}")
             raise ValueError(
                 f"Could not connect to HTC350D database. "
-                f"Ensure HTC_350D_DB_CONNECTION_STRING is configured in .env file. Error: {e}"
+                f"Ensure HTC_350D_CONNECTION_STRING is configured in .env file. Error: {e}"
             )
 
         # Step 1: Query Address Name Swaps table for exact match
@@ -155,12 +155,12 @@ class AddressNameSwapsLookup(MiscModule):
 
         # Step 2: Get connection to HTC300 database (Addresses table)
         try:
-            connection_300 = services.get_connection("htc_300_db")
+            connection_300 = services.get_connection("htc_300")
         except Exception as e:
-            logger.error(f"Failed to get database connection 'htc_300_db': {e}")
+            logger.error(f"Failed to get database connection 'htc_300': {e}")
             raise ValueError(
                 f"Could not connect to HTC300 database. "
-                f"Ensure HTC_300_DB_CONNECTION_STRING is configured in .env file. Error: {e}"
+                f"Ensure HTC_300_CONNECTION_STRING is configured in .env file. Error: {e}"
             )
 
         # Step 3: Query Addresses table for full address details

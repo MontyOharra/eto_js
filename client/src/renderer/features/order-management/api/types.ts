@@ -246,6 +246,12 @@ export interface GetUnifiedActionsParams {
   /** Filter by status (varies by type) */
   status?: string;
 
+  /** Filter by customer ID */
+  customer_id?: number;
+
+  /** Search by HAWB (partial match) or HTC order number (exact match) */
+  search?: string;
+
   /** Filter by read/unread state */
   is_read?: boolean;
 

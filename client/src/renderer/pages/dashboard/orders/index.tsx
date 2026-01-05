@@ -52,6 +52,25 @@ const UPDATE_STATUSES = [
   { value: 'rejected', label: 'Rejected' },
 ];
 
+/**
+ * Custom hook for debouncing a value
+ */
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
 function OrdersPage() {
   // Connect to SSE for real-time updates
   useOrderEvents();
@@ -78,19 +97,20 @@ function OrdersPage() {
   const [page, setPage] = useState(1);
   const perPage = 20;
 
-  // Reset page when filters change
+  // Debounce search query for real-time feedback (300ms delay)
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
+
+  // Reset page when filters change (use debounced search)
   useEffect(() => {
     setPage(1);
-  }, [customerFilter, searchQuery, typeFilter, statusFilter]);
+  }, [customerFilter, debouncedSearchQuery, typeFilter, statusFilter]);
 
-  // NOTE: customer_id and search are not yet implemented in the backend
-  // They are included here for UI purposes only - will be wired up later
+  // Build query params for the API
   const unifiedQueryParams = {
     type: typeFilter !== 'all' ? (typeFilter as ActionType) : undefined,
     status: statusFilter !== 'all' ? statusFilter : undefined,
-    // TODO: Add these when backend supports them:
-    // customer_id: customerFilter ?? undefined,
-    // search: searchQuery || undefined,
+    customer_id: customerFilter ?? undefined,
+    search: debouncedSearchQuery || undefined,
     limit: perPage,
     offset: (page - 1) * perPage,
   };

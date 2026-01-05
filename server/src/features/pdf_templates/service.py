@@ -1383,7 +1383,7 @@ class PdfTemplateService:
             return []
 
         try:
-            connection = self.data_db_manager.get_connection("htc_300_db")
+            connection = self.data_db_manager.get_connection("htc_300")
 
             sql = """
             SELECT CustomerID, Customer
@@ -1427,7 +1427,7 @@ class PdfTemplateService:
             return None
 
         try:
-            connection = self.data_db_manager.get_connection("htc_300_db")
+            connection = self.data_db_manager.get_connection("htc_300")
 
             sql = """
             SELECT CustomerID, Customer
@@ -1482,7 +1482,7 @@ class PdfTemplateService:
             return {}
 
         try:
-            connection = self.data_db_manager.get_connection("htc_300_db")
+            connection = self.data_db_manager.get_connection("htc_300")
 
             # Build IN clause with placeholders
             placeholders = ",".join("?" * len(customer_ids))

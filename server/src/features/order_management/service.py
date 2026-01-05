@@ -19,6 +19,7 @@ from shared.database.repositories.pending_order import PendingOrderRepository
 from shared.database.repositories.pending_order_history import PendingOrderHistoryRepository
 from shared.database.repositories.pending_update import PendingUpdateRepository
 from shared.database.repositories.pending_update_history import PendingUpdateHistoryRepository
+from shared.database.repositories.unified_actions import UnifiedActionsRepository
 from shared.database.repositories.eto_sub_run import EtoSubRunRepository
 from shared.database.repositories.eto_run import EtoRunRepository
 from shared.database.repositories.pdf_file import PdfFileRepository
@@ -35,6 +36,8 @@ from shared.types.pending_orders import (
     PendingUpdateHistoryCreate,
     PendingOrderStatus,
     FieldState,
+    UnifiedAction,
+    UnifiedActionsListResult,
     VALID_FIELD_NAMES,
     REQUIRED_FIELDS,
 )
@@ -123,6 +126,46 @@ class ApproveResult:
     message: str
 
 
+@dataclass
+class EnrichedUnifiedAction:
+    """
+    A unified action enriched with computed fields.
+    Used by the service layer to provide complete data to the router.
+    """
+    # Base fields from UnifiedAction
+    type: str  # 'create' or 'update'
+    id: int
+    customer_id: int
+    hawb: str
+    htc_order_number: Optional[int]
+    status: str
+    is_read: bool
+    error_message: Optional[str]
+    last_processed_at: Optional[datetime]
+    created_at: datetime
+    updated_at: datetime
+
+    # Enriched fields
+    customer_name: Optional[str]
+    conflict_count: int
+
+    # For pending orders (type='create')
+    required_fields_present: Optional[int] = None
+    required_field_count: Optional[int] = None
+    optional_fields_present: Optional[int] = None
+    optional_field_count: Optional[int] = None
+
+    # For pending updates (type='update')
+    fields_with_changes: Optional[List[str]] = None
+
+
+@dataclass
+class EnrichedUnifiedActionsResult:
+    """Result of listing enriched unified actions with pagination."""
+    items: List[EnrichedUnifiedAction]
+    total: int
+
+
 # ==================== Field Labels ====================
 
 FIELD_LABELS: Dict[str, str] = {
@@ -205,6 +248,9 @@ class OrderManagementService:
         self._pending_update_history_repo = PendingUpdateHistoryRepository(
             connection_manager=connection_manager
         )
+        self._unified_actions_repo = UnifiedActionsRepository(
+            connection_manager=connection_manager
+        )
 
         # Repositories for source lookup
         self._sub_run_repo = EtoSubRunRepository(
@@ -256,6 +302,181 @@ class OrderManagementService:
         if setting_value is None:
             return True
         return setting_value.lower() == "true"
+
+    # ==================== Unified Actions ====================
+
+    def get_unified_actions(
+        self,
+        type_filter: Optional[str] = None,
+        status: Optional[str] = None,
+        customer_id: Optional[int] = None,
+        search: Optional[str] = None,
+        is_read: Optional[bool] = None,
+        sort_by: str = "last_processed_at",
+        sort_order: str = "desc",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> EnrichedUnifiedActionsResult:
+        """
+        Get unified list of pending orders and updates with enriched data.
+
+        Uses the unified_actions_view for efficient filtering, sorting, and pagination,
+        then enriches each item with computed fields (customer_name, conflict_count, etc.).
+
+        Args:
+            type_filter: Filter by type ('create' or 'update')
+            status: Filter by status
+            customer_id: Filter by customer ID
+            search: Search HAWB or HTC order number
+            is_read: Filter by read/unread status
+            sort_by: Column to sort by
+            sort_order: Sort direction ('asc' or 'desc')
+            limit: Page size
+            offset: Pagination offset
+
+        Returns:
+            EnrichedUnifiedActionsResult with items and total count
+        """
+        logger.debug(
+            f"Getting unified actions: type={type_filter}, status={status}, "
+            f"customer_id={customer_id}, search={search}"
+        )
+
+        # Get raw data from the view
+        result = self._unified_actions_repo.list_all(
+            type_filter=type_filter,
+            status=status,
+            customer_id=customer_id,
+            search=search,
+            is_read=is_read,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            limit=limit,
+            offset=offset,
+        )
+
+        # Enrich each item
+        enriched_items = []
+        for action in result.items:
+            enriched = self._enrich_unified_action(action)
+            enriched_items.append(enriched)
+
+        logger.info(f"Retrieved {len(enriched_items)} unified actions (total: {result.total})")
+
+        return EnrichedUnifiedActionsResult(
+            items=enriched_items,
+            total=result.total,
+        )
+
+    def _enrich_unified_action(self, action: UnifiedAction) -> EnrichedUnifiedAction:
+        """
+        Enrich a unified action with computed fields.
+
+        Args:
+            action: Raw UnifiedAction from the repository
+
+        Returns:
+            EnrichedUnifiedAction with all computed fields
+        """
+        # Get customer name from HTC
+        customer_name = self._htc_service.get_customer_name(action.customer_id)
+
+        # Initialize enriched fields
+        conflict_count = 0
+        required_fields_present = None
+        required_field_count = None
+        optional_fields_present = None
+        optional_field_count = None
+        fields_with_changes = None
+
+        if action.type == "create":
+            # Get pending order and its history
+            pending_order = self._pending_order_repo.get_by_id(action.id)
+            history = self._pending_order_history_repo.get_by_pending_order_id(action.id)
+
+            # Group history by field
+            by_field: Dict[str, List] = {}
+            for h in history:
+                if h.field_name not in by_field:
+                    by_field[h.field_name] = []
+                by_field[h.field_name].append(h)
+
+            # Count conflicts and field completeness
+            required_present = 0
+            optional_present = 0
+
+            for field_name in VALID_FIELD_NAMES:
+                field_history = by_field.get(field_name, [])
+                current_value = getattr(pending_order, field_name, None) if pending_order else None
+
+                # Check for conflict
+                if len(field_history) > 1:
+                    unique_values = set(h.field_value for h in field_history)
+                    if len(unique_values) > 1 and not any(h.is_selected for h in field_history):
+                        conflict_count += 1
+
+                # Count present fields
+                if current_value is not None:
+                    if field_name in REQUIRED_FIELDS:
+                        required_present += 1
+                    else:
+                        optional_present += 1
+
+            required_fields_present = required_present
+            required_field_count = len(REQUIRED_FIELDS)
+            optional_fields_present = optional_present
+            optional_field_count = len(VALID_FIELD_NAMES) - len(REQUIRED_FIELDS)
+
+        else:  # type == "update"
+            # Get pending update and its history
+            pending_update = self._pending_update_repo.get_by_id(action.id)
+            history = self._pending_update_history_repo.get_by_pending_update_id(action.id)
+
+            # Group history by field
+            by_field: Dict[str, List] = {}
+            for h in history:
+                if h.field_name not in by_field:
+                    by_field[h.field_name] = []
+                by_field[h.field_name].append(h)
+
+            # Calculate conflicts and fields with changes
+            changes = []
+            for field_name in VALID_FIELD_NAMES:
+                field_history = by_field.get(field_name, [])
+                current_value = getattr(pending_update, field_name, None) if pending_update else None
+
+                # Track fields with any proposed value
+                if current_value is not None or len(field_history) > 0:
+                    changes.append(field_name)
+
+                # Check for conflict
+                if len(field_history) > 1:
+                    unique_values = set(h.field_value for h in field_history)
+                    if len(unique_values) > 1 and not any(h.is_selected for h in field_history):
+                        conflict_count += 1
+
+            fields_with_changes = changes
+
+        return EnrichedUnifiedAction(
+            type=action.type,
+            id=action.id,
+            customer_id=action.customer_id,
+            hawb=action.hawb,
+            htc_order_number=int(action.htc_order_number) if action.htc_order_number else None,
+            status=action.status,
+            is_read=action.is_read,
+            error_message=action.error_message,
+            last_processed_at=action.last_processed_at,
+            created_at=action.created_at,
+            updated_at=action.updated_at,
+            customer_name=customer_name,
+            conflict_count=conflict_count,
+            required_fields_present=required_fields_present,
+            required_field_count=required_field_count,
+            optional_fields_present=optional_fields_present,
+            optional_field_count=optional_field_count,
+            fields_with_changes=fields_with_changes,
+        )
 
     # ==================== Pending Orders - Read ====================
 

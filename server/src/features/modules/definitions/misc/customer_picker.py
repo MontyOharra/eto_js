@@ -61,7 +61,7 @@ class CustomerPicker(MiscModule):
                     logger.warning("DataDatabaseManager not available")
                     return schema
 
-                connection = data_db_manager.get_connection("htc_300_db")
+                connection = data_db_manager.get_connection("htc_300")
 
                 # Query active customers, ordered by name
                 sql = """
@@ -153,9 +153,9 @@ class CustomerPicker(MiscModule):
 
         # Get database connection
         try:
-            connection = services.get_connection("htc_300_db")
+            connection = services.get_connection("htc_300")
         except Exception as e:
-            logger.error(f"Failed to get database connection 'htc_300_db': {e}")
+            logger.error(f"Failed to get database connection 'htc_300': {e}")
             raise ValueError(f"Could not connect to database: {e}")
 
         # Query for customer ID by name

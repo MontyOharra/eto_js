@@ -22,8 +22,8 @@ logger = logging.getLogger(__name__)
 # These databases are located in the HTC_APPS_DIR directory
 HTC_DATABASE_FILES: Dict[str, str] = {
     "htc_000_data_staff": "HTC000_Data_Staff",
-    "htc_300_db": "HTC300_Data-01-01",
-    "htc_350d_db": "HTC350D_Database",
+    "htc_300": "HTC300_Data-01-01",
+    "htc_350d": "HTC350D_Database",
 }
 
 
@@ -152,7 +152,7 @@ class DatabaseConfig:
         Get a database connection config by name.
 
         Args:
-            name: Connection name (e.g., "main", "htc_300_db", "htc_000_db")
+            name: Connection name (e.g., "main", "htc_300", "htc_000_db")
 
         Returns:
             DatabaseConnectionConfig for the requested connection
@@ -215,7 +215,7 @@ class DatabaseConfig:
         for env_var_name, env_var_value in os.environ.items():
             if env_var_name.endswith("_CONNECTION_STRING") and env_var_value:
                 # Convert env var name to database name
-                # HTC_300_DB_CONNECTION_STRING → htc_300_db
+                # HTC_300_CONNECTION_STRING → htc_300
                 db_name = env_var_name.replace("_CONNECTION_STRING", "").lower()
 
                 try:

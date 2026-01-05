@@ -73,9 +73,12 @@ function getIndicatorState(item: UnifiedActionListItem): {
   icon: 'dot' | 'check' | 'x' | 'none';
 } {
   if (item.type === 'create') {
-    // Create statuses: incomplete, ready, processing, created, failed
+    // Create statuses: incomplete, ready, processing, created, failed, rejected
     if (item.status === 'failed') {
       return { color: 'red', icon: 'dot' };
+    }
+    if (item.status === 'rejected') {
+      return { color: 'gray', icon: 'x' };
     }
     if (item.status === 'created') {
       return { color: 'green', icon: 'check' };
@@ -258,6 +261,7 @@ function StatusInfoCell({ row }: CellContext<UnifiedActionListItem, unknown>) {
       processing: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
       created: 'bg-green-500/20 text-green-400 border-green-500/30',
       failed: 'bg-red-500/20 text-red-400 border-red-500/30',
+      rejected: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
     };
 
     const requiredComplete =
@@ -302,7 +306,7 @@ function StatusInfoCell({ row }: CellContext<UnifiedActionListItem, unknown>) {
 
         {/* Error message for failed */}
         {data.status === 'failed' && data.error_message && (
-          <span className="text-xs text-red-400 truncate max-w-[200px]" title={data.error_message}>
+          <span className="text-xs text-red-400 truncate flex-1 min-w-0" title={data.error_message}>
             {data.error_message}
           </span>
         )}
@@ -565,6 +569,8 @@ export function UnifiedActionsTable({
                   } else if (item.type === 'create') {
                     if (item.status === 'failed') {
                       rowBg = 'bg-red-900/10';
+                    } else if (item.status === 'rejected') {
+                      rowBg = 'bg-gray-900/10';
                     } else if (item.status === 'incomplete' || item.conflict_count > 0) {
                       rowBg = 'bg-yellow-900/5';
                     } else if (item.status === 'ready') {

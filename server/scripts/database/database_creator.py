@@ -108,9 +108,13 @@ class DatabaseCreator:
             logger.info("\n📊 Step 2: Creating tables...")
             DatabaseCreator.create_tables(database_url)
 
+            # Step 3: Create views
+            logger.info("\n👁️  Step 3: Creating views...")
+            DatabaseCreator.create_views(database_url)
+
             database_name = DatabaseCreator._parse_database_name(database_url)
             logger.info("\n" + "=" * 60)
-            logger.info(f"✅ SUCCESS: Database '{database_name}' created with all tables!")
+            logger.info(f"✅ SUCCESS: Database '{database_name}' created with all tables and views!")
             logger.info("=" * 60)
             return True
 
@@ -243,6 +247,74 @@ class DatabaseCreator:
             raise DatabaseConnectionError(error_msg) from e
         except Exception as e:
             error_msg = f"Failed to create database tables: {str(e)}"
+            logger.error(f"   ❌ {error_msg}")
+            logger.error(f"      Error type: {type(e).__name__}")
+            import traceback
+            logger.debug(f"\n📋 Stack trace:\n{traceback.format_exc()}")
+            raise DatabaseConnectionError(error_msg) from e
+
+    @staticmethod
+    def create_views(database_url: str) -> bool:
+        """Create all database views with progress logging"""
+        try:
+            import sys
+            from pathlib import Path
+
+            logger.debug("      Loading database views...")
+            project_root = Path(__file__).parent.parent.parent
+            src_path = project_root / 'src'
+            sys.path.insert(0, str(src_path))
+
+            # Import views
+            import importlib.util
+            views_path = src_path / 'shared' / 'database' / 'views.py'
+
+            if not views_path.exists():
+                logger.warning(f"   ⚠️  Views file not found: {views_path} - skipping view creation")
+                return True
+
+            logger.debug(f"      Loading views from: {views_path}")
+
+            views_spec = importlib.util.spec_from_file_location("views", views_path)
+            views_module = importlib.util.module_from_spec(views_spec)
+            views_spec.loader.exec_module(views_module)
+            all_views = views_module.ALL_VIEWS
+
+            database_name = DatabaseCreator._parse_database_name(database_url)
+            logger.info(f"   📋 Creating views in database '{database_name}'...")
+
+            # Create engine
+            engine = create_engine(database_url, pool_pre_ping=True)
+
+            try:
+                logger.info(f"      Found {len(all_views)} views to create:")
+                for view_name, _ in all_views:
+                    logger.info(f"         • {view_name}")
+
+                # Create each view
+                with engine.connect() as conn:
+                    for view_name, view_sql in all_views:
+                        logger.debug(f"      Creating view: {view_name}")
+                        conn.execute(text(view_sql))
+                    conn.commit()
+
+                logger.info(f"\n   ✅ Successfully created {len(all_views)} views")
+                return True
+
+            finally:
+                engine.dispose()
+                logger.debug("      Database connection closed")
+
+        except FileNotFoundError as e:
+            error_msg = f"Views file not found: {str(e)}"
+            logger.error(f"   ❌ {error_msg}")
+            raise DatabaseConnectionError(error_msg) from e
+        except OperationalError as e:
+            error_msg = f"Failed to create views - Connection error: {str(e)}"
+            logger.error(f"   ❌ {error_msg}")
+            raise DatabaseConnectionError(error_msg) from e
+        except Exception as e:
+            error_msg = f"Failed to create database views: {str(e)}"
             logger.error(f"   ❌ {error_msg}")
             logger.error(f"      Error type: {type(e).__name__}")
             import traceback

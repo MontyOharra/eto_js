@@ -79,8 +79,16 @@ async def list_unified_actions(
     ),
     status_filter: Optional[str] = Query(
         None,
-        description="Filter by status. Creates: incomplete,ready,processing,created,failed. Updates: pending,approved,rejected",
+        description="Filter by status. Creates: incomplete,ready,processing,created,failed,rejected. Updates: pending,approved,rejected",
         alias="status",
+    ),
+    customer_id: Optional[int] = Query(
+        None,
+        description="Filter by customer ID",
+    ),
+    search: Optional[str] = Query(
+        None,
+        description="Search by HAWB (partial match) or HTC order number (exact match)",
     ),
     is_read_filter: Optional[bool] = Query(
         None,
@@ -90,25 +98,29 @@ async def list_unified_actions(
     limit: int = Query(50, ge=1, le=100, description="Page size"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
     service = Depends(lambda: ServiceContainer.get_order_management_service()),
-    htc_service = Depends(lambda: ServiceContainer.get_htc_integration_service())
 ) -> UnifiedActionListResponse:
     """
     Get unified list of pending orders (creates) and pending updates.
 
-    Returns both types in a single list, sorted by updated_at descending (most recent first).
-    Supports filtering by type, status, and read/unread state.
+    Returns both types in a single list, sorted by last_processed_at descending (most recent first).
+    Supports filtering by type, status, customer, search, and read/unread state.
 
     Query Parameters:
     - type: Filter by "create" (pending orders) or "update" (pending updates)
     - status: Filter by status value (validates against type)
+    - customer_id: Filter by customer ID
+    - search: Search by HAWB (partial match) or HTC order number (exact match if numeric)
     - is_read: Filter by read/unread state (true/false)
     - limit: Page size (default 50, max 100)
     - offset: Pagination offset
     """
-    logger.debug(f"List unified actions: type={type_filter}, status={status_filter}, is_read={is_read_filter}")
+    logger.debug(
+        f"List unified actions: type={type_filter}, status={status_filter}, "
+        f"customer_id={customer_id}, search={search}, is_read={is_read_filter}"
+    )
 
     # Validate status filter against type
-    create_statuses = {"incomplete", "ready", "processing", "created", "failed"}
+    create_statuses = {"incomplete", "ready", "processing", "created", "failed", "rejected"}
     update_statuses = {"pending", "approved", "rejected"}
 
     if status_filter:
@@ -123,153 +135,47 @@ async def list_unified_actions(
                 detail=f"Invalid status '{status_filter}' for type 'update'. Valid: {update_statuses}"
             )
 
-    items = []
-    total = 0
+    # Call service layer
+    result = service.get_unified_actions(
+        type_filter=type_filter,
+        status=status_filter,
+        customer_id=customer_id,
+        search=search,
+        is_read=is_read_filter,
+        sort_by="last_processed_at",
+        sort_order="desc",
+        limit=limit,
+        offset=offset,
+    )
 
-    # Get repositories
-    pending_order_repo = service._pending_order_repo
-    pending_order_history_repo = service._pending_order_history_repo
-    pending_update_repo = service._pending_update_repo
-    pending_update_history_repo = service._pending_update_history_repo
-
-    # Collect pending orders if not filtered to updates only
-    if type_filter != "update":
-        # Get all orders (no pagination here - we filter in-memory for unified view)
-        orders_result = pending_order_repo.list_all(
-            status=status_filter if status_filter in create_statuses else None,
-            limit=1000,  # High limit to get all
-            offset=0,
+    # Map service result to API response
+    items = [
+        UnifiedActionListItem(
+            type=item.type,
+            id=item.id,
+            hawb=item.hawb,
+            customer_id=item.customer_id,
+            customer_name=item.customer_name,
+            htc_order_number=item.htc_order_number,
+            status=item.status,
+            is_read=item.is_read,
+            required_fields_present=item.required_fields_present,
+            required_field_count=item.required_field_count,
+            optional_fields_present=item.optional_fields_present,
+            optional_field_count=item.optional_field_count,
+            fields_with_changes=item.fields_with_changes,
+            conflict_count=item.conflict_count,
+            error_message=item.error_message,
+            last_processed_at=item.last_processed_at.isoformat() if item.last_processed_at else None,
+            created_at=item.created_at.isoformat(),
+            updated_at=item.updated_at.isoformat(),
         )
-        orders = orders_result.items
-
-        # Apply is_read filter
-        if is_read_filter is not None:
-            orders = [o for o in orders if o.is_read == is_read_filter]
-
-        for order in orders:
-            # Get history for conflict counting
-            history = pending_order_history_repo.get_by_pending_order_id(order.id)
-            by_field = {}
-            for h in history:
-                if h.field_name not in by_field:
-                    by_field[h.field_name] = []
-                by_field[h.field_name].append(h)
-
-            # Count conflicts and field completeness
-            conflict_count = 0
-            required_present = 0
-            optional_present = 0
-
-            for field_name in VALID_FIELD_NAMES:
-                field_history = by_field.get(field_name, [])
-                current_value = getattr(order, field_name, None)
-
-                # Check for conflict
-                if len(field_history) > 1:
-                    unique_values = set(h.field_value for h in field_history)
-                    if len(unique_values) > 1 and not any(h.is_selected for h in field_history):
-                        conflict_count += 1
-
-                # Count present fields
-                if current_value is not None:
-                    if field_name in REQUIRED_FIELDS:
-                        required_present += 1
-                    else:
-                        optional_present += 1
-
-            # Get customer name
-            customer_name = htc_service.get_customer_name(order.customer_id)
-
-            items.append(UnifiedActionListItem(
-                type="create",
-                id=order.id,
-                hawb=order.hawb,
-                customer_id=order.customer_id,
-                customer_name=customer_name,
-                htc_order_number=int(order.htc_order_number) if order.htc_order_number else None,
-                status=order.status,
-                is_read=order.is_read,
-                required_fields_present=required_present,
-                required_field_count=len(REQUIRED_FIELDS),
-                optional_fields_present=optional_present,
-                optional_field_count=len(VALID_FIELD_NAMES) - len(REQUIRED_FIELDS),
-                conflict_count=conflict_count,
-                error_message=order.error_message,
-                last_processed_at=order.last_processed_at.isoformat() if order.last_processed_at else None,
-                created_at=order.created_at.isoformat(),
-                updated_at=order.updated_at.isoformat(),
-            ))
-
-    # Collect pending updates if not filtered to creates only
-    if type_filter != "create":
-        updates, _ = pending_update_repo.list_all()
-
-        # Apply status filter
-        if status_filter and status_filter in update_statuses:
-            updates = [u for u in updates if u.status == status_filter]
-
-        # Apply is_read filter
-        if is_read_filter is not None:
-            updates = [u for u in updates if u.is_read == is_read_filter]
-
-        for update in updates:
-            # Get history for conflict counting and fields with changes
-            history = pending_update_history_repo.get_by_pending_update_id(update.id)
-            by_field = {}
-            for h in history:
-                if h.field_name not in by_field:
-                    by_field[h.field_name] = []
-                by_field[h.field_name].append(h)
-
-            # Calculate conflicts and fields with changes
-            conflict_count = 0
-            fields_with_changes = []
-
-            for field_name in VALID_FIELD_NAMES:
-                field_history = by_field.get(field_name, [])
-                current_value = getattr(update, field_name, None)
-
-                # Track fields with any proposed value
-                if current_value is not None or len(field_history) > 0:
-                    fields_with_changes.append(field_name)
-
-                # Check for conflict
-                if len(field_history) > 1:
-                    unique_values = set(h.field_value for h in field_history)
-                    if len(unique_values) > 1 and not any(h.is_selected for h in field_history):
-                        conflict_count += 1
-
-            # Get customer name
-            customer_name = htc_service.get_customer_name(update.customer_id)
-
-            items.append(UnifiedActionListItem(
-                type="update",
-                id=update.id,
-                hawb=update.hawb,
-                customer_id=update.customer_id,
-                customer_name=customer_name,
-                htc_order_number=int(update.htc_order_number) if update.htc_order_number is not None else None,
-                status=update.status,
-                is_read=update.is_read,
-                fields_with_changes=fields_with_changes,
-                conflict_count=conflict_count,
-                last_processed_at=update.last_processed_at.isoformat() if update.last_processed_at else None,
-                created_at=update.created_at.isoformat(),
-                updated_at=update.updated_at.isoformat(),
-            ))
-
-    # Sort by last_processed_at descending (most recent first), falling back to updated_at
-    items.sort(key=lambda x: x.last_processed_at or x.updated_at, reverse=True)
-
-    # Calculate total before pagination
-    total = len(items)
-
-    # Apply pagination
-    items = items[offset:offset + limit]
+        for item in result.items
+    ]
 
     return UnifiedActionListResponse(
         items=items,
-        total=total,
+        total=result.total,
         limit=limit,
         offset=offset,
     )
@@ -318,7 +224,7 @@ async def mark_as_read(
 
 @router.get("/pending-orders", response_model=GetPendingOrdersResponse)
 async def list_pending_orders(
-    status: Optional[Literal["incomplete", "ready", "processing", "created", "failed"]] = Query(
+    status: Optional[Literal["incomplete", "ready", "processing", "created", "failed", "rejected"]] = Query(
         None,
         description="Filter by status"
     ),

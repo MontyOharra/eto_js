@@ -67,7 +67,7 @@ class PendingOrderListItem(BaseModel):
     hawb: str
     customer_id: int
     customer_name: Optional[str] = None  # Resolved from Access DB
-    status: Literal["incomplete", "ready", "processing", "created", "failed"]
+    status: Literal["incomplete", "ready", "processing", "created", "failed", "rejected"]
 
     # HTC info (only set if status == 'created')
     # order_number is DOUBLE in Access but always whole numbers
@@ -136,7 +136,7 @@ class PendingOrderDetail(BaseModel):
     hawb: str
     customer_id: int
     customer_name: Optional[str] = None
-    status: Literal["incomplete", "ready", "processing", "created", "failed"]
+    status: Literal["incomplete", "ready", "processing", "created", "failed", "rejected"]
 
     # HTC info (order_number is DOUBLE in Access but always whole numbers)
     htc_order_number: Optional[int] = None
@@ -172,7 +172,7 @@ class ConfirmFieldResponse(BaseModel):
     success: bool
     field_name: str
     selected_value: str
-    new_status: Literal["incomplete", "ready", "processing", "created", "failed"]
+    new_status: Literal["incomplete", "ready", "processing", "created", "failed", "rejected"]
     message: Optional[str] = None
 
 
@@ -432,9 +432,9 @@ ActionType = Literal["create", "update"]
 # For updates: pending, approved, rejected
 UnifiedStatus = Literal[
     # Create statuses
-    "incomplete", "ready", "processing", "created", "failed",
-    # Update statuses
-    "pending", "approved", "rejected",
+    "incomplete", "ready", "processing", "created", "failed", "rejected",
+    # Update statuses (rejected shared with create, manual_review unique to updates)
+    "pending", "approved", "manual_review",
 ]
 
 

@@ -267,7 +267,7 @@ class PendingOrderRepository(BaseRepository[PendingOrderModel]):
         List pending orders with filtering, search, sorting, and pagination.
 
         Args:
-            status: Filter by status (incomplete, ready, processing, created, failed)
+            status: Filter by status (incomplete, ready, processing, created, failed, rejected)
             customer_id: Filter by customer ID
             search: Search string - matches HAWB (case-insensitive partial match)
                     or exact HTC order number if numeric

@@ -19,7 +19,8 @@ export type PendingOrderStatus =
   | 'ready'       // Has all required fields, can be created
   | 'processing'  // Being processed by HTC worker
   | 'created'     // Created in HTC database
-  | 'failed';     // HTC creation failed
+  | 'failed'      // HTC creation failed
+  | 'rejected';   // User rejected (will not be created in HTC)
 
 /**
  * Status of a pending update

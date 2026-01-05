@@ -83,7 +83,7 @@ class HtcIntegrationService:
         self,
         data_database_manager: 'DataDatabaseManager',
         connection_manager: Any = None,
-        database_name: str = "htc_300_db",
+        database_name: str = "htc_300",
     ) -> None:
         """
         Initialize the service.

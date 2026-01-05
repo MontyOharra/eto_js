@@ -1106,16 +1106,29 @@ Implemented basic dims handling with full replacement strategy:
 
 ## 31. Fix Missing 'rejected' Status Enum for Pending Orders
 
-**Status:** Not Started
+**Status:** COMPLETED
 
 **Priority:** High (Bug)
 
 **Issue:** Rejecting a pending order fails due to a missing enum value for the 'rejected' status.
 
-**Details:**
-- The `reject_pending_order` function sets status to 'rejected'
-- The status enum/type definition is missing this value
-- Need to add 'rejected' to `PendingOrderStatus` type
+**Solution:**
+Added 'rejected' to `PendingOrderStatus` across all type definitions and UI components:
+
+**Backend:**
+- `server/src/shared/types/pending_orders.py` - Added to `PendingOrderStatus` Literal
+- `server/src/shared/database/models.py` - Added to `PENDING_ORDER_STATUS` SQLAlchemy Enum
+- `server/src/api/schemas/order_management.py` - Added to all status Literals (PendingOrderListItem, PendingOrderDetail, ConfirmFieldResponse, UnifiedStatus)
+- `server/src/api/routers/order_management.py` - Added to status filter validation and endpoint Literal types
+- `server/src/shared/database/repositories/pending_order.py` - Updated docstring
+
+**Frontend:**
+- `client/src/renderer/features/order-management/types.ts` - Added to `PendingOrderStatus` type
+- `client/src/renderer/features/order-management/components/OrderStatusBadge/OrderStatusBadge.tsx` - Added gray styling for rejected status
+- `client/src/renderer/features/order-management/components/UnifiedActionsTable/UnifiedActionsTable.tsx`:
+  - Added to `getIndicatorState()` (gray 'x' icon)
+  - Added to `StatusInfoCell` statusColors (gray badge)
+  - Added to row background logic (gray background)
 
 ---
 

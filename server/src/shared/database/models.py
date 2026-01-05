@@ -18,6 +18,18 @@ from sqlalchemy import Enum as SAEnum
 
 
 class BaseModel(DeclarativeBase):
+    """Base class for all table models. Used by create_all() to create tables."""
+    pass
+
+
+class ViewBase(DeclarativeBase):
+    """
+    Separate base class for VIEW models.
+
+    Views inherit from this instead of BaseModel so they are NOT included
+    in BaseModel.metadata.create_all() - which would try to create tables.
+    Views are created separately via raw SQL in database_creator.py.
+    """
     pass
 
 
@@ -819,7 +831,7 @@ class OutputChannelTypeModel(BaseModel):
 
 # Pending order status
 PENDING_ORDER_STATUS = SAEnum(
-    'incomplete', 'ready', 'processing', 'created', 'failed',
+    'incomplete', 'ready', 'processing', 'created', 'failed', 'rejected',
     name='pending_order_status',
     native_enum=False,
     validate_strings=True
@@ -864,7 +876,7 @@ class PendingOrderModel(BaseModel):
     customer_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     hawb: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
 
-    # Status: incomplete -> ready -> processing -> created/failed
+    # Status: incomplete -> ready -> processing -> created/failed/rejected
     status: Mapped[str] = mapped_column(
         PENDING_ORDER_STATUS,
         nullable=False,
@@ -1144,3 +1156,42 @@ class SystemSettingModel(BaseModel):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.getutcdate(), onupdate=func.getutcdate(), nullable=False
     )
+
+
+# =========================
+# DATABASE VIEWS
+# =========================
+
+class UnifiedActionsViewModel(ViewBase):
+    """
+    Maps to the unified_actions_view VIEW (read-only).
+
+    Combines pending_orders and pending_updates into a single queryable view.
+    Used by the Orders page to display both types in a unified list with
+    efficient filtering, sorting, and pagination.
+
+    NOTE: This is a VIEW, not a table. INSERT/UPDATE/DELETE will fail.
+    The view is created by database_creator.py from views.py SQL.
+
+    Inherits from ViewBase (not BaseModel) so it's excluded from create_all().
+    """
+    __tablename__ = "unified_actions_view"
+
+    # Composite primary key (id alone is not unique across types)
+    type: Mapped[str] = mapped_column(String(10), primary_key=True)  # 'create' or 'update'
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+
+    # Common fields
+    customer_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    hawb: Mapped[str] = mapped_column(String(100), nullable=False)
+    htc_order_number: Mapped[Optional[float]] = mapped_column(nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    is_read: Mapped[bool] = mapped_column(Boolean, nullable=False)
+
+    # Type-specific fields (may be NULL for the other type)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Timestamps
+    last_processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

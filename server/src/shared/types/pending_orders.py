@@ -34,6 +34,7 @@ PendingOrderStatus = Literal[
     "processing",   # Worker is currently creating HTC order
     "created",      # Successfully created in HTC
     "failed",       # HTC creation failed (see error_message)
+    "rejected",     # User rejected the order (will not be created in HTC)
 ]
 
 PendingUpdateStatus = Literal[
@@ -406,3 +407,38 @@ class ProcessingResult:
     fields_contributed: List[str] = field(default_factory=list)
     # Any conflicts introduced by this contribution
     conflicts_introduced: List[str] = field(default_factory=list)
+
+
+# =========================
+# Unified Actions View Types
+# =========================
+
+UnifiedActionType = Literal["create", "update"]
+
+
+@dataclass
+class UnifiedAction:
+    """
+    A single row from the unified_actions_view.
+    Represents either a pending order (create) or pending update (update).
+    """
+    type: UnifiedActionType
+    id: int
+    customer_id: int
+    hawb: str
+    htc_order_number: Optional[float]
+    status: str
+    is_read: bool
+    error_message: Optional[str]
+    last_processed_at: Optional[datetime]
+    created_at: datetime
+    updated_at: datetime
+
+
+@dataclass
+class UnifiedActionsListResult:
+    """
+    Result of listing unified actions with pagination.
+    """
+    items: List[UnifiedAction]
+    total: int

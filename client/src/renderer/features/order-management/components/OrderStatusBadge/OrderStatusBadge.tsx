@@ -32,6 +32,10 @@ const statusConfig: Record<PendingOrderStatus, { label: string; className: strin
     label: 'Failed',
     className: 'bg-red-500/20 text-red-400 border-red-500/30',
   },
+  rejected: {
+    label: 'Rejected',
+    className: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
+  },
 };
 
 const defaultConfig = {
