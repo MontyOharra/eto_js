@@ -15,7 +15,6 @@ import ssl
 import threading
 import time
 from datetime import datetime, timezone
-from typing import Optional
 
 from .base_integration import BaseEmailIntegration
 from shared.types.email_integrations import EmailMessage, EmailAttachment, ValidationResult, SendEmailResult
@@ -81,11 +80,11 @@ class StandardEmailIntegration(BaseEmailIntegration):
         self.use_ssl = use_ssl
 
         # IMAP connection state
-        self._imap: Optional[imaplib.IMAP4_SSL | imaplib.IMAP4] = None
+        self._imap: imaplib.IMAP4_SSL | imaplib.IMAP4 | None = None
         self._lock = threading.Lock()
 
         # Keepalive thread
-        self._keepalive_thread: Optional[threading.Thread] = None
+        self._keepalive_thread: threading.Thread | None = None
         self._keepalive_stop = threading.Event()
 
         self.logger.debug(f"Initialized StandardEmailIntegration for {email_address} (IMAP: {imap_host}:{imap_port}, SMTP: {smtp_host}:{smtp_port})")
@@ -155,15 +154,6 @@ class StandardEmailIntegration(BaseEmailIntegration):
             # Authenticate
             temp_imap.login(self.email_address, self.password)
 
-            # Get capabilities
-            capabilities: list[str] = []
-            if hasattr(temp_imap, 'capabilities') and temp_imap.capabilities:
-                for cap in temp_imap.capabilities:
-                    if isinstance(cap, bytes):
-                        capabilities.append(cap.decode('utf-8'))
-                    else:
-                        capabilities.append(str(cap))
-
             # Get folder count
             status, folder_data = temp_imap.list()
             folder_count = 0
@@ -181,7 +171,6 @@ class StandardEmailIntegration(BaseEmailIntegration):
             return ValidationResult(
                 success=True,
                 message="Connection successful",
-                capabilities=capabilities,
                 folder_count=folder_count,
             )
 
@@ -672,30 +661,6 @@ class StandardEmailIntegration(BaseEmailIntegration):
                         (f" matching extensions {file_extensions}" if file_extensions else ""))
 
         return attachments
-
-    # ========== IMAP-Specific Methods ==========
-
-    def get_capabilities(self) -> list[str]:
-        """
-        Get server capabilities (IMAP-specific).
-
-        Thread-safe - uses internal lock.
-        """
-        with self._lock:
-            self._ensure_connected()
-
-            if self._imap is None:
-                raise RuntimeError("Not connected")
-
-            capabilities = []
-            if hasattr(self._imap, 'capabilities') and self._imap.capabilities:
-                for cap in self._imap.capabilities:
-                    if isinstance(cap, bytes):
-                        capabilities.append(cap.decode('utf-8'))
-                    else:
-                        capabilities.append(str(cap))
-
-            return capabilities
 
     # ========== Helper Methods ==========
 
