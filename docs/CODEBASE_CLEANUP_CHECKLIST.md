@@ -11,6 +11,8 @@ Track file-by-file cleanup progress for the server codebase.
 
 ## Workflow
 
+- **IMPORTANT:** Re-read this document before AND after making any changes
+- **IMPORTANT:** Check in with the user before making any code changes
 - Commit after checking off each file or set of related files
 - All cleanup work is done on the `code_cleanup` branch
 
@@ -79,13 +81,13 @@ Track file-by-file cleanup progress for the server codebase.
 - [x] `features/email/processing.py`
 
 ##### features/email/integrations/
-- [ ] `features/email/integrations/__init__.py`
+- [x] `features/email/integrations/__init__.py`
 - [x] `features/email/integrations/base_integration.py`
 - [x] `features/email/integrations/registry.py`
 - [x] `features/email/integrations/standard_integration.py`
 
 ##### features/email/utils/
-- [ ] `features/email/utils/__init__.py`
+- [x] `features/email/utils/__init__.py`
 - [x] `features/email/utils/deduplication.py`
 - [x] `features/email/utils/filter_rules.py`
 
@@ -294,5 +296,5 @@ Track file-by-file cleanup progress for the server codebase.
 ## Progress Summary
 
 - **Total files:** 172 (2 deleted)
-- **Completed:** 21
-- **Remaining:** 151
+- **Completed:** 23
+- **Remaining:** 149
