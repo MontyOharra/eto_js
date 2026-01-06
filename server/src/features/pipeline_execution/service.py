@@ -31,7 +31,7 @@ from shared.database.repositories import (
     PipelineDefinitionStepRepository,
     ModuleRepository,
 )
-from features.modules.utils.registry import ModuleRegistry
+from features.modules.registry import ModuleRegistry
 from shared.types.pipeline_definition import PipelineDefinition
 from shared.types.pipeline_definition_step import PipelineDefinitionStep
 from shared.types.pipelines import NodeInstance

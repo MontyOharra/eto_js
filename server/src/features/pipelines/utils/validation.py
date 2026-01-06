@@ -13,7 +13,7 @@ from shared.exceptions import (
     EdgeValidationError,
     GraphValidationError,
 )
-from features.modules.utils.registry import ModuleRegistry
+from features.modules.registry import ModuleRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -311,7 +311,7 @@ class PipelineValidator:
             logger.info(f"[VALIDATION DEBUG] Parsed: module_id={module_id}, version={version}")
 
             # Lookup module in catalog
-            template = self.module_catalog_repo.get_by_module_ref(module_id, version)
+            template = self.module_catalog_repo.get_by_identifier_version(module_id, version)
             logger.info(f"[VALIDATION DEBUG] Template found: {template is not None}")
 
             if not template:

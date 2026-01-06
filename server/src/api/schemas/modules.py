@@ -1,59 +1,40 @@
 """
 Modules API Schemas
-Pydantic models for module catalog endpoints
+Request/response models for module catalog endpoints
 """
-from typing import List, Optional, Dict, Any, Literal
-from pydantic import BaseModel, Field
+from typing import Any
+
+from pydantic import BaseModel
+
+from shared.types.output_channels import OutputChannelCategory, OutputChannelDataType
 
 
 # ============================================================================
-# Module Catalog Types
+# Module Catalog Response
 # ============================================================================
 
-class Module(BaseModel):
-    """Module catalog entry for API responses"""
-    id: str
+class ModuleResponse(BaseModel):
+    """Module catalog entry for API responses."""
+    identifier: str  # e.g., "text_cleaner"
     version: str
     name: str
-    description: Optional[str] = None
-    module_kind: str  # "transform", "action", "logic", "comparator"
-    meta: Dict[str, Any]  # Module I/O metadata
-    config_schema: Dict[str, Any]  # JSON schema for module configuration
+    description: str | None = None
+    module_kind: str  # "transform", "logic", "comparator", "misc", "output"
+    meta: dict[str, Any]  # Module I/O metadata
+    config_schema: dict[str, Any]  # JSON schema for module configuration
     color: str
     category: str
 
 
 # ============================================================================
-# Output Channel Types
+# Output Channel Response
 # ============================================================================
 
 class OutputChannel(BaseModel):
-    """Output channel type definition for API responses"""
+    """Output channel type definition for API responses."""
     name: str
     label: str
-    data_type: Literal["str", "int", "float", "datetime", "list[str]", "list[dim]"]
-    category: Literal["identification", "pickup", "delivery", "cargo", "other"]
-    description: Optional[str] = None
+    data_type: OutputChannelDataType
+    category: OutputChannelCategory
+    description: str | None = None
     is_required: bool
-
-
-# ============================================================================
-# Admin Sync Types
-# ============================================================================
-
-class ModuleSyncResult(BaseModel):
-    """Result of syncing a single module"""
-    id: str
-    name: str
-    status: str  # "success", "error", "skipped"
-    message: Optional[str] = None
-
-
-class SyncModulesResponse(BaseModel):
-    """Response for POST /admin/sync-modules"""
-    success: bool
-    modules_discovered: int
-    modules_synced: int
-    modules_failed: int
-    results: List[ModuleSyncResult]
-    message: str

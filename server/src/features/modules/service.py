@@ -1,18 +1,19 @@
 """
 Modules Service - Runtime operations for transformation pipeline modules
-Handles module catalog queries, execution, and registry management
+
+Handles module catalog queries, execution, and registry management.
 """
 import logging
-from typing import Dict, Optional, Type, Any
+from typing import Any
 
-from shared.types.modules import BaseModule, Module
-from shared.types.output_channels import OutputChannelTypeCreate
-from shared.database.repositories.module import ModuleRepository
-from shared.database.repositories import OutputChannelTypeRepository
-from shared.exceptions.service import ObjectNotFoundError
-
-from features.modules.utils.registry import ModuleRegistry
+from features.modules.base import BaseModule
 from features.modules.output_channel_definitions import OUTPUT_CHANNEL_DEFINITIONS
+from features.modules.registry import ModuleRegistry
+from shared.database.repositories import OutputChannelTypeRepository
+from shared.database.repositories.module import ModuleRepository
+from shared.exceptions.service import ObjectNotFoundError
+from shared.types.modules import Module
+from shared.types.output_channels import OutputChannelType
 
 logger = logging.getLogger(__name__)
 
@@ -20,21 +21,21 @@ logger = logging.getLogger(__name__)
 # ========== Exceptions ==========
 
 class ModuleNotFoundError(Exception):
-    """Raised when a module cannot be found"""
+    """Raised when a module cannot be found."""
     pass
 
 
 class ModuleLoadError(Exception):
-    """Raised when a module cannot be loaded"""
+    """Raised when a module cannot be loaded."""
     pass
 
 
 class ModuleExecutionError(Exception):
-    """Raised when module execution fails"""
-    def __init__(self, module_id: str, error: str):
-        self.module_id = module_id
+    """Raised when module execution fails."""
+    def __init__(self, identifier: str, error: str):
+        self.identifier = identifier
         self.error = error
-        super().__init__(f"Module {module_id} execution failed: {error}")
+        super().__init__(f"Module {identifier} execution failed: {error}")
 
 
 # ========== Main Service ==========
@@ -45,12 +46,12 @@ class ModulesService:
     Provides module catalog access, execution, and registry management.
 
     Architecture:
-    - Registry: In-memory class loading and caching (from utils)
+    - Registry: In-memory class loading and caching
     - Repository: Database persistence of module catalog
     - Service: Orchestration between registry and repository
     """
 
-    def __init__(self, connection_manager):
+    def __init__(self, connection_manager) -> None:
         """
         Initialize service with database connection.
 
@@ -72,7 +73,7 @@ class ModulesService:
 
         logger.info("ModulesService initialized")
 
-    def _auto_discover_modules(self):
+    def _auto_discover_modules(self) -> None:
         """
         Auto-discover and register all module classes at startup.
         Recursively scans the features/modules/definitions directory.
@@ -95,7 +96,7 @@ class ModulesService:
 
     def list_modules(
         self,
-        kind: Optional[str] = None,
+        kind: str | None = None,
         only_active: bool = True
     ) -> list[Module]:
         """
@@ -120,16 +121,58 @@ class ModulesService:
             logger.error(f"Failed to get module catalog: {e}")
             return []
 
+    def list_latest_modules(self, only_active: bool = True) -> list[Module]:
+        """
+        Get latest version of each module for frontend catalog display.
+
+        Returns only one entry per module identifier (the highest version),
+        suitable for the module pane where users select modules to add.
+
+        Args:
+            only_active: Whether to only include active modules
+
+        Returns:
+            List of Module domain objects (one per identifier, latest version)
+        """
+        try:
+            modules = self.module_repository.get_latest_versions(only_active=only_active)
+            logger.debug(f"Retrieved {len(modules)} latest module versions")
+            return modules
+        except Exception as e:
+            logger.error(f"Failed to get latest module versions: {e}")
+            return []
+
+    def get_module_by_id(self, id: int) -> Module | None:
+        """
+        Get module by primary key (int).
+
+        Args:
+            id: Module primary key
+
+        Returns:
+            Module object or None if not found
+        """
+        try:
+            module = self.module_repository.get_by_id(id)
+            if module:
+                logger.debug(f"Retrieved module by id={id}: {module.identifier}")
+            else:
+                logger.warning(f"Module not found: id={id}")
+            return module
+        except Exception as e:
+            logger.error(f"Failed to get module by id={id}: {e}")
+            return None
+
     def get_module(
         self,
-        module_id: str,
-        version: Optional[str] = None
+        identifier: str,
+        version: str | None = None
     ) -> Module | None:
         """
         Get detailed information about a specific module from database.
 
         Args:
-            module_id: Module ID to retrieve
+            identifier: Module identifier (e.g., "text_cleaner")
             version: Optional specific version (defaults to latest active)
 
         Returns:
@@ -137,36 +180,36 @@ class ModulesService:
         """
         try:
             if version:
-                module = self.module_repository.get_by_module_ref(module_id, version)
+                module = self.module_repository.get_by_identifier_version(identifier, version)
             else:
-                module = self.module_repository.get_by_id(module_id)
+                module = self.module_repository.get_by_identifier(identifier)
 
             if module:
-                logger.debug(f"Retrieved module info for: {module_id}")
+                logger.debug(f"Retrieved module info for: {identifier}")
             else:
-                logger.warning(f"Module not found in catalog: {module_id}")
+                logger.warning(f"Module not found in catalog: {identifier}")
             return module
         except ObjectNotFoundError:
-            logger.warning(f"Module not found: {module_id}")
+            logger.warning(f"Module not found: {identifier}")
             return None
         except Exception as e:
-            logger.error(f"Failed to get module info for {module_id}: {e}")
+            logger.error(f"Failed to get module info for {identifier}: {e}")
             return None
 
     # ========== Execution Operations ==========
 
     def execute_module(
         self,
-        module_id: str,
-        inputs: Dict[str, Any],
-        config: Dict[str, Any],
-        context: Optional[Any] = None
-    ) -> Dict[str, Any]:
+        identifier: str,
+        inputs: dict[str, Any],
+        config: dict[str, Any],
+        context: Any | None = None
+    ) -> dict[str, Any]:
         """
         Execute a module with given inputs and configuration.
 
         Args:
-            module_id: Module ID to execute
+            identifier: Module identifier to execute
             inputs: Input values keyed by node ID
             config: Configuration values
             context: Optional execution context
@@ -180,12 +223,12 @@ class ModulesService:
             ModuleExecutionError: If module execution fails
         """
         # Step 1: Get module metadata from database
-        module_info = self.get_module(module_id)
+        module_info = self.get_module(identifier)
         if not module_info:
-            raise ModuleNotFoundError(f"Module {module_id} not found in catalog")
+            raise ModuleNotFoundError(f"Module {identifier} not found in catalog")
 
         if not module_info.is_active:
-            raise ModuleLoadError(f"Module {module_id} is inactive")
+            raise ModuleLoadError(f"Module {identifier} is inactive")
 
         # Step 2: Get module class (from cache or dynamic load)
         module_class = self._get_module_class(module_info)
@@ -193,7 +236,7 @@ class ModulesService:
         # Step 3: Execute module
         return self._execute_module_instance(module_class, inputs, config, context)
 
-    def _get_module_class(self, module_info: Module) -> Type[BaseModule]:
+    def _get_module_class(self, module_info: Module) -> type[BaseModule]:
         """
         Get module class from registry, loading if needed.
 
@@ -207,25 +250,26 @@ class ModulesService:
             ModuleLoadError: If module cannot be loaded
         """
         # Try registry first (fast path - may be cached)
-        module_class = self._registry.get(module_info.id)
+        # Registry uses identifier (string), not id (int)
+        module_class = self._registry.get(module_info.identifier)
 
         if not module_class and module_info.handler_name:
             # Load dynamically using handler (will be cached)
-            logger.debug(f"Loading module {module_info.id} from handler: {module_info.handler_name}")
+            logger.debug(f"Loading module {module_info.identifier} from handler: {module_info.handler_name}")
             module_class = self._registry.load_module_from_handler(module_info.handler_name)
 
         if not module_class:
-            raise ModuleLoadError(f"Cannot load module class for {module_info.id}")
+            raise ModuleLoadError(f"Cannot load module class for {module_info.identifier}")
 
         return module_class
 
     def _execute_module_instance(
         self,
-        module_class: Type[BaseModule],
-        inputs: Dict[str, Any],
-        config: Dict[str, Any],
-        context: Optional[Any]
-    ) -> Dict[str, Any]:
+        module_class: type[BaseModule],
+        inputs: dict[str, Any],
+        config: dict[str, Any],
+        context: Any | None
+    ) -> dict[str, Any]:
         """
         Execute a module instance with validation.
 
@@ -263,7 +307,7 @@ class ModulesService:
             logger.error(f"Module {module_class.id} execution failed: {e}")
             raise ModuleExecutionError(module_class.id, str(e))
 
-    def _create_default_context(self, inputs: Dict[str, Any]) -> Any:
+    def _create_default_context(self, inputs: dict[str, Any]) -> Any:
         """
         Create a default execution context for modules.
 
@@ -280,60 +324,161 @@ class ModulesService:
 
     # ========== Registry Sync Operations ==========
 
-    def sync_registry_to_database(self):
+    def rediscover_modules(self) -> int:
         """
-        Sync registered modules from registry to database.
-        This should be called after module discovery to ensure database is up to date.
+        Re-scan the codebase for module definitions.
 
-        Process:
-        1. Get all registered modules as ModuleCreate dataclasses
-        2. Upsert each to database
-        3. Soft delete any modules in database that are no longer in registry
+        Clears the current registry and re-runs auto-discovery to pick up
+        any new modules or versions that were added.
+
+        Returns:
+            Number of modules discovered
         """
+        logger.info("Re-discovering modules...")
+
+        # Clear existing registry
+        self._registry.clear()
+
+        # Re-run auto-discovery
+        self._auto_discover_modules()
+
+        count = len(self._registry.get_all())
+        logger.info(f"Re-discovery complete: {count} modules found")
+
+        return count
+
+    def sync_modules(self, refresh: bool = False) -> dict[str, Any]:
+        """
+        Sync module definitions to database with detailed results.
+
+        This is the main entry point for module syncing, used by both
+        startup and the admin API endpoint.
+
+        Args:
+            refresh: If True, re-scan codebase for new modules before syncing
+
+        Returns:
+            Dict with sync results:
+                - success: bool
+                - modules_discovered: int
+                - modules_synced: int
+                - modules_failed: int
+                - results: list of per-module results
+                - message: str
+        """
+        results: list[dict[str, Any]] = []
+        synced_count = 0
+        failed_count = 0
+
         try:
-            # Get all modules from registry as ModuleCreate dataclasses
+            # Step 1: Optionally re-discover modules
+            if refresh:
+                self.rediscover_modules()
+
+            # Step 2: Get all registered modules as ModuleCreate objects
             catalog_entries = self._registry.to_catalog_entries()
 
-            # Build set of module refs (id:version) from registry
-            registry_refs = {(m.id, m.version) for m in catalog_entries}
+            if not catalog_entries:
+                logger.warning("No modules found to sync")
+                return {
+                    "success": True,
+                    "modules_discovered": 0,
+                    "modules_synced": 0,
+                    "modules_failed": 0,
+                    "results": [],
+                    "message": "No modules found to sync. Check module packages and decorators."
+                }
+
+            # Build set of module refs (identifier, version) from registry
+            registry_refs = {(m.identifier, m.version) for m in catalog_entries}
 
             logger.info(f"Syncing {len(catalog_entries)} modules to database...")
 
-            synced_count = 0
+            # Step 3: Sync each module and track results
             for module_create in catalog_entries:
                 try:
-                    # Upsert to database (repository handles all serialization)
                     self.module_repository.upsert(module_create)
                     synced_count += 1
 
+                    results.append({
+                        "id": module_create.identifier,
+                        "name": module_create.name,
+                        "status": "success",
+                        "message": None
+                    })
+                    logger.debug(f"Synced module: {module_create.identifier}")
+
                 except Exception as e:
-                    logger.error(f"Failed to sync module {module_create.id}: {e}")
+                    failed_count += 1
+                    error_msg = str(e)
 
-            logger.info(f"Successfully synced {synced_count}/{len(catalog_entries)} modules")
+                    results.append({
+                        "id": module_create.identifier,
+                        "name": module_create.name,
+                        "status": "error",
+                        "message": error_msg
+                    })
+                    logger.error(f"Failed to sync module {module_create.identifier}: {e}")
 
-            # Remove modules from database that are no longer in registry
+            # Step 4: Soft-delete modules no longer in registry
             db_modules = self.module_repository.get_all(only_active=True)
             removed_count = 0
 
             for db_module in db_modules:
-                db_ref = (db_module.id, db_module.version)
+                db_ref = (db_module.identifier, db_module.version)
                 if db_ref not in registry_refs:
                     try:
-                        self.module_repository.delete(db_module.id, db_module.version)
+                        self.module_repository.delete(db_module.id)
                         removed_count += 1
-                        logger.info(f"Removed obsolete module: {db_module.id}:{db_module.version}")
+                        logger.info(f"Deactivated obsolete module: {db_module.identifier}:{db_module.version}")
                     except Exception as e:
-                        logger.error(f"Failed to remove obsolete module {db_module.id}: {e}")
+                        logger.error(f"Failed to deactivate obsolete module {db_module.identifier}: {e}")
 
             if removed_count > 0:
-                logger.info(f"Removed {removed_count} obsolete modules from database")
+                logger.info(f"Deactivated {removed_count} obsolete modules")
+
+            # Build response
+            success = failed_count == 0
+            message = f"Successfully synced {synced_count} modules"
+            if failed_count > 0:
+                message += f", {failed_count} failed"
+            if removed_count > 0:
+                message += f", {removed_count} deactivated"
+
+            logger.info(message)
+
+            return {
+                "success": success,
+                "modules_discovered": len(catalog_entries),
+                "modules_synced": synced_count,
+                "modules_failed": failed_count,
+                "results": results,
+                "message": message
+            }
 
         except Exception as e:
-            logger.error(f"Failed to sync registry to database: {e}")
+            logger.error(f"Fatal error during module sync: {e}")
+            return {
+                "success": False,
+                "modules_discovered": 0,
+                "modules_synced": synced_count,
+                "modules_failed": failed_count,
+                "results": results,
+                "message": f"Fatal error: {str(e)}"
+            }
 
-    def get_registry_stats(self) -> Dict[str, Any]:
+    def sync_registry_to_database(self) -> None:
         """
-        Get registry statistics (registered modules, cache stats)
+        Sync registered modules from registry to database.
+
+        Simple wrapper for startup use - calls sync_modules without refresh.
+        For detailed results, use sync_modules() directly.
+        """
+        self.sync_modules(refresh=False)
+
+    def get_registry_stats(self) -> dict[str, Any]:
+        """
+        Get registry statistics (registered modules, cache stats).
 
         Returns:
             Dictionary with registry statistics
@@ -347,9 +492,28 @@ class ModulesService:
             "cache_stats": cache_stats
         }
 
-    # ========== Output Channel Sync Operations ==========
+    # ========== Output Channel Operations ==========
 
-    def sync_output_channel_types(self) -> Dict[str, Any]:
+    def list_output_channel_types(self) -> list[OutputChannelType]:
+        """
+        Get all output channel type definitions from database.
+
+        Returns the catalog of available output channel types that can be
+        placed in pipelines to collect data for the pending orders system.
+
+        Returns:
+            List of OutputChannelType domain objects
+        """
+        try:
+            repo = OutputChannelTypeRepository(connection_manager=self.connection_manager)
+            channels = repo.get_all()
+            logger.debug(f"Retrieved {len(channels)} output channel types")
+            return channels
+        except Exception as e:
+            logger.error(f"Failed to get output channel types: {e}")
+            return []
+
+    def sync_output_channel_types(self) -> dict[str, Any]:
         """
         Sync output channel type definitions to the database.
 
@@ -372,21 +536,11 @@ class ModulesService:
         channel_names = []
 
         for definition in OUTPUT_CHANNEL_DEFINITIONS:
-            # Convert definition to create dataclass
-            channel_create = OutputChannelTypeCreate(
-                name=definition.name,
-                label=definition.label,
-                data_type=definition.data_type,
-                is_required=definition.is_required,
-                category=definition.category,
-                description=definition.description,
-            )
-
             # Check if exists to track created vs updated
             existing = repo.get_by_name(definition.name)
 
-            # Upsert the channel type
-            repo.upsert(channel_create)
+            # Upsert the channel type (definition is already OutputChannelTypeCreate)
+            repo.upsert(definition)
 
             if existing:
                 updated += 1

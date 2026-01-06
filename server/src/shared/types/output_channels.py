@@ -1,10 +1,10 @@
 """
 Output Channel Type definitions for domain objects.
 """
-
-from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal
+
+from pydantic import BaseModel, ConfigDict
 
 
 # Type aliases for output channel fields
@@ -12,9 +12,10 @@ OutputChannelDataType = Literal["str", "int", "float", "datetime", "list[str]", 
 OutputChannelCategory = Literal["identification", "pickup", "delivery", "cargo", "other"]
 
 
-@dataclass(frozen=True)
-class OutputChannelType:
+class OutputChannelType(BaseModel):
     """Domain object for an output channel type."""
+    model_config = ConfigDict(frozen=True)
+
     id: int
     name: str
     label: str
@@ -26,9 +27,10 @@ class OutputChannelType:
     updated_at: datetime
 
 
-@dataclass(frozen=True)
-class OutputChannelTypeCreate:
+class OutputChannelTypeCreate(BaseModel):
     """Data for creating an output channel type."""
+    model_config = ConfigDict(frozen=True)
+
     name: str
     label: str
     data_type: OutputChannelDataType
@@ -37,11 +39,17 @@ class OutputChannelTypeCreate:
     description: str | None = None
 
 
-@dataclass(frozen=True)
-class OutputChannelTypeUpdate:
-    """Data for updating an output channel type."""
+class OutputChannelTypeUpdate(BaseModel):
+    """
+    Data for updating an output channel type.
+
+    Uses Pydantic's model_fields_set to distinguish between:
+    - Field not provided: not in model_fields_set (don't update)
+    - Field set to None: in model_fields_set with None value (set NULL)
+    - Field set to value: in model_fields_set with value (update)
+    """
     label: str | None = None
-    data_type: str | None = None
+    data_type: OutputChannelDataType | None = None
     description: str | None = None
     is_required: bool | None = None
-    category: str | None = None
+    category: OutputChannelCategory | None = None

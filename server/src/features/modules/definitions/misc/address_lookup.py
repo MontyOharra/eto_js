@@ -6,8 +6,9 @@ import logging
 from typing import Dict, Any, List
 from pydantic import BaseModel, Field
 
-from shared.types import MiscModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
-from features.modules.utils.decorators import register
+from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
+from features.modules.registry import register
+from features.modules.base import MiscModule
 
 logger = logging.getLogger(__name__)
 

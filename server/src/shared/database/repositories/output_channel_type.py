@@ -1,19 +1,18 @@
 """
 Output Channel Type Repository
+
 Repository for managing output channel type catalog database operations.
 """
-
 import logging
-from typing import Type
 
-from shared.database.repositories.base import BaseRepository
 from shared.database.models import OutputChannelTypeModel
+from shared.database.repositories.base import BaseRepository
+from shared.exceptions.service import ObjectNotFoundError
 from shared.types.output_channels import (
     OutputChannelType,
     OutputChannelTypeCreate,
     OutputChannelTypeUpdate,
 )
-from shared.exceptions.service import ObjectNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -25,11 +24,11 @@ class OutputChannelTypeRepository(BaseRepository[OutputChannelTypeModel]):
     """
 
     @property
-    def model_class(self) -> Type[OutputChannelTypeModel]:
+    def model_class(self) -> type[OutputChannelTypeModel]:
         """Return the SQLAlchemy model class this repository manages."""
         return OutputChannelTypeModel
 
-    def _model_to_dataclass(self, model: OutputChannelTypeModel) -> OutputChannelType:
+    def _model_to_domain(self, model: OutputChannelTypeModel) -> OutputChannelType:
         """Convert SQLAlchemy model to domain object."""
         return OutputChannelType(
             id=model.id,
@@ -50,7 +49,7 @@ class OutputChannelTypeRepository(BaseRepository[OutputChannelTypeModel]):
         Create a new output channel type.
 
         Args:
-            channel_create: OutputChannelTypeCreate dataclass with channel data
+            channel_create: OutputChannelTypeCreate with channel data
 
         Returns:
             Created OutputChannelType domain object
@@ -70,15 +69,21 @@ class OutputChannelTypeRepository(BaseRepository[OutputChannelTypeModel]):
             session.flush()
 
             logger.info(f"Created output channel type: {model.name}")
-            return self._model_to_dataclass(model)
+            return self._model_to_domain(model)
 
     def update(self, name: str, channel_update: OutputChannelTypeUpdate) -> OutputChannelType:
         """
         Update an existing output channel type.
 
+        Only fields explicitly set on the update model are updated.
+        Uses Pydantic's model_fields_set to distinguish between:
+        - Field not provided (not in model_fields_set): unchanged
+        - Field set to None: set to NULL in database
+        - Field set to value: updated to that value
+
         Args:
             name: Channel name to update
-            channel_update: OutputChannelTypeUpdate dataclass with fields to update
+            channel_update: OutputChannelTypeUpdate with fields to update
 
         Returns:
             Updated OutputChannelType domain object
@@ -94,25 +99,14 @@ class OutputChannelTypeRepository(BaseRepository[OutputChannelTypeModel]):
             if not model:
                 raise ObjectNotFoundError(f"Output channel type '{name}' not found")
 
-            # Build update dict from non-None fields
-            updates = {}
-            if channel_update.label is not None:
-                updates["label"] = channel_update.label
-            if channel_update.data_type is not None:
-                updates["data_type"] = channel_update.data_type
-            if channel_update.description is not None:
-                updates["description"] = channel_update.description
-            if channel_update.is_required is not None:
-                updates["is_required"] = channel_update.is_required
-            if channel_update.category is not None:
-                updates["category"] = channel_update.category
-
-            for key, value in updates.items():
-                setattr(model, key, value)
+            # Update only fields that were explicitly set
+            for field_name in channel_update.model_fields_set:
+                value = getattr(channel_update, field_name)
+                setattr(model, field_name, value)
 
             session.flush()
             logger.info(f"Updated output channel type: {name}")
-            return self._model_to_dataclass(model)
+            return self._model_to_domain(model)
 
     def get_by_name(self, name: str) -> OutputChannelType | None:
         """
@@ -132,7 +126,7 @@ class OutputChannelTypeRepository(BaseRepository[OutputChannelTypeModel]):
             if not model:
                 return None
 
-            return self._model_to_dataclass(model)
+            return self._model_to_domain(model)
 
     def get_all(self) -> list[OutputChannelType]:
         """
@@ -147,7 +141,7 @@ class OutputChannelTypeRepository(BaseRepository[OutputChannelTypeModel]):
                 self.model_class.name,
             ).all()
 
-            return [self._model_to_dataclass(model) for model in models]
+            return [self._model_to_domain(model) for model in models]
 
     def get_required(self) -> list[OutputChannelType]:
         """
@@ -164,7 +158,7 @@ class OutputChannelTypeRepository(BaseRepository[OutputChannelTypeModel]):
                 self.model_class.name,
             ).all()
 
-            return [self._model_to_dataclass(model) for model in models]
+            return [self._model_to_domain(model) for model in models]
 
     def get_by_category(self, category: str) -> list[OutputChannelType]:
         """
@@ -183,7 +177,7 @@ class OutputChannelTypeRepository(BaseRepository[OutputChannelTypeModel]):
                 self.model_class.name,
             ).all()
 
-            return [self._model_to_dataclass(model) for model in models]
+            return [self._model_to_domain(model) for model in models]
 
     def exists_by_name(self, name: str) -> bool:
         """
@@ -205,7 +199,7 @@ class OutputChannelTypeRepository(BaseRepository[OutputChannelTypeModel]):
         Create or update an output channel type.
 
         Args:
-            channel_create: OutputChannelTypeCreate dataclass with channel data
+            channel_create: OutputChannelTypeCreate with channel data
 
         Returns:
             Created or updated OutputChannelType domain object

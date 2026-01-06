@@ -1,25 +1,99 @@
 """
 Module Registry System
-Handles registration, discovery, and retrieval of module classes
-"""
-import logging
-import re
-import importlib
-import pkgutil
-from typing import Dict, List, Optional, Type, Any, Tuple
-from datetime import datetime
-from pathlib import Path
 
-from shared.types.modules import BaseModule, ModuleCreate
+Handles registration, discovery, and retrieval of module classes.
+Includes the @register decorator for marking module classes.
+"""
+import importlib
+import logging
+import pkgutil
+import re
+from datetime import datetime
+from typing import Any
+
+from features.modules.base import BaseModule
+from shared.types.modules import ModuleCreate
 
 logger = logging.getLogger(__name__)
 
 
+# ========== Registration Decorator ==========
+
+# Global pending registrations queue
+# Module classes are added here by @register decorator during import
+# Then consumed by ModuleRegistry during auto-discovery
+_pending_registrations: list[type[BaseModule]] = []
+
+
+def register(module_class: type[BaseModule]) -> type[BaseModule]:
+    """
+    Decorator to mark a module class for registration.
+
+    Usage:
+        from features.modules.registry import register
+
+        @register
+        class MyModule(TransformModule):
+            ...
+
+    This adds the module to a pending list that will be processed
+    by ModuleRegistry during auto-discovery.
+
+    Args:
+        module_class: Module class inheriting from BaseModule
+
+    Returns:
+        The module class (for decorator pattern)
+    """
+    _pending_registrations.append(module_class)
+    logger.debug(f"Queued module for registration: {module_class.__name__}")
+    return module_class
+
+
+def consume_pending_registrations(registry: 'ModuleRegistry') -> int:
+    """
+    Consume pending registrations and add them to a registry.
+    Called by ModuleRegistry after importing each module file.
+
+    Args:
+        registry: ModuleRegistry instance to register modules into
+
+    Returns:
+        Number of modules registered
+    """
+    global _pending_registrations
+    count = 0
+
+    for module_class in _pending_registrations:
+        try:
+            registry.register(module_class)
+            count += 1
+        except Exception as e:
+            logger.error(f"Failed to register {module_class.__name__}: {e}")
+
+    # Clear the pending list
+    _pending_registrations = []
+
+    return count
+
+
+def clear_pending_registrations() -> None:
+    """
+    Clear all pending registrations without processing them.
+    Useful for testing or cleanup scenarios.
+    """
+    global _pending_registrations
+    _pending_registrations = []
+    logger.debug("Cleared all pending registrations")
+
+
+# ========== Security Validator ==========
+
 class ModuleSecurityValidator:
-    """Security validation for module loading"""
+    """Security validation for module loading."""
 
     ALLOWED_PACKAGES = [
-        "features.modules.definitions",  # New location for module definitions
+        "features.modules.definitions",
     ]
 
     BLOCKED_PATTERNS = [
@@ -33,8 +107,8 @@ class ModuleSecurityValidator:
     ]
 
     @classmethod
-    def validate_handler_path(cls, handler_name: str) -> Tuple[bool, str]:
-        """Validate a handler path is safe to load"""
+    def validate_handler_path(cls, handler_name: str) -> tuple[bool, str]:
+        """Validate a handler path is safe to load."""
         if not handler_name or ":" not in handler_name:
             return False, "Invalid handler format"
 
@@ -53,7 +127,7 @@ class ModuleSecurityValidator:
         )
 
         if not is_allowed:
-            return False, f"Module not in allowed packages"
+            return False, "Module not in allowed packages"
 
         if not class_name.isidentifier():
             return False, f"Invalid class name: {class_name}"
@@ -61,18 +135,20 @@ class ModuleSecurityValidator:
         return True, "Valid"
 
 
+# ========== Module Cache ==========
+
 class ModuleCache:
-    """Simple cache for loaded modules"""
+    """Simple cache for loaded modules."""
 
     def __init__(self, max_size: int = 50, ttl_seconds: int = 3600):
-        self._cache: Dict[str, Tuple[Type[BaseModule], datetime]] = {}
+        self._cache: dict[str, tuple[type[BaseModule], datetime]] = {}
         self.max_size = max_size
         self.ttl_seconds = ttl_seconds
         self.hits = 0
         self.misses = 0
 
-    def get(self, key: str) -> Optional[Type[BaseModule]]:
-        """Get module from cache"""
+    def get(self, key: str) -> type[BaseModule] | None:
+        """Get module from cache."""
         if key in self._cache:
             module_class, cached_at = self._cache[key]
             age = (datetime.now() - cached_at).total_seconds()
@@ -85,8 +161,8 @@ class ModuleCache:
         self.misses += 1
         return None
 
-    def put(self, key: str, module_class: Type[BaseModule]):
-        """Add module to cache"""
+    def put(self, key: str, module_class: type[BaseModule]) -> None:
+        """Add module to cache."""
         if len(self._cache) >= self.max_size:
             # Remove oldest entry
             oldest = min(self._cache.keys(), key=lambda k: self._cache[k][1])
@@ -94,39 +170,41 @@ class ModuleCache:
 
         self._cache[key] = (module_class, datetime.now())
 
-    def clear(self):
-        """Clear all cached entries"""
+    def clear(self) -> None:
+        """Clear all cached entries."""
         self._cache.clear()
         self.hits = 0
         self.misses = 0
 
 
+# ========== Module Registry ==========
+
 class ModuleRegistry:
     """
-    Singleton registry for transformation pipeline modules
-    Handles registration, discovery, and retrieval of module classes
+    Singleton registry for transformation pipeline modules.
+    Handles registration, discovery, and retrieval of module classes.
     """
 
-    _instance: Optional['ModuleRegistry'] = None
+    _instance: 'ModuleRegistry | None' = None
     _initialized: bool = False
 
     def __new__(cls) -> 'ModuleRegistry':
-        """Ensure singleton pattern"""
+        """Ensure singleton pattern."""
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self):
-        """Initialize registry (only once)"""
+    def __init__(self) -> None:
+        """Initialize registry (only once)."""
         if not ModuleRegistry._initialized:
-            self._registry: Dict[str, Type[BaseModule]] = {}
+            self._registry: dict[str, type[BaseModule]] = {}
             self._cache = ModuleCache()
             ModuleRegistry._initialized = True
             logger.debug("ModuleRegistry initialized (singleton)")
 
-    def register(self, module_class: Type[BaseModule]) -> Type[BaseModule]:
+    def register(self, module_class: type[BaseModule]) -> type[BaseModule]:
         """
-        Register a module class with the registry
+        Register a module class with the registry.
 
         Args:
             module_class: Module class inheriting from BaseModule
@@ -153,9 +231,9 @@ class ModuleRegistry:
 
         return module_class
 
-    def get(self, module_id: str) -> Optional[Type[BaseModule]]:
+    def get(self, module_id: str) -> type[BaseModule] | None:
         """
-        Get a module class by ID
+        Get a module class by ID.
 
         Args:
             module_id: Module ID to retrieve
@@ -165,21 +243,21 @@ class ModuleRegistry:
         """
         return self._registry.get(module_id)
 
-    def get_all(self) -> Dict[str, Type[BaseModule]]:
+    def get_all(self) -> dict[str, type[BaseModule]]:
         """
-        Get all registered modules
+        Get all registered modules.
 
         Returns:
             Dictionary of module_id -> module_class
         """
         return dict(self._registry)
 
-    def get_by_kind(self, kind: str) -> List[Type[BaseModule]]:
+    def get_by_kind(self, kind: str) -> list[type[BaseModule]]:
         """
-        Get all modules of a specific kind
+        Get all modules of a specific kind.
 
         Args:
-            kind: Module kind ("transform", "action", "logic", "comparator")
+            kind: Module kind ("transform", "logic", "comparator", "misc", "output")
 
         Returns:
             List of module classes of that kind
@@ -190,15 +268,15 @@ class ModuleRegistry:
             if module_class.kind == kind
         ]
 
-    def clear(self):
-        """Clear all registered modules (useful for testing)"""
+    def clear(self) -> None:
+        """Clear all registered modules (useful for testing)."""
         self._registry.clear()
         self._cache.clear()
         logger.debug("Module registry cleared")
 
-    def load_module_from_handler(self, handler_name: str) -> Optional[Type[BaseModule]]:
+    def load_module_from_handler(self, handler_name: str) -> type[BaseModule] | None:
         """
-        Load a module from handler_name with security validation and caching
+        Load a module from handler_name with security validation and caching.
 
         Args:
             handler_name: Module handler path (e.g., "module.path:ClassName")
@@ -250,7 +328,11 @@ class ModuleRegistry:
             logger.error(f"Error loading module from {handler_name}: {e}")
             return None
 
-    def resolve_module(self, module_id: str, handler_name: Optional[str] = None) -> Optional[Type[BaseModule]]:
+    def resolve_module(
+        self,
+        module_id: str,
+        handler_name: str | None = None
+    ) -> type[BaseModule] | None:
         """
         Resolve a module using multiple strategies:
         1. Check registry (fast)
@@ -274,17 +356,15 @@ class ModuleRegistry:
 
         return None
 
-    def auto_discover(self, package_paths: List[str]):
+    def auto_discover(self, package_paths: list[str]) -> None:
         """
-        Auto-discover and import modules from specified packages (recursively)
-        This will trigger the @register decorators on module classes
+        Auto-discover and import modules from specified packages (recursively).
+        This will trigger the @register decorators on module classes.
 
         Args:
             package_paths: List of package paths to scan for modules
-                          e.g., ["pipeline_modules"]
+                          e.g., ["features.modules.definitions"]
         """
-        from features.modules.utils.decorators import consume_pending_registrations
-
         for package_path in package_paths:
             try:
                 logger.info(f"Auto-discovering modules in: {package_path}")
@@ -302,16 +382,14 @@ class ModuleRegistry:
 
         logger.info(f"Auto-discovery complete. {len(self._registry)} modules registered.")
 
-    def _discover_recursive(self, package, package_path: str):
+    def _discover_recursive(self, package: Any, package_path: str) -> None:
         """
-        Recursively discover modules in a package and all sub-packages
+        Recursively discover modules in a package and all sub-packages.
 
         Args:
             package: Imported package object
-            package_path: Package path string (e.g., "pipeline_modules.transform")
+            package_path: Package path string (e.g., "features.modules.definitions.transform")
         """
-        from features.modules.utils.decorators import consume_pending_registrations
-
         # Get package directory
         if not hasattr(package, '__path__'):
             logger.warning(f"Package {package_path} has no __path__ attribute")
@@ -338,12 +416,12 @@ class ModuleRegistry:
             except Exception as e:
                 logger.warning(f"Failed to import {full_module_name}: {e}")
 
-    def to_catalog_entries(self) -> List[ModuleCreate]:
+    def to_catalog_entries(self) -> list[ModuleCreate]:
         """
-        Convert all registered modules to ModuleCreate dataclasses for database sync
+        Convert all registered modules to ModuleCreate for database sync.
 
         Returns:
-            List of ModuleCreate dataclasses ready for repository
+            List of ModuleCreate objects ready for repository
         """
         catalog_entries = []
 
@@ -353,18 +431,18 @@ class ModuleRegistry:
                 meta = module_class.meta()
                 config_schema = module_class.config_schema()
 
-                # Build ModuleCreate dataclass
+                # Build ModuleCreate
                 entry = ModuleCreate(
-                    id=module_class.id,
-                    version=getattr(module_class, 'version', '1.0.0'),  # Default version
+                    identifier=module_class.id,
+                    version=getattr(module_class, 'version', '1.0.0'),
                     name=module_class.title,
                     description=module_class.description,
                     module_kind=module_class.kind,
-                    meta=meta,  # Already a ModuleMeta dataclass
-                    config_schema=config_schema,  # Already a dict
+                    meta=meta,
+                    config_schema=config_schema,
                     handler_name=f"{module_class.__module__}:{module_class.__name__}",
-                    color=getattr(module_class, 'color', '#3B82F6'),  # Default color
-                    category=getattr(module_class, 'category', 'Processing'),  # Default category
+                    color=getattr(module_class, 'color', '#3B82F6'),
+                    category=getattr(module_class, 'category', 'Processing'),
                     is_active=True
                 )
 
@@ -376,8 +454,8 @@ class ModuleRegistry:
 
         return catalog_entries
 
-    def get_cache_stats(self) -> Dict[str, Any]:
-        """Get cache statistics"""
+    def get_cache_stats(self) -> dict[str, Any]:
+        """Get cache statistics."""
         total = self._cache.hits + self._cache.misses
         hit_rate = (self._cache.hits / total * 100) if total > 0 else 0
 

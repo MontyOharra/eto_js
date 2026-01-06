@@ -357,22 +357,23 @@ class PdfTemplateVersionModel(BaseModel):
 
 
 # =========================
-# module_catalog
+# modules
 # =========================
 
 class ModuleModel(BaseModel):
     __tablename__ = "modules"
 
-    id: Mapped[str] = mapped_column(String(100), primary_key=True)
-    version: Mapped[str] = mapped_column(String(50), nullable=False)
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text)
-    color: Mapped[str] = mapped_column(String(50), default="#3B82F6")
-    category: Mapped[str] = mapped_column(String(100), default="Processing")
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    identifier: Mapped[str] = mapped_column(String(100), nullable=False)  # e.g., "text_cleaner"
+    version: Mapped[str] = mapped_column(String(50), nullable=False)       # e.g., "1.0.0"
+    name: Mapped[str] = mapped_column(String(255), nullable=False)         # Display name
+    description: Mapped[str | None] = mapped_column(Text)
     module_kind: Mapped[str] = mapped_column(String(20), nullable=False)
     meta: Mapped[str] = mapped_column(Text, nullable=False)
     config_schema: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
     handler_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    color: Mapped[str] = mapped_column(String(50), default="#3B82F6")
+    category: Mapped[str] = mapped_column(String(100), default="Processing")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     created_at: Mapped[datetime] = mapped_column(
@@ -383,16 +384,16 @@ class ModuleModel(BaseModel):
     )
 
     # Relationships
-    steps: Mapped[List["PipelineDefinitionStepModel"]] = relationship(
+    steps: Mapped[list["PipelineDefinitionStepModel"]] = relationship(
         back_populates="module", cascade="all, delete-orphan", passive_deletes=True
     )
 
     __table_args__ = (
-        Index("idx_module_catalog_name", "name"),
-        Index("idx_module_catalog_kind", "module_kind"),
-        Index("idx_module_catalog_active", "is_active"),
-        Index("idx_module_catalog_category", "category"),
-        Index("uq_module_catalog_id_version", "id", "version"),
+        UniqueConstraint("identifier", "version", name="uq_module_identifier_version"),
+        Index("idx_module_identifier", "identifier"),
+        Index("idx_module_kind", "module_kind"),
+        Index("idx_module_active", "is_active"),
+        Index("idx_module_category", "category"),
     )
 
 
@@ -434,9 +435,11 @@ class PipelineDefinitionStepModel(BaseModel):
     )
 
     module_instance_id: Mapped[str] = mapped_column(String(100), nullable=False)
-    # module_ref is nullable to support output channel steps (which are not real modules)
-    # NULL module_ref indicates an output channel step; channel_type is stored in module_config
-    module_ref: Mapped[Optional[str]] = mapped_column(ForeignKey("modules.id", ondelete="CASCADE"), nullable=True, index=True)
+    # module_id is nullable to support output channel steps (which are not real modules)
+    # NULL module_id indicates an output channel step; channel_type is stored in module_config
+    module_id: Mapped[int | None] = mapped_column(
+        ForeignKey("modules.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
     module_config: Mapped[str] = mapped_column(Text, nullable=False)
     input_field_mappings: Mapped[str] = mapped_column(Text, nullable=False)
@@ -452,10 +455,11 @@ class PipelineDefinitionStepModel(BaseModel):
 
     # Relationships
     pipeline_definition: Mapped["PipelineDefinitionModel"] = relationship(back_populates="steps")
-    module: Mapped[Optional["ModuleModel"]] = relationship(back_populates="steps")  # Optional for output channel steps
+    module: Mapped["ModuleModel | None"] = relationship(back_populates="steps")  # Optional for output channel steps
 
     __table_args__ = (
-        Index("idx_pipeline_definition_id", "pipeline_definition_id"),
+        Index("idx_pipeline_step_definition_id", "pipeline_definition_id"),
+        Index("idx_pipeline_step_module_id", "module_id"),
         Index("idx_pipeline_step_number", "step_number", "id"),
     )
 

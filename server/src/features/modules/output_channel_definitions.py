@@ -5,169 +5,156 @@ Static definitions of allowed output channel types for pipeline outputs.
 These define what data can flow out of pipelines (hawb, pickup_address, etc.)
 and are synced to the database via the admin sync endpoint.
 """
-
-from dataclasses import dataclass
-from typing import Literal
-
-
-@dataclass(frozen=True)
-class OutputChannelDefinition:
-    """Definition of an output channel type."""
-    name: str
-    label: str
-    data_type: Literal["str", "int", "float", "datetime", "list[str]", "list[dim]"]
-    is_required: bool
-    category: Literal["identification", "pickup", "delivery", "cargo", "other"]
-    description: str | None = None
+from shared.types.output_channels import OutputChannelTypeCreate
 
 
 # All available output channel types
 # Note: is_required means the output channel MUST be placed in the pipeline (only HAWB is required)
-OUTPUT_CHANNEL_DEFINITIONS: list[OutputChannelDefinition] = [
+OUTPUT_CHANNEL_DEFINITIONS: list[OutputChannelTypeCreate] = [
     # Identification
-    OutputChannelDefinition(
+    OutputChannelTypeCreate(
         name="hawb",
         label="HAWB",
         data_type="str",
         is_required=True,
         category="identification",
-        description="House Air Waybill number - primary order identifier"
+        description="House Air Waybill number - primary order identifier",
     ),
-    OutputChannelDefinition(
+    OutputChannelTypeCreate(
         name="hawb_list",
         label="HAWB List",
         data_type="list[str]",
         is_required=False,
         category="identification",
-        description="List of House Air Waybill numbers - for multi-HAWB orders from single PDF"
+        description="List of House Air Waybill numbers - for multi-HAWB orders from single PDF",
     ),
-    OutputChannelDefinition(
+    OutputChannelTypeCreate(
         name="mawb",
         label="MAWB",
         data_type="str",
         is_required=False,
         category="identification",
-        description="Master Air Waybill number"
+        description="Master Air Waybill number",
     ),
 
     # Pickup
-    OutputChannelDefinition(
+    OutputChannelTypeCreate(
         name="pickup_company_name",
         label="Pickup Company",
         data_type="str",
         is_required=False,
         category="pickup",
-        description="Company name at pickup location"
+        description="Company name at pickup location",
     ),
-    OutputChannelDefinition(
+    OutputChannelTypeCreate(
         name="pickup_address",
         label="Pickup Address",
         data_type="str",
         is_required=False,
         category="pickup",
-        description="Full pickup address text"
+        description="Full pickup address text",
     ),
-    OutputChannelDefinition(
+    OutputChannelTypeCreate(
         name="pickup_time_start",
         label="Pickup Start",
         data_type="datetime",
         is_required=False,
         category="pickup",
-        description="Pickup window start time"
+        description="Pickup window start time",
     ),
-    OutputChannelDefinition(
+    OutputChannelTypeCreate(
         name="pickup_time_end",
         label="Pickup End",
         data_type="datetime",
         is_required=False,
         category="pickup",
-        description="Pickup window end time"
+        description="Pickup window end time",
     ),
-    OutputChannelDefinition(
+    OutputChannelTypeCreate(
         name="pickup_notes",
         label="Pickup Notes",
         data_type="str",
         is_required=False,
         category="pickup",
-        description="Special instructions for pickup"
+        description="Special instructions for pickup",
     ),
 
     # Delivery
-    OutputChannelDefinition(
+    OutputChannelTypeCreate(
         name="delivery_company_name",
         label="Delivery Company",
         data_type="str",
         is_required=False,
         category="delivery",
-        description="Company name at delivery location"
+        description="Company name at delivery location",
     ),
-    OutputChannelDefinition(
+    OutputChannelTypeCreate(
         name="delivery_address",
         label="Delivery Address",
         data_type="str",
         is_required=False,
         category="delivery",
-        description="Full delivery address text"
+        description="Full delivery address text",
     ),
-    OutputChannelDefinition(
+    OutputChannelTypeCreate(
         name="delivery_time_start",
         label="Delivery Start",
         data_type="datetime",
         is_required=False,
         category="delivery",
-        description="Delivery window start time"
+        description="Delivery window start time",
     ),
-    OutputChannelDefinition(
+    OutputChannelTypeCreate(
         name="delivery_time_end",
         label="Delivery End",
         data_type="datetime",
         is_required=False,
         category="delivery",
-        description="Delivery window end time"
+        description="Delivery window end time",
     ),
-    OutputChannelDefinition(
+    OutputChannelTypeCreate(
         name="delivery_notes",
         label="Delivery Notes",
         data_type="str",
         is_required=False,
         category="delivery",
-        description="Special instructions for delivery"
+        description="Special instructions for delivery",
     ),
 
     # Cargo
-    OutputChannelDefinition(
+    OutputChannelTypeCreate(
         name="pieces",
         label="Pieces",
         data_type="int",
         is_required=False,
         category="cargo",
-        description="Number of pieces in shipment"
+        description="Number of pieces in shipment",
     ),
-    OutputChannelDefinition(
+    OutputChannelTypeCreate(
         name="weight",
         label="Weight",
         data_type="float",
         is_required=False,
         category="cargo",
-        description="Total weight of shipment"
+        description="Total weight of shipment",
     ),
-    OutputChannelDefinition(
+    OutputChannelTypeCreate(
         name="dims",
         label="Dimensions",
         data_type="list[dim]",
         is_required=False,
         category="cargo",
-        description="List of dimension sets with height, length, width, qty, and weight"
+        description="List of dimension sets with height, length, width, qty, and weight",
     ),
 
     # Other
-    OutputChannelDefinition(
+    OutputChannelTypeCreate(
         name="order_notes",
         label="Order Notes",
         data_type="str",
         is_required=False,
         category="other",
-        description="General order notes"
+        description="General order notes",
     ),
 ]
 
@@ -177,7 +164,7 @@ def get_required_channel_names() -> list[str]:
     return [ch.name for ch in OUTPUT_CHANNEL_DEFINITIONS if ch.is_required]
 
 
-def get_channel_by_name(name: str) -> OutputChannelDefinition | None:
+def get_channel_by_name(name: str) -> OutputChannelTypeCreate | None:
     """Get a channel definition by name."""
     for ch in OUTPUT_CHANNEL_DEFINITIONS:
         if ch.name == name:

@@ -5,8 +5,9 @@ All datetime comparison and boolean evaluation modules
 from typing import Dict, Any
 from pydantic import BaseModel, Field
 from datetime import datetime, date
-from shared.types import ComparatorModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
-from features.modules.utils.decorators import register
+from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
+from features.modules.registry import register
+from features.modules.base import ComparatorModule
 
 
 # Date Before

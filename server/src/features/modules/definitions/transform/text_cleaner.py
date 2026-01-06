@@ -6,8 +6,9 @@ import re
 from typing import Dict, Any
 from pydantic import BaseModel, Field
 
-from shared.types import TransformModule, ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
-from features.modules.utils.decorators import register
+from shared.types import ModuleMeta, IOShape, IOSideShape, NodeGroup, NodeTypeRule
+from features.modules.registry import register
+from features.modules.base import TransformModule
 
 
 class TextCleanerConfig(BaseModel):
