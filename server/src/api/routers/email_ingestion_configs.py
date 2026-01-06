@@ -15,14 +15,6 @@ from api.schemas.email_ingestion_configs import (
     IngestionConfigResponse,
     IngestionConfigListResponse,
 )
-from api.mappers.email_ingestion_configs import (
-    ingestion_config_to_api,
-    ingestion_config_with_account_to_api,
-    ingestion_config_list_to_api,
-    validation_result_to_api,
-    create_request_to_domain,
-    update_request_to_domain,
-)
 from shared.services.service_container import ServiceContainer
 from features.email.service import EmailService
 from shared.exceptions.service import ObjectNotFoundError, ValidationError, ConflictError
@@ -48,14 +40,11 @@ async def validate_config(
             account_id=request.account_id,
             folder_name=request.folder_name,
         )
-        return validation_result_to_api(
-            valid=True,
-            message="Configuration is valid",
-        )
+        return ValidateIngestionConfigResponse(valid=True, message="Configuration is valid")
     except ObjectNotFoundError as e:
-        return validation_result_to_api(valid=False, message=str(e))
+        return ValidateIngestionConfigResponse(valid=False, message=str(e))
     except ValidationError as e:
-        return validation_result_to_api(valid=False, message=str(e))
+        return ValidateIngestionConfigResponse(valid=False, message=str(e))
 
 
 @router.get(
@@ -70,11 +59,8 @@ async def list_configs(
     service: EmailService = Depends(lambda: ServiceContainer.get_email_service()),
 ) -> IngestionConfigListResponse:
     """List all ingestion configs."""
-    configs = service.list_ingestion_configs(
-        order_by=order_by,
-        desc=desc,
-    )
-    return ingestion_config_list_to_api(configs)
+    configs = service.list_ingestion_configs(order_by=order_by, desc=desc)
+    return IngestionConfigListResponse(configs=configs, total=len(configs))
 
 
 @router.get(
@@ -89,15 +75,10 @@ async def get_config(
 ) -> IngestionConfigResponse:
     """Get ingestion config by ID."""
     try:
-        config = service.get_ingestion_config(config_id)
-        # Need to get full config for the response
-        # get_ingestion_config returns EmailIngestionConfigWithAccount
-        # but we need EmailIngestionConfig for the full response
-        # Use repository directly for now
-        full_config = service.ingestion_config_repository.get_by_id(config_id)
-        if not full_config:
+        config = service.ingestion_config_repository.get_by_id(config_id)
+        if not config:
             raise ObjectNotFoundError(f"Ingestion config {config_id} not found")
-        return ingestion_config_to_api(full_config)
+        return config
     except ObjectNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
@@ -115,9 +96,8 @@ async def create_config(
 ) -> IngestionConfigResponse:
     """Create a new ingestion config."""
     try:
-        config_data = create_request_to_domain(request)
-        config = service.create_ingestion_config(config_data)
-        return ingestion_config_to_api(config)
+        config = service.create_ingestion_config(request)
+        return config
     except ObjectNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -137,9 +117,8 @@ async def update_config(
 ) -> IngestionConfigResponse:
     """Update an ingestion config."""
     try:
-        config_update = update_request_to_domain(request)
-        config = service.update_ingestion_config(config_id, config_update)
-        return ingestion_config_to_api(config)
+        config = service.update_ingestion_config(config_id, request)
+        return config
     except ObjectNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ConflictError as e:
@@ -161,7 +140,7 @@ async def delete_config(
     """Delete an ingestion config."""
     try:
         config = service.delete_ingestion_config(config_id)
-        return ingestion_config_to_api(config)
+        return config
     except ObjectNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ConflictError as e:
@@ -172,8 +151,7 @@ async def delete_config(
     "/{config_id}/activate",
     response_model=IngestionConfigResponse,
     summary="Activate ingestion config",
-    description="Activate an ingestion config and start polling for new emails. "
-                "This will establish a connection to the email server and begin monitoring.",
+    description="Activate an ingestion config and start polling for new emails.",
 )
 async def activate_config(
     config_id: int,
@@ -182,7 +160,7 @@ async def activate_config(
     """Activate an ingestion config and start polling."""
     try:
         config = service.activate_config(config_id)
-        return ingestion_config_to_api(config)
+        return config
     except ObjectNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -195,8 +173,7 @@ async def activate_config(
     "/{config_id}/deactivate",
     response_model=IngestionConfigResponse,
     summary="Deactivate ingestion config",
-    description="Deactivate an ingestion config and stop polling. "
-                "The connection will be closed if no other configs are using it.",
+    description="Deactivate an ingestion config and stop polling.",
 )
 async def deactivate_config(
     config_id: int,
@@ -205,6 +182,6 @@ async def deactivate_config(
     """Deactivate an ingestion config and stop polling."""
     try:
         config = service.deactivate_config(config_id)
-        return ingestion_config_to_api(config)
+        return config
     except ObjectNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
