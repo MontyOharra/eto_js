@@ -4,7 +4,7 @@ Repository for pdf_files table with CRUD operations
 """
 import json
 import logging
-from typing import Type, Any
+from typing import Type
 
 from shared.database.repositories.base import BaseRepository
 from shared.database.models import PdfFileModel
@@ -47,24 +47,23 @@ class PdfFileRepository(BaseRepository[PdfFileModel]):
 
     def _serialize_pdf_objects(self, obj: PdfObjects) -> str:
         """
-        Convert PdfObjects dataclass directly to JSON string for DB storage.
+        Convert PdfObjects model to JSON string for DB storage.
 
-        Uses dataclasses.asdict to recursively convert nested dataclasses.
+        Uses Pydantic's model_dump to recursively convert nested models.
         Tuples (like bbox) are automatically converted to lists for JSON compatibility.
 
         Note: PSLiteral and other non-serializable types are already cleaned
         during extraction in PdfFilesService._extract_objects_from_file(),
         so this is a simple conversion.
         """
-        from dataclasses import asdict
-        return json.dumps(asdict(obj))
+        return json.dumps(obj.model_dump())
 
     def _deserialize_pdf_objects(self, json_str: str) -> PdfObjects:
         """
-        Convert JSON string from DB directly to PdfObjects dataclass.
+        Convert JSON string from DB to PdfObjects model.
 
-        Reconstructs all nested dataclasses from dict representation.
-        Lists are converted back to appropriate dataclass types.
+        Reconstructs all nested Pydantic models from dict representation.
+        Lists are converted back to appropriate model types.
         """
         data = json.loads(json_str)
 
@@ -128,7 +127,7 @@ class PdfFileRepository(BaseRepository[PdfFileModel]):
     # ========== Helper Methods ==========
 
     def _model_to_dataclass(self, model: PdfFileModel) -> PdfFile:
-        """Convert ORM model to PdfFile dataclass"""
+        """Convert ORM model to PdfFile domain model."""
         # Deserialize objects_json directly to typed dataclass
         if model.objects_json:
             try:

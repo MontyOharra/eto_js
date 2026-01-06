@@ -33,7 +33,7 @@ Track file-by-file cleanup progress for the server codebase.
 - [ ] `api/mappers/eto_runs.py`
 - [ ] `api/mappers/modules.py`
 - [ ] `api/mappers/order_management.py`
-- [ ] `api/mappers/pdf_files.py`
+- [x] `api/mappers/pdf_files.py`
 - [ ] `api/mappers/pdf_templates.py`
 - [ ] `api/mappers/pipelines.py`
 
@@ -46,7 +46,7 @@ Track file-by-file cleanup progress for the server codebase.
 - [ ] `api/routers/eto_runs.py`
 - [ ] `api/routers/modules.py`
 - [ ] `api/routers/order_management.py`
-- [ ] `api/routers/pdf_files.py`
+- [x] `api/routers/pdf_files.py`
 - [ ] `api/routers/pdf_templates.py`
 - [ ] `api/routers/pipelines.py`
 - [ ] `api/routers/system_settings.py`
@@ -60,7 +60,7 @@ Track file-by-file cleanup progress for the server codebase.
 - [ ] `api/schemas/modules.py`
 - [ ] `api/schemas/order_management.py`
 - [ ] `api/schemas/output_channels.py`
-- [ ] `api/schemas/pdf_files.py`
+- [x] `api/schemas/pdf_files.py`
 - [ ] `api/schemas/pdf_templates.py`
 - [ ] `api/schemas/pipelines.py`
 - [ ] `api/schemas/system_settings.py`
@@ -175,7 +175,7 @@ Track file-by-file cleanup progress for the server codebase.
 
 #### features/pdf_files/
 - [ ] `features/pdf_files/__init__.py`
-- [ ] `features/pdf_files/service.py`
+- [x] `features/pdf_files/service.py`
 
 ##### features/pdf_files/utils/
 - [ ] `features/pdf_files/utils/__init__.py`
@@ -236,7 +236,7 @@ Track file-by-file cleanup progress for the server codebase.
 - [ ] `shared/database/repositories/eto_sub_run_pipeline_execution_step.py`
 - [ ] `shared/database/repositories/module.py`
 - [ ] `shared/database/repositories/output_channel_type.py`
-- [ ] `shared/database/repositories/pdf_file.py`
+- [x] `shared/database/repositories/pdf_file.py`
 - [ ] `shared/database/repositories/pdf_template.py`
 - [ ] `shared/database/repositories/pdf_template_version.py`
 - [ ] `shared/database/repositories/pending_order.py`
@@ -279,7 +279,7 @@ Track file-by-file cleanup progress for the server codebase.
 - [ ] `shared/types/eto_sub_run_pipeline_executions.py`
 - [ ] `shared/types/modules.py`
 - [ ] `shared/types/output_channels.py`
-- [ ] `shared/types/pdf_files.py`
+- [x] `shared/types/pdf_files.py`
 - [ ] `shared/types/pdf_templates.py`
 - [ ] `shared/types/pending_orders.py`
 - [ ] `shared/types/pipeline_definition.py`
@@ -296,5 +296,5 @@ Track file-by-file cleanup progress for the server codebase.
 ## Progress Summary
 
 - **Total files:** 174 (3 deleted, 2 new)
-- **Completed:** 41
-- **Remaining:** 133
+- **Completed:** 47
+- **Remaining:** 127

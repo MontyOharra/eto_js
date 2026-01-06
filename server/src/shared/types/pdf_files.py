@@ -1,12 +1,17 @@
-from dataclasses import dataclass
+"""
+PDF file domain types.
+"""
 from datetime import datetime
 
+from pydantic import BaseModel, ConfigDict
 
-# ========== PDF Object Type Dataclasses ==========
 
-@dataclass(frozen=True)
-class TextWord:
-    """Single text word extracted from PDF"""
+# ========== PDF Object Types ==========
+
+class TextWord(BaseModel):
+    """Single text word extracted from PDF."""
+    model_config = ConfigDict(frozen=True)
+
     page: int
     bbox: tuple[float, float, float, float]  # (x0, y0, x1, y1)
     text: str
@@ -14,34 +19,38 @@ class TextWord:
     fontsize: float
 
 
-@dataclass(frozen=True)
-class GraphicRect:
-    """Rectangle graphic object"""
+class GraphicRect(BaseModel):
+    """Rectangle graphic object."""
+    model_config = ConfigDict(frozen=True)
+
     page: int
     bbox: tuple[float, float, float, float]
     linewidth: float
 
 
-@dataclass(frozen=True)
-class GraphicLine:
-    """Line graphic object"""
+class GraphicLine(BaseModel):
+    """Line graphic object."""
+    model_config = ConfigDict(frozen=True)
+
     page: int
     bbox: tuple[float, float, float, float]
     linewidth: float
 
 
-@dataclass(frozen=True)
-class GraphicCurve:
-    """Curve graphic object with control points"""
+class GraphicCurve(BaseModel):
+    """Curve graphic object with control points."""
+    model_config = ConfigDict(frozen=True)
+
     page: int
     bbox: tuple[float, float, float, float]
     points: list[tuple[float, float]]  # Array of (x, y) coordinate pairs
     linewidth: float
 
 
-@dataclass(frozen=True)
-class Image:
-    """Image object with metadata"""
+class Image(BaseModel):
+    """Image object with metadata."""
+    model_config = ConfigDict(frozen=True)
+
     page: int
     bbox: tuple[float, float, float, float]
     format: str  # e.g., "JPEG", "PNG"
@@ -49,21 +58,20 @@ class Image:
     bits: int  # Bit depth
 
 
-@dataclass(frozen=True)
-class Table:
-    """Table structure with dimensions"""
+class Table(BaseModel):
+    """Table structure with dimensions."""
+    model_config = ConfigDict(frozen=True)
+
     page: int
     bbox: tuple[float, float, float, float]
     rows: int
     cols: int
 
 
-@dataclass(frozen=True)
-class PdfObjects:
-    """
-    Container for all extracted PDF objects, grouped by type.
-    Replaces raw dict with strongly-typed structure.
-    """
+class PdfObjects(BaseModel):
+    """Container for all extracted PDF objects, grouped by type."""
+    model_config = ConfigDict(frozen=True)
+
     text_words: list[TextWord]
     graphic_rects: list[GraphicRect]
     graphic_lines: list[GraphicLine]
@@ -71,19 +79,20 @@ class PdfObjects:
     images: list[Image]
     tables: list[Table]
 
-# ========== PDF File Dataclasses ==========
 
-@dataclass(frozen=True)
-class PdfFile:
+# ========== PDF File Types ==========
+
+class PdfFile(BaseModel):
     """
     Complete PDF File (database record).
-    Used by services and repositories for PDF file data.
 
     The extracted_objects field contains strongly-typed PDF objects grouped by type.
 
     Note: Source tracking (email/manual) is now handled at the eto_runs level,
     not at the PDF file level. PDFs are just storage entities.
     """
+    model_config = ConfigDict(frozen=True)
+
     id: int
     original_filename: str
     file_hash: str
@@ -96,16 +105,16 @@ class PdfFile:
     updated_at: datetime
 
 
-@dataclass(frozen=True)
-class PdfFileCreate:
+class PdfFileCreate(BaseModel):
     """
     Data for creating a new PDF record.
-    Used by store_pdf service method.
 
     The extracted_objects field contains strongly-typed PDF objects grouped by type.
 
     Note: email_id removed - source tracking now handled at eto_runs level.
     """
+    model_config = ConfigDict(frozen=True)
+
     original_filename: str
     file_hash: str
     file_size_bytes: int

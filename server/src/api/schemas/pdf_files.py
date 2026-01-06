@@ -1,91 +1,67 @@
 """
 PDF Files API Schemas
-Pydantic models for PDF file access endpoints
+
+Pydantic models for PDF file access endpoints.
+Reuses domain types from shared/types where possible.
 """
-from typing import Optional, List, Tuple
 from pydantic import BaseModel
 
-
-# Nested Object Schemas
-class TextWord(BaseModel):
-    page: int
-    bbox: Tuple[float, float, float, float]  # [x0, y0, x1, y1]
-    text: str
-    fontname: str
-    fontsize: float
-
-
-class GraphicRect(BaseModel):
-    page: int
-    bbox: Tuple[float, float, float, float]  # [x0, y0, x1, y1]
-    linewidth: float
+from shared.types.pdf_files import (
+    PdfFile as DomainPdfFile,
+    PdfObjects,
+    TextWord,
+    GraphicRect,
+    GraphicLine,
+    GraphicCurve,
+    Image,
+    Table,
+)
 
 
-class GraphicLine(BaseModel):
-    page: int
-    bbox: Tuple[float, float, float, float]  # [x0, y0, x1, y1]
-    linewidth: float
+# ========== Re-export domain types for API use ==========
+# These are the same as domain types - no transformation needed
+
+__all__ = [
+    "TextWord",
+    "GraphicRect",
+    "GraphicLine",
+    "GraphicCurve",
+    "Image",
+    "Table",
+    "PdfObjects",
+    "PdfFileResponse",
+    "GetPdfObjectsResponse",
+    "ProcessPdfObjectsResponse",
+]
 
 
-class GraphicCurve(BaseModel):
-    page: int
-    bbox: Tuple[float, float, float, float]  # [x0, y0, x1, y1]
-    points: List[Tuple[float, float]]  # Array of [x, y] coordinate pairs
-    linewidth: float
+# ========== Response Schemas ==========
 
-
-class Image(BaseModel):
-    page: int
-    bbox: Tuple[float, float, float, float]  # [x0, y0, x1, y1]
-    format: str  # e.g., "JPEG", "PNG"
-    colorspace: str  # e.g., "RGB", "CMYK"
-    bits: int  # Bit depth
-
-
-class Table(BaseModel):
-    page: int
-    bbox: Tuple[float, float, float, float]  # [x0, y0, x1, y1]
-    rows: int
-    cols: int
-
-
-class PdfObjects(BaseModel):
-    text_words: List[TextWord]
-    graphic_rects: List[GraphicRect]
-    graphic_lines: List[GraphicLine]
-    graphic_curves: List[GraphicCurve]
-    images: List[Image]
-    tables: List[Table]
-
-
-
-class PdfFile(BaseModel):
+class PdfFileResponse(BaseModel):
     """
-    Complete PDF File API schema (matches domain PdfFile).
-    Used for GET /pdf-files/{id} endpoint response.
+    PDF File API response.
 
-    Note:
-    - created_at/updated_at are audit fields and not included in API responses
-    - Source tracking (email/manual) moved to eto_runs table
+    Similar to domain PdfFile but excludes internal audit fields
+    (created_at/updated_at) and uses string for stored_at.
     """
     id: int
     original_filename: str
     file_hash: str
     file_size_bytes: int
     file_path: str
-    page_count: Optional[int] = None
+    page_count: int | None = None
     stored_at: str  # ISO 8601
     extracted_objects: PdfObjects
 
 
-
 class GetPdfObjectsResponse(BaseModel):
+    """Response for GET /pdf-files/{id}/objects endpoint."""
     pdf_file_id: int
     page_count: int
     objects: PdfObjects
 
 
-# POST /pdf-files/process-objects - Process Objects Response
 class ProcessPdfObjectsResponse(BaseModel):
+    """Response for POST /pdf-files/process-objects endpoint."""
     page_count: int
     objects: PdfObjects

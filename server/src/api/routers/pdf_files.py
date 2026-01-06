@@ -1,25 +1,26 @@
 """
 PDF Files API Router
-API endpoints for PDF file access and object extraction
+
+API endpoints for PDF file access and object extraction.
 """
 import logging
-from fastapi import APIRouter, Depends, UploadFile, File, Query, status
+
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from fastapi.responses import Response
 
-from api.schemas.pdf_files import (
-    PdfFile,
-    GetPdfObjectsResponse,
-    ProcessPdfObjectsResponse,
-)
 from api.mappers.pdf_files import (
-    pdf_file_to_api,
     convert_pdf_objects_response,
     convert_process_pdf_objects_response,
+    pdf_file_to_api,
 )
-
-from shared.services.service_container import ServiceContainer
+from api.schemas.pdf_files import (
+    GetPdfObjectsResponse,
+    PdfFileResponse,
+    ProcessPdfObjectsResponse,
+)
 from features.pdf_files.service import PdfFilesService
 from shared.exceptions.service import ValidationError
+from shared.services.service_container import ServiceContainer
 
 logger = logging.getLogger(__name__)
 
@@ -30,11 +31,11 @@ router = APIRouter(
 )
 
 
-@router.post("", response_model=PdfFile, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=PdfFileResponse, status_code=status.HTTP_201_CREATED)
 async def upload_pdf_file(
     pdf_file: UploadFile = File(...),
     pdf_service: PdfFilesService = Depends(lambda: ServiceContainer.get_pdf_files_service())
-) -> PdfFile:
+) -> PdfFileResponse:
     """
     Upload and store PDF file with automatic object extraction.
 
@@ -64,13 +65,13 @@ async def upload_pdf_file(
     return pdf_file_to_api(pdf)
 
 
-@router.get("/{id}", response_model=PdfFile)
+@router.get("/{id}", response_model=PdfFileResponse)
 async def get_pdf_file(
     id: int,
     pdf_service: PdfFilesService = Depends(
         lambda: ServiceContainer.get_pdf_files_service()
     )
-) -> PdfFile:
+) -> PdfFileResponse:
     """Get PDF file metadata (filename, size, page count, etc.)"""
     pdf = pdf_service.get_pdf_file(id)
     return pdf_file_to_api(pdf)

@@ -1,30 +1,25 @@
 """
 PDF Files Mappers
-Convert between domain dataclasses and API Pydantic models
+
+Convert between domain types and API response schemas.
+Since domain types are now Pydantic models, most conversions are pass-through.
 """
-from shared.types.pdf_files import PdfFile, PdfObjects, TextWord, GraphicRect, GraphicLine, GraphicCurve, Image, Table
+from shared.types.pdf_files import PdfFile, PdfObjects
 from api.schemas.pdf_files import (
-    PdfFile as PdfFilePydantic,
+    PdfFileResponse,
     GetPdfObjectsResponse,
     ProcessPdfObjectsResponse,
-    PdfObjects as PdfObjectsPydantic,
-    TextWord as TextWordPydantic,
-    GraphicRect as GraphicRectPydantic,
-    GraphicLine as GraphicLinePydantic,
-    GraphicCurve as GraphicCurvePydantic,
-    Image as ImagePydantic,
-    Table as TablePydantic,
 )
 
-# ========== Domain → API (Response) Conversions ==========
 
-def pdf_file_to_api(pdf: PdfFile) -> PdfFilePydantic:
+def pdf_file_to_api(pdf: PdfFile) -> PdfFileResponse:
     """
-    Convert domain PdfFile to API PdfFile schema.
+    Convert domain PdfFile to API PdfFileResponse.
 
-    Note: email_id removed - source tracking now at eto_runs level.
+    Main conversion: datetime → ISO 8601 string for stored_at.
+    PdfObjects is now a shared type, no conversion needed.
     """
-    return PdfFilePydantic(
+    return PdfFileResponse(
         id=pdf.id,
         original_filename=pdf.original_filename,
         file_hash=pdf.file_hash,
@@ -32,59 +27,7 @@ def pdf_file_to_api(pdf: PdfFile) -> PdfFilePydantic:
         file_path=pdf.file_path,
         page_count=pdf.page_count,
         stored_at=pdf.stored_at.isoformat(),
-        extracted_objects=convert_pdf_objects(pdf.extracted_objects)
-    )
-
-
-def convert_pdf_objects(objects: PdfObjects) -> PdfObjectsPydantic:
-    """Convert domain PdfObjects to API PdfObjects schema"""
-    return PdfObjectsPydantic(
-        text_words=[
-            TextWordPydantic(
-                page=obj.page,
-                bbox=obj.bbox,
-                text=obj.text,
-                fontname=obj.fontname,
-                fontsize=obj.fontsize
-            )
-            for obj in objects.text_words
-        ],
-        graphic_rects=[
-            GraphicRectPydantic(page=obj.page, bbox=obj.bbox, linewidth=obj.linewidth)
-            for obj in objects.graphic_rects
-        ],
-        graphic_lines=[
-            GraphicLinePydantic(page=obj.page, bbox=obj.bbox, linewidth=obj.linewidth)
-            for obj in objects.graphic_lines
-        ],
-        graphic_curves=[
-            GraphicCurvePydantic(
-                page=obj.page,
-                bbox=obj.bbox,
-                points=list(obj.points),
-                linewidth=obj.linewidth
-            )
-            for obj in objects.graphic_curves
-        ],
-        images=[
-            ImagePydantic(
-                page=obj.page,
-                bbox=obj.bbox,
-                format=obj.format,
-                colorspace=obj.colorspace,
-                bits=obj.bits
-            )
-            for obj in objects.images
-        ],
-        tables=[
-            TablePydantic(
-                page=obj.page,
-                bbox=obj.bbox,
-                rows=obj.rows,
-                cols=obj.cols
-            )
-            for obj in objects.tables
-        ]
+        extracted_objects=pdf.extracted_objects,  # Same type, no conversion
     )
 
 
@@ -93,11 +36,11 @@ def convert_pdf_objects_response(
     page_count: int,
     objects: PdfObjects
 ) -> GetPdfObjectsResponse:
-    """Convert domain data to GetPdfObjectsResponse"""
+    """Build GetPdfObjectsResponse from parts."""
     return GetPdfObjectsResponse(
         pdf_file_id=pdf_file_id,
         page_count=page_count,
-        objects=convert_pdf_objects(objects)
+        objects=objects,  # Same type, no conversion
     )
 
 
@@ -105,8 +48,8 @@ def convert_process_pdf_objects_response(
     page_count: int,
     objects: PdfObjects
 ) -> ProcessPdfObjectsResponse:
-    """Convert domain data to ProcessPdfObjectsResponse"""
+    """Build ProcessPdfObjectsResponse from parts."""
     return ProcessPdfObjectsResponse(
         page_count=page_count,
-        objects=convert_pdf_objects(objects)
+        objects=objects,  # Same type, no conversion
     )
