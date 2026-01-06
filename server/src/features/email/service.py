@@ -454,7 +454,6 @@ class EmailService:
     def create_validated_account(
         self,
         account_data: EmailAccountCreate,
-        capabilities: list[str],
     ) -> EmailAccount:
         """Create a new email account that has been validated."""
         existing = self.account_repository.get_by_email_address(account_data.email_address)
@@ -463,19 +462,18 @@ class EmailService:
 
         account = self.account_repository.create(account_data)
 
+        # Mark as validated immediately since it was pre-validated
         account = self.account_repository.update(
             account.id,
             EmailAccountUpdate(
                 is_validated=True,
                 validated_at=datetime.now(timezone.utc),
-                capabilities=capabilities,
-                clear_errors=True,
             )
         )
 
         logger.info(
             f"Created validated email account {account.id}: {account.name} "
-            f"({account.email_address}) with capabilities: {capabilities}"
+            f"({account.email_address})"
         )
         return account
 

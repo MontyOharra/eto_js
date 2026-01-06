@@ -19,11 +19,7 @@ from api.schemas.email_accounts import (
     SendEmailResponse,
 )
 from api.mappers.email_accounts import (
-    email_account_to_api,
     email_account_list_to_api,
-    validation_result_to_api,
-    create_request_to_domain,
-    update_request_to_domain,
     provider_settings_to_domain,
     credentials_to_domain,
 )
@@ -54,7 +50,7 @@ async def validate_connection(
         provider_settings=provider_settings_to_domain(request.provider_settings),
         credentials=credentials_to_domain(request.credentials),
     )
-    return validation_result_to_api(result)
+    return result
 
 
 @router.get(
@@ -112,7 +108,7 @@ async def get_account(
     """Get email account by ID."""
     try:
         account = service.get_account(account_id)
-        return email_account_to_api(account)
+        return account
     except ObjectNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
@@ -131,12 +127,8 @@ async def create_account(
 ) -> EmailAccountResponse:
     """Create a new email account."""
     try:
-        account_data = create_request_to_domain(request)
-        account = service.create_validated_account(
-            account_data=account_data,
-            capabilities=request.capabilities,
-        )
-        return email_account_to_api(account)
+        account = service.create_validated_account(request)
+        return account
     except ConflictError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except ValidationError as e:
@@ -157,9 +149,8 @@ async def update_account(
 ) -> EmailAccountResponse:
     """Update an email account."""
     try:
-        account_update = update_request_to_domain(request)
-        account = service.update_account(account_id, account_update)
-        return email_account_to_api(account)
+        account = service.update_account(account_id, request)
+        return account
     except ObjectNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:
@@ -179,7 +170,7 @@ async def delete_account(
     """Delete an email account."""
     try:
         account = service.delete_account(account_id)
-        return email_account_to_api(account)
+        return account
     except ObjectNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ConflictError as e:
