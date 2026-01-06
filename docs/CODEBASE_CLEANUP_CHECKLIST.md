@@ -77,7 +77,7 @@ Track file-by-file cleanup progress for the server codebase.
 
 ##### features/email/integrations/
 - [ ] `features/email/integrations/__init__.py`
-- [ ] `features/email/integrations/base_integration.py`
+- [x] `features/email/integrations/base_integration.py`
 - [ ] `features/email/integrations/registry.py`
 - [ ] `features/email/integrations/standard_integration.py`
 
@@ -265,7 +265,7 @@ Track file-by-file cleanup progress for the server codebase.
 - [x] `shared/types/email.py`
 - [x] `shared/types/email_accounts.py`
 - [x] `shared/types/email_ingestion_configs.py`
-- [ ] `shared/types/email_integrations.py`
+- [x] `shared/types/email_integrations.py`
 - [ ] `shared/types/eto_runs.py`
 - [ ] `shared/types/eto_sub_runs.py`
 - [ ] `shared/types/eto_sub_run_extractions.py`
@@ -291,5 +291,5 @@ Track file-by-file cleanup progress for the server codebase.
 ## Progress Summary
 
 - **Total files:** 174
-- **Completed:** 5
-- **Remaining:** 169
+- **Completed:** 7
+- **Remaining:** 167
