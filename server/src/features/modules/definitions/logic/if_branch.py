@@ -110,7 +110,7 @@ class IfBranch(LogicModule):
             TypeError: If condition is not a boolean
         """
         # Import sentinel here to avoid circular import
-        from src.features.pipeline_execution.service import BranchNotTaken
+        from features.pipeline_execution.service import BranchNotTaken
 
         # Get inputs (ordered: [Condition, Value] based on meta())
         condition_input = context.inputs[0]  # "Condition" group

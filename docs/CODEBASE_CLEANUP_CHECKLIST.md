@@ -40,7 +40,7 @@ Track file-by-file cleanup progress for the server codebase.
 #### api/routers/
 - [ ] `api/routers/__init__.py`
 - [ ] `api/routers/admin.py`
-- [ ] `api/routers/auth.py`
+- [x] `api/routers/auth.py`
 - [x] `api/routers/email_accounts.py`
 - [x] `api/routers/email_ingestion_configs.py`
 - [ ] `api/routers/eto_runs.py`
@@ -53,6 +53,7 @@ Track file-by-file cleanup progress for the server codebase.
 
 #### api/schemas/
 - [ ] `api/schemas/__init__.py`
+- [x] `api/schemas/auth.py` (new)
 - [x] `api/schemas/email_accounts.py`
 - [x] `api/schemas/email_ingestion_configs.py`
 - [ ] `api/schemas/eto_runs.py`
@@ -72,7 +73,7 @@ Track file-by-file cleanup progress for the server codebase.
 
 #### features/auth/
 - [ ] `features/auth/__init__.py`
-- [ ] `features/auth/service.py`
+- [x] `features/auth/service.py`
 
 #### features/email/
 - [ ] `features/email/__init__.py`
@@ -214,13 +215,12 @@ Track file-by-file cleanup progress for the server codebase.
 
 #### shared/database/
 - [ ] `shared/database/__init__.py`
-- [ ] `shared/database/connection.py`
-- [x] `shared/database/access_connection.py`
-- [x] `shared/database/access_database_manager.py` (renamed from data_database_manager.py)
-- [x] ~~`shared/database/database_manager.py`~~ (deleted - unused)
+- [x] `shared/database/connection.py`
+- [x] `shared/database/access_connection.py` (consolidated - includes AccessConnection and AccessConnectionManager)
+- [x] ~~`shared/database/access_database_manager.py`~~ (deleted - consolidated into access_connection.py)
 - [ ] `shared/database/models.py`
 - [ ] `shared/database/unit_of_work.py`
-- [ ] `shared/database/views.py`
+- [x] `shared/database/views.py`
 
 ##### shared/database/repositories/
 - [ ] `shared/database/repositories/__init__.py`
@@ -261,12 +261,12 @@ Track file-by-file cleanup progress for the server codebase.
 - [ ] `shared/exceptions/service.py`
 
 #### shared/services/
-- [ ] `shared/services/__init__.py`
-- [x] ~~`shared/services/database_connection_pool.py`~~ (deleted - unused)
-- [ ] `shared/services/service_container.py`
+- [x] `shared/services/__init__.py`
+- [x] `shared/services/service_container.py`
 
 #### shared/types/
 - [ ] `shared/types/__init__.py`
+- [x] `shared/types/auth.py` (new)
 - [x] `shared/types/email.py`
 - [x] `shared/types/email_accounts.py`
 - [x] `shared/types/email_ingestion_configs.py`
@@ -295,6 +295,6 @@ Track file-by-file cleanup progress for the server codebase.
 
 ## Progress Summary
 
-- **Total files:** 172 (2 deleted)
-- **Completed:** 24
-- **Remaining:** 148
+- **Total files:** 174 (3 deleted, 2 new)
+- **Completed:** 41
+- **Remaining:** 133

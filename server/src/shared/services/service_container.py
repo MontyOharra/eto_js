@@ -3,7 +3,7 @@ Service Container - Pure Class-Based Singleton Pattern
 Handles service dependencies and circular references elegantly
 """
 import logging
-from typing import Dict, Any, Optional, List, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from features.modules.service import ModulesService
@@ -11,13 +11,14 @@ if TYPE_CHECKING:
     from features.pdf_files.service import PdfFilesService
     from features.pdf_templates.service import PdfTemplateService
     from features.pipelines.service import PipelineService
-    from src.features.pipeline_execution.service import PipelineExecutionService
+    from features.pipeline_execution.service import PipelineExecutionService
     from features.htc_integration.service import HtcIntegrationService
     from features.output_processing.service import OutputProcessingService
     from features.order_management.service import OrderManagementService
     from features.eto_runs.service import EtoRunsService
     from features.auth.service import AuthService
     from shared.database.connection import DatabaseConnectionManager
+    from shared.database.access_connection import AccessConnectionManager
 
 logger = logging.getLogger(__name__)
 
@@ -27,17 +28,17 @@ class ServiceProxy:
     Proxy to handle service dependencies including potential circular references.
     Delays service resolution until the service is actually accessed.
     """
-    def __init__(self, service_name: str):
+    def __init__(self, service_name: str) -> None:
         self._service_name = service_name
-        self._resolved = None
+        self._resolved: Any = None
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str) -> Any:
         # Resolve the actual service when first accessed
         if self._resolved is None:
             self._resolved = ServiceContainer.get(self._service_name)
         return getattr(self._resolved, name)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<ServiceProxy for '{self._service_name}'>"
 
 
@@ -58,26 +59,29 @@ class ServiceContainer:
 
     # Class-level state - shared across all imports
     _initialized: bool = False
-    _services: Dict[str, Any] = {}
-    _service_definitions: Dict[str, Dict[str, Any]] = {}
-    _connection_manager: Optional['DatabaseConnectionManager'] = None  # Primary 'main' connection (meta/system DB)
-    _connection_managers: Dict[str, 'DatabaseConnectionManager'] = {}  # All named connections (includes 'main')
-    _access_database_manager: Optional[Any] = None  # AccessDatabaseManager for Access databases only (excludes 'main')
-    _pdf_storage_path: Optional[str] = None
-    _resolving: List[str] = []
+    _services: dict[str, Any] = {}
+    _service_definitions: dict[str, dict[str, Any]] = {}
+    _main_connection: 'DatabaseConnectionManager | None' = None  # SQL Server system database
+    _access_connection_manager: 'AccessConnectionManager | None' = None  # Access databases
+    _pdf_storage_path: str | None = None
+    _resolving: list[str] = []
 
     @classmethod
-    def initialize(cls, connection_manager: 'DatabaseConnectionManager', pdf_storage_path: str, connection_managers: Optional[Dict[str, 'DatabaseConnectionManager']] = None, database_manager: Optional[Any] = None, **kwargs) -> None:
+    def initialize(
+        cls,
+        main_connection: 'DatabaseConnectionManager',
+        pdf_storage_path: str,
+        access_connection_manager: 'AccessConnectionManager | None' = None,
+        **kwargs
+    ) -> None:
         """
         Initialize the service container.
         Can be called multiple times safely (will only initialize once).
 
         Args:
-            connection_manager: Primary database connection manager (meta/system DB)
+            main_connection: SQL Server database connection manager (system/meta DB)
             pdf_storage_path: Path for PDF file storage
-            connection_managers: Optional dict of ALL database connection managers
-                                 e.g., {'main': manager1, 'htc_db': manager2}
-            database_manager: AccessDatabaseManager for Access databases (excludes 'main')
+            access_connection_manager: AccessConnectionManager for Access databases
             **kwargs: Additional configuration parameters
         """
         if cls._initialized:
@@ -87,21 +91,13 @@ class ServiceContainer:
         logger.info("Initializing ServiceContainer...")
 
         # Store core dependencies
-        cls._connection_manager = connection_manager  # Meta/system database (main)
+        cls._main_connection = main_connection
         cls._pdf_storage_path = pdf_storage_path
-        cls._access_database_manager = database_manager  # Access databases only (for modules)
+        cls._access_connection_manager = access_connection_manager
 
-        # Store all connection managers
-        if connection_managers:
-            cls._connection_managers = connection_managers
-            logger.info(f"Registered {len(connection_managers)} database connections: {', '.join(connection_managers.keys())}")
-        else:
-            # If not provided, just register the main connection manager
-            cls._connection_managers = {'main': connection_manager}
-            logger.info("Registered single 'main' database connection")
-
-        if database_manager:
-            logger.info("AccessDatabaseManager registered for pipeline module access (Access databases only)")
+        if access_connection_manager:
+            databases = access_connection_manager.list_databases()
+            logger.info(f"AccessConnectionManager registered with {len(databases)} database(s): {', '.join(databases)}")
 
         # Store any additional configuration
         for key, value in kwargs.items():
@@ -127,67 +123,67 @@ class ServiceContainer:
             },
             'modules': {
                 'class': 'features.modules.service.ModulesService',
-                'args': [cls._connection_manager],
+                'args': [cls._main_connection],
                 'singleton': True,
                 'description': 'Module catalog and auto-discovery service'
             },
             'email': {
                 'class': 'features.email.service.EmailService',
-                'args': [cls._connection_manager, '_service:pdf_files', '_service:eto_runs'],
+                'args': [cls._main_connection, '_service:pdf_files', '_service:eto_runs'],
                 'singleton': True,
                 'description': 'Email service for account management, operations, and PDF processing'
             },
             'pdf_files': {
                 'class': 'features.pdf_files.service.PdfFilesService',
-                'args': [cls._connection_manager, '_service:storage_config'],
+                'args': [cls._main_connection, '_service:storage_config'],
                 'singleton': True,
                 'description': 'PDF files service with extraction and storage'
             },
             'pipeline_execution': {
                 'class': 'features.pipeline_execution.service.PipelineExecutionService',
-                'args': [cls._connection_manager, cls._access_database_manager],
+                'args': [cls._main_connection, cls._access_connection_manager],
                 'singleton': True,
                 'description': 'Pipeline execution service for running compiled pipelines'
             },
             'htc_integration': {
                 'class': 'features.htc_integration.service.HtcIntegrationService',
-                'args': [cls._access_database_manager, cls._connection_manager],
+                'args': [cls._access_connection_manager, cls._main_connection],
                 'singleton': True,
                 'description': 'HTC Access database integration service for order operations'
             },
             'output_processing': {
                 'class': 'features.output_processing.service.OutputProcessingService',
-                'args': [cls._connection_manager, '_service:htc_integration'],
+                'args': [cls._main_connection, '_service:htc_integration'],
                 'singleton': True,
                 'description': 'Output processing service for routing pipeline data to pending orders/updates'
             },
             'order_management': {
                 'class': 'features.order_management.service.OrderManagementService',
-                'args': [cls._connection_manager, '_service:htc_integration', '_service:email'],
+                'args': [cls._main_connection, '_service:htc_integration', '_service:email'],
                 'singleton': True,
                 'description': 'Order management service with worker and email notifications'
             },
             'pipelines': {
                 'class': 'features.pipelines.service.PipelineService',
-                'args': [cls._connection_manager, '_service:pipeline_execution', '_service:modules', cls._access_database_manager],
+                'args': [cls._main_connection, '_service:pipeline_execution', '_service:modules', cls._access_connection_manager],
                 'singleton': True,
                 'description': 'Pipeline compilation and execution service'
             },
             'pdf_templates': {
                 'class': 'features.pdf_templates.service.PdfTemplateService',
-                'args': [cls._connection_manager, '_service:pipelines', '_service:pdf_files', '_service:pipeline_execution', cls._access_database_manager],
+                'args': [cls._main_connection, '_service:pipelines', '_service:pdf_files', '_service:pipeline_execution', cls._access_connection_manager],
                 'singleton': True,
                 'description': 'PDF template service with versioning and pipeline integration'
             },
             'eto_runs': {
                 'class': 'features.eto_runs.service.EtoRunsService',
-                'args': [cls._connection_manager, '_service:pdf_templates', '_service:pdf_files', '_service:pipeline_execution', '_service:output_processing'],
+                'args': [cls._main_connection, '_service:pdf_templates', '_service:pdf_files', '_service:pipeline_execution', '_service:output_processing'],
                 'singleton': True,
                 'description': 'ETO runs service for processing lifecycle management'
             },
             'auth': {
                 'class': 'features.auth.service.AuthService',
-                'args': [cls._access_database_manager],
+                'args': [cls._access_connection_manager],
                 'singleton': True,
                 'description': 'Authentication service for user login via HTC Staff database'
             },
@@ -277,7 +273,7 @@ class ServiceContainer:
 
                     try:
                         # Import the module
-                        module = __import__(f'src.{module_path}', fromlist=[class_name])
+                        module = __import__(module_path, fromlist=[class_name])
                         # Get the class
                         factory_class = getattr(module, class_name)
                         # Get the method from the class
@@ -285,12 +281,12 @@ class ServiceContainer:
                     except (ImportError, AttributeError):
                         # Fall back to module.function pattern
                         module_path, function_name = factory_path.rsplit('.', 1)
-                        module = __import__(f'src.{module_path}', fromlist=[function_name])
+                        module = __import__(module_path, fromlist=[function_name])
                         factory_func = getattr(module, function_name)
                 else:
                     # module.function pattern
                     module_path, function_name = factory_path.rsplit('.', 1)
-                    module = __import__(f'src.{module_path}', fromlist=[function_name])
+                    module = __import__(module_path, fromlist=[function_name])
                     factory_func = getattr(module, function_name)
 
             except (ImportError, AttributeError) as e:
@@ -322,10 +318,10 @@ class ServiceContainer:
                 # Handle both absolute and relative imports
                 if module_path.startswith('.'):
                     from importlib import import_module
-                    module = import_module(module_path, package='src')
+                    module = import_module(module_path, package='shared')
                 else:
                     # Absolute import
-                    module = __import__(f'src.{module_path}', fromlist=[class_name])
+                    module = __import__(module_path, fromlist=[class_name])
 
                 service_class = getattr(module, class_name)
             except (ImportError, AttributeError) as e:
@@ -417,47 +413,22 @@ class ServiceContainer:
         return cls.get('auth')
 
     @classmethod
-    def get_connection_manager(cls) -> 'DatabaseConnectionManager':
-        """Get the primary database connection manager (backward compatibility)"""
+    def get_main_connection(cls) -> 'DatabaseConnectionManager':
+        """Get the main SQL Server database connection manager"""
         if not cls._initialized:
             raise RuntimeError("ServiceContainer not initialized")
-        if not cls._connection_manager:
-            raise RuntimeError("Connection manager not available")
-        return cls._connection_manager
+        if not cls._main_connection:
+            raise RuntimeError("Main connection not available")
+        return cls._main_connection
 
     @classmethod
-    def get_connection(cls, name: str) -> 'DatabaseConnectionManager':
-        """
-        Get a named database connection manager.
-
-        Args:
-            name: Connection name (e.g., 'main', 'orders_db')
-
-        Returns:
-            DatabaseConnectionManager for the requested connection
-
-        Raises:
-            RuntimeError: If ServiceContainer not initialized
-            ValueError: If connection name not found
-
-        Example:
-            # In a module's run() method:
-            orders_db = context.services.get_connection('orders_db')
-            with orders_db.session() as session:
-                # Use session for HTC database operations
-                ...
-        """
+    def get_access_connection_manager(cls) -> 'AccessConnectionManager':
+        """Get the Access database connection manager"""
         if not cls._initialized:
             raise RuntimeError("ServiceContainer not initialized")
-
-        if name not in cls._connection_managers:
-            available = ', '.join(cls._connection_managers.keys())
-            raise ValueError(
-                f"Database connection '{name}' not found. "
-                f"Available connections: {available}"
-            )
-
-        return cls._connection_managers[name]
+        if not cls._access_connection_manager:
+            raise RuntimeError("Access connection manager not available")
+        return cls._access_connection_manager
 
     @classmethod
     def is_initialized(cls) -> bool:
@@ -473,24 +444,25 @@ class ServiceContainer:
         cls._initialized = False
         cls._services = {}
         cls._service_definitions = {}
-        cls._connection_manager = None
+        cls._main_connection = None
+        cls._access_connection_manager = None
         cls._resolving = []
         logger.info("ServiceContainer reset")
 
     @classmethod
-    def get_all_services(cls) -> List[str]:
+    def get_all_services(cls) -> list[str]:
         """Get names of all registered services"""
         if not cls._initialized:
             raise RuntimeError("ServiceContainer not initialized")
         return list(cls._service_definitions.keys())
 
     @classmethod
-    def get_cached_services(cls) -> List[str]:
+    def get_cached_services(cls) -> list[str]:
         """Get names of all currently cached services"""
         return list(cls._services.keys())
 
     @classmethod
-    def health_check(cls) -> Dict[str, bool]:
+    def health_check(cls) -> dict[str, bool]:
         """
         Check health of all cached services.
         Only checks services that have been instantiated.

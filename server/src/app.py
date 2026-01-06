@@ -18,7 +18,6 @@ from fastapi.exceptions import RequestValidationError, HTTPException as FastAPIH
 
 from shared.logging import configure_logging
 from shared.database import init_database_connection
-from shared.database.connection import DatabaseConnectionManager
 from shared.database.access_connection import AccessConnectionManager
 from shared.services.service_container import ServiceContainer
 from shared.config.storage import get_storage_configuration
@@ -28,9 +27,8 @@ from shared.exceptions.service import ObjectNotFoundError, ConflictError, Valida
 logger = logging.getLogger(__name__)
 
 # Global variables to store initialized database connections
-_connection_manager = None  # Primary 'main' connection
-_connection_managers = {}  # All named connections
-_database_manager = None  # AccessDatabaseManager for Access databases
+_main_connection = None  # SQL Server system database (via SQLAlchemy)
+_access_connection_manager = None  # Access databases (via pyodbc)
 
 
 class DatabaseConnectionError(Exception):
@@ -45,50 +43,42 @@ class ServiceInitializationError(Exception):
 
 async def initialize_database_connection() -> None:
     """Initialize all database connections from configuration"""
-    global _connection_manager, _connection_managers, _database_manager
+    global _main_connection, _access_connection_manager
 
     try:
         logger.debug("Loading database configuration...")
         db_connections = load_database_connections()
         logger.info("Database configuration loaded successfully")
 
-        # Initialize all configured connections
-        _connection_managers = {}
+        # Separate main (SQL Server) from Access databases
+        access_connection_strings = {}
 
         for conn_name, conn_info in db_connections.items():
-            logger.debug(f"Initializing '{conn_name}' database connection (type: {conn_info.connection_type})...")
+            logger.debug(f"Processing '{conn_name}' database connection (type: {conn_info.connection_type})...")
 
-            # Create appropriate connection manager based on type
-            if conn_info.connection_type == "access":
-                # Use Access-specific connection manager
-                manager = AccessConnectionManager(conn_info.connection_string)
-                manager.initialize_connection()
-                logger.info(f"Access database connection '{conn_name}' established and verified")
+            if conn_name == 'main':
+                # Main SQL Server database - use SQLAlchemy
+                _main_connection = init_database_connection(conn_info.connection_string)
+                logger.info("Main SQL Server database connection established")
+            elif conn_info.connection_type == "access":
+                # Collect Access database connection strings
+                access_connection_strings[conn_name] = conn_info.connection_string
             else:
-                # Use SQLAlchemy-based connection manager (default)
-                manager = init_database_connection(conn_info.connection_string)
-                logger.info(f"Database connection '{conn_name}' established and verified")
+                logger.warning(f"Unknown connection type '{conn_info.connection_type}' for '{conn_name}', skipping")
 
-            _connection_managers[conn_name] = manager
-
-        # Set primary connection manager for backward compatibility
-        _connection_manager = _connection_managers.get('main')
-        if not _connection_manager:
+        # Validate main connection exists
+        if not _main_connection:
             raise DatabaseConnectionError("Primary 'main' database connection not configured")
 
-        # Create AccessDatabaseManager for Access databases only (excludes 'main' SQL Server)
-        # Pipeline modules should only access Access business data, never SQL Server system metadata
-        from shared.database.access_database_manager import AccessDatabaseManager
+        # Initialize all Access databases
+        if access_connection_strings:
+            _access_connection_manager = AccessConnectionManager(access_connection_strings)
+            logger.info(f"AccessConnectionManager initialized with {len(access_connection_strings)} database(s)")
+        else:
+            logger.warning("No Access databases configured")
 
-        access_databases = {
-            name: manager
-            for name, manager in _connection_managers.items()
-            if name != 'main'  # Exclude SQL Server system database
-        }
-        _database_manager = AccessDatabaseManager(access_databases)
-        logger.info(f"AccessDatabaseManager created for pipeline modules with {len(access_databases)} Access database(s)")
-
-        logger.info(f"Initialized {len(_connection_managers)} database connection(s)")
+        total_connections = 1 + len(access_connection_strings)  # main + Access databases
+        logger.info(f"Initialized {total_connections} database connection(s)")
 
     except Exception as e:
         logger.error(f"Failed to initialize database connections: {e}", exc_info=True)
@@ -97,22 +87,21 @@ async def initialize_database_connection() -> None:
 
 async def initialize_services() -> None:
     """Initialize all services using the ServiceContainer singleton"""
-    global _connection_manager, _connection_managers, _database_manager
+    global _main_connection, _access_connection_manager
 
     try:
         logger.debug("Initializing services via ServiceContainer...")
 
-        if not _connection_manager:
-            raise ServiceInitializationError("Database connection manager not available")
+        if not _main_connection:
+            raise ServiceInitializationError("Main database connection not available")
 
         pdf_storage_path = get_storage_configuration()
 
         logger.debug("Initializing ServiceContainer...")
         ServiceContainer.initialize(
-            connection_manager=_connection_manager,
+            main_connection=_main_connection,
             pdf_storage_path=pdf_storage_path,
-            connection_managers=_connection_managers,
-            database_manager=_database_manager
+            access_connection_manager=_access_connection_manager
         )
         logger.info("ServiceContainer initialized successfully")
 
@@ -254,7 +243,7 @@ async def initialize_services() -> None:
 
 async def cleanup_services() -> None:
     """Cleanup services and database connections on shutdown"""
-    global _connection_manager
+    global _main_connection, _access_connection_manager
 
     try:
         # Gracefully close all SSE connections first
@@ -299,11 +288,14 @@ async def cleanup_services() -> None:
             except Exception as e:
                 logger.warning(f"Failed to stop HTC order worker: {e}")
 
+        # Cleanup database connections
+        if _main_connection:
+            logger.info("Closing main database connection...")
+            _main_connection.close()
 
-        if _connection_manager:
-            logger.info("Cleaning up database connections...")
-            # Add database connection cleanup when implemented
-            # _connection_manager.close()
+        if _access_connection_manager:
+            logger.info("Closing Access database connections...")
+            _access_connection_manager.close_all()
 
     except Exception as e:
         logger.error(f"Error during cleanup: {e}", exc_info=True)

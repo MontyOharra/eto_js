@@ -5,12 +5,15 @@ Uses synchronous SQLAlchemy (SQL Server does not support async operations well)
 """
 import logging
 import threading
-from typing import Optional, Dict, Any
+from typing import Generator, TYPE_CHECKING
 from urllib.parse import urlparse
 from sqlalchemy import create_engine, Engine, text
 from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.exc import OperationalError, DatabaseError
+from sqlalchemy.exc import OperationalError
 from contextlib import contextmanager
+
+if TYPE_CHECKING:
+    from shared.database.unit_of_work import UnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -33,20 +36,20 @@ class DatabaseConnectionManager:
     Uses synchronous SQLAlchemy (SQL Server does not support async operations well)
     """
 
-    def __init__(self, database_url: str):
+    def __init__(self, database_url: str) -> None:
         """Initialize connection manager with database URL - doesn't connect yet"""
         if not database_url:
             raise ValueError("Database URL is required")
 
         self.database_url = database_url
-        self.engine: Optional[Engine] = None
-        self.session_factory: Optional[sessionmaker] = None
+        self.engine: Engine | None = None
+        self.session_factory: sessionmaker | None = None
         self._initialized = False
         self._lock = threading.Lock()
 
         logger.info(f"DatabaseConnectionManager initialized for: {self._safe_url()}")
     
-    def initialize_connection(self):
+    def initialize_connection(self) -> None:
         """Initialize the database engine and session factory"""
         with self._lock:
             if self._initialized:
@@ -94,7 +97,7 @@ class DatabaseConnectionManager:
                 logger.error(error_msg)
                 raise DatabaseConnectionError(error_msg) from e
     
-    def _verify_database_exists(self):
+    def _verify_database_exists(self) -> None:
         """Verify that the database exists - raises error if not"""
         try:
             # Simple query to test connection and database existence
@@ -116,7 +119,7 @@ class DatabaseConnectionManager:
                 raise
     
     @contextmanager
-    def session(self):
+    def session(self) -> Generator[Session, None, None]:
         """
         Create a session with automatic commit/rollback.
 
@@ -144,7 +147,7 @@ class DatabaseConnectionManager:
             session.close()
 
     @contextmanager
-    def unit_of_work(self):
+    def unit_of_work(self) -> Generator["UnitOfWork", None, None]:
         """
         Create a Unit of Work for managing multi-table transactions.
 
@@ -206,7 +209,7 @@ class DatabaseConnectionManager:
             logger.warning(f"Database connection test failed: {e}")
             return False
 
-    def close(self):
+    def close(self) -> None:
         """Close database connections and cleanup"""
         with self._lock:
             if self.engine:
@@ -225,7 +228,7 @@ class DatabaseConnectionManager:
                 safe_netloc = parsed.netloc.replace(f":{parsed.password}@", ":***@")
                 return self.database_url.replace(parsed.netloc, safe_netloc)
             return self.database_url
-        except:
+        except Exception:
             return "***"
     
     def _parse_database_name(self) -> str:
@@ -233,14 +236,14 @@ class DatabaseConnectionManager:
         try:
             parsed = urlparse(self.database_url)
             return parsed.path.lstrip('/')
-        except:
+        except Exception:
             return "unknown"
 
 
 
 
 # Global connection manager instance with thread safety
-_connection_manager: Optional[DatabaseConnectionManager] = None
+_connection_manager: DatabaseConnectionManager | None = None
 _connection_lock = threading.Lock()
 
 
@@ -266,7 +269,7 @@ def init_database_connection(database_url: str) -> DatabaseConnectionManager:
             raise
 
 
-def get_connection_manager() -> Optional[DatabaseConnectionManager]:
+def get_connection_manager() -> DatabaseConnectionManager | None:
     """Get the global connection manager instance"""
     if _connection_manager is None:
         logger.warning("Database connection not initialized. Call init_database_connection() first.")

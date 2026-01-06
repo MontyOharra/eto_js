@@ -30,7 +30,7 @@ ORDER_MANAGEMENT_AUTO_CREATE_ENABLED = "order_management.auto_create_enabled"
 
 def get_connection_manager() -> DatabaseConnectionManager:
     """Get database connection manager from service container."""
-    return ServiceContainer.get_connection_manager()
+    return ServiceContainer.get_main_connection()
 
 
 @router.get(

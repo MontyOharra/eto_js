@@ -16,13 +16,13 @@ Architecture:
     - HtcOrderWorker: Background worker for creating HTC orders from pending orders
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional, List, Dict
 
 from shared.logging import get_logger
 from shared.exceptions import OutputExecutionError
 from shared.config.database import get_htc_apps_dir
 from shared.config.storage import get_storage_configuration
-from shared.database.access_database_manager import AccessDatabaseManager
+from shared.database.access_connection import AccessConnectionManager, AccessConnection
 
 from features.htc_integration.lookup_utils import (
     HtcLookupUtils,
@@ -79,7 +79,7 @@ class HtcIntegrationService:
 
     def __init__(
         self,
-        access_database_manager: AccessDatabaseManager,
+        access_connection_manager: AccessConnectionManager,
         connection_manager: Any = None,
         database_name: str = "htc_300",
     ) -> None:
@@ -87,13 +87,13 @@ class HtcIntegrationService:
         Initialize the service.
 
         Args:
-            access_database_manager: AccessDatabaseManager for HTC database access
+            access_connection_manager: AccessConnectionManager for HTC database access
             connection_manager: Database connection manager (unused, kept for compatibility)
             database_name: Name of the database containing HTC tables
         """
         logger.debug("Initializing HtcIntegrationService...")
 
-        self._access_database_manager = access_database_manager
+        self._access_connection_manager = access_connection_manager
         self._database_name = database_name
 
         # Initialize utility classes
@@ -131,9 +131,9 @@ class HtcIntegrationService:
 
         logger.info("HtcIntegrationService initialized successfully")
 
-    def _get_connection(self) -> Any:
+    def _get_connection(self) -> AccessConnection:
         """Get the HTC database connection."""
-        return self._access_database_manager.get_connection(self._database_name)
+        return self._access_connection_manager.get_connection(self._database_name)
 
     # ==================== Lookup Operations ====================
     # Delegated to HtcLookupUtils

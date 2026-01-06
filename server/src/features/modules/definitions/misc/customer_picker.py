@@ -56,9 +56,9 @@ class CustomerPicker(MiscModule):
 
             if ServiceContainer.is_initialized():
                 # Get database connection
-                access_db_manager = ServiceContainer._access_database_manager
+                access_db_manager = ServiceContainer._access_connection_manager
                 if not access_db_manager:
-                    logger.warning("AccessDatabaseManager not available")
+                    logger.warning("AccessConnectionManager not available")
                     return schema
 
                 connection = access_db_manager.get_connection("htc_300")
@@ -136,14 +136,14 @@ class CustomerPicker(MiscModule):
             inputs: Empty dictionary (no inputs for this module)
             cfg: Validated configuration with selected customer_name
             context: Execution context with ordered outputs
-            services: AccessDatabaseManager for database access
+            services: AccessConnectionManager for database access
 
         Returns:
             Dictionary with customer_id and customer_name outputs
         """
         # Validate services
         if services is None:
-            raise ValueError("AccessDatabaseManager services required for customer_picker")
+            raise ValueError("AccessConnectionManager services required for customer_picker")
 
         # Validate that a customer was selected
         if not cfg.customer_name:

@@ -129,7 +129,7 @@ class SqlLookup(MiscModule):
 
             if ServiceContainer.is_initialized():
                 # Get available Access database connections (excludes 'main' SQL Server DB)
-                access_db_manager = ServiceContainer._access_database_manager
+                access_db_manager = ServiceContainer._access_connection_manager
                 if access_db_manager:
                     available_connections = access_db_manager.list_databases()
                 else:

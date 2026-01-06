@@ -8,24 +8,11 @@ Supports two authentication methods:
 
 Uses the same pattern as HtcIntegrationService for Access database access.
 """
-
-from dataclasses import dataclass
-from typing import Any, Optional
-
 from shared.logging import get_logger
-from shared.database.access_database_manager import AccessDatabaseManager
+from shared.database.access_connection import AccessConnectionManager, AccessConnection
+from shared.types.auth import AuthenticatedUser
 
 logger = get_logger(__name__)
-
-
-@dataclass
-class AuthenticatedUser:
-    """Represents an authenticated user."""
-    staff_emp_id: int
-    username: str  # Staff_Login - used for audit trail (Orders_UpdtLID)
-    display_name: str
-    first_name: str
-    last_name: str
 
 
 class AuthService:
@@ -42,22 +29,22 @@ class AuthService:
 
     def __init__(
         self,
-        access_database_manager: AccessDatabaseManager,
+        access_connection_manager: AccessConnectionManager,
     ) -> None:
         """
         Initialize the auth service.
 
         Args:
-            access_database_manager: AccessDatabaseManager for Access database access
+            access_connection_manager: AccessConnectionManager for Access database access
         """
         logger.debug("Initializing AuthService...")
-        self._access_database_manager = access_database_manager
+        self._access_connection_manager = access_connection_manager
 
-    def _get_connection(self) -> Any:
+    def _get_connection(self) -> AccessConnection:
         """Get database connection for staff database."""
-        return self._access_database_manager.get_connection(self.DATABASE_NAME)
+        return self._access_connection_manager.get_connection(self.DATABASE_NAME)
 
-    def attempt_auto_login(self, pc_name: str, pc_lid: str) -> Optional[AuthenticatedUser]:
+    def attempt_auto_login(self, pc_name: str, pc_lid: str) -> AuthenticatedUser | None:
         """
         Attempt automatic login by checking WhosLoggedIn table.
 
@@ -87,7 +74,7 @@ class AuthService:
             logger.error(f"Auto-login failed: {e}")
             return None
 
-    def _get_staff_id_from_session(self, pc_name: str, pc_lid: str) -> Optional[int]:
+    def _get_staff_id_from_session(self, pc_name: str, pc_lid: str) -> int | None:
         """
         Query WhosLoggedIn table for a matching session.
 
@@ -122,7 +109,7 @@ class AuthService:
             logger.info(f"Found active session for staff ID {staff_id}")
             return staff_id
 
-    def validate_credentials(self, username: str, password: str) -> Optional[AuthenticatedUser]:
+    def validate_credentials(self, username: str, password: str) -> AuthenticatedUser | None:
         """
         Validate username and password against Staff table.
 
@@ -174,7 +161,7 @@ class AuthService:
             logger.error(f"Credential validation failed: {e}")
             return None
 
-    def get_staff_by_id(self, emp_id: int) -> Optional[AuthenticatedUser]:
+    def get_staff_by_id(self, emp_id: int) -> AuthenticatedUser | None:
         """
         Get staff details by employee ID.
 

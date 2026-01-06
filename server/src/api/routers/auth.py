@@ -7,12 +7,17 @@ Provides endpoints for user authentication:
 """
 
 import logging
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
 
-from shared.services.service_container import ServiceContainer
+from fastapi import APIRouter, Depends
+
+from api.schemas.auth import (
+    AutoLoginRequest,
+    LoginRequest,
+    AuthResponse,
+    AuthStatusResponse,
+)
 from features.auth.service import AuthService
+from shared.services.service_container import ServiceContainer
 
 logger = logging.getLogger(__name__)
 
@@ -20,58 +25,6 @@ router = APIRouter(
     prefix="/auth",
     tags=["Authentication"]
 )
-
-
-# ==================== Request/Response Schemas ====================
-
-class AutoLoginRequest(BaseModel):
-    """Request for automatic login via WhosLoggedIn table."""
-    pc_name: str
-    pc_lid: str
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "pc_name": "WORKSTATION-01",
-                "pc_lid": "john.smith"
-            }
-        }
-
-
-class LoginRequest(BaseModel):
-    """Request for manual username/password login."""
-    username: str
-    password: str
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "username": "jsmith",
-                "password": "password123"
-            }
-        }
-
-
-class AuthUserResponse(BaseModel):
-    """Authenticated user information."""
-    staff_emp_id: int
-    username: str  # Staff_Login - used for audit trail
-    display_name: str
-    first_name: str
-    last_name: str
-
-
-class AuthResponse(BaseModel):
-    """Authentication response."""
-    success: bool
-    user: Optional[AuthUserResponse] = None
-    error: Optional[str] = None
-
-
-class AuthStatusResponse(BaseModel):
-    """Auth service status response."""
-    available: bool
-    message: str
 
 
 # ==================== Dependency ====================
@@ -101,16 +54,7 @@ async def auto_login(
         user = auth_service.attempt_auto_login(request.pc_name, request.pc_lid)
 
         if user:
-            return AuthResponse(
-                success=True,
-                user=AuthUserResponse(
-                    staff_emp_id=user.staff_emp_id,
-                    username=user.username,
-                    display_name=user.display_name,
-                    first_name=user.first_name,
-                    last_name=user.last_name,
-                )
-            )
+            return AuthResponse(success=True, user=user)
         else:
             return AuthResponse(
                 success=False,
@@ -119,10 +63,7 @@ async def auto_login(
 
     except Exception as e:
         logger.error(f"Auto-login error: {e}", exc_info=True)
-        return AuthResponse(
-            success=False,
-            error="Authentication service error"
-        )
+        return AuthResponse(success=False, error="Authentication service error")
 
 
 @router.post("/login", response_model=AuthResponse)
@@ -139,28 +80,13 @@ async def login(
         user = auth_service.validate_credentials(request.username, request.password)
 
         if user:
-            return AuthResponse(
-                success=True,
-                user=AuthUserResponse(
-                    staff_emp_id=user.staff_emp_id,
-                    username=user.username,
-                    display_name=user.display_name,
-                    first_name=user.first_name,
-                    last_name=user.last_name,
-                )
-            )
+            return AuthResponse(success=True, user=user)
         else:
-            return AuthResponse(
-                success=False,
-                error="Invalid username or password"
-            )
+            return AuthResponse(success=False, error="Invalid username or password")
 
     except Exception as e:
         logger.error(f"Login error: {e}", exc_info=True)
-        return AuthResponse(
-            success=False,
-            error="Authentication service error"
-        )
+        return AuthResponse(success=False, error="Authentication service error")
 
 
 @router.get("/status", response_model=AuthStatusResponse)

@@ -29,7 +29,7 @@ from shared.types.pipelines import PipelineState as PipelineStateDomain
 from shared.types.pipeline_definition_step import PipelineDefinitionStepCreate
 from shared.exceptions.service import ObjectNotFoundError, ConflictError, ServiceError
 from features.pipelines.service import PipelineService
-from src.features.pipeline_execution.service import PipelineExecutionService
+from features.pipeline_execution.service import PipelineExecutionService
 from features.pdf_files.service import PdfFilesService
 from shared.types.pipeline_execution import PipelineExecutionResult
 from api.mappers.pipelines import (
@@ -60,7 +60,7 @@ class PdfTemplateService:
         pipeline_service: 'PipelineService',
         pdf_files_service: 'PdfFilesService',
         pipeline_execution_service: PipelineExecutionService,
-        access_database_manager: Any = None
+        access_connection_manager: Any = None
     ) -> None:
         """
         Initialize PDF template service
@@ -70,10 +70,10 @@ class PdfTemplateService:
             pipeline_service: Pipeline service for pipeline operations
             pdf_files_service: PDF files service for text extraction
             pipeline_execution_service: Pipeline execution service for running pipelines
-            access_database_manager: AccessDatabaseManager for Access databases
+            access_connection_manager: AccessConnectionManager for Access databases
         """
         self.connection_manager = connection_manager
-        self.access_db_manager = access_database_manager
+        self.access_db_manager = access_connection_manager
         self.template_repository = PdfTemplateRepository(connection_manager=connection_manager)
         self.version_repository = PdfTemplateVersionRepository(connection_manager=connection_manager)
         self.pipeline_repository = PipelineDefinitionRepository(connection_manager=connection_manager)
@@ -1379,7 +1379,7 @@ class PdfTemplateService:
             ServiceError: If database connection is not available or query fails
         """
         if self.access_db_manager is None:
-            logger.warning("AccessDatabaseManager not available - returning empty customer list")
+            logger.warning("AccessConnectionManager not available - returning empty customer list")
             return []
 
         try:
@@ -1423,7 +1423,7 @@ class PdfTemplateService:
             ServiceError: If database connection fails
         """
         if self.access_db_manager is None:
-            logger.warning("AccessDatabaseManager not available - cannot get customer")
+            logger.warning("AccessConnectionManager not available - cannot get customer")
             return None
 
         try:

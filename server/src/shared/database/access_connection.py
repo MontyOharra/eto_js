@@ -1,7 +1,6 @@
 """
 Access Database Connection Management
 Handles Microsoft Access database connections using pyodbc
-Separate from SQLAlchemy-based connection manager due to Access limitations
 """
 from __future__ import annotations
 
@@ -20,9 +19,9 @@ class AccessConnectionError(Exception):
     pass
 
 
-class AccessConnectionManager:
+class AccessConnection:
     """
-    Manages Microsoft Access database connections using pyodbc.
+    Individual Microsoft Access database connection using pyodbc.
 
     Design considerations for Access:
     - No connection pooling (Access doesn't handle concurrent connections well)
@@ -33,7 +32,7 @@ class AccessConnectionManager:
 
     def __init__(self, connection_string: str) -> None:
         """
-        Initialize connection manager with Access connection string.
+        Initialize connection with Access connection string.
 
         Args:
             connection_string: pyodbc connection string, e.g.:
@@ -50,9 +49,9 @@ class AccessConnectionManager:
         self._initialized = False
         self._lock = threading.Lock()
 
-        logger.info(f"AccessConnectionManager initialized for: {self._safe_connection_info()}")
+        logger.info(f"AccessConnection initialized for: {self._safe_connection_info()}")
 
-    def initialize_connection(self) -> None:
+    def initialize(self) -> None:
         """
         Initialize the Access database connection.
         Tests connectivity by attempting to connect and execute a simple query.
@@ -103,26 +102,6 @@ class AccessConnectionManager:
 
                 raise AccessConnectionError(error_msg) from e
 
-    def get_connection(self) -> pyodbc.Connection:
-        """
-        Get the raw pyodbc connection object.
-
-        Returns:
-            The active pyodbc Connection
-
-        Raises:
-            AccessConnectionError: If not initialized or connection unavailable
-        """
-        if not self._initialized:
-            raise AccessConnectionError(
-                "Connection not initialized. Call initialize_connection() first."
-            )
-
-        if self.connection is None:
-            raise AccessConnectionError("Connection not available")
-
-        return self.connection
-
     @contextmanager
     def cursor(self) -> Generator[pyodbc.Cursor, None, None]:
         """
@@ -137,7 +116,7 @@ class AccessConnectionManager:
             simultaneously on the same connection (causes "Function sequence error").
 
         Usage:
-            with connection_manager.cursor() as cursor:
+            with connection.cursor() as cursor:
                 cursor.execute("INSERT INTO Orders (CustomerID) VALUES (?)", (123,))
                 # Auto-commits on success, auto-rolls back on exception
 
@@ -149,7 +128,7 @@ class AccessConnectionManager:
         """
         if not self._initialized:
             raise AccessConnectionError(
-                "Connection not initialized. Call initialize_connection() first."
+                "Connection not initialized. Call initialize() first."
             )
 
         if self.connection is None:
@@ -220,3 +199,94 @@ class AccessConnectionManager:
             return "Access database"
         except Exception:
             return "Access database"
+
+
+class AccessConnectionManager:
+    """
+    Manages multiple Microsoft Access database connections.
+
+    This manager wraps AccessConnection instances and provides unified access
+    to multiple Access databases. It excludes the 'main' SQL Server database
+    which is handled separately by DatabaseConnectionManager.
+
+    Usage:
+        manager = AccessConnectionManager({"htc_300": conn_str1, "htc_350d": conn_str2})
+        connection = manager.get_connection("htc_300")
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT * FROM Customers")
+    """
+
+    def __init__(self, connection_strings: dict[str, str]) -> None:
+        """
+        Initialize Access connection manager with connection strings.
+
+        Args:
+            connection_strings: Dictionary mapping database names to connection strings.
+                e.g., {'htc_300': 'Driver=...;DBQ=...', 'htc_350d': 'Driver=...;DBQ=...'}
+
+        Raises:
+            ValueError: If 'main' database is included (should be excluded)
+        """
+        if 'main' in connection_strings:
+            raise ValueError(
+                "AccessConnectionManager should not include 'main' database. "
+                "The 'main' database is SQL Server and should be accessed via "
+                "DatabaseConnectionManager, not AccessConnectionManager."
+            )
+
+        self._connections: dict[str, AccessConnection] = {}
+
+        # Create and initialize connections
+        for name, conn_string in connection_strings.items():
+            connection = AccessConnection(conn_string)
+            connection.initialize()
+            self._connections[name] = connection
+
+        logger.info(
+            f"AccessConnectionManager initialized with {len(self._connections)} "
+            f"database(s): {', '.join(self._connections.keys())}"
+        )
+
+    def get_connection(self, database_name: str) -> AccessConnection:
+        """
+        Get an Access database connection by name.
+
+        Args:
+            database_name: Name of the Access database (e.g., "htc_300", "htc_350d")
+
+        Returns:
+            AccessConnection instance - use .cursor() context manager for queries
+
+        Raises:
+            ValueError: If database connection not found
+        """
+        if database_name not in self._connections:
+            available = list(self._connections.keys())
+            raise ValueError(
+                f"Unknown Access database: '{database_name}'. "
+                f"Available databases: {available}"
+            )
+
+        logger.debug(f"Retrieved Access database connection: {database_name}")
+        return self._connections[database_name]
+
+    def list_databases(self) -> list[str]:
+        """
+        List all available Access database connection names.
+
+        Returns:
+            List of Access database connection names
+        """
+        return list(self._connections.keys())
+
+    def close_all(self) -> None:
+        """Close all Access database connections."""
+        for name, connection in self._connections.items():
+            try:
+                connection.close()
+                logger.debug(f"Closed Access connection: {name}")
+            except Exception as e:
+                logger.warning(f"Error closing Access connection '{name}': {e}")
+
+        self._connections.clear()
+        logger.info("All Access database connections closed")

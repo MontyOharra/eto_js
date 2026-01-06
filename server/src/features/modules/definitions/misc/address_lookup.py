@@ -126,7 +126,7 @@ class AddressLookup(MiscModule):
             from shared.services.service_container import ServiceContainer
 
             if ServiceContainer.is_initialized():
-                access_db_manager = ServiceContainer._access_database_manager
+                access_db_manager = ServiceContainer._access_connection_manager
                 if access_db_manager:
                     available_connections = access_db_manager.list_databases()
                 else:

@@ -216,9 +216,9 @@ async def execute_pipeline(
     ```
     """
     # Get execution service
-    from src.features.pipeline_execution.service import PipelineExecutionService
+    from features.pipeline_execution.service import PipelineExecutionService
     execution_service = PipelineExecutionService(
-        connection_manager=ServiceContainer.get_connection_manager(),
+        connection_manager=ServiceContainer.get_main_connection(),
         services=ServiceContainer
     )
 
