@@ -208,9 +208,9 @@ Track file-by-file cleanup progress for the server codebase.
 - [ ] `shared/logging.py`
 
 #### shared/config/
-- [ ] `shared/config/__init__.py`
-- [ ] `shared/config/database.py`
-- [ ] `shared/config/storage.py`
+- [x] `shared/config/__init__.py`
+- [x] `shared/config/database.py`
+- [x] `shared/config/storage.py`
 
 #### shared/database/
 - [ ] `shared/database/__init__.py`

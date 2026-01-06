@@ -1,9 +1,9 @@
 """
 Storage configuration for PDF files and other file storage needs
 """
+import logging
+import os
 from dataclasses import dataclass
-
-import os, logging
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ def get_storage_configuration() -> str:
     # Priority 2: Project-relative default
     # Find the eto_server directory (where main.py is located)
     current_file = os.path.abspath(__file__)
-    # Navigate: storage_config.py -> utils -> shared -> src -> eto_server
+    # Navigate: storage.py -> config -> shared -> src -> server
     eto_server_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(current_file))))
     default_path = os.path.join(eto_server_dir, 'storage')
 

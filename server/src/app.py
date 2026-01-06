@@ -22,7 +22,7 @@ from shared.database.connection import DatabaseConnectionManager
 from shared.database.access_connection import AccessConnectionManager
 from shared.services.service_container import ServiceContainer
 from shared.config.storage import get_storage_configuration
-from shared.config.database import DatabaseConfig
+from shared.config.database import load_database_connections
 from shared.exceptions.service import ObjectNotFoundError, ConflictError, ValidationError, ServiceError
 
 logger = logging.getLogger(__name__)
@@ -204,24 +204,24 @@ async def initialize_database_connection() -> None:
 
     try:
         logger.debug("Loading database configuration...")
-        db_config = DatabaseConfig.from_environment()
+        db_connections = load_database_connections()
         logger.info("Database configuration loaded successfully")
 
         # Initialize all configured connections
         _connection_managers = {}
 
-        for conn_name, conn_config in db_config.get_all_connections().items():
-            logger.debug(f"Initializing '{conn_name}' database connection (type: {conn_config.connection_type})...")
+        for conn_name, conn_info in db_connections.items():
+            logger.debug(f"Initializing '{conn_name}' database connection (type: {conn_info.connection_type})...")
 
             # Create appropriate connection manager based on type
-            if conn_config.connection_type == "access":
+            if conn_info.connection_type == "access":
                 # Use Access-specific connection manager
-                manager = AccessConnectionManager(conn_config.connection_string)
+                manager = AccessConnectionManager(conn_info.connection_string)
                 manager.initialize_connection()
                 logger.info(f"Access database connection '{conn_name}' established and verified")
             else:
                 # Use SQLAlchemy-based connection manager (default)
-                manager = init_database_connection(conn_config.connection_string)
+                manager = init_database_connection(conn_info.connection_string)
                 logger.info(f"Database connection '{conn_name}' established and verified")
 
             _connection_managers[conn_name] = manager

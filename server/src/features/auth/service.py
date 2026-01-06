@@ -38,7 +38,7 @@ class AuthService:
     """
 
     # Database name (auto-discovered from HTC_000_DATA_STAFF_CONNECTION_STRING env var)
-    DATABASE_NAME = "htc_000_data_staff"
+    DATABASE_NAME = "htc_000"
 
     def __init__(
         self,
