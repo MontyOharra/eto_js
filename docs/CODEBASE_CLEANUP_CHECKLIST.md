@@ -20,7 +20,7 @@ Track file-by-file cleanup progress for the server codebase.
 
 ## server/src/
 
-- [ ] `__init__.py`
+- [x] `__init__.py`
 - [ ] `app.py`
 
 ### api/
@@ -204,8 +204,8 @@ Track file-by-file cleanup progress for the server codebase.
 
 ### shared/
 
-- [ ] `shared/__init__.py`
-- [ ] `shared/logging.py`
+- [x] `shared/__init__.py`
+- [x] `shared/logging.py`
 
 #### shared/config/
 - [x] `shared/config/__init__.py`

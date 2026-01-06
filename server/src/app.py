@@ -2,10 +2,9 @@
 Transformation Pipeline Server - FastAPI Application
 Node-based pipeline system with Dask execution
 """
-import os
 import logging
+import os
 import sys
-from typing import Dict, Any
 
 # Add src directory to path BEFORE any local imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -17,6 +16,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError, HTTPException as FastAPIHTTPException
 
+from shared.logging import configure_logging
 from shared.database import init_database_connection
 from shared.database.connection import DatabaseConnectionManager
 from shared.database.access_connection import AccessConnectionManager
@@ -41,161 +41,6 @@ class DatabaseConnectionError(Exception):
 class ServiceInitializationError(Exception):
     """Raised when services cannot be initialized"""
     pass
-
-
-def get_log_level() -> int:
-    """Get logging level from environment variable"""
-    log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
-    level_mapping = {
-        'DEBUG': logging.DEBUG,
-        'INFO': logging.INFO,
-        'WARNING': logging.WARNING,
-        'ERROR': logging.ERROR,
-        'CRITICAL': logging.CRITICAL,
-        'TRACE': 5,  # Custom level below DEBUG for very verbose tracing
-        'MONITOR': 7  # Custom level for monitoring loops (between TRACE and DEBUG)
-    }
-    return level_mapping.get(log_level, logging.INFO)
-
-
-def setup_custom_log_levels():
-    """Setup custom logging levels using MonitorLogger class"""
-    from shared.logging import setup_logger_class
-    setup_logger_class()
-
-
-class ColoredFormatter(logging.Formatter):
-    """Custom formatter with color support for different log levels and automatic traceback inclusion"""
-
-    # ANSI color codes
-    COLORS = {
-        'TRACE': '\033[37m',      # Light gray
-        'MONITOR': '\033[90m',    # Dark gray
-        'DEBUG': '\033[90m',      # Gray
-        'INFO': '\033[94m',       # Blue
-        'WARNING': '\033[93m',    # Yellow
-        'ERROR': '\033[91m',      # Red
-        'CRITICAL': '\033[91m',   # Red
-        'RESET': '\033[0m'        # Reset
-    }
-
-    def __init__(self, fmt=None, datefmt=None, use_colors=True, include_traceback_on_error=True):
-        super().__init__(fmt, datefmt)
-        self.use_colors = use_colors
-        self.include_traceback_on_error = include_traceback_on_error
-
-    def format(self, record):
-        # Automatically add exc_info for ERROR and CRITICAL levels if an exception is present
-        if self.include_traceback_on_error and record.levelno >= logging.ERROR:
-            # Check if there's an exception available but exc_info wasn't explicitly set
-            if not record.exc_info and hasattr(record, 'exc_text') and record.exc_text is None:
-                # Try to get the current exception from sys
-                import sys
-                if sys.exc_info()[0] is not None:
-                    record.exc_info = sys.exc_info()
-
-        if self.use_colors:
-            # Get color for this log level
-            color = self.COLORS.get(record.levelname, self.COLORS['RESET'])
-            reset = self.COLORS['RESET']
-
-            # Format the message normally first (this will include traceback if exc_info is set)
-            formatted = super().format(record)
-
-            # Check if the formatted message contains the separator between header and content
-            if ':\n    ' in formatted:
-                # Split at the separator to color only the header
-                header, content = formatted.split(':\n    ', 1)
-                return f"{color}{header}{reset}:\n    {content}"
-            else:
-                # If no separator, color the entire message (for simple logs)
-                return f"{color}{formatted}{reset}"
-        else:
-            return super().format(record)
-
-
-def configure_logging():
-    """Configure comprehensive logging for the application"""
-    setup_custom_log_levels()
-
-    # Get logging configuration from environment
-    log_level = get_log_level()
-    log_format = os.getenv('LOG_FORMAT',
-         '\n%(asctime)s | %(levelname)s | %(name)s - line %(lineno)s:\n    %(message)s\n'
-    )
-    date_format = os.getenv('LOG_DATE_FORMAT', '%Y-%m-%d %H:%M:%S')
-    use_colors = os.getenv('LOG_COLORS', 'true').lower() == 'true'
-    include_traceback = os.getenv('LOG_TRACEBACKS', 'true').lower() == 'true'
-
-    # Create logs directory if it doesn't exist
-    logs_dir = os.getenv('LOGS_DIR', 'logs')
-    os.makedirs(logs_dir, exist_ok=True)
-
-    # Configure root logger
-    root_logger = logging.getLogger()
-    root_logger.setLevel(log_level)
-
-    # Remove existing handlers to avoid duplicates
-    for handler in root_logger.handlers[:]:
-        root_logger.removeHandler(handler)
-
-    # Console handler with colors
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(log_level)
-    console_formatter = ColoredFormatter(
-        fmt=log_format,
-        datefmt=date_format,
-        use_colors=use_colors,
-        include_traceback_on_error=include_traceback
-    )
-    console_handler.setFormatter(console_formatter)
-    root_logger.addHandler(console_handler)
-
-    # File handler (always without colors, but with tracebacks)
-    log_file = os.path.join(logs_dir, 'app.log')
-    file_handler = logging.FileHandler(log_file, encoding='utf-8')
-    file_handler.setLevel(log_level)
-    file_formatter = ColoredFormatter(
-        fmt=log_format,
-        datefmt=date_format,
-        use_colors=False,
-        include_traceback_on_error=include_traceback
-    )
-    file_handler.setFormatter(file_formatter)
-    root_logger.addHandler(file_handler)
-
-    # Reduce noise from external libraries
-    logging.getLogger('urllib3').setLevel(logging.WARNING)
-    logging.getLogger('requests').setLevel(logging.WARNING)
-    logging.getLogger('uvicorn').setLevel(logging.INFO)
-    logging.getLogger('uvicorn.access').setLevel(logging.INFO)
-    logging.getLogger('fastapi').setLevel(logging.INFO)
-
-    third_party_loggers = [
-        'pdfminer',
-        'pdfminer.cmapdb',
-        'pdfminer.pdfparser',
-        'pdfminer.pdfdocument',
-        'pdfminer.pdfinterp',
-        'pdfminer.converter',
-        'pdfminer.layout',
-        'urllib3',
-        'requests',
-        'matplotlib',
-        'PIL'
-    ]
-
-    third_party_level = os.getenv('THIRD_PARTY_LOG_LEVEL', 'WARNING').upper()
-    third_party_log_level = logging.getLevelName(third_party_level)
-    if isinstance(third_party_log_level, int):
-        for logger_name in third_party_loggers:
-            logging.getLogger(logger_name).setLevel(third_party_log_level)
-
-    logger.info("Logging configured successfully")
-    logger.info(f"Log level: {logging.getLevelName(log_level)}")
-    logger.info(f"Console colors: {use_colors}")
-    logger.info(f"Full tracebacks: {include_traceback}")
-    logger.info(f"Log file: {log_file}")
 
 
 async def initialize_database_connection() -> None:
