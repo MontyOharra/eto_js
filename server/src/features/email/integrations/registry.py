@@ -4,7 +4,7 @@ Registry pattern for managing email provider integrations
 Replaces factory pattern with self-registering providers
 """
 import logging
-from typing import Type, Optional
+from typing import Type
 
 from .base_integration import BaseEmailIntegration
 
@@ -37,7 +37,7 @@ class IntegrationRegistry:
     """
 
     # Class-level registry mapping provider_type -> integration class
-    _integrations: dict[str, Type] = {}
+    _integrations: dict[str, Type[BaseEmailIntegration]] = {}
 
     # Provider metadata for discovery and UI
     _metadata: dict[str, dict] = {}
@@ -85,7 +85,7 @@ class IntegrationRegistry:
         return decorator
 
     @classmethod
-    def create(cls, provider_type: str, **config) -> 'BaseEmailIntegration':
+    def create(cls, provider_type: str, **config) -> BaseEmailIntegration:
         """
         Create an integration instance by provider type.
 
@@ -160,7 +160,7 @@ class IntegrationRegistry:
         return provider_type in cls._integrations
 
     @classmethod
-    def get_provider_metadata(cls, provider_type: str) -> Optional[dict]:
+    def get_provider_metadata(cls, provider_type: str) -> dict | None:
         """
         Get metadata for a specific provider.
 

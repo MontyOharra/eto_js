@@ -78,7 +78,7 @@ Track file-by-file cleanup progress for the server codebase.
 ##### features/email/integrations/
 - [ ] `features/email/integrations/__init__.py`
 - [x] `features/email/integrations/base_integration.py`
-- [ ] `features/email/integrations/registry.py`
+- [x] `features/email/integrations/registry.py`
 - [ ] `features/email/integrations/standard_integration.py`
 
 ##### features/email/utils/
@@ -291,5 +291,5 @@ Track file-by-file cleanup progress for the server codebase.
 ## Progress Summary
 
 - **Total files:** 174
-- **Completed:** 7
-- **Remaining:** 167
+- **Completed:** 8
+- **Remaining:** 166
