@@ -59,18 +59,19 @@ def apply_filter_rules(
                 )
                 continue
 
-        if email_passes:
+        if email_passes and matched_rule:
             filtered_emails.append(email)
+            subject_preview = email.subject[:40] + ('...' if len(email.subject) > 40 else '')
             logger.info(
                 f"[{config_context}] PASSED: UID {email.uid} from '{email.sender_email}' "
-                f"subject='{email.subject[:40]}{'...' if len(email.subject) > 40 else ''}' "
-                f"- matched rule: {matched_rule.field} {matched_rule.operation} '{matched_rule.value}'" if matched_rule else ""
+                f"subject='{subject_preview}' "
+                f"- matched rule: {matched_rule.field} {matched_rule.operation} '{matched_rule.value}'"
             )
         else:
+            subject_preview = email.subject[:40] + ('...' if len(email.subject) > 40 else '')
             logger.info(
                 f"[{config_context}] FILTERED OUT: UID {email.uid} from '{email.sender_email}' "
-                f"subject='{email.subject[:40]}{'...' if len(email.subject) > 40 else ''}' "
-                f"- no rules matched"
+                f"subject='{subject_preview}' - no rules matched"
             )
 
     logger.info(
