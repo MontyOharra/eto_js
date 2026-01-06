@@ -18,11 +18,6 @@ from api.schemas.email_accounts import (
     SendEmailRequest,
     SendEmailResponse,
 )
-from api.mappers.email_accounts import (
-    email_account_list_to_api,
-    provider_settings_to_domain,
-    credentials_to_domain,
-)
 from shared.services.service_container import ServiceContainer
 from features.email.service import EmailService
 from shared.exceptions.service import ObjectNotFoundError, ValidationError, ConflictError
@@ -47,8 +42,8 @@ async def validate_connection(
     result = service.validate_connection(
         provider_type=request.provider_type,
         email_address=request.email_address,
-        provider_settings=provider_settings_to_domain(request.provider_settings),
-        credentials=credentials_to_domain(request.credentials),
+        provider_settings=request.provider_settings,
+        credentials=request.credentials,
     )
     return result
 
@@ -71,7 +66,7 @@ async def list_accounts(
         desc=desc,
         validated_only=validated_only,
     )
-    return email_account_list_to_api(summaries)
+    return EmailAccountListResponse(accounts=summaries, total=len(summaries))
 
 
 @router.get(
