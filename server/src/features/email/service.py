@@ -20,6 +20,7 @@ from shared.types.email_accounts import (
     EmailAccountSummary,
     EmailAccountCreate,
     EmailAccountUpdate,
+    ProviderType,
     ProviderSettings,
     Credentials,
     StandardProviderSettings,
@@ -274,7 +275,7 @@ class EmailService:
 
     def validate_connection(
         self,
-        provider_type: str,
+        provider_type: ProviderType,
         email_address: str,
         provider_settings: ProviderSettings,
         credentials: Credentials,
@@ -311,7 +312,7 @@ class EmailService:
 
     def _build_validation_params(
         self,
-        provider_type: str,
+        provider_type: ProviderType,
         email_address: str,
         provider_settings: ProviderSettings,
         credentials: Credentials,

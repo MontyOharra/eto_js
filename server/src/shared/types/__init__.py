@@ -2,6 +2,7 @@
 
 # Email account types
 from shared.types.email_accounts import (
+    ProviderType,
     StandardProviderSettings,
     ProviderSettings,
     PasswordCredentials,
@@ -102,6 +103,7 @@ from shared.types.pending_orders import (
 
 __all__ = [
     # Email accounts
+    "ProviderType",
     "StandardProviderSettings",
     "ProviderSettings",
     "PasswordCredentials",

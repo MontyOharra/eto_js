@@ -7,6 +7,9 @@ Pydantic models for email account API requests and responses.
 from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
+# Provider type literal - must match shared/types/email_accounts.ProviderType
+ProviderType = Literal["standard"]
+
 
 # ========== Provider Settings ==========
 
@@ -55,7 +58,7 @@ CredentialsSchema = PasswordCredentialsSchema | OAuthCredentialsSchema
 
 class ValidateConnectionRequest(BaseModel):
     """Request to test email connection"""
-    provider_type: str = Field(..., description="Provider type (standard, gmail_api, etc.)")
+    provider_type: ProviderType = Field(..., description="Provider type")
     email_address: str = Field(..., description="Email address")
     provider_settings: StandardProviderSettingsSchema = Field(..., description="Provider connection settings")
     credentials: PasswordCredentialsSchema = Field(..., description="Authentication credentials")
@@ -75,7 +78,7 @@ class CreateEmailAccountRequest(BaseModel):
     """Request to create a new email account"""
     name: str = Field(..., description="Display name for the account")
     description: Optional[str] = Field(None, description="Optional description")
-    provider_type: str = Field(..., description="Provider type (standard, gmail_api, etc.)")
+    provider_type: ProviderType = Field(..., description="Provider type")
     email_address: str = Field(..., description="Email address")
     provider_settings: StandardProviderSettingsSchema = Field(..., description="Provider connection settings")
     credentials: PasswordCredentialsSchema = Field(..., description="Authentication credentials")
@@ -98,7 +101,7 @@ class EmailAccountSummaryResponse(BaseModel):
     id: int
     name: str
     email_address: str
-    provider_type: str
+    provider_type: ProviderType
     is_validated: bool
     capabilities: list[str]
 
@@ -108,7 +111,7 @@ class EmailAccountResponse(BaseModel):
     id: int
     name: str
     description: Optional[str]
-    provider_type: str
+    provider_type: ProviderType
     email_address: str
     provider_settings: StandardProviderSettingsSchema
     is_validated: bool

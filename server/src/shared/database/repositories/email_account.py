@@ -14,11 +14,11 @@ from shared.types.email_accounts import (
     EmailAccountSummary,
     EmailAccountCreate,
     EmailAccountUpdate,
+    ProviderType,
     ProviderSettings,
     StandardProviderSettings,
     Credentials,
     PasswordCredentials,
-    OAuthCredentials,
 )
 from shared.exceptions.service import ObjectNotFoundError
 
@@ -52,16 +52,13 @@ class EmailAccountRepository(BaseRepository[EmailAccountModel]):
         }
         return json.dumps(settings_dict)
 
-    def _provider_settings_from_json(self, settings_json: str, provider_type: str) -> ProviderSettings:
+    def _provider_settings_from_json(self, settings_json: str, provider_type: ProviderType) -> ProviderSettings:
         """Convert JSON string to provider settings dataclass"""
         settings_dict = json.loads(settings_json)
         data = settings_dict.get('data', settings_dict)  # Handle both formats
 
         if provider_type == 'standard':
             return StandardProviderSettings(**data)
-
-        # Default fallback
-        return StandardProviderSettings(**data)
 
     def _credentials_to_json(self, credentials: Credentials) -> str:
         """Convert credentials dataclass to JSON string"""
@@ -72,12 +69,6 @@ class EmailAccountRepository(BaseRepository[EmailAccountModel]):
 
         if isinstance(credentials, PasswordCredentials):
             creds_dict['data'] = {'password': credentials.password}
-        elif isinstance(credentials, OAuthCredentials):
-            creds_dict['data'] = {
-                'access_token': credentials.access_token,
-                'refresh_token': credentials.refresh_token,
-                'token_expiry': credentials.token_expiry.isoformat() if credentials.token_expiry else None,
-            }
 
         return json.dumps(creds_dict)
 
@@ -87,30 +78,7 @@ class EmailAccountRepository(BaseRepository[EmailAccountModel]):
         creds_type = creds_dict.get('type', 'PasswordCredentials')
         data = creds_dict.get('data', creds_dict)
 
-        if creds_type == 'OAuthCredentials':
-            token_expiry = None
-            if data.get('token_expiry'):
-                token_expiry = datetime.fromisoformat(data['token_expiry'])
-            return OAuthCredentials(
-                access_token=data['access_token'],
-                refresh_token=data.get('refresh_token'),
-                token_expiry=token_expiry,
-            )
-        else:
-            # Default to password credentials
-            return PasswordCredentials(password=data.get('password', ''))
-
-    def _capabilities_to_json(self, capabilities: list[str] | None) -> str | None:
-        """Convert capabilities list to JSON string"""
-        if not capabilities:
-            return None
-        return json.dumps(capabilities)
-
-    def _capabilities_from_json(self, capabilities_json: str | None) -> list[str]:
-        """Convert JSON string to capabilities list"""
-        if not capabilities_json:
-            return []
-        return json.loads(capabilities_json)
+        return PasswordCredentials(password=data.get('password', ''))
 
     def _model_to_dataclass(self, model: EmailAccountModel) -> EmailAccount:
         """Convert ORM model to EmailAccount dataclass"""
@@ -124,7 +92,6 @@ class EmailAccountRepository(BaseRepository[EmailAccountModel]):
             credentials=self._credentials_from_json(model.credentials),
             is_validated=model.is_validated,
             validated_at=model.validated_at,
-            capabilities=self._capabilities_from_json(model.capabilities),
             last_error_message=model.last_error_message,
             last_error_at=model.last_error_at,
             created_at=model.created_at,
@@ -139,7 +106,6 @@ class EmailAccountRepository(BaseRepository[EmailAccountModel]):
             email_address=model.email_address,
             provider_type=model.provider_type,
             is_validated=model.is_validated,
-            capabilities=self._capabilities_from_json(model.capabilities),
         )
 
     # ========== Public Repository Methods ==========
@@ -239,7 +205,6 @@ class EmailAccountRepository(BaseRepository[EmailAccountModel]):
                 credentials=self._credentials_to_json(account_data.credentials),
                 is_validated=False,
                 validated_at=None,
-                capabilities=None,
                 last_error_message=None,
                 last_error_at=None,
             )
@@ -290,17 +255,11 @@ class EmailAccountRepository(BaseRepository[EmailAccountModel]):
             if account_update.validated_at is not None:
                 model.validated_at = account_update.validated_at
 
-            if account_update.capabilities is not None:
-                model.capabilities = self._capabilities_to_json(account_update.capabilities)
-
-            if account_update.clear_errors:
-                model.last_error_message = None
-                model.last_error_at = None
-            else:
-                if account_update.last_error_message is not None:
-                    model.last_error_message = account_update.last_error_message
-                if account_update.last_error_at is not None:
-                    model.last_error_at = account_update.last_error_at
+            if account_update.last_error_message is not None:
+                model.last_error_message = account_update.last_error_message
+                
+            if account_update.last_error_at is not None:
+                model.last_error_at = account_update.last_error_at
 
             session.flush()
 

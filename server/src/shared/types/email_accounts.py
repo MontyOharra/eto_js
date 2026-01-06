@@ -8,6 +8,14 @@ shared across multiple ingestion listeners and sending configs.
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Literal
+
+
+# =========================
+# Provider Type
+# =========================
+
+ProviderType = Literal["standard"]
 
 
 # =========================
@@ -47,18 +55,8 @@ class PasswordCredentials:
     """Simple username/password credentials"""
     password: str
 
-
-@dataclass(frozen=True)
-class OAuthCredentials:
-    """OAuth token credentials (for Gmail API, etc.)"""
-    access_token: str
-    refresh_token: str | None = None
-    token_expiry: datetime | None = None
-
-
 # Union type for all credential types
-Credentials = PasswordCredentials | OAuthCredentials
-
+Credentials = PasswordCredentials
 
 # =========================
 # Email Account (full record)
@@ -73,7 +71,7 @@ class EmailAccount:
     id: int
     name: str
     description: str | None
-    provider_type: str  # "imap", "gmail_api", "outlook_com"
+    provider_type: ProviderType
     email_address: str
     provider_settings: ProviderSettings
     credentials: Credentials
@@ -94,7 +92,7 @@ class EmailAccountSummary:
     id: int
     name: str
     email_address: str
-    provider_type: str
+    provider_type: ProviderType
     is_validated: bool
 
 
@@ -106,7 +104,7 @@ class EmailAccountSummary:
 class EmailAccountCreate:
     """Data for creating a new email account"""
     name: str
-    provider_type: str
+    provider_type: ProviderType
     email_address: str
     provider_settings: ProviderSettings
     credentials: Credentials

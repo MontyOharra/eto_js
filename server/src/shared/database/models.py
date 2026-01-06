@@ -78,6 +78,15 @@ ETO_OUTPUT_STATUS = SAEnum(
 )
 
 
+# Email provider type enum
+EMAIL_PROVIDER_TYPE = SAEnum(
+    'standard',
+    name='email_provider_type',
+    native_enum=False,
+    validate_strings=True
+)
+
+
 # =========================
 # email_accounts (credentials storage)
 # =========================
@@ -97,22 +106,17 @@ class EmailAccountModel(BaseModel):
     description: Mapped[Optional[str]] = mapped_column(Text)
 
     # Provider info
-    provider_type: Mapped[str] = mapped_column(String(50), nullable=False)  # "imap", "gmail_api", "outlook_com"
+    provider_type: Mapped[str] = mapped_column(EMAIL_PROVIDER_TYPE, nullable=False)
     email_address: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
 
     # Connection settings (JSON) - host, port, use_ssl, etc. (excludes credentials)
     provider_settings: Mapped[str] = mapped_column(Text, nullable=False)
 
-    # Credentials (JSON) - password, oauth_token, refresh_token, etc.
-    # TODO: Encrypt this field in future
     credentials: Mapped[str] = mapped_column(Text, nullable=False)
 
     # Validation status
     is_validated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     validated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
-
-    # Discovered capabilities (JSON array) - ["IDLE", "UIDPLUS"]
-    capabilities: Mapped[Optional[str]] = mapped_column(Text)
 
     # Error tracking
     last_error_message: Mapped[Optional[str]] = mapped_column(Text)

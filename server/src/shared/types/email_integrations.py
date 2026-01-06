@@ -46,11 +46,10 @@ class ValidationResult:
     Result of credential validation.
 
     Returned by validate_credentials() - contains success status,
-    message, and any discovered capabilities.
+    message.
     """
     success: bool
     message: str
-    capabilities: list[str] = field(default_factory=list)
     folder_count: int | None = None
 
 
