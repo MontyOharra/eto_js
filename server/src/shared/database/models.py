@@ -16,6 +16,7 @@ from sqlalchemy.orm import DeclarativeBase, relationship, Mapped, mapped_column
 from sqlalchemy.sql import func
 from sqlalchemy import Enum as SAEnum
 
+from shared.types.email_account
 
 class BaseModel(DeclarativeBase):
     """Base class for all table models. Used by create_all() to create tables."""
