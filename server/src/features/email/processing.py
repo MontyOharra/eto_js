@@ -14,7 +14,8 @@ from datetime import datetime
 from shared.database.repositories.email import EmailRepository
 from shared.types.email import EmailCreate
 from shared.types.email_ingestion_configs import EmailIngestionConfig
-from features.email.integrations.base_integration import BaseEmailIntegration, EmailMessage
+from features.email.integrations.base_integration import BaseEmailIntegration
+from shared.types.email_integrations import EmailMessage
 from features.pdf_files.service import PdfFilesService
 from features.eto_runs.service import EtoRunsService
 

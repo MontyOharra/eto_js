@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Callable
 from shared.database.repositories.email import EmailRepository
 from shared.types.email_ingestion_configs import EmailIngestionConfig
 from shared.exceptions import PermanentEmailError, TransientEmailError
-from features.email.integrations.base_integration import EmailMessage
+from shared.types.email_integrations import EmailMessage
 from features.email.utils.filter_rules import apply_filter_rules
 from features.email.utils.deduplication import filter_duplicate_emails
 

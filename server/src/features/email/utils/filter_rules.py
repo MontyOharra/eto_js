@@ -9,7 +9,7 @@ import logging
 from datetime import datetime
 
 from shared.types.email_ingestion_configs import FilterRule
-from features.email.integrations.base_integration import EmailMessage
+from shared.types.email_integrations import EmailMessage
 
 logger = logging.getLogger(__name__)
 

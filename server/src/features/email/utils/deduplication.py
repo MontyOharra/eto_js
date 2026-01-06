@@ -7,7 +7,7 @@ Uses Message-ID for deduplication - same Message-ID on same account = same email
 import logging
 
 from shared.database.repositories.email import EmailRepository
-from features.email.integrations.base_integration import EmailMessage
+from shared.types.email_integrations import EmailMessage
 
 logger = logging.getLogger(__name__)
 

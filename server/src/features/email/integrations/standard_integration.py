@@ -17,7 +17,8 @@ import time
 from datetime import datetime, timezone
 from typing import Optional
 
-from .base_integration import BaseEmailIntegration, EmailMessage, EmailAttachment, ValidationResult, SendEmailResult
+from .base_integration import BaseEmailIntegration
+from shared.types.email_integrations import EmailMessage, EmailAttachment, ValidationResult, SendEmailResult
 from .registry import IntegrationRegistry
 from shared.exceptions import PermanentEmailError, TransientEmailError
 

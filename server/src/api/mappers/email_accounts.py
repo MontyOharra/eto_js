@@ -15,7 +15,7 @@ from shared.types.email_accounts import (
     OAuthCredentials,
     Credentials,
 )
-from features.email.integrations.base_integration import ValidationResult
+from shared.types.email_integrations import ValidationResult
 from api.schemas.email_accounts import (
     EmailAccountResponse,
     EmailAccountSummaryResponse,

@@ -35,8 +35,8 @@ from shared.types.email_ingestion_configs import (
 from shared.exceptions.service import ObjectNotFoundError, ValidationError, ConflictError
 
 from features.email.integrations import IntegrationRegistry
-from features.email.integrations.base_integration import (
-    BaseEmailIntegration,
+from features.email.integrations.base_integration import BaseEmailIntegration
+from shared.types.email_integrations import (
     EmailMessage,
     ValidationResult,
     SendEmailResult,

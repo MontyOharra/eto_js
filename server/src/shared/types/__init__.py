@@ -5,7 +5,6 @@ from shared.types.email_accounts import (
     StandardProviderSettings,
     ProviderSettings,
     PasswordCredentials,
-    OAuthCredentials,
     Credentials,
     EmailAccount,
     EmailAccountSummary,
@@ -32,10 +31,10 @@ from shared.types.email import (
 
 # Email integration types (transient dataclasses from integrations)
 from shared.types.email_integrations import (
-    EmailAccountInfo,
-    EmailFolder,
     EmailMessage,
-    ConnectionTestResult,
+    EmailAttachment,
+    ValidationResult,
+    SendEmailResult,
 )
 
 # PDF files types
@@ -106,7 +105,6 @@ __all__ = [
     "StandardProviderSettings",
     "ProviderSettings",
     "PasswordCredentials",
-    "OAuthCredentials",
     "Credentials",
     "EmailAccount",
     "EmailAccountSummary",
@@ -124,10 +122,10 @@ __all__ = [
     "Email",
     "EmailCreate",
     # Email integrations (transient)
-    "EmailAccountInfo",
-    "EmailFolder",
     "EmailMessage",
-    "ConnectionTestResult",
+    "EmailAttachment",
+    "ValidationResult",
+    "SendEmailResult",
     # PDF files
     "PdfFile",
     "PdfFileCreate",
