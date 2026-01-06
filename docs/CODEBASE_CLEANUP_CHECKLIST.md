@@ -5,6 +5,9 @@ Track file-by-file cleanup progress for the server codebase.
 ## Requirements
 
 - Use Python 3.10+ typing syntax: `T | None` instead of `Optional[T]`, `list[T]` instead of `List[T]`, etc.
+- Use Pydantic models for domain types (shared/types/)
+- Reuse domain types in API schemas where possible (no duplicate definitions)
+- Remove unnecessary mapper files when API uses domain types directly
 
 ## Workflow
 
@@ -23,8 +26,8 @@ Track file-by-file cleanup progress for the server codebase.
 - [ ] `api/__init__.py`
 
 #### api/mappers/
-- [ ] `api/mappers/email_accounts.py`
-- [ ] `api/mappers/email_ingestion_configs.py`
+- [x] ~~`api/mappers/email_accounts.py`~~ (deleted - unnecessary)
+- [x] ~~`api/mappers/email_ingestion_configs.py`~~ (deleted - unnecessary)
 - [ ] `api/mappers/eto_runs.py`
 - [ ] `api/mappers/modules.py`
 - [ ] `api/mappers/order_management.py`
@@ -36,8 +39,8 @@ Track file-by-file cleanup progress for the server codebase.
 - [ ] `api/routers/__init__.py`
 - [ ] `api/routers/admin.py`
 - [ ] `api/routers/auth.py`
-- [ ] `api/routers/email_accounts.py`
-- [ ] `api/routers/email_ingestion_configs.py`
+- [x] `api/routers/email_accounts.py`
+- [x] `api/routers/email_ingestion_configs.py`
 - [ ] `api/routers/eto_runs.py`
 - [ ] `api/routers/modules.py`
 - [ ] `api/routers/order_management.py`
@@ -48,8 +51,8 @@ Track file-by-file cleanup progress for the server codebase.
 
 #### api/schemas/
 - [ ] `api/schemas/__init__.py`
-- [ ] `api/schemas/email_accounts.py`
-- [ ] `api/schemas/email_ingestion_configs.py`
+- [x] `api/schemas/email_accounts.py`
+- [x] `api/schemas/email_ingestion_configs.py`
 - [ ] `api/schemas/eto_runs.py`
 - [ ] `api/schemas/modules.py`
 - [ ] `api/schemas/order_management.py`
@@ -72,8 +75,8 @@ Track file-by-file cleanup progress for the server codebase.
 #### features/email/
 - [ ] `features/email/__init__.py`
 - [ ] `features/email/service.py`
-- [ ] `features/email/poller.py`
-- [ ] `features/email/processing.py`
+- [x] `features/email/poller.py`
+- [x] `features/email/processing.py`
 
 ##### features/email/integrations/
 - [ ] `features/email/integrations/__init__.py`
@@ -83,8 +86,8 @@ Track file-by-file cleanup progress for the server codebase.
 
 ##### features/email/utils/
 - [ ] `features/email/utils/__init__.py`
-- [ ] `features/email/utils/deduplication.py`
-- [ ] `features/email/utils/filter_rules.py`
+- [x] `features/email/utils/deduplication.py`
+- [x] `features/email/utils/filter_rules.py`
 
 #### features/eto_runs/
 - [ ] `features/eto_runs/__init__.py`
@@ -220,9 +223,9 @@ Track file-by-file cleanup progress for the server codebase.
 ##### shared/database/repositories/
 - [ ] `shared/database/repositories/__init__.py`
 - [ ] `shared/database/repositories/base.py`
-- [ ] `shared/database/repositories/email.py`
-- [ ] `shared/database/repositories/email_account.py`
-- [ ] `shared/database/repositories/email_ingestion_config.py`
+- [x] `shared/database/repositories/email.py`
+- [x] `shared/database/repositories/email_account.py`
+- [x] `shared/database/repositories/email_ingestion_config.py`
 - [ ] `shared/database/repositories/eto_run.py`
 - [ ] `shared/database/repositories/eto_sub_run.py`
 - [ ] `shared/database/repositories/eto_sub_run_extraction.py`
@@ -290,6 +293,6 @@ Track file-by-file cleanup progress for the server codebase.
 
 ## Progress Summary
 
-- **Total files:** 174
-- **Completed:** 9
-- **Remaining:** 165
+- **Total files:** 172 (2 deleted)
+- **Completed:** 21
+- **Remaining:** 151
