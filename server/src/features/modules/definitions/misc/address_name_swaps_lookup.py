@@ -87,14 +87,14 @@ class AddressNameSwapsLookup(MiscModule):
             inputs: Dictionary with address_name input
             cfg: Validated configuration
             context: Execution context with ordered inputs/outputs
-            services: DataDatabaseManager for database access
+            services: AccessDatabaseManager for database access
 
         Returns:
             Dictionary with location_name, address_string, and address_found outputs
         """
         # Validate services
         if services is None:
-            raise ValueError("DataDatabaseManager services required for address_lookup")
+            raise ValueError("AccessDatabaseManager services required for address_lookup")
 
         # Get input
         input_node_id = list(inputs.keys())[0]

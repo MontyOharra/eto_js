@@ -60,7 +60,7 @@ class PdfTemplateService:
         pipeline_service: 'PipelineService',
         pdf_files_service: 'PdfFilesService',
         pipeline_execution_service: PipelineExecutionService,
-        data_database_manager: Any = None
+        access_database_manager: Any = None
     ) -> None:
         """
         Initialize PDF template service
@@ -70,10 +70,10 @@ class PdfTemplateService:
             pipeline_service: Pipeline service for pipeline operations
             pdf_files_service: PDF files service for text extraction
             pipeline_execution_service: Pipeline execution service for running pipelines
-            data_database_manager: DataDatabaseManager for business databases (Access DB)
+            access_database_manager: AccessDatabaseManager for Access databases
         """
         self.connection_manager = connection_manager
-        self.data_db_manager = data_database_manager
+        self.access_db_manager = access_database_manager
         self.template_repository = PdfTemplateRepository(connection_manager=connection_manager)
         self.version_repository = PdfTemplateVersionRepository(connection_manager=connection_manager)
         self.pipeline_repository = PipelineDefinitionRepository(connection_manager=connection_manager)
@@ -1378,12 +1378,12 @@ class PdfTemplateService:
         Raises:
             ServiceError: If database connection is not available or query fails
         """
-        if self.data_db_manager is None:
-            logger.warning("DataDatabaseManager not available - returning empty customer list")
+        if self.access_db_manager is None:
+            logger.warning("AccessDatabaseManager not available - returning empty customer list")
             return []
 
         try:
-            connection = self.data_db_manager.get_connection("htc_300")
+            connection = self.access_db_manager.get_connection("htc_300")
 
             sql = """
             SELECT CustomerID, Customer
@@ -1422,12 +1422,12 @@ class PdfTemplateService:
         Raises:
             ServiceError: If database connection fails
         """
-        if self.data_db_manager is None:
-            logger.warning("DataDatabaseManager not available - cannot get customer")
+        if self.access_db_manager is None:
+            logger.warning("AccessDatabaseManager not available - cannot get customer")
             return None
 
         try:
-            connection = self.data_db_manager.get_connection("htc_300")
+            connection = self.access_db_manager.get_connection("htc_300")
 
             sql = """
             SELECT CustomerID, Customer
@@ -1478,11 +1478,11 @@ class PdfTemplateService:
         Returns:
             Dictionary mapping customer_id -> customer_name
         """
-        if not customer_ids or self.data_db_manager is None:
+        if not customer_ids or self.access_db_manager is None:
             return {}
 
         try:
-            connection = self.data_db_manager.get_connection("htc_300")
+            connection = self.access_db_manager.get_connection("htc_300")
 
             # Build IN clause with placeholders
             placeholders = ",".join("?" * len(customer_ids))

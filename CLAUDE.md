@@ -40,6 +40,12 @@ If changes are **not** substantial, you may batch them until they are.
 
 ---
 
+## Code Standards
+
+- **Imports must be at top of file.** Do not place import statements inside functions or methods. Use `TYPE_CHECKING` blocks for type-only imports that would cause circular dependencies.
+
+---
+
 ## Destructive/Sensitive Operations
 
 - **NEVER delete files automatically.** Do **not** run `rm`, `del`, or equivalent without explicit user confirmation.

@@ -66,10 +66,10 @@ class NextOrderNumber(MiscModule):
             from shared.services.service_container import ServiceContainer
 
             if ServiceContainer.is_initialized():
-                # Get available business database connections (excludes 'main' system DB)
-                data_db_manager = ServiceContainer._data_database_manager
-                if data_db_manager:
-                    available_connections = data_db_manager.list_databases()
+                # Get available Access database connections (excludes 'main' SQL Server DB)
+                access_db_manager = ServiceContainer._access_database_manager
+                if access_db_manager:
+                    available_connections = access_db_manager.list_databases()
                 else:
                     available_connections = []
 
@@ -122,14 +122,14 @@ class NextOrderNumber(MiscModule):
             inputs: Dictionary (empty, no inputs)
             cfg: Validated configuration with database name
             context: Execution context with output node info
-            services: DatabaseManager for database access
+            services: AccessDatabaseManager for database access
 
         Returns:
             Dictionary with new order number
         """
         # Validate services
         if services is None:
-            raise ValueError("DatabaseManager services required for next_order_number")
+            raise ValueError("AccessDatabaseManager services required for next_order_number")
 
         # Hardcoded values (always 1, 1 for local system)
         CO_ID = 1

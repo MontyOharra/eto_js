@@ -3,10 +3,14 @@ Access Database Connection Management
 Handles Microsoft Access database connections using pyodbc
 Separate from SQLAlchemy-based connection manager due to Access limitations
 """
+from __future__ import annotations
+
 import logging
 import threading
-from typing import Any
 from contextlib import contextmanager
+from typing import Generator
+
+import pyodbc
 
 logger = logging.getLogger(__name__)
 
@@ -25,12 +29,9 @@ class AccessConnectionManager:
     - File-based database with potential locking issues
     - Single connection with thread safety
     - Direct SQL via cursor (no ORM)
-
-    Note: Requires Microsoft Access Database Engine or full Access installation
-    with matching bitness (32-bit vs 64-bit) to Python installation.
     """
 
-    def __init__(self, connection_string: str):
+    def __init__(self, connection_string: str) -> None:
         """
         Initialize connection manager with Access connection string.
 
@@ -45,13 +46,13 @@ class AccessConnectionManager:
             raise ValueError("Access connection string is required")
 
         self.connection_string = connection_string
-        self.connection: Any = None  # pyodbc.Connection
+        self.connection: pyodbc.Connection | None = None
         self._initialized = False
         self._lock = threading.Lock()
 
         logger.info(f"AccessConnectionManager initialized for: {self._safe_connection_info()}")
 
-    def initialize_connection(self):
+    def initialize_connection(self) -> None:
         """
         Initialize the Access database connection.
         Tests connectivity by attempting to connect and execute a simple query.
@@ -65,9 +66,7 @@ class AccessConnectionManager:
                 return
 
             try:
-                import pyodbc
-
-                logger.debug(f"Initializing Access database connection...")
+                logger.debug("Initializing Access database connection...")
 
                 # Create connection (no pooling for Access)
                 self.connection = pyodbc.connect(
@@ -77,7 +76,6 @@ class AccessConnectionManager:
                 )
 
                 # Test connection with a simple query
-                assert self.connection is not None
                 cursor = self.connection.cursor()
                 cursor.execute("SELECT 1")
                 cursor.close()
@@ -85,13 +83,8 @@ class AccessConnectionManager:
                 self._initialized = True
                 logger.info("Access database connection initialized successfully")
 
-            except ImportError:
-                error_msg = "pyodbc is not installed. Install it with: pip install pyodbc"
-                logger.error(error_msg)
-                raise AccessConnectionError(error_msg)
-
             except Exception as e:
-                error_msg = f"Failed to connect to Access database: {str(e)}"
+                error_msg = f"Failed to connect to Access database: {e}"
                 logger.error(error_msg)
 
                 # Provide helpful error messages for common issues
@@ -110,12 +103,12 @@ class AccessConnectionManager:
 
                 raise AccessConnectionError(error_msg) from e
 
-    def get_connection(self):
+    def get_connection(self) -> pyodbc.Connection:
         """
         Get the raw pyodbc connection object.
 
         Returns:
-            pyodbc.Connection: The active connection
+            The active pyodbc Connection
 
         Raises:
             AccessConnectionError: If not initialized or connection unavailable
@@ -125,13 +118,13 @@ class AccessConnectionManager:
                 "Connection not initialized. Call initialize_connection() first."
             )
 
-        if not self.connection:
+        if self.connection is None:
             raise AccessConnectionError("Connection not available")
 
         return self.connection
 
     @contextmanager
-    def cursor(self):
+    def cursor(self) -> Generator[pyodbc.Cursor, None, None]:
         """
         Create a cursor with automatic commit/rollback and thread safety.
 
@@ -149,7 +142,7 @@ class AccessConnectionManager:
                 # Auto-commits on success, auto-rolls back on exception
 
         Yields:
-            pyodbc.Cursor: Database cursor for executing queries
+            Database cursor for executing queries
 
         Raises:
             AccessConnectionError: If connection not initialized
@@ -159,7 +152,7 @@ class AccessConnectionManager:
                 "Connection not initialized. Call initialize_connection() first."
             )
 
-        if not self.connection:
+        if self.connection is None:
             raise AccessConnectionError("Connection not available")
 
         # Serialize all cursor operations to prevent concurrent access errors
@@ -181,7 +174,7 @@ class AccessConnectionManager:
         Test if Access database connection is working.
 
         Returns:
-            bool: True if connection test succeeds, False otherwise
+            True if connection test succeeds, False otherwise
         """
         try:
             if not self._initialized:
@@ -197,10 +190,10 @@ class AccessConnectionManager:
             logger.warning(f"Access connection test failed: {e}")
             return False
 
-    def close(self):
-        """Close Access database connection and cleanup"""
+    def close(self) -> None:
+        """Close Access database connection and cleanup."""
         with self._lock:
-            if self.connection:
+            if self.connection is not None:
                 try:
                     self.connection.close()
                     logger.info("Closed Access database connection")
@@ -215,7 +208,7 @@ class AccessConnectionManager:
         Return safe connection info for logging (masks sensitive data).
 
         Returns:
-            str: Safe connection info showing only database file path
+            Safe connection info showing only database file path
         """
         try:
             # Extract DBQ (database file path) from connection string
@@ -225,5 +218,5 @@ class AccessConnectionManager:
                     db_path = part.split('=', 1)[1]
                     return f"Access DB at {db_path}"
             return "Access database"
-        except:
+        except Exception:
             return "Access database"

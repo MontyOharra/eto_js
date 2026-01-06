@@ -128,10 +128,10 @@ class SqlLookup(MiscModule):
             from shared.services.service_container import ServiceContainer
 
             if ServiceContainer.is_initialized():
-                # Get available business database connections (excludes 'main' system DB)
-                data_db_manager = ServiceContainer._data_database_manager
-                if data_db_manager:
-                    available_connections = data_db_manager.list_databases()
+                # Get available Access database connections (excludes 'main' SQL Server DB)
+                access_db_manager = ServiceContainer._access_database_manager
+                if access_db_manager:
+                    available_connections = access_db_manager.list_databases()
                 else:
                     available_connections = []
 

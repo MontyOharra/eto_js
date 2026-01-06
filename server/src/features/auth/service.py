@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from shared.logging import get_logger
-from shared.database.data_database_manager import DataDatabaseManager
+from shared.database.access_database_manager import AccessDatabaseManager
 
 logger = get_logger(__name__)
 
@@ -42,20 +42,20 @@ class AuthService:
 
     def __init__(
         self,
-        data_database_manager: DataDatabaseManager,
+        access_database_manager: AccessDatabaseManager,
     ) -> None:
         """
         Initialize the auth service.
 
         Args:
-            data_database_manager: DataDatabaseManager for Access database access
+            access_database_manager: AccessDatabaseManager for Access database access
         """
         logger.debug("Initializing AuthService...")
-        self._data_database_manager = data_database_manager
+        self._access_database_manager = access_database_manager
 
     def _get_connection(self) -> Any:
         """Get database connection for staff database."""
-        return self._data_database_manager.get_connection(self.DATABASE_NAME)
+        return self._access_database_manager.get_connection(self.DATABASE_NAME)
 
     def attempt_auto_login(self, pc_name: str, pc_lid: str) -> Optional[AuthenticatedUser]:
         """

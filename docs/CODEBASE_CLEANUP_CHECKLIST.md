@@ -215,9 +215,9 @@ Track file-by-file cleanup progress for the server codebase.
 #### shared/database/
 - [ ] `shared/database/__init__.py`
 - [ ] `shared/database/connection.py`
-- [ ] `shared/database/access_connection.py`
-- [ ] `shared/database/data_database_manager.py`
-- [ ] `shared/database/database_manager.py`
+- [x] `shared/database/access_connection.py`
+- [x] `shared/database/access_database_manager.py` (renamed from data_database_manager.py)
+- [x] ~~`shared/database/database_manager.py`~~ (deleted - unused)
 - [ ] `shared/database/models.py`
 - [ ] `shared/database/unit_of_work.py`
 - [ ] `shared/database/views.py`
@@ -262,7 +262,7 @@ Track file-by-file cleanup progress for the server codebase.
 
 #### shared/services/
 - [ ] `shared/services/__init__.py`
-- [ ] `shared/services/database_connection_pool.py`
+- [x] ~~`shared/services/database_connection_pool.py`~~ (deleted - unused)
 - [ ] `shared/services/service_container.py`
 
 #### shared/types/

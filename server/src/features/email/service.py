@@ -15,6 +15,7 @@ from shared.database import DatabaseConnectionManager
 from shared.database.repositories.email_account import EmailAccountRepository
 from shared.database.repositories.email_ingestion_config import EmailIngestionConfigRepository
 from shared.database.repositories.email import EmailRepository
+
 from shared.types.email_accounts import (
     EmailAccount,
     EmailAccountSummary,
@@ -32,17 +33,19 @@ from shared.types.email_ingestion_configs import (
     EmailIngestionConfigCreate,
     EmailIngestionConfigUpdate,
 )
-from shared.exceptions.service import ObjectNotFoundError, ValidationError, ConflictError
-
-from features.email.integrations import IntegrationRegistry
-from features.email.integrations.base_integration import BaseEmailIntegration
 from shared.types.email_integrations import (
     EmailMessage,
     ValidationResult,
     SendEmailResult,
 )
+
+from shared.exceptions.service import ObjectNotFoundError, ValidationError, ConflictError
+
+from features.email.integrations import IntegrationRegistry
+from features.email.integrations.base_integration import BaseEmailIntegration
 from features.email.poller import PollerWorker
 from features.email.processing import EmailProcessingHandler
+
 from features.pdf_files.service import PdfFilesService
 from features.eto_runs.service import EtoRunsService
 

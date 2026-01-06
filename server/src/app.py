@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 # Global variables to store initialized database connections
 _connection_manager = None  # Primary 'main' connection
 _connection_managers = {}  # All named connections
-_database_manager = None  # DatabaseManager for multi-database access
+_database_manager = None  # AccessDatabaseManager for Access databases
 
 
 class DatabaseConnectionError(Exception):
@@ -76,17 +76,17 @@ async def initialize_database_connection() -> None:
         if not _connection_manager:
             raise DatabaseConnectionError("Primary 'main' database connection not configured")
 
-        # Create DataDatabaseManager for business/data databases only (excludes 'main')
-        # Pipeline modules should only access business data, never system metadata
-        from shared.database.data_database_manager import DataDatabaseManager
+        # Create AccessDatabaseManager for Access databases only (excludes 'main' SQL Server)
+        # Pipeline modules should only access Access business data, never SQL Server system metadata
+        from shared.database.access_database_manager import AccessDatabaseManager
 
-        business_databases = {
+        access_databases = {
             name: manager
             for name, manager in _connection_managers.items()
-            if name != 'main'  # Exclude meta/system database
+            if name != 'main'  # Exclude SQL Server system database
         }
-        _database_manager = DataDatabaseManager(business_databases)
-        logger.info(f"DataDatabaseManager created for pipeline modules with {len(business_databases)} business database(s)")
+        _database_manager = AccessDatabaseManager(access_databases)
+        logger.info(f"AccessDatabaseManager created for pipeline modules with {len(access_databases)} Access database(s)")
 
         logger.info(f"Initialized {len(_connection_managers)} database connection(s)")
 

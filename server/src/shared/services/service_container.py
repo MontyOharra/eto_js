@@ -62,7 +62,7 @@ class ServiceContainer:
     _service_definitions: Dict[str, Dict[str, Any]] = {}
     _connection_manager: Optional['DatabaseConnectionManager'] = None  # Primary 'main' connection (meta/system DB)
     _connection_managers: Dict[str, 'DatabaseConnectionManager'] = {}  # All named connections (includes 'main')
-    _data_database_manager: Optional[Any] = None  # DataDatabaseManager for business databases only (excludes 'main')
+    _access_database_manager: Optional[Any] = None  # AccessDatabaseManager for Access databases only (excludes 'main')
     _pdf_storage_path: Optional[str] = None
     _resolving: List[str] = []
 
@@ -77,7 +77,7 @@ class ServiceContainer:
             pdf_storage_path: Path for PDF file storage
             connection_managers: Optional dict of ALL database connection managers
                                  e.g., {'main': manager1, 'htc_db': manager2}
-            database_manager: DataDatabaseManager for business databases (excludes 'main')
+            database_manager: AccessDatabaseManager for Access databases (excludes 'main')
             **kwargs: Additional configuration parameters
         """
         if cls._initialized:
@@ -89,7 +89,7 @@ class ServiceContainer:
         # Store core dependencies
         cls._connection_manager = connection_manager  # Meta/system database (main)
         cls._pdf_storage_path = pdf_storage_path
-        cls._data_database_manager = database_manager  # Business databases only (for modules)
+        cls._access_database_manager = database_manager  # Access databases only (for modules)
 
         # Store all connection managers
         if connection_managers:
@@ -101,7 +101,7 @@ class ServiceContainer:
             logger.info("Registered single 'main' database connection")
 
         if database_manager:
-            logger.info("DataDatabaseManager registered for pipeline module access (business databases only)")
+            logger.info("AccessDatabaseManager registered for pipeline module access (Access databases only)")
 
         # Store any additional configuration
         for key, value in kwargs.items():
@@ -145,13 +145,13 @@ class ServiceContainer:
             },
             'pipeline_execution': {
                 'class': 'features.pipeline_execution.service.PipelineExecutionService',
-                'args': [cls._connection_manager, cls._data_database_manager],
+                'args': [cls._connection_manager, cls._access_database_manager],
                 'singleton': True,
                 'description': 'Pipeline execution service for running compiled pipelines'
             },
             'htc_integration': {
                 'class': 'features.htc_integration.service.HtcIntegrationService',
-                'args': [cls._data_database_manager, cls._connection_manager],
+                'args': [cls._access_database_manager, cls._connection_manager],
                 'singleton': True,
                 'description': 'HTC Access database integration service for order operations'
             },
@@ -169,13 +169,13 @@ class ServiceContainer:
             },
             'pipelines': {
                 'class': 'features.pipelines.service.PipelineService',
-                'args': [cls._connection_manager, '_service:pipeline_execution', '_service:modules', cls._data_database_manager],
+                'args': [cls._connection_manager, '_service:pipeline_execution', '_service:modules', cls._access_database_manager],
                 'singleton': True,
                 'description': 'Pipeline compilation and execution service'
             },
             'pdf_templates': {
                 'class': 'features.pdf_templates.service.PdfTemplateService',
-                'args': [cls._connection_manager, '_service:pipelines', '_service:pdf_files', '_service:pipeline_execution', cls._data_database_manager],
+                'args': [cls._connection_manager, '_service:pipelines', '_service:pdf_files', '_service:pipeline_execution', cls._access_database_manager],
                 'singleton': True,
                 'description': 'PDF template service with versioning and pipeline integration'
             },
@@ -187,7 +187,7 @@ class ServiceContainer:
             },
             'auth': {
                 'class': 'features.auth.service.AuthService',
-                'args': [cls._data_database_manager],
+                'args': [cls._access_database_manager],
                 'singleton': True,
                 'description': 'Authentication service for user login via HTC Staff database'
             },
