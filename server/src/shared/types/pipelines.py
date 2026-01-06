@@ -1,14 +1,16 @@
 """
 Pipeline Structure Types
-Core data structures for pipeline execution and visualization using dataclasses
+Core data structures for pipeline execution and visualization using Pydantic
 """
-from dataclasses import dataclass, field
-from typing import Dict, Any, List, Optional, TypeAlias
+from typing import Any, TypeAlias
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
-@dataclass(frozen=True)
-class NodeInstance:
+class NodeInstance(BaseModel):
     """Runtime instance of a pin in a module instance"""
+    model_config = ConfigDict(frozen=True)
+
     node_id: str
     type: str  # Selected type: "str", "int", "float", "bool", "datetime", etc.
     name: str
@@ -16,83 +18,90 @@ class NodeInstance:
     group_index: int  # Index of the NodeGroup in meta.io_shape.inputs.nodes or outputs.nodes
 
 
-@dataclass(frozen=True)
-class EntryPoint:
+class EntryPoint(BaseModel):
     """Entry point for pipeline - structured like a module with outputs"""
+    model_config = ConfigDict(frozen=True)
+
     entry_point_id: str
     name: str
-    outputs: List[NodeInstance] = field(default_factory=list)
+    outputs: list[NodeInstance] = Field(default_factory=list)
 
 
-@dataclass(frozen=True)
-class ModuleInstance:
+class ModuleInstance(BaseModel):
     """A module instance placed on the canvas"""
+    model_config = ConfigDict(frozen=True)
+
     module_instance_id: str
     module_ref: str  # e.g., "text_cleaner:1.0.0"
-    config: Dict[str, Any]  # Module-specific configuration
-    inputs: List[NodeInstance] = field(default_factory=list)  # Flat list, grouped by group_index
-    outputs: List[NodeInstance] = field(default_factory=list)
+    config: dict[str, Any]  # Module-specific configuration
+    inputs: list[NodeInstance] = Field(default_factory=list)  # Flat list, grouped by group_index
+    outputs: list[NodeInstance] = Field(default_factory=list)
 
 
-@dataclass(frozen=True)
-class NodeConnection:
+class NodeConnection(BaseModel):
     """Connection between two nodes"""
+    model_config = ConfigDict(frozen=True)
+
     from_node_id: str
     to_node_id: str
 
 
-@dataclass(frozen=True)
-class OutputChannelInstance:
+class OutputChannelInstance(BaseModel):
     """Output channel instance for collecting pipeline outputs"""
+    model_config = ConfigDict(frozen=True)
+
     output_channel_instance_id: str  # Format: OC01, OC02, etc.
     channel_type: str                 # e.g., "hawb", "pickup_address"
-    inputs: List[NodeInstance] = field(default_factory=list)  # Single input pin
+    inputs: list[NodeInstance] = Field(default_factory=list)  # Single input pin
 
 
-@dataclass(frozen=True)
-class Position:
+class Position(BaseModel):
     """2D position for visual layout"""
+    model_config = ConfigDict(frozen=True)
+
     x: float
     y: float
 
 
-@dataclass(frozen=True)
-class PipelineState:
+class PipelineState(BaseModel):
     """The actual pipeline structure (execution data)"""
-    entry_points: List[EntryPoint] = field(default_factory=list)
-    modules: List[ModuleInstance] = field(default_factory=list)
-    connections: List[NodeConnection] = field(default_factory=list)
-    output_channels: List[OutputChannelInstance] = field(default_factory=list)
+    model_config = ConfigDict(frozen=True)
+
+    entry_points: list[EntryPoint] = Field(default_factory=list)
+    modules: list[ModuleInstance] = Field(default_factory=list)
+    connections: list[NodeConnection] = Field(default_factory=list)
+    output_channels: list[OutputChannelInstance] = Field(default_factory=list)
 
 
-VisualState: TypeAlias = Dict[str, Position]
+VisualState: TypeAlias = dict[str, Position]
 
 
-@dataclass(frozen=True)
-class PinInfo:
+class PinInfo(BaseModel):
     """Information about a pin for index lookups"""
+    model_config = ConfigDict(frozen=True)
+
     node_id: str
     type: str
     direction: str  # "entry" | "in" | "out" | "output_channel"
     name: str
-    module_instance_id: Optional[str] = None
-    output_channel_instance_id: Optional[str] = None
+    module_instance_id: str | None = None
+    output_channel_instance_id: str | None = None
 
 
-@dataclass(frozen=True)
-class PipelineIndices:
+class PipelineIndices(BaseModel):
     """
     Index structures for fast pipeline lookups.
 
     Built once during pipeline processing to avoid repeated iterations.
     """
-    pin_by_id: Dict[str, PinInfo] = field(default_factory=dict)
-    module_by_id: Dict[str, ModuleInstance] = field(default_factory=dict)
-    input_to_upstream: Dict[str, str] = field(default_factory=dict)  # Input pin → upstream output pin
+    model_config = ConfigDict(frozen=True)
+
+    pin_by_id: dict[str, PinInfo] = Field(default_factory=dict)
+    module_by_id: dict[str, ModuleInstance] = Field(default_factory=dict)
+    input_to_upstream: dict[str, str] = Field(default_factory=dict)  # Input pin → upstream output pin
 
 
-@dataclass(frozen=True)
-class ModuleExecutionContext:
+class ModuleExecutionContext(BaseModel):
     """
     Context passed to module handlers during execution.
 
@@ -101,6 +110,8 @@ class ModuleExecutionContext:
 
     Note: Services are passed as a separate parameter to run(), not via context.
     """
-    inputs: List[NodeInstance]  # Input pins metadata
-    outputs: List[NodeInstance]  # Output pins metadata
+    model_config = ConfigDict(frozen=True)
+
+    inputs: list[NodeInstance]  # Input pins metadata
+    outputs: list[NodeInstance]  # Output pins metadata
     module_instance_id: str  # For debugging/logging

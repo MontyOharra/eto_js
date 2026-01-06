@@ -13,7 +13,7 @@ import json
 import threading
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable
 
 from shared.logging import get_logger
 from shared.exceptions import OutputExecutionError
@@ -213,8 +213,8 @@ class HtcOrderUtils:
     def update_order_fields(
         self,
         order_number: float,
-        field_updates: Dict[str, Any],
-    ) -> List[str]:
+        field_updates: dict[str, Any],
+    ) -> list[str]:
         """
         Update specific fields on an existing HTC order.
 
@@ -269,10 +269,10 @@ class HtcOrderUtils:
     def create_update_history(
         self,
         order_number: float,
-        updated_fields: List[str],
-        old_values: Dict[str, Any],
-        new_values: Dict[str, Any],
-        user_lid: Optional[str] = None,
+        updated_fields: list[str],
+        old_values: dict[str, Any],
+        new_values: dict[str, Any],
+        user_lid: str | None = None,
     ) -> None:
         """
         Create an order update history record with detailed field changes.
@@ -323,7 +323,7 @@ class HtcOrderUtils:
                     pass
             return str(val)
 
-        def format_dim(dim: Dict[str, Any]) -> str:
+        def format_dim(dim: dict[str, Any]) -> str:
             """Format a single dim object as 'qty - HxLxW @ weightlbs'."""
             h = dim.get('height', 0)
             l = dim.get('length', 0)
@@ -879,7 +879,7 @@ class HtcOrderUtils:
             # No comma - might just be a street address
             return address_string.strip()
 
-    def parse_datetime_string(self, datetime_str: Optional[str]) -> tuple:
+    def parse_datetime_string(self, datetime_str: str | None) -> tuple:
         """
         Parse a datetime string into date and time components.
 
@@ -927,7 +927,7 @@ class HtcOrderUtils:
     def create_dims_records(
         self,
         order_number: float,
-        dims: List[Dict[str, Any]],
+        dims: list[dict[str, Any]],
     ) -> int:
         """
         Create dimension records for an order in HTC300_G040_T012A Open Order Dims.
@@ -1024,7 +1024,7 @@ class HtcOrderUtils:
     def replace_dims_records(
         self,
         order_number: float,
-        dims: List[Dict[str, Any]],
+        dims: list[dict[str, Any]],
     ) -> int:
         """
         Replace all dimension records for an order.

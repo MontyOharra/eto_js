@@ -10,7 +10,7 @@ Provides lookup operations for HTC database entities:
 
 import json
 from dataclasses import dataclass
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable
 
 from shared.logging import get_logger
 
@@ -25,8 +25,8 @@ class HtcOrderDetails:
     order_number: float
     customer_id: int
     hawb: str
-    mawb: Optional[str]
-    status: Optional[str]
+    mawb: str | None
+    status: str | None
 
 
 @dataclass
@@ -42,23 +42,23 @@ class HtcOrderFields:
     hawb: str
 
     # Address IDs for comparison (comparing IDs is more reliable than string comparison)
-    pickup_address_id: Optional[float]    # M_PUID - FavID of pickup address
-    delivery_address_id: Optional[float]  # M_DelID - FavID of delivery address
+    pickup_address_id: float | None    # M_PUID - FavID of pickup address
+    delivery_address_id: float | None  # M_DelID - FavID of delivery address
 
     # Fields that can be updated (matching pending order field names)
-    pickup_company_name: Optional[str]
-    pickup_address: Optional[str]
-    pickup_time_start: Optional[str]  # Combined date + time as ISO string
-    pickup_time_end: Optional[str]    # Combined date + time as ISO string
-    delivery_company_name: Optional[str]
-    delivery_address: Optional[str]
-    delivery_time_start: Optional[str]  # Combined date + time as ISO string
-    delivery_time_end: Optional[str]    # Combined date + time as ISO string
-    mawb: Optional[str]
-    pickup_notes: Optional[str]
-    delivery_notes: Optional[str]
-    order_notes: Optional[str]
-    dims: Optional[str]  # JSON string of dim objects from dims table
+    pickup_company_name: str | None
+    pickup_address: str | None
+    pickup_time_start: str | None  # Combined date + time as ISO string
+    pickup_time_end: str | None    # Combined date + time as ISO string
+    delivery_company_name: str | None
+    delivery_address: str | None
+    delivery_time_start: str | None  # Combined date + time as ISO string
+    delivery_time_end: str | None    # Combined date + time as ISO string
+    mawb: str | None
+    pickup_notes: str | None
+    delivery_notes: str | None
+    order_notes: str | None
+    dims: str | None  # JSON string of dim objects from dims table
 
 
 @dataclass
@@ -139,7 +139,7 @@ class HtcLookupUtils:
         self,
         customer_id: int,
         hawb: str,
-    ) -> Optional[float]:
+    ) -> float | None:
         """
         Check if an order exists in HTC Open Orders for a customer/HAWB pair.
 
@@ -226,7 +226,7 @@ class HtcLookupUtils:
         self,
         order_number: float,
         is_pickup: bool = True,
-    ) -> Optional[float]:
+    ) -> float | None:
         """
         Get the address ID (M_PUID or M_DelID) from an existing order.
 
@@ -260,7 +260,7 @@ class HtcLookupUtils:
             logger.error(f"Failed to get address ID for order {order_number}: {e}")
             raise
 
-    def get_customer_name(self, customer_id: int) -> Optional[str]:
+    def get_customer_name(self, customer_id: int) -> str | None:
         """
         Look up customer name by customer ID.
 
@@ -294,7 +294,7 @@ class HtcLookupUtils:
             logger.error(f"Failed to lookup customer name for ID {customer_id}: {e}")
             return None
 
-    def get_customer_info(self, customer_id: int) -> Optional[CustomerInfo]:
+    def get_customer_info(self, customer_id: int) -> CustomerInfo | None:
         """
         Get full customer information for order creation.
 
@@ -342,7 +342,7 @@ class HtcLookupUtils:
             logger.error(f"Failed to get customer info for ID {customer_id}: {e}")
             return None
 
-    def get_default_agent_id(self, customer_id: int) -> Optional[int]:
+    def get_default_agent_id(self, customer_id: int) -> int | None:
         """
         Get the default agent ID for a customer.
 
@@ -378,7 +378,7 @@ class HtcLookupUtils:
             logger.error(f"Failed to get default agent for customer {customer_id}: {e}")
             return None
 
-    def get_address_info(self, address_id: float) -> Optional[AddressInfo]:
+    def get_address_info(self, address_id: float) -> AddressInfo | None:
         """
         Get full address information for order creation.
 
@@ -492,7 +492,7 @@ class HtcLookupUtils:
             logger.error(f"Failed to get ACI letter for ID {aci_id}: {e}")
             return ""
 
-    def get_order_details(self, order_number: float) -> Optional[HtcOrderDetails]:
+    def get_order_details(self, order_number: float) -> HtcOrderDetails | None:
         """
         Get details of an HTC order by order number.
 
@@ -532,7 +532,7 @@ class HtcLookupUtils:
             logger.error(f"Failed to get order details for {order_number}: {e}")
             raise
 
-    def get_order_fields(self, order_number: float) -> Optional[HtcOrderFields]:
+    def get_order_fields(self, order_number: float) -> HtcOrderFields | None:
         """
         Get all editable fields of an HTC order for comparison with pending updates.
 
@@ -585,7 +585,7 @@ class HtcLookupUtils:
                     return None
 
             # Helper to combine date and time into ISO format
-            def combine_datetime(date_val, time_val) -> Optional[str]:
+            def combine_datetime(date_val, time_val) -> str | None:
                 """Combine date and time fields into ISO datetime string."""
                 if not date_val:
                     return None
@@ -616,7 +616,7 @@ class HtcLookupUtils:
                 return f"{date_str}T{time_str}:00"
 
             # Query dims from the dims table
-            dims_json: Optional[str] = None
+            dims_json: str | None = None
             with connection.cursor() as cursor:
                 dims_query = """
                     SELECT
@@ -636,7 +636,7 @@ class HtcLookupUtils:
                 dims_rows = cursor.fetchall()
 
                 if dims_rows:
-                    dims_list: List[dict] = []
+                    dims_list: list[dict] = []
                     for dim_row in dims_rows:
                         dims_list.append({
                             "height": float(dim_row[0]) if dim_row[0] is not None else 0,

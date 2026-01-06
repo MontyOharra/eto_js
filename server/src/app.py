@@ -5,6 +5,7 @@ Node-based pipeline system with Dask execution
 import logging
 import os
 import sys
+from typing import Any
 
 # Add src directory to path BEFORE any local imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -116,12 +117,12 @@ async def initialize_services() -> None:
             logger.warning(f"Failed to initialize storage config: {e}")
 
         # 2. Initialize modules service (triggers auto-discovery)
-        try:
+        """try:
             modules_service = ServiceContainer.get_modules_service()
             logger.info("Modules service initialized (auto-discovery complete)")
         except Exception as e:
             logger.error(f"Failed to initialize modules service: {e}")
-            # Continue - other services may still work
+            # Continue - other services may still work"""
 
         # 3. Initialize core data services
         try:
@@ -130,62 +131,62 @@ async def initialize_services() -> None:
         except Exception as e:
             logger.warning(f"Failed to initialize PDF files service: {e}")
 
-        try:
+        """try:
             pipeline_execution_service = ServiceContainer.get_pipeline_execution_service()
             logger.info("Pipeline execution service initialized")
         except Exception as e:
-            logger.warning(f"Failed to initialize pipeline execution service: {e}")
+            logger.warning(f"Failed to initialize pipeline execution service: {e}")"""
 
-        try:
+        """try:
             pipeline_service = ServiceContainer.get_pipeline_service()
             logger.info("Pipeline service initialized")
         except Exception as e:
-            logger.warning(f"Failed to initialize pipeline service: {e}")
+            logger.warning(f"Failed to initialize pipeline service: {e}")"""
 
-        try:
+        """try:
             pdf_template_service = ServiceContainer.get_pdf_template_service()
             logger.info("PDF template service initialized")
         except Exception as e:
-            logger.warning(f"Failed to initialize PDF template service: {e}")
+            logger.warning(f"Failed to initialize PDF template service: {e}")"""
 
         # 4. Initialize ingestion services and start email polling
-        try:
+        """try:
             email_service = ServiceContainer.get_email_service()
             logger.info("Email service initialized")
             # Start polling for active email configs
             email_service.startup()
             logger.info("Email service startup complete (pollers started for active configs)")
         except Exception as e:
-            logger.warning(f"Failed to initialize/start email service: {e}")
+            logger.warning(f"Failed to initialize/start email service: {e}")"""
 
         # 5. Initialize HTC integration service (needed by output_processing and order_management)
-        htc_integration_service = None
+        """htc_integration_service = None
         try:
             htc_integration_service = ServiceContainer.get_htc_integration_service()
             logger.info("HTC integration service initialized")
         except Exception as e:
-            logger.warning(f"Failed to initialize HTC integration service: {e}")
+            logger.warning(f"Failed to initialize HTC integration service: {e}")"""
 
         # 6. Initialize output processing service (needed by eto_runs)
-        try:
+        """try:
             output_processing_service = ServiceContainer.get_output_processing_service()
             logger.info("Output processing service initialized")
         except Exception as e:
-            logger.warning(f"Failed to initialize output processing service: {e}")
+            logger.warning(f"Failed to initialize output processing service: {e}")"""
 
         # 7. Initialize ETO runs service
-        try:
+        """try:
             eto_runs_service = ServiceContainer.get_eto_runs_service()
             logger.info("ETO runs service initialized")
         except Exception as e:
-            logger.warning(f"Failed to initialize ETO runs service: {e}")
+            logger.warning(f"Failed to initialize ETO runs service: {e}")"""
 
         # 8. Initialize order management service
-        try:
+        """try:
             order_management_service = ServiceContainer.get_order_management_service()
             logger.info("Order management service initialized")
         except Exception as e:
-            logger.warning(f"Failed to initialize order management service: {e}")
+            logger.warning(f"Failed to initialize order management service: {e}")"""
 
         # 9. Initialize auth service (for user authentication)
         try:
@@ -200,7 +201,7 @@ async def initialize_services() -> None:
         logger.info("All services initialized successfully")
 
         # Sync modules and output channels to database
-        try:
+        """try:
             modules_service.sync_registry_to_database()
             logger.info("Module registry synced to database")
         except Exception as e:
@@ -210,10 +211,10 @@ async def initialize_services() -> None:
             result = modules_service.sync_output_channel_types()
             logger.info(f"Output channel types synced: {result['total']} types ({result['created']} created, {result['updated']} updated)")
         except Exception as e:
-            logger.warning(f"Failed to sync output channel types: {e}")
+            logger.warning(f"Failed to sync output channel types: {e}")"""
 
         # Start ETO processing worker (background polling)
-        try:
+        """try:
             eto_runs_service = ServiceContainer.get_eto_runs_service()
             worker_started = await eto_runs_service.startup()
             if worker_started:
@@ -221,10 +222,10 @@ async def initialize_services() -> None:
             else:
                 logger.warning("ETO processing worker failed to start or is disabled")
         except Exception as service_error:
-            logger.warning(f"ETO processing worker startup failed: {service_error}")
+            logger.warning(f"ETO processing worker startup failed: {service_error}")"""
 
         # Start HTC order worker (background polling for ready pending orders)
-        try:
+        """try:
             if order_management_service:
                 htc_worker_started = await order_management_service.startup()
                 if htc_worker_started:
@@ -232,7 +233,7 @@ async def initialize_services() -> None:
                 else:
                     logger.warning("HTC order worker failed to start or is disabled")
         except Exception as service_error:
-            logger.warning(f"HTC order worker startup failed: {service_error}")
+            logger.warning(f"HTC order worker startup failed: {service_error}")"""
 
 
     except Exception as e:
@@ -529,7 +530,7 @@ def register_info_endpoint(app: FastAPI) -> None:
     """Register application info endpoint"""
 
     @app.get("/", tags=["info"])
-    async def app_info() -> Dict[str, Any]:
+    async def app_info() -> dict[str, Any]:
         """Application information endpoint"""
         return {
             "service": "Unified ETO Server",

@@ -16,7 +16,7 @@ Architecture:
     - HtcOrderWorker: Background worker for creating HTC orders from pending orders
 """
 
-from typing import Any, Optional, List, Dict
+from typing import Any
 
 from shared.logging import get_logger
 from shared.exceptions import OutputExecutionError
@@ -34,6 +34,7 @@ from features.htc_integration.lookup_utils import (
 from features.htc_integration.address_utils import HtcAddressUtils
 from features.htc_integration.order_utils import HtcOrderUtils, PreparedOrderData
 from features.htc_integration.attachment_utils import AttachmentManager, PdfSource, AttachmentResult
+from shared.types.pending_orders import PendingOrder
 
 logger = get_logger(__name__)
 
@@ -51,7 +52,7 @@ __all__ = [
 ]
 
 
-def _uppercase_str(value: Optional[str]) -> Optional[str]:
+def _uppercase_str(value: str | None) -> str | None:
     """Uppercase a string value, returning None if input is None."""
     if value is None:
         return None
@@ -114,7 +115,7 @@ class HtcIntegrationService:
         )
 
         # Initialize attachment manager (optional - only if HTC_APPS_DIR is configured)
-        self._attachment_manager: Optional[AttachmentManager] = None
+        self._attachment_manager: AttachmentManager | None = None
         htc_apps_dir = get_htc_apps_dir()
         if htc_apps_dir:
             eto_storage_path = get_storage_configuration()
@@ -142,7 +143,7 @@ class HtcIntegrationService:
         self,
         customer_id: int,
         hawb: str,
-    ) -> Optional[float]:
+    ) -> float | None:
         """
         Check if an order exists in HTC Open Orders for a customer/HAWB pair.
 
@@ -174,7 +175,7 @@ class HtcIntegrationService:
         """
         return self._lookup_utils.count_orders_by_customer_and_hawb(customer_id, hawb)
 
-    def get_customer_name(self, customer_id: int) -> Optional[str]:
+    def get_customer_name(self, customer_id: int) -> str | None:
         """
         Look up customer name by customer ID.
 
@@ -186,7 +187,7 @@ class HtcIntegrationService:
         """
         return self._lookup_utils.get_customer_name(customer_id)
 
-    def get_customer_info(self, customer_id: int) -> Optional[CustomerInfo]:
+    def get_customer_info(self, customer_id: int) -> CustomerInfo | None:
         """
         Get full customer information for order creation.
 
@@ -198,7 +199,7 @@ class HtcIntegrationService:
         """
         return self._lookup_utils.get_customer_info(customer_id)
 
-    def get_address_info(self, address_id: float) -> Optional[AddressInfo]:
+    def get_address_info(self, address_id: float) -> AddressInfo | None:
         """
         Get full address information for order creation.
 
@@ -222,7 +223,7 @@ class HtcIntegrationService:
         """
         return self._lookup_utils.get_aci_letter(aci_id)
 
-    def get_order_details(self, order_number: float) -> Optional[HtcOrderDetails]:
+    def get_order_details(self, order_number: float) -> HtcOrderDetails | None:
         """
         Get details of an HTC order by order number.
 
@@ -234,7 +235,7 @@ class HtcIntegrationService:
         """
         return self._lookup_utils.get_order_details(order_number)
 
-    def get_order_fields(self, order_number: float) -> Optional[HtcOrderFields]:
+    def get_order_fields(self, order_number: float) -> HtcOrderFields | None:
         """
         Get all editable fields of an HTC order.
 
@@ -252,7 +253,7 @@ class HtcIntegrationService:
     # ==================== Address Operations ====================
     # Delegated to HtcAddressUtils
 
-    def find_address_id(self, address_string: str) -> Optional[float]:
+    def find_address_id(self, address_string: str) -> float | None:
         """
         Find an address ID from a full address string.
 
@@ -413,11 +414,11 @@ class HtcIntegrationService:
         delivery_address: str,
         delivery_time_start: str,
         delivery_time_end: str,
-        mawb: Optional[str] = None,
-        pickup_notes: Optional[str] = None,
-        delivery_notes: Optional[str] = None,
-        order_notes: Optional[str] = None,
-        dims: Optional[List[Dict[str, Any]]] = None,
+        mawb: str | None = None,
+        pickup_notes: str | None = None,
+        delivery_notes: str | None = None,
+        order_notes: str | None = None,
+        dims: list[dict[str, Any]] | None = None,
     ) -> float:
         """
         Create an HTC order from raw input data.
@@ -657,7 +658,7 @@ class HtcIntegrationService:
             # Note: OIW entry remains if we fail - will be skipped by next order number generation
             raise OutputExecutionError(f"Failed to create HTC order: {e}") from e
 
-    def create_order_from_pending(self, pending_order: 'PendingOrder') -> float:
+    def create_order_from_pending(self, pending_order: PendingOrder) -> float:
         """
         Create an HTC order from a pending order.
 
@@ -709,23 +710,23 @@ class HtcIntegrationService:
     def update_order(
         self,
         order_number: float,
-        pickup_company_name: Optional[str] = None,
-        pickup_address: Optional[str] = None,
-        pickup_time_start: Optional[str] = None,
-        pickup_time_end: Optional[str] = None,
-        delivery_company_name: Optional[str] = None,
-        delivery_address: Optional[str] = None,
-        delivery_time_start: Optional[str] = None,
-        delivery_time_end: Optional[str] = None,
-        mawb: Optional[str] = None,
-        pickup_notes: Optional[str] = None,
-        delivery_notes: Optional[str] = None,
-        order_notes: Optional[str] = None,
-        dims: Optional[List[Dict[str, Any]]] = None,
-        approver_username: Optional[str] = None,
-        old_values: Optional[Dict[str, Any]] = None,
-        new_values: Optional[Dict[str, Any]] = None,
-    ) -> List[str]:
+        pickup_company_name: str | None = None,
+        pickup_address: str | None = None,
+        pickup_time_start: str | None = None,
+        pickup_time_end: str | None = None,
+        delivery_company_name: str | None = None,
+        delivery_address: str | None = None,
+        delivery_time_start: str | None = None,
+        delivery_time_end: str | None = None,
+        mawb: str | None = None,
+        pickup_notes: str | None = None,
+        delivery_notes: str | None = None,
+        order_notes: str | None = None,
+        dims: list[dict[str, Any]] | None = None,
+        approver_username: str | None = None,
+        old_values: dict[str, Any] | None = None,
+        new_values: dict[str, Any] | None = None,
+    ) -> list[str]:
         """
         Update an existing HTC order with new field values.
 
@@ -776,8 +777,8 @@ class HtcIntegrationService:
         delivery_notes = _uppercase_str(delivery_notes)
         order_notes = _uppercase_str(order_notes)
 
-        htc_updates: Dict[str, Any] = {}
-        updated_fields: List[str] = []
+        htc_updates: dict[str, Any] = {}
+        updated_fields: list[str] = []
         address_changed = False
 
         # Track address info for order type recalculation
@@ -980,8 +981,8 @@ class HtcIntegrationService:
         order_number: float,
         customer_id: int,
         hawb: str,
-        pdf_sources: List[PdfSource],
-    ) -> List[AttachmentResult]:
+        pdf_sources: list[PdfSource],
+    ) -> list[AttachmentResult]:
         """
         Process PDF attachments for an HTC order.
 

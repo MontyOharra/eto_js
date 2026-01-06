@@ -5,7 +5,7 @@ Background async worker for creating HTC orders from ready pending orders
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Callable, Optional, List, Set
+from typing import Callable
 
 from shared.types.pending_orders import PendingOrder
 
@@ -35,12 +35,12 @@ class HtcOrderWorker:
     def __init__(
         self,
         # Callbacks
-        get_ready_pending_orders_callback: Callable[[int], List[PendingOrder]],
+        get_ready_pending_orders_callback: Callable[[int], list[PendingOrder]],
         create_htc_order_callback: Callable[[int], float],
         mark_processing_callback: Callable[[int], None],
         mark_created_callback: Callable[[int, float], None],
         mark_failed_callback: Callable[[int, str], None],
-        is_auto_create_enabled_callback: Optional[Callable[[], bool]] = None,
+        is_auto_create_enabled_callback: Callable[[], bool] | None = None,
         # Configuration
         enabled: bool = True,
         max_concurrent: int = 5,
@@ -79,8 +79,8 @@ class HtcOrderWorker:
         # State
         self.running = False
         self.paused = False
-        self.worker_task: Optional[asyncio.Task] = None
-        self.currently_processing: Set[int] = set()
+        self.worker_task: asyncio.Task | None = None
+        self.currently_processing: set[int] = set()
 
         logger.debug(
             f"HtcOrderWorker initialized - enabled: {enabled}, "

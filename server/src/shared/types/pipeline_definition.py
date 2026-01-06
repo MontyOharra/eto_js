@@ -2,14 +2,14 @@
 Pipeline Definition Types
 Domain types for pipeline_definitions table
 """
-from dataclasses import dataclass
 from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict
 
 from .pipelines import PipelineState, VisualState
 
 
-@dataclass(frozen=True)
-class PipelineDefinition:
+class PipelineDefinition(BaseModel):
     """
     Complete pipeline definition from database.
 
@@ -17,6 +17,8 @@ class PipelineDefinition:
     and visual layout (visual_state). Each definition owns its compiled steps
     directly via the pipeline_definition_steps table.
     """
+    model_config = ConfigDict(frozen=True)
+
     id: int
     pipeline_state: PipelineState
     visual_state: VisualState
@@ -24,18 +26,18 @@ class PipelineDefinition:
     updated_at: datetime
 
 
-@dataclass(frozen=True)
-class PipelineDefinitionSummary:
+class PipelineDefinitionSummary(BaseModel):
     """
     Lightweight summary for list views.
     """
+    model_config = ConfigDict(frozen=True)
+
     id: int
     created_at: datetime
     updated_at: datetime
 
 
-@dataclass(frozen=True)
-class PipelineDefinitionCreate:
+class PipelineDefinitionCreate(BaseModel):
     """
     Data needed to create new pipeline definition.
 
@@ -44,5 +46,7 @@ class PipelineDefinitionCreate:
     - Pruning dead branches
     - Compilation to execution steps
     """
+    model_config = ConfigDict(frozen=True)
+
     pipeline_state: PipelineState
     visual_state: VisualState

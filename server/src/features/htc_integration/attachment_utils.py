@@ -7,9 +7,8 @@ import shutil
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
 
-from pyodbc import Connection
+from shared.database.access_connection import AccessConnection
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +28,7 @@ class AttachmentResult:
     source_path: str
     dest_path: str
     file_size_kb: float
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
 
 class AttachmentManager:
@@ -50,7 +49,7 @@ class AttachmentManager:
         self,
         htc_apps_dir: str,
         eto_storage_path: str,
-        connection: Connection,
+        connection: AccessConnection,
         co_id: int = 1,
         br_id: int = 1,
     ):
@@ -60,7 +59,7 @@ class AttachmentManager:
         Args:
             htc_apps_dir: Root HTC apps directory (e.g., "C:/HTC_Apps")
             eto_storage_path: Root ETO PDF storage path (e.g., "C:/ETO_Storage")
-            connection: pyodbc connection to HTC Access database
+            connection: AccessConnection to HTC Access database
             co_id: Company ID (default 1)
             br_id: Branch ID (default 1)
         """
@@ -106,7 +105,7 @@ class AttachmentManager:
         self,
         original_filename: str,
         hawb: str,
-        timestamp: Optional[datetime] = None,
+        timestamp: datetime | None = None,
     ) -> str:
         """
         Build the attachment filename with HAWB and timestamp.
@@ -213,8 +212,8 @@ class AttachmentManager:
         order_number: float,
         customer_id: int,
         hawb: str,
-        pdf_sources: List[PdfSource],
-    ) -> List[AttachmentResult]:
+        pdf_sources: list[PdfSource],
+    ) -> list[AttachmentResult]:
         """
         Process all PDF attachments for an order.
 
@@ -232,7 +231,7 @@ class AttachmentManager:
         Returns:
             List of AttachmentResult for each processed attachment
         """
-        results: List[AttachmentResult] = []
+        results: list[AttachmentResult] = []
 
         # Track processed PDF file IDs to avoid duplicates
         processed_ids: set = set()

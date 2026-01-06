@@ -2,14 +2,14 @@
 Pipeline Definition Step Types
 Domain types for pipeline_definition_steps table
 """
-from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict
 
 from .pipelines import NodeInstance
 
 
-@dataclass(frozen=True)
-class PipelineDefinitionStep:
+class PipelineDefinitionStep(BaseModel):
     """
     Complete pipeline step record from database.
 
@@ -19,18 +19,19 @@ class PipelineDefinitionStep:
 
     Each step belongs to exactly one pipeline definition via pipeline_definition_id.
     """
+    model_config = ConfigDict(frozen=True)
+
     id: int
     pipeline_definition_id: int
     module_instance_id: str
-    module_ref: Optional[str]  # e.g., "text_cleaner:1.0.0", None for output channel steps
+    module_ref: str | None  # e.g., "text_cleaner:1.0.0", None for output channel steps
     module_config: dict[str, Any]  # Module-specific configuration; contains channel_type for output channels
     input_field_mappings: dict[str, str]  # Maps input pin IDs to source node IDs
     node_metadata: dict[str, list[NodeInstance]]  # Maps "inputs"/"outputs" to pin metadata
     step_number: int  # Execution order (topological layer)
 
 
-@dataclass(frozen=True)
-class PipelineDefinitionStepCreate:
+class PipelineDefinitionStepCreate(BaseModel):
     """
     Data needed to create new pipeline step.
 
@@ -42,9 +43,11 @@ class PipelineDefinitionStepCreate:
 
     The repository layer handles JSON serialization of dict fields.
     """
+    model_config = ConfigDict(frozen=True)
+
     pipeline_definition_id: int
     module_instance_id: str
-    module_ref: Optional[str]  # None for output channel steps
+    module_ref: str | None  # None for output channel steps
     module_config: dict[str, Any]  # Contains channel_type for output channel steps
     input_field_mappings: dict[str, str]
     node_metadata: dict[str, list[NodeInstance]]

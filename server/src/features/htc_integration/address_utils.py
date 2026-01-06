@@ -9,7 +9,7 @@ Provides address-related operations for the HTC database:
 
 import re
 from datetime import datetime
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable
 
 from shared.logging import get_logger
 from shared.exceptions import OutputExecutionError
@@ -266,7 +266,7 @@ class HtcAddressUtils:
 
     # ==================== Address Parsing ====================
 
-    def parse_address_string(self, address_string: str) -> Optional[Dict[str, str]]:
+    def parse_address_string(self, address_string: str) -> dict[str, str] | None:
         """
         Parse a US address string into components using the usaddress library.
 
@@ -366,7 +366,7 @@ class HtcAddressUtils:
         city: str,
         state: str,
         zip_code: str,
-    ) -> Optional[float]:
+    ) -> float | None:
         """
         Search for an existing address in the database using normalized matching.
 
@@ -447,7 +447,7 @@ class HtcAddressUtils:
             logger.error(f"Failed to search for address: {e}")
             raise
 
-    def find_address_id(self, address_string: str) -> Optional[float]:
+    def find_address_id(self, address_string: str) -> float | None:
         """
         Find an address ID from a full address string.
 
@@ -616,7 +616,7 @@ class HtcAddressUtils:
             return ''
 
         # Count character occurrences
-        char_counts: Dict[str, int] = {}
+        char_counts: dict[str, int] = {}
         for char in keycheck:
             char_counts[char] = char_counts.get(char, 0) + 1
 
