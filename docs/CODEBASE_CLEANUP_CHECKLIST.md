@@ -76,7 +76,7 @@ Track file-by-file cleanup progress for the server codebase.
 
 #### features/email/
 - [ ] `features/email/__init__.py`
-- [ ] `features/email/service.py`
+- [x] `features/email/service.py`
 - [x] `features/email/poller.py`
 - [x] `features/email/processing.py`
 
@@ -296,5 +296,5 @@ Track file-by-file cleanup progress for the server codebase.
 ## Progress Summary
 
 - **Total files:** 172 (2 deleted)
-- **Completed:** 23
-- **Remaining:** 149
+- **Completed:** 24
+- **Remaining:** 148

@@ -28,7 +28,6 @@ from shared.types.email_accounts import (
 )
 from shared.types.email_ingestion_configs import (
     EmailIngestionConfig,
-    EmailIngestionConfigSummary,
     EmailIngestionConfigWithAccount,
     EmailIngestionConfigCreate,
     EmailIngestionConfigUpdate,
@@ -259,7 +258,7 @@ class EmailService:
             limit: Max emails to fetch
 
         Returns:
-            List of EmailMessage dataclasses
+            List of EmailMessage objects
         """
         integration = self._get_or_create_integration(config.account_id)
 
@@ -659,7 +658,8 @@ class EmailService:
             EmailIngestionConfigUpdate(
                 is_active=True,
                 activated_at=datetime.now(timezone.utc),
-                clear_errors=True,
+                last_error_message=None,
+                last_error_at=None,
             )
         )
 
@@ -826,7 +826,7 @@ class EmailService:
                 config_id,
                 EmailIngestionConfigUpdate(
                     is_active=False,
-                    reset_last_processed_uid=True,  # Reset so reactivation starts fresh
+                    last_processed_uid=None,  # Reset so reactivation starts fresh
                 )
             )
             logger.info(f"  Database updated (is_active=False, last_processed_uid=NULL)")
