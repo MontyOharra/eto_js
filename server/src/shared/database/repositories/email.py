@@ -33,8 +33,8 @@ class EmailRepository(BaseRepository[EmailModel]):
 
     # ========== Helper Methods ==========
 
-    def _model_to_dataclass(self, model: EmailModel) -> Email:
-        """Convert ORM model to Email dataclass"""
+    def _model_to_domain(self, model: EmailModel) -> Email:
+        """Convert ORM model to Email domain model"""
         return Email(
             id=model.id,
             account_id=model.account_id,
@@ -112,7 +112,7 @@ class EmailRepository(BaseRepository[EmailModel]):
             email_id: Email record ID
 
         Returns:
-            Email dataclass or None if not found
+            Email or None if not found
         """
         with self._get_session() as session:
             model = session.query(self.model_class).filter(
@@ -122,7 +122,7 @@ class EmailRepository(BaseRepository[EmailModel]):
             if model is None:
                 return None
 
-            return self._model_to_dataclass(model)
+            return self._model_to_domain(model)
 
     def get_by_account_and_message_id(self, account_id: int, message_id: str) -> Email | None:
         """
@@ -133,7 +133,7 @@ class EmailRepository(BaseRepository[EmailModel]):
             message_id: Email Message-ID header
 
         Returns:
-            Email dataclass or None if not found
+            Email or None if not found
         """
         if not message_id:
             return None
@@ -147,7 +147,7 @@ class EmailRepository(BaseRepository[EmailModel]):
             if model is None:
                 return None
 
-            return self._model_to_dataclass(model)
+            return self._model_to_domain(model)
 
     # ========== Create Methods ==========
 
@@ -156,10 +156,10 @@ class EmailRepository(BaseRepository[EmailModel]):
         Create new email record.
 
         Args:
-            email_data: EmailCreate dataclass with email data
+            email_data: EmailCreate with email data
 
         Returns:
-            Created Email dataclass
+            Created Email
         """
         with self._get_session() as session:
             now = datetime.now(timezone.utc)
@@ -187,4 +187,4 @@ class EmailRepository(BaseRepository[EmailModel]):
                 f"{email_data.message_id[:50]}..."
             )
 
-            return self._model_to_dataclass(model)
+            return self._model_to_domain(model)

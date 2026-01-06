@@ -44,39 +44,20 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
     # ========== Helper Methods ==========
 
     def _filter_rules_to_json(self, filter_rules: list[FilterRule]) -> str:
-        """Convert list of FilterRule dataclasses to JSON string"""
+        """Convert list of FilterRule models to JSON string"""
         if not filter_rules:
             return "[]"
-
-        rules_dicts = [
-            {
-                "field": rule.field,
-                "operation": rule.operation,
-                "value": rule.value,
-                "case_sensitive": rule.case_sensitive,
-            }
-            for rule in filter_rules
-        ]
-        return json.dumps(rules_dicts)
+        return json.dumps([rule.model_dump() for rule in filter_rules])
 
     def _filter_rules_from_json(self, filter_rules_json: str | None) -> list[FilterRule]:
-        """Convert JSON string from database to list of FilterRule dataclasses"""
+        """Convert JSON string from database to list of FilterRule models"""
         if not filter_rules_json:
             return []
-
         rules_dicts = json.loads(filter_rules_json)
-        return [
-            FilterRule(
-                field=rule["field"],
-                operation=rule["operation"],
-                value=rule["value"],
-                case_sensitive=rule.get("case_sensitive", False),
-            )
-            for rule in rules_dicts
-        ]
+        return [FilterRule(**rule) for rule in rules_dicts]
 
-    def _model_to_dataclass(self, model: EmailIngestionConfigModel) -> EmailIngestionConfig:
-        """Convert ORM model to EmailIngestionConfig dataclass"""
+    def _model_to_domain(self, model: EmailIngestionConfigModel) -> EmailIngestionConfig:
+        """Convert ORM model to EmailIngestionConfig domain model"""
         return EmailIngestionConfig(
             id=model.id,
             name=model.name,
@@ -97,7 +78,7 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
         )
 
     def _model_to_summary(self, model: EmailIngestionConfigModel) -> EmailIngestionConfigSummary:
-        """Convert ORM model to EmailIngestionConfigSummary dataclass"""
+        """Convert ORM model to EmailIngestionConfigSummary"""
         return EmailIngestionConfigSummary(
             id=model.id,
             name=model.name,
@@ -108,7 +89,7 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
         )
 
     def _model_to_with_account(self, model: EmailIngestionConfigModel) -> EmailIngestionConfigWithAccount:
-        """Convert ORM model to EmailIngestionConfigWithAccount dataclass"""
+        """Convert ORM model to EmailIngestionConfigWithAccount"""
         return EmailIngestionConfigWithAccount(
             id=model.id,
             name=model.name,
@@ -137,7 +118,7 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
             desc: Sort descending if True
 
         Returns:
-            List of EmailIngestionConfigSummary dataclasses
+            List of EmailIngestionConfigSummary
         """
         with self._get_session() as session:
             query = session.query(self.model_class)
@@ -168,7 +149,7 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
             desc: Sort descending if True
 
         Returns:
-            List of EmailIngestionConfigWithAccount dataclasses
+            List of EmailIngestionConfigWithAccount
         """
         with self._get_session() as session:
             query = session.query(self.model_class).options(
@@ -193,14 +174,14 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
         Get all active ingestion configs.
 
         Returns:
-            List of active EmailIngestionConfig dataclasses
+            List of active EmailIngestionConfiges
         """
         with self._get_session() as session:
             models = session.query(self.model_class).filter(
                 self.model_class.is_active == True
             ).all()
 
-            return [self._model_to_dataclass(model) for model in models]
+            return [self._model_to_domain(model) for model in models]
 
     def get_by_account_id(self, account_id: int) -> list[EmailIngestionConfig]:
         """
@@ -210,14 +191,14 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
             account_id: Account ID
 
         Returns:
-            List of EmailIngestionConfig dataclasses
+            List of EmailIngestionConfiges
         """
         with self._get_session() as session:
             models = session.query(self.model_class).filter(
                 self.model_class.account_id == account_id
             ).all()
 
-            return [self._model_to_dataclass(model) for model in models]
+            return [self._model_to_domain(model) for model in models]
 
     def get_by_id(self, config_id: int) -> EmailIngestionConfig | None:
         """
@@ -227,7 +208,7 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
             config_id: Config ID
 
         Returns:
-            EmailIngestionConfig dataclass or None if not found
+            EmailIngestionConfig or None if not found
         """
         with self._get_session() as session:
             model = session.get(self.model_class, config_id)
@@ -235,7 +216,7 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
             if model is None:
                 return None
 
-            return self._model_to_dataclass(model)
+            return self._model_to_domain(model)
 
     def get_by_id_with_account(self, config_id: int) -> EmailIngestionConfigWithAccount | None:
         """
@@ -264,10 +245,10 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
         Create new ingestion config.
 
         Args:
-            config_data: EmailIngestionConfigCreate dataclass
+            config_data: EmailIngestionConfigCreate with config data
 
         Returns:
-            Created EmailIngestionConfig dataclass
+            Created EmailIngestionConfig
         """
         with self._get_session() as session:
             model = self.model_class(
@@ -291,18 +272,24 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
 
             logger.info(f"Created ingestion config {model.id}: {config_data.name}")
 
-            return self._model_to_dataclass(model)
+            return self._model_to_domain(model)
 
     def update(self, config_id: int, config_update: EmailIngestionConfigUpdate) -> EmailIngestionConfig:
         """
         Update ingestion config.
 
+        Only fields explicitly set on the update model are updated.
+        Uses Pydantic's model_fields_set to distinguish between:
+        - Field not provided (not in model_fields_set): unchanged
+        - Field set to None: set to NULL in database
+        - Field set to value: updated to that value
+
         Args:
             config_id: Config ID
-            config_update: EmailIngestionConfigUpdate dataclass
+            config_update: EmailIngestionConfigUpdate with fields to update
 
         Returns:
-            Updated EmailIngestionConfig dataclass
+            Updated EmailIngestionConfig
 
         Raises:
             ObjectNotFoundError: If config not found
@@ -313,53 +300,21 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
             if model is None:
                 raise ObjectNotFoundError(f"Ingestion config {config_id} not found")
 
-            # Update only provided fields
-            if config_update.name is not None:
-                model.name = config_update.name
+            # Update only fields that were explicitly set
+            for field_name in config_update.model_fields_set:
+                value = getattr(config_update, field_name)
 
-            if config_update.description is not None:
-                model.description = config_update.description
+                # Handle serialization for JSON fields
+                if field_name == 'filter_rules' and value is not None:
+                    value = self._filter_rules_to_json(value)
 
-            if config_update.folder_name is not None:
-                model.folder_name = config_update.folder_name
-
-            if config_update.filter_rules is not None:
-                model.filter_rules = self._filter_rules_to_json(config_update.filter_rules)
-
-            if config_update.poll_interval_seconds is not None:
-                model.poll_interval_seconds = config_update.poll_interval_seconds
-
-            if config_update.use_idle is not None:
-                model.use_idle = config_update.use_idle
-
-            if config_update.is_active is not None:
-                model.is_active = config_update.is_active
-
-            if config_update.activated_at is not None:
-                model.activated_at = config_update.activated_at
-
-            if config_update.last_check_time is not None:
-                model.last_check_time = config_update.last_check_time
-
-            if config_update.reset_last_processed_uid:
-                model.last_processed_uid = None
-            elif config_update.last_processed_uid is not None:
-                model.last_processed_uid = config_update.last_processed_uid
-
-            if config_update.clear_errors:
-                model.last_error_message = None
-                model.last_error_at = None
-            else:
-                if config_update.last_error_message is not None:
-                    model.last_error_message = config_update.last_error_message
-                if config_update.last_error_at is not None:
-                    model.last_error_at = config_update.last_error_at
+                setattr(model, field_name, value)
 
             session.flush()
 
             logger.debug(f"Updated ingestion config {config_id}")
 
-            return self._model_to_dataclass(model)
+            return self._model_to_domain(model)
 
     def delete(self, config_id: int) -> EmailIngestionConfig:
         """
@@ -369,7 +324,7 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
             config_id: Config ID
 
         Returns:
-            Deleted EmailIngestionConfig dataclass
+            Deleted EmailIngestionConfig
 
         Raises:
             ObjectNotFoundError: If config not found
@@ -380,7 +335,7 @@ class EmailIngestionConfigRepository(BaseRepository[EmailIngestionConfigModel]):
             if model is None:
                 raise ObjectNotFoundError(f"Ingestion config {config_id} not found")
 
-            result = self._model_to_dataclass(model)
+            result = self._model_to_domain(model)
 
             session.delete(model)
             session.flush()

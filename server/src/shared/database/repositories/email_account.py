@@ -53,7 +53,7 @@ class EmailAccountRepository(BaseRepository[EmailAccountModel]):
         return json.dumps(settings_dict)
 
     def _provider_settings_from_json(self, settings_json: str, provider_type: ProviderType) -> ProviderSettings:
-        """Convert JSON string to provider settings dataclass"""
+        """Convert JSON string to provider settings model"""
         settings_dict = json.loads(settings_json)
         data = settings_dict.get('data', settings_dict)  # Handle both formats
 
@@ -61,27 +61,21 @@ class EmailAccountRepository(BaseRepository[EmailAccountModel]):
             return StandardProviderSettings(**data)
 
     def _credentials_to_json(self, credentials: Credentials) -> str:
-        """Convert credentials dataclass to JSON string"""
+        """Convert credentials model to JSON string"""
         creds_dict = {
             'type': type(credentials).__name__,
-            'data': {}
+            'data': credentials.model_dump()
         }
-
-        if isinstance(credentials, PasswordCredentials):
-            creds_dict['data'] = {'password': credentials.password}
-
         return json.dumps(creds_dict)
 
     def _credentials_from_json(self, credentials_json: str) -> Credentials:
-        """Convert JSON string to credentials dataclass"""
+        """Convert JSON string to credentials model"""
         creds_dict = json.loads(credentials_json)
-        creds_type = creds_dict.get('type', 'PasswordCredentials')
         data = creds_dict.get('data', creds_dict)
+        return PasswordCredentials(**data)
 
-        return PasswordCredentials(password=data.get('password', ''))
-
-    def _model_to_dataclass(self, model: EmailAccountModel) -> EmailAccount:
-        """Convert ORM model to EmailAccount dataclass"""
+    def _model_to_domain(self, model: EmailAccountModel) -> EmailAccount:
+        """Convert ORM model to EmailAccount domain model"""
         return EmailAccount(
             id=model.id,
             name=model.name,
@@ -99,7 +93,7 @@ class EmailAccountRepository(BaseRepository[EmailAccountModel]):
         )
 
     def _model_to_summary(self, model: EmailAccountModel) -> EmailAccountSummary:
-        """Convert ORM model to EmailAccountSummary dataclass (no credentials)"""
+        """Convert ORM model to EmailAccountSummary (no credentials)"""
         return EmailAccountSummary(
             id=model.id,
             name=model.name,
@@ -125,7 +119,7 @@ class EmailAccountRepository(BaseRepository[EmailAccountModel]):
             validated_only: Only return validated accounts
 
         Returns:
-            List of EmailAccountSummary dataclasses
+            List of EmailAccountSummary
         """
         with self._get_session() as session:
             query = session.query(self.model_class)
@@ -155,7 +149,7 @@ class EmailAccountRepository(BaseRepository[EmailAccountModel]):
             account_id: Account ID
 
         Returns:
-            EmailAccount dataclass or None if not found
+            EmailAccount or None if not found
         """
         with self._get_session() as session:
             model = session.get(self.model_class, account_id)
@@ -163,7 +157,7 @@ class EmailAccountRepository(BaseRepository[EmailAccountModel]):
             if model is None:
                 return None
 
-            return self._model_to_dataclass(model)
+            return self._model_to_domain(model)
 
     def get_by_email_address(self, email_address: str) -> EmailAccount | None:
         """
@@ -173,7 +167,7 @@ class EmailAccountRepository(BaseRepository[EmailAccountModel]):
             email_address: Email address to look up
 
         Returns:
-            EmailAccount dataclass or None if not found
+            EmailAccount or None if not found
         """
         with self._get_session() as session:
             model = session.query(self.model_class).filter(
@@ -183,17 +177,17 @@ class EmailAccountRepository(BaseRepository[EmailAccountModel]):
             if model is None:
                 return None
 
-            return self._model_to_dataclass(model)
+            return self._model_to_domain(model)
 
     def create(self, account_data: EmailAccountCreate) -> EmailAccount:
         """
         Create new email account.
 
         Args:
-            account_data: EmailAccountCreate dataclass with account data
+            account_data: EmailAccountCreate with account data
 
         Returns:
-            Created EmailAccount dataclass
+            Created EmailAccount
         """
         with self._get_session() as session:
             model = self.model_class(
@@ -214,7 +208,7 @@ class EmailAccountRepository(BaseRepository[EmailAccountModel]):
 
             logger.info(f"Created email account {model.id}: {account_data.name} ({account_data.email_address})")
 
-            return self._model_to_dataclass(model)
+            return self._model_to_domain(model)
 
     def update(self, account_id: int, account_update: EmailAccountUpdate) -> EmailAccount:
         """
@@ -258,7 +252,7 @@ class EmailAccountRepository(BaseRepository[EmailAccountModel]):
 
             logger.debug(f"Updated email account {account_id}")
 
-            return self._model_to_dataclass(model)
+            return self._model_to_domain(model)
 
     def delete(self, account_id: int) -> EmailAccount:
         """
@@ -270,7 +264,7 @@ class EmailAccountRepository(BaseRepository[EmailAccountModel]):
             account_id: Account ID
 
         Returns:
-            Deleted EmailAccount dataclass
+            Deleted EmailAccount
 
         Raises:
             ObjectNotFoundError: If account not found
@@ -282,7 +276,7 @@ class EmailAccountRepository(BaseRepository[EmailAccountModel]):
                 raise ObjectNotFoundError(f"Email account {account_id} not found")
 
             # Store dataclass before deletion
-            result = self._model_to_dataclass(model)
+            result = self._model_to_domain(model)
 
             session.delete(model)
             session.flush()
