@@ -220,11 +220,15 @@ class PollerWorker:
             # Stage 2: Deduplication
             # Skip emails already processed for this account (handles folder moves)
             if filtered_emails:
+                # Fetch existing message IDs for this account
+                message_ids = [e.message_id for e in filtered_emails if e.message_id]
+                existing_ids = self.email_repository.get_existing_message_ids(
+                    self.config.account_id, message_ids
+                )
                 new_emails = filter_duplicate_emails(
                     emails=filtered_emails,
-                    account_id=self.config.account_id,
-                    email_repository=self.email_repository,
-                    config_id=self.config.id,
+                    existing_message_ids=existing_ids,
+                    context=f"config {self.config.id}",
                 )
             else:
                 new_emails = []

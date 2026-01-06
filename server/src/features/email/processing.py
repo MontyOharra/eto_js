@@ -101,10 +101,10 @@ class EmailProcessingHandler:
             email_msg: The email message to process
             integration: The email integration for downloading attachments
         """
+        subject_preview = email_msg.subject[:50] + ('...' if len(email_msg.subject) > 50 else '')
         logger.info(
             f"[PROCESSING] Processing email UID {email_msg.uid}: "
-            f"'{email_msg.subject[:50]}{'...' if len(email_msg.subject) > 50 else ''}' "
-            f"from {email_msg.sender_email}"
+            f"'{subject_preview}' from {email_msg.sender_email}"
         )
 
         # Step 1: Download PDF attachments

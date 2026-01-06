@@ -6,7 +6,6 @@ Uses Message-ID for deduplication - same Message-ID on same account = same email
 """
 import logging
 
-from shared.database.repositories.email import EmailRepository
 from shared.types.email_integrations import EmailMessage
 
 logger = logging.getLogger(__name__)
@@ -14,41 +13,27 @@ logger = logging.getLogger(__name__)
 
 def filter_duplicate_emails(
     emails: list[EmailMessage],
-    account_id: int,
-    email_repository: EmailRepository,
-    config_id: int | None = None,
+    existing_message_ids: set[str],
+    context: str | None = None,
 ) -> list[EmailMessage]:
     """
-    Filter out emails that have already been processed for this account.
-
-    Uses batch query for efficiency when checking multiple emails.
+    Filter out emails that have already been processed.
 
     Args:
         emails: List of EmailMessage to check
-        account_id: Email account ID (for per-account deduplication)
-        email_repository: Repository for checking existing emails
-        config_id: Optional config ID for logging context
+        existing_message_ids: Set of message IDs that have already been processed
+        context: Optional context string for logging (e.g., "config 123")
 
     Returns:
         List of emails that have NOT been processed yet (new emails)
     """
-    config_context = f"config {config_id}" if config_id else "dedup"
+    log_context = f"[{context}] " if context else ""
 
     if not emails:
         return []
 
-    # Extract message IDs for batch lookup
-    message_ids = [email.message_id for email in emails if email.message_id]
-
-    if not message_ids:
-        logger.warning(f"[{config_context}] No valid message IDs found in {len(emails)} emails")
-        return emails
-
-    # Batch check which already exist
-    existing_ids = email_repository.get_existing_message_ids(account_id, message_ids)
-
-    if not existing_ids:
-        logger.debug(f"[{config_context}] No duplicates found - all {len(emails)} emails are new")
+    if not existing_message_ids:
+        logger.debug(f"{log_context}No existing message IDs - all {len(emails)} emails are new")
         return emails
 
     # Filter out duplicates
@@ -56,17 +41,15 @@ def filter_duplicate_emails(
     duplicate_count = 0
 
     for email in emails:
-        if email.message_id in existing_ids:
+        if email.message_id in existing_message_ids:
             duplicate_count += 1
-            logger.info(
-                f"[{config_context}] DUPLICATE: UID {email.uid} message_id='{email.message_id[:40]}...' "
-                f"already processed for account {account_id}"
-            )
+            message_id_preview = email.message_id[:40] + ('...' if len(email.message_id) > 40 else '')
+            logger.info(f"{log_context}DUPLICATE: UID {email.uid} message_id='{message_id_preview}'")
         else:
             new_emails.append(email)
 
     logger.info(
-        f"[{config_context}] Deduplication: {len(new_emails)}/{len(emails)} emails are new "
+        f"{log_context}Deduplication: {len(new_emails)}/{len(emails)} emails are new "
         f"({duplicate_count} duplicates filtered)"
     )
 
