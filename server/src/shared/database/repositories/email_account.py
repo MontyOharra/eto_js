@@ -5,7 +5,7 @@ Repository for email_accounts table with CRUD operations
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Type, cast
+from typing import Type
 
 from shared.database.repositories.base import BaseRepository
 from shared.database.models import EmailAccountModel
@@ -82,14 +82,13 @@ class EmailAccountRepository(BaseRepository[EmailAccountModel]):
 
     def _model_to_dataclass(self, model: EmailAccountModel) -> EmailAccount:
         """Convert ORM model to EmailAccount dataclass"""
-        provider_type = cast(ProviderType, model.provider_type)
         return EmailAccount(
             id=model.id,
             name=model.name,
             description=model.description,
-            provider_type=provider_type,
+            provider_type=model.provider_type,
             email_address=model.email_address,
-            provider_settings=self._provider_settings_from_json(model.provider_settings, provider_type),
+            provider_settings=self._provider_settings_from_json(model.provider_settings, model.provider_type),
             credentials=self._credentials_from_json(model.credentials),
             is_validated=model.is_validated,
             validated_at=model.validated_at,
@@ -105,7 +104,7 @@ class EmailAccountRepository(BaseRepository[EmailAccountModel]):
             id=model.id,
             name=model.name,
             email_address=model.email_address,
-            provider_type=cast(ProviderType, model.provider_type),
+            provider_type=model.provider_type,
             is_validated=model.is_validated,
         )
 

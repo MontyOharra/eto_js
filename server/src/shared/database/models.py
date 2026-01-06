@@ -16,7 +16,7 @@ from sqlalchemy.orm import DeclarativeBase, relationship, Mapped, mapped_column
 from sqlalchemy.sql import func
 from sqlalchemy import Enum as SAEnum
 
-from shared.types.email_account
+from shared.types.email_accounts import ProviderType
 
 class BaseModel(DeclarativeBase):
     """Base class for all table models. Used by create_all() to create tables."""
@@ -107,7 +107,7 @@ class EmailAccountModel(BaseModel):
     description: Mapped[Optional[str]] = mapped_column(Text)
 
     # Provider info
-    provider_type: Mapped[str] = mapped_column(EMAIL_PROVIDER_TYPE, nullable=False)
+    provider_type: Mapped[ProviderType] = mapped_column(EMAIL_PROVIDER_TYPE, nullable=False)
     email_address: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
 
     # Connection settings (JSON) - host, port, use_ssl, etc. (excludes credentials)
