@@ -45,10 +45,10 @@ class EmailAccountRepository(BaseRepository[EmailAccountModel]):
     # ========== Helper Methods ==========
 
     def _provider_settings_to_json(self, settings: ProviderSettings) -> str:
-        """Convert provider settings dataclass to JSON string"""
+        """Convert provider settings model to JSON string"""
         settings_dict = {
             'type': type(settings).__name__,
-            'data': {k: v for k, v in settings.__dict__.items()}
+            'data': settings.model_dump()
         }
         return json.dumps(settings_dict)
 
@@ -220,12 +220,18 @@ class EmailAccountRepository(BaseRepository[EmailAccountModel]):
         """
         Update email account.
 
+        Only fields explicitly set on the update model are updated.
+        Uses Pydantic's model_fields_set to distinguish between:
+        - Field not provided (not in model_fields_set): unchanged
+        - Field set to None: set to NULL in database
+        - Field set to value: updated to that value
+
         Args:
             account_id: Account ID
-            account_update: EmailAccountUpdate dataclass with fields to update
+            account_update: EmailAccountUpdate with fields to update
 
         Returns:
-            Updated EmailAccount dataclass
+            Updated EmailAccount
 
         Raises:
             ObjectNotFoundError: If account not found
@@ -236,30 +242,17 @@ class EmailAccountRepository(BaseRepository[EmailAccountModel]):
             if model is None:
                 raise ObjectNotFoundError(f"Email account {account_id} not found")
 
-            # Update only provided fields
-            if account_update.name is not None:
-                model.name = account_update.name
+            # Update only fields that were explicitly set
+            for field_name in account_update.model_fields_set:
+                value = getattr(account_update, field_name)
 
-            if account_update.description is not None:
-                model.description = account_update.description
+                # Handle serialization for JSON fields
+                if field_name == 'provider_settings' and value is not None:
+                    value = self._provider_settings_to_json(value)
+                elif field_name == 'credentials' and value is not None:
+                    value = self._credentials_to_json(value)
 
-            if account_update.provider_settings is not None:
-                model.provider_settings = self._provider_settings_to_json(account_update.provider_settings)
-
-            if account_update.credentials is not None:
-                model.credentials = self._credentials_to_json(account_update.credentials)
-
-            if account_update.is_validated is not None:
-                model.is_validated = account_update.is_validated
-
-            if account_update.validated_at is not None:
-                model.validated_at = account_update.validated_at
-
-            if account_update.last_error_message is not None:
-                model.last_error_message = account_update.last_error_message
-                
-            if account_update.last_error_at is not None:
-                model.last_error_at = account_update.last_error_at
+                setattr(model, field_name, value)
 
             session.flush()
 

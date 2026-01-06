@@ -1,14 +1,15 @@
 """
 Email Ingestion Config Types
 
-Dataclasses for email ingestion listener configuration.
+Pydantic models for email ingestion listener configuration.
 References email_accounts for credentials - this file only handles
 ingestion-specific settings like folder, filters, polling, etc.
 """
 
-from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal
+
+from pydantic import BaseModel, ConfigDict
 
 
 # =========================
@@ -23,9 +24,10 @@ FilterRuleOperation = Literal["contains", "equals", "starts_with", "ends_with", 
 # Filter Rules
 # =========================
 
-@dataclass(frozen=True)
-class FilterRule:
+class FilterRule(BaseModel):
     """Rule for filtering which emails to process"""
+    model_config = ConfigDict(frozen=True)
+
     field: FilterRuleField
     operation: FilterRuleOperation
     value: str
@@ -36,12 +38,13 @@ class FilterRule:
 # Email Ingestion Config (full record)
 # =========================
 
-@dataclass(frozen=True)
-class EmailIngestionConfig:
+class EmailIngestionConfig(BaseModel):
     """
     Full email ingestion configuration from database.
     References an email_account for credentials.
     """
+    model_config = ConfigDict(frozen=True)
+
     id: int
     name: str
     description: str | None
@@ -60,11 +63,12 @@ class EmailIngestionConfig:
     updated_at: datetime
 
 
-@dataclass(frozen=True)
-class EmailIngestionConfigSummary:
+class EmailIngestionConfigSummary(BaseModel):
     """
     Lightweight ingestion config summary for list operations.
     """
+    model_config = ConfigDict(frozen=True)
+
     id: int
     name: str
     account_id: int
@@ -73,12 +77,13 @@ class EmailIngestionConfigSummary:
     last_check_time: datetime | None
 
 
-@dataclass(frozen=True)
-class EmailIngestionConfigWithAccount:
+class EmailIngestionConfigWithAccount(BaseModel):
     """
     Ingestion config with related account info for display.
     Used when listing configs with account names.
     """
+    model_config = ConfigDict(frozen=True)
+
     id: int
     name: str
     description: str | None
@@ -95,23 +100,27 @@ class EmailIngestionConfigWithAccount:
 # Create/Update DTOs
 # =========================
 
-@dataclass(frozen=True)
-class EmailIngestionConfigCreate:
+class EmailIngestionConfigCreate(BaseModel):
     """Data for creating a new ingestion config"""
+    model_config = ConfigDict(frozen=True)
+
     name: str
     account_id: int
     folder_name: str
     description: str | None = None
-    filter_rules: list[FilterRule] = field(default_factory=list)
+    filter_rules: list[FilterRule] = []
     poll_interval_seconds: int = 60
     use_idle: bool = True
 
 
-@dataclass(frozen=True)
-class EmailIngestionConfigUpdate:
+class EmailIngestionConfigUpdate(BaseModel):
     """
     Data for updating an ingestion config.
-    All fields optional - only provided fields are updated.
+
+    Uses Pydantic's model_fields_set to distinguish between:
+    - Field not provided: not in model_fields_set (don't update)
+    - Field set to None: in model_fields_set with None value (set NULL)
+    - Field set to value: in model_fields_set with value (update)
     """
     name: str | None = None
     description: str | None = None

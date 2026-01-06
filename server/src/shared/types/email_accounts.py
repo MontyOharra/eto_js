@@ -1,14 +1,15 @@
 """
 Email Account Types
 
-Dataclasses for email account management (credentials storage).
+Pydantic models for email account management (credentials storage).
 Decoupled from ingestion configs - accounts store credentials that can be
 shared across multiple ingestion listeners and sending configs.
 """
 
-from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal
+
+from pydantic import BaseModel, ConfigDict
 
 
 # =========================
@@ -22,14 +23,15 @@ ProviderType = Literal["standard"]
 # Provider Settings (connection config, no credentials)
 # =========================
 
-@dataclass(frozen=True)
-class StandardProviderSettings:
+class StandardProviderSettings(BaseModel):
     """
     Standard email provider settings (IMAP + SMTP).
 
     IMAP is used for receiving/reading emails.
     SMTP is used for sending emails.
     """
+    model_config = ConfigDict(frozen=True)
+
     # IMAP settings (receiving)
     imap_host: str
     imap_port: int
@@ -50,24 +52,28 @@ ProviderSettings = StandardProviderSettings
 # Credentials (sensitive data)
 # =========================
 
-@dataclass(frozen=True)
-class PasswordCredentials:
+class PasswordCredentials(BaseModel):
     """Simple username/password credentials"""
+    model_config = ConfigDict(frozen=True)
+
     password: str
+
 
 # Union type for all credential types
 Credentials = PasswordCredentials
 
+
 # =========================
-# Email Account (full record)
+# Email Account (full record from DB)
 # =========================
 
-@dataclass(frozen=True)
-class EmailAccount:
+class EmailAccount(BaseModel):
     """
     Full email account record from database.
     Contains credentials and connection settings.
     """
+    model_config = ConfigDict(frozen=True)
+
     id: int
     name: str
     description: str | None
@@ -83,12 +89,13 @@ class EmailAccount:
     updated_at: datetime
 
 
-@dataclass(frozen=True)
-class EmailAccountSummary:
+class EmailAccountSummary(BaseModel):
     """
     Lightweight email account summary for list/dropdown operations.
     Does NOT include credentials.
     """
+    model_config = ConfigDict(frozen=True)
+
     id: int
     name: str
     email_address: str
@@ -100,9 +107,10 @@ class EmailAccountSummary:
 # Create/Update DTOs
 # =========================
 
-@dataclass(frozen=True)
-class EmailAccountCreate:
+class EmailAccountCreate(BaseModel):
     """Data for creating a new email account"""
+    model_config = ConfigDict(frozen=True)
+
     name: str
     provider_type: ProviderType
     email_address: str
@@ -111,11 +119,14 @@ class EmailAccountCreate:
     description: str | None = None
 
 
-@dataclass(frozen=True)
-class EmailAccountUpdate:
+class EmailAccountUpdate(BaseModel):
     """
     Data for updating an email account.
-    All fields optional - only provided fields are updated.
+
+    Uses Pydantic's model_fields_set to distinguish between:
+    - Field not provided: not in model_fields_set (don't update)
+    - Field set to None: in model_fields_set with None value (set NULL)
+    - Field set to value: in model_fields_set with value (update)
     """
     name: str | None = None
     description: str | None = None
@@ -131,9 +142,10 @@ class EmailAccountUpdate:
 # Validation Result
 # =========================
 
-@dataclass(frozen=True)
-class EmailAccountValidationResult:
+class EmailAccountValidationResult(BaseModel):
     """Result of validating/testing an email account connection"""
+    model_config = ConfigDict(frozen=True)
+
     success: bool
     message: str
     folder_count: int | None = None  # Number of folders discovered

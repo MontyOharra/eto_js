@@ -1,12 +1,11 @@
 """
 Email Integration Domain Types
-Dataclass types for email integration layer - used by integrations, service, and processing.
+Pydantic models for email integration layer - used by integrations, service, and processing.
 """
-from dataclasses import dataclass, field
+from pydantic import BaseModel, ConfigDict
 
 
-@dataclass(frozen=True)
-class EmailMessage:
+class EmailMessage(BaseModel):
     """
     Email message returned from integration.
 
@@ -14,6 +13,8 @@ class EmailMessage:
     for processing and tracking. Does NOT include attachment content
     to keep polling efficient.
     """
+    model_config = ConfigDict(frozen=True)
+
     uid: int  # IMAP UID or equivalent (required for tracking)
     message_id: str  # Email Message-ID header
     subject: str
@@ -28,37 +29,40 @@ class EmailMessage:
     attachment_filenames: list[str] | None = None
 
 
-@dataclass(frozen=True)
-class EmailAttachment:
+class EmailAttachment(BaseModel):
     """
     Email attachment with content.
 
     Used when downloading attachments after filter rules have been applied.
     """
+    model_config = ConfigDict(frozen=True)
+
     filename: str
     content_type: str
     data: bytes  # Raw attachment content
 
 
-@dataclass(frozen=True)
-class ValidationResult:
+class ValidationResult(BaseModel):
     """
     Result of credential validation.
 
     Returned by validate_credentials() - contains success status,
     message.
     """
+    model_config = ConfigDict(frozen=True)
+
     success: bool
     message: str
     folder_count: int | None = None
 
 
-@dataclass(frozen=True)
-class SendEmailResult:
+class SendEmailResult(BaseModel):
     """
     Result of sending an email.
 
     Returned by send_email() - contains success status and message.
     """
+    model_config = ConfigDict(frozen=True)
+
     success: bool
     message: str
