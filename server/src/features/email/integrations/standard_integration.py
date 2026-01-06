@@ -14,10 +14,10 @@ import smtplib
 import ssl
 import threading
 import time
-from datetime import datetime, timezone
 
 from .base_integration import BaseEmailIntegration
 from shared.types.email_integrations import EmailMessage, EmailAttachment, ValidationResult, SendEmailResult
+from shared.utils.datetime import utc_now, ensure_utc_aware
 from .registry import IntegrationRegistry
 from shared.exceptions import PermanentEmailError, TransientEmailError
 
@@ -764,12 +764,10 @@ class StandardEmailIntegration(BaseEmailIntegration):
         sender_email = sender_email or ""
 
         date_header = msg.get("Date")
-        received_date = datetime.now(timezone.utc)
+        received_date = utc_now()
         if date_header:
             try:
-                received_date = parsedate_to_datetime(date_header)
-                if received_date.tzinfo is None:
-                    received_date = received_date.replace(tzinfo=timezone.utc)
+                received_date = ensure_utc_aware(parsedate_to_datetime(date_header))
             except Exception:
                 pass
 
