@@ -4,7 +4,7 @@ Repository for pipeline_definition_steps table with CRUD operations
 """
 import json
 import logging
-from typing import Type, List, Dict, Optional, Any
+
 from sqlalchemy import select
 
 from shared.database.repositories.base import BaseRepository
@@ -30,30 +30,27 @@ class PipelineDefinitionStepRepository(BaseRepository[PipelineDefinitionStepMode
     """
 
     @property
-    def model_class(self) -> Type[PipelineDefinitionStepModel]:
-        """Return the SQLAlchemy model class this repository manages"""
+    def model_class(self) -> type[PipelineDefinitionStepModel]:
+        """Return the SQLAlchemy model class this repository manages."""
         return PipelineDefinitionStepModel
 
-    def _serialize_node_metadata(self, node_metadata: Dict[str, List[NodeInstance]]) -> str:
+    def _serialize_node_metadata(self, node_metadata: dict[str, list[NodeInstance]]) -> str:
         """
         Convert node metadata (inputs/outputs) to JSON string.
 
         Args:
-            node_metadata: Dict with "inputs" and "outputs" keys mapping to List[NodeInstance]
+            node_metadata: Dict with "inputs" and "outputs" keys mapping to list of NodeInstance
 
         Returns:
             JSON string representation
         """
-        from dataclasses import asdict
-
-        # Convert NodeInstance dataclasses to dicts
-        serializable = {}
+        serializable: dict[str, list[dict]] = {}
         for key, node_list in node_metadata.items():
-            serializable[key] = [asdict(node) for node in node_list]
+            serializable[key] = [node.model_dump() for node in node_list]
 
         return json.dumps(serializable)
 
-    def _deserialize_node_metadata(self, json_str: str) -> Dict[str, List[NodeInstance]]:
+    def _deserialize_node_metadata(self, json_str: str) -> dict[str, list[NodeInstance]]:
         """
         Convert JSON string to node metadata dict.
 
@@ -61,33 +58,33 @@ class PipelineDefinitionStepRepository(BaseRepository[PipelineDefinitionStepMode
             json_str: JSON string from database
 
         Returns:
-            Dict with "inputs" and "outputs" keys mapping to List[NodeInstance]
+            Dict with "inputs" and "outputs" keys mapping to list of NodeInstance
         """
         data = json.loads(json_str)
 
-        result = {}
+        result: dict[str, list[NodeInstance]] = {}
         for key, node_list in data.items():
             result[key] = [NodeInstance(**node_dict) for node_dict in node_list]
 
         return result
 
-    def _model_to_full(self, model: PipelineDefinitionStepModel) -> PipelineDefinitionStep:
-        """Convert ORM model to PipelineDefinitionStep dataclass"""
+    def _model_to_domain(self, model: PipelineDefinitionStepModel) -> PipelineDefinitionStep:
+        """Convert ORM model to PipelineDefinitionStep domain type."""
         return PipelineDefinitionStep(
             id=model.id,
             pipeline_definition_id=model.pipeline_definition_id,
             module_instance_id=model.module_instance_id,
-            module_ref=model.module_ref,
+            module_id=model.module_id,
             module_config=json.loads(model.module_config),
             input_field_mappings=json.loads(model.input_field_mappings),
             node_metadata=self._deserialize_node_metadata(model.node_metadata),
-            step_number=model.step_number
+            step_number=model.step_number,
         )
 
     def create_steps(
         self,
-        steps: List[PipelineDefinitionStepCreate]
-    ) -> List[PipelineDefinitionStep]:
+        steps: list[PipelineDefinitionStepCreate],
+    ) -> list[PipelineDefinitionStep]:
         """
         Bulk create pipeline definition steps.
 
@@ -101,34 +98,31 @@ class PipelineDefinitionStepRepository(BaseRepository[PipelineDefinitionStepMode
             List of created steps with full details
         """
         with self._get_session() as session:
-            # Create ORM models
             step_models = []
             for step_data in steps:
                 step_model = self.model_class(
                     pipeline_definition_id=step_data.pipeline_definition_id,
                     module_instance_id=step_data.module_instance_id,
-                    module_ref=step_data.module_ref,
+                    module_id=step_data.module_id,
                     module_config=json.dumps(step_data.module_config),
                     input_field_mappings=json.dumps(step_data.input_field_mappings),
                     node_metadata=self._serialize_node_metadata(step_data.node_metadata),
-                    step_number=step_data.step_number
+                    step_number=step_data.step_number,
                 )
                 step_models.append(step_model)
 
-            # Bulk insert
             session.add_all(step_models)
             session.commit()
 
-            # Refresh to get IDs
             for model in step_models:
                 session.refresh(model)
 
-            return [self._model_to_full(model) for model in step_models]
+            return [self._model_to_domain(model) for model in step_models]
 
     def get_steps_by_definition_id(
         self,
-        pipeline_definition_id: int
-    ) -> List[PipelineDefinitionStep]:
+        pipeline_definition_id: int,
+    ) -> list[PipelineDefinitionStep]:
         """
         Get all steps for a pipeline definition, ordered by step_number.
 
@@ -148,9 +142,9 @@ class PipelineDefinitionStepRepository(BaseRepository[PipelineDefinitionStepMode
             result = session.execute(stmt)
             models = result.scalars().all()
 
-            return [self._model_to_full(model) for model in models]
+            return [self._model_to_domain(model) for model in models]
 
-    def get_by_id(self, step_id: int) -> Optional[PipelineDefinitionStep]:
+    def get_by_id(self, step_id: int) -> PipelineDefinitionStep | None:
         """
         Get step by ID.
 
@@ -166,4 +160,4 @@ class PipelineDefinitionStepRepository(BaseRepository[PipelineDefinitionStepMode
             if step is None:
                 return None
 
-            return self._model_to_full(step)
+            return self._model_to_domain(step)

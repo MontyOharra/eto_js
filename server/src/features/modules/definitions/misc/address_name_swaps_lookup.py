@@ -30,7 +30,7 @@ class AddressNameSwapsLookup(MiscModule):
     """
 
     # Class metadata
-    id = "address_name_swaps_lookup"
+    identifier = "address_name_swaps_lookup"
     version = "3.0.0"
     title = "Address Name Swaps Lookup"
     description = "Find address location name and full address using Address Name Swaps table"

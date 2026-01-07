@@ -17,6 +17,7 @@ from sqlalchemy.sql import func
 from sqlalchemy import Enum as SAEnum
 
 from shared.types.email_accounts import ProviderType
+from shared.types.output_channels import OutputChannelDataType, OutputChannelCategory
 
 class BaseModel(DeclarativeBase):
     """Base class for all table models. Used by create_all() to create tables."""
@@ -79,6 +80,12 @@ ETO_OUTPUT_STATUS = SAEnum(
 )
 
 
+
+
+# =========================
+# email_accounts (credentials storage)
+# =========================
+
 # Email provider type enum
 EMAIL_PROVIDER_TYPE = SAEnum(
     'standard',
@@ -86,11 +93,6 @@ EMAIL_PROVIDER_TYPE = SAEnum(
     native_enum=False,
     validate_strings=True
 )
-
-
-# =========================
-# email_accounts (credentials storage)
-# =========================
 
 class EmailAccountModel(BaseModel):
     """
@@ -795,6 +797,23 @@ class EtoSubRunOutputExecutionModel(BaseModel):
 # output_channel_types (catalog of allowed output channels)
 # =========================
 
+# Output channel data type enum
+OUTPUT_CHANNEL_DATA_TYPE = SAEnum(
+    'str', 'int', 'float', 'datetime', 'list[str]', 'list[dim]',
+    name='output_channel_data_type',
+    native_enum=False,
+    validate_strings=True
+)
+
+# Output channel category enum
+OUTPUT_CHANNEL_CATEGORY = SAEnum(
+    'identification', 'pickup', 'delivery', 'cargo', 'other',
+    name='output_channel_category',
+    native_enum=False,
+    validate_strings=True
+)
+
+
 class OutputChannelTypeModel(BaseModel):
     """
     Catalog of allowed output channel types for pipeline outputs.
@@ -812,12 +831,12 @@ class OutputChannelTypeModel(BaseModel):
     label: Mapped[str] = mapped_column(String(100), nullable=False)  # e.g., "HAWB", "Pickup Address"
 
     # Data type constraint
-    data_type: Mapped[str] = mapped_column(String(20), nullable=False)  # e.g., "str", "datetime", "int", "float"
+    data_type: Mapped[OutputChannelDataType] = mapped_column(OUTPUT_CHANNEL_DATA_TYPE, nullable=False)
 
     # Metadata
-    description: Mapped[Optional[str]] = mapped_column(Text)
+    description: Mapped[str | None] = mapped_column(Text)
     is_required: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)  # Required for order creation?
-    category: Mapped[Optional[str]] = mapped_column(String(50))  # e.g., "identification", "pickup", "delivery", "cargo"
+    category: Mapped[OutputChannelCategory] = mapped_column(OUTPUT_CHANNEL_CATEGORY, nullable=False)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(

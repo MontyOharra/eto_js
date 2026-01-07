@@ -17,7 +17,7 @@ class StringEqualsConfig(BaseModel):
 
 @register
 class StringEquals(ComparatorModule):
-    id = "string_equals"
+    identifier = "string_equals"
     version = "1.0.0"
     title = "String Equals"
     description = "Check if input string equals a configured value"

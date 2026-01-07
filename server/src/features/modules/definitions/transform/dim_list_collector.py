@@ -26,7 +26,7 @@ class DimListCollector(TransformModule):
     """
 
     # Class metadata
-    id = "dim_list_collector"
+    identifier = "dim_list_collector"
     version = "1.0.0"
     title = "Dim List Collector"
     description = "Collect multiple dim objects into a list"

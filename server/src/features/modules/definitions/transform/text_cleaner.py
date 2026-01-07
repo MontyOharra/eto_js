@@ -28,7 +28,7 @@ class BasicTextCleaner(TransformModule):
     """
 
     # Class metadata
-    id = "basic_text_cleaner"
+    identifier = "basic_text_cleaner"
     version = "1.0.0"
     title = "Basic Text Cleaner"
     description = "Clean and normalize text by removing extra whitespace and applying basic transformations"

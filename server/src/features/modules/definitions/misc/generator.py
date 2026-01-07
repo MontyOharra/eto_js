@@ -23,7 +23,7 @@ class Generator(MiscModule):
     """
 
     # Class metadata
-    id = "generator"
+    identifier = "generator"
     version = "1.0.0"
     title = "Value Generator"
     description = "Output a configured value (no inputs required)"

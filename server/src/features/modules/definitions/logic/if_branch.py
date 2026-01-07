@@ -41,7 +41,7 @@ class IfBranch(LogicModule):
     """
 
     # Class metadata
-    id = "if_branch"
+    identifier = "if_branch"
     version = "1.0.0"
     title = "If Branch"
     description = "Route value to one of two paths based on boolean condition"

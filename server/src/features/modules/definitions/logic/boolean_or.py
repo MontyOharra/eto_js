@@ -22,7 +22,7 @@ class BooleanOr(LogicModule):
     """
 
     # Class metadata
-    id = "boolean_or"
+    identifier = "boolean_or"
     version = "1.0.0"
     title = "Boolean OR"
     description = "Logical OR operation on two boolean inputs"

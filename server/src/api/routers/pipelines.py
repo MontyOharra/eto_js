@@ -116,7 +116,7 @@ async def create_pipeline(
     # DEBUG: Log what API receives from frontend
     logger.debug("[API DEBUG] Received pipeline from frontend:")
     for module in request.pipeline_state.modules:
-        logger.debug(f"[API DEBUG]   Module {module.module_instance_id} ({module.module_ref}):")
+        logger.debug(f"[API DEBUG]   Module {module.module_instance_id} ({module.module_id}):")
         for inp in module.inputs:
             logger.debug(f"[API DEBUG]     Input: node_id={inp.node_id}, name={inp.name}, group_index={inp.group_index}")
 
@@ -126,7 +126,7 @@ async def create_pipeline(
     # DEBUG: Log after conversion to domain type
     logger.debug("[API DEBUG] After conversion to domain:")
     for module in pipeline_create.pipeline_state.modules:
-        logger.debug(f"[API DEBUG]   Module {module.module_instance_id} ({module.module_ref}):")
+        logger.debug(f"[API DEBUG]   Module {module.module_instance_id} ({module.module_id}):")
         for inp in module.inputs:
             logger.debug(f"[API DEBUG]     Input: node_id={inp.node_id}, name={inp.name}, group_index={inp.group_index}")
 

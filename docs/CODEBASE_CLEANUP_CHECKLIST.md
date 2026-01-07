@@ -178,9 +178,6 @@ Track file-by-file cleanup progress for the server codebase.
 - [ ] `features/pipeline_execution/__init__.py`
 - [ ] `features/pipeline_execution/service.py`
 
-##### features/pipeline_execution/utils/
-- [ ] `features/pipeline_execution/utils/__init__.py`
-
 #### features/pipelines/
 - [ ] `features/pipelines/__init__.py`
 - [ ] `features/pipelines/service.py`

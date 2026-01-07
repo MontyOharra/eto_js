@@ -25,7 +25,7 @@ class StripCharacters(TransformModule):
     """
 
     # Class metadata
-    id = "strip_characters"
+    identifier = "strip_characters"
     version = "1.0.0"
     title = "Strip Characters"
     description = "Remove a specified number of characters from the beginning and/or end of a text string"

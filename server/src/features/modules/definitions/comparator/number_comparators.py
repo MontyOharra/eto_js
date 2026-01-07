@@ -16,7 +16,7 @@ class NumberEqualsConfig(BaseModel):
 
 @register
 class NumberEquals(ComparatorModule):
-    id = "number_equals"
+    identifier = "number_equals"
     version = "1.0.0"
     title = "Number Equals"
     description = "Check if input number equals a configured value"

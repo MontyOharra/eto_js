@@ -22,7 +22,7 @@ class BooleanNot(LogicModule):
     """
 
     # Class metadata
-    id = "boolean_not"
+    identifier = "boolean_not"
     version = "1.0.0"
     title = "Boolean NOT"
     description = "Logical NOT operation on one boolean input"

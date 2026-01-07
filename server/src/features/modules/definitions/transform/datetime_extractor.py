@@ -40,7 +40,7 @@ class DateTimeExtractor(TransformModule):
     """
 
     # Class metadata
-    id = "datetime_extractor"
+    identifier = "datetime_extractor"
     version = "1.0.0"
     title = "DateTime Extractor"
     description = "Extract time start/end as full datetime objects using AI"

@@ -4,7 +4,7 @@ Repository for pipeline_definitions table with CRUD operations
 """
 import json
 import logging
-from typing import Type, List, Optional
+
 from sqlalchemy import select, desc, asc
 
 from shared.database.repositories.base import BaseRepository
@@ -14,7 +14,16 @@ from shared.types.pipeline_definition import (
     PipelineDefinitionSummary,
     PipelineDefinitionCreate,
 )
-from shared.types.pipelines import PipelineState, VisualState
+from shared.types.pipelines import (
+    PipelineState,
+    VisualState,
+    EntryPoint,
+    ModuleInstance,
+    NodeInstance,
+    NodeConnection,
+    OutputChannelInstance,
+    Position,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,76 +38,68 @@ class PipelineDefinitionRepository(BaseRepository[PipelineDefinitionModel]):
     """
 
     @property
-    def model_class(self) -> Type[PipelineDefinitionModel]:
-        """Return the SQLAlchemy model class this repository manages"""
+    def model_class(self) -> type[PipelineDefinitionModel]:
+        """Return the SQLAlchemy model class this repository manages."""
         return PipelineDefinitionModel
 
     def _serialize_pipeline_state(self, pipeline_state: PipelineState) -> str:
-        """Convert PipelineState dataclass to JSON string"""
-        from dataclasses import asdict
-        return json.dumps(asdict(pipeline_state))
+        """Convert PipelineState to JSON string."""
+        return json.dumps(pipeline_state.model_dump())
 
     def _serialize_visual_state(self, visual_state: VisualState) -> str:
-        """Convert VisualState (flat dict) to JSON string"""
-        from dataclasses import asdict
-        # visual_state is a dict of {node_id: Position}
-        # Convert Position dataclasses to dicts
-        return json.dumps({k: asdict(v) for k, v in visual_state.items()})
+        """Convert VisualState (dict of Position) to JSON string."""
+        return json.dumps({k: v.model_dump() for k, v in visual_state.items()})
 
     def _deserialize_pipeline_state(self, json_str: str) -> PipelineState:
-        """Convert JSON string to PipelineState dataclass"""
-        from shared.types.pipelines import EntryPoint, ModuleInstance, NodeInstance, NodeConnection, OutputChannelInstance
+        """Convert JSON string to PipelineState."""
         data = json.loads(json_str)
 
-        # Reconstruct nested dataclasses
-        entry_points = []
-        for ep in data.get("entry_points", []):
-            outputs = [NodeInstance(**ni) for ni in ep.get("outputs", [])]
-            entry_points.append(EntryPoint(
+        entry_points = [
+            EntryPoint(
                 entry_point_id=ep["entry_point_id"],
                 name=ep["name"],
-                outputs=outputs
-            ))
+                outputs=[NodeInstance(**ni) for ni in ep.get("outputs", [])],
+            )
+            for ep in data.get("entry_points", [])
+        ]
 
-        modules = []
-        for mod in data.get("modules", []):
-            inputs = [NodeInstance(**ni) for ni in mod.get("inputs", [])]
-            outputs = [NodeInstance(**ni) for ni in mod.get("outputs", [])]
-            modules.append(ModuleInstance(
+        modules = [
+            ModuleInstance(
                 module_instance_id=mod["module_instance_id"],
-                module_ref=mod["module_ref"],
+                module_id=mod["module_id"],
                 config=mod["config"],
-                inputs=inputs,
-                outputs=outputs
-            ))
+                inputs=[NodeInstance(**ni) for ni in mod.get("inputs", [])],
+                outputs=[NodeInstance(**ni) for ni in mod.get("outputs", [])],
+            )
+            for mod in data.get("modules", [])
+        ]
 
         connections = [NodeConnection(**conn) for conn in data.get("connections", [])]
 
-        output_channels = []
-        for oc in data.get("output_channels", []):
-            inputs = [NodeInstance(**ni) for ni in oc.get("inputs", [])]
-            output_channels.append(OutputChannelInstance(
+        output_channels = [
+            OutputChannelInstance(
                 output_channel_instance_id=oc["output_channel_instance_id"],
                 channel_type=oc["channel_type"],
-                inputs=inputs
-            ))
+                inputs=[NodeInstance(**ni) for ni in oc.get("inputs", [])],
+            )
+            for oc in data.get("output_channels", [])
+        ]
 
         return PipelineState(
             entry_points=entry_points,
             modules=modules,
             connections=connections,
-            output_channels=output_channels
+            output_channels=output_channels,
         )
 
     def _deserialize_visual_state(self, json_str: str) -> VisualState:
-        """Convert JSON string to VisualState (flat dict structure)"""
-        from shared.types.pipelines import Position
+        """Convert JSON string to VisualState (flat dict structure)."""
         data = json.loads(json_str)
 
         # Handle both old nested structure and new flat structure
         if "modules" in data or "entry_points" in data:
             # Old nested structure - flatten it
-            result = {}
+            result: VisualState = {}
             result.update({k: Position(**v) for k, v in data.get("modules", {}).items()})
             result.update({k: Position(**v) for k, v in data.get("entry_points", {}).items()})
             return result
@@ -106,22 +107,22 @@ class PipelineDefinitionRepository(BaseRepository[PipelineDefinitionModel]):
             # New flat structure
             return {k: Position(**v) for k, v in data.items()}
 
-    def _model_to_full(self, model: PipelineDefinitionModel) -> PipelineDefinition:
-        """Convert ORM model to PipelineDefinition dataclass"""
+    def _model_to_domain(self, model: PipelineDefinitionModel) -> PipelineDefinition:
+        """Convert ORM model to PipelineDefinition domain type."""
         return PipelineDefinition(
             id=model.id,
             pipeline_state=self._deserialize_pipeline_state(model.pipeline_state),
             visual_state=self._deserialize_visual_state(model.visual_state),
             created_at=model.created_at,
-            updated_at=model.updated_at
+            updated_at=model.updated_at,
         )
 
     def _model_to_summary(self, model: PipelineDefinitionModel) -> PipelineDefinitionSummary:
-        """Convert ORM model to PipelineDefinitionSummary dataclass"""
+        """Convert ORM model to PipelineDefinitionSummary domain type."""
         return PipelineDefinitionSummary(
             id=model.id,
             created_at=model.created_at,
-            updated_at=model.updated_at
+            updated_at=model.updated_at,
         )
 
     def create(self, create_data: PipelineDefinitionCreate) -> PipelineDefinition:
@@ -135,23 +136,21 @@ class PipelineDefinitionRepository(BaseRepository[PipelineDefinitionModel]):
             Created pipeline definition with full details
         """
         with self._get_session() as session:
-            # Serialize states to JSON
             pipeline_state_json = self._serialize_pipeline_state(create_data.pipeline_state)
             visual_state_json = self._serialize_visual_state(create_data.visual_state)
 
-            # Create ORM model
             pipeline_def = self.model_class(
                 pipeline_state=pipeline_state_json,
-                visual_state=visual_state_json
+                visual_state=visual_state_json,
             )
 
             session.add(pipeline_def)
             session.commit()
             session.refresh(pipeline_def)
 
-            return self._model_to_full(pipeline_def)
+            return self._model_to_domain(pipeline_def)
 
-    def get_by_id(self, pipeline_id: int) -> Optional[PipelineDefinition]:
+    def get_by_id(self, pipeline_id: int) -> PipelineDefinition | None:
         """
         Get pipeline definition by ID.
 
@@ -167,13 +166,13 @@ class PipelineDefinitionRepository(BaseRepository[PipelineDefinitionModel]):
             if pipeline_def is None:
                 return None
 
-            return self._model_to_full(pipeline_def)
+            return self._model_to_domain(pipeline_def)
 
     def list_pipelines(
         self,
         sort_by: str = "created_at",
-        sort_order: str = "desc"
-    ) -> List[PipelineDefinitionSummary]:
+        sort_order: str = "desc",
+    ) -> list[PipelineDefinitionSummary]:
         """
         List all pipeline definitions with lightweight summaries.
 
@@ -185,10 +184,8 @@ class PipelineDefinitionRepository(BaseRepository[PipelineDefinitionModel]):
             List of pipeline definition summaries
         """
         with self._get_session() as session:
-            # Build query
             stmt = select(self.model_class)
 
-            # Apply sorting
             sort_column = getattr(self.model_class, sort_by, self.model_class.created_at)
             if sort_order == "desc":
                 stmt = stmt.order_by(desc(sort_column))

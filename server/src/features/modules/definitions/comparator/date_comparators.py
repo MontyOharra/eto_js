@@ -16,7 +16,7 @@ class DateBeforeConfig(BaseModel):
 
 @register
 class DateBefore(ComparatorModule):
-    id = "date_before"
+    identifier = "date_before"
     version = "1.0.0"
     title = "Date Before"
     description = "Check if input date is before a configured date"

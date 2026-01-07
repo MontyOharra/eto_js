@@ -23,7 +23,7 @@ class TypeConverter(TransformModule):
     """
 
     # Class metadata
-    id = "type_converter"
+    identifier = "type_converter"
     version = "1.0.0"
     title = "Type Converter"
     description = "Convert data from one type to another"

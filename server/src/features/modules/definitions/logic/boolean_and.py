@@ -22,7 +22,7 @@ class BooleanAnd(LogicModule):
     """
 
     # Class metadata
-    id = "boolean_and"
+    identifier = "boolean_and"
     version = "1.0.0"
     title = "Boolean AND"
     description = "Logical AND operation on two boolean inputs"

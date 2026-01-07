@@ -26,7 +26,7 @@ class StripText(TransformModule):
     """
 
     # Class metadata
-    id = "strip_text"
+    identifier = "strip_text"
     version = "1.0.0"
     title = "Strip Text"
     description = "Remove specific text from the beginning and/or end of a string"

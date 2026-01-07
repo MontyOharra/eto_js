@@ -2,7 +2,6 @@
 Pipeline Compilation
 Compiles pruned pipeline into ordered execution steps with proper layer-based topological sorting
 """
-from typing import List, Dict, Set
 import logging
 
 from shared.types.pipelines import PipelineState, PipelineIndices, ModuleInstance, NodeConnection, OutputChannelInstance
@@ -20,7 +19,7 @@ class PipelineCompiler:
     """
 
     @staticmethod
-    def compile(pruned_pipeline: PipelineState, indices: PipelineIndices) -> List[PipelineDefinitionStepCreate]:
+    def compile(pruned_pipeline: PipelineState, indices: PipelineIndices) -> list[PipelineDefinitionStepCreate]:
         """
         Compile pruned pipeline to ordered execution steps.
 
@@ -47,8 +46,8 @@ class PipelineCompiler:
     @staticmethod
     def _compute_topological_layers(
         pipeline: PipelineState,
-        indices: PipelineIndices
-    ) -> List[List[str]]:
+        indices: PipelineIndices,
+    ) -> list[list[str]]:
         """
         Compute topological execution layers using Kahn's algorithm with layer tracking.
 
@@ -67,10 +66,10 @@ class PipelineCompiler:
             RuntimeError: If cycle detected (shouldn't happen after validation)
         """
         # Build adjacency list and in-degree count
-        adjacency: Dict[str, Set[str]] = {
+        adjacency: dict[str, set[str]] = {
             module.module_instance_id: set() for module in pipeline.modules
         }
-        in_degree: Dict[str, int] = {
+        in_degree: dict[str, int] = {
             module.module_instance_id: 0 for module in pipeline.modules
         }
 
@@ -100,7 +99,7 @@ class PipelineCompiler:
                 in_degree[target_module] += 1
 
         # Kahn's algorithm with layer tracking
-        layers: List[List[str]] = []
+        layers: list[list[str]] = []
         current_layer = [module_id for module_id, degree in in_degree.items() if degree == 0]
         processed_count = 0
 
@@ -133,9 +132,9 @@ class PipelineCompiler:
     @staticmethod
     def _build_steps(
         pipeline: PipelineState,
-        layers: List[List[str]],
-        indices: PipelineIndices
-    ) -> List[PipelineDefinitionStepCreate]:
+        layers: list[list[str]],
+        indices: PipelineIndices,
+    ) -> list[PipelineDefinitionStepCreate]:
         """
         Build PipelineDefinitionStepCreate objects from topological layers.
 
@@ -147,7 +146,7 @@ class PipelineCompiler:
         Returns:
             List of step creation objects
         """
-        steps: List[PipelineDefinitionStepCreate] = []
+        steps: list[PipelineDefinitionStepCreate] = []
 
         for layer_number, layer in enumerate(layers):
             for module_id in layer:
@@ -173,15 +172,11 @@ class PipelineCompiler:
                 # DEBUG: Log what's in node_metadata
                 logger.debug(f"[COMPILATION DEBUG] node_metadata inputs={node_metadata['inputs']}")
 
-                # Extract module_id from module_ref (format: "module_id:version")
-                # The module_ref column has FK to module_catalog.id which only contains module_id
-                module_id = module.module_ref.split(":")[0] if ":" in module.module_ref else module.module_ref
-
                 # Create step
                 step = PipelineDefinitionStepCreate(
                     pipeline_definition_id=0,  # Will be set by service layer
                     module_instance_id=module.module_instance_id,
-                    module_ref=module_id,  # Just the module ID (not "id:version")
+                    module_id=module.module_id,  # Just the module ID (not "id:version")
                     module_config=module.config,
                     input_field_mappings=input_field_mappings,
                     node_metadata=node_metadata,
@@ -200,8 +195,8 @@ class PipelineCompiler:
     @staticmethod
     def _build_input_mappings(
         module: ModuleInstance,
-        connections: List[NodeConnection]
-    ) -> Dict[str, str]:
+        connections: list[NodeConnection],
+    ) -> dict[str, str]:
         """
         Build input field mappings for a module.
 
@@ -220,7 +215,7 @@ class PipelineCompiler:
                 "m2:i1": "m1:o0"          # From upstream module
             }
         """
-        mappings: Dict[str, str] = {}
+        mappings: dict[str, str] = {}
 
         # Get all input pin IDs for this module
         input_pin_ids = {pin.node_id for pin in module.inputs}
@@ -236,8 +231,8 @@ class PipelineCompiler:
     @staticmethod
     def _build_output_channel_steps(
         pipeline: PipelineState,
-        layers: List[List[str]]
-    ) -> List[PipelineDefinitionStepCreate]:
+        layers: list[list[str]],
+    ) -> list[PipelineDefinitionStepCreate]:
         """
         Build steps for output channels (terminal collection points).
 
@@ -257,7 +252,7 @@ class PipelineCompiler:
         # Output channels go in the layer after all modules
         final_layer = len(layers) if layers else 0
 
-        steps: List[PipelineDefinitionStepCreate] = []
+        steps: list[PipelineDefinitionStepCreate] = []
 
         for output_channel in pipeline.output_channels:
             # Build input mappings (channel input pin → upstream source)
@@ -271,11 +266,10 @@ class PipelineCompiler:
                 "outputs": []
             }
 
-            # Create step with NULL module_ref to indicate output channel
             step = PipelineDefinitionStepCreate(
                 pipeline_definition_id=0,  # Will be set by service layer
                 module_instance_id=output_channel.output_channel_instance_id,
-                module_ref=None,  # NULL indicates output channel step
+                module_id=None,  # NULL indicates output channel step
                 module_config={"channel_type": output_channel.channel_type},
                 input_field_mappings=input_field_mappings,
                 node_metadata=node_metadata,
@@ -295,8 +289,8 @@ class PipelineCompiler:
     @staticmethod
     def _build_output_channel_input_mappings(
         output_channel: OutputChannelInstance,
-        connections: List[NodeConnection]
-    ) -> Dict[str, str]:
+        connections: list[NodeConnection],
+    ) -> dict[str, str]:
         """
         Build input field mappings for an output channel.
 
@@ -309,7 +303,7 @@ class PipelineCompiler:
         Returns:
             Dict mapping input_pin_id → source_pin_id
         """
-        mappings: Dict[str, str] = {}
+        mappings: dict[str, str] = {}
 
         # Get all input pin IDs for this output channel
         input_pin_ids = {pin.node_id for pin in output_channel.inputs}

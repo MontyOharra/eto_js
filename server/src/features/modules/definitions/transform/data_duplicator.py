@@ -23,7 +23,7 @@ class DataDuplicator(TransformModule):
     """
 
     # Class metadata
-    id = "data_duplicator"
+    identifier = "data_duplicator"
     version = "1.0.0"
     title = "Data Duplicator"
     description = "Duplicate input data to multiple outputs"

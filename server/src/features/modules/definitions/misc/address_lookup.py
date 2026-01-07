@@ -52,7 +52,7 @@ class AddressLookup(MiscModule):
     """
 
     # Class metadata
-    id = "address_lookup"
+    identifier = "address_lookup"
     version = "1.0.0"
     title = "Address Lookup"
     description = "Find address ID from parsed address components"

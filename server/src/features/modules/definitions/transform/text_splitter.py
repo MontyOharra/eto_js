@@ -38,7 +38,7 @@ class TextSplitter(TransformModule):
     """
 
     # Class metadata
-    id = "text_splitter"
+    identifier = "text_splitter"
     version = "1.0.0"
     title = "Text Splitter"
     description = "Split text into a list of strings based on a delimiter"

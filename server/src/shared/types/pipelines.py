@@ -32,7 +32,7 @@ class ModuleInstance(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     module_instance_id: str
-    module_ref: str  # e.g., "text_cleaner:1.0.0"
+    module_id: int  # e.g., "text_cleaner:1.0.0"
     config: dict[str, Any]  # Module-specific configuration
     inputs: list[NodeInstance] = Field(default_factory=list)  # Flat list, grouped by group_index
     outputs: list[NodeInstance] = Field(default_factory=list)

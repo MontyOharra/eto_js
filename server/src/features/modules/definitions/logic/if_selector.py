@@ -23,7 +23,7 @@ class IfSelector(LogicModule):
     """
 
     # Class metadata
-    id = "if_selector"
+    identifier = "if_selector"
     version = "1.0.0"
     title = "If Selector"
     description = "Select one of two values based on a boolean condition"

@@ -31,7 +31,7 @@ class DimBuilder(TransformModule):
     """
 
     # Class metadata
-    id = "dim_builder"
+    identifier = "dim_builder"
     version = "1.0.0"
     title = "Dim Builder"
     description = "Build a dimension object from individual components (count, L, W, H, weight)"

@@ -27,7 +27,7 @@ class AddressParser(TransformModule):
     """
 
     # Class metadata
-    id = "address_parser"
+    identifier = "address_parser"
     version = "1.0.0"
     title = "Address Parser"
     description = "Parse US address string into components (street, city, state, zip)"

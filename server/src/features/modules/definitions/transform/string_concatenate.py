@@ -29,7 +29,7 @@ class StringConcatenate(TransformModule):
     """
 
     # Class metadata
-    id = "string_concatenate"
+    identifier = "string_concatenate"
     version = "1.0.0"
     title = "String Concatenate"
     description = "Concatenate multiple strings with a separator"

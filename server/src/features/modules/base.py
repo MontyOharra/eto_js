@@ -21,7 +21,7 @@ class BaseModule(ABC):
     """
 
     # Class-level metadata (must be defined in subclasses)
-    id: str
+    identifier: str
     version: str
     title: str
     description: str
